@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "7940088860331048944"
+      "templateHash": "6759530400785936598"
     },
     "name": "Zero Trust Architecture Custom Windows Image Builder",
     "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
@@ -12422,7 +12422,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.33.93.31351",
-              "templateHash": "6694398302522969960"
+              "templateHash": "2775506309403815823"
             }
           },
           "parameters": {
@@ -12711,6 +12711,7 @@
                   "name": {
                     "value": "[parameters('imageVersionName')]"
                   },
+                  "confidentialVMEncryptionType": "[if(equals(parameters('imageDefinitionSecurityType'), 'ConfidentialVM'), createObject('value', 'EncryptedVMGuestStateOnlyWithPmk'), createObject('value', null()))]",
                   "galleryName": {
                     "value": "[last(split(parameters('computeGalleryResourceId'), '/'))]"
                   },
@@ -12735,7 +12736,8 @@
                   "storageAccountType": {
                     "value": "[parameters('imageVersionDefaultStorageAccountType')]"
                   },
-                  "sourceId": "[if(contains(parameters('imageDefinitionSecurityType'), 'Supported'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Image-{1}', parameters('depPrefix'), parameters('timeStamp'))), '2022-09-01').outputs.resourceId.value), createObject('value', parameters('virtualMachineResourceId')))]",
+                  "sourceId": "[if(contains(parameters('imageDefinitionSecurityType'), 'Supported'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Image-{1}', parameters('depPrefix'), parameters('timeStamp'))), '2022-09-01').outputs.resourceId.value), createObject('value', null()))]",
+                  "virtualMachineId": "[if(contains(parameters('imageDefinitionSecurityType'), 'Supported'), createObject('value', null()), createObject('value', parameters('virtualMachineResourceId')))]",
                   "targetRegions": {
                     "value": "[parameters('imageVersionReplicationRegions')]"
                   },
@@ -12750,11 +12752,8 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.33.93.31351",
-                      "templateHash": "6621924146950843652"
-                    },
-                    "name": "Compute Galleries Image Version",
-                    "description": "This module deploys an Azure Compute Gallery Image Definition Version",
-                    "author": "shawn.meyer@microsoft.com"
+                      "templateHash": "4377704069420763152"
+                    }
                   },
                   "parameters": {
                     "name": {
@@ -12801,7 +12800,7 @@
                     "replicaCount": {
                       "type": "int",
                       "metadata": {
-                        "description": "Optional. The number of replicas of the Image Version to be created per region.\nThis property would take effect for a region when regionalReplicaCount is not specified. This property is updatable."
+                        "description": "Optional. The number of replicas of the Image Version to be created per region. This property would take effect for a region when regionalReplicaCount is not specified. This property is updatable."
                       }
                     },
                     "replicationMode": {
@@ -12831,7 +12830,7 @@
                       "type": "array",
                       "defaultValue": [],
                       "metadata": {
-                        "description": "Optional. The target regions where the Image Version is going to be replicated to.\nIf this object is not specified, then the deployment location will be used."
+                        "description": "Optional. The target regions where the Image Version is going to be replicated to. If this object is not specified, then the deployment location will be used."
                       }
                     },
                     "diskEncryptionSetId": {
@@ -12884,7 +12883,7 @@
                       "type": "string",
                       "defaultValue": "",
                       "metadata": {
-                        "description": "Optional. The id of the gallery artifact version source. Can specify a disk uri, snapshot uri, user image or storage account resource."
+                        "description": "Optional. The id of the gallery artifact version source. Can specify a OS disk resource id, snapshot resource id, user image or storage account resource."
                       }
                     },
                     "osDiskImageSourceUri": {
@@ -12907,6 +12906,13 @@
                       "metadata": {
                         "description": "Optional. Tags for all resources."
                       }
+                    },
+                    "virtualMachineId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. The virtual machine id of the source image."
+                      }
                     }
                   },
                   "variables": {
@@ -12917,8 +12923,8 @@
                         "input": "[if(equals(parameters('targetRegions')[copyIndex('regionMatchArray')].name, parameters('location')), true(), false())]"
                       }
                     ],
-                    "sourceStorageProfile": "[if(not(empty(parameters('sourceId'))), createObject('id', parameters('sourceId')), createObject())]",
-                    "osDiskImageStorageProfile": "[if(or(not(empty(parameters('osDiskImageSourceId'))), not(empty(parameters('osDiskImageSourceUri')))), createObject('hostCaching', parameters('hostCaching'), 'source', createObject('id', if(not(empty(parameters('osDiskImageSourceId'))), parameters('osDiskImageSourceId'), null()), 'uri', if(not(empty(parameters('osDiskImageSourceUri'))), parameters('osDiskImageSourceUri'), null()))), createObject())]",
+                    "sourceStorageProfile": "[if(or(not(empty(parameters('sourceId'))), not(empty(parameters('virtualMachineId')))), createObject('id', parameters('sourceId'), 'virtualMachineId', parameters('virtualMachineId')), null())]",
+                    "osDiskImageStorageProfile": "[if(or(not(empty(parameters('osDiskImageSourceId'))), not(empty(parameters('osDiskImageSourceUri')))), createObject('hostCaching', parameters('hostCaching'), 'source', createObject('id', if(not(empty(parameters('osDiskImageSourceId'))), parameters('osDiskImageSourceId'), null()), 'uri', if(not(empty(parameters('osDiskImageSourceUri'))), parameters('osDiskImageSourceUri'), null()))), null())]",
                     "targetRegionDefault": [
                       {
                         "encryption": "[if(not(empty(parameters('diskEncryptionSetId'))), createObject('osDiskImage', createObject('diskEncryptionSetId', parameters('diskEncryptionSetId'), 'securityProfile', createObject('confidentialVMEncryptionType', if(not(empty(parameters('confidentialVMEncryptionType'))), parameters('confidentialVMEncryptionType'), null()), 'secureVMDiskEncryptionSetId', if(not(empty(parameters('secureVMDiskEncryptionSetId'))), parameters('secureVMDiskEncryptionSetId'), null())))), null())]",
@@ -12932,7 +12938,7 @@
                   "resources": [
                     {
                       "type": "Microsoft.Compute/galleries/images/versions",
-                      "apiVersion": "2022-03-03",
+                      "apiVersion": "2024-03-03",
                       "name": "[format('{0}/{1}/{2}', parameters('galleryName'), parameters('imageName'), parameters('name'))]",
                       "location": "[parameters('location')]",
                       "properties": {
@@ -12982,7 +12988,7 @@
                       "metadata": {
                         "description": "The location the resource was deployed into."
                       },
-                      "value": "[reference(resourceId('Microsoft.Compute/galleries/images/versions', parameters('galleryName'), parameters('imageName'), parameters('name')), '2022-03-03', 'full').location]"
+                      "value": "[reference(resourceId('Microsoft.Compute/galleries/images/versions', parameters('galleryName'), parameters('imageName'), parameters('name')), '2024-03-03', 'full').location]"
                     }
                   }
                 }
@@ -13315,11 +13321,8 @@
             "_generator": {
               "name": "bicep",
               "version": "0.33.93.31351",
-              "templateHash": "6621924146950843652"
-            },
-            "name": "Compute Galleries Image Version",
-            "description": "This module deploys an Azure Compute Gallery Image Definition Version",
-            "author": "shawn.meyer@microsoft.com"
+              "templateHash": "4377704069420763152"
+            }
           },
           "parameters": {
             "name": {
@@ -13366,7 +13369,7 @@
             "replicaCount": {
               "type": "int",
               "metadata": {
-                "description": "Optional. The number of replicas of the Image Version to be created per region.\nThis property would take effect for a region when regionalReplicaCount is not specified. This property is updatable."
+                "description": "Optional. The number of replicas of the Image Version to be created per region. This property would take effect for a region when regionalReplicaCount is not specified. This property is updatable."
               }
             },
             "replicationMode": {
@@ -13396,7 +13399,7 @@
               "type": "array",
               "defaultValue": [],
               "metadata": {
-                "description": "Optional. The target regions where the Image Version is going to be replicated to.\nIf this object is not specified, then the deployment location will be used."
+                "description": "Optional. The target regions where the Image Version is going to be replicated to. If this object is not specified, then the deployment location will be used."
               }
             },
             "diskEncryptionSetId": {
@@ -13449,7 +13452,7 @@
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. The id of the gallery artifact version source. Can specify a disk uri, snapshot uri, user image or storage account resource."
+                "description": "Optional. The id of the gallery artifact version source. Can specify a OS disk resource id, snapshot resource id, user image or storage account resource."
               }
             },
             "osDiskImageSourceUri": {
@@ -13472,6 +13475,13 @@
               "metadata": {
                 "description": "Optional. Tags for all resources."
               }
+            },
+            "virtualMachineId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The virtual machine id of the source image."
+              }
             }
           },
           "variables": {
@@ -13482,8 +13492,8 @@
                 "input": "[if(equals(parameters('targetRegions')[copyIndex('regionMatchArray')].name, parameters('location')), true(), false())]"
               }
             ],
-            "sourceStorageProfile": "[if(not(empty(parameters('sourceId'))), createObject('id', parameters('sourceId')), createObject())]",
-            "osDiskImageStorageProfile": "[if(or(not(empty(parameters('osDiskImageSourceId'))), not(empty(parameters('osDiskImageSourceUri')))), createObject('hostCaching', parameters('hostCaching'), 'source', createObject('id', if(not(empty(parameters('osDiskImageSourceId'))), parameters('osDiskImageSourceId'), null()), 'uri', if(not(empty(parameters('osDiskImageSourceUri'))), parameters('osDiskImageSourceUri'), null()))), createObject())]",
+            "sourceStorageProfile": "[if(or(not(empty(parameters('sourceId'))), not(empty(parameters('virtualMachineId')))), createObject('id', parameters('sourceId'), 'virtualMachineId', parameters('virtualMachineId')), null())]",
+            "osDiskImageStorageProfile": "[if(or(not(empty(parameters('osDiskImageSourceId'))), not(empty(parameters('osDiskImageSourceUri')))), createObject('hostCaching', parameters('hostCaching'), 'source', createObject('id', if(not(empty(parameters('osDiskImageSourceId'))), parameters('osDiskImageSourceId'), null()), 'uri', if(not(empty(parameters('osDiskImageSourceUri'))), parameters('osDiskImageSourceUri'), null()))), null())]",
             "targetRegionDefault": [
               {
                 "encryption": "[if(not(empty(parameters('diskEncryptionSetId'))), createObject('osDiskImage', createObject('diskEncryptionSetId', parameters('diskEncryptionSetId'), 'securityProfile', createObject('confidentialVMEncryptionType', if(not(empty(parameters('confidentialVMEncryptionType'))), parameters('confidentialVMEncryptionType'), null()), 'secureVMDiskEncryptionSetId', if(not(empty(parameters('secureVMDiskEncryptionSetId'))), parameters('secureVMDiskEncryptionSetId'), null())))), null())]",
@@ -13497,7 +13507,7 @@
           "resources": [
             {
               "type": "Microsoft.Compute/galleries/images/versions",
-              "apiVersion": "2022-03-03",
+              "apiVersion": "2024-03-03",
               "name": "[format('{0}/{1}/{2}', parameters('galleryName'), parameters('imageName'), parameters('name'))]",
               "location": "[parameters('location')]",
               "properties": {
@@ -13547,7 +13557,7 @@
               "metadata": {
                 "description": "The location the resource was deployed into."
               },
-              "value": "[reference(resourceId('Microsoft.Compute/galleries/images/versions', parameters('galleryName'), parameters('imageName'), parameters('name')), '2022-03-03', 'full').location]"
+              "value": "[reference(resourceId('Microsoft.Compute/galleries/images/versions', parameters('galleryName'), parameters('imageName'), parameters('name')), '2024-03-03', 'full').location]"
             }
           }
         }

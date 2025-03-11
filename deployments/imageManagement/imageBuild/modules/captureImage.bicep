@@ -41,6 +41,7 @@ module imageVersion '../../../sharedModules/resources/compute/gallery/image/vers
   params: {
     location: location
     name: imageVersionName
+    confidentialVMEncryptionType: imageDefinitionSecurityType == 'ConfidentialVM' ? 'EncryptedVMGuestStateOnlyWithPmk' : null
     galleryName: last(split(computeGalleryResourceId, '/'))
     imageName: imageName
     endOfLifeDate: imageVersionEndOfLifeDate
@@ -49,7 +50,8 @@ module imageVersion '../../../sharedModules/resources/compute/gallery/image/vers
     replicaCount: imageVersionDefaultReplicaCount
     replicationMode: 'Full'
     storageAccountType: imageVersionDefaultStorageAccountType
-    sourceId: contains(imageDefinitionSecurityType, 'Supported') ? managedImage.outputs.resourceId : virtualMachineResourceId
+    sourceId: contains(imageDefinitionSecurityType, 'Supported') ? managedImage.outputs.resourceId : null
+    virtualMachineId: contains(imageDefinitionSecurityType, 'Supported') ? null : virtualMachineResourceId
     targetRegions: imageVersionReplicationRegions
     tags: tags[?'Microsoft.Compute/galleries/images/versions'] ?? {}
   }

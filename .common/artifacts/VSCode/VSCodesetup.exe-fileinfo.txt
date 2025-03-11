@@ -1,3 +1,3 @@
 DownloadUrl = https://code.visualstudio.com/sha/download?build=stable&os=win32-x64
-Download File = VSCodeSetup-x64-1.97.2.exe
-@{ProductVersion=1.97.2                                            ; FileVersion=1.97.2              }
+Download File = VSCodeSetup-x64-1.98.1.exe
+@{ProductVersion=1.98.1                                            ; FileVersion=1.98.1              }
