@@ -305,25 +305,44 @@ var logContainerUri = collectCustomizationLogs
   ? '${logsStorageAccount.outputs.primaryBlobEndpoint}${logContainerName}/'
   : ''
 
+var securityFeature = securityType != 'Standard'
+? [
+    {
+      name: 'SecurityType'
+      value: securityType
+    }
+  ]
+: []
+
+var hibernateSupported = imageDefinitionIsHibernateSupported
+? [
+    {
+      name: 'IsHibernateSupported'
+      value: 'true'
+    }
+  ]
+: []
+
+var acceleratedNetworkSupported = imageDefinitionIsAcceleratedNetworkSupported
+? [
+    {
+      name: 'IsAcceleratedNetworkSupported'
+      value: 'true'
+    }
+  ]
+: []
+
+var diskControllerTypes = imageDefinitionIsAcceleratedNetworkSupported
+? [
+    {
+      name: 'DiskControllerTypes'
+      value: 'SCSI, NVMe'
+    }
+  ]
+: []
+
 var imageDefinitionFeatures = empty(imageDefinitionResourceId)
-  ? [
-      {
-        name: 'IsHibernateSupported'
-        value: imageDefinitionIsHibernateSupported
-      }
-      {
-        name: 'IsAcceleratedNetworkSupported'
-        value: imageDefinitionIsAcceleratedNetworkSupported
-      }
-      {
-        name: 'DiskControllerTypes'
-        value: imageDefinitionIsHigherStoragePerformanceSupported
-      }
-      {
-        name: 'SecurityType'
-        value: imageDefinitionSecurityType
-      }
-    ]
+  ? union(securityFeature, acceleratedNetworkSupported, hibernateSupported, diskControllerTypes)
   : existingImageDefinition.properties.features
 
 var galleryImageDefinitionHyperVGeneration = endsWith(sku, 'g2') || startsWith(sku, 'win11') ? 'V2' : 'V1'
@@ -481,7 +500,7 @@ module remoteImageDefinition '../../sharedModules/resources/compute/gallery/imag
         imageDefinitionFeatures,
         feature => feature.name == 'DiskControllerTypes'
       ))
-      ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0].value)
+      ? contains(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0].value, 'NVMe')
       : false
     securityType: !empty(filter(imageDefinitionFeatures, feature => feature.name == 'SecurityType'))
       ? any(filter(imageDefinitionFeatures, feature => feature.name == 'SecurityType')[0].value)
@@ -686,7 +705,12 @@ module imageVm '../../sharedModules/resources/compute/virtual-machine/main.bicep
     adminPassword: adminPw
     adminUsername: adminUserName
     bootDiagnostics: false
+    diskControllerType: !empty(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes'))
+    ? contains(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0].value, 'NVMe') ? 'NVMe' : null : null
     encryptionAtHost: encryptionAtHost
+    hibernationEnabled: !empty(filter(imageDefinitionFeatures, feature => feature.name == 'IsHibernateSupported'))
+      ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsHibernateSupported')[0].value)
+      : false
     imageReference: empty(customSourceImageResourceId)
       ? {
           publisher: publisher
@@ -699,7 +723,12 @@ module imageVm '../../sharedModules/resources/compute/virtual-machine/main.bicep
         }
     nicConfigurations: [
       {
-        enableAcceleratedNetworking: imageDefinitionIsAcceleratedNetworkSupported
+        enableAcceleratedNetworking: !empty(filter(
+          imageDefinitionFeatures,
+          feature => feature.name == 'IsAcceleratedNetworkSupported'
+        ))
+        ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsAcceleratedNetworkSupported')[0].value)
+        : false
         deleteOption: 'Delete'
         ipConfigurations: [
           {

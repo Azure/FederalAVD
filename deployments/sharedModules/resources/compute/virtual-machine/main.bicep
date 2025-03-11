@@ -33,8 +33,18 @@ param plan object = {}
 @description('Required. Specifies the OS disk. For security reasons, it is recommended to specify DiskEncryptionSet into the osDisk object.  Restrictions: DiskEncryptionSet cannot be enabled if Azure Disk Encryption (guest-VM encryption using bitlocker/DM-Crypt) is enabled on your VMs.')
 param osDisk object
 
+@allowed([
+  'SCSI'
+  'NVMe'
+])
+@description('Optional. Specifies the disk controller type. Default value is SCSI.')
+param diskControllerType string = 'SCSI'
+
 @description('Optional. Specifies the data disks. For security reasons, it is recommended to specify DiskEncryptionSet into the dataDisk object. Restrictions: DiskEncryptionSet cannot be enabled if Azure Disk Encryption (guest-VM encryption using bitlocker/DM-Crypt) is enabled on your VMs.')
 param dataDisks array = []
+
+@description('Optional. Specifies the hibernation state for the virtual machine. Restrictions: Hibernation is not supported for virtual machines with nested virtualization enabled.')
+param hibernationEnabled bool = false
 
 @description('Optional. The flag that enables or disables a capability to have one or more managed data disks with UltraSSD_LRS storage account type on the VM or VMSS. Managed disks with storage account type UltraSSD_LRS can be added to a virtual machine or virtual machine scale set only if this property is enabled.')
 param ultraSSDEnabled bool = false
@@ -374,6 +384,10 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-11-01' = {
   zones: availabilityZone != 0 ? array(availabilityZone) : null
   plan: !empty(plan) ? plan : null
   properties: {
+    additionalCapabilities: {
+      hibernationEnabled: hibernationEnabled
+      ultraSSDEnabled: ultraSSDEnabled
+    }
     hardwareProfile: {
       vmSize: vmSize
     }
@@ -387,6 +401,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-11-01' = {
     }
     storageProfile: {
       imageReference: imageReference
+      diskControllerType: diskControllerType
       osDisk: {
         name: '${name}-disk-os-01'
         createOption: osDisk.?createOption ?? 'FromImage'
@@ -415,9 +430,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-11-01' = {
         }
       }]
     }
-    additionalCapabilities: {
-      ultraSSDEnabled: ultraSSDEnabled
-    }
+
     osProfile: {
       computerName: computerName
       adminUsername: adminUsername

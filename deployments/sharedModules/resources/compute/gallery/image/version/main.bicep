@@ -65,13 +65,13 @@ param allowDeletionOfReplicatedLocations bool = true
 ])
 param hostCaching string = 'None'
 
-@sys.description('Optional. The id of the gallery artifact version source. Can specify a OS disk resource id, snapshot resource id, user image or storage account resource.')
+@sys.description('Optional. The id of the gallery artifact version source. Can specify a OS disk resource id or snapshot resource id.')
 param osDiskImageSourceId string = ''
 
 @sys.description('Optional. The uri of the gallery artifact version source. Currently used to specify vhd/blob source.')
 param osDiskImageSourceUri string = ''
 
-@sys.description('Optional. The id of the gallery artifact version source. Can specify a disk uri, snapshot uri, user image or storage account resource.')
+@sys.description('Optional. The id of the gallery artifact version source. Can specify a managed disk resource id, snapshot resource id, or storage account resource.')
 param sourceId string = ''
 
 @sys.description('Optional. Tags for all resources.')
@@ -80,39 +80,47 @@ param tags object = {}
 @sys.description('Optional. The virtual machine id of the source image.')
 param virtualMachineId string = ''
 
-var sourceStorageProfile = !empty(sourceId) || !empty(virtualMachineId) ?  {
-  id: sourceId
-  virtualMachineId: virtualMachineId
-} : null
-
-var osDiskImageStorageProfile = !empty(osDiskImageSourceId) || !empty(osDiskImageSourceUri) ? {
-  hostCaching: hostCaching
-  source: {
-    id: !empty(osDiskImageSourceId) ? osDiskImageSourceId : null
-    uri: !empty(osDiskImageSourceUri) ? osDiskImageSourceUri : null
-  }
-} : null
+var storageProfile = !empty(sourceId) || !empty(virtualMachineId)
+  ? {
+      source: {
+        id: !empty(sourceId) ? sourceId : null
+        virtualMachineId: !empty(virtualMachineId) ? virtualMachineId : null
+      }
+    }
+  : {
+      osDiskImage: {
+        hostCaching: hostCaching
+        source: {
+          id: !empty(osDiskImageSourceId) ? osDiskImageSourceId : null
+          uri: !empty(osDiskImageSourceUri) ? osDiskImageSourceUri : null
+        }
+      }
+    }
 
 var targetRegionDefault = [
   {
-    encryption: !empty(diskEncryptionSetId) ? {
-      osDiskImage: {
-        diskEncryptionSetId : diskEncryptionSetId
-        securityProfile: {
-          confidentialVMEncryptionType: !empty(confidentialVMEncryptionType) ? confidentialVMEncryptionType : null
-          secureVMDiskEncryptionSetId: !empty(secureVMDiskEncryptionSetId) ? secureVMDiskEncryptionSetId : null
+    encryption: !empty(diskEncryptionSetId)
+      ? {
+          osDiskImage: {
+            diskEncryptionSetId: diskEncryptionSetId
+            securityProfile: {
+              confidentialVMEncryptionType: !empty(confidentialVMEncryptionType) ? confidentialVMEncryptionType : null
+              secureVMDiskEncryptionSetId: !empty(secureVMDiskEncryptionSetId) ? secureVMDiskEncryptionSetId : null
+            }
+          }
         }
-      }
-    } : null
+      : null
     name: location
     storageAccountType: storageAccountType
   }
 ]
 // determine if targetRegions contains the deployment location with the next two variables
-var regionMatchArray = [for region in targetRegions: region.name == location ? true : false ]
+var regionMatchArray = [for region in targetRegions: region.name == location ? true : false]
 var targetRegionsContainsLocation = contains(regionMatchArray, true) ? true : false
 // cannot simply use a union function on an array of objects because there could be duplicates which will cause failures.
-var targetRegionsVar = !empty(targetRegions) ? (targetRegionsContainsLocation ? targetRegions : union(targetRegions, targetRegionDefault)) : targetRegionDefault
+var targetRegionsVar = !empty(targetRegions)
+  ? (targetRegionsContainsLocation ? targetRegions : union(targetRegions, targetRegionDefault))
+  : targetRegionDefault
 
 resource gallery 'Microsoft.Compute/galleries@2022-03-03' existing = {
   name: galleryName
@@ -137,10 +145,7 @@ resource version 'Microsoft.Compute/galleries/images/versions@2024-03-03' = {
     safetyProfile: {
       allowDeletionOfReplicatedLocations: allowDeletionOfReplicatedLocations
     }
-    storageProfile: {
-      osDiskImage: osDiskImageStorageProfile
-      source: sourceStorageProfile
-    }
+    storageProfile: storageProfile
   }
   tags: tags
 }

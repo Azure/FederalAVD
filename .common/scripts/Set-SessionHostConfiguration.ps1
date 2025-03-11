@@ -490,7 +490,7 @@ If ($ConfigureFSLogix) {
         Reg LOAD HKLM\DefaultUser "$env:SystemDrive\Users\Default User\NtUser.dat"
         Set-RegistryValue -Key 'HKLM:\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer' -Name NoRecycleFiles -Type DWord -Value 1
         Write-Log -Message "Unloading default user hive."
-        $null = cmd /c REG UNLOAD "HKLM\Default" '2>&1'
+        $null = cmd /c REG UNLOAD "HKLM\DefaultUser" '2>&1'
     }
 
     if ($CloudCache -eq $True) {

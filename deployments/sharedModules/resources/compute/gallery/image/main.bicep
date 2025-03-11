@@ -119,41 +119,43 @@ param excludedDiskTypes array = []
 @sys.description('Optional. Tags for all resources.')
 param tags object = {}
 
-var hibernateSupported = isHibernateSupported ? 'true' : 'false'
-var acceleratedNetworkSupported = isAcceleratedNetworkSupported ? 'true' : 'false'
+var securityFeature = securityType != 'Standard'
+  ? [
+      {
+        name: 'SecurityType'
+        value: securityType
+      }
+    ]
+  : []
 
-var diskControllerTypes = isHigherStoragePerformanceSupported ? [
-  {
-    name: 'DiskControllerTypes'
-    value: 'SCSI, NVMe'
-  }
- ] : []
+var hibernateSupported = isHibernateSupported
+  ? [
+      {
+        name: 'IsHibernateSupported'
+        value: 'true'
+      }
+    ]
+  : []
 
-var gaFeatures = securityType != 'Standard' ? [
-  {
-    name: 'SecurityType'
-    value: securityType
-  }
-  {
-    name: 'IsAcceleratedNetworkSupported'
-    value: acceleratedNetworkSupported
-  }
-  {
-    name: 'IsHibernateSupported'
-    value: hibernateSupported
-  }
-] : [
-  {
-    name: 'IsAcceleratedNetworkSupported'
-    value: acceleratedNetworkSupported
-  }
-  {
-    name: 'IsHibernateSupported'
-    value: hibernateSupported
-  }
-]
+var acceleratedNetworkSupported = isAcceleratedNetworkSupported
+  ? [
+      {
+        name: 'IsAcceleratedNetworkSupported'
+        value: 'true'
+      }
+    ]
+  : []
 
-var features = !empty(diskControllerTypes) ? union(gaFeatures, diskControllerTypes) : gaFeatures
+var diskControllerTypes = isHigherStoragePerformanceSupported
+  ? [
+      {
+        name: 'DiskControllerTypes'
+        value: 'SCSI, NVMe'
+      }
+    ]
+  : []
+
+var features = union(securityFeature, acceleratedNetworkSupported, hibernateSupported, diskControllerTypes)
 
 resource gallery 'Microsoft.Compute/galleries@2022-03-03' existing = {
   name: galleryName

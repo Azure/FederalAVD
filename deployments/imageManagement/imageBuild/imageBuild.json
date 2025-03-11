@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "6759530400785936598"
+      "templateHash": "15068352119396523865"
     },
     "name": "Zero Trust Architecture Custom Windows Image Builder",
     "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
@@ -4778,7 +4778,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.33.93.31351",
-              "templateHash": "4108644559694399275"
+              "templateHash": "3410959993783166575"
             }
           },
           "parameters": {
@@ -4853,11 +4853,29 @@
                 "description": "Required. Specifies the OS disk. For security reasons, it is recommended to specify DiskEncryptionSet into the osDisk object.  Restrictions: DiskEncryptionSet cannot be enabled if Azure Disk Encryption (guest-VM encryption using bitlocker/DM-Crypt) is enabled on your VMs."
               }
             },
+            "diskControllerType": {
+              "type": "string",
+              "defaultValue": "SCSI",
+              "allowedValues": [
+                "SCSI",
+                "NVMe"
+              ],
+              "metadata": {
+                "description": "Optional. Specifies the disk controller type. Default value is SCSI."
+              }
+            },
             "dataDisks": {
               "type": "array",
               "defaultValue": [],
               "metadata": {
                 "description": "Optional. Specifies the data disks. For security reasons, it is recommended to specify DiskEncryptionSet into the dataDisk object. Restrictions: DiskEncryptionSet cannot be enabled if Azure Disk Encryption (guest-VM encryption using bitlocker/DM-Crypt) is enabled on your VMs."
+              }
+            },
+            "hibernationEnabled": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Specifies the hibernation state for the virtual machine. Restrictions: Hibernation is not supported for virtual machines with nested virtualization enabled."
               }
             },
             "ultraSSDEnabled": {
@@ -5372,6 +5390,10 @@
               "zones": "[if(not(equals(parameters('availabilityZone'), 0)), array(parameters('availabilityZone')), null())]",
               "plan": "[if(not(empty(parameters('plan'))), parameters('plan'), null())]",
               "properties": {
+                "additionalCapabilities": {
+                  "hibernationEnabled": "[parameters('hibernationEnabled')]",
+                  "ultraSSDEnabled": "[parameters('ultraSSDEnabled')]"
+                },
                 "hardwareProfile": {
                   "vmSize": "[parameters('vmSize')]"
                 },
@@ -5400,6 +5422,7 @@
                     }
                   ],
                   "imageReference": "[parameters('imageReference')]",
+                  "diskControllerType": "[parameters('diskControllerType')]",
                   "osDisk": {
                     "name": "[format('{0}-disk-os-01', parameters('name'))]",
                     "createOption": "[coalesce(tryGet(parameters('osDisk'), 'createOption'), 'FromImage')]",
@@ -5411,9 +5434,6 @@
                       "diskEncryptionSet": "[if(contains(parameters('osDisk').managedDisk, 'diskEncryptionSet'), createObject('id', parameters('osDisk').managedDisk.diskEncryptionSet.id), null())]"
                     }
                   }
-                },
-                "additionalCapabilities": {
-                  "ultraSSDEnabled": "[parameters('ultraSSDEnabled')]"
                 },
                 "osProfile": {
                   "computerName": "[parameters('computerName')]",
@@ -8139,14 +8159,16 @@
           "bootDiagnostics": {
             "value": false
           },
+          "diskControllerType": "[if(not(empty(filter(if(empty(parameters('imageDefinitionResourceId')), createArray(createObject('name', 'IsHibernateSupported', 'value', parameters('imageDefinitionIsHibernateSupported')), createObject('name', 'IsAcceleratedNetworkSupported', 'value', parameters('imageDefinitionIsAcceleratedNetworkSupported')), createObject('name', 'DiskControllerTypes', 'value', parameters('imageDefinitionIsHigherStoragePerformanceSupported')), createObject('name', 'SecurityType', 'value', parameters('imageDefinitionSecurityType'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('imageDefinitionResourceId'), '/')[2], split(parameters('imageDefinitionResourceId'), '/')[4]), 'Microsoft.Compute/galleries/images', split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[0], split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[1]), '2024-03-03').features), lambda('feature', equals(lambdaVariables('feature').name, 'DiskControllerTypes'))))), if(contains(filter(if(empty(parameters('imageDefinitionResourceId')), createArray(createObject('name', 'IsHibernateSupported', 'value', parameters('imageDefinitionIsHibernateSupported')), createObject('name', 'IsAcceleratedNetworkSupported', 'value', parameters('imageDefinitionIsAcceleratedNetworkSupported')), createObject('name', 'DiskControllerTypes', 'value', parameters('imageDefinitionIsHigherStoragePerformanceSupported')), createObject('name', 'SecurityType', 'value', parameters('imageDefinitionSecurityType'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('imageDefinitionResourceId'), '/')[2], split(parameters('imageDefinitionResourceId'), '/')[4]), 'Microsoft.Compute/galleries/images', split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[0], split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[1]), '2024-03-03').features), lambda('feature', equals(lambdaVariables('feature').name, 'DiskControllerTypes')))[0].value, 'NVMe'), createObject('value', 'NVMe'), createObject('value', null())), createObject('value', null()))]",
           "encryptionAtHost": {
             "value": "[parameters('encryptionAtHost')]"
           },
+          "hibernationEnabled": "[if(not(empty(filter(if(empty(parameters('imageDefinitionResourceId')), createArray(createObject('name', 'IsHibernateSupported', 'value', parameters('imageDefinitionIsHibernateSupported')), createObject('name', 'IsAcceleratedNetworkSupported', 'value', parameters('imageDefinitionIsAcceleratedNetworkSupported')), createObject('name', 'DiskControllerTypes', 'value', parameters('imageDefinitionIsHigherStoragePerformanceSupported')), createObject('name', 'SecurityType', 'value', parameters('imageDefinitionSecurityType'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('imageDefinitionResourceId'), '/')[2], split(parameters('imageDefinitionResourceId'), '/')[4]), 'Microsoft.Compute/galleries/images', split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[0], split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[1]), '2024-03-03').features), lambda('feature', equals(lambdaVariables('feature').name, 'IsHibernateSupported'))))), createObject('value', bool(filter(if(empty(parameters('imageDefinitionResourceId')), createArray(createObject('name', 'IsHibernateSupported', 'value', parameters('imageDefinitionIsHibernateSupported')), createObject('name', 'IsAcceleratedNetworkSupported', 'value', parameters('imageDefinitionIsAcceleratedNetworkSupported')), createObject('name', 'DiskControllerTypes', 'value', parameters('imageDefinitionIsHigherStoragePerformanceSupported')), createObject('name', 'SecurityType', 'value', parameters('imageDefinitionSecurityType'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('imageDefinitionResourceId'), '/')[2], split(parameters('imageDefinitionResourceId'), '/')[4]), 'Microsoft.Compute/galleries/images', split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[0], split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[1]), '2024-03-03').features), lambda('feature', equals(lambdaVariables('feature').name, 'IsHibernateSupported')))[0].value)), createObject('value', false()))]",
           "imageReference": "[if(empty(parameters('customSourceImageResourceId')), createObject('value', createObject('publisher', parameters('publisher'), 'offer', parameters('offer'), 'sku', parameters('sku'), 'version', 'latest')), createObject('value', createObject('id', parameters('customSourceImageResourceId'))))]",
           "nicConfigurations": {
             "value": [
               {
-                "enableAcceleratedNetworking": "[parameters('imageDefinitionIsAcceleratedNetworkSupported')]",
+                "enableAcceleratedNetworking": "[if(not(empty(filter(if(empty(parameters('imageDefinitionResourceId')), createArray(createObject('name', 'IsHibernateSupported', 'value', parameters('imageDefinitionIsHibernateSupported')), createObject('name', 'IsAcceleratedNetworkSupported', 'value', parameters('imageDefinitionIsAcceleratedNetworkSupported')), createObject('name', 'DiskControllerTypes', 'value', parameters('imageDefinitionIsHigherStoragePerformanceSupported')), createObject('name', 'SecurityType', 'value', parameters('imageDefinitionSecurityType'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('imageDefinitionResourceId'), '/')[2], split(parameters('imageDefinitionResourceId'), '/')[4]), 'Microsoft.Compute/galleries/images', split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[0], split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[1]), '2024-03-03').features), lambda('feature', equals(lambdaVariables('feature').name, 'IsAcceleratedNetworkSupported'))))), bool(filter(if(empty(parameters('imageDefinitionResourceId')), createArray(createObject('name', 'IsHibernateSupported', 'value', parameters('imageDefinitionIsHibernateSupported')), createObject('name', 'IsAcceleratedNetworkSupported', 'value', parameters('imageDefinitionIsAcceleratedNetworkSupported')), createObject('name', 'DiskControllerTypes', 'value', parameters('imageDefinitionIsHigherStoragePerformanceSupported')), createObject('name', 'SecurityType', 'value', parameters('imageDefinitionSecurityType'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('imageDefinitionResourceId'), '/')[2], split(parameters('imageDefinitionResourceId'), '/')[4]), 'Microsoft.Compute/galleries/images', split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[0], split(format('{0}/{1}', split(parameters('imageDefinitionResourceId'), '/')[8], last(split(parameters('imageDefinitionResourceId'), '/'))), '/')[1]), '2024-03-03').features), lambda('feature', equals(lambdaVariables('feature').name, 'IsAcceleratedNetworkSupported')))[0].value), false())]",
                 "deleteOption": "Delete",
                 "ipConfigurations": [
                   {
@@ -8190,7 +8212,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.33.93.31351",
-              "templateHash": "4108644559694399275"
+              "templateHash": "3410959993783166575"
             }
           },
           "parameters": {
@@ -8265,11 +8287,29 @@
                 "description": "Required. Specifies the OS disk. For security reasons, it is recommended to specify DiskEncryptionSet into the osDisk object.  Restrictions: DiskEncryptionSet cannot be enabled if Azure Disk Encryption (guest-VM encryption using bitlocker/DM-Crypt) is enabled on your VMs."
               }
             },
+            "diskControllerType": {
+              "type": "string",
+              "defaultValue": "SCSI",
+              "allowedValues": [
+                "SCSI",
+                "NVMe"
+              ],
+              "metadata": {
+                "description": "Optional. Specifies the disk controller type. Default value is SCSI."
+              }
+            },
             "dataDisks": {
               "type": "array",
               "defaultValue": [],
               "metadata": {
                 "description": "Optional. Specifies the data disks. For security reasons, it is recommended to specify DiskEncryptionSet into the dataDisk object. Restrictions: DiskEncryptionSet cannot be enabled if Azure Disk Encryption (guest-VM encryption using bitlocker/DM-Crypt) is enabled on your VMs."
+              }
+            },
+            "hibernationEnabled": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Specifies the hibernation state for the virtual machine. Restrictions: Hibernation is not supported for virtual machines with nested virtualization enabled."
               }
             },
             "ultraSSDEnabled": {
@@ -8784,6 +8824,10 @@
               "zones": "[if(not(equals(parameters('availabilityZone'), 0)), array(parameters('availabilityZone')), null())]",
               "plan": "[if(not(empty(parameters('plan'))), parameters('plan'), null())]",
               "properties": {
+                "additionalCapabilities": {
+                  "hibernationEnabled": "[parameters('hibernationEnabled')]",
+                  "ultraSSDEnabled": "[parameters('ultraSSDEnabled')]"
+                },
                 "hardwareProfile": {
                   "vmSize": "[parameters('vmSize')]"
                 },
@@ -8812,6 +8856,7 @@
                     }
                   ],
                   "imageReference": "[parameters('imageReference')]",
+                  "diskControllerType": "[parameters('diskControllerType')]",
                   "osDisk": {
                     "name": "[format('{0}-disk-os-01', parameters('name'))]",
                     "createOption": "[coalesce(tryGet(parameters('osDisk'), 'createOption'), 'FromImage')]",
@@ -8823,9 +8868,6 @@
                       "diskEncryptionSet": "[if(contains(parameters('osDisk').managedDisk, 'diskEncryptionSet'), createObject('id', parameters('osDisk').managedDisk.diskEncryptionSet.id), null())]"
                     }
                   }
-                },
-                "additionalCapabilities": {
-                  "ultraSSDEnabled": "[parameters('ultraSSDEnabled')]"
                 },
                 "osProfile": {
                   "computerName": "[parameters('computerName')]",
@@ -12422,7 +12464,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.33.93.31351",
-              "templateHash": "2775506309403815823"
+              "templateHash": "1542479752307271057"
             }
           },
           "parameters": {
@@ -12752,7 +12794,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.33.93.31351",
-                      "templateHash": "4377704069420763152"
+                      "templateHash": "18239753126752064575"
                     }
                   },
                   "parameters": {
@@ -12883,7 +12925,7 @@
                       "type": "string",
                       "defaultValue": "",
                       "metadata": {
-                        "description": "Optional. The id of the gallery artifact version source. Can specify a OS disk resource id, snapshot resource id, user image or storage account resource."
+                        "description": "Optional. The id of the gallery artifact version source. Can specify a OS disk resource id or snapshot resource id."
                       }
                     },
                     "osDiskImageSourceUri": {
@@ -12897,7 +12939,7 @@
                       "type": "string",
                       "defaultValue": "",
                       "metadata": {
-                        "description": "Optional. The id of the gallery artifact version source. Can specify a disk uri, snapshot uri, user image or storage account resource."
+                        "description": "Optional. The id of the gallery artifact version source. Can specify a managed disk resource id, snapshot resource id, or storage account resource."
                       }
                     },
                     "tags": {
@@ -12923,8 +12965,7 @@
                         "input": "[if(equals(parameters('targetRegions')[copyIndex('regionMatchArray')].name, parameters('location')), true(), false())]"
                       }
                     ],
-                    "sourceStorageProfile": "[if(or(not(empty(parameters('sourceId'))), not(empty(parameters('virtualMachineId')))), createObject('id', parameters('sourceId'), 'virtualMachineId', parameters('virtualMachineId')), null())]",
-                    "osDiskImageStorageProfile": "[if(or(not(empty(parameters('osDiskImageSourceId'))), not(empty(parameters('osDiskImageSourceUri')))), createObject('hostCaching', parameters('hostCaching'), 'source', createObject('id', if(not(empty(parameters('osDiskImageSourceId'))), parameters('osDiskImageSourceId'), null()), 'uri', if(not(empty(parameters('osDiskImageSourceUri'))), parameters('osDiskImageSourceUri'), null()))), null())]",
+                    "storageProfile": "[if(or(not(empty(parameters('sourceId'))), not(empty(parameters('virtualMachineId')))), createObject('source', createObject('id', if(not(empty(parameters('sourceId'))), parameters('sourceId'), null()), 'virtualMachineId', if(not(empty(parameters('virtualMachineId'))), parameters('virtualMachineId'), null()))), createObject('osDiskImage', createObject('hostCaching', parameters('hostCaching'), 'source', createObject('id', if(not(empty(parameters('osDiskImageSourceId'))), parameters('osDiskImageSourceId'), null()), 'uri', if(not(empty(parameters('osDiskImageSourceUri'))), parameters('osDiskImageSourceUri'), null())))))]",
                     "targetRegionDefault": [
                       {
                         "encryption": "[if(not(empty(parameters('diskEncryptionSetId'))), createObject('osDiskImage', createObject('diskEncryptionSetId', parameters('diskEncryptionSetId'), 'securityProfile', createObject('confidentialVMEncryptionType', if(not(empty(parameters('confidentialVMEncryptionType'))), parameters('confidentialVMEncryptionType'), null()), 'secureVMDiskEncryptionSetId', if(not(empty(parameters('secureVMDiskEncryptionSetId'))), parameters('secureVMDiskEncryptionSetId'), null())))), null())]",
@@ -12953,10 +12994,7 @@
                         "safetyProfile": {
                           "allowDeletionOfReplicatedLocations": "[parameters('allowDeletionOfReplicatedLocations')]"
                         },
-                        "storageProfile": {
-                          "osDiskImage": "[variables('osDiskImageStorageProfile')]",
-                          "source": "[variables('sourceStorageProfile')]"
-                        }
+                        "storageProfile": "[variables('storageProfile')]"
                       },
                       "tags": "[parameters('tags')]"
                     }
@@ -13321,7 +13359,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.33.93.31351",
-              "templateHash": "4377704069420763152"
+              "templateHash": "18239753126752064575"
             }
           },
           "parameters": {
@@ -13452,7 +13490,7 @@
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. The id of the gallery artifact version source. Can specify a OS disk resource id, snapshot resource id, user image or storage account resource."
+                "description": "Optional. The id of the gallery artifact version source. Can specify a OS disk resource id or snapshot resource id."
               }
             },
             "osDiskImageSourceUri": {
@@ -13466,7 +13504,7 @@
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. The id of the gallery artifact version source. Can specify a disk uri, snapshot uri, user image or storage account resource."
+                "description": "Optional. The id of the gallery artifact version source. Can specify a managed disk resource id, snapshot resource id, or storage account resource."
               }
             },
             "tags": {
@@ -13492,8 +13530,7 @@
                 "input": "[if(equals(parameters('targetRegions')[copyIndex('regionMatchArray')].name, parameters('location')), true(), false())]"
               }
             ],
-            "sourceStorageProfile": "[if(or(not(empty(parameters('sourceId'))), not(empty(parameters('virtualMachineId')))), createObject('id', parameters('sourceId'), 'virtualMachineId', parameters('virtualMachineId')), null())]",
-            "osDiskImageStorageProfile": "[if(or(not(empty(parameters('osDiskImageSourceId'))), not(empty(parameters('osDiskImageSourceUri')))), createObject('hostCaching', parameters('hostCaching'), 'source', createObject('id', if(not(empty(parameters('osDiskImageSourceId'))), parameters('osDiskImageSourceId'), null()), 'uri', if(not(empty(parameters('osDiskImageSourceUri'))), parameters('osDiskImageSourceUri'), null()))), null())]",
+            "storageProfile": "[if(or(not(empty(parameters('sourceId'))), not(empty(parameters('virtualMachineId')))), createObject('source', createObject('id', if(not(empty(parameters('sourceId'))), parameters('sourceId'), null()), 'virtualMachineId', if(not(empty(parameters('virtualMachineId'))), parameters('virtualMachineId'), null()))), createObject('osDiskImage', createObject('hostCaching', parameters('hostCaching'), 'source', createObject('id', if(not(empty(parameters('osDiskImageSourceId'))), parameters('osDiskImageSourceId'), null()), 'uri', if(not(empty(parameters('osDiskImageSourceUri'))), parameters('osDiskImageSourceUri'), null())))))]",
             "targetRegionDefault": [
               {
                 "encryption": "[if(not(empty(parameters('diskEncryptionSetId'))), createObject('osDiskImage', createObject('diskEncryptionSetId', parameters('diskEncryptionSetId'), 'securityProfile', createObject('confidentialVMEncryptionType', if(not(empty(parameters('confidentialVMEncryptionType'))), parameters('confidentialVMEncryptionType'), null()), 'secureVMDiskEncryptionSetId', if(not(empty(parameters('secureVMDiskEncryptionSetId'))), parameters('secureVMDiskEncryptionSetId'), null())))), null())]",
@@ -13522,10 +13559,7 @@
                 "safetyProfile": {
                   "allowDeletionOfReplicatedLocations": "[parameters('allowDeletionOfReplicatedLocations')]"
                 },
-                "storageProfile": {
-                  "osDiskImage": "[variables('osDiskImageStorageProfile')]",
-                  "source": "[variables('sourceStorageProfile')]"
-                }
+                "storageProfile": "[variables('storageProfile')]"
               },
               "tags": "[parameters('tags')]"
             }

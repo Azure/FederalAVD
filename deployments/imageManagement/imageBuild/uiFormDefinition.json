@@ -1498,49 +1498,7 @@
 										"validationMessage": "The value must contain only valid characters, no spaces, and be between 2 and 64 characters in length."
 									},
 									"visible": "[equals(steps('imageDest').imageDefinition.useExImageDef, false)]"
-								},
-								{
-									"name": "isAcceleratedNetworkSupported",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Accelerated Networking Supported (Preview)",
-									"defaultValue": "Yes",
-									"toolTip": "Set to 'Yes' to allow Virtual Machines deployed from the image to use Accelerated Networking. When set to 'Yes' on the Image definition, capturing VMs that don't support accelerated networking is not supported.",
-									"constraints": {
-										"allowedValues": [
-											{
-												"label": "Yes",
-												"value": true
-											},
-											{
-												"label": "No",
-												"value": false
-											}
-										],
-										"required": false
-									},
-									"visible": "[equals(steps('imageDest').imageDefinition.useExImageDef, false)]"
-								},
-								{
-									"name": "isHibernateSupported",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Hibernation Supported (preview)",
-									"defaultValue": "No",
-									"toolTip": "Set this to 'Yes' to enable Virtual Machines to be deployed from this image definition that support hibernation.",
-									"constraints": {
-										"required": false,
-										"allowedValues": [
-											{
-												"label": "Yes",
-												"value": true
-											},
-											{
-												"label": "No",
-												"value": false
-											}
-										]
-									},
-									"visible": "[and(equals(steps('imageDest').imageDefinition.useExImageDef, false), or(contains(steps('imageVm').imageSource.sku, 'g2'), contains(steps('imageVm').imageSource.sku, 'win11'), contains(steps('imageVm').imageSource.sku, '2022')) )]"
-								},
+								},								
 								{
 									"name": "securityType",
 									"type": "Microsoft.Common.DropDown",
@@ -1577,6 +1535,39 @@
 										]
 									},
 									"visible": "[and(equals(steps('imageDest').imageDefinition.useExImageDef, false), or(contains(steps('imageVm').imageSource.sku, 'g2'), contains(steps('imageVm').imageSource.sku, 'win11'), contains(steps('imageVm').imageSource.sku, '2022')))]"
+								},
+								{
+									"name": "isAcceleratedNetworkSupported",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Accelerated Networking Supported",
+									"defaultValue": "[if(contains(steps('imageDest').imageDefinition.securityType, 'Confidential'), 'No', 'Yes')]",
+									"toolTip": "Set to 'Yes' to allow Virtual Machines deployed from the image to use Accelerated Networking. When set to 'Yes' on the Image definition, capturing VMs that don't support accelerated networking is not supported.",
+									"constraints": {
+										"allowedValues": "[if(contains(steps('imageDest').imageDefinition.securityType, 'Confidential'), parse('[{\"label\":\"No\",\"value\":false}]'), parse('[{\"label\":\"Yes\",\"value\":true},{\"label\":\"No\",\"value\":false}]'))]",
+										"required": true
+									},
+									"visible": "[equals(steps('imageDest').imageDefinition.useExImageDef, false)]"
+								},
+								{
+									"name": "isHibernateSupported",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Hibernation Supported (preview)",
+									"defaultValue": "No",
+									"toolTip": "Set this to 'Yes' to enable Virtual Machines to be deployed from this image definition that support hibernation.",
+									"constraints": {
+										"required": false,
+										"allowedValues": [
+											{
+												"label": "Yes",
+												"value": true
+											},
+											{
+												"label": "No",
+												"value": false
+											}
+										]
+									},
+									"visible": "[and(equals(steps('imageDest').imageDefinition.useExImageDef, false), or(contains(steps('imageVm').imageSource.sku, 'g2'), contains(steps('imageVm').imageSource.sku, 'win11'), contains(steps('imageVm').imageSource.sku, '2022')) )]"
 								},
 								{
 									"name": "isNVMeSupported",
