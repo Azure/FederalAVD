@@ -35,7 +35,6 @@ param imageBuildResourceGroupId string = ''
 param customBuildResourceGroupName string = ''
 
 // Source Image Properties
-
 @description('Optional. The resource Id of the source image to use for the image build. If not provided, the latest image from the specified publisher, offer, and sku will be used.')
 param customSourceImageResourceId string = ''
 
@@ -61,20 +60,11 @@ param appsToRemove array = []
 @description('Optional. Install FSLogix Agent.')
 param installFsLogix bool = false
 
-@description('Conditional. The name of the blob (or Full URI) of FSLogix.zip. Required when "InstallFSLogix" is true and "DownloadLatestCustomizationSources" is false.')
-param fslogixSetupBlobName string = 'FSLogix.zip'
-
 @description('Optional. List of Office 365 ProPlus Apps to Install. Default is [].')
 param office365AppsToInstall array = []
 
-@description('Conditional. The name of the blob (or full URI) of the Office Deployment Tool. Required when "Office365AppsToInstall" is not empty and "DownloadLatestCustomizationSources" is false.')
-param officeDeploymentToolBlobName string = 'Office365DeploymentTool.exe'
-
 @description('Optional. Install OneDrive Per Machine.')
 param installOneDrive bool = false
-
-@description('Conditional. The name of the blob (or full URI) of OneDriveSetup.exe. Required when "InstallOneDrive" is true and "DownloadLatestCustomizationSources" is false.')
-param onedriveSetupBlobName string = 'OneDriveSetup.exe'
 
 @description('Optional. Install Microsoft Teams.')
 param installTeams bool = false
@@ -91,14 +81,8 @@ param installTeams bool = false
 @description('Optional. The Teams Governmant Cloud type.')
 param teamsCloudType string = 'Commercial'
 
-@description('Conditional. The name of the blob (or full Uri) of the Teams installer. Required when "InstallTeams" is true and "DownloadLatestCustomizationSources" is false.')
-param teamsInstallerBlobName string = 'Microsoft-Teams.zip'
-
 @description('Optional. Apply the Virtual Desktop Optimization Tool customizations.')
 param installVirtualDesktopOptimizationTool bool = false
-
-@description('Conditional. The name of the zip blob containing the Virtual Desktop Optimization Tool Script and files. Required when "InstallVirtualDesktopOptimizationTool" is true and "DownloadLatestCustomizationSources" is false.')
-param vDotBlobName string = 'VDOT.zip'
 
 @description('''An array of image customization objects that are executed first before any restarts or updates.
 Each object contains the following properties:
@@ -278,18 +262,20 @@ param remoteImageVersionStorageAccountType string = 'Standard_LRS'
 param tags object = {}
 
 // * VARIABLE DECLARATIONS * //
-
 var installers = []
 // elimnate duplicates
 var customizers = union(customizations, installers)
 
 var cloud = environment().name
-var locations = loadJsonContent('../../../.common/data/locations.json')[environment().name]
-var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
+var locations = loadJsonContent('../../../../.common/data/locations.json')[environment().name]
+var resourceAbbreviations = loadJsonContent('../../../../.common/data/resourceAbbreviations.json')
 
 var computeLocation = vnet.location
 var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''
-var logStorageAccountName = take(replace(toLower('sa${depPrefix}log${uniqueString(subscription().id,imageBuildResourceGroupName)}'), '-', ''),24)
+var logStorageAccountName = take(
+  replace(toLower('sa${depPrefix}log${uniqueString(subscription().id,imageBuildResourceGroupName)}'), '-', ''),
+  24
+)
 
 var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
   ? (empty(customBuildResourceGroupName)
@@ -305,44 +291,36 @@ var logContainerUri = collectCustomizationLogs
   ? '${logsStorageAccount.outputs.primaryBlobEndpoint}${logContainerName}/'
   : ''
 
-var securityFeature = securityType != 'Standard'
-? [
-    {
-      name: 'SecurityType'
-      value: securityType
-    }
-  ]
-: []
-
-var hibernateSupported = imageDefinitionIsHibernateSupported
-? [
-    {
-      name: 'IsHibernateSupported'
-      value: 'true'
-    }
-  ]
-: []
-
-var acceleratedNetworkSupported = imageDefinitionIsAcceleratedNetworkSupported
-? [
-    {
-      name: 'IsAcceleratedNetworkSupported'
-      value: 'true'
-    }
-  ]
-: []
-
-var diskControllerTypes = imageDefinitionIsAcceleratedNetworkSupported
-? [
-    {
-      name: 'DiskControllerTypes'
-      value: 'SCSI, NVMe'
-    }
-  ]
-: []
+// calculate the image definition features
+var newimageDefinitionFeatures = union(
+  imageVmSecurityType != 'Standard'
+    ? {
+        name: 'SecurityType'
+        value: imageVmSecurityType
+      }
+    : {},
+  imageDefinitionIsHibernateSupported
+    ? {
+        name: 'IsHibernateSupported'
+        value: 'true'
+      }
+    : {},
+  imageDefinitionIsAcceleratedNetworkSupported
+    ? {
+        name: 'IsAcceleratedNetworkSupported'
+        value: 'true'
+      }
+    : {},
+  imageDefinitionIsHigherStoragePerformanceSupported
+    ? {
+        name: 'DiskControllerTypes'
+        value: 'SCSI, NVMe'
+      }
+    : {}
+)
 
 var imageDefinitionFeatures = empty(imageDefinitionResourceId)
-  ? union(securityFeature, acceleratedNetworkSupported, hibernateSupported, diskControllerTypes)
+  ? !empty(newimageDefinitionFeatures) ? [newimageDefinitionFeatures] : []
   : existingImageDefinition.properties.features
 
 var galleryImageDefinitionHyperVGeneration = endsWith(sku, 'g2') || startsWith(sku, 'win11') ? 'V2' : 'V1'
@@ -351,17 +329,18 @@ var galleryImageDefinitionName = empty(imageDefinitionResourceId)
       ? '${replace('${resourceAbbreviations.imageDefinitions}-${replace(galleryImageDefinitionPublisher, '-', '')}-${replace(galleryImageDefinitionOffer, '-', '')}-${replace(galleryImageDefinitionSku, '-', '')}', ' ', '')}'
       : customImageDefinitionName)
   : last(split(imageDefinitionResourceId, '/'))
-var galleryImageDefinitionOffer = !empty(imageDefinitionOffer) ? replace(imageDefinitionOffer, ' ', '') : offer
 var galleryImageDefinitionPublisher = !empty(imageDefinitionPublisher)
   ? replace(imageDefinitionPublisher, ' ', '')
   : publisher
+var galleryImageDefinitionOffer = !empty(imageDefinitionOffer) ? replace(imageDefinitionOffer, ' ', '') : offer
 
+var galleryImageDefinitionSku = !empty(imageDefinitionSku) ? replace(imageDefinitionSku, ' ', '') : sku
 var galleryImageDefinitionSecurityType = empty(imageDefinitionResourceId)
   ? imageDefinitionSecurityType
   : !empty(filter(imageDefinitionFeatures, feature => feature.name == 'SecurityType'))
       ? filter(imageDefinitionFeatures, feature => feature.name == 'SecurityType')[0].value
       : 'Standard'
-var galleryImageDefinitionSku = !empty(imageDefinitionSku) ? replace(imageDefinitionSku, ' ', '') : sku
+
 // build an image version from the ISO 8601 timestamp
 var autoImageVersionName = '${substring(timeStamp, 2, 2)}.${substring(timeStamp, 4, 4)}.${substring(timeStamp, 9, 4)}'
 var imageVersionName = imageMajorVersion != -1 && imageMajorVersion != -1 && imagePatch != -1
@@ -403,7 +382,7 @@ var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0 ? dateTimeAdd(timeStam
 var imageVmName = take('${depPrefix}vmimg-${uniqueString(timeStamp)}', 15)
 var orchestrationVmName = take('${depPrefix}vmorc-${uniqueString(timeStamp)}', 15)
 
-var securityType = galleryImageDefinitionSecurityType == 'TrustedLaunch'
+var imageVmSecurityType = galleryImageDefinitionSecurityType == 'TrustedLaunch'
   ? 'TrustedLaunch'
   : galleryImageDefinitionSecurityType == 'ConfidentialVM' ? 'ConfidentialVM' : 'Standard'
 
@@ -451,19 +430,15 @@ resource existingImageDefinition 'Microsoft.Compute/galleries/images@2024-03-03'
   scope: resourceGroup(split(imageDefinitionResourceId, '/')[2], split(imageDefinitionResourceId, '/')[4])
 }
 
-module imageDefinition '../../sharedModules/resources/compute/gallery/image/main.bicep' = if (empty(imageDefinitionResourceId)) {
+module imageDefinition 'modules/imageDefinition.bicep' = if (empty(imageDefinitionResourceId)) {
   name: '${depPrefix}Gallery-Image-Definition-${timeStamp}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[4])
   params: {
     location: location
     galleryName: last(split(computeGalleryResourceId, '/'))
+    features: imageDefinitionFeatures
     name: galleryImageDefinitionName
     hyperVGeneration: galleryImageDefinitionHyperVGeneration
-    isHibernateSupported: imageDefinitionIsHibernateSupported
-    isAcceleratedNetworkSupported: imageDefinitionIsAcceleratedNetworkSupported
-    isHigherStoragePerformanceSupported: imageDefinitionIsHigherStoragePerformanceSupported
-    securityType: imageDefinitionSecurityType
-    osType: 'Windows'
     osState: 'Generalized'
     publisher: galleryImageDefinitionPublisher
     offer: galleryImageDefinitionOffer
@@ -477,34 +452,17 @@ resource remoteComputeGallery 'Microsoft.Compute/galleries@2024-03-03' existing 
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
 }
 
-module remoteImageDefinition '../../sharedModules/resources/compute/gallery/image/main.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
+module remoteImageDefinition 'modules/imageDefinition.bicep' = if(!empty(remoteComputeGalleryResourceId)) {
   name: '${depPrefix}Remote-Gallery-Image-Definition-${timeStamp}'
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {
     galleryName: last(split(remoteComputeGalleryResourceId, '/'))
     location: remoteLocation
     name: empty(imageDefinitionResourceId) ? galleryImageDefinitionName : last(split(imageDefinitionResourceId, '/'))
+    feature: imageDefinitionFeatures
     hyperVGeneration: empty(imageDefinitionResourceId)
       ? galleryImageDefinitionHyperVGeneration
       : any(existingImageDefinition.properties.hyperVGeneration)
-    isHibernateSupported: !empty(filter(imageDefinitionFeatures, feature => feature.name == 'IsHibernateSupported'))
-      ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsHibernateSupported')[0].value)
-      : false
-    isAcceleratedNetworkSupported: !empty(filter(
-        imageDefinitionFeatures,
-        feature => feature.name == 'IsAcceleratedNetworkSupported'
-      ))
-      ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsAcceleratedNetworkSupported')[0].value)
-      : false
-    isHigherStoragePerformanceSupported: !empty(filter(
-        imageDefinitionFeatures,
-        feature => feature.name == 'DiskControllerTypes'
-      ))
-      ? contains(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0].value, 'NVMe')
-      : false
-    securityType: !empty(filter(imageDefinitionFeatures, feature => feature.name == 'SecurityType'))
-      ? any(filter(imageDefinitionFeatures, feature => feature.name == 'SecurityType')[0].value)
-      : 'Standard'
     osType: 'Windows'
     osState: 'Generalized'
     publisher: empty(imageDefinitionResourceId)
@@ -517,7 +475,6 @@ module remoteImageDefinition '../../sharedModules/resources/compute/gallery/imag
       ? galleryImageDefinitionSku
       : existingImageDefinition.properties.identifier.sku
     tags: tags[?'Microsoft.Compute/galleries/images'] ?? {}
-  }
 }
 
 // * Role Assignments * //
@@ -706,7 +663,10 @@ module imageVm '../../sharedModules/resources/compute/virtual-machine/main.bicep
     adminUsername: adminUserName
     bootDiagnostics: false
     diskControllerType: !empty(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes'))
-    ? contains(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0].value, 'NVMe') ? 'NVMe' : null : null
+      ? contains(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0].value, 'NVMe')
+          ? 'NVMe'
+          : null
+      : null
     encryptionAtHost: encryptionAtHost
     hibernationEnabled: !empty(filter(imageDefinitionFeatures, feature => feature.name == 'IsHibernateSupported'))
       ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsHibernateSupported')[0].value)
@@ -724,11 +684,11 @@ module imageVm '../../sharedModules/resources/compute/virtual-machine/main.bicep
     nicConfigurations: [
       {
         enableAcceleratedNetworking: !empty(filter(
-          imageDefinitionFeatures,
-          feature => feature.name == 'IsAcceleratedNetworkSupported'
-        ))
-        ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsAcceleratedNetworkSupported')[0].value)
-        : false
+            imageDefinitionFeatures,
+            feature => feature.name == 'IsAcceleratedNetworkSupported'
+          ))
+          ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsAcceleratedNetworkSupported')[0].value)
+          : false
         deleteOption: 'Delete'
         ipConfigurations: [
           {
@@ -749,9 +709,9 @@ module imageVm '../../sharedModules/resources/compute/virtual-machine/main.bicep
       }
     }
     osType: 'Windows'
-    securityType: securityType
-    secureBootEnabled: securityType == 'TrustedLaunch' ? true : false
-    vTpmEnabled: securityType == 'TrustedLaunch' ? true : false
+    securityType: imageVmSecurityType
+    secureBootEnabled: imageVmSecurityType == 'TrustedLaunch' ? true : false
+    vTpmEnabled: imageVmSecurityType == 'TrustedLaunch' ? true : false
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
     userAssignedIdentities: empty(userAssignedIdentityResourceId)
       ? {
@@ -793,12 +753,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     updateService: updateService
     wsusServer: wsusServer
     artifactsContainerUri: artifactsContainerUri
-    fslogixSetupBlobName: fslogixSetupBlobName
-    officeDeploymentToolBlobName: officeDeploymentToolBlobName
-    onedriveSetupBlobName: onedriveSetupBlobName
-    teamsInstallerBlobName: teamsInstallerBlobName
     vdiCustomizations: vdiCustomizations
-    vDotBlobName: vDotBlobName
   }
 }
 
@@ -939,3 +894,4 @@ module remoteImageVersion '../../sharedModules/resources/compute/gallery/image/v
     tags: tags[?'Microsoft.Compute/galleries/images/versions'] ?? {}
   }
 }
+*/

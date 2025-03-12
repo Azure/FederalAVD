@@ -9,16 +9,16 @@ param logBlobContainerUri string
 param orchestrationVmName string
 param imageVmName string
 param installFsLogix bool
-param fslogixSetupBlobName string
+param fslogixSetupBlobName string = 'FSLogix.zip'
 param installOneDrive bool
 param installTeams bool
 param installUpdates bool
 param installVirtualDesktopOptimizationTool bool
 param office365AppsToInstall array
-param onedriveSetupBlobName string
-param vDotBlobName string
-param officeDeploymentToolBlobName string
-param teamsInstallerBlobName string
+param onedriveSetupBlobName string = 'OneDriveSetup.exe'
+param vDotBlobName string = 'VDOT.zip'
+param officeDeploymentToolBlobName string = 'Office365DeploymentTool.exe'
+param teamsInstallerBlobName string = 'Microsoft-Teams.zip'
 param teamsCloudType string
 param timeStamp string = utcNow('yyMMddhhmm')
 param updateService string

@@ -86,8 +86,12 @@ param isHibernateSupported bool = false
 @sys.description('Optional. The image supports accelerated networking.</p>Accelerated networking enables single root I/O virtualization (SR-IOV) to a VM, greatly improving its networking performance.</p>This high-performance path bypasses the host from the data path, which reduces latency, jitter, and CPU utilization for the most demanding network workloads on supported VM types.')
 param isAcceleratedNetworkSupported bool = false
 
-@sys.description('Optional. The image supports Higher Storage Performance with NVMe.')
-param isHigherStoragePerformanceSupported bool = false
+@allowed([
+  'SCSI'
+  'SCSI, NVMe'
+])
+@sys.description('Optional. The disk controller types. Requires a hyperVGeneration V2.')
+param diskControllerTypes array = ['SCSI, NVMe']
 
 @sys.description('Optional. The description of this gallery Image Definition resource. This property is updatable.')
 param description string = ''
@@ -119,43 +123,29 @@ param excludedDiskTypes array = []
 @sys.description('Optional. Tags for all resources.')
 param tags object = {}
 
-var securityFeature = securityType != 'Standard'
-  ? [
-      {
-        name: 'SecurityType'
-        value: securityType
-      }
-    ]
-  : []
-
-var hibernateSupported = isHibernateSupported
-  ? [
-      {
-        name: 'IsHibernateSupported'
-        value: 'true'
-      }
-    ]
-  : []
-
-var acceleratedNetworkSupported = isAcceleratedNetworkSupported
-  ? [
-      {
+var features = union(
+  securityType != 'Standard' ? { name: 'SecurityType', value: securityType } : {},
+  isAcceleratedNetworkSupported
+    ? {
         name: 'IsAcceleratedNetworkSupported'
         value: 'true'
       }
-    ]
-  : []
-
-var diskControllerTypes = isHigherStoragePerformanceSupported
-  ? [
-      {
+    : {},
+  isHibernateSupported
+    ? {
+        name: 'IsHibernateSupported'
+        value: 'true'
+      }
+    : {},
+  diskControllerTypes == 'SCSI, NVMe'
+    ? {
         name: 'DiskControllerTypes'
         value: 'SCSI, NVMe'
       }
-    ]
-  : []
+    : {}
+)
 
-var features = union(securityFeature, acceleratedNetworkSupported, hibernateSupported, diskControllerTypes)
+var imageDefinitionFeatures = !empty(features) ? [features] : null
 
 resource gallery 'Microsoft.Compute/galleries@2022-03-03' existing = {
   name: galleryName
@@ -185,7 +175,7 @@ resource image 'Microsoft.Compute/galleries/images@2022-03-03' = {
       }
     }
     hyperVGeneration: hyperVGeneration
-    features: features
+    features: imageDefinitionFeatures
     description: description
     eula: !empty(eula) ? eula : null
     privacyStatementUri: privacyStatementUri
