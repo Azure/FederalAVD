@@ -237,7 +237,7 @@
     "PuTTY": {
         "DownloadUrl": "",
         "WebsiteUrl": "https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html",
-        "SearchString": "",
+        "SearchString": "*64bit*.msi",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
@@ -249,11 +249,11 @@
     "7-zip": {
         "DownloadUrl": "",
         "WebsiteUrl": "https://www.7-zip.org/download.html",
-        "SearchString": "x64.msi",
+        "SearchString": "*x64.exe",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
-        "DestinationFileName": "PuTTY.msi",
+        "DestinationFileName": "7-zip.exe",
         "DestinationFolders": [
             ""
         ]
