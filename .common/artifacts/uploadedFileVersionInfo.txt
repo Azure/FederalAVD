@@ -1,91 +1,91 @@
 SoftwareName = LGPO
 DownloadUrl = https://download.microsoft.com/download/8/5/c/85c25433-a1b0-4ffa-9429-7e023e7da8d8/LGPO.zip
-Downloaded on = 03/14/2025 06:46:31
+Downloaded on = 03/17/2025 19:42:38
 --------------------------------------------------
 SoftwareName = FSLogix
 DownloadUrl = https://aka.ms/fslogix_download
 Download File = FSLogix_25.02.zip
-Downloaded on = 03/14/2025 06:46:33
+Downloaded on = 03/17/2025 19:42:43
 --------------------------------------------------
 SoftwareName = Office365DeploymentTool
 DownloadUrl = https://download.microsoft.com/download/6c1eeb25-cf8b-41d9-8d0d-cc1dbc032140/officedeploymenttool_18526-20146.exe
 Download File = officedeploymenttool_18526-20146.exe
 @{ProductVersion=16.0.18526.20146; FileVersion=16.0.18526.20146}
-Downloaded on = 03/14/2025 06:46:34
+Downloaded on = 03/17/2025 19:42:49
 --------------------------------------------------
 SoftwareName = Office365AdministrativeTemplates
 DownloadUrl = https://download.microsoft.com/download/2/e/e/2eeec938-c014-419d-bb4b-d184871450f1/admintemplates_x64_5486-1000_en-us.exe
 Download File = admintemplates_x64_5486-1000_en-us.exe
 @{ProductVersion=16.0.5486.1000; FileVersion=16.0.5486.1000}
-Downloaded on = 03/14/2025 06:46:35
+Downloaded on = 03/17/2025 19:42:55
 --------------------------------------------------
 SoftwareName = OneDrive
 DownloadUrl = https://go.microsoft.com/fwlink/p/?linkid=2121808
 @{ProductVersion=19.232.1124.0009; FileVersion=19.232.1124.0009}
-Downloaded on = 03/14/2025 06:46:37
+Downloaded on = 03/17/2025 19:43:00
 --------------------------------------------------
 SoftwareName = TeamsBootstrapper
 DownloadUrl = https://go.microsoft.com/fwlink/?linkid=2243204&clcid=0x409
 @{ProductVersion=1.0.2414501; FileVersion=1.0.2414501}
-Downloaded on = 03/14/2025 06:46:37
+Downloaded on = 03/17/2025 19:43:00
 --------------------------------------------------
 SoftwareName = Teams64BitMSIX
 DownloadUrl = https://go.microsoft.com/fwlink/?linkid=2196106
-Downloaded on = 03/14/2025 06:46:40
+Downloaded on = 03/17/2025 19:43:10
 --------------------------------------------------
 SoftwareName = WebView2Runtime
 DownloadUrl = https://go.microsoft.com/fwlink/?linkid=2124703
 Download File = MicrosoftEdgeWebview2Setup.exe
 @{ProductVersion=1.3.195.45; FileVersion=1.3.195.45}
-Downloaded on = 03/14/2025 06:46:40
+Downloaded on = 03/17/2025 19:43:10
 --------------------------------------------------
 SoftwareName = RemoteDesktopWebRTCRedirectorService
 DownloadUrl = https://aka.ms/msrdcwebrtcsvc/msi
 Download File = MsRdcWebRTCSvc_HostSetup_1.54.2408.19001_x64.msi
 @{File=System.IO.FileInfo[]; UpgradeCode={66722E7E-5DF5-4C1D-841C-1BD9C36830CC}; WixUIRMOption=UseRM; ALLUSERS=1; ARPNOMODIFY=1; QtExecCmdLine="[SystemFolder]taskkill.exe" /F /T /IM Teams.exe /IM ms-teams.exe; Manufacturer=Microsoft Corporation; ProductCode={2270A09C-AF5A-4F19-BAF2-4DDC70C80F7B}; ProductLanguage=1033; ProductName=Remote Desktop WebRTC Redirector Service; ProductVersion=1.54.2408.19001; DefaultUIFont=WixUI_Font_Normal; WixUI_Mode=Minimal; ErrorDialog=ErrorDlg; SecureCustomProperties=NEWER_VERSION_FOUND;PREVIOUS_VERSION_FOUND}
-Downloaded on = 03/14/2025 06:46:42
+Downloaded on = 03/17/2025 19:43:13
 --------------------------------------------------
 SoftwareName = VisualStudioRedistributables
 DownloadUrl = https://aka.ms/vs/17/release/vc_redist.x64.exe
 @{ProductVersion=14.42.34438.0; FileVersion=14.42.34438.0}
-Downloaded on = 03/14/2025 06:46:42
+Downloaded on = 03/17/2025 19:43:15
 --------------------------------------------------
 SoftwareName = EdgeEnterpriseAdministrativeTemplates
 DownloadUrl = https://aka.ms/vs/17/release/vc_redist.x64.exe
 Download File = vc_redist.x64.exe
-Downloaded on = 03/14/2025 06:46:43
+Downloaded on = 03/17/2025 19:43:17
 --------------------------------------------------
 SoftwareName = PowerShellAzModule
 DownloadUrl = https://github.com/Azure/azure-powershell/releases/download/v13.3.0-March2025/Az-Cmdlets-13.3.0.39388-x64.msi
 Download File = Az-Cmdlets-13.3.0.39388-x64.msi
 @{File=System.IO.FileInfo[]; UpgradeCode={EBC1AD5E-1BBE-45B5-9E8D-ACFC8951C253}; NETFRAMEWORK472=0; WixUIRMOption=UseRM; ALLUSERS=1; ARPNOMODIFY=1; POWERSHELLEXE=c:\windows\system32\WindowsPowerShell\v1.0\powershell.exe; ARPPRODUCTICON=icon.ico; Manufacturer=Microsoft Corporation; ProductCode={617D26F4-5068-4A1F-8D92-B75A71D4038B}; ProductLanguage=1033; ProductName=Microsoft Azure PowerShell - March 2025; ProductVersion=13.3.0.39388; DefaultUIFont=WixUI_Font_Normal; WixUI_Mode=Minimal; ErrorDialog=ErrorDlg; SecureCustomProperties=ISVSINSTALL;NETFRAMEWORK472;WIX_DOWNGRADE_DETECTED;WIX_UPGRADE_DETECTED}
-Downloaded on = 03/14/2025 06:46:46
+Downloaded on = 03/17/2025 19:43:26
 --------------------------------------------------
 SoftwareName = Powershell7
 DownloadUrl = https://github.com/PowerShell/PowerShell/releases/download/v7.5.0/PowerShell-7.5.0-win-x64.msi
 Download File = PowerShell-7.5.0-win-x64.msi
 @{File=System.IO.FileInfo[]; UpgradeCode={31AB5147-9A97-4452-8443-D9709F0516E1}; ProductName=PowerShell 7-x64; WixUIRMOption=UseRM; WIXUI_INSTALLDIR=INSTALLFOLDER; ALLUSERS=1; ARPNOMODIFY=1; ARPPRODUCTICON=PowerShellExe.ico; ARPHELPLINK=https://github.com/PowerShell/PowerShell; WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT=Open PowerShell; WixShellExecTarget=[VersionFolder]pwsh.exe; REINSTALLMODE=dmus; Manufacturer=Microsoft Corporation; ProductCode={D012DCD1-67EA-4627-938F-19FD677FC03A}; ProductLanguage=1033; ProductVersion=7.5.0.0; DefaultUIFont=WixUI_Font_Normal; WixUI_Mode=InstallDir; ErrorDialog=ErrorDlg; SecureCustomProperties=PWRSHPLUGIN_VERSION;UNIVERSAL_C_RUNTIME_INSTALLED;WIX_DOWNGRADE_DETECTED;WIX_UPGRADE_DETECTED}
-Downloaded on = 03/14/2025 06:46:49
+Downloaded on = 03/17/2025 19:43:33
 --------------------------------------------------
 SoftwareName = VSCode
 DownloadUrl = https://code.visualstudio.com/sha/download?build=stable&os=win32-x64
 Download File = VSCodeSetup-x64-1.98.2.exe
 @{ProductVersion=1.98.2                                            ; FileVersion=1.98.2              }
-Downloaded on = 03/14/2025 06:46:51
+Downloaded on = 03/17/2025 19:43:42
 --------------------------------------------------
 SoftwareName = DoDInstallRoot
 DownloadUrl = https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/InstallRoot_5.6x64_NonAdmin.msi
 Download File = InstallRoot_5.6x64_NonAdmin.msi
 @{File=System.IO.FileInfo[]; AppsShutdownOption=All; DiskPrompt=[1]; SecureCustomProperties=OLDPRODUCTS;AI_NEWERPRODUCTFOUND; AI_BITMAP_DISPLAY_MODE=0; AI_FrameBtnsColor=powderblue; AI_BackgroundColor=powderblue; WindowsTypeNT50=Windows 2000; AI_CLEAN_RESOURCES_DISABLE_UPGRADE=1; AI_CLEAN_RESOURCES_UNINSTALL=1; ButtonText_Reset=&Reset; ButtonText_Finish=&Finish; Manufacturer=DoD PKE; AI_FrameColor=powderblue; AI_CLEAN_RESOURCES_USER_PROMPT_BASIC_UI=0; ExitBackground=ExitBackground.jpg_1; AI_ImagesColor=powderblue; Background=background.jpg_1; WindowsType9X=Windows 9x/ME; ButtonText_Return=&Return; FolderLogoIcon=folderlogoicon; AI_CLEAN_RESOURCES_USER_PROMPT_FULL_UI=0; AI_CommitButton=ButtonText_Install; ButtonText_Install=&Install; AI_PREDEF_LCONDS_PROPS=AI_DETECTED_DOTNET_VERSION; WindowsTypeNT5X=Windows XP/2003 RTM, Windows XP/2003 SP1, Windows XP SP2 x86; ButtonText_Retry=&Retry; AI_REQUIRED_DOTNET_DISPLAY=3.5; ButtonText_Ignore=&Ignore; ButtonText_Accept=&Accept; ButtonText_Exit=&Exit; AI_REQUIRED_DOTNET_VERSION=3.5; InstallLogoIcon=installlogoicon; WindowsTypeNT40=Windows NT 4.0; AI_ThemeStyle=head; AppLogoIcon=DoDPKE128.ico; ARPPRODUCTICON=pke_1648_1.exe; ButtonText_Yes=&Yes; ARPCOMMENTS=This installer database contains the logic and data required to install InstallRoot.; ARPCONTACT=dodpke@mail.mil; WindowsTypeNT40Display=Windows NT 4.0; ButtonText_Cancel=Cancel; ARPHELPLINK=https://public.cyber.mil/pki-pke/; ARPURLINFOABOUT=https://public.cyber.mil/pki-pke/; EnableUserControl=1; CHECKBOX_1_PROP=1; CHECK1=1; CHECK2=1; CHECKBOX_1_PROP_1=1; ButtonText_Remove=&Remove; CTRLS=2; WindowsTypeNT5XDisplay=Windows XP/2003 RTM, Windows XP/2003 SP1, Windows XP SP2 x86; ProductCode={B48F8D38-B01E-44DC-9884-DB4AD1B8CA2B}; ButtonText_Repair=&Repair; ProductLanguage=1033; ProductVersion=5.6; WindowsType9XDisplay=Windows 9x/ME; ProductName=InstallRoot; UpgradeCode={0D94D9ED-3EC0-4C22-A960-E13865EC33D3}; WindowsTypeNT50Display=Windows 2000; ButtonText_OK=OK; ErrorDialog=ErrorDlg; INSTALLLEVEL=3; PROMPTROLLBACKCOST=P; ButtonText_Browse=Br&owse...; ButtonText_No=&No; ButtonText_Resume=&Resume; ButtonText_Decline=&Decline; CtrlEvtChanging=Changing; CtrlEvtRemoving=Removing; CtrlEvtRepairing=Repairing; CtrlEvtchanges=changes; CtrlEvtremoves=removes; CtrlEvtrepairs=repairs; PrintIcon=printico; InstallMode=Typical; InstallModeComplete=Complete; InstallModeCustom=Custom; InstallModeTypical=Typical; Setup=Setup; Wizard=Setup Wizard; Progress1=Installing; Progress2=installs; AiPrerequisitesColums=PrereqLabel,PrereqReq,PrereqFound,PrereqAction; Text_Next=Next; Text_Install=Install; ButtonText_Back=< &Back; ButtonText_Next=&Next >; DefaultUIFont=DlgFont8; DlgTitleFont={\DlgFontBold8}; ExclamationIcon=exclamic; InfoIcon=info; TabBackground=tabback; RemoveIcon=removico; UpDirIcon=Up; NewDirIcon=New; WaitLogoItem=waitlogoicon; WhiteBackround=whitebackground; CompleteSetupIcon=completi; AiEarlyValidate=1; AI_CF_TITLE_TEXT_STYLE={\CfTitleFont}; OptionsLogoIcon=optionslogoicon; RepairIcon=repairic; CustomSetupIcon=custicon; InstallerIcon=insticon; MinBackground=minbackground; AI_LOG_CHECKBOX=1; AiStyleConditions= ; AI_BOOTSTRAPPERLANGS=1033;; AI_BUILD_NAME=DefaultBuild; AI_PACKAGE_TYPE=x64; AI_APP_FILE=[#InstallRootUI.exe]}
-Downloaded on = 03/14/2025 06:46:52
+Downloaded on = 03/17/2025 19:43:44
 --------------------------------------------------
 SoftwareName = DoDSTIGGPOPackage
 DownloadUrl = https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_January_2025.zip
 Download File = U_STIG_GPO_Package_January_2025.zip
-Downloaded on = 03/14/2025 06:47:00
+Downloaded on = 03/17/2025 19:43:50
 --------------------------------------------------
 SoftwareName = VirtualDesktopOptimizationTool
 DownloadUrl = https://github.com/The-Virtual-Desktop-Team/Virtual-Desktop-Optimization-Tool/archive/refs/heads/main.zip
 Download File = main.zip
-Downloaded on = 03/14/2025 06:47:00
+Downloaded on = 03/17/2025 19:43:51
 --------------------------------------------------

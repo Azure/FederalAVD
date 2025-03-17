@@ -2,7 +2,7 @@
     "LGPO": {
         "DownloadUrl": "https://download.microsoft.com/download/8/5/c/85c25433-a1b0-4ffa-9429-7e023e7da8d8/LGPO.zip",
         "WebSiteUrl": "https://www.microsoft.com/en-us/download/details.aspx?id=55319",
-        "SearchString": "LGPO.zip",
+        "SearchString": "*LGPO.zip",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
@@ -32,7 +32,7 @@
     "Office365DeploymentTool": {
         "DownloadUrl": "https://download.microsoft.com/download/6c1eeb25-cf8b-41d9-8d0d-cc1dbc032140/officedeploymenttool_18526-20146.exe",
         "WebSiteUrl": "https://go.microsoft.com/fwlink/p/?LinkID=626065",
-        "SearchString": "officedeploymenttool",
+        "SearchString": "*officedeploymenttool*",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
@@ -44,7 +44,7 @@
     "Office365AdministrativeTemplates": {
         "DownloadUrl": "https://download.microsoft.com/download/2/e/e/2eeec938-c014-419d-bb4b-d184871450f1/admintemplates_x64_5486-1000_en-us.exe",
         "WebsiteUrl": "https://www.microsoft.com/en-us/download/details.aspx?id=49030",
-        "SearchString": "admintemplates_x64*.exe",
+        "SearchString": "*admintemplates_x64*.exe",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
@@ -189,7 +189,7 @@
     "DoDSTIGGPOPackage": {
         "DownloadUrl": "",
         "WebSiteUrl": "https://public.cyber.mil/stigs/gpo",
-        "SearchString": "GPOs",
+        "SearchString": "*GPOs*",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",

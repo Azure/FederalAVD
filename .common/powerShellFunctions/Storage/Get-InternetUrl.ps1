@@ -36,7 +36,7 @@ Function Get-InternetUrl {
     $HTML = Invoke-WebRequest -Uri $WebSiteUrl -UseBasicParsing
     $Links = $HTML.Links
     #First try to find search string in actual link href
-    $LinkHref = $HTML.Links.Href | Get-Unique | Where-Object { $_ -like "*$SearchString*" }
+    $LinkHref = $HTML.Links.Href | Get-Unique | Where-Object { $_ -like $SearchString }
     If ($LinkHref) {
         Return $LinkHref
     }
