@@ -1,8 +1,8 @@
 {
     "LGPO": {
         "DownloadUrl": "https://download.microsoft.com/download/8/5/c/85c25433-a1b0-4ffa-9429-7e023e7da8d8/LGPO.zip",
-        "WebSiteUrl": "https://www.microsoft.com/en-us/download/details.aspx?id=55319",
-        "SearchString": "*LGPO.zip",
+        "WebSiteUrl": "",
+        "SearchString": "",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
@@ -15,7 +15,8 @@
             "Configure-WindowsUpdatePolicy",
             "LGPO",
             "STIGs"
-        ]
+        ],
+        "Evergreen": {}
     },
     "FSLogix": {
         "DownloadUrl": "https://aka.ms/fslogix_download",
@@ -27,31 +28,34 @@
         "DestinationFileName": "FSLogix.zip",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {}
     },
     "Office365DeploymentTool": {
-        "DownloadUrl": "https://download.microsoft.com/download/6c1eeb25-cf8b-41d9-8d0d-cc1dbc032140/officedeploymenttool_18526-20146.exe",
-        "WebSiteUrl": "https://go.microsoft.com/fwlink/p/?LinkID=626065",
-        "SearchString": "*officedeploymenttool*",
+        "DownloadUrl": "https://officecdn.microsoft.com/pr/wsus/setup.exe",
+        "WebSiteUrl": "",
+        "SearchString": "",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
         "DestinationFileName": "Office365DeploymentTool.exe",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {}
     },
     "Office365AdministrativeTemplates": {
         "DownloadUrl": "https://download.microsoft.com/download/2/e/e/2eeec938-c014-419d-bb4b-d184871450f1/admintemplates_x64_5486-1000_en-us.exe",
-        "WebsiteUrl": "https://www.microsoft.com/en-us/download/details.aspx?id=49030",
-        "SearchString": "*admintemplates_x64*.exe",
+        "WebsiteUrl": "",
+        "SearchString": "",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
         "DestinationFileName": "AdminTemplates_x64.exe",
         "DestinationFolders": [
             "Configure-Office365Policy"
-        ]
+        ],
+        "Evergreen": {}
     },
     "OneDrive": {
         "DownloadUrl": "https://go.microsoft.com/fwlink/p/?linkid=2121808",
@@ -63,7 +67,8 @@
         "DestinationFileName": "OneDriveSetup.exe",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {}
     },
     "TeamsBootstrapper": {
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2243204&clcid=0x409",
@@ -75,7 +80,8 @@
         "DestinationFileName": "teamsbootstrapper.exe",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {}
     },
     "Teams64BitMSIX": {
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2196106",
@@ -87,7 +93,8 @@
         "DestinationFileName": "MSTeams-x64.msix",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {}
     },
     "WebView2Runtime": {
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2124703",
@@ -99,7 +106,8 @@
         "DestinationFileName": "WebView2.exe",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {}
     },
     "RemoteDesktopWebRTCRedirectorService": {
         "DownloadUrl": "https://aka.ms/msrdcwebrtcsvc/msi",
@@ -111,7 +119,8 @@
         "DestinationFileName": "MsRdcWebRTCSvc.msi",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {}
     },
     "VisualStudioRedistributables": {
         "DownloadUrl": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
@@ -124,7 +133,8 @@
         "DestinationFolders": [
             "",
             "VisualC++Redistributables"
-        ]
+        ],
+        "Evergreen": {}
     },
     "EdgeEnterpriseAdministrativeTemplates": {
         "DownloadUrl": "",
@@ -136,7 +146,8 @@
         "DestinationFileName": "EdgeEnterprisePolicyTemplates.cab",
         "DestinationFolders": [
             "Configure-EdgePolicy"
-        ]
+        ],
+        "Evergreen": {}
     },
     "PowerShellAzModule": {
         "DownloadUrl": "",
@@ -148,7 +159,8 @@
         "DestinationFileName": "PowerShell-Az.msi",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {}
     },
     "Powershell7": {
         "DownloadUrl": "",
@@ -160,7 +172,8 @@
         "DestinationFileName": "Powershell.msi",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {}
     },
     "VSCode": {
         "DownloadUrl": "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64",
@@ -172,7 +185,8 @@
         "DestinationFileName": "VSCodesetup.exe",
         "DestinationFolders": [
             "VSCode"
-        ]
+        ],
+        "Evergreen": {}
     },
     "DoDInstallRoot": {
         "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/InstallRoot_5.6x64_NonAdmin.msi",
@@ -184,7 +198,8 @@
         "DestinationFileName": "InstallRoot.msi",
         "DestinationFolders": [
             "InstallRoot"
-        ]
+        ],
+        "Evergreen": {}
     },
     "DoDSTIGGPOPackage": {
         "DownloadUrl": "",
@@ -196,7 +211,8 @@
         "DestinationFileName": "STIGs.zip",
         "DestinationFolders": [
             "STIGs"
-        ]
+        ],
+        "Evergreen": {}
     },
     "VirtualDesktopOptimizationTool": {
         "DownloadUrl": "https://github.com/The-Virtual-Desktop-Team/Virtual-Desktop-Optimization-Tool/archive/refs/heads/main.zip",
@@ -208,10 +224,11 @@
         "DestinationFileName": "VDOT.zip",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {}
     },
     "GoogleChromeEnterprise": {
-        "DownloadUrl": "https://dl.google.com/tag/s/appguid%3D%7B8A69D345-D564-463C-AFF1-A69D9E530F96%7D%26iid%3D%7B6987F882-8EAE-5E84-2357-AC18D9D6634D%7D%26lang%3Den%26browser%3D5%26usagestats%3D0%26appname%3DGoogle%2520Chrome%26needsadmin%3Dtrue%26ap%3Dx64-stable-statsdef_0%26brand%3DGCEA/dl/chrome/install/googlechromestandaloneenterprise64.msi",
+        "DownloadUrl": "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi",
         "WebsiteUrl": "",
         "SearchString": "",
         "APIUrl": "",
@@ -220,7 +237,12 @@
         "DestinationFileName": "GoogleChrome.msi",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {
+            "name": "GoogleChrome",
+            "Architecture": "x64",
+            "Type": "msi"
+        }
     },
     "SimpleStickyNotes": {
         "DownloadUrl": "https://www.simplestickynotes.com/setup/Setup_SimpleStickyNotes.exe",
@@ -232,7 +254,8 @@
         "DestinationFileName": "Setup_SimpleStickyNotes.exe",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {}
     },
     "PuTTY": {
         "DownloadUrl": "",
@@ -244,18 +267,62 @@
         "DestinationFileName": "PuTTY.msi",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {
+            "name": "PuTTY",
+            "Architecture": "x64"
+        }
     },
     "7-zip": {
         "DownloadUrl": "",
-        "WebsiteUrl": "https://www.7-zip.org/download.html",
-        "SearchString": "*x64.exe",
+        "WebsiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "ip7z/7zip",
+        "GitHubFileNamePattern": "*x64.exe",
+        "DestinationFileName": "7-Zip.exe",
+        "DestinationFolders": [
+            ""
+        ],
+        "Evergreen": {
+            "name": "7Zip",
+            "Architecture": "x64",
+            "InstallerType": "Default",
+            "Type": "exe"
+        }
+    },
+    "NotepadPlusPlus": {
+        "DownloadUrl": "",
+        "WebsiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "notepad-plus-plus/notepad-plus-plus",
+        "GitHubFileNamePattern": "*.exe",
+        "DestinationFileName": "NotepadPlusPlus.exe",
+        "DestinationFolders": [
+            ""
+        ],
+        "Evergreen": {
+            "Name": "NotepadPlusPlus",
+            "Architecture": "x64",
+            "InstallerType": "Default"
+        }
+    },
+    "AdobeAcrobatReaderDC": {
+        "DownloadUrl": "",
+        "WebsiteUrl": "",
+        "SearchString": "",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
-        "DestinationFileName": "7-zip.exe",
+        "DestinationFileName": "AcroRdrDCx64.exe",
         "DestinationFolders": [
             ""
-        ]
+        ],
+        "Evergreen": {
+            "Name": "AdobeAcrobatReaderDC",
+            "Language": "English",
+            "Architecture": "x64"
+        }
     }
 }

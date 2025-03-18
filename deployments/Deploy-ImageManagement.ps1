@@ -81,6 +81,10 @@ Write-Output ("[{0} entered]" -f $MyInvocation.MyCommand)
 . "$FunctionsPath\Storage\Get-InternetFile.ps1"
 . "$FunctionsPath\Storage\Get-InternetUrl.ps1"
 . "$FunctionsPath\Storage\Add-ContentToBlobContainer.ps1"
+If ($Environment -eq 'AzureCloud' -or $Environment -eq 'AzureUSGovernment') {
+    . "$FunctionsPath\Storage\Evergreen.ps1"
+    Install-Evergreen
+}
 
 Write-Output "Working Directory: '$PSScriptRoot'"
 
@@ -187,7 +191,11 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             $ReleasesUri = "https://api.github.com/repos/$Repo/releases/latest"
             Write-Output "Retrieving the url of the latest version from '$Repo' Github repo."
             $DownloadUrl = ((Invoke-RestMethod -Method GET -Uri $ReleasesUri).assets | Where-Object name -like $FileNamePattern).browser_download_url
-        }      
+        }
+        Elseif($null -ne $Download.Evergreen) {
+            Write-Output "Retrieving the url of the latest version from Evergreen."
+            $DownloadUrl = Get-EvergreenAppUri -Evergreen $Download.Evergreen
+        }    
 
         If (($DownloadUrl -ne '') -and ($null -ne $DownloadUrl)) {
             Write-Output "Downloading '$SoftwareName'."

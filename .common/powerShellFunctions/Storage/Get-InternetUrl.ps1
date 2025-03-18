@@ -48,7 +48,7 @@ Function Get-InternetUrl {
         Return $LinkHref
     }
     #If not found, try to find search string in the outer html
-    $LinkHref = $Links | Get-Unique | Where-Object { $_.OuterHTML -like $SearchString }
+    $LinkHref = $Links | Where-Object { $_.OuterHTML -like $SearchString }
     If ($LinkHref) {
         Return $LinkHref.href
     }
