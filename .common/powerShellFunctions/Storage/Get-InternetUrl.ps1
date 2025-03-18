@@ -38,12 +38,19 @@ Function Get-InternetUrl {
     #First try to find search string in actual link href
     $LinkHref = $HTML.Links.Href | Get-Unique | Where-Object { $_ -like $SearchString }
     If ($LinkHref) {
+        if ($LinkHref.Contains('http://') -or $LinkHref.Contains('https://')) {
+            Return $LinkHref
+        }
+        Else {
+            $LinkHref = $WebSiteUrl.AbsoluteUri + $LinkHref
+            Return $LinkHref
+        }
         Return $LinkHref
     }
     #If not found, try to find search string in the outer html
-    $LinkHrefs = $Links | Where-Object { $_.OuterHTML -like "*$SearchString*" }
-    If ($LinkHrefs) {
-        Return $LinkHrefs.href
+    $LinkHref = $Links | Get-Unique | Where-Object { $_.OuterHTML -like $SearchString }
+    If ($LinkHref) {
+        Return $LinkHref.href
     }
     Else {
         $Pattern = '"url":\s*"(https://[^"]*?' + $SearchString.Replace('.', '\.').Replace('*', '.*').Replace('+', '\+') + ')"' 
