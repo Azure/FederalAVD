@@ -24,8 +24,6 @@ param(
     # The Location where the AVD Management Resources are being deployed.
     [Parameter(Mandatory=$true, ParameterSetName='Deploy')]
     [string]$Location,
-    # Teams Tenant Type to determine download Url
-    [Parameter(ParameterSetName='Deploy', Mandatory=$false)]
     # The full resource ID of the existing storage account to update.
     [Parameter(ParameterSetName='UpdateOnly', Mandatory=$true)]
     [string]$StorageAccountResourceId,
