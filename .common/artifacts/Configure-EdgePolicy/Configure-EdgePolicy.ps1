@@ -305,6 +305,52 @@ function Write-Log {
     }
 }
 
+Function Set-RegistryValue {
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [string]
+        $Name,
+        [Parameter()]
+        [string]
+        $Path,
+        [Parameter()]
+        [string]$PropertyType,
+        [Parameter()]
+        $Value
+    )
+    Begin {
+        Write-Log -message "[Set-RegistryValue]: Setting Registry Value: $Name"
+    }
+    Process {
+        # Create the registry Key(s) if necessary.
+        If (!(Test-Path -Path $Path)) {
+            Write-Log -message "[Set-RegistryValue]: Creating Registry Key: $Path"
+            New-Item -Path $Path -Force | Out-Null
+        }
+        # Check for existing registry setting
+        $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
+        If ($RemoteValue) {
+            # Get current Value
+            $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name
+            Write-Log -message "[Set-RegistryValue]: Current Value of $($Path)\$($Name) : $CurrentValue"
+            If ($Value -ne $CurrentValue) {
+                Write-Log -message "[Set-RegistryValue]: Setting Value of $($Path)\$($Name) : $Value"
+                Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
+            }
+            Else {
+                Write-Log -message "[Set-RegistryValue]: Value of $($Path)\$($Name) is already set to $Value"
+            }           
+        }
+        Else {
+            Write-Log -message "[Set-RegistryValue]: Setting Value of $($Path)\$($Name) : $Value"
+            New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    End {
+    }
+}
 
 #endregion Functions
 

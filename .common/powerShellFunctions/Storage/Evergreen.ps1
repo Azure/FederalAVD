@@ -27,22 +27,28 @@ function Get-EvergreenAppUri {
     param (
         [psobject]$Evergreen
     )
-    $command = "Get-EvergreenApp -Name $($Evergreen.name)"
     $filters = @()
     if ($Evergreen.Architecture) {
-        $filters += "$_.Architecture -eq '$($Evergreen.Architecture)'"
+        $Architecture = $Evergreen.Architecture
+        $filters += '$_.Architecture -eq ''' + $Architecture + ''''
     }
     if ($Evergreen.InstallerType) {
-        $filters += "$_.InstallerType -eq '$($Evergreen.InstallerType)'"
+        $InstallerType = $Evergreen.InstallerType
+        $filters += '$_.InstallerType -eq ''' + $InstallerType + ''''
     }
     if ($Evergreen.Language) {
-        $filters += "$_.Language -eq '$($Evergreen.Language)'"
+        $Language = $Evergreen.Language
+        $filters += '$_.Language -eq ''' + $Language + ''''
     }
     if ($Evergreen.Type) {
-        $filters += "$_.Type -eq '$($Evergreen.Type)'"
+        $Type = $Evergreen.Type
+        $filters += '$_.Type -eq ''' + $Type + ''''
     } 
     if ($filters.Count -gt 0) {
-        $command += " | Where-Object {" + ($filters -join " -and ") + "}"
+        $WhereObject = ($filters -join ' -and ').replace('  ', ' ')
+        $ScriptBlock = [scriptblock]::Create("Get-EvergreenApp -name $($Evergreen.name) | Where-Object {$($WhereObject)}")
+        Return (Invoke-Command -ScriptBlock $ScriptBlock).Uri
+    } Else {
+        Return (Get-EvergreenApp -Name $($Evergreen.name)).Uri
     }
-    Return (Invoke-Command -ScriptBlock $command).Uri
 }

@@ -95,9 +95,9 @@ Write-Verbose "## 1 - Deploy/Update Storage Account and gather variables        
 Write-Verbose "###########################################################################"
 
 If ($DeployImageManagementResources) {
-    $BicepPath = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement'
-    $Template = (Get-ChildItem -Path $BicepPath -filter 'imageManagement.bicep').FullName
-    $Parameters = (Get-ChildItem -Path (Join-Path -Path $BicepPath -ChildPath 'parameters') -Filter 'imagemanagement.parameters.json').FullName  
+    $TemplatePath = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement'
+    $Template = (Get-ChildItem -Path $TemplatePath -filter 'imageManagement.bicep').FullName
+    $Parameters = (Get-ChildItem -Path (Join-Path -Path $TemplatePath -ChildPath 'parameters') -Filter 'imageManagement.parameters.json').FullName
     Write-Output "Deploying Image Management Resources using BICEP template and parameter file."
     New-AzDeployment -Name "ImageManagement-$Time" -Location $Location -TemplateFile $Template -TemplateParameterFile $Parameters -verbose -artifactsContainerName $ArtifactsContainerName
     $DeploymentOutputs = (Get-AzSubscriptionDeployment -Name "ImageManagement-$Time").Outputs
@@ -194,6 +194,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         }
         Elseif($null -ne $Download.Evergreen) {
             Write-Output "Retrieving the url of the latest version from Evergreen."
+            Write-Output "Evergreen Configuration: $($Download.Evergreen)"
             $DownloadUrl = Get-EvergreenAppUri -Evergreen $Download.Evergreen
         }    
 

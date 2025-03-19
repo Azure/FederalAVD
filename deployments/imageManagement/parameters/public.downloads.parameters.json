@@ -236,26 +236,13 @@
         "GitHubFileNamePattern": "",
         "DestinationFileName": "GoogleChrome.msi",
         "DestinationFolders": [
-            ""
+            "GoogleChrome"
         ],
         "Evergreen": {
             "name": "GoogleChrome",
             "Architecture": "x64",
             "Type": "msi"
         }
-    },
-    "SimpleStickyNotes": {
-        "DownloadUrl": "https://www.simplestickynotes.com/setup/Setup_SimpleStickyNotes.exe",
-        "WebsiteUrl": "",
-        "SearchString": "",
-        "APIUrl": "",
-        "GitHubRepo": "",
-        "GitHubFileNamePattern": "",
-        "DestinationFileName": "Setup_SimpleStickyNotes.exe",
-        "DestinationFolders": [
-            ""
-        ],
-        "Evergreen": {}
     },
     "PuTTY": {
         "DownloadUrl": "",
@@ -266,23 +253,23 @@
         "GitHubFileNamePattern": "",
         "DestinationFileName": "PuTTY.msi",
         "DestinationFolders": [
-            ""
+            "PuTTY"
         ],
         "Evergreen": {
             "name": "PuTTY",
             "Architecture": "x64"
         }
     },
-    "7-zip": {
+    "7-Zip": {
         "DownloadUrl": "",
         "WebsiteUrl": "",
         "SearchString": "",
         "APIUrl": "",
         "GitHubRepo": "ip7z/7zip",
-        "GitHubFileNamePattern": "*x64.exe",
-        "DestinationFileName": "7-Zip.exe",
+        "GitHubFileNamePattern": "*x64.msi",
+        "DestinationFileName": "7-Zip.msi",
         "DestinationFolders": [
-            ""
+            "7-Zip"
         ],
         "Evergreen": {
             "name": "7Zip",
@@ -291,16 +278,29 @@
             "Type": "exe"
         }
     },
+"Amazon-Workspaces-Client": {
+        "DownloadUrl": "https://d2td7dqidlhjx7.cloudfront.net/prod/global/windows/Amazon+WorkSpaces.msi",
+        "WebsiteUrl": "https://clients.amazonworkspaces.com/",
+        "SearchString": "Amazon+WorkSpaces.msi",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "Amazon+Workspaces.msi",
+        "DestinationFolders": [
+            "Amazon-Workspaces-Client"
+        ],
+        "Evergreen": {}
+    },
     "NotepadPlusPlus": {
         "DownloadUrl": "",
         "WebsiteUrl": "",
         "SearchString": "",
         "APIUrl": "",
         "GitHubRepo": "notepad-plus-plus/notepad-plus-plus",
-        "GitHubFileNamePattern": "*.exe",
+        "GitHubFileNamePattern": "*x64.exe",
         "DestinationFileName": "NotepadPlusPlus.exe",
         "DestinationFolders": [
-            ""
+            "NotePadPlusPlus"
         ],
         "Evergreen": {
             "Name": "NotepadPlusPlus",
@@ -317,7 +317,7 @@
         "GitHubFileNamePattern": "",
         "DestinationFileName": "AcroRdrDCx64.exe",
         "DestinationFolders": [
-            ""
+            "AdobeAcrobatReaderDC"
         ],
         "Evergreen": {
             "Name": "AdobeAcrobatReaderDC",
