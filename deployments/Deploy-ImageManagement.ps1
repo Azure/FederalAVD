@@ -10,25 +10,32 @@ param(
     [Parameter(ParameterSetName='Deploy', Mandatory=$false)]
     [Parameter(ParameterSetName='UpdateOnly')]
     [string] $TempDir = "$Env:Temp",
+
     # Determines whether or not to delete existing blobs in the storage account before uploading new blobs.
     [Parameter(ParameterSetName='Deploy', Mandatory=$false)]
     [Parameter(ParameterSetName='UpdateOnly', Mandatory=$false)]
     [switch] $DeleteExistingBlobs,
+
     # Determines whether or not to download new sources from the internet.
     [Parameter(ParameterSetName='Deploy', Mandatory=$false)]
     [Parameter(ParameterSetName='UpdateOnly', Mandatory=$false)]
     [switch] $SkipDownloadingNewSources,
+
     # Determines whether or not to deploy/redeploy the storage account using BICEP and the parameter file contained in the storageAccount folder
     [Parameter(ParameterSetName='Deploy')]
     [switch]$DeployImageManagementResources,
+
     # The Location where the AVD Management Resources are being deployed.
     [Parameter(Mandatory=$true, ParameterSetName='Deploy')]
     [string]$Location,
+
     # The full resource ID of the existing storage account to update.
     [Parameter(ParameterSetName='UpdateOnly', Mandatory=$true)]
     [string]$StorageAccountResourceId,
+
     [Parameter(ParameterSetName='UpdateOnly', Mandatory=$true)]
     [string]$ManagedIdentityResourceID,
+    
     # The container where the artifacts will be stored.
     [Parameter(ParameterSetName='UpdateOnly', Mandatory=$false)]
     [string]$ArtifactsContainerName = 'artifacts'
