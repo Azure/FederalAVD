@@ -750,6 +750,16 @@
 									}
 								},
 								{
+									"name": "startVmOnConnect",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Start VM on Connect",
+									"defaultValue": true,
+									"toolTip": "Select to enable the Start VM on Connect feature.",
+									"constraints": {
+										"required": false
+									}
+								},
+								{
 									"name": "assignmentType",
 									"type": "Microsoft.Common.DropDown",
 									"visible": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
@@ -4045,6 +4055,7 @@
 				"hostPoolMaxSessionLimit": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('controlPlane').hostPool.type, 'Pooled')), steps('controlPlane').hostPool.maxSessions, 1)]",
 				"hostPoolValidationEnvironment": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('controlPlane').hostPool.validation, false)]",
 				"hostPoolRDPProperties": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('controlPlane').hostPool.rdpProperties, '')]",
+				"startVmOnConnect": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('controlPlane').hostPool.startVmOnConnect, false)]",
 				"appGroupSecurityGroups": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('controlPlane').assignments.groupPickerBlade.transformed.selection, parse('[]'))]",
 				"deployScalingPlan": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('controlPlane').scalingPlan.deployScalingPlan, false)]",
 				"scalingPlanExclusionTag": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.exclusionTag, '')]",

@@ -12,6 +12,7 @@ param privateEndpointName string
 param privateEndpointNICName string
 param privateEndpointSubnetResourceId string
 param hostPoolMaxSessionLimit int
+param startVmOnConnect bool
 param enableMonitoring bool
 param tags object
 param timeStamp string
@@ -88,7 +89,7 @@ resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' = {
     customRdpProperty: hostPoolRDPProperties
     personalDesktopAssignmentType: contains(hostPoolType, 'Personal') ? split(hostPoolType, ' ')[1] : null
     publicNetworkAccess: hostPoolPublicNetworkAccess
-    startVMOnConnect: true
+    startVMOnConnect: startVmOnConnect
     vmTemplate: string(virtualMachineTemplate)
   }
 }

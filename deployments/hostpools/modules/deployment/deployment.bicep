@@ -23,6 +23,7 @@ param resourceGroupDeployment string
 param resourceGroupHosts string
 param resourceGroupStorage string
 param roleDefinitions object
+param startVmOnConnect bool
 param tags object
 param timeStamp string
 param userAssignedIdentityNameConv string
@@ -135,26 +136,24 @@ module deploymentUserAssignedIdentity '../../../sharedModules/resources/managed-
 }
 
 // Role Assignment required for Start VM On Connect
-resource roleAssignment_PowerOnContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!deployScalingPlan) {
-  name: guid(avdObjectId, roleDefinitions.DesktopVirtualizationPowerOnContributor, subscription().id)
-  properties: {
-    roleDefinitionId: resourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      roleDefinitions.DesktopVirtualizationPowerOnContributor
-    )
+module roleAssignment_PowerOnContributor '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = if (!deployScalingPlan && startVmOnConnect) {
+  name: 'RA-PowerOnContributor_${timeStamp}'
+  scope: resourceGroup(resourceGroupHosts)
+  params: {
     principalId: avdObjectId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: roleDefinitions.DesktopVirtualizationPowerOnContributor
   }
 }
 
 // Role Assignment required for Scaling Plans
-resource roleAssignment_PowerOnOffContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployScalingPlan) {
-  name: guid(avdObjectId, roleDefinitions.DesktopVirtualizationPowerOnOffContributor, subscription().id)
-  properties: {
-    roleDefinitionId: resourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      roleDefinitions.DesktopVirtualizationPowerOnOffContributor
-    )
+module roleAssignment_PowerOnOffContributor '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = if (deployScalingPlan) {
+  name: 'RA-PowerOnOffContributor_${timeStamp}'
+  scope: resourceGroup(resourceGroupHosts)
+  params: {
     principalId: avdObjectId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: roleDefinitions.DesktopVirtualizationPowerOnOffContributor
   }
 }
 
@@ -182,7 +181,6 @@ module roleAssignments_deployment '../../../sharedModules/resources/authorizatio
 ]
 
 // Deployment VM
-
 module virtualMachine 'modules/virtualMachine.bicep' = {
   name: 'VirtualMachine_Deployment_${timeStamp}'
   scope: resourceGroup(resourceGroupDeployment)

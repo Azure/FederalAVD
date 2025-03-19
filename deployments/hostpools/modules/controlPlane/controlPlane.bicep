@@ -35,6 +35,7 @@ param roleDefinitions object
 param scalingPlanExclusionTag string
 param scalingPlanName string
 param scalingPlanSchedules array
+param startVmOnConnect bool
 param tags object
 param timeStamp string
 param virtualMachinesTimeZone string
@@ -128,6 +129,7 @@ module hostPool 'modules/hostPool.bicep' = {
     privateEndpointName: hostPoolPrivateEndpointName
     privateEndpointNICName: hostPoolPrivateEndpointNICName
     privateEndpointSubnetResourceId: hostPoolPrivateEndpointSubnetResourceId
+    startVmOnConnect: startVmOnConnect
     tags: tags 
     timeStamp: timeStamp
     virtualMachineTemplate: hostPoolVmTemplate

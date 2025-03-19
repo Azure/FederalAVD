@@ -103,6 +103,9 @@ param hostPoolRDPProperties string = ''
 @description('Optional. The value determines whether the hostPool should receive early AVD updates for testing.')
 param hostPoolValidationEnvironment bool = false
 
+@description('Optional. Determines if the Start VM on Connect Feature is enabled for the Host Pool.')
+param startVmOnConnect bool = true
+
 @description('''Optional.
 An array of objects, defining the security groups that are assigned permissions to the desktop application group created by this solution.
 Each object contains a displayName and objectId key value pair.
@@ -806,6 +809,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (deploymentT
     resourceGroupHosts: resourceNames.outputs.resourceGroupHosts
     resourceGroupStorage: resourceNames.outputs.resourceGroupStorage
     roleDefinitions: logic.outputs.roleDefinitions
+    startVmOnConnect: startVmOnConnect
     tags: tags
     timeStamp: timeStamp
     userAssignedIdentityNameConv: resourceNames.outputs.userAssignedIdentityNameConv
@@ -903,6 +907,7 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
     scalingPlanName: resourceNames.outputs.scalingPlanName
     scalingPlanSchedules: logic.outputs.scalingPlanSchedules
     scalingPlanExclusionTag: scalingPlanExclusionTag
+    startVmOnConnect: startVmOnConnect
     tags: tags
     timeStamp: timeStamp
     virtualMachinesTimeZone: logic.outputs.timeZone
