@@ -148,7 +148,7 @@ module roleAssignment_PowerOnContributor '../../../sharedModules/resources/autho
 
 // Role Assignment required for Scaling Plans
 module roleAssignment_PowerOnOffContributor '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = if (deployScalingPlan) {
-  name: 'RA-PowerOnOffContributor_${timeStamp}'
+  name: 'RA-Hosts-PowerOnOffContributor_${timeStamp}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     principalId: avdObjectId
@@ -159,7 +159,7 @@ module roleAssignment_PowerOnOffContributor '../../../sharedModules/resources/au
 
 // Required for EntraID login
 module roleAssignment_VirtualMachineUserLogin '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [for i in range(0, length(appGroupSecurityGroups)): if (!contains(identitySolution, 'DomainServices')) {
-  name: 'RA-VMLoginUser-${i}_${timeStamp}'
+  name: 'RA-Hosts-VMLoginUser-${i}_${timeStamp}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     principalId: appGroupSecurityGroups[i]

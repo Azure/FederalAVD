@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "5920256137739998597"
+      "templateHash": "1582681309988559172"
     },
     "name": "Zero Trust Architecture Custom Windows Image Builder",
     "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
@@ -1077,8 +1077,8 @@
     "$fxv#4": {
       "LGPO": {
         "DownloadUrl": "https://download.microsoft.com/download/8/5/c/85c25433-a1b0-4ffa-9429-7e023e7da8d8/LGPO.zip",
-        "WebSiteUrl": "",
-        "SearchString": "",
+        "WebSiteUrl": "https://www.microsoft.com/en-us/download/details.aspx?id=55319",
+        "SearchString": "*LGPO.zip",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
@@ -1091,8 +1091,7 @@
           "Configure-WindowsUpdatePolicy",
           "LGPO",
           "STIGs"
-        ],
-        "Evergreen": {}
+        ]
       },
       "FSLogix": {
         "DownloadUrl": "https://aka.ms/fslogix_download",
@@ -1104,34 +1103,31 @@
         "DestinationFileName": "FSLogix.zip",
         "DestinationFolders": [
           ""
-        ],
-        "Evergreen": {}
+        ]
       },
       "Office365DeploymentTool": {
-        "DownloadUrl": "https://officecdn.microsoft.com/pr/wsus/setup.exe",
-        "WebSiteUrl": "",
-        "SearchString": "",
+        "DownloadUrl": "https://download.microsoft.com/download/6c1eeb25-cf8b-41d9-8d0d-cc1dbc032140/officedeploymenttool_18526-20146.exe",
+        "WebSiteUrl": "https://go.microsoft.com/fwlink/p/?LinkID=626065",
+        "SearchString": "*officedeploymenttool*",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
         "DestinationFileName": "Office365DeploymentTool.exe",
         "DestinationFolders": [
           ""
-        ],
-        "Evergreen": {}
+        ]
       },
       "Office365AdministrativeTemplates": {
         "DownloadUrl": "https://download.microsoft.com/download/2/e/e/2eeec938-c014-419d-bb4b-d184871450f1/admintemplates_x64_5486-1000_en-us.exe",
-        "WebsiteUrl": "",
-        "SearchString": "",
+        "WebsiteUrl": "https://www.microsoft.com/en-us/download/details.aspx?id=49030",
+        "SearchString": "*admintemplates_x64*.exe",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
         "DestinationFileName": "AdminTemplates_x64.exe",
         "DestinationFolders": [
           "Configure-Office365Policy"
-        ],
-        "Evergreen": {}
+        ]
       },
       "OneDrive": {
         "DownloadUrl": "https://go.microsoft.com/fwlink/p/?linkid=2121808",
@@ -1143,8 +1139,7 @@
         "DestinationFileName": "OneDriveSetup.exe",
         "DestinationFolders": [
           ""
-        ],
-        "Evergreen": {}
+        ]
       },
       "TeamsBootstrapper": {
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2243204&clcid=0x409",
@@ -1156,8 +1151,7 @@
         "DestinationFileName": "teamsbootstrapper.exe",
         "DestinationFolders": [
           ""
-        ],
-        "Evergreen": {}
+        ]
       },
       "Teams64BitMSIX": {
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2196106",
@@ -1169,8 +1163,7 @@
         "DestinationFileName": "MSTeams-x64.msix",
         "DestinationFolders": [
           ""
-        ],
-        "Evergreen": {}
+        ]
       },
       "WebView2Runtime": {
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2124703",
@@ -1182,8 +1175,7 @@
         "DestinationFileName": "WebView2.exe",
         "DestinationFolders": [
           ""
-        ],
-        "Evergreen": {}
+        ]
       },
       "RemoteDesktopWebRTCRedirectorService": {
         "DownloadUrl": "https://aka.ms/msrdcwebrtcsvc/msi",
@@ -1195,8 +1187,7 @@
         "DestinationFileName": "MsRdcWebRTCSvc.msi",
         "DestinationFolders": [
           ""
-        ],
-        "Evergreen": {}
+        ]
       },
       "VisualStudioRedistributables": {
         "DownloadUrl": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
@@ -1209,8 +1200,7 @@
         "DestinationFolders": [
           "",
           "VisualC++Redistributables"
-        ],
-        "Evergreen": {}
+        ]
       },
       "EdgeEnterpriseAdministrativeTemplates": {
         "DownloadUrl": "",
@@ -1222,8 +1212,7 @@
         "DestinationFileName": "EdgeEnterprisePolicyTemplates.cab",
         "DestinationFolders": [
           "Configure-EdgePolicy"
-        ],
-        "Evergreen": {}
+        ]
       },
       "PowerShellAzModule": {
         "DownloadUrl": "",
@@ -1235,8 +1224,7 @@
         "DestinationFileName": "PowerShell-Az.msi",
         "DestinationFolders": [
           ""
-        ],
-        "Evergreen": {}
+        ]
       },
       "Powershell7": {
         "DownloadUrl": "",
@@ -1248,8 +1236,7 @@
         "DestinationFileName": "Powershell.msi",
         "DestinationFolders": [
           ""
-        ],
-        "Evergreen": {}
+        ]
       },
       "VSCode": {
         "DownloadUrl": "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64",
@@ -1261,8 +1248,7 @@
         "DestinationFileName": "VSCodesetup.exe",
         "DestinationFolders": [
           "VSCode"
-        ],
-        "Evergreen": {}
+        ]
       },
       "DoDInstallRoot": {
         "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/InstallRoot_5.6x64_NonAdmin.msi",
@@ -1274,8 +1260,7 @@
         "DestinationFileName": "InstallRoot.msi",
         "DestinationFolders": [
           "InstallRoot"
-        ],
-        "Evergreen": {}
+        ]
       },
       "DoDSTIGGPOPackage": {
         "DownloadUrl": "",
@@ -1287,8 +1272,7 @@
         "DestinationFileName": "STIGs.zip",
         "DestinationFolders": [
           "STIGs"
-        ],
-        "Evergreen": {}
+        ]
       },
       "VirtualDesktopOptimizationTool": {
         "DownloadUrl": "https://github.com/The-Virtual-Desktop-Team/Virtual-Desktop-Optimization-Tool/archive/refs/heads/main.zip",
@@ -1300,106 +1284,7 @@
         "DestinationFileName": "VDOT.zip",
         "DestinationFolders": [
           ""
-        ],
-        "Evergreen": {}
-      },
-      "GoogleChromeEnterprise": {
-        "DownloadUrl": "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi",
-        "WebsiteUrl": "",
-        "SearchString": "",
-        "APIUrl": "",
-        "GitHubRepo": "",
-        "GitHubFileNamePattern": "",
-        "DestinationFileName": "GoogleChrome.msi",
-        "DestinationFolders": [
-          "GoogleChrome"
-        ],
-        "Evergreen": {
-          "name": "GoogleChrome",
-          "Architecture": "x64",
-          "Type": "msi"
-        }
-      },
-      "PuTTY": {
-        "DownloadUrl": "",
-        "WebsiteUrl": "https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html",
-        "SearchString": "*64bit*.msi",
-        "APIUrl": "",
-        "GitHubRepo": "",
-        "GitHubFileNamePattern": "",
-        "DestinationFileName": "PuTTY.msi",
-        "DestinationFolders": [
-          "PuTTY"
-        ],
-        "Evergreen": {
-          "name": "PuTTY",
-          "Architecture": "x64"
-        }
-      },
-      "7-Zip": {
-        "DownloadUrl": "",
-        "WebsiteUrl": "",
-        "SearchString": "",
-        "APIUrl": "",
-        "GitHubRepo": "ip7z/7zip",
-        "GitHubFileNamePattern": "*x64.msi",
-        "DestinationFileName": "7-Zip.msi",
-        "DestinationFolders": [
-          "7-Zip"
-        ],
-        "Evergreen": {
-          "name": "7Zip",
-          "Architecture": "x64",
-          "InstallerType": "Default",
-          "Type": "exe"
-        }
-      },
-      "Amazon-Workspaces-Client": {
-        "DownloadUrl": "https://d2td7dqidlhjx7.cloudfront.net/prod/global/windows/Amazon+WorkSpaces.msi",
-        "WebsiteUrl": "https://clients.amazonworkspaces.com/",
-        "SearchString": "Amazon+WorkSpaces.msi",
-        "APIUrl": "",
-        "GitHubRepo": "",
-        "GitHubFileNamePattern": "",
-        "DestinationFileName": "Amazon+Workspaces.msi",
-        "DestinationFolders": [
-          "Amazon-Workspaces-Client"
-        ],
-        "Evergreen": {}
-      },
-      "NotepadPlusPlus": {
-        "DownloadUrl": "",
-        "WebsiteUrl": "",
-        "SearchString": "",
-        "APIUrl": "",
-        "GitHubRepo": "notepad-plus-plus/notepad-plus-plus",
-        "GitHubFileNamePattern": "*x64.exe",
-        "DestinationFileName": "NotepadPlusPlus.exe",
-        "DestinationFolders": [
-          "NotePadPlusPlus"
-        ],
-        "Evergreen": {
-          "Name": "NotepadPlusPlus",
-          "Architecture": "x64",
-          "InstallerType": "Default"
-        }
-      },
-      "AdobeAcrobatReaderDC": {
-        "DownloadUrl": "",
-        "WebsiteUrl": "",
-        "SearchString": "",
-        "APIUrl": "",
-        "GitHubRepo": "",
-        "GitHubFileNamePattern": "",
-        "DestinationFileName": "AcroRdrDCx64.exe",
-        "DestinationFolders": [
-          "AdobeAcrobatReaderDC"
-        ],
-        "Evergreen": {
-          "Name": "AdobeAcrobatReaderDC",
-          "Language": "English",
-          "Architecture": "x64"
-        }
+        ]
       }
     },
     "$fxv#5": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$VmResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod `\r\n        -Headers @{Metadata=\"true\"} `\r\n        -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Stop the VM\r\n    $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/powerOff?api-version=2024-03-01')\r\n    # Wait for it to show as stopped in Azure\r\n    Do {\r\n        Start-Sleep -Seconds 5\r\n        $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')\r\n        $VMPowerState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).displayStatus\r\n\r\n    } Until ($VMPowerState -eq 'VM stopped')\r\n    # Generatlize the VM\r\n    $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/generalize?api-version=2024-03-01')\r\n}\r\ncatch {\r\n    throw\r\n}",

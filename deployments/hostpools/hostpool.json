@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "8099463187123523876"
+      "templateHash": "3785043041044779821"
     }
   },
   "parameters": {
@@ -2340,7 +2340,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.33.93.31351",
-              "templateHash": "7958075297552091990"
+              "templateHash": "2057527900784262221"
             }
           },
           "parameters": {
@@ -2656,7 +2656,7 @@
               "condition": "[parameters('deployScalingPlan')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2022-09-01",
-              "name": "[format('RA-PowerOnOffContributor_{0}', parameters('timeStamp'))]",
+              "name": "[format('RA-Hosts-PowerOnOffContributor_{0}', parameters('timeStamp'))]",
               "resourceGroup": "[parameters('resourceGroupHosts')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -2759,7 +2759,7 @@
               "condition": "[not(contains(parameters('identitySolution'), 'DomainServices'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2022-09-01",
-              "name": "[format('RA-VMLoginUser-{0}_{1}', range(0, length(parameters('appGroupSecurityGroups')))[copyIndex()], parameters('timeStamp'))]",
+              "name": "[format('RA-Hosts-VMLoginUser-{0}_{1}', range(0, length(parameters('appGroupSecurityGroups')))[copyIndex()], parameters('timeStamp'))]",
               "resourceGroup": "[parameters('resourceGroupHosts')]",
               "properties": {
                 "expressionEvaluationOptions": {
