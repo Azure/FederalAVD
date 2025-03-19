@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "6059340934766134289"
+      "templateHash": "11664776987971505617"
     }
   },
   "parameters": {
@@ -562,8 +562,8 @@
     "resourceAbbreviations": "[variables('$fxv#1')]",
     "nameConv_Suffix_withoutResType": "LOCATION",
     "nameConvSuffix": "[if(parameters('nameConvResTypeAtEnd'), format('{0}-RESOURCETYPE', variables('nameConv_Suffix_withoutResType')), variables('nameConv_Suffix_withoutResType'))]",
-    "nameConv_ImageManagement_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-image-management-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-image-management-{0}', variables('nameConvSuffix')))]",
-    "nameConv_ImageManagement_Resources": "[if(parameters('nameConvResTypeAtEnd'), format('avd-image-management-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-image-management-{0}', variables('nameConvSuffix')))]",
+    "nameConv_ImageManagement_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-management-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-management-{0}', variables('nameConvSuffix')))]",
+    "nameConv_ImageManagement_Resources": "[if(parameters('nameConvResTypeAtEnd'), format('avd-management-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-management-{0}', variables('nameConvSuffix')))]",
     "resourceGroupName": "[replace(replace(variables('nameConv_ImageManagement_ResGroup'), 'LOCATION', variables('locations')[parameters('location')].abbreviation), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
     "remoteResourceGroupName": "[if(not(empty(parameters('remoteLocation'))), replace(replace(variables('nameConv_ImageManagement_ResGroup'), 'LOCATION', variables('locations')[parameters('remoteLocation')].abbreviation), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups), '')]",
     "blobContainerName": "[replace(replace(toLower(parameters('artifactsContainerName')), '_', '-'), ' ', '-')]",

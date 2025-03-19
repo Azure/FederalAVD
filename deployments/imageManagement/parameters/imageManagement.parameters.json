@@ -6,7 +6,7 @@
       "value": "artifacts"
     },
     "nameConvResTypeAtEnd": {
-      "value": false
+      "value": true
     },
     "logAnalyticsWorkspaceResourceId": {
       "value": ""
