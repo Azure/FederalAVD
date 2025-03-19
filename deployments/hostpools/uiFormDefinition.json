@@ -176,61 +176,6 @@
 										"text": "The Desktop Virtualization Resource Provider is not registered. Follow the instructions in the link to register the resource provider",
 										"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/prerequisites?tabs=portal"
 									}
-								},
-								{
-									"name": "avdServicePrincipalsApi",
-									"type": "Microsoft.Solutions.GraphApiControl",
-									"request": {
-										"method": "GET",
-										"path": "/v1.0/servicePrincipals?$filter=startsWith(displayName, 'Azure Virtual Desktop')&$select=displayName,id",
-										"transforms": {
-											"avd": "[value[?displayName=='Azure Virtual Desktop'] | [0].id]",
-											"avdARMProvider": "[value[?displayName=='Azure Virtual Desktop ARM Provider'] | [0].id]"
-										}
-									}
-								},
-								{
-									"name": "servicePrincipalPickerBlade",
-									"type": "Microsoft.Solutions.BladeInvokeControl",
-									"openBladeStatus": "[steps('basics').prereqs.servicePrincipalSelector.changing]",
-									"bladeReference": {
-										"name": "ObjectPickerBlade",
-										"extension": "Microsoft_AAD_IAM",
-										"parameters": {
-											"queries": 4,
-											"bladeSubtitle": "Azure/Windows Virtual Desktop Enterprise Application",
-											"additionalQueriesOnSearch": 0,
-											"advancedQueryOptions": {},
-											"selectionMaximum": 1,
-											"selectionMinimum": 1,
-											"bladeTitle": "Select the Enterprise Application",
-											"informationHeader": {
-												"informationText": "Select the 'Azure/Windows Virtual Desktop' Enterprise Application."
-											},
-											"searchBoxLabel": "Copy '9cdead84-a844-4324-93f2-b2e6bb768d07' into the search box",
-											"searchBoxPlaceHolderText": "Enter '9cdead84-a844-4324-93f2-b2e6bb768d07'",
-											"searchGridNoRowsMessage": "No Enterprise Applications found",
-											"selectButtonText": "Select Enterprise Application",
-											"selectedGridLabel": "Selected Enterprise Application",
-											"selectedGridNoRowsMessage": "You must select the 'Azure/Windows Virtual Desktop' Enterprise Application"
-										}
-									},
-									"transforms": {
-										"selection": "selectedObjects|[*].{displayName:displayName,id:id}"
-									}
-								},
-								{
-									"name": "servicePrincipalSelector",
-									"type": "Microsoft.Common.Selector",
-									"label": "Select the <b>Azure Virtual Desktop</b> Enterprise Application",
-									"keyPath": "displayName",
-									"value": "[steps('basics').prereqs.servicePrincipalPickerBlade.transformed.selection]",
-									"barColor": "[if(empty(steps('basics').prereqs.servicePrincipalPickerBlade), '#FF0000', '#7fba00')]",
-									"constraints": {
-										"required": true
-									},
-									"link": "[if(empty(steps('basics').prereqs.servicePrincipalPickerBlade), 'Select Enterprise Application', first(map(steps('basics').prereqs.servicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
-									"visible": "[empty(first(steps('basics').prereqs.avdServicePrincipalsApi.value))]"
 								}
 							]
 						},
@@ -2326,7 +2271,7 @@
 									"constraints": {
 										"required": false
 									}
-								},								
+								},
 								{
 									"name": "storageShareSize",
 									"type": "Microsoft.Common.Slider",
@@ -2999,6 +2944,73 @@
 					"name": "management",
 					"label": "Management",
 					"elements": [
+						{
+							"name": "avdServicePrincipalApi",
+							"type": "Microsoft.Solutions.GraphApiControl",
+							"request": {
+								"method": "GET",
+								"path": "/v1.0/servicePrincipals?$filter=appId eq '9cdead84-a844-4324-93f2-b2e6bb768d07'"
+							}
+						},
+						{
+							"name": "avdArmServicePrincipalApi",
+							"type": "Microsoft.Solutions.GraphApiControl",
+							"request": {
+								"method": "GET",
+								"path": "/v1.0/servicePrincipals?$filter=appId eq '50e95039-b200-4007-bc97-8d5790743a63'"
+							}
+						},
+						{
+							"name": "servicePrincipals",
+							"type": "Microsoft.Common.Section",
+							"label": "Service Principals",
+							"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan), empty(first(steps('management').avdServicePrincipalApi.value)))]",
+							"elements": [
+								{
+									"name": "avdServicePrincipalPickerBlade",
+									"type": "Microsoft.Solutions.BladeInvokeControl",
+									"openBladeStatus": "[steps('management').servicePrincipals.avdServicePrincipalSelector.changing]",
+									"bladeReference": {
+										"name": "ObjectPickerBlade",
+										"extension": "Microsoft_AAD_IAM",
+										"parameters": {
+											"queries": 4,
+											"bladeSubtitle": "Azure/Windows Virtual Desktop Enterprise Application",
+											"additionalQueriesOnSearch": 0,
+											"advancedQueryOptions": {},
+											"selectionMaximum": 1,
+											"selectionMinimum": 1,
+											"bladeTitle": "Select the Enterprise Application",
+											"informationHeader": {
+												"informationText": "Select the 'Azure/Windows Virtual Desktop' Enterprise Application."
+											},
+											"searchBoxLabel": "Copy '9cdead84-a844-4324-93f2-b2e6bb768d07' into the search box",
+											"searchBoxPlaceHolderText": "Enter '9cdead84-a844-4324-93f2-b2e6bb768d07'",
+											"searchGridNoRowsMessage": "No Enterprise Applications found",
+											"selectButtonText": "Select Enterprise Application",
+											"selectedGridLabel": "Selected Enterprise Application",
+											"selectedGridNoRowsMessage": "You must select the 'Azure/Windows Virtual Desktop' Enterprise Application"
+										}
+									},
+									"transforms": {
+										"selection": "selectedObjects|[*].{displayName:displayName,id:id}"
+									}
+								},
+								{
+									"name": "avdServicePrincipalSelector",
+									"type": "Microsoft.Common.Selector",
+									"label": "Select the <b>Azure Virtual Desktop</b> Enterprise Application",
+									"keyPath": "displayName",
+									"value": "[steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection]",
+									"barColor": "[if(empty(steps('management').servicePrincipals.avdServicePrincipalPickerBlade), '#FF0000', '#7fba00')]",
+									"constraints": {
+										"required": true
+									},
+									"link": "[if(empty(steps('management').servicePrincipals.avdServicePrincipalPickerBlade), 'Select Enterprise Application', first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
+									"visible": "[and(empty(first(steps('management').avdServicePrincipalApi.value)), or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan))]"
+								}
+							]
+						},
 						{
 							"name": "automation",
 							"type": "Microsoft.Common.Section",
@@ -4042,7 +4054,6 @@
 			"parameters": {
 				"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), coalesce(first(skip(split(steps('basics').hostPoolApi.tags.vmSubnetId, '/'), 8)), ''), '')]",
 				"deploymentType": "[steps('basics').deploymentType]",
-				"avdObjectId": "[if(empty(steps('basics').prereqs.avdServicePrincipalsApi), if(equals(steps('basics').deploymentType, 'Complete'), first(map(steps('basics').prereqs.servicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), ''), first(steps('basics').prereqs.avdServicePrincipalsApi.transformed.avd))]",
 				"identifier": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('basics').naming.identifier, '')]",
 				"index": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('basics').naming.index, '')]",
 				"nameConvResTypeAtEnd": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('basics').naming.nameConvResTypeAtEnd, false)]",
@@ -4058,6 +4069,7 @@
 				"startVmOnConnect": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('controlPlane').hostPool.startVmOnConnect, false)]",
 				"appGroupSecurityGroups": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('controlPlane').assignments.groupPickerBlade.transformed.selection, parse('[]'))]",
 				"deployScalingPlan": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('controlPlane').scalingPlan.deployScalingPlan, false)]",
+				"avdObjectId": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('management').avdServicePrincipalApi.value)), first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('management').avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
 				"scalingPlanExclusionTag": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.exclusionTag, '')]",
 				"scalingPlanRampUpSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayRampUpSchedule), parse('{}'))]",
 				"scalingPlanPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayPeakSchedule), parse('{}'))]",
