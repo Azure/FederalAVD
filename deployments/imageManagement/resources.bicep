@@ -112,6 +112,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
   properties: {
     accessTier: storageAccessTier
     allowBlobPublicAccess: false
+    allowCrossTenantReplication: false
     allowSharedKeyAccess: storageAllowSharedKeyAccess
     minimumTlsVersion: 'TLS1_2'
     networkAcls: !(empty(ipRules)) || !(empty(storageServiceEndpointSubnetResourceIds)) ? {
