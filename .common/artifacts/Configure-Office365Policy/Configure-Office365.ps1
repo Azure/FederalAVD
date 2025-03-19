@@ -145,6 +145,53 @@ Function Get-InternetUrl {
 
 }
 
+Function Set-RegistryValue {
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [string]
+        $Name,
+        [Parameter()]
+        [string]
+        $Path,
+        [Parameter()]
+        [string]$PropertyType,
+        [Parameter()]
+        $Value
+    )
+    Begin {
+        Write-Log -message "[Set-RegistryValue]: Setting Registry Value: $Name"
+    }
+    Process {
+        # Create the registry Key(s) if necessary.
+        If (!(Test-Path -Path $Path)) {
+            Write-Log -message "[Set-RegistryValue]: Creating Registry Key: $Path"
+            New-Item -Path $Path -Force | Out-Null
+        }
+        # Check for existing registry setting
+        $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
+        If ($RemoteValue) {
+            # Get current Value
+            $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name
+            Write-Log -message "[Set-RegistryValue]: Current Value of $($Path)\$($Name) : $CurrentValue"
+            If ($Value -ne $CurrentValue) {
+                Write-Log -message "[Set-RegistryValue]: Setting Value of $($Path)\$($Name) : $Value"
+                Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
+            }
+            Else {
+                Write-Log -message "[Set-RegistryValue]: Value of $($Path)\$($Name) is already set to $Value"
+            }           
+        }
+        Else {
+            Write-Log -message "[Set-RegistryValue]: Setting Value of $($Path)\$($Name) : $Value"
+            New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    End {
+    }
+}
+
 Function Update-LocalGPOTextFile {
     [CmdletBinding(DefaultParameterSetName = 'Set')]
     Param (
@@ -428,9 +475,9 @@ If (Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe") {
 
     If ($CaldendarSyncWindowSetting) {
         Reg LOAD HKLM\DefaultUser "$env:SystemDrive\Users\Default User\NtUser.dat"
-        Set-RegistryValue -Key 'HKLM:\DefaultUser\Software\Policies\Microsoft\Office16.0\Outlook\Cached Mode' -Name CalendarSyncWindowSetting -Type DWord -Value $CalendarSyncWindowSetting
+        Set-RegistryValue -Path 'HKLM:\DefaultUser\Software\Policies\Microsoft\Office16.0\Outlook\Cached Mode' -Name CalendarSyncWindowSetting -Type DWord -Value $CalendarSyncWindowSetting
         If ($CalendarSyncMonths -ne 'Not Configured') {
-            Set-RegistryValue -Key 'HKCU:\DefaultUser\Software\Policies\Microsoft\Office\16.0\Outlook\Cached Mode' -Name CalendarSyncWindowSettingMonths -Type DWord -Value $CalendarSyncMonths
+            Set-RegistryValue -Path 'HKCU:\DefaultUser\Software\Policies\Microsoft\Office\16.0\Outlook\Cached Mode' -Name CalendarSyncWindowSettingMonths -Type DWord -Value $CalendarSyncMonths
         }
         Write-Log -Message "Unloading default user hive."
         $null = cmd /c REG UNLOAD "HKLM\DefaultUser" '2>&1'
