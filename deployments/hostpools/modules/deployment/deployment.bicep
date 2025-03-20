@@ -136,24 +136,26 @@ module deploymentUserAssignedIdentity '../../../sharedModules/resources/managed-
 }
 
 // Role Assignment required for Start VM On Connect
-module roleAssignment_PowerOnContributor '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = if (!deployScalingPlan && startVmOnConnect) {
-  name: 'RA-PowerOnContributor_${timeStamp}'
-  scope: resourceGroup(resourceGroupHosts)
-  params: {
+resource roleAssignment_PowerOnContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!deployScalingPlan && startVmOnConnect) {
+  name: guid(avdObjectId, roleDefinitions.DesktopVirtualizationPowerOnContributor, subscription().id)
+  properties: {
+    roleDefinitionId: resourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      roleDefinitions.DesktopVirtualizationPowerOnContributor
+    )
     principalId: avdObjectId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: roleDefinitions.DesktopVirtualizationPowerOnContributor
   }
 }
 
 // Role Assignment required for Scaling Plans
-module roleAssignment_PowerOnOffContributor '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = if (deployScalingPlan) {
-  name: 'RA-Hosts-PowerOnOffContributor_${timeStamp}'
-  scope: resourceGroup(resourceGroupHosts)
-  params: {
+resource roleAssignment_PowerOnOffContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployScalingPlan) {
+  name: guid(avdObjectId, roleDefinitions.DesktopVirtualizationPowerOnOffContributor, subscription().id)
+  properties: {
+    roleDefinitionId: resourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      roleDefinitions.DesktopVirtualizationPowerOnOffContributor
+    )
     principalId: avdObjectId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: roleDefinitions.DesktopVirtualizationPowerOnOffContributor
   }
 }
 
