@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "3785043041044779821"
+      "templateHash": "11974684769210668109"
     }
   },
   "parameters": {
@@ -775,6 +775,13 @@
       "defaultValue": false,
       "metadata": {
         "description": "Optional. Deploys the Secrets Key Vault."
+      }
+    },
+    "secretsKeyVaultEnableSoftDelete": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enables soft delete on the secrets key vault."
       }
     },
     "enableMonitoring": {
@@ -3366,8 +3373,14 @@
           "deploySecretsKeyVault": {
             "value": "[parameters('deploySecretsKeyVault')]"
           },
+          "keyVaultEnableSoftDelete": {
+            "value": "[parameters('secretsKeyVaultEnableSoftDelete')]"
+          },
           "keyVaultName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.keyVaultNames.value.VMSecrets]"
+          },
+          "keyVaultRetentionInDays": {
+            "value": "[parameters('keyVaultRetentionInDays')]"
           },
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
@@ -3419,7 +3432,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.33.93.31351",
-              "templateHash": "15219696743859579755"
+              "templateHash": "17505167529537301724"
             }
           },
           "parameters": {
@@ -3452,6 +3465,12 @@
             },
             "keyVaultName": {
               "type": "string"
+            },
+            "keyVaultEnableSoftDelete": {
+              "type": "bool"
+            },
+            "keyVaultRetentionInDays": {
+              "type": "int"
             },
             "location": {
               "type": "string"
@@ -3520,7 +3539,10 @@
                     "value": false
                   },
                   "enableSoftDelete": {
-                    "value": false
+                    "value": "[parameters('keyVaultEnableSoftDelete')]"
+                  },
+                  "softDeleteRetentionInDays": {
+                    "value": "[parameters('keyVaultRetentionInDays')]"
                   },
                   "enableVaultForDeployment": {
                     "value": false

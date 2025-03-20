@@ -3091,6 +3091,14 @@
 									"visible": "[equals(steps('identity').credentials.source, 'manual')]"
 								},
 								{
+									"name": "enableSoftDelete",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Soft Delete on Secrets Key Vault",
+									"defaultValue": true,
+									"toolTip": "Select to enable soft delete on the secrets key vault",
+									"visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault)]"
+								},
+								{
 									"name": "keyVaultRetentionInDays",
 									"type": "Microsoft.Common.Slider",
 									"label": "Key Vault Retention (in Days)",
@@ -3099,7 +3107,7 @@
 									"toolTip": "The number of days Key Vaults are kept in the recycle bin. Soft delete is designed to prevent accidental deletion of your key vault and keys, secrets, and certificates stored inside key vault. When you delete a key vault or a key vault object, it remains recoverable for a user configurable retention period or a default of 90 days.",
 									"min": 7,
 									"max": 90,
-									"visible": "[or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))]"
+									"visible": "[or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault)]"
 								},
 								{
 									"name": "keyExpirationInDays",
@@ -4142,6 +4150,7 @@
 				"existingRecoveryServicesVaultResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolApi.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices), steps('management').backup.recoveryServicesVault, '')]",
 				"existingDiskAccessResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolApi.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices, steps('management').backup.associateDiskAccessResource), steps('management').backup.diskAccess, '')]",
 				"deploySecretsKeyVault": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual')), steps('management').keyVaults.deploySecretsKeyVault, false)]",
+				"secretsKeyVaultEnableSoftDelete" : "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault), steps('management').keyVaults.enableSoftDelete, false)]",
 				"keyVaultRetentionInDays": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(steps('management').keyVaults.deploySecretsKeyVault, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.keyVaultRetentionInDays, 7)]",
 				"keyExpirationInDays": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.keyExpirationInDays, 180)]",
 				"enableMonitoring": "[steps('management').monitoring.enableMonitoring]",

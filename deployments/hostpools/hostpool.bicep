@@ -489,6 +489,9 @@ param recoveryServices bool = false
 @description('Optional. Deploys the Secrets Key Vault.')
 param deploySecretsKeyVault bool = false
 
+@description('Optional. Enables soft delete on the secrets key vault.')
+param secretsKeyVaultEnableSoftDelete bool = true
+
 @description('Optional. Deploys the required monitoring resources to enable AVD and VM Insights and monitor features in the automation account.')
 param enableMonitoring bool = true
 
@@ -842,7 +845,9 @@ module management 'modules/management/management.bicep' = if (deploymentType == 
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     deploySecretsKeyVault: deploySecretsKeyVault
+    keyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
     keyVaultName: resourceNames.outputs.keyVaultNames.VMSecrets
+    keyVaultRetentionInDays: keyVaultRetentionInDays
     location: locationVirtualMachines
     logAnalyticsWorkspaceName: resourceNames.outputs.logAnalyticsWorkspaceName
     logAnalyticsWorkspaceRetention: logAnalyticsWorkspaceRetention
