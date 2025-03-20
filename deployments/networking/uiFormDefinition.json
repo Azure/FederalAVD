@@ -430,6 +430,39 @@
 									"label": "Use Gateway on hub",
 									"defaultValue": false,
 									"toolTip": "This information will be used to set remote gateway settings on vNet peering."
+								},
+								{
+									"name": "cafTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "The Cloud Adoption Framework (CAF) provides a recommended resource naming convention which specifies that the abbreviation for the resource type is listed first in the name. This solution automatically names resources using the CAF naming convention and suggested resource type abbreviations. Some customers have chosen to move the resource type to the end of the resource names. Select 'Yes' below to ensure that resources are named with this reverse convention or leave it set to 'No' to follow the CAF.",
+										"link": {
+											"label": "Resource Naming | Microsoft Learn",
+											"uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming"
+										}
+									}
+								},
+								{
+									"name": "nameConvResTypeAtEnd",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Move the Resource Type to the end of resource names",
+									"defaultValue": "No",
+									"toolTip": "",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Yes",
+												"value": true
+											},
+											{
+												"label": "No",
+												"value": false
+											}
+										],
+										"required": true
+									},
+									"visible": true
 								}
 							]
 						}
@@ -698,7 +731,6 @@
 				{
 					"name": "tags",
 					"label": "Tags",
-					"type": "Microsoft.Common.Section",
 					"elements": [
 						{
 							"name": "tags",
@@ -726,13 +758,14 @@
 				"vnetAddressPrefixes": "[if(steps('virtualNetwork').deployVnet, if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.addressPrefixes, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.addressPrefixes, steps('virtualNetwork').deploy.vnetMinimum.addressPrefixes)), '')]",
 				"hostsSubnet": "[if(steps('virtualNetwork').deployVnet, if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.subnets.subnet1, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.subnets.subnet1, steps('virtualNetwork').deploy.vnetMinimum.subnets.subnet1)), parse('{}'))]",
 				"privateEndpointsSubnet": "[if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.subnets.subnet2, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.subnets.subnet2, parse('{}')))]",
-				"functionAppsSubnet": "[if(steps('virtualNetwork').deployVnet, if(steps('basics').features.storageQuotaAutomation, steps('virtualNetwork').deploy.vnetFunctionApp.subnets.subnet3, parse('{}')), parse('{}'))]",
+				"functionAppSubnet": "[if(steps('virtualNetwork').deployVnet, if(steps('basics').features.storageQuotaAutomation, steps('virtualNetwork').deploy.vnetFunctionApp.subnets.subnet3, parse('{}')), parse('{}'))]",
 				"defaultRouting": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.defaultRouteType, 'default')]",
 				"nvaIPAddress": "[if(steps('virtualNetwork').deployVnet, if(equals(steps('virtualNetwork').deploy.defaultRouteType, 'nva'), steps('virtualNetwork').deploy.nvaIPAddress, ''), '')]",
 				"customDNSServers": "[if(steps('virtualNetwork').deployVnet, map(filter(steps('virtualNetwork').deploy.dnsServers, (item) => not(empty(item.ipAddress))), (item) => item.ipAddress), parse('[]'))]",
 				"deployDDoSNetworkProtection": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.deployDDoSNetworkProtection, false)]",
 				"hubVnetResourceId": "[if(steps('virtualNetwork').deployVnet, if(steps('virtualNetwork').deploy.peerVnetToHub, steps('virtualNetwork').deploy.hubVnet.id, ''), '')]",
 				"virtualNetworkGatewayOnHub": "[if(steps('virtualNetwork').deployVnet, if(steps('virtualNetwork').deploy.peerVnetToHub, steps('virtualNetwork').deploy.hubVirtualNetworkGateway, ''), '')]",
+				"nameConvResTypeAtEnd": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.nameConvResTypeAtEnd, false)]",
 				"privateDNSZonesSubscriptionId": "[if(and(steps('basics').features.privateEndpoints, steps('privateDNSZones').zones.deployMissingZones), steps('privateDNSZones').zones.subscription.subscriptionId, '')]",
 				"deployPrivateDNSZonesResourceGroup": "[if(and(steps('basics').features.privateEndpoints, steps('privateDNSZones').zones.deployMissingZones, equals(steps('privateDNSZones').zones.resourceGroup.mode, 'New')), true, false)]",
 				"privateDNSZonesResourceGroupName": "[if(and(steps('basics').features.privateEndpoints, steps('privateDNSZones').zones.deployMissingZones), steps('privateDNSZones').zones.resourceGroup.value.name, '')]",
@@ -757,7 +790,7 @@
 				"createAzureWebAppScmZone": "[if(and(steps('basics').features.storageQuotaAutomation, steps('privateDNSZones').zones.deployMissingZones), empty(steps('privateDNSZones').zones.azureWebAppScm), false)]",
 				"azureWebAppScmZoneId": "[if(steps('basics').features.storageQuotaAutomation, steps('privateDNSZones').zones.azureWebAppScm, '')]",
 				"linkPrivateDnsZonesToNewVnet": "[if(steps('virtualNetwork').deployVnet, equals(steps('privateDNSZones').zones.linkOptions, 'newVnet'), false)]",
-				"privateDNSZonesVnetId": "[if(equals(steps('privateDNSZones').zones.linkOptions, 'other'), steps('privateDNSZones').zones.privateDnsZoneLinkVnet.id, if(equals(steps('privateDNSZones').zones.linkOptions, 'hub'), steps('virtualNetwork').deploy.hubVnet.id, ''))]",
+				"privateDnsZonesVnetId": "[if(equals(steps('privateDNSZones').zones.linkOptions, 'other'), steps('privateDNSZones').zones.privateDnsZoneLinkVnet.id, if(equals(steps('privateDNSZones').zones.linkOptions, 'hub'), steps('virtualNetwork').deploy.hubVnet.id, ''))]",
 				"tags": "[steps('tags').tags]"
 			},
 			"kind": "Subscription",

@@ -171,10 +171,6 @@ var routeTableName = replace(
   ''
 )
 
-var hubSubscriptionId = !empty(hubVnetResourceId) ? split(hubVnetResourceId, '/')[2] : ''
-var hubVnetResourceGroup = !empty(hubVnetResourceId) ? split(hubVnetResourceId, '/')[4] : ''
-var hubVnetName = !empty(hubVnetResourceId) ? last(split(hubVnetResourceId, '/')) : ''
-
 var backupPrivateDnsZone = createAzureBackupZone
   ? filter(privateDNSZoneNames.outputs.zoneNames, (name) => contains(name, '.backup.'))
   : []
@@ -220,7 +216,6 @@ var privateDnsZonesToCreate = union(
   webAppPrivateDnsZone,
   webAppScmPrivateDnsZone
 )
-
 var existingParamPrivateDnsZones = [
   azureBackupZoneId
   azureBlobZoneId
@@ -233,31 +228,24 @@ var existingParamPrivateDnsZones = [
   azureWebAppZoneId
   azureWebAppScmZoneId
 ]
-
 var existingPrivateDnsZoneIds = filter(existingParamPrivateDnsZones, (zone) => !empty(zone))
 
-resource vNetResourceGroup 'Microsoft.Resources/resourceGroups@2023-07-01' = if (deployVnetResourceGroup) {
-  name: vnetResourceGroupName
-  location: location
-  tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {} 
-}
-
-module network 'modules/networks.bicep' = if (deployVnet) {
-  scope: resourceGroup(vnetResourceGroupName)
+module vnetResources 'modules/vnet-sub-module.bicep' = if (deployVnet) {
   name: 'Network-Resources-${timeStamp}'
   params: {
     customDNSServers: customDNSServers
+    deployVnetResourceGroup: deployVnetResourceGroup
     defaultRouting: defaultRouting
     deployDDoSNetworkProtection: deployDDoSNetworkProtection
     functionAppSubnet: functionAppSubnet
     hostsSubnet: hostsSubnet
-    hubVnetName: hubVnetName
-    hubVnetResourceGroup: hubVnetResourceGroup
-    hubVnetSubscriptionId: hubSubscriptionId
+    hubVnetName: !empty(hubVnetResourceId) ? last(split(hubVnetResourceId, '/')) : ''
+    hubVnetResourceGroup: !empty(hubVnetResourceId) ? split(hubVnetResourceId, '/')[4] : ''
+    hubVnetSubscriptionId: !empty(hubVnetResourceId) ? split(hubVnetResourceId, '/')[2] : ''
     location: location
     natGatewayName: natGatewayName
-    nvaIPAddress: nvaIPAddress
-    privateEndpointsSubnet: privateEndpointsSubnet
+    nvaIPAddress: !empty(nvaIPAddress) ? nvaIPAddress : ''
+    privateEndpointsSubnet: !empty(privateEndpointsSubnet) ? privateEndpointsSubnet : {}
     publicIPName: publicIPName
     routeTableName: routeTableName
     tags: tags
@@ -265,51 +253,29 @@ module network 'modules/networks.bicep' = if (deployVnet) {
     virtualNetworkGatewayOnHub: virtualNetworkGatewayOnHub
     vnetAddressPrefixes: vnetAddressPrefixes
     vnetName: vnetName
+    vnetResourceGroupName: vnetResourceGroupName
   }
-  dependsOn: [
-    vNetResourceGroup
-  ]
 }
 
 module privateDNSZoneNames 'modules/privateDnsZoneNames.bicep' = {
   name: 'Private-Dns-Zone-Names-${timeStamp}'
-  scope: subscription()
   params: {
     recoveryServicesGeo: locations[location].recoveryServicesGeo
   }
 }
 
-module privateDNSZonesResourceGroup '../sharedModules/resources/resources/resource-group/main.bicep' = if (createPrivateDNSZones && deployPrivateDNSZonesResourceGroup) {
-  name: 'Private-DNS-Zones-ResourceGroup-${timeStamp}'
+module privateDNSZonesResources 'modules/privateDNS-sub-module.bicep' = if(createPrivateDNSZones || linkPrivateDnsZonesToNewVnet || !empty(privateDnsZonesVnetId)) {
+  name: 'Private-DNS-Zones-Resources-${timeStamp}'
   scope: subscription(privateDNSZonesSubscriptionId)
   params: {
-    name: privateDNSZonesResourceGroupName
+    createPrivateDNSZones: createPrivateDNSZones
+    deployPrivateDNSZonesResourceGroup: deployPrivateDNSZonesResourceGroup
+    existingPrivateDnsZoneIds: existingPrivateDnsZoneIds
     location: location
-    tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
-  }
-  dependsOn: [
-    network
-    privateDNSZoneNames
-  ]
-}
-
-module privateDNSZones 'modules/privateDnsZones.bicep' = if(createPrivateDNSZones) {
-  name: 'Private-DNS-Zones-${timeStamp}'
-  scope: resourceGroup(privateDNSZonesSubscriptionId, privateDNSZonesResourceGroupName)
-  params: {
-    privateDnsZoneNames: privateDnsZonesToCreate
+    privateDNSZonesResourceGroupName: privateDNSZonesResourceGroupName
+    privateDnsZonesToCreate: privateDnsZonesToCreate
+    privateDnsZonesVnetId: !empty(privateDnsZonesVnetId) ? privateDnsZonesVnetId : ( linkPrivateDnsZonesToNewVnet ? vnetResources.outputs.vNetResourceId : '' )
     tags: tags
-  }
-  dependsOn: [
-    privateDNSZonesResourceGroup
-  ]
-}
-
-module privateDNSZonesVnetLinks 'modules/privateDnsZonesVnetLinks.bicep' = if(linkPrivateDnsZonesToNewVnet || !empty(privateDnsZonesVnetId)) {
-  name: 'Private-DNS-Zones-Vnet-Links-${timeStamp}'
-  params: {
-    privateDnsZoneResourceIds: createPrivateDNSZones ? union(privateDNSZones.outputs.resourceIds, existingPrivateDnsZoneIds) : existingPrivateDnsZoneIds
-    vnetId: !empty(privateDnsZonesVnetId) ? privateDnsZonesVnetId : ( linkPrivateDnsZonesToNewVnet ? network.outputs.vnetResourceId : '' )
     timeStamp: timeStamp
   }
 }
