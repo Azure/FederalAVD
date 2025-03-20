@@ -13,6 +13,7 @@ param domainJoinUserPassword string
 param domainJoinUserPrincipalName string
 param keyVaultName string
 param keyVaultEnableSoftDelete bool
+param keyVaultEnablePurgeProtection bool
 param keyVaultRetentionInDays int
 param location string
 param logAnalyticsWorkspaceName string
@@ -52,7 +53,7 @@ module secretsKeyVault '../../../sharedModules/resources/key-vault/vault/main.bi
   params: {
     name: keyVaultName
     diagnosticWorkspaceId: enableMonitoring ? logAnalyticsWorkspace.outputs.resourceId : ''
-    enablePurgeProtection: false
+    enablePurgeProtection: keyVaultEnablePurgeProtection
     enableSoftDelete: keyVaultEnableSoftDelete
     softDeleteRetentionInDays: keyVaultRetentionInDays
     enableVaultForDeployment: false

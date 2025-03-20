@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "11974684769210668109"
+      "templateHash": "1155507175539561217"
     }
   },
   "parameters": {
@@ -778,6 +778,13 @@
       }
     },
     "secretsKeyVaultEnableSoftDelete": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enables soft delete on the secrets key vault."
+      }
+    },
+    "secretsKeyVaultEnablePurgeProtection": {
       "type": "bool",
       "defaultValue": true,
       "metadata": {
@@ -3373,6 +3380,9 @@
           "deploySecretsKeyVault": {
             "value": "[parameters('deploySecretsKeyVault')]"
           },
+          "keyVaultEnablePurgeProtection": {
+            "value": "[parameters('secretsKeyVaultEnablePurgeProtection')]"
+          },
           "keyVaultEnableSoftDelete": {
             "value": "[parameters('secretsKeyVaultEnableSoftDelete')]"
           },
@@ -3432,7 +3442,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.33.93.31351",
-              "templateHash": "17505167529537301724"
+              "templateHash": "10443713955641401316"
             }
           },
           "parameters": {
@@ -3467,6 +3477,9 @@
               "type": "string"
             },
             "keyVaultEnableSoftDelete": {
+              "type": "bool"
+            },
+            "keyVaultEnablePurgeProtection": {
               "type": "bool"
             },
             "keyVaultRetentionInDays": {
@@ -3536,7 +3549,7 @@
                   },
                   "diagnosticWorkspaceId": "[if(parameters('enableMonitoring'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceId.value), createObject('value', ''))]",
                   "enablePurgeProtection": {
-                    "value": false
+                    "value": "[parameters('keyVaultEnablePurgeProtection')]"
                   },
                   "enableSoftDelete": {
                     "value": "[parameters('keyVaultEnableSoftDelete')]"
