@@ -171,52 +171,87 @@ var routeTableName = replace(
   ''
 )
 
-var backupPrivateDnsZone = createAzureBackupZone
-  ? filter(privateDNSZoneNames.outputs.zoneNames, (name) => contains(name, '.backup.'))
-  : []
-var blobPrivateDnsZone = createAzureBlobZone
-  ? filter(privateDNSZoneNames.outputs.zoneNames, (name) => contains(name, '.blob.'))
-  : []
-var filesPrivateDnsZone = createAzureFilesZone
-  ? filter(privateDNSZoneNames.outputs.zoneNames, (name) => contains(name, '.file.'))
-  : []
-var queuePrivateDnsZone = createAzureQueueZone
-  ? filter(privateDNSZoneNames.outputs.zoneNames, (name) => contains(name, '.queue.'))
-  : []
-var tablePrivateDnsZone = createAzureTableZone
-  ? filter(privateDNSZoneNames.outputs.zoneNames, (name) => contains(name, '.table.'))
-  : []
-var keyVaultPrivateDnsZone = createAzureKeyVaultZone
-  ? filter(privateDNSZoneNames.outputs.zoneNames, (name) => contains(name, '.vaultcore.'))
-  : []
-var avdFeedPrivateDnsZone = createAvdFeedZone
-  ? filter(privateDNSZoneNames.outputs.zoneNames, (name) => contains(name, 'privatelink.wvd.'))
-  : []
-var avdGlobalFeedPrivateDnsZone = createAvdGlobalFeedZone
-  ? filter(privateDNSZoneNames.outputs.zoneNames, (name) => contains(name, 'privatelink-global.wvd.'))
-  : []
-var webAppPrivateDnsZone = createAzureWebAppZone
-  ? filter(
-      privateDNSZoneNames.outputs.zoneNames,
-      (name) => contains(name, '.azurewebsites.') || contains(name, '.appservice.')
-    )
-  : []
-var webAppScmPrivateDnsZone = createAzureWebAppScmZone
-  ? filter(privateDNSZoneNames.outputs.zoneNames, (name) => contains(name, '.scm.'))
-  : []
-var privateDnsZonesToCreate = union(
-  backupPrivateDnsZone,
-  blobPrivateDnsZone,
-  filesPrivateDnsZone,
-  queuePrivateDnsZone,
-  tablePrivateDnsZone,
-  keyVaultPrivateDnsZone,
-  avdFeedPrivateDnsZone,
-  avdGlobalFeedPrivateDnsZone,
-  webAppPrivateDnsZone,
-  webAppScmPrivateDnsZone
+var cloudSuffix = replace(
+  replace(
+    replace(
+      environment().resourceManager,
+      'https://management.azure.',
+      ''
+    ),
+    'https://management.',
+    ''
+  ),
+  '/',
+  ''
 )
-var existingParamPrivateDnsZones = [
+
+var privateDnsZones_AzureVirtualDesktop = {
+  AzureCloud: 'privatelink.wvd.microsoft.com'
+  AzureUSGovernment: 'privatelink.wvd.azure.us'
+  USNat: 'privatelink.wvd.${cloudSuffix}'
+  USSec: 'privatelink.wvd.${cloudSuffix}'
+}
+
+var privateDnsZones_AzureVirtualDesktopGlobalFeed = {
+  AzureCloud: 'privatelink-global.wvd.microsoft.com'
+  AzureUSGovernment: 'privatelink-global.wvd.azure.us'
+  USNat: 'privatelink.wvd.${cloudSuffix}'
+  USSec: 'privatelink.wvd.${cloudSuffix}'
+}
+
+var privateDnsZoneSuffixes_AzureWebApps = {
+  AzureCloud: 'net'
+  AzureUSGovernment: 'us'
+  USNat: cloudSuffix
+  USSec: cloudSuffix
+}
+
+var privateDnsZoneSuffixes_Backup = {
+  AzureCloud: 'com'
+  AzureUSGovernment: 'us'
+  USNat: cloudSuffix
+  USSec: cloudSuffix
+}
+/*
+var privateDnsZoneSuffixes_AzureAutomation = {
+  AzureCloud: 'net'
+  AzureUSGovernment: 'us'
+  USNat: cloudSuffix
+  USSec: cloudSuffix
+}
+
+var privateDnsZoneSuffixes_Monitor = {
+  AzureCloud: 'com'
+  AzureUSGovernment: 'us'
+  USNat: cloudSuffix
+  USSec: cloudSuffix
+}
+*/
+var backupPrivateDnsZone = createAzureBackupZone ? 'privatelink.${locations[location].recoveryServicesGeo}.backup.windowsazure.${privateDnsZoneSuffixes_Backup[environment().name]}' : ''
+var blobPrivateDnsZone = createAzureBlobZone ? 'privatelink.blob.${environment().suffixes.storage}' : ''
+var filesPrivateDnsZone = createAzureFilesZone ? 'privatelink.file.${environment().suffixes.storage}' : ''
+var queuePrivateDnsZone = createAzureQueueZone ? 'privatelink.queue.${environment().suffixes.storage}' : ''
+var tablePrivateDnsZone = createAzureTableZone ? 'privatelink.table.${environment().suffixes.storage}' : ''
+var keyVaultPrivateDnsZone = createAzureKeyVaultZone ? 'privatelink${replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore')}' : ''
+var avdFeedPrivateDnsZone = createAvdFeedZone ? privateDnsZones_AzureVirtualDesktop[environment().name] : ''
+var avdGlobalFeedPrivateDnsZone = createAvdGlobalFeedZone ? privateDnsZones_AzureVirtualDesktopGlobalFeed[environment().name] : ''
+var webAppPrivateDnsZone = createAzureWebAppZone ? 'privatelink.azurewebsites.${privateDnsZoneSuffixes_AzureWebApps[environment().name]}' : ''
+var webAppScmPrivateDnsZone = createAzureWebAppScmZone ? 'scm.privatelink.azurewebsites.${privateDnsZoneSuffixes_AzureWebApps[environment().name]}' : ''
+
+var privateDnsZones = [
+  backupPrivateDnsZone
+  blobPrivateDnsZone
+  filesPrivateDnsZone
+  queuePrivateDnsZone
+  tablePrivateDnsZone
+  keyVaultPrivateDnsZone
+  avdFeedPrivateDnsZone
+  avdGlobalFeedPrivateDnsZone
+  webAppPrivateDnsZone
+  webAppScmPrivateDnsZone
+]
+
+var existingPrivateDnsZones = [
   azureBackupZoneId
   azureBlobZoneId
   azureFilesZoneId
@@ -228,7 +263,6 @@ var existingParamPrivateDnsZones = [
   azureWebAppZoneId
   azureWebAppScmZoneId
 ]
-var existingPrivateDnsZoneIds = filter(existingParamPrivateDnsZones, (zone) => !empty(zone))
 
 module vnetResources 'modules/vnet-sub-module.bicep' = if (deployVnet) {
   name: 'Network-Resources-${timeStamp}'
@@ -257,24 +291,19 @@ module vnetResources 'modules/vnet-sub-module.bicep' = if (deployVnet) {
   }
 }
 
-module privateDNSZoneNames 'modules/privateDnsZoneNames.bicep' = {
-  name: 'Private-Dns-Zone-Names-${timeStamp}'
-  params: {
-    recoveryServicesGeo: locations[location].recoveryServicesGeo
-  }
-}
-
-module privateDNSZonesResources 'modules/privateDNS-sub-module.bicep' = if(createPrivateDNSZones || linkPrivateDnsZonesToNewVnet || !empty(privateDnsZonesVnetId)) {
+module privateDNSZonesResources 'modules/privateDNS-sub-module.bicep' = if (createPrivateDNSZones || linkPrivateDnsZonesToNewVnet || !empty(privateDnsZonesVnetId)) {
   name: 'Private-DNS-Zones-Resources-${timeStamp}'
   scope: subscription(privateDNSZonesSubscriptionId)
   params: {
     createPrivateDNSZones: createPrivateDNSZones
     deployPrivateDNSZonesResourceGroup: deployPrivateDNSZonesResourceGroup
-    existingPrivateDnsZoneIds: existingPrivateDnsZoneIds
+    existingPrivateDnsZoneIds: filter(existingPrivateDnsZones, (zone) => !empty(zone))
     location: location
     privateDNSZonesResourceGroupName: privateDNSZonesResourceGroupName
-    privateDnsZonesToCreate: privateDnsZonesToCreate
-    privateDnsZonesVnetId: !empty(privateDnsZonesVnetId) ? privateDnsZonesVnetId : ( linkPrivateDnsZonesToNewVnet ? vnetResources.outputs.vNetResourceId : '' )
+    privateDnsZonesToCreate: filter(privateDnsZones, (zone) => !empty(zone))
+    privateDnsZonesVnetId: !empty(privateDnsZonesVnetId)
+      ? privateDnsZonesVnetId
+      : (linkPrivateDnsZonesToNewVnet ? vnetResources.outputs.vNetResourceId : '')
     tags: tags
     timeStamp: timeStamp
   }

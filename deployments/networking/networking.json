@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "11537853101528218005"
+      "templateHash": "3608446135569526245"
     }
   },
   "parameters": {
@@ -742,7 +742,54 @@
     "natGatewayName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').natGateways), 'LOCATION', variables('locations')[parameters('location')].abbreviation), 'TOKEN-', '')]",
     "publicIPName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').publicIPAddresses), 'LOCATION', variables('locations')[parameters('location')].abbreviation), 'TOKEN-', '')]",
     "routeTableName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').routeTables), 'LOCATION', variables('locations')[parameters('location')].abbreviation), 'TOKEN-', '')]",
-    "existingParamPrivateDnsZones": [
+    "cloudSuffix": "[replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')]",
+    "privateDnsZones_AzureVirtualDesktop": {
+      "AzureCloud": "privatelink.wvd.microsoft.com",
+      "AzureUSGovernment": "privatelink.wvd.azure.us",
+      "USNat": "[format('privatelink.wvd.{0}', variables('cloudSuffix'))]",
+      "USSec": "[format('privatelink.wvd.{0}', variables('cloudSuffix'))]"
+    },
+    "privateDnsZones_AzureVirtualDesktopGlobalFeed": {
+      "AzureCloud": "privatelink-global.wvd.microsoft.com",
+      "AzureUSGovernment": "privatelink-global.wvd.azure.us",
+      "USNat": "[format('privatelink.wvd.{0}', variables('cloudSuffix'))]",
+      "USSec": "[format('privatelink.wvd.{0}', variables('cloudSuffix'))]"
+    },
+    "privateDnsZoneSuffixes_AzureWebApps": {
+      "AzureCloud": "net",
+      "AzureUSGovernment": "us",
+      "USNat": "[variables('cloudSuffix')]",
+      "USSec": "[variables('cloudSuffix')]"
+    },
+    "privateDnsZoneSuffixes_Backup": {
+      "AzureCloud": "com",
+      "AzureUSGovernment": "us",
+      "USNat": "[variables('cloudSuffix')]",
+      "USSec": "[variables('cloudSuffix')]"
+    },
+    "backupPrivateDnsZone": "[if(parameters('createAzureBackupZone'), format('privatelink.{0}.backup.windowsazure.{1}', variables('locations')[parameters('location')].recoveryServicesGeo, variables('privateDnsZoneSuffixes_Backup')[environment().name]), '')]",
+    "blobPrivateDnsZone": "[if(parameters('createAzureBlobZone'), format('privatelink.blob.{0}', environment().suffixes.storage), '')]",
+    "filesPrivateDnsZone": "[if(parameters('createAzureFilesZone'), format('privatelink.file.{0}', environment().suffixes.storage), '')]",
+    "queuePrivateDnsZone": "[if(parameters('createAzureQueueZone'), format('privatelink.queue.{0}', environment().suffixes.storage), '')]",
+    "tablePrivateDnsZone": "[if(parameters('createAzureTableZone'), format('privatelink.table.{0}', environment().suffixes.storage), '')]",
+    "keyVaultPrivateDnsZone": "[if(parameters('createAzureKeyVaultZone'), format('privatelink{0}', replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore')), '')]",
+    "avdFeedPrivateDnsZone": "[if(parameters('createAvdFeedZone'), variables('privateDnsZones_AzureVirtualDesktop')[environment().name], '')]",
+    "avdGlobalFeedPrivateDnsZone": "[if(parameters('createAvdGlobalFeedZone'), variables('privateDnsZones_AzureVirtualDesktopGlobalFeed')[environment().name], '')]",
+    "webAppPrivateDnsZone": "[if(parameters('createAzureWebAppZone'), format('privatelink.azurewebsites.{0}', variables('privateDnsZoneSuffixes_AzureWebApps')[environment().name]), '')]",
+    "webAppScmPrivateDnsZone": "[if(parameters('createAzureWebAppScmZone'), format('scm.privatelink.azurewebsites.{0}', variables('privateDnsZoneSuffixes_AzureWebApps')[environment().name]), '')]",
+    "privateDnsZones": [
+      "[variables('backupPrivateDnsZone')]",
+      "[variables('blobPrivateDnsZone')]",
+      "[variables('filesPrivateDnsZone')]",
+      "[variables('queuePrivateDnsZone')]",
+      "[variables('tablePrivateDnsZone')]",
+      "[variables('keyVaultPrivateDnsZone')]",
+      "[variables('avdFeedPrivateDnsZone')]",
+      "[variables('avdGlobalFeedPrivateDnsZone')]",
+      "[variables('webAppPrivateDnsZone')]",
+      "[variables('webAppScmPrivateDnsZone')]"
+    ],
+    "existingPrivateDnsZones": [
       "[parameters('azureBackupZoneId')]",
       "[parameters('azureBlobZoneId')]",
       "[parameters('azureFilesZoneId')]",
@@ -753,8 +800,7 @@
       "[parameters('avdGlobalFeedZoneId')]",
       "[parameters('azureWebAppZoneId')]",
       "[parameters('azureWebAppScmZoneId')]"
-    ],
-    "existingPrivateDnsZoneIds": "[filter(variables('existingParamPrivateDnsZones'), lambda('zone', not(empty(lambdaVariables('zone')))))]"
+    ]
   },
   "resources": [
     {
@@ -1366,96 +1412,6 @@
       }
     },
     {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
-      "name": "[format('Private-Dns-Zone-Names-{0}', parameters('timeStamp'))]",
-      "location": "[deployment().location]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "recoveryServicesGeo": {
-            "value": "[variables('locations')[parameters('location')].recoveryServicesGeo]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.33.93.31351",
-              "templateHash": "13158662219195275849"
-            }
-          },
-          "parameters": {
-            "recoveryServicesGeo": {
-              "type": "string"
-            }
-          },
-          "variables": {
-            "cloudSuffix": "[replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')]",
-            "privateDnsZoneNames": [
-              "[format('privatelink.agentsvc.azure-automation.{0}', coalesce(variables('privateDnsZoneSuffixes_AzureAutomation')[environment().name], variables('cloudSuffix')))]",
-              "[format('privatelink.azure-automation.{0}', coalesce(variables('privateDnsZoneSuffixes_AzureAutomation')[environment().name], variables('cloudSuffix')))]",
-              "[format('privatelink.{0}', coalesce(variables('privateDnsZoneSuffixes_AzureWebSites')[environment().name], format('appservice.{0}', variables('cloudSuffix'))))]",
-              "[format('scm.privatelink.{0}', coalesce(variables('privateDnsZoneSuffixes_AzureWebSites')[environment().name], format('appservice.{0}', variables('cloudSuffix'))))]",
-              "[format('privatelink.wvd.{0}', coalesce(variables('privateDnsZoneSuffixes_AzureVirtualDesktop')[environment().name], variables('cloudSuffix')))]",
-              "[format('privatelink-global.wvd.{0}', coalesce(variables('privateDnsZoneSuffixes_AzureVirtualDesktop')[environment().name], variables('cloudSuffix')))]",
-              "[format('privatelink.{0}.backup.windowsazure.{1}', parameters('recoveryServicesGeo'), coalesce(variables('privateDnsZoneSuffixes_Backup')[environment().name], variables('cloudSuffix')))]",
-              "[format('privatelink.file.{0}', environment().suffixes.storage)]",
-              "[format('privatelink.queue.{0}', environment().suffixes.storage)]",
-              "[format('privatelink.table.{0}', environment().suffixes.storage)]",
-              "[format('privatelink.blob.{0}', environment().suffixes.storage)]",
-              "[format('privatelink{0}', replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore'))]",
-              "[format('privatelink.monitor.{0}', coalesce(variables('privateDnsZoneSuffixes_Monitor')[environment().name], variables('cloudSuffix')))]",
-              "[format('privatelink.ods.opinsights.{0}', coalesce(variables('privateDnsZoneSuffixes_Monitor')[environment().name], variables('cloudSuffix')))]",
-              "[format('privatelink.oms.opinsights.{0}', coalesce(variables('privateDnsZoneSuffixes_Monitor')[environment().name], variables('cloudSuffix')))]"
-            ],
-            "privateDnsZoneSuffixes_AzureAutomation": {
-              "AzureCloud": "net",
-              "AzureUSGovernment": "us",
-              "USNat": null,
-              "USSec": null
-            },
-            "privateDnsZoneSuffixes_AzureVirtualDesktop": {
-              "AzureCloud": "microsoft.com",
-              "AzureUSGovernment": "azure.us",
-              "USNat": null,
-              "USSec": null
-            },
-            "privateDnsZoneSuffixes_AzureWebSites": {
-              "AzureCloud": "azurewebsites.net",
-              "AzureUSGovernment": "azurewebsites.us",
-              "USNat": null,
-              "USSec": null
-            },
-            "privateDnsZoneSuffixes_Backup": {
-              "AzureCloud": "com",
-              "AzureUSGovernment": "us",
-              "USNat": null,
-              "USSec": null
-            },
-            "privateDnsZoneSuffixes_Monitor": {
-              "AzureCloud": "azure.com",
-              "AzureUSGovernment": "azure.us",
-              "USNat": null,
-              "USSec": null
-            }
-          },
-          "resources": [],
-          "outputs": {
-            "zoneNames": {
-              "type": "array",
-              "value": "[variables('privateDnsZoneNames')]"
-            }
-          }
-        }
-      }
-    },
-    {
       "condition": "[or(or(variables('createPrivateDNSZones'), parameters('linkPrivateDnsZonesToNewVnet')), not(empty(parameters('privateDnsZonesVnetId'))))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2022-09-01",
@@ -1475,7 +1431,7 @@
             "value": "[parameters('deployPrivateDNSZonesResourceGroup')]"
           },
           "existingPrivateDnsZoneIds": {
-            "value": "[variables('existingPrivateDnsZoneIds')]"
+            "value": "[filter(variables('existingPrivateDnsZones'), lambda('zone', not(empty(lambdaVariables('zone')))))]"
           },
           "location": {
             "value": "[parameters('location')]"
@@ -1484,7 +1440,7 @@
             "value": "[parameters('privateDNSZonesResourceGroupName')]"
           },
           "privateDnsZonesToCreate": {
-            "value": "[union(if(parameters('createAzureBackupZone'), filter(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Private-Dns-Zone-Names-{0}', parameters('timeStamp'))), '2022-09-01').outputs.zoneNames.value, lambda('name', contains(lambdaVariables('name'), '.backup.'))), createArray()), if(parameters('createAzureBlobZone'), filter(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Private-Dns-Zone-Names-{0}', parameters('timeStamp'))), '2022-09-01').outputs.zoneNames.value, lambda('name', contains(lambdaVariables('name'), '.blob.'))), createArray()), if(parameters('createAzureFilesZone'), filter(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Private-Dns-Zone-Names-{0}', parameters('timeStamp'))), '2022-09-01').outputs.zoneNames.value, lambda('name', contains(lambdaVariables('name'), '.file.'))), createArray()), if(parameters('createAzureQueueZone'), filter(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Private-Dns-Zone-Names-{0}', parameters('timeStamp'))), '2022-09-01').outputs.zoneNames.value, lambda('name', contains(lambdaVariables('name'), '.queue.'))), createArray()), if(parameters('createAzureTableZone'), filter(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Private-Dns-Zone-Names-{0}', parameters('timeStamp'))), '2022-09-01').outputs.zoneNames.value, lambda('name', contains(lambdaVariables('name'), '.table.'))), createArray()), if(parameters('createAzureKeyVaultZone'), filter(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Private-Dns-Zone-Names-{0}', parameters('timeStamp'))), '2022-09-01').outputs.zoneNames.value, lambda('name', contains(lambdaVariables('name'), '.vaultcore.'))), createArray()), if(parameters('createAvdFeedZone'), filter(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Private-Dns-Zone-Names-{0}', parameters('timeStamp'))), '2022-09-01').outputs.zoneNames.value, lambda('name', contains(lambdaVariables('name'), 'privatelink.wvd.'))), createArray()), if(parameters('createAvdGlobalFeedZone'), filter(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Private-Dns-Zone-Names-{0}', parameters('timeStamp'))), '2022-09-01').outputs.zoneNames.value, lambda('name', contains(lambdaVariables('name'), 'privatelink-global.wvd.'))), createArray()), if(parameters('createAzureWebAppZone'), filter(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Private-Dns-Zone-Names-{0}', parameters('timeStamp'))), '2022-09-01').outputs.zoneNames.value, lambda('name', or(contains(lambdaVariables('name'), '.azurewebsites.'), contains(lambdaVariables('name'), '.appservice.')))), createArray()), if(parameters('createAzureWebAppScmZone'), filter(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Private-Dns-Zone-Names-{0}', parameters('timeStamp'))), '2022-09-01').outputs.zoneNames.value, lambda('name', contains(lambdaVariables('name'), '.scm.'))), createArray()))]"
+            "value": "[filter(variables('privateDnsZones'), lambda('zone', not(empty(lambdaVariables('zone')))))]"
           },
           "privateDnsZonesVnetId": "[if(not(empty(parameters('privateDnsZonesVnetId'))), createObject('value', parameters('privateDnsZonesVnetId')), if(parameters('linkPrivateDnsZonesToNewVnet'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Network-Resources-{0}', parameters('timeStamp'))), '2022-09-01').outputs.vNetResourceId.value), createObject('value', '')))]",
           "tags": {
@@ -1719,7 +1675,6 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Private-Dns-Zone-Names-{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Network-Resources-{0}', parameters('timeStamp')))]"
       ]
     }
