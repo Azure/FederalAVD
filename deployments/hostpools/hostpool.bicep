@@ -674,7 +674,7 @@ var hostPoolVmTemplate = {
   secureBoot: secureBootEnabled
   vTPM: vTpmEnabled
   subnetId: virtualMachineSubnetResourceId
-  availability: availability == 'availabilityZones' ? 'Availibility Zones' : availability == 'availabilitySets' ? 'Availability Sets' : 'No infrastructure redundancy required'
+  availability: availability == 'availabilityZones' ? 'Availability Zones' : availability == 'availabilitySets' ? 'Availability Sets' : 'No infrastructure redundancy required'
   vmInfrastructureType: 'Cloud'
 }
 

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "1877858061157101830"
+      "templateHash": "3801991428332371328"
     }
   },
   "parameters": {
@@ -5060,7 +5060,7 @@
               "secureBoot": "[parameters('secureBootEnabled')]",
               "vTPM": "[parameters('vTpmEnabled')]",
               "subnetId": "[parameters('virtualMachineSubnetResourceId')]",
-              "availability": "[if(equals(parameters('availability'), 'availabilityZones'), 'Availibility Zones', if(equals(parameters('availability'), 'availabilitySets'), 'Availability Sets', 'No infrastructure redundancy required'))]",
+              "availability": "[if(equals(parameters('availability'), 'availabilityZones'), 'Availability Zones', if(equals(parameters('availability'), 'availabilitySets'), 'Availability Sets', 'No infrastructure redundancy required'))]",
               "vmInfrastructureType": "Cloud"
             }
           },
