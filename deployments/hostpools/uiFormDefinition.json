@@ -57,6 +57,18 @@
 							}
 						},
 						{
+							"name": "sessionHostsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('basics').hostPool.id))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').hostPool.id, '/sessionHosts?api-version=2024-04-03&isDescending=true')]",
+								"transforms": {
+									"lastname": "value[*].name|[0]"
+								}
+							}
+						},						
+						{
 							"name": "scope",
 							"type": "Microsoft.Common.ResourceScope",
 							"instanceDetailsLabel": "Deployment Details",
@@ -72,7 +84,10 @@
 							"type": "Microsoft.Solutions.ArmApiControl",
 							"request": {
 								"method": "GET",
-								"path": "/subscriptions?api-version=2022-12-01"
+								"path": "/subscriptions?api-version=2022-12-01",
+								"transforms": {
+									"list": "value|[*].{label:displayName, value:id}"
+								}
 							}
 						},
 						{
@@ -1195,7 +1210,7 @@
 									"confidentialVMSizes": "value[?resourceType=='virtualMachines'&&ends_with(name, `v5`)&&(starts_with(name, `Standard_DC`)||starts_with(name, `Standard_EC`)||starts_with(name, `Standard_NCC`))]|[*].{label:name, value:name}"
 								}
 							}
-						},
+						},						
 						{
 							"name": "naming",
 							"type": "Microsoft.Common.Section",
@@ -1218,10 +1233,10 @@
 									"name": "index",
 									"type": "Microsoft.Common.Slider",
 									"label": "Starting number (index)",
-									"defaultValue": 1,
+									"defaultValue": "[if(equals(steps('basics').deploymentType, 'Complete'), 1, add(int(substring(steps('basics').sessionHostsApi.transformed.lastname, sub(length(steps('basics').sessionHostsApi.transformed.lastname), 3), 3)), 1))]",
 									"toolTip": "Select the start number of the virtual machine suffix.",
 									"min": 1,
-									"max": 4998,
+									"max": 998,
 									"showStepMarkers": true,
 									"constraints": {
 										"required": true
@@ -1353,16 +1368,38 @@
 										"required": true
 									},
 									"visible": "[equals(steps('hosts').image.source, 'marketplace')]"
+								},								
+								{
+									"name": "gallerySubscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Compute Gallery Subscription",
+									"defaultValue": "[steps('basics').scope.subscription.displayName]",
+									"constraints": {
+										"allowedValues": "[steps('basics').subscriptionsApi.transformed.list]",
+										"required": false
+									},
+									"visible": "[equals(steps('hosts').image.source, 'gallery')]"
+								},								
+								{
+									"name": "galleriesApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.gallerySubscription)))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('hosts').image.gallerySubscription, '/providers/Microsoft.Compute/galleries?api-version=2024-03-03')]"
+									}
 								},
 								{
 									"name": "computeGallery",
-									"type": "Microsoft.Solutions.ResourceSelector",
-									"visible": "[equals(steps('hosts').image.source, 'gallery')]",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'Complete'), empty(steps('basics').hostPoolApi.tags.vmCustomImageId)), '', first(skip(split(steps('basics').hostPoolApi.tags.vmCustomImageId, '/'), 8)))]",
 									"label": "Compute Gallery",
-									"resourceType": "Microsoft.Compute/galleries",
+									"multiLine": true,
 									"constraints": {
+										"allowedValues": "[map(steps('hosts').image.galleriesApi.value, (gal) => parse(concat('{\"label\":\"', gal.name, '\",\"description\":\"Resource Group: ', first(skip(split(gal.id, '/'), 4)), ', Location: ', gal.location, '\",\"value\":\"', gal.id, '\"}')))]",
 										"required": true
-									}
+									},
+									"visible": "[and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.gallerySubscription)))]"
 								},
 								{
 									"name": "imageDefinitionsApi",
@@ -1370,7 +1407,7 @@
 									"condition": "[and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.computeGallery)))]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('hosts').image.computeGallery.id, '/images?api-version=2024-03-03')]",
+										"path": "[concat(steps('hosts').image.computeGallery, '/images?api-version=2024-03-03')]",
 										"transforms": {
 											"list": "value|[*].{label:name, value:id}"
 										}
@@ -1864,7 +1901,7 @@
 								{
 									"name": "availability",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[if(empty(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (sku) => sku.zones))), 'No infrastructure redundancy required', 'Availability Zones')]",
+									"defaultValue": "[if(equals(steps('basics').deploymentType, 'Complete'), if(empty(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (sku) => sku.zones))), 'No infrastructure redundancy required', 'Availability Zones'), coalesce(steps('basics').hostPoolApi.tags.vmAvailability, 'No infrastructure redundancy required'))]",
 									"label": "Availability Options",
 									"toolTip": "Select the redundancy / resiliency for the virtual machines.",
 									"constraints": {
@@ -1971,7 +2008,7 @@
 									"defaultValue": "[steps('basics').scope.subscription.displayName]",
 									"toolTip": "",
 									"constraints": {
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"id\":\"', sub.id, '\",\"displayName\":\"', sub.displayName, '\"}}')))]",
+										"allowedValues": "[steps('basics').subscriptionsApi.transformed.list]",
 										"required": false
 									},
 									"visible": "[steps('hosts').customScripts.addCustomScripts]"
@@ -1982,7 +2019,7 @@
 									"condition": "[not(empty(steps('hosts').customScripts.storageAccountSubscription))]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('hosts').customScripts.storageAccountSubscription.id, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01')]"
+										"path": "[concat(steps('hosts').customScripts.storageAccountSubscription, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01')]"
 									}
 								},
 								{
@@ -2325,7 +2362,7 @@
 									"label": "Existing Local NetApp Account",
 									"toolTip": "Select the existing local NetApp account to use for the FSLogix profile storage.",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => equals(account.location, steps('basics').scope.location.name)), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"ResourceGroup: ', first(skip(split(account.id, '/'), 4)), '\", \"value\":\"', account.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => equals(account.location, steps('basics').scope.location.name)), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Resource Group: ', first(skip(split(account.id, '/'), 4)), '\", \"value\":\"', account.id, '\"}')))]",
 										"required": true
 									},
 									"visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)))]"
@@ -2395,7 +2432,7 @@
 									"toolTip": "Select the existing local NetApp account to use for the FSLogix profile storage.",
 									"multiLine": true,
 									"constraints": {
-										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => not(equals(account.location, steps('basics').scope.location.name))), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Location: ', account.location, ', ResourceGroup: ', first(skip(split(account.id, '/'), 4)), '\", \"value\":\"', account.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => not(equals(account.location, steps('basics').scope.location.name))), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Location: ', account.location, ', Resource Group: ', first(skip(split(account.id, '/'), 4)), '\", \"value\":\"', account.id, '\"}')))]",
 										"required": false
 									},
 									"visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'))]"
@@ -2779,7 +2816,7 @@
 									"multiselect": true,
 									"toolTip": "",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.region, steps('basics').scope.location.name)), (sa) => parse(concat('{\"label\":\"', sa.saName, '\",\"description\":\"ResourceGroup: ', first(skip(split(sa.resourceId, '/'), 4)),  ', Location: ', sa.region, '\", \"value\":\"', sa.resourceId, '\"}')))]",
+										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.region, steps('basics').scope.location.name)), (sa) => parse(concat('{\"label\":\"', sa.saName, '\",\"description\":\"Resource Group: ', first(skip(split(sa.resourceId, '/'), 4)),  ', Location: ', sa.region, '\", \"value\":\"', sa.resourceId, '\"}')))]",
 										"required": true
 									},
 									"visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)))]"
@@ -2849,7 +2886,7 @@
 									"multiselect": true,
 									"toolTip": "",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.region, steps('userProfiles').azureFiles.remoteLocation)), (sa) => parse(concat('{\"label\":\"', sa.saName, '\",\"description\":\"ResourceGroup: ', first(skip(split(sa.resourceId, '/'), 4)), '\", \"value\":\"', sa.resourceId, '\"}')))]",
+										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.region, steps('userProfiles').azureFiles.remoteLocation)), (sa) => parse(concat('{\"label\":\"', sa.saName, '\",\"description\":\"Resource Group: ', first(skip(split(sa.resourceId, '/'), 4)), '\", \"value\":\"', sa.resourceId, '\"}')))]",
 										"required": false
 									},
 									"visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'))]"
@@ -4068,6 +4105,7 @@
 		},
 		"outputs": {
 			"parameters": {
+				"test": "[int(substring(steps('basics').sessionHostsApi.transformed.lastname, sub(length(steps('basics').sessionHostsApi.transformed.lastname), 3), 3))]",
 				"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), coalesce(first(skip(split(steps('basics').hostPoolApi.tags.vmSubnetId, '/'), 8)), ''), '')]",
 				"deploymentType": "[steps('basics').deploymentType]",
 				"identifier": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('basics').naming.identifier, '')]",

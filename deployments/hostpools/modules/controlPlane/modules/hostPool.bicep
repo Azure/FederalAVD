@@ -49,6 +49,7 @@ var hostPoolVmTemplateTags = union(
     vmOSDiskType: virtualMachineTemplate.osDiskType
     vmDiskSizeGB: virtualMachineTemplate.diskSizeGB
     vmSize: virtualMachineTemplate.vmSize.id
+    vmAvailability: virtualMachineTemplate.availability
     vmEncryptionAtHost: virtualMachineTemplate.?encryptionAtHost ?? false
     vmAcceleratedNetworking: virtualMachineTemplate.?acceleratedNetworking ?? false
     vmHibernate: virtualMachineTemplate.?hibernate ?? false

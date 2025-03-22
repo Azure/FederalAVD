@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "1781735653730675430"
+      "templateHash": "1877858061157101830"
     }
   },
   "parameters": {
@@ -5060,6 +5060,7 @@
               "secureBoot": "[parameters('secureBootEnabled')]",
               "vTPM": "[parameters('vTpmEnabled')]",
               "subnetId": "[parameters('virtualMachineSubnetResourceId')]",
+              "availability": "[if(equals(parameters('availability'), 'availabilityZones'), 'Availibility Zones', if(equals(parameters('availability'), 'availabilitySets'), 'Availability Sets', 'No infrastructure redundancy required'))]",
               "vmInfrastructureType": "Cloud"
             }
           },
@@ -5134,7 +5135,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.33.93.31351",
-              "templateHash": "17828366652719732584"
+              "templateHash": "6546557091922448352"
             }
           },
           "parameters": {
@@ -5472,7 +5473,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.33.93.31351",
-                      "templateHash": "1804481006672254214"
+                      "templateHash": "5077142198663921246"
                     }
                   },
                   "parameters": {
@@ -5546,7 +5547,7 @@
                     "vmImagePublisher": "[if(empty(parameters('virtualMachineTemplate').galleryImagePublisher), createObject(), createObject('vmImagePublisher', parameters('virtualMachineTemplate').galleryImagePublisher))]",
                     "vmImageSKU": "[if(empty(parameters('virtualMachineTemplate').galleryImageSKU), createObject(), createObject('vmImageSku', parameters('virtualMachineTemplate').galleryImageSKU))]",
                     "vmDiskEncryptionSetName": "[if(empty(parameters('virtualMachineTemplate').diskEncryptionSetName), createObject(), createObject('vmDiskEncryptionSetName', parameters('virtualMachineTemplate').diskEncryptionSetName))]",
-                    "hostPoolVmTemplateTags": "[union(createObject('vmNamePrefix', parameters('virtualMachineTemplate').namePrefix, 'vmImageType', parameters('virtualMachineTemplate').imageType, 'vmOSDiskType', parameters('virtualMachineTemplate').osDiskType, 'vmDiskSizeGB', parameters('virtualMachineTemplate').diskSizeGB, 'vmSize', parameters('virtualMachineTemplate').vmSize.id, 'vmEncryptionAtHost', coalesce(tryGet(parameters('virtualMachineTemplate'), 'encryptionAtHost'), false()), 'vmAcceleratedNetworking', coalesce(tryGet(parameters('virtualMachineTemplate'), 'acceleratedNetworking'), false()), 'vmHibernate', coalesce(tryGet(parameters('virtualMachineTemplate'), 'hibernate'), false()), 'vmSecurityType', coalesce(tryGet(parameters('virtualMachineTemplate'), 'securityType'), 'Standard'), 'vmSecureBoot', coalesce(tryGet(parameters('virtualMachineTemplate'), 'secureBoot'), false()), 'vmVirtualTPM', coalesce(tryGet(parameters('virtualMachineTemplate'), 'vTPM'), false()), 'vmSubnetId', parameters('virtualMachineTemplate').subnetId), variables('vmDomain'), variables('vmOUPath'), variables('vmCustomImageId'), variables('vmImageOffer'), variables('vmImagePublisher'), variables('vmImageSKU'), variables('vmDiskEncryptionSetName'))]"
+                    "hostPoolVmTemplateTags": "[union(createObject('vmNamePrefix', parameters('virtualMachineTemplate').namePrefix, 'vmImageType', parameters('virtualMachineTemplate').imageType, 'vmOSDiskType', parameters('virtualMachineTemplate').osDiskType, 'vmDiskSizeGB', parameters('virtualMachineTemplate').diskSizeGB, 'vmSize', parameters('virtualMachineTemplate').vmSize.id, 'vmAvailability', parameters('virtualMachineTemplate').availability, 'vmEncryptionAtHost', coalesce(tryGet(parameters('virtualMachineTemplate'), 'encryptionAtHost'), false()), 'vmAcceleratedNetworking', coalesce(tryGet(parameters('virtualMachineTemplate'), 'acceleratedNetworking'), false()), 'vmHibernate', coalesce(tryGet(parameters('virtualMachineTemplate'), 'hibernate'), false()), 'vmSecurityType', coalesce(tryGet(parameters('virtualMachineTemplate'), 'securityType'), 'Standard'), 'vmSecureBoot', coalesce(tryGet(parameters('virtualMachineTemplate'), 'secureBoot'), false()), 'vmVirtualTPM', coalesce(tryGet(parameters('virtualMachineTemplate'), 'vTPM'), false()), 'vmSubnetId', parameters('virtualMachineTemplate').subnetId), variables('vmDomain'), variables('vmOUPath'), variables('vmCustomImageId'), variables('vmImageOffer'), variables('vmImagePublisher'), variables('vmImageSKU'), variables('vmDiskEncryptionSetName'))]"
                   },
                   "resources": [
                     {
