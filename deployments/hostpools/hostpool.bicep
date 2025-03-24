@@ -793,12 +793,12 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (deploymentT
     deployScalingPlan: deployScalingPlan
     deploymentVmSize: deploymentVmSize
     diskSku: diskSku
-    domainJoinUserPassword: identitySolution != 'EntraId'
+    domainJoinUserPassword: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
           : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : ''
       : ''
-    domainJoinUserPrincipalName: identitySolution != 'EntraId'
+    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
           : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : ''
@@ -948,12 +948,12 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType == 'Complete
       ? deploymentPrereqs.outputs.deploymentUserAssignedIdentityClientId
       : ''
     deploymentVirtualMachineName: deploymentType == 'Complete' ? deploymentPrereqs.outputs.virtualMachineName : ''
-    domainJoinUserPassword: identitySolution != 'EntraId'
+    domainJoinUserPassword: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
           : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : ''
       : ''
-    domainJoinUserPrincipalName: identitySolution != 'EntraId'
+    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
           : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : ''
@@ -1055,12 +1055,12 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     divisionRemainderValue: logic.outputs.divisionRemainderValue
-    domainJoinUserPassword: identitySolution != 'EntraId'
+    domainJoinUserPassword: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
           : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : ''
       : ''
-    domainJoinUserPrincipalName: identitySolution != 'EntraId'
+    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
           : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : ''
