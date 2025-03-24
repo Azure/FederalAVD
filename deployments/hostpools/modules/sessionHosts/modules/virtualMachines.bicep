@@ -25,7 +25,6 @@ param domainJoinUserPassword string
 param domainJoinUserPrincipalName string
 param domainName string
 param drainMode bool
-
 param enableAcceleratedNetworking bool
 param enableMonitoring bool
 param encryptionAtHost bool
@@ -557,7 +556,7 @@ resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runC
       script: loadTextContent('../../../../../.common/scripts/Set-SessionHostConfiguration.ps1')
     }
     treatFailureAsDeploymentFailure: true
-    timeoutInSeconds: 120
+    timeoutInSeconds: 300
   }
   dependsOn: [
     extension_AADLoginForWindows
