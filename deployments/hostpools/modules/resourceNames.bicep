@@ -242,8 +242,8 @@ var diskEncryptionSetNameConv = replace(
   locations[locationVirtualMachines].abbreviation
 )
 // Key Vault Names must be unique across the entire Azure Cloud
-var keyVaultNameVMs = nameConvResTypeAtEnd ? 'vme-${take(uniqueStringHosts,12)}-${locations[locationVirtualMachines].abbreviation}-${resourceAbbreviations.keyVaults}' : '${resourceAbbreviations.keyVaults}-vme-${take(uniqueStringHosts, 12)}-${locations[locationVirtualMachines].abbreviation}'
-var keyVaultNameSHR = nameConvResTypeAtEnd ? 'shr-${take(uniqueStringHosts, 12)}-${locations[locationVirtualMachines].abbreviation}-${resourceAbbreviations.keyVaults}' : '${resourceAbbreviations.keyVaults}-shr-${take(uniqueStringHosts, 12)}-${locations[locationVirtualMachines].abbreviation}'
+var keyVaultNameVMs = nameConvResTypeAtEnd ? 'vme-${take(uniqueStringHosts, 12)}-${locations[locationVirtualMachines].abbreviation}-${resourceAbbreviations.keyVaults}' : '${resourceAbbreviations.keyVaults}-vme-${take(uniqueStringHosts, 12)}-${locations[locationVirtualMachines].abbreviation}'
+//var keyVaultNameSHR = nameConvResTypeAtEnd ? 'shr-${take(uniqueStringHosts, 12)}-${locations[locationVirtualMachines].abbreviation}-${resourceAbbreviations.keyVaults}' : '${resourceAbbreviations.keyVaults}-shr-${take(uniqueStringHosts, 12)}-${locations[locationVirtualMachines].abbreviation}'
 
 // Storage Resources
 var resourceGroupStorage = replace(
@@ -255,7 +255,6 @@ var resourceGroupStorage = replace(
   'RESOURCETYPE',
   '${resourceAbbreviations.resourceGroups}'
 )
-
 var netAppAccountName = replace(
   replace(
     replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.netAppAccounts),
@@ -276,14 +275,14 @@ var netAppCapacityPoolName = replace(
 )
 
 // App Attach and FSLogix Storage Account Naming Convention (max 15 characters for domain join)
-var appAttachStorageAccountName = 'aa${uniqueStringManagement}'
+var appAttachStorageAccountName = take('appattach${uniqueStringManagement}', 15)
 var keyVaultNameAppAttach = nameConvResTypeAtEnd ? '${appAttachStorageAccountName}-${locations[locationVirtualMachines].abbreviation}-${resourceAbbreviations.keyVaults}' : '${resourceAbbreviations.keyVaults}-${appAttachStorageAccountName}-${locations[locationVirtualMachines].abbreviation}'
-
 var uniqueStringStorage = uniqueString(subscription().subscriptionId, resourceGroupStorage)
-var fslogixStorageAccountNamePrefix = empty(fslogixStorageCustomPrefix) ? take('fsl${uniqueStringStorage}', 13) : toLower(fslogixStorageCustomPrefix)
+var fslogixStorageAccountNamePrefix = empty(fslogixStorageCustomPrefix) ? take('fslogix${uniqueStringStorage}', 13) : toLower(fslogixStorageCustomPrefix)
 
-var increaseQuotaFAStorageAccountName = 'saq${uniqueStringStorage}'
-var sessionHostReplacerFAStorageAccountName = 'shr${uniqueStringHosts}'
+var increaseQuotaFAStorageAccountName = take('saquota${uniqueStringStorage}', 13)
+var sessionHostReplacerFAStorageAccountName = 'shreplacer${uniqueStringHosts}'
+var keyVaultNameProfileStorage = nameConvResTypeAtEnd ? '${take('fslogix${uniqueStringStorage}', 13)}-${locations[locationVirtualMachines].abbreviation}-${resourceAbbreviations.keyVaults}' : '${resourceAbbreviations.keyVaults}-${take('fslogix${uniqueStringStorage}', 13)}-${locations[locationVirtualMachines].abbreviation}'
 
 var fslogixfileShareNames = {
   CloudCacheProfileContainer: [
@@ -302,12 +301,9 @@ var fslogixfileShareNames = {
   ]
 }
 
-var keyVaultNameIncreaseQuota = nameConvResTypeAtEnd ? '${increaseQuotaFAStorageAccountName}-${locations[locationVirtualMachines].abbreviation}-${resourceAbbreviations.keyVaults}' : '${resourceAbbreviations.keyVaults}-${increaseQuotaFAStorageAccountName}-${locations[locationVirtualMachines].abbreviation}'
-var keyVaultNameConvProfileStorage = nameConvResTypeAtEnd ? '${fslogixStorageAccountNamePrefix}##-${locations[locationVirtualMachines].abbreviation}-${resourceAbbreviations.keyVaults}' : '${resourceAbbreviations.keyVaults}-${fslogixStorageAccountNamePrefix}##-${locations[locationVirtualMachines].abbreviation}'
-
 output appInsightsNames object = {
-  IncreaseStorageQuota: replace(appInsightsNameConv, 'TOKEN-', 'saq-')
-  SessionHostReplacement: replace(appInsightsNameConv, 'TOKEN-', 'shr-')
+  IncreaseStorageQuota: replace(appInsightsNameConv, 'TOKEN-', 'saquota-')
+  SessionHostReplacement: replace(appInsightsNameConv, 'TOKEN-', 'shreplacer-')
 }
 output appServicePlanName string = appServicePlanName
 output availabilitySetNamePrefix string = availabilitySetNamePrefix
@@ -325,16 +321,14 @@ output diskEncryptionSetNames object = {
 output diskNamePrefix string = diskNamePrefix
 output fslogixFileShareNames object = fslogixfileShareNames
 output functionAppNames object = {
-  IncreaseStorageQuota: replace(functionAppNameConv, 'TOKEN-', 'saq-')
-  SessionHostReplacement: replace(functionAppNameConv, 'TOKEN-', 'shr-')
+  IncreaseStorageQuota: replace(functionAppNameConv, 'TOKEN-', 'saquota-')
+  SessionHostReplacement: replace(functionAppNameConv, 'TOKEN-', 'shreplacer-')
 }
 output globalFeedWorkspaceName string = globalFeedWorkspaceName
 output hostPoolName string = hostPoolName
 output keyVaultNames object = {
   AppAttachEncryptionKeys: keyVaultNameAppAttach
-  FSLogixEncryptionKeys: keyVaultNameConvProfileStorage
-  IncreaseStorageQuotaEncryptionKeys: keyVaultNameIncreaseQuota
-  SessionHostReplacementEncryptionKeys: keyVaultNameSHR
+  FSLogixEncryptionKeys: keyVaultNameProfileStorage
   VMEncryptionKeys: keyVaultNameVMs
   VMSecrets: keyVaultNameSecrets
 }

@@ -3,7 +3,6 @@ param hostPoolRDPProperties string
 param hostPoolName string
 param hostPoolPublicNetworkAccess string
 param hostPoolType string
-//param hostPoolVmTemplateTags object = {}
 param location string
 param logAnalyticsWorkspaceResourceId string
 param privateEndpoint bool
@@ -44,6 +43,7 @@ var vmDiskEncryptionSetName = empty(virtualMachineTemplate.diskEncryptionSetName
 
 var hostPoolVmTemplateTags = union(
   {
+    vmIdentityType: virtualMachineTemplate.identityType
     vmNamePrefix: virtualMachineTemplate.namePrefix
     vmImageType: virtualMachineTemplate.imageType
     vmOSDiskType: virtualMachineTemplate.osDiskType

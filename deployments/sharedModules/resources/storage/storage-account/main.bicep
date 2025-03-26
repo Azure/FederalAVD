@@ -61,6 +61,7 @@ param allowSharedKeyAccess bool = true
 @description('Optional. Configuration details for private endpoints. For security reasons, it is recommended to use private endpoints whenever possible.')
 param privateEndpoints array = []
 
+
 @description('Optional. The Storage Account ManagementPolicies Rules.')
 param managementPolicyRules array = []
 
@@ -278,6 +279,7 @@ resource storageAccount_diagnosticSettings 'Microsoft.Insights/diagnosticSetting
 }
 
 module storageAccount_privateEndpoints '../../network/private-endpoint/main.bicep' = [for (privateEndpoint, index) in privateEndpoints: {
+  #disable-next-line BCP335
   name: 'StorageAccount-PrivateEndpoint-${index}-${uniqueString(deployment().name, location)}'
   params: {
     groupIds: [

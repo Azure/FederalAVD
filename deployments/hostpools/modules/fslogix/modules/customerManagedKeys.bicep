@@ -1,5 +1,5 @@
 param azureKeyVaultPrivateDnsZoneResourceId string
-param fslogixStorageAccountEncryptionKeysVaultNameConv string
+param keyVaultName string
 param hostPoolResourceId string
 param keyManagementStorageAccounts string
 param keyExpirationInDays int
@@ -17,11 +17,10 @@ param tags object
 param timeStamp string
 param userAssignedIdentityNameConv string
 
-var storageAccountEncryptionKeyName = 'StorageAccountEncryptionKey'
+var encryptionKeySuffix = '-encryption-key'
 
-module storageAccountKeyVaults '../../../../sharedModules/resources/key-vault/vault/main.bicep' = [
-  for i in range(0, storageCount): {
-    name: '${replace(fslogixStorageAccountEncryptionKeysVaultNameConv, '##-', '${string(padLeft(i + storageIndex, 2, '0'))}-')}_${timeStamp}'
+module storageAccountKeyVault '../../../../sharedModules/resources/key-vault/vault/main.bicep' = {
+    name: '${keyVaultName}-${timeStamp}'
     params: {
       diagnosticWorkspaceId: logAnalyticsWorkspaceResourceId      
       enablePurgeProtection: true
@@ -30,10 +29,9 @@ module storageAccountKeyVaults '../../../../sharedModules/resources/key-vault/va
       enableVaultForDeployment: false
       enableVaultForDiskEncryption: false
       enableVaultForTemplateDeployment: false
-      keys: [
-        {
+      keys: [for i in range(0, storageCount): {
           attributesExportable: false
-          name: storageAccountEncryptionKeyName
+          name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}${encryptionKeySuffix}'
           keySize: 4096
           kty: contains(keyManagementStorageAccounts, 'HSM') ? 'RSA-HSM' : 'RSA'
           rotationPolicy: {
@@ -62,11 +60,7 @@ module storageAccountKeyVaults '../../../../sharedModules/resources/key-vault/va
         }
       ]
       location: location
-      name: replace(
-        fslogixStorageAccountEncryptionKeysVaultNameConv,
-        '##-',
-        '${string(padLeft(i + storageIndex, 2, '0'))}-'
-      )
+      name: keyVaultName
       privateEndpoints: privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureKeyVaultPrivateDnsZoneResourceId)
         ? [
             {
@@ -74,11 +68,7 @@ module storageAccountKeyVaults '../../../../sharedModules/resources/key-vault/va
                 replace(
                   replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'),
                   'RESOURCE',
-                  replace(
-                    fslogixStorageAccountEncryptionKeysVaultNameConv,
-                    '##-',
-                    '${string(padLeft(i + storageIndex, 2, '0'))}-'
-                  )
+                  keyVaultName
                 ),
                 'VNETID',
                 '${split(privateEndpointSubnetResourceId, '/')[8]}'
@@ -87,11 +77,7 @@ module storageAccountKeyVaults '../../../../sharedModules/resources/key-vault/va
                 replace(
                   replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'),
                   'RESOURCE',
-                  replace(
-                    fslogixStorageAccountEncryptionKeysVaultNameConv,
-                    '##-',
-                    '${string(padLeft(i + storageIndex, 2, '0'))}-'
-                  )
+                  keyVaultName
                 ),
                 'VNETID',
                 '${split(privateEndpointSubnetResourceId, '/')[8]}'
@@ -113,11 +99,10 @@ module storageAccountKeyVaults '../../../../sharedModules/resources/key-vault/va
           ]
         : null
       softDeleteRetentionInDays: keyVaultRetentionInDays
-      tags: union({ storageAccountName : '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'}, { 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.KeyVault/vaults'] ?? {})
+      tags: union ({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.KeyVault/vaults'] ?? {})
       vaultSku: contains(keyManagementStorageAccounts, 'HSM') ? 'premium' : 'standard'
     }
   }
-]
 
 module userAssignedIdentity '../../../../sharedModules/resources/managed-identity/user-assigned-identity/main.bicep' = {
   name: 'UAI_Encryption_${timeStamp}'
@@ -140,6 +125,7 @@ module roleAssignment_UAI_EncryptUser '../../../../sharedModules/resources/autho
   }
 }
 
-output keyVaultUris array = [for i in range(0, storageCount): storageAccountKeyVaults[i].outputs.uri]
-output storageEncryptionKeyName string = storageAccountEncryptionKeyName
+output keyVaultName string = storageAccountKeyVault.outputs.name
+output keyVaultUri string = storageAccountKeyVault.outputs.uri
 output userAssignedIdentityResourceId string = userAssignedIdentity.outputs.resourceId
+output encryptionKeySuffix string = encryptionKeySuffix

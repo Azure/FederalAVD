@@ -3,7 +3,6 @@ param azureBlobPrivateDnsZoneResourceId string
 param azureFilePrivateDnsZoneResourceId string
 param azureFunctionAppPrivateDnsZoneResourceId string
 param azureFunctionAppScmPrivateDnsZoneResourceId string
-param azureKeyVaultPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
 param azureTablePrivateDnsZoneResourceId string
 param functionAppDelegatedSubnetResourceId string
@@ -48,89 +47,13 @@ var storageSubResources = [
   'table'
 ]
 
-var storageEncryptionKeyName = 'storageEncryptionKey'
-
-resource vault 'Microsoft.KeyVault/vaults@2022-07-01' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
+resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = if(keyManagementStorageAccounts != 'MicrosoftManaged') {
   name: keyVaultName
-  location: location
-  tags: union({ 'cm-resource-parent': hostPoolResourceId }, {storageAccountName: storageAccountName}, tags[?'Microsoft.KeyVault/vaults'] ?? {})
-  properties: {
-    enabledForDeployment: false
-    enabledForDiskEncryption: false
-    enabledForTemplateDeployment: false
-    enablePurgeProtection: true
-    enableRbacAuthorization: true
-    enableSoftDelete: true
-    networkAcls: {
-      bypass: 'AzureServices'
-      defaultAction: 'Deny'
-      ipRules: []
-      virtualNetworkRules: []
-    }
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
-    sku: {
-      family: 'A'
-      name: contains(keyManagementStorageAccounts, 'HSM') ? 'premium' : 'standard'
-    }
-    softDeleteRetentionInDays: 90
-    tenantId: subscription().tenantId
-  }
 }
 
-resource privateEndpoint_vault 'Microsoft.Network/privateEndpoints@2023-04-01' = if (keyManagementStorageAccounts != 'MicrosoftManaged' && privateEndpoint) {
-  name: replace(
-    replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', keyVaultName),
-    'VNETID',
-    privateEndpointVnetName
-  )
-  location: location
-  properties: {
-    customNetworkInterfaceName: replace(
-      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', keyVaultName),
-      'VNETID',
-      privateEndpointVnetName
-    )
-    privateLinkServiceConnections: [
-      {
-        name: replace(
-          replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', keyVaultName),
-          'VNETID',
-          privateEndpointVnetName
-        )
-        properties: {
-          privateLinkServiceId: vault.id
-          groupIds: [
-            'vault'
-          ]
-        }
-      }
-    ]
-    subnet: {
-      id: privateEndpointSubnetResourceId
-    }
-  }
-  tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
-}
-
-resource privateDnsZoneGroup_vault 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-08-01' = if (keyManagementStorageAccounts != 'MicrosoftManaged' && privateEndpoint && !empty(azureKeyVaultPrivateDnsZoneResourceId)) {
-  parent: privateEndpoint_vault
-  name: keyVaultName
-  properties: {
-    privateDnsZoneConfigs: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          #disable-next-line use-resource-id-functions
-          privateDnsZoneId: azureKeyVaultPrivateDnsZoneResourceId
-        }
-      }
-    ]
-  }
-}
-
-resource key_storageAccount 'Microsoft.KeyVault/vaults/keys@2022-07-01' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
-  parent: vault
-  name: storageEncryptionKeyName
+resource key 'Microsoft.KeyVault/vaults/keys@2022-07-01' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
+  parent: keyVault
+  name: '${storageAccountName}-encryption-key'
   properties: {
     attributes: {
       enabled: true
@@ -200,8 +123,8 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
       keySource: keyManagementStorageAccounts != 'MicrosoftManaged' ? 'Microsoft.KeyVault' : 'Microsoft.Storage'
       keyvaultproperties: keyManagementStorageAccounts != 'MicrosoftManaged'
         ? {
-            keyvaulturi: vault.properties.vaultUri
-            keyname: key_storageAccount.name
+            keyvaulturi: keyVault.properties.vaultUri
+            keyname: key.name
           }
         : null
       requireInfrastructureEncryption: true
@@ -239,10 +162,6 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
     }
     supportsHttpsTrafficOnly: true
   }
-  dependsOn: [
-    privateDnsZoneGroup_vault
-    privateEndpoint_vault
-  ]
 }
 
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2021-09-01' = {
@@ -315,6 +234,7 @@ resource diagnosticSetting_storage_blob 'Microsoft.Insights/diagnosticsettings@2
         enabled: true
       }
     ]
+    #disable-next-line BCP037
     metrics: [
       {
         category: 'Transaction'

@@ -556,7 +556,7 @@ resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runC
       script: loadTextContent('../../../../../.common/scripts/Set-SessionHostConfiguration.ps1')
     }
     treatFailureAsDeploymentFailure: true
-    timeoutInSeconds: 300
+    timeoutInSeconds: 600
   }
   dependsOn: [
     extension_AADLoginForWindows

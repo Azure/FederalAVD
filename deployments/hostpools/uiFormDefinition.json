@@ -309,7 +309,7 @@
 									"type": "Microsoft.Common.OptionsGroup",
 									"visible": true,
 									"label": "Identity Provider",
-									"defaultValue": "[if(equals(steps('basics').deploymentType, 'Complete'), 'Active Directory Domain Services (AD DS)', if(empty{steps('basics').hostPoolApi.tags.vmDomain), 'Entra Id', 'Active Directory Domain Services (AD DS)'))]",
+									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'Complete'), empty(steps('basics').hostPoolApi.tags.vmIdentityType)), 'Active Directory Domain Services (AD DS)', if(contains(steps('basics').hostPoolApi.tags.vmIdentityType, 'EntraId'), 'Entra Id', if(contains(steps('basics').hostPoolApi.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (AD DS)', 'Entra Domain Services')))]",
 									"toolTip": "Choose the Identity Solution for the virtual machines.",
 									"constraints": {
 										"required": true,
@@ -334,7 +334,7 @@
 									"type": "Microsoft.Common.OptionsGroup",
 									"visible": "[equals(steps('identity').virtualMachines.solution, 'EntraId')]",
 									"label": "Intune Enrollment",
-									"defaultValue": "No",
+									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'Complete'), empty(steps('basics').hostPoolApi.tags.identityType)), 'No', if(contains(steps('basics').hostPoolApi.tags.identityType, 'Intune'), 'Yes', 'No'))]",
 									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting Yes.",
 									"constraints": {
 										"required": false,
@@ -3193,6 +3193,7 @@
 								{
 									"name": "avdInsightsDataCollectionRule",
 									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('management').monitoring.dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('microsoft-avdi-', steps('basics').scope.location.name))), (dcr) => dcr.name))]",
 									"visible": "[and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('management').monitoring.enableMonitoring)]",
 									"label": "AVD Insights Data Collection Rule",
 									"multiLine": true,
@@ -3205,6 +3206,7 @@
 								{
 									"name": "vmInsightsDataCollectionRule",
 									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('management').monitoring.dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('MSVMI-', steps('basics').scope.location.name))), (dcr) => dcr.name))]",
 									"visible": "[and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('management').monitoring.enableMonitoring)]",
 									"label": "VM Insights Data Collection Rule",
 									"multiLine": true,
@@ -3244,6 +3246,7 @@
 								{
 									"name": "dataCollectionEndpoint",
 									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('management').monitoring.dataCollectionEndpointsApi.value, (dce) => and(contains(dce.name, 'avd'), equals(dce.location, steps('basics').scope.location.name))), (dce) => dce.name))]",
 									"visible": "[and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('management').monitoring.enableMonitoring)]",
 									"label": "Data Collection Endpoint",
 									"multiLine": true,

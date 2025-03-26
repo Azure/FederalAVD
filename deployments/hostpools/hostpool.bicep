@@ -643,6 +643,7 @@ var resourceGroupsCount = 3 + (empty(existingFeedWorkspaceResourceId) ? 1 : 0) +
   ? 1
   : 0)
 var hostPoolVmTemplate = {
+  identityType: identitySolution
   domain: !empty(domainName) ? domainName : null
   ouPath: !empty(vmOUPath) ? vmOUPath : null
   namePrefix: virtualMachineNamePrefix
@@ -962,7 +963,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType == 'Complete
     fslogixAdminGroups: fslogixAdminGroups
     fslogixFileShares: logic.outputs.fslogixFileShareNames
     fslogixShardOptions: fslogixShardOptions
-    fslogixStorageAccountEncryptionKeysVaultNameConv: resourceNames.outputs.keyVaultNames.FSLogixEncryptionKeys
+    storageAccountEncryptionKeysVaultName: resourceNames.outputs.keyVaultNames.FSLogixEncryptionKeys
     fslogixUserGroups: logic.outputs.fslogixUserGroups
     hostPoolResourceId: deploymentType == 'Complete'
       ? controlPlane.outputs.hostPoolResourceId
@@ -970,7 +971,6 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType == 'Complete
     identitySolution: identitySolution
     increaseQuotaAppInsightsName: resourceNames.outputs.appInsightsNames.IncreaseStorageQuota
     increaseQuotaFunctionAppName: resourceNames.outputs.functionAppNames.IncreaseStorageQuota
-    increaseQuotaKeyVaultName: resourceNames.outputs.keyVaultNames.IncreaseStorageQuotaEncryptionKeys
     increaseQuotaStorageAccountName: resourceNames.outputs.storageAccountNames.IncreaseStorageQuota
     kerberosEncryptionType: fslogixStorageAccountADKerberosEncryption
     keyExpirationInDays: keyExpirationInDays

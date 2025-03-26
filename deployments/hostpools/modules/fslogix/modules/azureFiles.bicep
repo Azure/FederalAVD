@@ -4,7 +4,6 @@ param azureBlobPrivateDnsZoneResourceId string
 param azureFilePrivateDnsZoneResourceId string
 param azureFunctionAppPrivateDnsZoneResourceId string
 param azureFunctionAppScmPrivateDnsZoneResourceId string
-param azureKeyVaultPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
 param azureTablePrivateDnsZoneResourceId string
 param deploymentUserAssignedIdentityClientId string
@@ -12,7 +11,8 @@ param deploymentUserAssignedIdentityClientId string
 param domainJoinUserPassword string
 @secure()
 param domainJoinUserPrincipalName string
-param encryptionKeyKeyVaultUris array
+param encryptionKeyVaultName string
+param encryptionKeyVaultUri string
 param encryptionUserAssignedIdentityResourceId string
 param fileShares array
 param functionAppDelegatedSubnetResourceId string
@@ -21,7 +21,6 @@ param identitySolution string
 param increaseQuota bool
 param increaseQuotaApplicationInsightsName string
 param increaseQuotaFunctionAppName string
-param increaseQuotaKeyVaultName string
 param increaseQuotaStorageAccountName string
 param kerberosEncryptionType string
 param keyManagementStorageAccounts string
@@ -45,7 +44,7 @@ param shareAdminGroups array
 param shareSizeInGB int
 param shareUserGroups array
 param storageAccountNamePrefix string
-param storageEncryptionKeyName string = ''
+param storageEncryptionKeySuffix string
 param storageCount int
 param storageIndex int
 param storageSku string
@@ -132,8 +131,8 @@ resource storageAccounts 'Microsoft.Storage/storageAccounts@2022-09-01' = [
         keySource: keyManagementStorageAccounts != 'MicrosoftManaged' ? 'Microsoft.KeyVault' : 'Microsoft.Storage'
         keyvaultproperties: keyManagementStorageAccounts != 'MicrosoftManaged'
           ? {
-              keyname: storageEncryptionKeyName
-              keyvaulturi: encryptionKeyKeyVaultUris[i]
+              keyname: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}${storageEncryptionKeySuffix}'
+              keyvaulturi: encryptionKeyVaultUri
             }
           : null
         requireInfrastructureEncryption: true
@@ -402,7 +401,6 @@ module increaseQuotaFunctionApp '../../common/functionApp/functionApp.bicep' = i
     azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
     azureFunctionAppScmPrivateDnsZoneResourceId: azureFunctionAppScmPrivateDnsZoneResourceId
-    azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
     enableApplicationInsights: !empty(logAnalyticsWorkspaceId)
@@ -421,7 +419,7 @@ module increaseQuotaFunctionApp '../../common/functionApp/functionApp.bicep' = i
     functionAppName: increaseQuotaFunctionAppName
     hostPoolResourceId: hostPoolResourceId
     keyManagementStorageAccounts: keyManagementStorageAccounts
-    keyVaultName: increaseQuotaKeyVaultName
+    keyVaultName: encryptionKeyVaultName
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceId
     privateEndpoint: privateEndpoint
     privateEndpointNameConv: privateEndpointNameConv
