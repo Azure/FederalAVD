@@ -308,7 +308,7 @@ var customNetworkInterfaceName = nameConvResTypeAtEnd
 var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
   ? (empty(customBuildResourceGroupName)
       ? nameConvResTypeAtEnd
-          ? 'avd-image-builds--${locations[location].abbreviation}-${resourceAbbreviations.resourceGroups}'
+          ? 'avd-image-builds-${locations[location].abbreviation}-${resourceAbbreviations.resourceGroups}'
           : '${resourceAbbreviations.resourceGroups}-avd-image-builds-${locations[location].abbreviation}'
       : customBuildResourceGroupName)
   : last(split(imageBuildResourceGroupId, '/'))

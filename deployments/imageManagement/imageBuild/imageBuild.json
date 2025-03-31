@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.34.44.8038",
-      "templateHash": "1261179692066380415"
+      "templateHash": "5497609972984247866"
     },
     "name": "Zero Trust Architecture Custom Windows Image Builder",
     "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
@@ -1423,7 +1423,7 @@
     "privateEndpointNameConv": "[replace(format('{0}', if(parameters('nameConvResTypeAtEnd'), format('RESOURCE-SUBRESOURCE-{0}-RESOURCETYPE', variables('vnetName')), format('RESOURCETYPE-RESOURCE-SUBRESOURCE-{0}', variables('vnetName')))), 'RESOURCETYPE', variables('resourceAbbreviations').privateEndpoints)]",
     "privateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logStorageAccountName'))]",
     "customNetworkInterfaceName": "[if(parameters('nameConvResTypeAtEnd'), format('{0}-{1}', variables('privateEndpointName'), variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}', variables('resourceAbbreviations').networkInterfaces, variables('privateEndpointName')))]",
-    "imageBuildResourceGroupName": "[if(empty(parameters('imageBuildResourceGroupId')), if(empty(parameters('customBuildResourceGroupName')), if(parameters('nameConvResTypeAtEnd'), format('avd-image-builds--{0}-{1}', variables('locations')[parameters('location')].abbreviation, variables('resourceAbbreviations').resourceGroups), format('{0}-avd-image-builds-{1}', variables('resourceAbbreviations').resourceGroups, variables('locations')[parameters('location')].abbreviation)), parameters('customBuildResourceGroupName')), last(split(parameters('imageBuildResourceGroupId'), '/')))]",
+    "imageBuildResourceGroupName": "[if(empty(parameters('imageBuildResourceGroupId')), if(empty(parameters('customBuildResourceGroupName')), if(parameters('nameConvResTypeAtEnd'), format('avd-image-builds-{0}-{1}', variables('locations')[parameters('location')].abbreviation, variables('resourceAbbreviations').resourceGroups), format('{0}-avd-image-builds-{1}', variables('resourceAbbreviations').resourceGroups, variables('locations')[parameters('location')].abbreviation)), parameters('customBuildResourceGroupName')), last(split(parameters('imageBuildResourceGroupId'), '/')))]",
     "adminPw": "1qaz@WSX1qaz@WSX",
     "adminUserName": "vmadmin",
     "logContainerName": "image-customization-logs",
