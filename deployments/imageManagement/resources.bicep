@@ -56,6 +56,9 @@ param privateEndpointSubnetResourceId string = ''
 @description('Optional. The Private Endpoint name to create for Blob Storage.')
 param privateEndpointName string = ''
 
+@description('Optional. The name of the custom network interface to create for the Private Endpoint.')
+param customNetworkInterfaceName string = ''
+
 @description('Required. Indicates whether the storage account permits requests to be authorized with the account access key via Shared Key. If false, then all requests, including shared access signatures, must be authorized with Azure Active Directory (Azure AD). The default value is null, which is equivalent to true.')
 param storageAllowSharedKeyAccess bool
 
@@ -176,11 +179,12 @@ resource blobContainer 'Microsoft.Storage/storageAccounts/blobServices/container
   }
 }
 
-resource privateEndpoint 'Microsoft.Network/privateEndpoints@2020-05-01' = if (!empty(privateEndpointSubnetResourceId)) {
+resource privateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = if (!empty(privateEndpointSubnetResourceId)) {
   name: privateEndpointName
   location: location
   tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
   properties: {
+    customNetworkInterfaceName: empty(customNetworkInterfaceName) ? null : customNetworkInterfaceName
     subnet: {
       id: privateEndpointSubnetResourceId
     }

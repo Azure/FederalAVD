@@ -14,6 +14,9 @@ param location string = deployment().location
 @maxLength(6)
 param deploymentPrefix string = ''
 
+@description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
+param nameConvResTypeAtEnd bool = false
+
 // Required Existing Resources
 @description('Azure Compute Gallery Resource Id.')
 param computeGalleryResourceId string
@@ -274,7 +277,11 @@ var cloud = toLower(environment().name)
 
 var locations = loadJsonContent('../../../.common/data/locations.json')[environment().name]
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
-var downloads = cloud == 'usnat' ? loadJsonContent('../parameters/usnat.downloads.parameters.json') : cloud == 'ussec' ? loadJsonContent('../parameters/ussec.downloads.parameters.json') : loadJsonContent('../parameters/public.downloads.parameters.json')
+var downloads = cloud == 'usnat'
+  ? loadJsonContent('../parameters/usnat.downloads.parameters.json')
+  : cloud == 'ussec'
+      ? loadJsonContent('../parameters/ussec.downloads.parameters.json')
+      : loadJsonContent('../parameters/public.downloads.parameters.json')
 
 var computeLocation = vnet.location
 var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''
@@ -283,13 +290,30 @@ var logStorageAccountName = take(
   24
 )
 
+var vnetName = !empty(privateEndpointSubnetResourceId) ? split(privateEndpointSubnetResourceId, '/')[8] : ''
+var privateEndpointNameConv = replace(
+  '${nameConvResTypeAtEnd ? 'RESOURCE-SUBRESOURCE-${vnetName}-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-${vnetName}'}',
+  'RESOURCETYPE',
+  resourceAbbreviations.privateEndpoints
+)
+var privateEndpointName = replace(
+  replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'),
+  'RESOURCE',
+  logStorageAccountName
+)
+var customNetworkInterfaceName = nameConvResTypeAtEnd
+  ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}'
+  : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
+
 var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
   ? (empty(customBuildResourceGroupName)
-      ? '${resourceAbbreviations.resourceGroups}-image-builder-${locations[location].abbreviation}'
+      ? nameConvResTypeAtEnd
+          ? 'avd-image-builds--${locations[location].abbreviation}-${resourceAbbreviations.resourceGroups}'
+          : '${resourceAbbreviations.resourceGroups}-avd-image-builds-${locations[location].abbreviation}'
       : customBuildResourceGroupName)
   : last(split(imageBuildResourceGroupId, '/'))
 
-var adminPw = '1qaz@WSX1qaz@WSX'   
+var adminPw = '1qaz@WSX1qaz@WSX'
 //var adminPw = '1qaz@WSX${uniqueString(subscription().id, imageBuildResourceGroupName)}'
 var adminUserName = 'vmadmin'
 
@@ -311,9 +335,19 @@ var imageDefinitionFeatures = empty(imageDefinitionResourceId)
 
 var galleryImageDefinitionHyperVGeneration = endsWith(mpSku, 'g2') || startsWith(mpSku, 'win11') ? 'V2' : 'V1'
 var galleryImageDefinitionName = empty(imageDefinitionResourceId)
-  ? (empty(customImageDefinitionName)
-      ? '${replace('${resourceAbbreviations.imageDefinitions}-${replace(galleryImageDefinitionPublisher, '-', '')}-${replace(galleryImageDefinitionOffer, '-', '')}-${replace(galleryImageDefinitionSku, '-', '')}', ' ', '')}'
-      : customImageDefinitionName)
+  ? empty(customImageDefinitionName)
+      ? nameConvResTypeAtEnd
+          ? replace(
+              '${replace(galleryImageDefinitionPublisher, '-', '')}-${replace(galleryImageDefinitionOffer, '-', '')}-${replace(galleryImageDefinitionSku, '-', '')}-${resourceAbbreviations.imageDefinitions}',
+              ' ',
+              ''
+            )
+          : replace(
+              '${resourceAbbreviations.imageDefinitions}-${replace(galleryImageDefinitionPublisher, '-', '')}-${replace(galleryImageDefinitionOffer, '-', '')}-${replace(galleryImageDefinitionSku, '-', '')}',
+              ' ',
+              ''
+            )
+      : customImageDefinitionName
   : last(split(imageDefinitionResourceId, '/'))
 var galleryImageDefinitionOffer = !empty(imageDefinitionOffer) ? replace(imageDefinitionOffer, ' ', '') : mpOffer
 var galleryImageDefinitionPublisher = !empty(imageDefinitionPublisher)
@@ -395,7 +429,9 @@ module userAssignedIdentity '../../sharedModules/resources/managed-identity/user
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     location: location
-    name: '${resourceAbbreviations.userAssignedIdentities}-image-builder-${locations[location].abbreviation}'
+    name: nameConvResTypeAtEnd
+      ? 'avd-image-builder-${locations[location].abbreviation}-${resourceAbbreviations.userAssignedIdentities}'
+      : '${resourceAbbreviations.userAssignedIdentities}-image-builder-${locations[location].abbreviation}'
     tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
   }
   dependsOn: [
@@ -539,7 +575,8 @@ module logsStorageAccount '../../sharedModules/resources/storage/storage-account
     privateEndpoints: logStorageAccountNetworkAccess == 'PrivateEndpoint' && !empty(privateEndpointSubnetResourceId)
       ? [
           {
-            name: '${resourceAbbreviations.privateEndpoints}-${logStorageAccountName}-blob-${locations[computeLocation].abbreviation}'
+            name: privateEndpointName
+            customNetworkInterfaceName: customNetworkInterfaceName
             privateDnsZoneGroup: empty(blobPrivateDnsZoneResourceId)
               ? null
               : {
@@ -547,7 +584,7 @@ module logsStorageAccount '../../sharedModules/resources/storage/storage-account
                 }
             service: 'blob'
             subnetResourceId: privateEndpointSubnetResourceId
-            tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
+            tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
           }
         ]
       : null
@@ -575,7 +612,7 @@ module logsStorageAccount '../../sharedModules/resources/storage/storage-account
             }
     sasExpirationPeriod: '180.00:00:00'
     skuName: 'Standard_LRS'
-    tags: tags
+    tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
   }
   dependsOn: [
     imageBuildRg

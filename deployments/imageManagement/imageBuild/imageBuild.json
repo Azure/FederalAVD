@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.34.44.8038",
-      "templateHash": "6143944436790288912"
+      "templateHash": "1261179692066380415"
     },
     "name": "Zero Trust Architecture Custom Windows Image Builder",
     "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
@@ -32,6 +32,13 @@
       "maxLength": 6,
       "metadata": {
         "description": "Value to prepend to the deployment names."
+      }
+    },
+    "nameConvResTypeAtEnd": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name."
       }
     },
     "computeGalleryResourceId": {
@@ -1412,12 +1419,16 @@
     "downloads": "[if(equals(variables('cloud'), 'usnat'), variables('$fxv#2'), if(equals(variables('cloud'), 'ussec'), variables('$fxv#3'), variables('$fxv#4')))]",
     "depPrefix": "[if(not(empty(parameters('deploymentPrefix'))), format('{0}-', parameters('deploymentPrefix')), '')]",
     "logStorageAccountName": "[take(replace(toLower(format('sa{0}log{1}', variables('depPrefix'), uniqueString(subscription().id, variables('imageBuildResourceGroupName')))), '-', ''), 24)]",
-    "imageBuildResourceGroupName": "[if(empty(parameters('imageBuildResourceGroupId')), if(empty(parameters('customBuildResourceGroupName')), format('{0}-image-builder-{1}', variables('resourceAbbreviations').resourceGroups, variables('locations')[parameters('location')].abbreviation), parameters('customBuildResourceGroupName')), last(split(parameters('imageBuildResourceGroupId'), '/')))]",
+    "vnetName": "[if(not(empty(parameters('privateEndpointSubnetResourceId'))), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
+    "privateEndpointNameConv": "[replace(format('{0}', if(parameters('nameConvResTypeAtEnd'), format('RESOURCE-SUBRESOURCE-{0}-RESOURCETYPE', variables('vnetName')), format('RESOURCETYPE-RESOURCE-SUBRESOURCE-{0}', variables('vnetName')))), 'RESOURCETYPE', variables('resourceAbbreviations').privateEndpoints)]",
+    "privateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logStorageAccountName'))]",
+    "customNetworkInterfaceName": "[if(parameters('nameConvResTypeAtEnd'), format('{0}-{1}', variables('privateEndpointName'), variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}', variables('resourceAbbreviations').networkInterfaces, variables('privateEndpointName')))]",
+    "imageBuildResourceGroupName": "[if(empty(parameters('imageBuildResourceGroupId')), if(empty(parameters('customBuildResourceGroupName')), if(parameters('nameConvResTypeAtEnd'), format('avd-image-builds--{0}-{1}', variables('locations')[parameters('location')].abbreviation, variables('resourceAbbreviations').resourceGroups), format('{0}-avd-image-builds-{1}', variables('resourceAbbreviations').resourceGroups, variables('locations')[parameters('location')].abbreviation)), parameters('customBuildResourceGroupName')), last(split(parameters('imageBuildResourceGroupId'), '/')))]",
     "adminPw": "1qaz@WSX1qaz@WSX",
     "adminUserName": "vmadmin",
     "logContainerName": "image-customization-logs",
     "galleryImageDefinitionHyperVGeneration": "[if(or(endsWith(parameters('mpSku'), 'g2'), startsWith(parameters('mpSku'), 'win11')), 'V2', 'V1')]",
-    "galleryImageDefinitionName": "[if(empty(parameters('imageDefinitionResourceId')), if(empty(parameters('customImageDefinitionName')), format('{0}', replace(format('{0}-{1}-{2}-{3}', variables('resourceAbbreviations').imageDefinitions, replace(variables('galleryImageDefinitionPublisher'), '-', ''), replace(variables('galleryImageDefinitionOffer'), '-', ''), replace(variables('galleryImageDefinitionSku'), '-', '')), ' ', '')), parameters('customImageDefinitionName')), last(split(parameters('imageDefinitionResourceId'), '/')))]",
+    "galleryImageDefinitionName": "[if(empty(parameters('imageDefinitionResourceId')), if(empty(parameters('customImageDefinitionName')), if(parameters('nameConvResTypeAtEnd'), replace(format('{0}-{1}-{2}-{3}', replace(variables('galleryImageDefinitionPublisher'), '-', ''), replace(variables('galleryImageDefinitionOffer'), '-', ''), replace(variables('galleryImageDefinitionSku'), '-', ''), variables('resourceAbbreviations').imageDefinitions), ' ', ''), replace(format('{0}-{1}-{2}-{3}', variables('resourceAbbreviations').imageDefinitions, replace(variables('galleryImageDefinitionPublisher'), '-', ''), replace(variables('galleryImageDefinitionOffer'), '-', ''), replace(variables('galleryImageDefinitionSku'), '-', '')), ' ', '')), parameters('customImageDefinitionName')), last(split(parameters('imageDefinitionResourceId'), '/')))]",
     "galleryImageDefinitionOffer": "[if(not(empty(parameters('imageDefinitionOffer'))), replace(parameters('imageDefinitionOffer'), ' ', ''), parameters('mpOffer'))]",
     "galleryImageDefinitionPublisher": "[if(not(empty(parameters('imageDefinitionPublisher'))), replace(parameters('imageDefinitionPublisher'), ' ', ''), parameters('mpPublisher'))]",
     "galleryImageDefinitionSku": "[if(not(empty(parameters('imageDefinitionSku'))), replace(parameters('imageDefinitionSku'), ' ', ''), parameters('mpSku'))]",
@@ -1451,9 +1462,7 @@
           "location": {
             "value": "[parameters('location')]"
           },
-          "name": {
-            "value": "[format('{0}-image-builder-{1}', variables('resourceAbbreviations').userAssignedIdentities, variables('locations')[parameters('location')].abbreviation)]"
-          },
+          "name": "[if(parameters('nameConvResTypeAtEnd'), createObject('value', format('avd-image-builder-{0}-{1}', variables('locations')[parameters('location')].abbreviation, variables('resourceAbbreviations').userAssignedIdentities)), createObject('value', format('{0}-image-builder-{1}', variables('resourceAbbreviations').userAssignedIdentities, variables('locations')[parameters('location')].abbreviation)))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.ManagedIdentity/userAssignedIdentities'), createObject())]"
           }
@@ -2427,7 +2436,7 @@
               }
             ]
           },
-          "privateEndpoints": "[if(and(equals(parameters('logStorageAccountNetworkAccess'), 'PrivateEndpoint'), not(empty(parameters('privateEndpointSubnetResourceId')))), createObject('value', createArray(createObject('name', format('{0}-{1}-blob-{2}', variables('resourceAbbreviations').privateEndpoints, variables('logStorageAccountName'), variables('locations')[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('subnetResourceId'), '/')[2], split(parameters('subnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('subnetResourceId'), '/')[8]), '2023-05-01', 'full').location].abbreviation), 'privateDnsZoneGroup', if(empty(parameters('blobPrivateDnsZoneResourceId')), null(), createObject('privateDNSResourceIds', createArray(format('{0}', parameters('blobPrivateDnsZoneResourceId'))))), 'service', 'blob', 'subnetResourceId', parameters('privateEndpointSubnetResourceId'), 'tags', coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())))), createObject('value', null()))]",
+          "privateEndpoints": "[if(and(equals(parameters('logStorageAccountNetworkAccess'), 'PrivateEndpoint'), not(empty(parameters('privateEndpointSubnetResourceId')))), createObject('value', createArray(createObject('name', variables('privateEndpointName'), 'customNetworkInterfaceName', variables('customNetworkInterfaceName'), 'privateDnsZoneGroup', if(empty(parameters('blobPrivateDnsZoneResourceId')), null(), createObject('privateDNSResourceIds', createArray(format('{0}', parameters('blobPrivateDnsZoneResourceId'))))), 'service', 'blob', 'subnetResourceId', parameters('privateEndpointSubnetResourceId'), 'tags', coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())))), createObject('value', null()))]",
           "publicNetworkAccess": "[if(equals(parameters('logStorageAccountNetworkAccess'), 'PrivateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
           "networkAcls": "[if(equals(parameters('logStorageAccountNetworkAccess'), 'PrivateEndpoint'), createObject('value', createObject('bypass', 'None', 'defaultAction', 'Deny')), if(equals(parameters('logStorageAccountNetworkAccess'), 'ServiceEndpoint'), createObject('value', createObject('bypass', 'None', 'defaultAction', 'Deny', 'ipRules', createArray(), 'virtualNetworkRules', createArray(createObject('id', parameters('subnetResourceId'), 'action', 'Allow')))), createObject('value', createObject('bypass', 'None', 'defaultAction', 'Allow'))))]",
           "sasExpirationPeriod": {
@@ -2437,7 +2446,7 @@
             "value": "Standard_LRS"
           },
           "tags": {
-            "value": "[parameters('tags')]"
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
           }
         },
         "template": {

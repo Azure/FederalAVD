@@ -95,6 +95,7 @@ var identityName = replace(replace(nameConv_ImageManagement_Resources, 'RESOURCE
 var vnetName = !empty(privateEndpointSubnetResourceId) ? split(privateEndpointSubnetResourceId, '/')[8] : ''
 var privateEndpointNameConv = replace('${nameConvResTypeAtEnd ? 'RESOURCE-SUBRESOURCE-${vnetName}-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-${vnetName}'}', 'RESOURCETYPE', resourceAbbreviations.privateEndpoints)
 var privateEndpointName = replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'), 'RESOURCE', storageName)
+var customNetworkInterfaceName = nameConvResTypeAtEnd ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}' : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
 var storageName = take('${resourceAbbreviations.storageAccounts}imageassets${locations[location].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}', 24)
 var storageKind = 'StorageV2'
 
@@ -112,6 +113,7 @@ module resources 'resources.bicep' = {
     location: location
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     computeGalleryName: galleryName
+    customNetworkInterfaceName: customNetworkInterfaceName
     storageAccountName: storageName
     blobContainerName: blobContainerName
     managedIdentityName: identityName

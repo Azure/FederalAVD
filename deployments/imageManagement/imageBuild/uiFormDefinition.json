@@ -145,10 +145,10 @@
 							}
 						},
 						{
-							"name": "deploymentSpecs",
+							"name": "naming",
 							"type": "Microsoft.Common.Section",
 							"visible": true,
-							"label": "Deployment Specifications",
+							"label": "Naming",
 							"elements": [
 								{
 									"name": "deploymentPrefix",
@@ -162,6 +162,39 @@
 										"regex": "^[a-z0-9A-Z-]{2,6}$",
 										"validationMessage": "The prefix must be between 2 and 6 characters"
 									}
+								},
+								{
+									"name": "cafTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "The Cloud Adoption Framework (CAF) provides a recommended resource naming convention which specifies that the abbreviation for the resource type is listed first in the name. This solution automatically names resources using the CAF naming convention and suggested resource type abbreviations. Some customers have chosen to move the resource type to the end of the resource names. Select 'Yes' below to ensure that resources are named with this reverse convention or leave it set to 'No' to follow the CAF.",
+										"link": {
+											"label": "Resource Naming | Microsoft Learn",
+											"uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming"
+										}
+									}
+								},
+								{
+									"name": "nameConvResTypeAtEnd",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Move the Resource Type to the end of resource names",
+									"defaultValue": "No",
+									"toolTip": "",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Yes",
+												"value": true
+											},
+											{
+												"label": "No",
+												"value": false
+											}
+										],
+										"required": true
+									},
+									"visible": true
 								}
 							]
 						}
@@ -1994,7 +2027,8 @@
 			"subscriptionId": "[steps('basics').scope.subscription.id]",
 			"parameters": {
 				"location": "[steps('basics').scope.location.name]",
-				"deploymentPrefix": "[steps('basics').deploymentSpecs.deploymentPrefix]",
+				"deploymentPrefix": "[steps('basics').naming.deploymentPrefix]",
+				"nameConvResTypeAtEnd": "[steps('basics').naming.nameConvResTypeAtEnd]",
 				"imageBuildResourceGroupId": "[if(equals(steps('basics').resGroup.useExResGroup, true), concat(steps('basics').scope.subscription.id, '/resourceGroups/',steps('basics').resGroup.resourceGroup), '')]",
 				"customBuildResourceGroupName": "[if(equals(steps('basics').resGroup.useExResGroup, false), steps('basics').resGroup.customBuildResourceGroupName, '')]",
 				"computeGalleryResourceId": "[steps('prereqs').gallery.gallery.id]",
