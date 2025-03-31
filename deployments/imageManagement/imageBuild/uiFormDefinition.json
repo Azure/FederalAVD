@@ -2022,7 +2022,7 @@
 				"wsusServer": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), steps('imageCustomizations').updates.wsusServer, '')]",
 				"collectCustomizationLogs": "[steps('imageCustomizations').logging.collectLogs]",
 				"logStorageAccountNetworkAccess": "[if(steps('imageCustomizations').logging.collectLogs, steps('imageCustomizations').logging.networkAccess, 'PublicEndpoint')]",
-				"PrivateEndpointSubnetResourceId": "[if(and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint')), steps('imageCustomizations').logging.subnet, '')]",
+				"privateEndpointSubnetResourceId": "[if(and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint')), steps('imageCustomizations').logging.subnet, '')]",
 				"blobPrivateDnsZoneResourceId": "[if(and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint'), steps('imageCustomizations').logging.enablePrivateDNSIntegration), steps('imageCustomizations').logging.blobPrivateDnsZone, '')]",
 				"imageDefinitionResourceId": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, true), concat(steps('prereqs').gallery.gallery.id, '/images/', steps('imageDest').imageDefinition.imageDefinition), '')]",
 				"customImageDefinitionName": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, false), steps('imageDest').imageDefinition.customImageDefinitionName, '')]",
