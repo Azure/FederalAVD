@@ -334,7 +334,7 @@
 									"type": "Microsoft.Common.OptionsGroup",
 									"visible": "[equals(steps('identity').virtualMachines.solution, 'EntraId')]",
 									"label": "Intune Enrollment",
-									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'Complete'), empty(steps('basics').hostPoolApi.tags.identityType)), 'No', if(contains(steps('basics').hostPoolApi.tags.identityType, 'Intune'), 'Yes', 'No'))]",
+									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'Complete'), empty(steps('basics').hostPoolApi.tags.identityType)), 'No', if(contains(steps('basics').hostPoolApi.tags.vmIdentityType, 'Intune'), 'Yes', 'No'))]",
 									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting Yes.",
 									"constraints": {
 										"required": false,
