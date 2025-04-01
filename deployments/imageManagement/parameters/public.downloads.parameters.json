@@ -132,7 +132,7 @@
         "DestinationFileName": "vc_redist.x64.exe",
         "DestinationFolders": [
             "",
-            "VisualC++Redistributables"
+            "VisualCPlusPlusRedistributables"
         ],
         "Evergreen": {}
     },
