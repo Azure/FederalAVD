@@ -324,5 +324,22 @@
             "Language": "English",
             "Architecture": "x64"
         }
+    },
+    "GitForWindows": {
+        "DownloadUrl": "",
+        "WebsiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "git-for-windows/git",
+        "GitHubFileNamePattern": "*64-bit.exe",
+        "DestinationFileName": "Git-64-bit.exe.exe",
+        "DestinationFolders": [
+            "GitForWindows"
+        ],
+        "Evergreen": {
+            "Name": "gitForWindows",
+            "Language": "",
+            "Architecture": "x64"
+        }
     }
 }
