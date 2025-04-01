@@ -131,6 +131,9 @@ JSON example:
 ''')
 param vdiCustomizations array = []
 
+@description('Optional. Remove all links from the public desktop.')
+param cleanupDesktop bool = false
+
 @description('Optional. Collect image customization logs.')
 param collectCustomizationLogs bool = false
 
@@ -758,6 +761,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     cloud: cloud
     appsToRemove: appsToRemove
     location: computeLocation
+    cleanupDesktop: cleanupDesktop
     customizations: customizers
     installFsLogix: installFsLogix
     installOneDrive: installOneDrive

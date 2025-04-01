@@ -7,6 +7,7 @@ param downloadLatestMicrosoftContent bool
 param location string = resourceGroup().location
 param artifactsContainerUri string
 param customizations array
+param cleanupDesktop bool
 param logBlobContainerUri string
 param orchestrationVmName string
 param imageVmName string
@@ -460,7 +461,7 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
   ]
 }
 
-resource secondImageVmRestart 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if( installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams ) {
+resource secondImageVmRestart 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams) {
   name: 'restart-vm-2'
   location: location
   parent: orchestrationVm
@@ -668,6 +669,10 @@ resource cleanup 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
       {
         name: 'BuildDir'
         value: buildDir
+      }
+      {
+        name: 'CleanupDesktop'
+        value: string(cleanupDesktop)
       }
     ]
     source: {

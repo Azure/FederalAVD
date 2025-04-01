@@ -1080,6 +1080,12 @@
 									"label": "Apply Virtual Desktop Optimizations",
 									"toolTip": "Select to apply the customizations prescribed in the Virtual Desktop Optimization Tool",
 									"visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud'))))]"
+								},
+								{
+									"name": "cleanupDesktop",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Cleanup the Common Desktop",
+									"toolTip": "Select to remove all items from the common desktop"									
 								}
 							]
 						},
@@ -2051,6 +2057,7 @@
 				"teamsCloudType": "[if(steps('imageCustomizations').office.installTeams, steps('imageCustomizations').office.teamsCloudType, 'Commercial')]",
 				"appsToRemove": "[steps('imageCustomizations').customizations.appsToRemove]",
 				"installVirtualDesktopOptimizationTool": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud')))), steps('imageCustomizations').customizations.installVirtualDesktopOptimizationTool, false)]",
+				"cleanupDesktop": "[steps('imageCustomizations').customizations.cleanupDesktop]",
 				"installUpdates": "[steps('imageCustomizations').updates.installUpdates]",
 				"updateService": "[steps('imageCustomizations').updates.updateService]",
 				"wsusServer": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), steps('imageCustomizations').updates.wsusServer, '')]",
