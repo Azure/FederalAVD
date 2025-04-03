@@ -52,12 +52,6 @@ var roleAssignmentsControlPlane = [
     subscription: subscription().subscriptionId
   }
   {
-    roleDefinitionId: roleDefinitions.DesktopVirtualizationWorkspaceContributor // (Purpose: update the app group references on an existing feed workspace)
-    depName: 'ControlPlane-DVWorkspaceCont'
-    resourceGroup: resourceGroupControlPlane
-    subscription: subscription().subscriptionId
-  }
-  {
     roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the control plane role assignments for the deployment identity. This role Assignment must remain last in the list.)
     depName: 'ControlPlane-RBACAdmin'
     resourceGroup: resourceGroupControlPlane

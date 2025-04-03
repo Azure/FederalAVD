@@ -526,8 +526,9 @@ param deploymentVmSize string = 'Standard_B2s'
 @description('Optional. Create private endpoints for all deployed management and storage resources where applicable.')
 param deployPrivateEndpoints bool = false
 
-@description('Conditional. The Resource Id of the subnet on which to create the storage account, keyvault, and other resources private link. Required when "deployPrivateEndpoints" = true.')
-param managementResourcesPrivateEndpointSubnetResourceId string = ''
+@description('Conditional. The Resource Id of the subnet on which to create the secrets Key Vault private endpoint. Required when "deployPrivateEndpoints" = true and "deploySecretsKeyVault" = true.')
+#disable-next-line secure-secrets-in-params
+param secretsKeyVaultPrivateEndpointSubnetResourceId string = ''
 
 @description('Conditional. The Resource Id of the subnet on which to create the storage account, keyvault, and other resources private link. Required when "deployPrivateEndpoints" = true.')
 param hostPoolResourcesPrivateEndpointSubnetResourceId string = ''
@@ -858,7 +859,7 @@ module management 'modules/management/management.bicep' = if (deploymentType == 
     logAnalyticsWorkspaceName: resourceNames.outputs.logAnalyticsWorkspaceName
     logAnalyticsWorkspaceRetention: logAnalyticsWorkspaceRetention
     logAnalyticsWorkspaceSku: logAnalyticsWorkspaceSku
-    privateEndpointSubnetResourceId: managementResourcesPrivateEndpointSubnetResourceId
+    privateEndpointSubnetResourceId: secretsKeyVaultPrivateEndpointSubnetResourceId
     privateEndpoint: deployPrivateEndpoints
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv

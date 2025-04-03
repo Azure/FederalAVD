@@ -23,3 +23,7 @@ Remove-Item -Path $env:ProgramData\Microsoft\Windows\WER\ReportQueue\* -Recurse 
 Remove-Item -Path $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
 Clear-RecycleBin -Force -ErrorAction SilentlyContinue
 Clear-BCCache -Force -ErrorAction SilentlyContinue
+Try {
+    Delete-DeliveryOptimizationCache -Force
+} catch {
+}

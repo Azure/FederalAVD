@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.34.44.8038",
-      "templateHash": "8845714393850341097"
+      "templateHash": "8233205793396825984"
     }
   },
   "parameters": {
@@ -844,11 +844,11 @@
         "description": "Optional. Create private endpoints for all deployed management and storage resources where applicable."
       }
     },
-    "managementResourcesPrivateEndpointSubnetResourceId": {
+    "secretsKeyVaultPrivateEndpointSubnetResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Conditional. The Resource Id of the subnet on which to create the storage account, keyvault, and other resources private link. Required when \"deployPrivateEndpoints\" = true."
+        "description": "Conditional. The Resource Id of the subnet on which to create the secrets Key Vault private endpoint. Required when \"deployPrivateEndpoints\" = true and \"deploySecretsKeyVault\" = true."
       }
     },
     "hostPoolResourcesPrivateEndpointSubnetResourceId": {
@@ -2350,7 +2350,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.34.44.8038",
-              "templateHash": "2522031539106745221"
+              "templateHash": "12293026398958807753"
             }
           },
           "parameters": {
@@ -2460,12 +2460,6 @@
               {
                 "roleDefinitionId": "[parameters('roleDefinitions').DesktopVirtualizationSessionHostOperator]",
                 "depName": "ControlPlane-DVSessionHostOp",
-                "resourceGroup": "[parameters('resourceGroupControlPlane')]",
-                "subscription": "[subscription().subscriptionId]"
-              },
-              {
-                "roleDefinitionId": "[parameters('roleDefinitions').DesktopVirtualizationWorkspaceContributor]",
-                "depName": "ControlPlane-DVWorkspaceCont",
                 "resourceGroup": "[parameters('resourceGroupControlPlane')]",
                 "subscription": "[subscription().subscriptionId]"
               },
@@ -3223,7 +3217,7 @@
             "value": "[parameters('logAnalyticsWorkspaceSku')]"
           },
           "privateEndpointSubnetResourceId": {
-            "value": "[parameters('managementResourcesPrivateEndpointSubnetResourceId')]"
+            "value": "[parameters('secretsKeyVaultPrivateEndpointSubnetResourceId')]"
           },
           "privateEndpoint": {
             "value": "[parameters('deployPrivateEndpoints')]"
