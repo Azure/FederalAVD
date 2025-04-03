@@ -664,7 +664,23 @@ resource cleanup 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
   location: location
   parent: imageVm
   properties: {
-    asyncExecution: true
+    asyncExecution: true    
+    errorBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    errorBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-DiskCleanup-error-${timeStamp}.log'
+    outputBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    outputBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-DiskCleanup-output-${timeStamp}.log'
     parameters: [
       {
         name: 'BuildDir'
@@ -711,6 +727,22 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
     outputBlobUri: empty(logBlobContainerUri)
       ? null
       : '${logBlobContainerUri}${imageVmName}-Sysprep-output-${timeStamp}.log'
+    parameters: empty(logBlobContainerUri)
+      ? null
+      : [
+          {
+            name: 'APIVersion'
+            value: apiVersion
+          }
+          {
+            name: 'LogBlobContainerUri'
+            value: logBlobContainerUri
+          }
+          {
+            name: 'UserAssignedIdentityClientId'
+            value: userAssignedIdentityClientId
+          }
+        ]
     source: {
       script: loadTextContent('../../../../.common/scripts/Invoke-Sysprep.ps1')
     }
