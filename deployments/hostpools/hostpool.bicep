@@ -200,7 +200,7 @@ param encryptionAtHost bool = true
 
 @allowed([
   'PlatformManaged'
-  'CustomerManaged'
+  'customerManaged'
   'CustomerManagedHSM'
   'PlatformManagedAndCustomerManaged'
   'PlatformManagedAndCustomerManagedHSM'
@@ -464,7 +464,7 @@ param fslogixStorageIndex int = 1
 
 @allowed([
   'MicrosoftManaged'
-  'CustomerManaged'
+  'customerManaged'
   'CustomerManagedHSM'
 ])
 @description('Optional. The type of key management used for the Azure Files storage account encryption.')
@@ -486,7 +486,7 @@ param deployIncreaseQuota bool = false
 @description('Optional. Enable backups to an Azure Recovery Services vault.  For a pooled host pool this will enable backups on the Azure file share.  For a personal host pool this will enable backups on the AVD sessions hosts.')
 param recoveryServices bool = false
 
-@description('Optional. Deploys the Secrets Key Vault.')
+@description('Optional. Deploys the secrets Key Vault.')
 param deploySecretsKeyVault bool = false
 
 @description('Optional. Enables soft delete on the secrets key vault.')
@@ -527,10 +527,9 @@ param deploymentVmSize string = 'Standard_B2s'
 param deployPrivateEndpoints bool = false
 
 @description('Conditional. The Resource Id of the subnet on which to create the secrets Key Vault private endpoint. Required when "deployPrivateEndpoints" = true and "deploySecretsKeyVault" = true.')
-#disable-next-line secure-secrets-in-params
-param secretsKeyVaultPrivateEndpointSubnetResourceId string = ''
+param keyVaultPrivateEndpointSubnetResourceId string = ''
 
-@description('Conditional. The Resource Id of the subnet on which to create the storage account, keyvault, and other resources private link. Required when "deployPrivateEndpoints" = true.')
+@description('Conditional. The Resource Id of the subnet on which to create the storage account and other resources private link. Required when "deployPrivateEndpoints" = true.')
 param hostPoolResourcesPrivateEndpointSubnetResourceId string = ''
 
 @description('Optional. The resource id of the subnet delegated to "Microsoft.Web/serverFarms" to which the function app will be linked.')
@@ -547,9 +546,6 @@ param azureFilesPrivateDnsZoneResourceId string = ''
 
 @description('Conditional. If using private endpoints with Azure function apps, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
 param azureFunctionAppPrivateDnsZoneResourceId string = ''
-
-@description('Conditional. If using private endpoints with Azure function apps, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
-param azureFunctionAppScmPrivateDnsZoneResourceId string = ''
 
 @description('Conditional. If using private endpoints with Key Vaults, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
 param azureKeyVaultPrivateDnsZoneResourceId string = ''
@@ -665,19 +661,27 @@ var hostPoolVmTemplate = {
   encryptionAtHost: encryptionAtHost
   acceleratedNetworking: enableAcceleratedNetworking
   diskEncryptionSetName: confidentialVMOSDiskEncryption
-    ? resourceNames.outputs.diskEncryptionSetNames.ConfidentialVMs
-    : startsWith(keyManagementDisks, 'CustomerManaged')
-        ? resourceNames.outputs.diskEncryptionSetNames.CustomerManaged
+    ? resourceNames.outputs.diskEncryptionSetNames.confidentialVMs
+    : startsWith(keyManagementDisks, 'customerManaged')
+        ? resourceNames.outputs.diskEncryptionSetNames.customerManaged
         : contains(keyManagementDisks, 'PlatformManagedAndCustomerManaged')
-            ? resourceNames.outputs.diskEncryptionSetNames.PlatformAndCustomerManaged
+            ? resourceNames.outputs.diskEncryptionSetNames.platformAndCustomerManaged
             : null
   hibernate: hibernationEnabled
   securityType: securityType
   secureBoot: secureBootEnabled
   vTPM: vTpmEnabled
   subnetId: virtualMachineSubnetResourceId
-  availability: availability == 'availabilityZones' ? 'Availability Zones' : availability == 'availabilitySets' ? 'Availability Sets' : 'No infrastructure redundancy required'
+  availability: availability == 'availabilityZones'
+    ? 'Availability Zones'
+    : availability == 'availabilitySets' ? 'Availability Sets' : 'No infrastructure redundancy required'
   vmInfrastructureType: 'Cloud'
+  nameConvResTypeAtEnd: nameConvResTypeAtEnd
+}
+
+resource existingHostPool 'Microsoft.DesktopVirtualization/hostPools@2024-04-03' existing = if (!empty(existingHostPoolResourceId)) {
+  name: last(split(existingHostPoolResourceId, '/'))
+  scope: resourceGroup(split(existingHostPoolResourceId, '/')[2], split(existingHostPoolResourceId, '/')[4])
 }
 
 // Existing Session Host Virtual Network location
@@ -695,7 +699,7 @@ resource avdPrivateLinkGlobalFeedNetwork 'Microsoft.Network/virtualNetworks@2023
   )
 }
 
-// Existing Key Vaults for Secrets (only used for UI deployments since you can specify references in Parameter files.)
+// Existing Key Vaults for secrets (only used for UI deployments since you can specify references in Parameter files.)
 resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(credentialsKeyVaultResourceId)) {
   name: last(split(credentialsKeyVaultResourceId, '/'))
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
@@ -711,7 +715,9 @@ module resourceNames 'modules/resourceNames.bicep' = {
     locationControlPlane: locationControlPlane
     locationGlobalFeed: locationGlobalFeed
     locationVirtualMachines: locationVirtualMachines
-    nameConvResTypeAtEnd: nameConvResTypeAtEnd
+    nameConvResTypeAtEnd: deploymentType == 'Complete'
+      ? nameConvResTypeAtEnd
+      : bool(existingHostPool.tags.?nameConvResTypeAtEnd) ?? false
     virtualMachineNamePrefix: virtualMachineNamePrefix
     existingFeedWorkspaceResourceId: existingFeedWorkspaceResourceId
   }
@@ -775,12 +781,9 @@ module rgs 'modules/resourceGroups.bicep' = [
           logic.outputs.resourceGroupNames[i],
           'hosts'
         )
-        ? union(
-            tags[?'Microsoft.Resources/resourceGroups'] ?? {},
-            {
-              'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'
-            }
-          )
+        ? union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, {
+            'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'
+          })
         : tags[?'Microsoft.Resources/resourceGroups'] ?? {}
     }
   }
@@ -838,7 +841,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (deploymentT
   ]
 }
 
-// Management Services: Monitoring, Secrets, and App Service Plan (if needed)
+// Management Services: Monitoring, secrets, and App Service Plan (if needed)
 module management 'modules/management/management.bicep' = if (deploymentType == 'Complete') {
   name: 'Management_${timeStamp}'
   params: {
@@ -848,18 +851,23 @@ module management 'modules/management/management.bicep' = if (deploymentType == 
     dataCollectionEndpointName: resourceNames.outputs.dataCollectionEndpointName
     enableMonitoring: enableMonitoring
     enableQuotaManagement: deployIncreaseQuota
+    encryptionKeysKeyVaultName: resourceNames.outputs.keyVaultNames.encryptionKeys
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
+    deployEncryptionKeysKeyVault: contains(keyManagementDisks, 'Customer') || contains(
+      keyManagementStorageAccounts,
+      'Customer'
+    )
     deploySecretsKeyVault: deploySecretsKeyVault
     keyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
     keyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
-    keyVaultName: resourceNames.outputs.keyVaultNames.VMSecrets
+    secretsKeyVaultName: resourceNames.outputs.keyVaultNames.secrets
     keyVaultRetentionInDays: keyVaultRetentionInDays
     location: locationVirtualMachines
     logAnalyticsWorkspaceName: resourceNames.outputs.logAnalyticsWorkspaceName
     logAnalyticsWorkspaceRetention: logAnalyticsWorkspaceRetention
     logAnalyticsWorkspaceSku: logAnalyticsWorkspaceSku
-    privateEndpointSubnetResourceId: secretsKeyVaultPrivateEndpointSubnetResourceId
+    privateEndpointSubnetResourceId: keyVaultPrivateEndpointSubnetResourceId
     privateEndpoint: deployPrivateEndpoints
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
@@ -942,8 +950,6 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType == 'Complete
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFilePrivateDnsZoneResourceId: azureFilesPrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
-    azureFunctionAppScmPrivateDnsZoneResourceId: azureFunctionAppScmPrivateDnsZoneResourceId
-    azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: deploymentType == 'Complete'
@@ -964,19 +970,21 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType == 'Complete
     fslogixAdminGroups: fslogixAdminGroups
     fslogixFileShares: logic.outputs.fslogixFileShareNames
     fslogixShardOptions: fslogixShardOptions
-    storageAccountEncryptionKeysVaultName: resourceNames.outputs.keyVaultNames.FSLogixEncryptionKeys
+    encryptionKeyVaultResourceId: management.outputs.encryptionKeyVaultResourceId
+    encryptionKeyVaultUri: management.outputs.encryptionKeyVaultUri
+    fslogixEncryptionKeyNameConv: resourceNames.outputs.encryptionKeyNames.fslogix
     fslogixUserGroups: logic.outputs.fslogixUserGroups
     hostPoolResourceId: deploymentType == 'Complete'
       ? controlPlane.outputs.hostPoolResourceId
       : existingHostPoolResourceId
     identitySolution: identitySolution
-    increaseQuotaAppInsightsName: resourceNames.outputs.appInsightsNames.IncreaseStorageQuota
-    increaseQuotaFunctionAppName: resourceNames.outputs.functionAppNames.IncreaseStorageQuota
-    increaseQuotaStorageAccountName: resourceNames.outputs.storageAccountNames.IncreaseStorageQuota
+    increaseQuotaAppInsightsName: resourceNames.outputs.appInsightsNames.increaseStorageQuota
+    increaseQuotaEncryptionKeyName: resourceNames.outputs.encryptionKeyNames.increaseStorageQuota
+    increaseQuotaFunctionAppName: resourceNames.outputs.functionAppNames.increaseStorageQuota
+    increaseQuotaStorageAccountName: resourceNames.outputs.storageAccountNames.increaseStorageQuota
     kerberosEncryptionType: fslogixStorageAccountADKerberosEncryption
     keyExpirationInDays: keyExpirationInDays
     keyManagementStorageAccounts: keyManagementStorageAccounts
-    keyVaultRetentionInDays: keyVaultRetentionInDays
     location: locationVirtualMachines
     logAnalyticsWorkspaceResourceId: deploymentType == 'Complete' && enableMonitoring
       ? management.outputs.logAnalyticsWorkspaceResourceId
@@ -990,12 +998,12 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType == 'Complete
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     recoveryServices: recoveryServices
-    recoveryServicesVaultName: resourceNames.outputs.recoveryServicesVaultNames.FSLogixStorage
+    recoveryServicesVaultName: resourceNames.outputs.recoveryServicesVaultNames.fslogixStorage
     resourceGroupDeployment: resourceNames.outputs.resourceGroupDeployment
     resourceGroupStorage: resourceNames.outputs.resourceGroupStorage
     shareSizeInGB: fslogixShareSizeInGB
     smbServerLocation: logic.outputs.smbServerLocation
-    storageAccountNamePrefix: resourceNames.outputs.storageAccountNames.FSLogix
+    storageAccountNamePrefix: resourceNames.outputs.storageAccountNames.fslogix
     storageCount: logic.outputs.fslogixStorageCount
     storageIndex: fslogixStorageIndex
     storageSku: logic.outputs.fslogixStorageSku
@@ -1007,7 +1015,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType == 'Complete
     functionAppDelegatedSubnetResourceId: functionAppSubnetResourceId
     increaseQuota: deployIncreaseQuota
     privateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
-    serverFarmId: deploymentType == 'Complete' ? management.outputs.appServicePlanId : ''
+    serverFarmId: deploymentType == 'Complete' ? management.outputs.appServicePlanId : ''    
   }
 }
 
@@ -1028,7 +1036,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     availabilityZones: availabilityZones
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
@@ -1052,7 +1059,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
       : ''
     diskAccessName: resourceNames.outputs.diskAccessName
     diskEncryptionSetNames: resourceNames.outputs.diskEncryptionSetNames
-    diskNamePrefix: resourceNames.outputs.diskNamePrefix
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     divisionRemainderValue: logic.outputs.divisionRemainderValue
@@ -1071,6 +1077,9 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     enableAcceleratedNetworking: enableAcceleratedNetworking
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
+    encryptionKeyName: resourceNames.outputs.encryptionKeyNames.virtualMachines
+    encryptionKeyVaultResourceId: management.outputs.encryptionKeyVaultResourceId
+    encryptionKeyVaultUri: management.outputs.encryptionKeyVaultUri
     existingDiskAccessResourceId: existingDiskAccessResourceId
     existingDiskEncryptionSetResourceId: existingDiskEncryptionSetResourceId
     existingRecoveryServicesVaultResourceId: existingRecoveryServicesVaultResourceId
@@ -1098,24 +1107,23 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     integrityMonitoring: integrityMonitoring
     keyExpirationInDays: keyExpirationInDays
     keyManagementDisks: keyManagementDisks
-    keyVaultNames: resourceNames.outputs.keyVaultNames
-    keyVaultRetentionInDays: keyVaultRetentionInDays
     logAnalyticsWorkspaceResourceId: enableMonitoring && deploymentType == 'Complete'
       ? management.outputs.logAnalyticsWorkspaceResourceId
       : ''
     location: vmVirtualNetwork.location
     maxResourcesPerTemplateDeployment: logic.outputs.maxResourcesPerTemplateDeployment
+    osDiskNameConv: resourceNames.outputs.virtualMachineDiskNameConv
     ouPath: vmOUPath
     pooledHostPool: logic.outputs.pooledHostPool
     privateEndpoint: deployPrivateEndpoints
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
-    networkInterfaceNamePrefix: resourceNames.outputs.networkInterfaceNamePrefix
+    networkInterfaceNameConv: resourceNames.outputs.virtualMachineNicNameConv
     recoveryServices: deploymentType == 'Complete'
       ? contains(hostPoolType, 'Personal') ? recoveryServices : false
       : recoveryServices
-    recoveryServicesVaultName: resourceNames.outputs.recoveryServicesVaultNames.VirtualMachines
+    recoveryServicesVaultName: resourceNames.outputs.recoveryServicesVaultNames.virtualMachines
     resourceGroupHosts: deploymentType == 'Complete'
       ? resourceNames.outputs.resourceGroupHosts
       : existingHostsResourceGroupName
@@ -1139,7 +1147,8 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     virtualMachineAdminUserName: !empty(virtualMachineAdminUserName)
       ? virtualMachineAdminUserName
       : kvCredentials.getSecret('VirtualMachineAdminUserName')
-    virtualMachineNamePrefix: resourceNames.outputs.virtualMachineNamePrefix
+    virtualMachineNameConv: resourceNames.outputs.virtualMachineNameConv
+    virtualMachineNamePrefix: virtualMachineNamePrefix
     virtualMachineSize: virtualMachineSize
     vmInsightsDataCollectionRulesResourceId: enableMonitoring
       ? deploymentType == 'Complete'

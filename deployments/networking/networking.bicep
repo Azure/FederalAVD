@@ -116,12 +116,6 @@ param createAzureWebAppZone bool = false
 @description('Optional. The Resource Id of the existing Azure Web App Private DNS Zone.')
 param azureWebAppZoneId string = ''
 
-@description('Optional. Determines if the Azure Web App SCM private DNS zone should be created.')
-param createAzureWebAppScmZone bool = false
-
-@description('Optional. The Resource Id of the existing Azure Web App SCM Private DNS Zone.')
-param azureWebAppScmZoneId string = ''
-
 @description('Optional. Determines if the private DNS zones should be linked to a new virtual network.')
 param linkPrivateDnsZonesToNewVnet bool = false
 
@@ -135,7 +129,7 @@ param tags object = {}
 @description('DO NOT MODIFY THIS VALUE! The timeStamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddhhmmss')
 
-var createPrivateDNSZones = createAzureBackupZone || createAzureBlobZone || createAzureFilesZone || createAzureQueueZone || createAzureTableZone || createAzureKeyVaultZone || createAvdFeedZone || createAvdGlobalFeedZone || createAzureWebAppZone || createAzureWebAppScmZone
+var createPrivateDNSZones = createAzureBackupZone || createAzureBlobZone || createAzureFilesZone || createAzureQueueZone || createAzureTableZone || createAzureKeyVaultZone || createAvdFeedZone || createAvdGlobalFeedZone || createAzureWebAppZone
 var locations = (loadJsonContent('../../.common/data/locations.json'))[environment().name]
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 var nameConvSuffix = nameConvResTypeAtEnd ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
@@ -236,7 +230,6 @@ var keyVaultPrivateDnsZone = createAzureKeyVaultZone ? 'privatelink${replace(env
 var avdFeedPrivateDnsZone = createAvdFeedZone ? privateDnsZones_AzureVirtualDesktop[environment().name] : ''
 var avdGlobalFeedPrivateDnsZone = createAvdGlobalFeedZone ? privateDnsZones_AzureVirtualDesktopGlobalFeed[environment().name] : ''
 var webAppPrivateDnsZone = createAzureWebAppZone ? 'privatelink.azurewebsites.${privateDnsZoneSuffixes_AzureWebApps[environment().name]}' : ''
-var webAppScmPrivateDnsZone = createAzureWebAppScmZone ? 'scm.privatelink.azurewebsites.${privateDnsZoneSuffixes_AzureWebApps[environment().name]}' : ''
 
 var privateDnsZones = [
   backupPrivateDnsZone
@@ -248,7 +241,6 @@ var privateDnsZones = [
   avdFeedPrivateDnsZone
   avdGlobalFeedPrivateDnsZone
   webAppPrivateDnsZone
-  webAppScmPrivateDnsZone
 ]
 
 var existingPrivateDnsZones = [
@@ -261,7 +253,6 @@ var existingPrivateDnsZones = [
   avdFeedZoneId
   avdGlobalFeedZoneId
   azureWebAppZoneId
-  azureWebAppScmZoneId
 ]
 
 module vnetResources 'modules/vnet-sub-module.bicep' = if (deployVnet) {

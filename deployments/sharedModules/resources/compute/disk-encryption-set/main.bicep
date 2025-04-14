@@ -43,11 +43,11 @@ var identity = {
   userAssignedIdentities: !empty(userAssignedIdentities) ? userAssignedIdentities : null
 }
 
-resource keyVault 'Microsoft.KeyVault/vaults@2021-10-01' existing = {
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: last(split(keyVaultResourceId, '/'))!
   scope: resourceGroup(split(keyVaultResourceId, '/')[2], split(keyVaultResourceId, '/')[4])
 
-  resource key 'keys@2021-10-01' existing = {
+  resource key 'keys@2023-07-01' existing = {
     name: keyName
   }
 }

@@ -1220,7 +1220,7 @@
 									"name": "virtualMachineNamePrefix",
 									"type": "Microsoft.Common.TextBox",
 									"label": "Virtual Machine Name Prefix",
-									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'Complete'), empty(steps('basics').hostPoolApi.tags.vmNamePrefix)), concat('avd', steps('basics').naming.identifier), steps('basics').hostPoolApi.tags.vmNamePrefix)]",
+									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'Complete'), empty(steps('basics').hostPoolApi.tags.vmNamePrefix)), toLower(concat('avd', steps('basics').naming.identifier, if(empty(steps('basics').naming.index), '', concat('-', steps('basics').naming.index)))), steps('basics').hostPoolApi.tags.vmNamePrefix)]",
 									"toolTip": "Provide a Virtual Machine name prefix consisting of alphanumeric and dashes up to 12 characters long. A three character numeric suffix will be appended to the name padded with zeros (0).",
 									"constraints": {
 										"required": true,
@@ -3330,7 +3330,7 @@
 								{
 									"name": "privateEndpointVnetsSubscription",
 									"type": "Microsoft.Common.DropDown",
-									"label": "Private Endpoint Subnets Subscription",
+									"label": "Subnets Subscription",
 									"placeholder": "",
 									"defaultValue": "[steps('basics').scope.subscription.displayName]",
 									"toolTip": "",
@@ -3354,7 +3354,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(or(steps('management').keyVaults.deploySecretsKeyVault, steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
 									"options": {
-										"text": "<i>Shared Management Resources</i>"
+										"text": "<i>Shared Management Resources (i.e., Key Vaults, Function Apps, etc.)</i>"
 									}
 								},
 								{
@@ -3379,21 +3379,21 @@
 									}
 								},
 								{
-									"name": "keyVaultSubnet",
+									"name": "keyVaultsSubnet",
 									"type": "Microsoft.Common.DropDown",
-									"label": "Secrets Key Vault Private Endpoint subnet",
+									"label": "Key Vault Private Endpoint subnet",
 									"toolTip": "Select an existing subnet for the private Endpoint.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.managementSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]",
 										"required": true
-									},
-									"visible": "[and(steps('management').keyVaults.deploySecretsKeyVault, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									},									
+									"visible": "[and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "functionAppOutboundSubnet",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Function App Outbound subnet",
-									"toolTip": "Select an existing subnet for function App Outbound access.",
+									"toolTip": "Select an existing subnet for function App Outbound access. This subnet must have a delegation for Microsoft.Web/serverFarms.",
 									"constraints": {
 										"required": true,
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.managementSubnetsApi.value, (snet) => equals(first(map(snet.properties.delegations, (del) => del.properties.serviceName)), 'Microsoft.Web/serverFarms')), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
@@ -3405,7 +3405,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
 									"options": {
-										"text": "<i>Hostpool Resources</i>"
+										"text": "<i>Hostpool Resources (i.e., FSLogix storage accounts)</i>"
 									}
 								},
 								{
@@ -3580,20 +3580,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": false
 									}
-								},
-								{
-									"name": "azureFunctionAppScmPrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"visible": "[and(steps('management').automation.deployIncreaseQuota, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
-									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'scm.privatelink.')), (zone) => zone.name))]",
-									"label": "Azure Web App SCM",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Function Apps",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'scm.privatelink.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": false
-									}
-								}
+								}								
 							]
 						},
 						{
@@ -3888,7 +3875,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Subnet",
 									"toolTip": "Select an existing subnet for the private Endpoints.",
-									"defaultValue": "[last(split(steps('zeroTrust').privateEndpoints.keyVaultSubnet, '/'))]",
+									"defaultValue": "[last(split(steps('zeroTrust').privateEndpoints.keyVaultsSubnet, '/'))]",
 									"constraints": {
 										"allowedValues": "[map(steps('zeroTrust').avdPrivateLink.feedWorkspaceSubnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]",
 										"required": true
@@ -4082,8 +4069,6 @@
 								"Microsoft.Compute/availabilitySets",
 								"Microsoft.Compute/diskAccesses",
 								"Microsoft.Compute/diskEncryptionSets",
-								"Microsoft.Compute/hostGroups",
-								"Microsoft.Compute/hostGroups/hosts",
 								"Microsoft.Compute/virtualMachines",
 								"Microsoft.DesktopVirtualization/applicationGroups",
 								"Microsoft.DesktopVirtualization/hostPools",
@@ -4211,13 +4196,12 @@
 				"existingDataCollectionEndpointResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('management').monitoring.enableMonitoring), steps('management').monitoring.dataCollectionEndpoint, '')]",
 				"securityDataCollectionRulesResourceId": "[if(steps('management').monitoring.enableCentralMonitoring, steps('management').monitoring.securityDataCollectionRule.id, '')]",
 				"deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
-				"secretsKeyVaultPrivateEndpointSubnetResourceId": "[if(and(steps('management').keyVaults.deploySecretsKeyVault, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.keyVaultSubnet, '')]",
+				"keyVaultPrivateEndpointSubnetResourceId": "[if(and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.keyVaultsSubnet, '')]",
 				"functionAppSubnetResourceId": "[if(and(steps('management').automation.deployIncreaseQuota, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.functionAppOutboundSubnet, '')]",
 				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.hostpoolSubnet, '')]",
 				"azureBackupPrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
 				"azureBlobPrivateDnsZoneResourceId": "[if(and(or(steps('management').backup.recoveryServices, steps('management').monitoring.enableMonitoring), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
 				"azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('management').automation.deployIncreaseQuota, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFunctionAppPrivateDnsZone, '')]",
-				"azureFunctionAppScmPrivateDnsZoneResourceId": "[if(and(steps('management').automation.deployIncreaseQuota, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFunctionAppScmPrivateDnsZone, '')]",
 				"azureFilesPrivateDnsZoneResourceId": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilesPrivateDnsZone, '')]",
 				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, or(steps('management').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
 				"azureQueuePrivateDnsZoneResourceId": "[if(and(or(steps('management').backup.recoveryServices, steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",

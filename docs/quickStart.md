@@ -79,12 +79,12 @@ There are several Azure resource prerequisite that are required to run this depl
     | **AVD PrivateLink Global Feed** | privatelink-global.wvd.microsoft.com | privatelink-global.wvd.usgovcloudapi.net |
     | **AVD PrivateLink Workspace Feed and Hostpool Connections** | privatelink.wvd.microsoft.com | privatelink.wvd.usgovcloudapi.net |
     | **Azure Backup** | privatelink.`<geo>`.backup.windowsazure.com[^1] | privatelink.`<geo>`.backup.windowsazure.us[^1] |
-    | **Azure Blob Storage**<br>- image management artifacts<br>- backup<br>- managed disk access | privatelink.blob.core.windows.net |
+    | **Azure Blob Storage**<br>- image management artifacts<br>- backup<br>- managed disk access | privatelink.blob.core.windows.net | privatelink.blob.core.usgovcloudapi.net |
     | **Azure Files**<br>- FSLogix Storage | privatelink.file.core.windows.net | privatelink.file.core.usgovcloudapi.net |
     | **Azure Key Vault**<br>-vm secrets<br>- customer managed keys | privatelink.vaultcore.azure.net | privatelink.vaultcore.usgovcloudapi.net |
     | **Azure Queue Storage**<br>- storage quota function app | privatelink.queue.core.windows.net | privatelink.queue.core.usgovcloudapi.net |
     | **Azure Table Storage**<br>- storage quota function app | privatelink.table.core.windows.net | privatelink.table.core.usgovcloudapi.net |
-    | **Azure Web Sites**<br>- storage quota function app | privatelink.azurewebsites.net</br>scm.privatelink.azurewebsites.net | privatelink.azurewebsites.us</br>scm.privatelink.azurewebsites.us |
+    | **Azure Web Sites**<br>- storage quota function app | privatelink.azurewebsites.net | privatelink.azurewebsites.us |
 
     - For Private DNS values on USSec, see [USSec Private DNS Zone Values](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/services/networking/private-link/private-endpoint-dns?branch=main)
     - For Private DNS zone values on USNat, see [USNat Private DNS Zone Values](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/services/networking/private-link/private-endpoint-dns?branch=main)

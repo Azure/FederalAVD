@@ -7,8 +7,6 @@ param azureBackupPrivateDnsZoneResourceId string
 param azureBlobPrivateDnsZoneResourceId string
 param azureFilePrivateDnsZoneResourceId string
 param azureFunctionAppPrivateDnsZoneResourceId string
-param azureFunctionAppScmPrivateDnsZoneResourceId string
-param azureKeyVaultPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
 param azureTablePrivateDnsZoneResourceId string
 param deploymentUserAssignedIdentityClientId string
@@ -18,21 +16,23 @@ param domainJoinUserPassword string
 @secure()
 param domainJoinUserPrincipalName string
 param domainName string
-param fslogixFileShares array
+param encryptionKeyVaultResourceId string
+param encryptionKeyVaultUri string
 param fslogixAdminGroups array
+param fslogixEncryptionKeyNameConv string
+param fslogixFileShares array
 param fslogixShardOptions string
-param storageAccountEncryptionKeysVaultName string
 param fslogixUserGroups array
 param functionAppDelegatedSubnetResourceId string
 param hostPoolResourceId string
 param increaseQuota bool
 param increaseQuotaAppInsightsName string
+param increaseQuotaEncryptionKeyName string
 param increaseQuotaFunctionAppName string
 param increaseQuotaStorageAccountName string
 param kerberosEncryptionType string
 param keyExpirationInDays int
 param keyManagementStorageAccounts string
-param keyVaultRetentionInDays int
 param location string
 param logAnalyticsWorkspaceResourceId string
 param netAppAccountName string
@@ -65,24 +65,19 @@ module customerManagedKeys 'modules/customerManagedKeys.bicep' = if(storageSolut
   name: 'CustomerManagedKeys_${timeStamp}'
   scope: resourceGroup(resourceGroupStorage)
   params: {
-    azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
     hostPoolResourceId: hostPoolResourceId
     keyExpirationInDays: keyExpirationInDays
     keyManagementStorageAccounts: keyManagementStorageAccounts
-    keyVaultName: storageAccountEncryptionKeysVaultName
-    keyVaultRetentionInDays: keyVaultRetentionInDays
+    keyVaultResourceId: encryptionKeyVaultResourceId
     location: location
-    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
-    privateEndpoint: privateEndpoint
-    privateEndpointNICNameConv: privateEndpointNICNameConv
-    privateEndpointNameConv: privateEndpointNameConv
-    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
-    storageAccountNamePrefix: storageAccountNamePrefix
     storageCount: storageCount
     storageIndex: storageIndex
     tags: tags
     timeStamp: timeStamp
     userAssignedIdentityNameConv: userAssignedIdentityNameConv
+    fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
+    increaseQuotaEncryptionKeyName: increaseQuotaEncryptionKeyName
+    increaseQuota: increaseQuota
   }
 }
 
@@ -122,7 +117,6 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     availability: availability
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
-    azureFunctionAppScmPrivateDnsZoneResourceId: azureFunctionAppScmPrivateDnsZoneResourceId
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
@@ -130,15 +124,16 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? domainJoinUserPassword : ''
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? domainJoinUserPrincipalName : ''
-    encryptionKeyVaultUri: keyManagementStorageAccounts == 'MicrosoftManaged' ? '' : customerManagedKeys.outputs.keyVaultUri
-    encryptionKeyVaultName: keyManagementStorageAccounts == 'MicrosoftManaged' ? '' : customerManagedKeys.outputs.keyVaultName
+    encryptionKeyVaultUri: encryptionKeyVaultUri
     encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'MicrosoftManaged' ? '' : customerManagedKeys.outputs.userAssignedIdentityResourceId
     fileShares: fslogixFileShares
+    fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
     functionAppDelegatedSubnetResourceId: functionAppDelegatedSubnetResourceId
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
     increaseQuota: increaseQuota
     increaseQuotaApplicationInsightsName: increaseQuotaAppInsightsName
+    increaseQuotaEncryptionKeyName: increaseQuotaEncryptionKeyName
     increaseQuotaFunctionAppName: increaseQuotaFunctionAppName
     increaseQuotaStorageAccountName: increaseQuotaStorageAccountName
     kerberosEncryptionType: kerberosEncryptionType
@@ -164,7 +159,6 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     shareUserGroups: fslogixUserGroups
     storageAccountNamePrefix: storageAccountNamePrefix
     storageCount: storageCount
-    storageEncryptionKeySuffix: keyManagementStorageAccounts == 'MicrosoftManaged' ? '' : customerManagedKeys.outputs.encryptionKeySuffix
     storageIndex: storageIndex
     storageSku: storageSku
     storageSolution: storageSolution

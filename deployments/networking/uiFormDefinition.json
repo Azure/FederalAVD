@@ -670,25 +670,13 @@
 										"allowedValues": "[map(filter(steps('privateDNSZones').zones.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": false
 									}
-								},
-								{
-									"name": "azureWebAppScm",
-									"type": "Microsoft.Common.DropDown",
-									"visible": "[steps('basics').features.storageQuotaAutomation]",
-									"label": "Azure Web App SCM",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Function Apps",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('privateDNSZones').zones.privateDNSZonesApi.value, (zone) => contains(zone.name, 'scm.privatelink.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": false
-									}
-								},
+								},								
 								{
 									"name": "deployMissingZones",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Deploy any missing Private DNS Zones",
 									"toolTip": "Select this box to automatically deploy any missing Private DNS Zones to the subscription above.",
-									"visible": "[or(if(equals(steps('basics').features.recoveryServices, true), empty(steps('privateDNSZones').zones.azureBackup), false), if(or(equals(steps('basics').features.customImage, true), equals(steps('basics').features.recoveryServices, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureBlob), false), if(or(equals(steps('basics').features.azureFiles, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureFiles), false), if(or(equals(steps('basics').features.recoveryServices, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureQueue), false), if(equals(steps('basics').features.storageQuotaAutomation, true), empty(steps('privateDNSZones').zones.azureTable), false), empty(steps('privateDNSZones').zones.azureKeyVault), if(equals(steps('basics').features.avdPrivateLink, true), or(empty(steps('privateDNSZones').zones.avdFeedAndConnections), empty(steps('privateDNSZones').zones.globalFeed)), false), if(equals(steps('basics').features.storageQuotaAutomation, true), or(empty(steps('privateDNSZones').zones.azureWebApp), empty(steps('privateDNSZones').zones.azureWebAppScm)), false))]"
+									"visible": "[or(if(equals(steps('basics').features.recoveryServices, true), empty(steps('privateDNSZones').zones.azureBackup), false), if(or(equals(steps('basics').features.customImage, true), equals(steps('basics').features.recoveryServices, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureBlob), false), if(or(equals(steps('basics').features.azureFiles, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureFiles), false), if(or(equals(steps('basics').features.recoveryServices, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureQueue), false), if(equals(steps('basics').features.storageQuotaAutomation, true), empty(steps('privateDNSZones').zones.azureTable), false), empty(steps('privateDNSZones').zones.azureKeyVault), if(equals(steps('basics').features.avdPrivateLink, true), or(empty(steps('privateDNSZones').zones.avdFeedAndConnections), empty(steps('privateDNSZones').zones.globalFeed)), false), if(equals(steps('basics').features.storageQuotaAutomation, true), empty(steps('privateDNSZones').zones.azureWebApp), false))]"
 								},
 								{
 									"type": "Microsoft.Common.ResourceGroupSelector",
@@ -787,8 +775,6 @@
 				"avdGlobalFeedZoneId": "[if(steps('basics').features.avdPrivateLink, steps('privateDNSZones').zones.globalFeed, '')]",
 				"createAzureWebAppZone": "[if(and(steps('basics').features.storageQuotaAutomation, steps('privateDNSZones').zones.deployMissingZones), empty(steps('privateDNSZones').zones.azureWebApp), false)]",
 				"azureWebAppZoneId": "[if(steps('basics').features.storageQuotaAutomation, steps('privateDNSZones').zones.azureWebApp, '')]",
-				"createAzureWebAppScmZone": "[if(and(steps('basics').features.storageQuotaAutomation, steps('privateDNSZones').zones.deployMissingZones), empty(steps('privateDNSZones').zones.azureWebAppScm), false)]",
-				"azureWebAppScmZoneId": "[if(steps('basics').features.storageQuotaAutomation, steps('privateDNSZones').zones.azureWebAppScm, '')]",
 				"linkPrivateDnsZonesToNewVnet": "[if(steps('virtualNetwork').deployVnet, equals(steps('privateDNSZones').zones.linkOptions, 'newVnet'), false)]",
 				"privateDnsZonesVnetId": "[if(equals(steps('privateDNSZones').zones.linkOptions, 'other'), steps('privateDNSZones').zones.privateDnsZoneLinkVnet.id, if(equals(steps('privateDNSZones').zones.linkOptions, 'hub'), steps('virtualNetwork').deploy.hubVnet.id, ''))]",
 				"tags": "[steps('tags').tags]"

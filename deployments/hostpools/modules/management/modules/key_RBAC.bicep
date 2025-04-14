@@ -5,8 +5,7 @@ param keyName string
 param roleDefinitionId string
 
 resource keyVault 'Microsoft.KeyVault/vaults@2021-10-01' existing = {
-  name: keyVaultName!
-
+  name: keyVaultName
   resource key 'keys@2021-10-01' existing = {
     name: keyName
   }

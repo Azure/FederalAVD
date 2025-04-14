@@ -74,7 +74,7 @@ var roleAssignmentsHosts = union(
       subscription: subscription().subscriptionId
     }
   ],
-  confidentialVMOSDiskEncryption && contains(keyManagementDisks, 'CustomerManaged')
+  confidentialVMOSDiskEncryption && contains(keyManagementDisks, 'customerManaged')
     ? [
         {
           roleDefinitionId: roleDefinitions.KeyVaultCryptoOfficer // (Purpose: Retrieve the customer managed keys from the key vault for idempotent deployment)
@@ -125,7 +125,7 @@ module deploymentUserAssignedIdentity '../../../sharedModules/resources/managed-
   params: {
     location: locationVirtualMachines
     name: deploymentUserAssignedIdentityName
-    tags: union({'cm-resource-parent': '${subscription().id}}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'}, tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {})
+    tags: union({'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'}, tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {})
   }
 }
 
@@ -192,8 +192,8 @@ module virtualMachine 'modules/virtualMachine.bicep' = {
     networkInterfaceName: virtualMachineNICName
     ouPath: ouPath
     subnetResourceId: virtualMachineSubnetResourceId
-    tagsNetworkInterfaces: union({'cm-resource-parent': '${subscription().id}}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'}, tags[?'Microsoft.Network/networkInterfaces'] ?? {})
-    tagsVirtualMachines: union({'cm-resource-parent': '${subscription().id}}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
+    tagsNetworkInterfaces: union({'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'}, tags[?'Microsoft.Network/networkInterfaces'] ?? {})
+    tagsVirtualMachines: union({'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
     timeStamp: timeStamp
     userAssignedIdentitiesResourceIds: {
       '${deploymentUserAssignedIdentity.outputs.resourceId}': {}

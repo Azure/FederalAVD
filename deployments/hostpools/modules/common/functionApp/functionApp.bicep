@@ -2,18 +2,17 @@ param applicationInsightsName string
 param azureBlobPrivateDnsZoneResourceId string
 param azureFilePrivateDnsZoneResourceId string
 param azureFunctionAppPrivateDnsZoneResourceId string
-param azureFunctionAppScmPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
 param azureTablePrivateDnsZoneResourceId string
 param functionAppDelegatedSubnetResourceId string
 param enableApplicationInsights bool
+param encryptionKeyName string
+param encryptionKeyVaultUri string
 param encryptionUserAssignedIdentityResourceId string
 param functionAppName string
 param functionAppAppSettings array
 param hostPoolResourceId string
-param keyExpirationInDays int = 30
 param keyManagementStorageAccounts string
-param keyVaultName string
 param location string
 param logAnalyticsWorkspaceResourceId string
 param privateEndpoint bool
@@ -46,46 +45,6 @@ var storageSubResources = [
   'queue'
   'table'
 ]
-
-resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = if(keyManagementStorageAccounts != 'MicrosoftManaged') {
-  name: keyVaultName
-}
-
-resource key 'Microsoft.KeyVault/vaults/keys@2022-07-01' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
-  parent: keyVault
-  name: '${storageAccountName}-encryption-key'
-  properties: {
-    attributes: {
-      enabled: true
-    }
-    keySize: 4096
-    kty: contains(keyManagementStorageAccounts, 'HSM') ? 'RSA-HSM' : 'RSA'
-    rotationPolicy: {
-      attributes: {
-        expiryTime: 'P${string(keyExpirationInDays)}D'
-      }
-      lifetimeActions: [
-        {
-          action: {
-            type: 'Notify'
-          }
-          trigger: {
-            timeBeforeExpiry: 'P10D'
-          }
-        }
-        {
-          action: {
-            type: 'Rotate'
-          }
-          trigger: {
-            timeAfterCreate: 'P${string(keyExpirationInDays - 7)}D'
-          }
-        }
-      ]
-    }
-  }
-  tags: union({ 'cm-resource-parent': hostPoolResourceId }, { storageAccountName : storageAccountName }, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
-}
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
   name: storageAccountName
@@ -123,8 +82,8 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
       keySource: keyManagementStorageAccounts != 'MicrosoftManaged' ? 'Microsoft.KeyVault' : 'Microsoft.Storage'
       keyvaultproperties: keyManagementStorageAccounts != 'MicrosoftManaged'
         ? {
-            keyvaulturi: keyVault.properties.vaultUri
-            keyname: key.name
+            keyvaulturi: encryptionKeyVaultUri
+            keyname: encryptionKeyName
           }
         : null
       requireInfrastructureEncryption: true
@@ -438,20 +397,6 @@ module roleAssignment_storageAccount '../roleAssignment-storageAccount.bicep' = 
     principalType: 'ServicePrincipal'
     roleDefinitionId: 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b' // Storage Blob Data Owner
     storageAccountResourceId: storageAccount.id
-  }
-}
-
-// This module is used to deploy the A record for the SCM site which does not use a dedicated private endpoint
-module scmARecord '../dnsARecords/get-PrivateDnsZone.bicep' = if(!empty(azureFunctionAppScmPrivateDnsZoneResourceId)) {
-  name: 'deploy-scm-a-record-${timeStamp}'
-  params: {
-    dnsZoneResourceId: azureFunctionAppScmPrivateDnsZoneResourceId
-    ipv4Address: filter(
-      privateDnsZoneGroup_functionApp.properties.privateDnsZoneConfigs[0].properties.recordSets,
-      record => record.recordSetName == functionApp.name
-    )[0].ipAddresses[0]
-    recordName: functionApp.name
-    timeStamp: timeStamp
   }
 }
 

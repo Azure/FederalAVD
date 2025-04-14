@@ -7,11 +7,14 @@ param dataCollectionEndpointName string
 param deploySecretsKeyVault bool
 param enableMonitoring bool
 param enableQuotaManagement bool
+param encryptionKeysKeyVaultName string
+param deployEncryptionKeysKeyVault bool
 @secure()
 param domainJoinUserPassword string
 @secure()
 param domainJoinUserPrincipalName string
-param keyVaultName string
+#disable-next-line secure-secrets-in-params
+param secretsKeyVaultName string
 param keyVaultEnableSoftDelete bool
 param keyVaultEnablePurgeProtection bool
 param keyVaultRetentionInDays int
@@ -51,7 +54,7 @@ module secretsKeyVault '../../../sharedModules/resources/key-vault/vault/main.bi
   name: 'Secrets_KeyVault_${timeStamp}'
   scope: resourceGroup(resourceGroupManagement)
   params: {
-    name: keyVaultName
+    name: secretsKeyVaultName
     diagnosticWorkspaceId: enableMonitoring ? logAnalyticsWorkspace.outputs.resourceId : ''
     enablePurgeProtection: keyVaultEnablePurgeProtection
     enableSoftDelete: keyVaultEnableSoftDelete
@@ -63,12 +66,12 @@ module secretsKeyVault '../../../sharedModules/resources/key-vault/vault/main.bi
       ? [
           {
             customNetworkInterfaceName: replace(
-              replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', keyVaultName),
+              replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', secretsKeyVaultName),
               'VNETID',
               '${split(privateEndpointSubnetResourceId, '/')[8]}'
             )
             name: replace(
-              replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', keyVaultName),
+              replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', secretsKeyVaultName),
               'VNETID',
               '${split(privateEndpointSubnetResourceId, '/')[8]}'
             )
@@ -90,6 +93,49 @@ module secretsKeyVault '../../../sharedModules/resources/key-vault/vault/main.bi
     }
     tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
     vaultSku: 'standard'
+  }
+}
+
+module encryptionKeyVault '../../../sharedModules/resources/key-vault/vault/main.bicep' = if (deployEncryptionKeysKeyVault) {
+  name: 'Encryption_Keys_KeyVault_${timeStamp}'
+  scope: resourceGroup(resourceGroupManagement)
+  params: {
+    name: encryptionKeysKeyVaultName
+    diagnosticWorkspaceId: enableMonitoring ? logAnalyticsWorkspace.outputs.resourceId : ''
+    enablePurgeProtection: true
+    enableSoftDelete: true
+    softDeleteRetentionInDays: keyVaultRetentionInDays
+    enableVaultForDeployment: false
+    enableVaultForDiskEncryption: true
+    enableVaultForTemplateDeployment: false
+    privateEndpoints: privateEndpoint && !empty(privateEndpointSubnetResourceId)
+      ? [
+          {
+            customNetworkInterfaceName: replace(
+              replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeysKeyVaultName),
+              'VNETID',
+              '${split(privateEndpointSubnetResourceId, '/')[8]}'
+            )
+            name: replace(
+              replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeysKeyVaultName),
+              'VNETID',
+              '${split(privateEndpointSubnetResourceId, '/')[8]}'
+            )
+            privateDnsZoneGroup: empty(azureKeyVaultPrivateDnsZoneResourceId)
+              ? null
+              : {
+                  privateDNSResourceIds: [
+                    azureKeyVaultPrivateDnsZoneResourceId
+                  ]
+                }
+            service: 'vault'
+            subnetResourceId: privateEndpointSubnetResourceId
+            tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+          }
+        ]
+      : null
+    tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
+    vaultSku: 'premium'
   }
 }
 
@@ -176,3 +222,5 @@ output logAnalyticsWorkspaceResourceId string = enableMonitoring ? logAnalyticsW
 output vmInsightsDataCollectionRulesResourceId string = enableMonitoring
   ? vmInsightsDataCollectionRules.outputs.dataCollectionRulesId
   : ''
+output encryptionKeyVaultResourceId string = deployEncryptionKeysKeyVault ? encryptionKeyVault.outputs.resourceId : ''
+output encryptionKeyVaultUri string = deployEncryptionKeysKeyVault ? encryptionKeyVault.outputs.uri : ''

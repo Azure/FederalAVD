@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.34.44.8038",
-      "templateHash": "9104201773096118866"
+      "templateHash": "17995990287314128342"
     }
   },
   "parameters": {
@@ -271,20 +271,6 @@
       "defaultValue": "",
       "metadata": {
         "description": "Optional. The Resource Id of the existing Azure Web App Private DNS Zone."
-      }
-    },
-    "createAzureWebAppScmZone": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Determines if the Azure Web App SCM private DNS zone should be created."
-      }
-    },
-    "azureWebAppScmZoneId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. The Resource Id of the existing Azure Web App SCM Private DNS Zone."
       }
     },
     "linkPrivateDnsZonesToNewVnet": {
@@ -711,7 +697,6 @@
       "desktopApplicationGroups": "vddag",
       "diskAccesses": "da",
       "remoteApplicationGroups": "vdrag",
-      "disks": "disk",
       "diskEncryptionSets": "des",
       "functionApps": "fa",
       "hostPools": "vdpool",
@@ -721,6 +706,7 @@
       "netAppAccounts": "naa",
       "netAppCapacityPools": "nacp",
       "networkInterfaces": "nic",
+      "osdisks": "osdisk",
       "privateEndpoints": "pe",
       "privateLinkScopes": "pls",
       "publicIPAddresses": "pip",
@@ -734,7 +720,7 @@
       "workspaces": "vdws",
       "imageDefinitions": "vmid"
     },
-    "createPrivateDNSZones": "[or(or(or(or(or(or(or(or(or(parameters('createAzureBackupZone'), parameters('createAzureBlobZone')), parameters('createAzureFilesZone')), parameters('createAzureQueueZone')), parameters('createAzureTableZone')), parameters('createAzureKeyVaultZone')), parameters('createAvdFeedZone')), parameters('createAvdGlobalFeedZone')), parameters('createAzureWebAppZone')), parameters('createAzureWebAppScmZone'))]",
+    "createPrivateDNSZones": "[or(or(or(or(or(or(or(or(parameters('createAzureBackupZone'), parameters('createAzureBlobZone')), parameters('createAzureFilesZone')), parameters('createAzureQueueZone')), parameters('createAzureTableZone')), parameters('createAzureKeyVaultZone')), parameters('createAvdFeedZone')), parameters('createAvdGlobalFeedZone')), parameters('createAzureWebAppZone'))]",
     "locations": "[variables('$fxv#0')[environment().name]]",
     "resourceAbbreviations": "[variables('$fxv#1')]",
     "nameConvSuffix": "[if(parameters('nameConvResTypeAtEnd'), 'LOCATION-RESOURCETYPE', 'LOCATION')]",
@@ -776,7 +762,6 @@
     "avdFeedPrivateDnsZone": "[if(parameters('createAvdFeedZone'), variables('privateDnsZones_AzureVirtualDesktop')[environment().name], '')]",
     "avdGlobalFeedPrivateDnsZone": "[if(parameters('createAvdGlobalFeedZone'), variables('privateDnsZones_AzureVirtualDesktopGlobalFeed')[environment().name], '')]",
     "webAppPrivateDnsZone": "[if(parameters('createAzureWebAppZone'), format('privatelink.azurewebsites.{0}', variables('privateDnsZoneSuffixes_AzureWebApps')[environment().name]), '')]",
-    "webAppScmPrivateDnsZone": "[if(parameters('createAzureWebAppScmZone'), format('scm.privatelink.azurewebsites.{0}', variables('privateDnsZoneSuffixes_AzureWebApps')[environment().name]), '')]",
     "privateDnsZones": [
       "[variables('backupPrivateDnsZone')]",
       "[variables('blobPrivateDnsZone')]",
@@ -786,8 +771,7 @@
       "[variables('keyVaultPrivateDnsZone')]",
       "[variables('avdFeedPrivateDnsZone')]",
       "[variables('avdGlobalFeedPrivateDnsZone')]",
-      "[variables('webAppPrivateDnsZone')]",
-      "[variables('webAppScmPrivateDnsZone')]"
+      "[variables('webAppPrivateDnsZone')]"
     ],
     "existingPrivateDnsZones": [
       "[parameters('azureBackupZoneId')]",
@@ -798,8 +782,7 @@
       "[parameters('azureKeyVaultZoneId')]",
       "[parameters('avdFeedZoneId')]",
       "[parameters('avdGlobalFeedZoneId')]",
-      "[parameters('azureWebAppZoneId')]",
-      "[parameters('azureWebAppScmZoneId')]"
+      "[parameters('azureWebAppZoneId')]"
     ]
   },
   "resources": [

@@ -11,7 +11,6 @@ param availabilityZones array
 param avdInsightsDataCollectionRulesResourceId string
 param azureBackupPrivateDnsZoneResourceId string
 param azureBlobPrivateDnsZoneResourceId string
-param azureKeyVaultPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
 param confidentialVMOrchestratorObjectId string
 param confidentialVMOSDiskEncryption bool
@@ -30,7 +29,6 @@ param domainJoinUserPassword string
 param domainJoinUserPrincipalName string
 param diskEncryptionSetNames object
 param diskAccessName string
-param diskNamePrefix string
 param diskSizeGB int
 param diskSku string
 param divisionRemainderValue int
@@ -38,6 +36,9 @@ param domainName string
 param drainMode bool
 param enableAcceleratedNetworking bool
 param encryptionAtHost bool
+param encryptionKeyName string
+param encryptionKeyVaultResourceId string
+param encryptionKeyVaultUri string
 param existingDiskAccessResourceId string
 param existingDiskEncryptionSetResourceId string
 param existingRecoveryServicesVaultResourceId string
@@ -59,8 +60,6 @@ param imageSku string
 param integrityMonitoring bool
 param keyExpirationInDays int
 param keyManagementDisks string
-param keyVaultNames object
-param keyVaultRetentionInDays int
 param location string
 param logAnalyticsWorkspaceResourceId string
 param maxResourcesPerTemplateDeployment int
@@ -69,7 +68,8 @@ param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
 param enableMonitoring bool
-param networkInterfaceNamePrefix string
+param networkInterfaceNameConv string
+param osDiskNameConv string
 param ouPath string
 param pooledHostPool bool
 param recoveryServices bool
@@ -89,6 +89,7 @@ param tags object
 param timeStamp string
 param timeZone string
 param useAgentDownloadEndpoint bool
+param virtualMachineNameConv string
 param virtualMachineNamePrefix string
 param virtualMachineSize string
 @secure()
@@ -188,14 +189,9 @@ module diskEncryption 'modules/diskEncryption.bicep' =  if (deploymentType == 'C
     hostPoolResourceId: hostPoolResourceId
     keyExpirationInDays: keyExpirationInDays
     keyManagementDisks: keyManagementDisks
-    keyVaultNames: keyVaultNames
-    keyVaultRetentionInDays: keyVaultRetentionInDays
-    azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
-    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
-    privateEndpoint: privateEndpoint
-    privateEndpointNameConv: privateEndpointNameConv
-    privateEndpointNICNameConv: privateEndpointNICNameConv
-    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
+    keyName: encryptionKeyName
+    keyVaultResourceId: encryptionKeyVaultResourceId
+    keyVaultUri: encryptionKeyVaultUri
     resourceGroupDeployment: resourceGroupDeployment
     tags: tags
     timeStamp: timeStamp
@@ -256,16 +252,15 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
     dedicatedHostGroupZones: dedicatedHostGroupZones
     dedicatedHostResourceId: dedicatedHostResourceId
+    deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
+    deploymentVirtualMachineName: deploymentVirtualMachineName
     diskAccessId: deploymentType == 'Complete' ? deployDiskAccessResource ? diskAccessResource.outputs.resourceId : '' : existingDiskAccessResourceId
     diskEncryptionSetResourceId: ( deploymentType == 'Complete' && (keyManagementDisks != 'PlatformManaged' || confidentialVMOSDiskEncryption )) ? diskEncryption.outputs.diskEncryptionSetResourceId : !empty(existingDiskEncryptionSetResourceId) ? existingDiskEncryptionSetResourceId : ''
-    diskNamePrefix: diskNamePrefix
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
-    deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
-    deploymentVirtualMachineName: deploymentVirtualMachineName
     drainMode: drainMode
     enableAcceleratedNetworking: enableAcceleratedNetworking
     enableMonitoring: enableMonitoring
@@ -287,7 +282,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     imageSku: imageSku
     integrityMonitoring: integrityMonitoring
     location: location
-    networkInterfaceNamePrefix: networkInterfaceNamePrefix
+    networkInterfaceNameConv: networkInterfaceNameConv
+    osDiskNameConv: osDiskNameConv
     ouPath: ouPath
     resourceGroupDeployment: resourceGroupDeployment
     sessionHostCustomizations: sessionHostCustomizations
@@ -304,6 +300,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     useAgentDownloadEndpoint: useAgentDownloadEndpoint
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
+    virtualMachineNameConv: virtualMachineNameConv
     virtualMachineNamePrefix: virtualMachineNamePrefix
     virtualMachineSize: virtualMachineSize
     vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId 

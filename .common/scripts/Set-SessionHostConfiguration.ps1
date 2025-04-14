@@ -484,29 +484,6 @@ If ($ConfigureFSLogix) {
         Write-Log -message "Adding AccessNetworkAsComputerObject for cloud only identities."
         # Attach the users VHD(x) as the computer: https://learn.microsoft.com/en-us/fslogix/reference-configuration-settings?tabs=profiles#accessnetworkascomputerobject
         $RegSettings.Add([PSCustomObject]@{Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
-        # Disable Roaming the Recycle Bin because it corrupts. https://learn.microsoft.com/en-us/fslogix/reference-configuration-settings?tabs=profiles#roamrecyclebin
-        $RegSettings.Add([PSCustomObject]@{Path = 'HKLM:\SOFTWARE\FSLogix\Apps'; Name = 'RoamRecycleBin'; PropertyType = 'DWord'; Value = 0 })
-        # Disable the Recycle Bin
-        Reg LOAD "HKLM\TempHive" "$env:SystemDrive\Users\Default User\NtUser.dat"
-        Set-RegistryValue -Path 'HKLM:\TempHive\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer' -Name NoRecycleFiles -PropertyType DWord -Value 1
-        Write-Log -Message "Unloading default user hive."
-        $null = cmd /c REG UNLOAD "HKLM\TempHive" '2>&1'
-        If ($LastExitCode -ne 0) {
-            # sometimes the registry doesn't unload properly so we have to perform powershell garbage collection first.
-            [GC]::Collect()
-            [GC]::WaitForPendingFinalizers()
-            Start-Sleep -Seconds 5
-            $null = cmd /c REG UNLOAD "HKLM\TempHive" '2>&1'
-            If ($LastExitCode -eq 0) {
-                Write-Log -Message "Hive unloaded successfully."
-            }
-            Else {
-                Write-Log -category Error -Message "Default User hive unloaded with exit code [$LastExitCode]."
-            }
-        }
-        Else {
-            Write-Log -Message "Hive unloaded successfully."
-        }
     }
 
     if ($CloudCache -eq $True) {
@@ -690,5 +667,5 @@ $driveLetter = $env:SystemDrive.Substring(0,1)
 $size = Get-PartitionSupportedSize -DriveLetter $driveLetter
 Resize-Partition -DriveLetter $driveLetter -Size $size.SizeMax
 Write-Log -message "OS Disk Resized"
-
+Clear-EventLog "Windows PowerShell" -ErrorAction SilentlyContinue
 Write-Log -message "Done"

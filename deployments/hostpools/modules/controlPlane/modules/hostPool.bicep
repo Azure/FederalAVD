@@ -57,6 +57,7 @@ var hostPoolVmTemplateTags = union(
     vmSecureBoot: virtualMachineTemplate.?secureBoot ?? false
     vmVirtualTPM: virtualMachineTemplate.?vTPM ?? false
     vmSubnetId: virtualMachineTemplate.subnetId
+    nameConvResTypeAtEnd: virtualMachineTemplate.nameConvResTypeAtEnd
   },
   vmDomain,
   vmOUPath,
@@ -73,7 +74,7 @@ resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' = {
   tags: union(
     hostPoolVmTemplateTags,
     {
-      'cm-resource-parent': '${subscription().id}}/resourceGroups/${resourceGroup().name}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
+      'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroup().name}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
     },
     tags[?'Microsoft.DesktopVirtualization/hostPools'] ?? {}
   )
