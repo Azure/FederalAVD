@@ -177,8 +177,8 @@ module diskAccessPolicy 'modules/diskNetworkAccessPolicy.bicep' = if (deployDisk
   }
 }
 
-module diskEncryption 'modules/diskEncryption.bicep' =  if (deploymentType == 'Complete' && (keyManagementDisks != 'PlatformManaged' || confidentialVMOSDiskEncryption)) {
-  name: 'DiskEncryption_${timeStamp}'
+module customerManagedKeys 'modules/customerManagedKeys.bicep' =  if (deploymentType == 'Complete' && keyManagementDisks != 'PlatformManaged') {
+  name: 'Customer_Managed_Keys_${timeStamp}'
   scope: resourceGroup(resourceGroupHosts)
   params: {    
     confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
@@ -220,14 +220,14 @@ module availabilitySets '../../../sharedModules/resources/compute/availability-s
 }]
 
 module localNetAppVolumes 'modules/getNetAppVolumeSmbServerFqdn.bicep' = [for i in range(0, length(sortedLocalNetAppResourceIds)): if(!empty(sortedLocalNetAppResourceIds)) {
-  name: 'localNetAppVolumes-${i}-${timeStamp}'
+  name: 'LocalNetAppVolumes-${i}-${timeStamp}'
   params: {
     netAppVolumeResourceId: sortedLocalNetAppResourceIds[i]
   }
 }]
 
 module remoteNetAppVolumes 'modules/getNetAppVolumeSmbServerFqdn.bicep' = [for i in range(0, length(sortedRemoteNetAppResourceIds)) : if(!empty(sortedRemoteNetAppResourceIds)) {
-  name: 'remoteNetAppVolumes-${i}-${timeStamp}'
+  name: 'RemoteNetAppVolumes-${i}-${timeStamp}'
   params: {
     netAppVolumeResourceId: sortedRemoteNetAppResourceIds[i]
   }
@@ -255,7 +255,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     deploymentVirtualMachineName: deploymentVirtualMachineName
     diskAccessId: deploymentType == 'Complete' ? deployDiskAccessResource ? diskAccessResource.outputs.resourceId : '' : existingDiskAccessResourceId
-    diskEncryptionSetResourceId: ( deploymentType == 'Complete' && (keyManagementDisks != 'PlatformManaged' || confidentialVMOSDiskEncryption )) ? diskEncryption.outputs.diskEncryptionSetResourceId : !empty(existingDiskEncryptionSetResourceId) ? existingDiskEncryptionSetResourceId : ''
+    diskEncryptionSetResourceId: ( deploymentType == 'Complete' && keyManagementDisks != 'PlatformManaged' ) ? customerManagedKeys.outputs.diskEncryptionSetResourceId : !empty(existingDiskEncryptionSetResourceId) ? existingDiskEncryptionSetResourceId : ''
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     domainJoinUserPassword: domainJoinUserPassword

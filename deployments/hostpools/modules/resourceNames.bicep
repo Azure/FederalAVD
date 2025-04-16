@@ -343,10 +343,11 @@ output keyVaultNames object = {
 }
 output encryptionKeyNames object = {
   appAttach: 'encryption-key-appattach-${appAttachStorageAccountName}'
-  fslogix: '${hpBaseName}-encryption-key-fslogix-${fslogixStorageAccountNamePrefix}##'
-  increaseStorageQuota: '${hpBaseName}-encryption-key-increase-storage-quota-${increaseQuotaFAStorageAccountName}'
-  sessionHostReplacement: '${hpBaseName}-encryption-key-session-host-replacement-${sessionHostReplacerFAStorageAccountName}'
-  virtualMachines: '${hpBaseName}-encryption-key-virtual-machines'
+  fslogix: '${hpBaseName}-encryption-key-${fslogixStorageAccountNamePrefix}##'
+  increaseStorageQuota: '${hpBaseName}-encryption-key-${increaseQuotaFAStorageAccountName}'
+  sessionHostReplacement: '${hpBaseName}-encryption-key-${sessionHostReplacerFAStorageAccountName}'
+  virtualMachines: '${hpBaseName}-encryption-key-vms'
+  confidentialVMs: '${hpBaseName}-encryption-key-confidential-vms'
 }
 output locations object = locations
 output logAnalyticsWorkspaceName string = logAnalyticsWorkspaceName

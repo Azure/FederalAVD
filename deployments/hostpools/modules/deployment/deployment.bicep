@@ -21,6 +21,7 @@ param ouPath string
 param resourceGroupControlPlane string
 param resourceGroupDeployment string
 param resourceGroupHosts string
+param resourceGroupManagement string
 param resourceGroupStorage string
 param roleDefinitions object
 param startVmOnConnect bool
@@ -59,33 +60,6 @@ var roleAssignmentsControlPlane = [
   }
 ]
 
-var roleAssignmentsHosts = union(
-  [
-    {
-      roleDefinitionId: roleDefinitions.VirtualMachineContributor // (Purpose: remove the run commands from the host VMs)
-      depName: 'Hosts-VMCont'
-      resourceGroup: resourceGroupHosts
-      subscription: subscription().subscriptionId
-    }
-    {
-      roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the hosts resource group role assignment for the deployment identity. This role Assignment must remain last in the list.)
-      depName: 'Hosts-RBACAdmin'
-      resourceGroup: resourceGroupHosts
-      subscription: subscription().subscriptionId
-    }
-  ],
-  confidentialVMOSDiskEncryption && contains(keyManagementDisks, 'customerManaged')
-    ? [
-        {
-          roleDefinitionId: roleDefinitions.KeyVaultCryptoOfficer // (Purpose: Retrieve the customer managed keys from the key vault for idempotent deployment)
-          depName: 'Hosts-KVCryptoOff'
-          resourceGroup: resourceGroupHosts
-          subscription: subscription().subscriptionId
-        }
-      ]
-    : []
-)
-
 var roleAssignmentsDeployment = [
   {
     roleDefinitionId: roleDefinitions.Contributor // (Purpose: remove the deployment resource group during cleanup as there won't be any resources within.)
@@ -94,6 +68,32 @@ var roleAssignmentsDeployment = [
     subscription: subscription().subscriptionId
   }
 ]
+
+var roleAssignmentsHosts = [
+  {
+    roleDefinitionId: roleDefinitions.VirtualMachineContributor // (Purpose: remove the run commands from the host VMs)
+    depName: 'Hosts-VMCont'
+    resourceGroup: resourceGroupHosts
+    subscription: subscription().subscriptionId
+  }
+  {
+    roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the hosts resource group role assignment for the deployment identity. This role Assignment must remain last in the list.)
+    depName: 'Hosts-RBACAdmin'
+    resourceGroup: resourceGroupHosts
+    subscription: subscription().subscriptionId
+  }
+]
+
+var roleAssignmentsManagement = confidentialVMOSDiskEncryption && keyManagementDisks == 'CustomerManagedHSM'
+  ? [
+      {
+        roleDefinitionId: roleDefinitions.KeyVaultCryptoOfficer // (Purpose: Retrieve the customer managed keys from the key vault for idempotent deployment)
+        depName: 'Management-KVCryptoOff'
+        resourceGroup: resourceGroupManagement
+        subscription: subscription().subscriptionId
+      }
+    ]
+  : []
 
 var roleAssignmentStorage = fslogix && contains(identitySolution, 'DomainServices')
   ? [
@@ -112,10 +112,11 @@ var roleAssignmentStorage = fslogix && contains(identitySolution, 'DomainService
     ]
   : []
 
-  var roleAssignments = union(
+var roleAssignments = union(
   roleAssignmentsControlPlane,
   roleAssignmentsDeployment,
   roleAssignmentsHosts,
+  roleAssignmentsManagement,
   roleAssignmentStorage
 )
 
@@ -125,7 +126,12 @@ module deploymentUserAssignedIdentity '../../../sharedModules/resources/managed-
   params: {
     location: locationVirtualMachines
     name: deploymentUserAssignedIdentityName
-    tags: union({'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'}, tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {})
+    tags: union(
+      {
+        'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
+      },
+      tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
+    )
   }
 }
 
@@ -154,15 +160,17 @@ resource roleAssignment_PowerOnOffContributor 'Microsoft.Authorization/roleAssig
 }
 
 // Required for EntraID login
-module roleAssignment_VirtualMachineUserLogin '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [for i in range(0, length(appGroupSecurityGroups)): if (!contains(identitySolution, 'DomainServices')) {
-  name: 'RA-Hosts-VMLoginUser-${i}_${timeStamp}'
-  scope: resourceGroup(resourceGroupHosts)
-  params: {
-    principalId: appGroupSecurityGroups[i]
-    principalType: 'Group'
-    roleDefinitionId: roleDefinitions.VirtualMachineUserLogin
+module roleAssignment_VirtualMachineUserLogin '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
+  for i in range(0, length(appGroupSecurityGroups)): if (!contains(identitySolution, 'DomainServices')) {
+    name: 'RA-Hosts-VMLoginUser-${i}_${timeStamp}'
+    scope: resourceGroup(resourceGroupHosts)
+    params: {
+      principalId: appGroupSecurityGroups[i]
+      principalType: 'Group'
+      roleDefinitionId: roleDefinitions.VirtualMachineUserLogin
+    }
   }
-}]
+]
 
 module roleAssignments_deployment '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
   for i in range(0, length(roleAssignments)): {
@@ -192,8 +200,18 @@ module virtualMachine 'modules/virtualMachine.bicep' = {
     networkInterfaceName: virtualMachineNICName
     ouPath: ouPath
     subnetResourceId: virtualMachineSubnetResourceId
-    tagsNetworkInterfaces: union({'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'}, tags[?'Microsoft.Network/networkInterfaces'] ?? {})
-    tagsVirtualMachines: union({'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
+    tagsNetworkInterfaces: union(
+      {
+        'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
+      },
+      tags[?'Microsoft.Network/networkInterfaces'] ?? {}
+    )
+    tagsVirtualMachines: union(
+      {
+        'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
+      },
+      tags[?'Microsoft.Compute/virtualMachines'] ?? {}
+    )
     timeStamp: timeStamp
     userAssignedIdentitiesResourceIds: {
       '${deploymentUserAssignedIdentity.outputs.resourceId}': {}

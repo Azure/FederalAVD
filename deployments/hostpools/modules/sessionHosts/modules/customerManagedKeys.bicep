@@ -22,7 +22,7 @@ var diskEncryptionSetEncryptionType = confidentialVMOSDiskEncryption
       ? 'EncryptionAtRestWithCustomerKey'
       : 'EncryptionAtRestWithPlatformAndCustomerKeys')
 
-module key '../../../../sharedModules/resources/key-vault/vault/key/main.bicep' = if(!confidentialVMOSDiskEncryption) {
+module key '../../../../sharedModules/resources/key-vault/vault/key/main.bicep' = if (!confidentialVMOSDiskEncryption) {
   name: 'Encryption_Key_${timeStamp}'
   scope: resourceGroup(keyVaultResourceGroup)
   params: {
@@ -55,15 +55,15 @@ module key '../../../../sharedModules/resources/key-vault/vault/key/main.bicep' 
         }
       ]
     }
-    tags: {'cm-resource-parent': hostPoolResourceId}
+    tags: { 'cm-resource-parent': hostPoolResourceId }
   }
 }
 
-module set_confidentialVM_key_disks '../../../../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = if(confidentialVMOSDiskEncryption) {
+module confidentialVM_key '../../../../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = if (confidentialVMOSDiskEncryption) {
   name: 'Set_EncryptionKey_ConfidentialVMOSDisk_${timeStamp}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
-    name: 'Set_confidentialVM_key_disks'
+    name: 'Set_ConfidentialVM_Key_Disks'
     parameters: [
       {
         name: 'KeyName'
@@ -71,7 +71,7 @@ module set_confidentialVM_key_disks '../../../../sharedModules/resources/compute
       }
       {
         name: 'Tags'
-        value: string({'cm-resource-parent': hostPoolResourceId})
+        value: string({ 'cm-resource-parent': hostPoolResourceId })
       }
       {
         name: 'UserAssignedIdentityClientId'
@@ -84,19 +84,7 @@ module set_confidentialVM_key_disks '../../../../sharedModules/resources/compute
     ]
     script: loadTextContent('../../../../../.common/scripts/Set-ConfidentialVMOSDiskEncryptionKey.ps1')
     treatFailureAsDeploymentFailure: true
-    virtualMachineName: deploymentVirtualMachineName  
-  }
-}
-
-module roleAssignment_ConfVMOrchestrator_EncryptUser '../../management/modules/key_RBAC.bicep' = if (confidentialVMOSDiskEncryption) {
-  name: 'RoleAssignment_ConfVMOrchestrator_EncryptUser_${timeStamp}'
-  scope: resourceGroup(keyVaultResourceGroup)
-  params: {
-    keyName: keyName
-    keyVaultName: keyVaultName
-    principalId: confidentialVMOrchestratorObjectId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6' // Key Vault Crypto Service Encryption User
+    virtualMachineName: deploymentVirtualMachineName
   }
 }
 
@@ -110,30 +98,41 @@ module roleAssignment_ConfVMOrchestrator_ReleaseUser '../../management/modules/k
     principalType: 'ServicePrincipal'
     roleDefinitionId: '08bbd89e-9f13-488c-ac41-acfcb10c90ab' // Key Vault Crypto Service Release User 
   }
+  dependsOn: [
+    confidentialVM_key
+  ]
 }
 
 module diskEncryptionSet '../../../../sharedModules/resources/compute/disk-encryption-set/main.bicep' = {
   name: 'DiskEncryptionSet_${timeStamp}'
   params: {
     rotationToLatestKeyVersionEnabled: confidentialVMOSDiskEncryption ? false : true
-    name: confidentialVMOSDiskEncryption ? diskEncryptionSetNames.confidentialVMs : (diskEncryptionSetEncryptionType == 'EncryptionAtRestWithCustomerKey' ? diskEncryptionSetNames.customerManaged : diskEncryptionSetNames.platformAndCustomerManaged)
+    name: confidentialVMOSDiskEncryption
+      ? diskEncryptionSetNames.confidentialVMs
+      : (diskEncryptionSetEncryptionType == 'EncryptionAtRestWithCustomerKey'
+          ? diskEncryptionSetNames.customerManaged
+          : diskEncryptionSetNames.platformAndCustomerManaged)
     encryptionType: diskEncryptionSetEncryptionType
-    keyName: key.outputs.name
+    keyName: keyName
     keyVaultResourceId: keyVaultResourceId
     systemAssignedIdentity: true
-    tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/diskEncryptionSets'] ?? {})
+    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Compute/diskEncryptionSets'] ?? {})
   }
+  dependsOn: [
+    key
+    confidentialVM_key
+  ]
 }
 
 module roleAssignment_DiskEncryptionSet_EncryptUser '../../management/modules/key_RBAC.bicep' = {
-  name: 'RoleAssignment_DiskEncryptionSet_EncryptUser_${timeStamp}'
+  name: 'RA_DiskEncryptionSet_CryptoServiceEncryptionUser_${timeStamp}'
   scope: resourceGroup(keyVaultResourceGroup)
   params: {
     keyName: keyName
     keyVaultName: keyVaultName
     principalId: diskEncryptionSet.outputs.principalId
     principalType: 'ServicePrincipal'
-    roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6' // Key Vault Crypto Service Encryption User 
+    roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6' // Key Vault Crypto Service Encryption User
   }
 }
 

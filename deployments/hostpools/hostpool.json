@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.34.44.8038",
-      "templateHash": "13663624617368086316"
+      "templateHash": "2137982965177940570"
     }
   },
   "parameters": {
@@ -351,7 +351,7 @@
       "defaultValue": "PlatformManaged",
       "allowedValues": [
         "PlatformManaged",
-        "customerManaged",
+        "CustomerManaged",
         "CustomerManagedHSM",
         "PlatformManagedAndCustomerManaged",
         "PlatformManagedAndCustomerManagedHSM"
@@ -733,7 +733,7 @@
       "defaultValue": "MicrosoftManaged",
       "allowedValues": [
         "MicrosoftManaged",
-        "customerManaged",
+        "CustomerManaged",
         "CustomerManagedHSM"
       ],
       "metadata": {
@@ -1070,7 +1070,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.34.44.8038",
-              "templateHash": "8237874053922399452"
+              "templateHash": "11858274540684878682"
             }
           },
           "parameters": {
@@ -1668,10 +1668,11 @@
               "type": "object",
               "value": {
                 "appAttach": "[format('encryption-key-appattach-{0}', variables('appAttachStorageAccountName'))]",
-                "fslogix": "[format('{0}-encryption-key-fslogix-{1}##', variables('hpBaseName'), variables('fslogixStorageAccountNamePrefix'))]",
-                "increaseStorageQuota": "[format('{0}-encryption-key-increase-storage-quota-{1}', variables('hpBaseName'), variables('increaseQuotaFAStorageAccountName'))]",
-                "sessionHostReplacement": "[format('{0}-encryption-key-session-host-replacement-{1}', variables('hpBaseName'), variables('sessionHostReplacerFAStorageAccountName'))]",
-                "virtualMachines": "[format('{0}-encryption-key-virtual-machines', variables('hpBaseName'))]"
+                "fslogix": "[format('{0}-encryption-key-{1}##', variables('hpBaseName'), variables('fslogixStorageAccountNamePrefix'))]",
+                "increaseStorageQuota": "[format('{0}-encryption-key-{1}', variables('hpBaseName'), variables('increaseQuotaFAStorageAccountName'))]",
+                "sessionHostReplacement": "[format('{0}-encryption-key-{1}', variables('hpBaseName'), variables('sessionHostReplacerFAStorageAccountName'))]",
+                "virtualMachines": "[format('{0}-encryption-key-vms', variables('hpBaseName'))]",
+                "confidentialVMs": "[format('{0}-encryption-key-confidential-vms', variables('hpBaseName'))]"
               }
             },
             "locations": {
@@ -2308,6 +2309,9 @@
           "resourceGroupHosts": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value]"
           },
+          "resourceGroupManagement": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value]"
+          },
           "resourceGroupStorage": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value]"
           },
@@ -2348,7 +2352,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.34.44.8038",
-              "templateHash": "17914215562791010121"
+              "templateHash": "10077919629558117422"
             }
           },
           "parameters": {
@@ -2407,6 +2411,9 @@
               "type": "string"
             },
             "resourceGroupHosts": {
+              "type": "string"
+            },
+            "resourceGroupManagement": {
               "type": "string"
             },
             "resourceGroupStorage": {
@@ -2468,7 +2475,6 @@
                 "subscription": "[subscription().subscriptionId]"
               }
             ],
-            "roleAssignmentsHosts": "[union(createArray(createObject('roleDefinitionId', parameters('roleDefinitions').VirtualMachineContributor, 'depName', 'Hosts-VMCont', 'resourceGroup', parameters('resourceGroupHosts'), 'subscription', subscription().subscriptionId), createObject('roleDefinitionId', parameters('roleDefinitions').RoleBasedAccessControlAdministrator, 'depName', 'Hosts-RBACAdmin', 'resourceGroup', parameters('resourceGroupHosts'), 'subscription', subscription().subscriptionId)), if(and(parameters('confidentialVMOSDiskEncryption'), contains(parameters('keyManagementDisks'), 'customerManaged')), createArray(createObject('roleDefinitionId', parameters('roleDefinitions').KeyVaultCryptoOfficer, 'depName', 'Hosts-KVCryptoOff', 'resourceGroup', parameters('resourceGroupHosts'), 'subscription', subscription().subscriptionId)), createArray()))]",
             "roleAssignmentsDeployment": [
               {
                 "roleDefinitionId": "[parameters('roleDefinitions').Contributor]",
@@ -2477,8 +2483,23 @@
                 "subscription": "[subscription().subscriptionId]"
               }
             ],
+            "roleAssignmentsHosts": [
+              {
+                "roleDefinitionId": "[parameters('roleDefinitions').VirtualMachineContributor]",
+                "depName": "Hosts-VMCont",
+                "resourceGroup": "[parameters('resourceGroupHosts')]",
+                "subscription": "[subscription().subscriptionId]"
+              },
+              {
+                "roleDefinitionId": "[parameters('roleDefinitions').RoleBasedAccessControlAdministrator]",
+                "depName": "Hosts-RBACAdmin",
+                "resourceGroup": "[parameters('resourceGroupHosts')]",
+                "subscription": "[subscription().subscriptionId]"
+              }
+            ],
+            "roleAssignmentsManagement": "[if(and(parameters('confidentialVMOSDiskEncryption'), equals(parameters('keyManagementDisks'), 'CustomerManagedHSM')), createArray(createObject('roleDefinitionId', parameters('roleDefinitions').KeyVaultCryptoOfficer, 'depName', 'Management-KVCryptoOff', 'resourceGroup', parameters('resourceGroupManagement'), 'subscription', subscription().subscriptionId)), createArray())]",
             "roleAssignmentStorage": "[if(and(parameters('fslogix'), contains(parameters('identitySolution'), 'DomainServices')), createArray(createObject('roleDefinitionId', parameters('roleDefinitions').StorageAccountContributor, 'depName', 'Storage-StorageAcctCont', 'resourceGroup', parameters('resourceGroupStorage'), 'subscription', subscription().subscriptionId), createObject('roleDefinitionId', parameters('roleDefinitions').RoleBasedAccessControlAdministrator, 'depName', 'Storage-RBACAdmin', 'resourceGroup', parameters('resourceGroupStorage'), 'subscription', subscription().subscriptionId)), createArray())]",
-            "roleAssignments": "[union(variables('roleAssignmentsControlPlane'), variables('roleAssignmentsDeployment'), variables('roleAssignmentsHosts'), variables('roleAssignmentStorage'))]"
+            "roleAssignments": "[union(variables('roleAssignmentsControlPlane'), variables('roleAssignmentsDeployment'), variables('roleAssignmentsHosts'), variables('roleAssignmentsManagement'), variables('roleAssignmentStorage'))]"
           },
           "resources": [
             {
@@ -3258,7 +3279,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.34.44.8038",
-              "templateHash": "13152723391096708314"
+              "templateHash": "10689830983204496338"
             }
           },
           "parameters": {
@@ -3408,7 +3429,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.34.44.8038",
-                      "templateHash": "10519135864030702129"
+                      "templateHash": "5694340932988629233"
                     }
                   },
                   "parameters": {
@@ -3842,7 +3863,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.34.44.8038",
-                              "templateHash": "18311030759611574914"
+                              "templateHash": "6134864855795773090"
                             }
                           },
                           "parameters": {
@@ -3888,6 +3909,10 @@
                               "type": "string",
                               "defaultValue": "EC"
                             },
+                            "release_policy": {
+                              "type": "object",
+                              "defaultValue": {}
+                            },
                             "rotationPolicy": {
                               "type": "object",
                               "defaultValue": {}
@@ -3910,7 +3935,8 @@
                                 "keyOps": "[parameters('keyOps')]",
                                 "keySize": "[if(not(equals(parameters('keySize'), -1)), parameters('keySize'), null())]",
                                 "kty": "[parameters('kty')]",
-                                "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]"
+                                "release_policy": "[if(empty(parameters('release_policy')), null(), parameters('release_policy'))]",
+                                "rotationPolicy": "[if(empty(parameters('rotationPolicy')), null(), parameters('rotationPolicy'))]"
                               }
                             }
                           ],
@@ -4330,7 +4356,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.34.44.8038",
-                      "templateHash": "10519135864030702129"
+                      "templateHash": "5694340932988629233"
                     }
                   },
                   "parameters": {
@@ -4764,7 +4790,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.34.44.8038",
-                              "templateHash": "18311030759611574914"
+                              "templateHash": "6134864855795773090"
                             }
                           },
                           "parameters": {
@@ -4810,6 +4836,10 @@
                               "type": "string",
                               "defaultValue": "EC"
                             },
+                            "release_policy": {
+                              "type": "object",
+                              "defaultValue": {}
+                            },
                             "rotationPolicy": {
                               "type": "object",
                               "defaultValue": {}
@@ -4832,7 +4862,8 @@
                                 "keyOps": "[parameters('keyOps')]",
                                 "keySize": "[if(not(equals(parameters('keySize'), -1)), parameters('keySize'), null())]",
                                 "kty": "[parameters('kty')]",
-                                "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]"
+                                "release_policy": "[if(empty(parameters('release_policy')), null(), parameters('release_policy'))]",
+                                "rotationPolicy": "[if(empty(parameters('rotationPolicy')), null(), parameters('rotationPolicy'))]"
                               }
                             }
                           ],
@@ -5985,7 +6016,7 @@
               },
               "encryptionAtHost": "[parameters('encryptionAtHost')]",
               "acceleratedNetworking": "[parameters('enableAcceleratedNetworking')]",
-              "diskEncryptionSetName": "[if(parameters('confidentialVMOSDiskEncryption'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.diskEncryptionSetNames.value.confidentialVMs, if(startsWith(parameters('keyManagementDisks'), 'customerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.diskEncryptionSetNames.value.customerManaged, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.diskEncryptionSetNames.value.platformAndCustomerManaged, null())))]",
+              "diskEncryptionSetName": "[if(parameters('confidentialVMOSDiskEncryption'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.diskEncryptionSetNames.value.confidentialVMs, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.diskEncryptionSetNames.value.customerManaged, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.diskEncryptionSetNames.value.platformAndCustomerManaged, null())))]",
               "hibernate": "[parameters('hibernationEnabled')]",
               "securityType": "[parameters('securityType')]",
               "secureBoot": "[parameters('secureBootEnabled')]",
@@ -8350,12 +8381,8 @@
           "fslogixShardOptions": {
             "value": "[parameters('fslogixShardOptions')]"
           },
-          "encryptionKeyVaultResourceId": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultResourceId.value]"
-          },
-          "encryptionKeyVaultUri": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultUri.value]"
-          },
+          "encryptionKeyVaultResourceId": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultResourceId.value), createObject('value', ''))]",
+          "encryptionKeyVaultUri": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultUri.value), createObject('value', ''))]",
           "fslogixEncryptionKeyNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyNames.value.fslogix]"
           },
@@ -8478,7 +8505,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.34.44.8038",
-              "templateHash": "2034230139808407875"
+              "templateHash": "16276660074897622642"
             }
           },
           "parameters": {
@@ -8717,7 +8744,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.34.44.8038",
-                      "templateHash": "9668295931325166421"
+                      "templateHash": "11166503403568315534"
                     }
                   },
                   "parameters": {
@@ -8832,7 +8859,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.34.44.8038",
-                              "templateHash": "18311030759611574914"
+                              "templateHash": "6134864855795773090"
                             }
                           },
                           "parameters": {
@@ -8878,6 +8905,10 @@
                               "type": "string",
                               "defaultValue": "EC"
                             },
+                            "release_policy": {
+                              "type": "object",
+                              "defaultValue": {}
+                            },
                             "rotationPolicy": {
                               "type": "object",
                               "defaultValue": {}
@@ -8900,7 +8931,8 @@
                                 "keyOps": "[parameters('keyOps')]",
                                 "keySize": "[if(not(equals(parameters('keySize'), -1)), parameters('keySize'), null())]",
                                 "kty": "[parameters('kty')]",
-                                "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]"
+                                "release_policy": "[if(empty(parameters('release_policy')), null(), parameters('release_policy'))]",
+                                "rotationPolicy": "[if(empty(parameters('rotationPolicy')), null(), parameters('rotationPolicy'))]"
                               }
                             }
                           ],
@@ -8921,7 +8953,7 @@
                       "condition": "[parameters('increaseQuota')]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2022-09-01",
-                      "name": "[format('increaseQuotaEncryptionKey_{0}', parameters('timeStamp'))]",
+                      "name": "[format('IncreaseQuotaEncryptionKey_{0}', parameters('timeStamp'))]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -8980,7 +9012,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.34.44.8038",
-                              "templateHash": "18311030759611574914"
+                              "templateHash": "6134864855795773090"
                             }
                           },
                           "parameters": {
@@ -9026,6 +9058,10 @@
                               "type": "string",
                               "defaultValue": "EC"
                             },
+                            "release_policy": {
+                              "type": "object",
+                              "defaultValue": {}
+                            },
                             "rotationPolicy": {
                               "type": "object",
                               "defaultValue": {}
@@ -9048,7 +9084,8 @@
                                 "keyOps": "[parameters('keyOps')]",
                                 "keySize": "[if(not(equals(parameters('keySize'), -1)), parameters('keySize'), null())]",
                                 "kty": "[parameters('kty')]",
-                                "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]"
+                                "release_policy": "[if(empty(parameters('release_policy')), null(), parameters('release_policy'))]",
+                                "rotationPolicy": "[if(empty(parameters('rotationPolicy')), null(), parameters('rotationPolicy'))]"
                               }
                             }
                           ],
@@ -9145,7 +9182,7 @@
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2022-09-01",
-                      "name": "[format('RA_EncryptionUser_FSLogix_{0}-{1}', padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0'), parameters('timeStamp'))]",
+                      "name": "[format('RA_Encryption_User_FSLogix_{0}-{1}', padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0'), parameters('timeStamp'))]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -9220,7 +9257,7 @@
                       "condition": "[parameters('increaseQuota')]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2022-09-01",
-                      "name": "[format('RA_EncryptionUser_increaseQuota-{0}', parameters('timeStamp'))]",
+                      "name": "[format('RA_Encryption_User_IncreaseQuota-{0}', parameters('timeStamp'))]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -9229,7 +9266,7 @@
                         "mode": "Incremental",
                         "parameters": {
                           "keyName": {
-                            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('increaseQuotaEncryptionKey_{0}', parameters('timeStamp'))), '2022-09-01').outputs.name.value]"
+                            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('IncreaseQuotaEncryptionKey_{0}', parameters('timeStamp'))), '2022-09-01').outputs.name.value]"
                           },
                           "keyVaultName": {
                             "value": "[variables('keyVaultName')]"
@@ -9287,7 +9324,7 @@
                         }
                       },
                       "dependsOn": [
-                        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('increaseQuotaEncryptionKey_{0}', parameters('timeStamp')))]",
+                        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('IncreaseQuotaEncryptionKey_{0}', parameters('timeStamp')))]",
                         "[resourceId('Microsoft.Resources/deployments', format('UAI_Encryption_{0}', parameters('timeStamp')))]"
                       ]
                     }
@@ -13948,9 +13985,7 @@
           "encryptionAtHost": {
             "value": "[parameters('encryptionAtHost')]"
           },
-          "encryptionKeyName": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyNames.value.virtualMachines]"
-          },
+          "encryptionKeyName": "[if(parameters('confidentialVMOSDiskEncryption'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyNames.value.confidentialVMs), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyNames.value.virtualMachines))]",
           "encryptionKeyVaultResourceId": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultResourceId.value]"
           },
@@ -14111,7 +14146,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.34.44.8038",
-              "templateHash": "4026990886972449912"
+              "templateHash": "2567722371196156708"
             }
           },
           "parameters": {
@@ -15035,10 +15070,10 @@
               ]
             },
             {
-              "condition": "[and(equals(parameters('deploymentType'), 'Complete'), or(not(equals(parameters('keyManagementDisks'), 'PlatformManaged')), parameters('confidentialVMOSDiskEncryption')))]",
+              "condition": "[and(equals(parameters('deploymentType'), 'Complete'), not(equals(parameters('keyManagementDisks'), 'PlatformManaged')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2022-09-01",
-              "name": "[format('DiskEncryption_{0}', parameters('timeStamp'))]",
+              "name": "[format('Customer_Managed_Keys_{0}', parameters('timeStamp'))]",
               "resourceGroup": "[parameters('resourceGroupHosts')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -15096,7 +15131,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.34.44.8038",
-                      "templateHash": "4627977234892865359"
+                      "templateHash": "8381990915516201527"
                     }
                   },
                   "parameters": {
@@ -15145,7 +15180,7 @@
                     }
                   },
                   "variables": {
-                    "$fxv#0": "[CmdletBinding()]\r\nparam (\r\n    [string]$KeyName,\r\n    [string]$Tags,\r\n    [string]$UserAssignedIdentityClientId,\r\n    [string]$VaultUri\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\n# Fix the Vault URI since only AzureCloud contains a trailing slash\r\n$VaultUriFixed = if($VaultUri[-1] -eq '/'){$VaultUri.Substring(0,$VaultUri.Length - 1)} else {$VaultUri}\r\n\r\n$PolicyContentJson = @\"\r\n{\"version\":\"1.0.0\",\"anyOf\":[{\"authority\":\"https://sharedeus.eus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus.wus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedneu.neu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedweu.weu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsasia.sasia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeasia.easia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedjpe.jpe.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedswn.swn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareditn.itn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2.eus2.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2e.eus2e.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedscus.scus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcuse.cuse.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcus.cus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeau.eau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsau.sau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcin.cin.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareduaen.uaen.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareddewc.dewc.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus3.wus3.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]}]}\r\n\"@\r\nIf ($Tags -ne '{}') {\r\n    [PSCustomObject]$TagsObject = Replace($Tags, '\\', '') | ConvertFrom-Json\r\n}\r\ntry \r\n{\r\n    # Get an access token for Azure resources\r\n    $AzureKeyVaultAccessToken = (Invoke-RestMethod `\r\n        -Headers @{Metadata=\"true\"} `\r\n        -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $VaultUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureKeyVaultHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureKeyVaultAccessToken\r\n    }\r\n\r\n    $Key = (Invoke-RestMethod `\r\n        -Headers $AzureKeyVaultHeader `\r\n        -Method 'GET' `\r\n        -Uri $($VaultUriFixed + '/keys?api-version=7.4')).value | Where-Object { $_.kid -eq \"$VaultUriFixed/keys/$KeyName\" }\r\n        \r\n    If (!$Key) {\r\n        #$PolicyContentJson | ConvertFrom-Json | ConvertTo-Json -Depth 100\r\n        $Release_Policy_Data = [Convert]::ToBase64String([char[]]$PolicyContentJson)\r\n        $Body = (@{\r\n            attributes = @{\r\n                enabled = $true\r\n                exportable = $true\r\n            }\r\n            kty='RSA-HSM'\r\n            key_size=4096\r\n            key_ops=@('wrapKey', 'unwrapKey')\r\n            release_policy=@{\r\n                data=$Release_Policy_Data\r\n            }\r\n        })\r\n        If($TagsObject) {\r\n            $Body.tags = $TagsObject\r\n        }\r\n        $Body = $Body | ConvertTo-Json -Depth 100 -Compress\r\n\r\n        Invoke-RestMethod `\r\n            -Headers $AzureKeyVaultHeader `\r\n            -Method 'POST' `\r\n            -Uri $($VaultUriFixed + '/keys/' + $KeyName + '/create?api-version=7.4') `\r\n            -Body $Body\r\n    }\r\n}\r\ncatch \r\n{\r\n    Write-Error -Message \"Failed to create or retrieve the key from the Key Vault. $_\"\r\n    throw\r\n}",
+                    "$fxv#0": "[CmdletBinding()]\r\nparam (\r\n    [string]$KeyName,\r\n    [string]$Tags,\r\n    [string]$UserAssignedIdentityClientId,\r\n    [string]$VaultUri\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\n# Fix the Vault URI since only AzureCloud contains a trailing slash\r\n$VaultUriFixed = if($VaultUri[-1] -eq '/'){$VaultUri.Substring(0,$VaultUri.Length - 1)} else {$VaultUri}\r\n\r\n$PolicyContentJson = @\"\r\n{\"version\":\"1.0.0\",\"anyOf\":[{\"authority\":\"https://sharedeus.eus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus.wus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedneu.neu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedweu.weu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsasia.sasia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeasia.easia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedjpe.jpe.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedswn.swn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareditn.itn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2.eus2.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2e.eus2e.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedscus.scus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcuse.cuse.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcus.cus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeau.eau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsau.sau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcin.cin.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareduaen.uaen.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareddewc.dewc.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus3.wus3.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]}]}\r\n\"@\r\nIf ($Tags -ne '{}') {\r\n    [PSCustomObject]$TagsObject = $Tags | ConvertFrom-Json\r\n}\r\ntry \r\n{\r\n    # Get an access token for Azure resources\r\n    $AzureKeyVaultAccessToken = (Invoke-RestMethod `\r\n        -Headers @{Metadata=\"true\"} `\r\n        -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $VaultUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureKeyVaultHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureKeyVaultAccessToken\r\n    }\r\n\r\n    $Key = (Invoke-RestMethod `\r\n        -Headers $AzureKeyVaultHeader `\r\n        -Method 'GET' `\r\n        -Uri $($VaultUriFixed + '/keys?api-version=7.4')).value | Where-Object { $_.kid -eq \"$VaultUriFixed/keys/$KeyName\" }\r\n        \r\n    If (!$Key) {\r\n        #$PolicyContentJson | ConvertFrom-Json | ConvertTo-Json -Depth 100\r\n        $Release_Policy_Data = [Convert]::ToBase64String([char[]]$PolicyContentJson)\r\n        $Body = (@{\r\n            attributes = @{\r\n                enabled = $true\r\n                exportable = $true\r\n            }\r\n            kty='RSA-HSM'\r\n            key_size=4096\r\n            key_ops=@('encrypt', 'decrypt', 'sign', 'verify', 'wrapKey', 'unwrapKey')\r\n            release_policy=@{\r\n                data=$Release_Policy_Data\r\n            }\r\n        })\r\n        If($TagsObject) {\r\n            $Body.tags = $TagsObject\r\n        }\r\n        $Body = $Body | ConvertTo-Json -Depth 100 -Compress\r\n\r\n        Invoke-RestMethod `\r\n            -Headers $AzureKeyVaultHeader `\r\n            -Method 'POST' `\r\n            -Uri $($VaultUriFixed + '/keys/' + $KeyName + '/create?api-version=7.4') `\r\n            -Body $Body\r\n    }\r\n}\r\ncatch \r\n{\r\n    Write-Error -Message \"Failed to create or retrieve the key from the Key Vault. $_\"\r\n    throw\r\n}",
                     "keyVaultName": "[last(split(parameters('keyVaultResourceId'), '/'))]",
                     "keyVaultResourceGroup": "[split(parameters('keyVaultResourceId'), '/')[4]]",
                     "diskEncryptionSetEncryptionType": "[if(parameters('confidentialVMOSDiskEncryption'), 'ConfidentialVmEncryptedWithCustomerKey', if(not(contains(parameters('keyManagementDisks'), 'Platform')), 'EncryptionAtRestWithCustomerKey', 'EncryptionAtRestWithPlatformAndCustomerKeys'))]"
@@ -15217,7 +15252,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.34.44.8038",
-                              "templateHash": "18311030759611574914"
+                              "templateHash": "6134864855795773090"
                             }
                           },
                           "parameters": {
@@ -15263,6 +15298,10 @@
                               "type": "string",
                               "defaultValue": "EC"
                             },
+                            "release_policy": {
+                              "type": "object",
+                              "defaultValue": {}
+                            },
                             "rotationPolicy": {
                               "type": "object",
                               "defaultValue": {}
@@ -15285,7 +15324,8 @@
                                 "keyOps": "[parameters('keyOps')]",
                                 "keySize": "[if(not(equals(parameters('keySize'), -1)), parameters('keySize'), null())]",
                                 "kty": "[parameters('kty')]",
-                                "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]"
+                                "release_policy": "[if(empty(parameters('release_policy')), null(), parameters('release_policy'))]",
+                                "rotationPolicy": "[if(empty(parameters('rotationPolicy')), null(), parameters('rotationPolicy'))]"
                               }
                             }
                           ],
@@ -15315,7 +15355,7 @@
                         "mode": "Incremental",
                         "parameters": {
                           "name": {
-                            "value": "Set_confidentialVM_key_disks"
+                            "value": "Set_ConfidentialVM_Key_Disks"
                           },
                           "parameters": {
                             "value": [
@@ -15540,77 +15580,6 @@
                       "condition": "[parameters('confidentialVMOSDiskEncryption')]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2022-09-01",
-                      "name": "[format('RoleAssignment_ConfVMOrchestrator_EncryptUser_{0}', parameters('timeStamp'))]",
-                      "resourceGroup": "[variables('keyVaultResourceGroup')]",
-                      "properties": {
-                        "expressionEvaluationOptions": {
-                          "scope": "inner"
-                        },
-                        "mode": "Incremental",
-                        "parameters": {
-                          "keyName": {
-                            "value": "[parameters('keyName')]"
-                          },
-                          "keyVaultName": {
-                            "value": "[variables('keyVaultName')]"
-                          },
-                          "principalId": {
-                            "value": "[parameters('confidentialVMOrchestratorObjectId')]"
-                          },
-                          "principalType": {
-                            "value": "ServicePrincipal"
-                          },
-                          "roleDefinitionId": {
-                            "value": "e147488a-f6f5-4113-8e2d-b22465e65bf6"
-                          }
-                        },
-                        "template": {
-                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                          "contentVersion": "1.0.0.0",
-                          "metadata": {
-                            "_generator": {
-                              "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "790700466623368904"
-                            }
-                          },
-                          "parameters": {
-                            "keyVaultName": {
-                              "type": "string"
-                            },
-                            "principalId": {
-                              "type": "string"
-                            },
-                            "principalType": {
-                              "type": "string"
-                            },
-                            "keyName": {
-                              "type": "string"
-                            },
-                            "roleDefinitionId": {
-                              "type": "string"
-                            }
-                          },
-                          "resources": [
-                            {
-                              "type": "Microsoft.Authorization/roleAssignments",
-                              "apiVersion": "2022-04-01",
-                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
-                              "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), parameters('principalId'), parameters('roleDefinitionId'))]",
-                              "properties": {
-                                "principalId": "[parameters('principalId')]",
-                                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
-                                "principalType": "[parameters('principalType')]"
-                              }
-                            }
-                          ]
-                        }
-                      }
-                    },
-                    {
-                      "condition": "[parameters('confidentialVMOSDiskEncryption')]",
-                      "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2022-09-01",
                       "name": "[format('RoleAssignment_ConfVMOrchestrator_ReleaseUser_{0}', parameters('timeStamp'))]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
@@ -15676,7 +15645,10 @@
                             }
                           ]
                         }
-                      }
+                      },
+                      "dependsOn": [
+                        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('Set_EncryptionKey_ConfidentialVMOSDisk_{0}', parameters('timeStamp')))]"
+                      ]
                     },
                     {
                       "type": "Microsoft.Resources/deployments",
@@ -15694,7 +15666,7 @@
                             "value": "[variables('diskEncryptionSetEncryptionType')]"
                           },
                           "keyName": {
-                            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('Encryption_Key_{0}', parameters('timeStamp'))), '2022-09-01').outputs.name.value]"
+                            "value": "[parameters('keyName')]"
                           },
                           "keyVaultResourceId": {
                             "value": "[parameters('keyVaultResourceId')]"
@@ -16039,13 +16011,14 @@
                         }
                       },
                       "dependsOn": [
+                        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('Set_EncryptionKey_ConfidentialVMOSDisk_{0}', parameters('timeStamp')))]",
                         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('Encryption_Key_{0}', parameters('timeStamp')))]"
                       ]
                     },
                     {
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2022-09-01",
-                      "name": "[format('RoleAssignment_DiskEncryptionSet_EncryptUser_{0}', parameters('timeStamp'))]",
+                      "name": "[format('RA_DiskEncryptionSet_CryptoServiceEncryptionUser_{0}', parameters('timeStamp'))]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -16329,7 +16302,7 @@
               "condition": "[not(empty(variables('sortedLocalNetAppResourceIds')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2022-09-01",
-              "name": "[format('localNetAppVolumes-{0}-{1}', range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()], parameters('timeStamp'))]",
+              "name": "[format('LocalNetAppVolumes-{0}-{1}', range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()], parameters('timeStamp'))]",
               "location": "[deployment().location]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -16374,7 +16347,7 @@
               "condition": "[not(empty(variables('sortedRemoteNetAppResourceIds')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2022-09-01",
-              "name": "[format('remoteNetAppVolumes-{0}-{1}', range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()], parameters('timeStamp'))]",
+              "name": "[format('RemoteNetAppVolumes-{0}-{1}', range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()], parameters('timeStamp'))]",
               "location": "[deployment().location]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -16475,7 +16448,7 @@
                     "value": "[parameters('deploymentVirtualMachineName')]"
                   },
                   "diskAccessId": "[if(equals(parameters('deploymentType'), 'Complete'), if(parameters('deployDiskAccessResource'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceId.value), createObject('value', '')), createObject('value', parameters('existingDiskAccessResourceId')))]",
-                  "diskEncryptionSetResourceId": "[if(and(equals(parameters('deploymentType'), 'Complete'), or(not(equals(parameters('keyManagementDisks'), 'PlatformManaged')), parameters('confidentialVMOSDiskEncryption'))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskEncryption_{0}', parameters('timeStamp'))), '2022-09-01').outputs.diskEncryptionSetResourceId.value), if(not(empty(parameters('existingDiskEncryptionSetResourceId'))), createObject('value', parameters('existingDiskEncryptionSetResourceId')), createObject('value', '')))]",
+                  "diskEncryptionSetResourceId": "[if(and(equals(parameters('deploymentType'), 'Complete'), not(equals(parameters('keyManagementDisks'), 'PlatformManaged'))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('Customer_Managed_Keys_{0}', parameters('timeStamp'))), '2022-09-01').outputs.diskEncryptionSetResourceId.value), if(not(empty(parameters('existingDiskEncryptionSetResourceId'))), createObject('value', parameters('existingDiskEncryptionSetResourceId')), createObject('value', '')))]",
                   "diskSizeGB": {
                     "value": "[parameters('diskSizeGB')]"
                   },
@@ -16520,7 +16493,7 @@
                       {
                         "name": "value",
                         "count": "[length(range(0, length(variables('sortedLocalNetAppResourceIds'))))]",
-                        "input": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('localNetAppVolumes-{0}-{1}', range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex('value')]], parameters('timeStamp'))), '2022-09-01').outputs.smbServerFqdn.value]"
+                        "input": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('LocalNetAppVolumes-{0}-{1}', range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex('value')]], parameters('timeStamp'))), '2022-09-01').outputs.smbServerFqdn.value]"
                       }
                     ]
                   },
@@ -16532,7 +16505,7 @@
                       {
                         "name": "value",
                         "count": "[length(range(0, length(variables('sortedRemoteNetAppResourceIds'))))]",
-                        "input": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('remoteNetAppVolumes-{0}-{1}', range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex('value')]], parameters('timeStamp'))), '2022-09-01').outputs.smbServerFqdn.value]"
+                        "input": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('RemoteNetAppVolumes-{0}-{1}', range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex('value')]], parameters('timeStamp'))), '2022-09-01').outputs.smbServerFqdn.value]"
                       }
                     ]
                   },
@@ -17957,8 +17930,8 @@
               "dependsOn": [
                 "[subscriptionResourceId('Microsoft.Resources/deployments', format('ArtifactsUserAssignedIdentity_{0}', parameters('timeStamp')))]",
                 "availabilitySets",
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('Customer_Managed_Keys_{0}', parameters('timeStamp')))]",
                 "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess_{0}', parameters('timeStamp')))]",
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskEncryption_{0}', parameters('timeStamp')))]",
                 "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.Resources/deployments', format('HostPoolRegistrationTokenUpdate_{0}', parameters('timeStamp')))]",
                 "localNetAppVolumes",
                 "remoteNetAppVolumes"

@@ -200,7 +200,7 @@ param encryptionAtHost bool = true
 
 @allowed([
   'PlatformManaged'
-  'customerManaged'
+  'CustomerManaged'
   'CustomerManagedHSM'
   'PlatformManagedAndCustomerManaged'
   'PlatformManagedAndCustomerManagedHSM'
@@ -464,7 +464,7 @@ param fslogixStorageIndex int = 1
 
 @allowed([
   'MicrosoftManaged'
-  'customerManaged'
+  'CustomerManaged'
   'CustomerManagedHSM'
 ])
 @description('Optional. The type of key management used for the Azure Files storage account encryption.')
@@ -662,7 +662,7 @@ var hostPoolVmTemplate = {
   acceleratedNetworking: enableAcceleratedNetworking
   diskEncryptionSetName: confidentialVMOSDiskEncryption
     ? resourceNames.outputs.diskEncryptionSetNames.confidentialVMs
-    : startsWith(keyManagementDisks, 'customerManaged')
+    : startsWith(keyManagementDisks, 'CustomerManaged')
         ? resourceNames.outputs.diskEncryptionSetNames.customerManaged
         : contains(keyManagementDisks, 'PlatformManagedAndCustomerManaged')
             ? resourceNames.outputs.diskEncryptionSetNames.platformAndCustomerManaged
@@ -819,6 +819,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (deploymentT
     resourceGroupControlPlane: resourceNames.outputs.resourceGroupControlPlane
     resourceGroupDeployment: resourceNames.outputs.resourceGroupDeployment
     resourceGroupHosts: resourceNames.outputs.resourceGroupHosts
+    resourceGroupManagement: resourceNames.outputs.resourceGroupManagement
     resourceGroupStorage: resourceNames.outputs.resourceGroupStorage
     roleDefinitions: logic.outputs.roleDefinitions
     startVmOnConnect: startVmOnConnect
@@ -970,8 +971,8 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType == 'Complete
     fslogixAdminGroups: fslogixAdminGroups
     fslogixFileShares: logic.outputs.fslogixFileShareNames
     fslogixShardOptions: fslogixShardOptions
-    encryptionKeyVaultResourceId: management.outputs.encryptionKeyVaultResourceId
-    encryptionKeyVaultUri: management.outputs.encryptionKeyVaultUri
+    encryptionKeyVaultResourceId: deploymentType == 'Complete' ? management.outputs.encryptionKeyVaultResourceId : ''
+    encryptionKeyVaultUri: deploymentType == 'Complete' ? management.outputs.encryptionKeyVaultUri : ''
     fslogixEncryptionKeyNameConv: resourceNames.outputs.encryptionKeyNames.fslogix
     fslogixUserGroups: logic.outputs.fslogixUserGroups
     hostPoolResourceId: deploymentType == 'Complete'
@@ -1077,7 +1078,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     enableAcceleratedNetworking: enableAcceleratedNetworking
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
-    encryptionKeyName: resourceNames.outputs.encryptionKeyNames.virtualMachines
+    encryptionKeyName: confidentialVMOSDiskEncryption ? resourceNames.outputs.encryptionKeyNames.confidentialVMs : resourceNames.outputs.encryptionKeyNames.virtualMachines
     encryptionKeyVaultResourceId: management.outputs.encryptionKeyVaultResourceId
     encryptionKeyVaultUri: management.outputs.encryptionKeyVaultUri
     existingDiskAccessResourceId: existingDiskAccessResourceId

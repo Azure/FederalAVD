@@ -1516,19 +1516,7 @@
 											"uri": "http://go.microsoft.com/fwlink/?LinkId=2133517"
 										}
 									}
-								},
-								{
-									"name": "confidentialVMEncryptionTextBlock",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[equals(steps('hosts').security.securityType, 'ConfidentialVM')]",
-									"options": {
-										"text": "<ul><li><b>Confidential disk encryption</b> binds disk encryption keys to the virtual machine's TPM and makes the protected disk content accessible only to the VM. The TPM and VM guest state is always encrypted in attested code using keys released by a secure protocol that bypasses the hypervisor and host operating system. Currently only available for the OS disk. Encryption at host may be used for other disks on a Confidential VM in addition to Confidential Disk Encryption.</li></ul>",
-										"link": {
-											"label": "Learn more",
-											"uri": "http://go.microsoft.com/fwlink/?LinkId=2133517"
-										}
-									}
-								},
+								},								
 								{
 									"name": "encryptionAtHost",
 									"type": "Microsoft.Common.CheckBox",
@@ -1545,6 +1533,18 @@
 										"style": "Error",
 										"text": "The 'Encryption At Host' feature is not registered in your subscription. Follow the guidance at this link to enable the feature and restart the deployment.",
 										"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-enable-host-based-encryption-portal?tabs=azure-powershell"
+									}
+								},
+								{
+									"name": "confidentialVMEncryptionTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[equals(steps('hosts').security.securityType, 'ConfidentialVM')]",
+									"options": {
+										"text": "<ul><li><b>Confidential disk encryption</b> binds disk encryption keys to the virtual machine's TPM and makes the protected disk content accessible only to the VM. The TPM and VM guest state is always encrypted in attested code using keys released by a secure protocol that bypasses the hypervisor and host operating system. Currently only available for the OS disk. Encryption at host may be used for other disks on a Confidential VM in addition to Confidential Disk Encryption.</li></ul>",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/en-us/azure/confidential-computing/confidential-vm-overview#confidential-os-disk-encryption"
+										}
 									}
 								},
 								{
@@ -1623,7 +1623,7 @@
 									"defaultValue": "Platform-Managed Keys",
 									"toolTip": "Platform-managed keys are key encryption keys that are generated, stored, and managed entirely by Azure. Choose Platform Managed for the best balance of security and ease of use. Customer-managed keys are key encryption keys that are generated, stored, and managed by you, the customer, in your Azure Key Vault. Choose Customer Managed if you need to meet specific compliance requirements. Platform-Managed and Customer-Managed Keys provide double encryption with an infrastructure encryption layer using platform-managed keys and a disk encryption layer using customer-managed keys.",
 									"constraints": {
-										"allowedValues": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManaged\"}]'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys\",\"value\":\"CustomerManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"},{\"label\":\"Platform-Managed and Customer-Managed Keys\",\"value\":\"PlatformManagedAndCustomerManaged\"},{\"label\":\"Platform-Managed and Customer-Managed Keys protected by HSM\",\"value\":\"PlatformManagedAndCustomerManagedHSM\"}]'))]"
+										"allowedValues": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"}]'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys\",\"value\":\"CustomerManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"},{\"label\":\"Platform-Managed and Customer-Managed Keys\",\"value\":\"PlatformManagedAndCustomerManaged\"},{\"label\":\"Platform-Managed and Customer-Managed Keys protected by HSM\",\"value\":\"PlatformManagedAndCustomerManagedHSM\"}]'))]"
 									},
 									"visible": "[equals(steps('basics').deploymentType, 'Complete')]"
 								},
@@ -1649,16 +1649,47 @@
 									}
 								},
 								{
-									"name": "confDiskEncryptionPrincipal",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Confidential VM Orchestrator (Object Id)",
-									"toolTip": "Enter the Object Id of the 'Confidential VM Orchestrator' Service Principal",
-									"constraints": {
-										"required": true,
-										"regex": "^(?!\\d+$)\\w{8}-\\w{4}-\\w{4}-\\w{4}-\\w{12}$",
-										"validationMessage": "A proper GUID must be provided."
+									"name": "confDiskEncryptionServicePrincipalPickerBlade",
+									"type": "Microsoft.Solutions.BladeInvokeControl",									
+									"openBladeStatus": "[steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalSelector.changing]",
+									"bladeReference": {
+										"name": "ObjectPickerBlade",
+										"extension": "Microsoft_AAD_IAM",
+										"parameters": {
+											"queries": 4,
+											"bladeSubtitle": "Confidential VM Orchestrator Service Principal",
+											"additionalQueriesOnSearch": 0,
+											"advancedQueryOptions": {},
+											"selectionMaximum": 1,
+											"selectionMinimum": 1,
+											"bladeTitle": "Select the Service Principal",
+											"informationHeader": {
+												"informationText": "Select the 'Confidential VM Orchestrator' Service Principal."
+											},
+											"searchBoxLabel": "Enter 'Confidential VM Orchestrator' into the search box",
+											"searchBoxPlaceHolderText": "",
+											"searchGridNoRowsMessage": "No Service Principals found",
+											"selectButtonText": "Select Service Principal",
+											"selectedGridLabel": "Selected Service Principal",
+											"selectedGridNoRowsMessage": "You must select the 'Confidential VM Orchestrator' Service Principal."
+										}
 									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), empty(first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.value)))]"
+									"transforms": {
+										"selection": "selectedObjects|[*].{displayName:displayName,id:id}"
+									}
+								},
+								{
+									"name": "confDiskEncryptionServicePrincipalSelector",
+									"type": "Microsoft.Common.Selector",
+									"label": "Select the <b>Confidential VM Orchestrator</b> Service Principal",
+									"keyPath": "displayName",
+									"value": "[steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection]",
+									"barColor": "[if(empty(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade), '#FF0000', '#7fba00')]",
+									"constraints": {
+										"required": true
+									},
+									"link": "[if(empty(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade), 'Select Service Principal', first(map(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
+									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManagedHSM'), empty(first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.value)))]"
 								}
 							]
 						},
@@ -3367,7 +3398,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateEndpointVirtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":\"', vnet.id, '\"}')))]",
 										"required": true
 									},
-									"visible": "[and(or(steps('management').keyVaults.deploySecretsKeyVault, steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault, steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "managementSubnetsApi",
@@ -3387,7 +3418,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.managementSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]",
 										"required": true
 									},									
-									"visible": "[and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "functionAppOutboundSubnet",
@@ -3540,7 +3571,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": true
 									},
-									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, or(steps('management').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
+									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, or(steps('management').keyVaults.deploySecretsKeyVault, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
 								},
 								{
 									"name": "azureQueuePrivateDnsZone",
@@ -4135,7 +4166,7 @@
 				"existingDiskEncryptionSetResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('hosts').diskEncryption.selectDiskEncryptionSet), steps('hosts').diskEncryption.existingDiskEncryptionSet, '')]",
 				"keyManagementDisks": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('hosts').diskEncryption.keyManagement, 'PlatformManaged')]",
 				"confidentialVMOSDiskEncryption": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, false)]",
-				"confidentialVMOrchestratorObjectId": "[if(and(equals(steps('basics').deploymentType, 'Complete'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), if(empty(first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.value)), steps('hosts').diskEncryption.confDiskEncryptionPrincipal, first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.transformed.objectId)), '')]",
+				"confidentialVMOrchestratorObjectId": "[if(and(equals(steps('basics').deploymentType, 'Complete'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManagedHSM')), if(empty(first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.value)), first(map(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.transformed.objectId)), '')]",
 				"dedicatedHostGroupResourceId": "[if(steps('hosts').dedicatedHosts.deployToDedicatedHosts, steps('hosts').dedicatedHosts.dedicatedHostGroup, '')]",
 				"dedicatedHostResourceId": "[if(steps('hosts').dedicatedHosts.deployToDedicatedHosts, steps('hosts').dedicatedHosts.dedicatedHost, '')]",
 				"availability": "[if(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), steps('hosts').availability.availability, 'none')]",
