@@ -18,6 +18,9 @@ param useAgentDownloadEndpoint bool = false
 @description('Optional. The type of deployment to perform.  A "Complete" deployment will deploy the host pool, selected other resources, and session hosts.  A "SessionHostsOnly" deployment will only deploy the session hosts.')
 param deploymentType string = 'Complete'
 
+@description('Optional. The TimeZone of the AVD session hosts.')
+param virtualMachinesTimeZone string = 'Eastern Standard Time'
+
 @description('Optional. The resource Id of an existing AVD host pool to which the session hosts will be registered. Only used when "DeploymentType" is "SessionHostOnly".')
 param existingHostPoolResourceId string = ''
 
@@ -620,7 +623,7 @@ param tags object = {}
 @description('DO NOT MODIFY THIS VALUE! The timeStamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddhhmmss')
 
-var sessionHostRegistrationDSCStorageAccount = environment().name =~ 'USNat'
+var sessionHostRegistrationDSCStorageAccount = startsWith(environment().name, 'USN')
   ? 'wvdexportalcontainer'
   : 'wvdportalstorageblob'
 var sessionHostRegistrationDSCUrl = startsWith(avdAgentsDSCPackage, 'https://')
@@ -931,7 +934,7 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
     startVmOnConnect: startVmOnConnect
     tags: tags
     timeStamp: timeStamp
-    virtualMachinesTimeZone: logic.outputs.timeZone
+    virtualMachinesTimeZone: virtualMachinesTimeZone
     workspaceFeedPrivateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
     workspaceFriendlyName: workspaceFriendlyName
     workspaceName: resourceNames.outputs.workspaceName
@@ -1011,7 +1014,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType == 'Complete
     storageSolution: logic.outputs.fslogixStorageSolution
     tags: tags
     timeStamp: timeStamp
-    timeZone: logic.outputs.timeZone
+    timeZone: virtualMachinesTimeZone
     userAssignedIdentityNameConv: resourceNames.outputs.userAssignedIdentityNameConv
     functionAppDelegatedSubnetResourceId: functionAppSubnetResourceId
     increaseQuota: deployIncreaseQuota
@@ -1140,7 +1143,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     subnetResourceId: virtualMachineSubnetResourceId
     tags: deployScalingPlan ? logic.outputs.tags : tags
     timeStamp: timeStamp
-    timeZone: logic.outputs.timeZone
+    timeZone: virtualMachinesTimeZone
     useAgentDownloadEndpoint: useAgentDownloadEndpoint
     virtualMachineAdminPassword: !empty(virtualMachineAdminPassword)
       ? virtualMachineAdminPassword

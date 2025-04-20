@@ -139,8 +139,6 @@ Our auto-scaling solution includes schedule-based scale out and scale in to help
 
 This auto-scaling solution is already embedded to the Design and Implementation component. In case this is not needed, it can be easily disabled.
 
-NOTE: At this time, auto-scaling is still not available in USNat and USSec. Subject to change.
-
 ### Session Hosts
 
 - [ ] How many Session Hosts, Desktops, and/or Apps will be published?

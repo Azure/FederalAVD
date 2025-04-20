@@ -183,9 +183,6 @@ var fslogixStorageSku = fslogixStorageService == 'None' ? 'None' : split(fslogix
 var fslogixStorageSolution = split(fslogixStorageService, ' ')[0]
 var storageSuffix = environment().suffixes.storage
 
-var timeDifference = locations[locationVirtualMachines].timeDifference
-var timeZone = locations[locationVirtualMachines].timeZone
-
 output availabilitySetsCount int = availabilitySetsCount
 output beginAvSetRange int = beginAvSetRange
 output dedicatedHostGroupZones array = !empty(dedicatedHostGroupName) ? dedicatedHostGroup.zones : []
@@ -207,5 +204,3 @@ output SecurityGroupsCount int = SecurityGroupsCount
 output smbServerLocation string = smbServerLocation
 output storageSuffix string = storageSuffix
 output tags object = varTags
-output timeDifference string = timeDifference
-output timeZone string = timeZone

@@ -8,7 +8,7 @@ With this solution, you can deploy:
 2. Image management capability.
 3. Custom Image build automation solution.
 
-The code and automation capabilities of this repo can be used to deploy these capabilities in Azure Commercial, Azure US Government, **USSec**, and **USNat** Azure environments. The code is designed to allow you to deploy in compliance with Microsoft's [Zero Trust principles](https://learn.microsoft.com/security/zero-trust/azure-infrastructure-avd) and [IL5 Isolation Guidance](https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5).
+The code and automation capabilities of this repo can be used to deploy these capabilities in Azure Commercial, Azure US Government, **Azure Government Secret**, and **Azure Government Top Secret** environments. The code is designed to allow you to deploy in compliance with Microsoft's [Zero Trust principles](https://learn.microsoft.com/security/zero-trust/azure-infrastructure-avd) and [IL5 Isolation Guidance](https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5).
 
 The code is idempotent to allow all resources deployed via this solution to be redeployed without conflicts when the same parameters are used. The [resource organization](docs/design.md) follows CAF guidance and by changing the `identifier` parameter and/or the deployment location of the host pool deployment, you can deploy multiple host pools while sharing many resources to create an enterprise ready AVD solution including regional disaster recovery capabilities. Many of the [common features](docs/features.md) used with AVD have been automated in this solution for your convenience.
 

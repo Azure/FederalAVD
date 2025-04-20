@@ -1,384 +1,223 @@
 {
-    "AzureChina": {
-        "chinaeast": {
-            "abbreviation": "cne",
-            "recoveryServicesGeo": "sha",
-            "timeDifference": "+8:00",
-            "timeZone": "China Standard Time"
-        },
-        "chinaeast2": {
-            "abbreviation": "cne2",
-            "recoveryServicesGeo": "sha2",
-            "timeDifference": "+8:00",
-            "timeZone": "China Standard Time"
-        },
-        "chinanorth": {
-            "abbreviation": "cnn",
-            "recoveryServicesGeo": "bjb",
-            "timeDifference": "+8:00",
-            "timeZone": "China Standard Time"
-        },
-        "chinanorth2": {
-            "abbreviation": "cnn2",
-            "recoveryServicesGeo": "bjb2",
-            "timeDifference": "+8:00",
-            "timeZone": "China Standard Time"
-        }
-    },
     "AzureCloud": {
         "australiacentral": {
             "abbreviation": "auc",
-            "recoveryServicesGeo": "acl",
-            "timeDifference": "+10:00",
-            "timeZone": "AUS Eastern Standard Time"
+            "recoveryServicesGeo": "acl"
         },
         "australiacentral2": {
             "abbreviation": "auc2",
-            "recoveryServicesGeo": "acl2",
-            "timeDifference": "+10:00",
-            "timeZone": "AUS Eastern Standard Time"
+            "recoveryServicesGeo": "acl2"
+            
         },
         "australiaeast": {
             "abbreviation": "aue",
-            "recoveryServicesGeo": "ae",
-            "timeDifference": "+10:00",
-            "timeZone": "AUS Eastern Standard Time"
+            "recoveryServicesGeo": "ae"
         },
         "australiasoutheast": {
             "abbreviation": "ause",
-            "recoveryServicesGeo": "ase",
-            "timeDifference": "+10:00",
-            "timeZone": "AUS Eastern Standard Time"
+            "recoveryServicesGeo": "ase"
         },
         "brazilsouth": {
             "abbreviation": "brs",
-            "recoveryServicesGeo": "brs",
-            "timeDifference": "-3:00",
-            "timeZone": "E. South America Standard Time"
+            "recoveryServicesGeo": "brs"
         },
         "brazilsoutheast": {
             "abbreviation": "brse",
-            "recoveryServicesGeo": "bse",
-            "timeDifference": "-3:00",
-            "timeZone": "E. South America Standard Time"
+            "recoveryServicesGeo": "bse"
         },
         "canadacentral": {
             "abbreviation": "cac",
-            "recoveryServicesGeo": "cnc",
-            "timeDifference": "-5:00",
-            "timeZone": "Eastern Standard Time"
+            "recoveryServicesGeo": "cnc"
         },
         "canadaeast": {
             "abbreviation": "cae",
-            "recoveryServicesGeo": "cne",
-            "timeDifference": "-5:00",
-            "timeZone": "Eastern Standard Time"
+            "recoveryServicesGeo": "cne"
         },
         "centralindia": {
             "abbreviation": "inc",
-            "recoveryServicesGeo": "inc",
-            "timeDifference": "+5:30",
-            "timeZone": "India Standard Time"
+            "recoveryServicesGeo": "inc"
         },
         "centralus": {
             "abbreviation": "usc",
-            "recoveryServicesGeo": "cus",
-            "timeDifference": "-6:00",
-            "timeZone": "Central Standard Time"
+            "recoveryServicesGeo": "cus"
         },
         "eastasia": {
             "abbreviation": "ase",
-            "recoveryServicesGeo": "ea",
-            "timeDifference": "+8:00",
-            "timeZone": "China Standard Time"
+            "recoveryServicesGeo": "ea"
         },
         "eastus": {
             "abbreviation": "use",
-            "recoveryServicesGeo": "eus",
-            "timeDifference": "-5:00",
-            "timeZone": "Eastern Standard Time"
+            "recoveryServicesGeo": "eus"
         },
         "eastus2": {
             "abbreviation": "use2",
-            "recoveryServicesGeo": "eus2",
-            "timeDifference": "-5:00",
-            "timeZone": "Eastern Standard Time"
+            "recoveryServicesGeo": "eus2"
         },
         "francecentral": {
             "abbreviation": "frc",
-            "recoveryServicesGeo": "frc",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "frc"
         },
         "francesouth": {
             "abbreviation": "frs",
-            "recoveryServicesGeo": "frs",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "frs"
         },
         "germanynorth": {
             "abbreviation": "den",
-            "recoveryServicesGeo": "gn",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "gn"
         },
         "germanywestcentral": {
             "abbreviation": "dewc",
-            "recoveryServicesGeo": "gwc",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "gwc"
         },
         "israelcentral": {
             "abbreviation": "ilc",
-            "recoveryServicesGeo": "ilc",
-            "timeDifference": "+2:00",
-            "timeZone": "Israel Standard Time"
+            "recoveryServicesGeo": "ilc"
         },
         "italynorth": {
             "abbreviation": "itn",
-            "recoveryServicesGeo": "itn",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "itn"
         },
         "japaneast": {
             "abbreviation": "jpe",
-            "recoveryServicesGeo": "jpe",
-            "timeDifference": "+9:00",
-            "timeZone": "Tokyo Standard Time"
+            "recoveryServicesGeo": "jpe"
         },
         "japanwest": {
             "abbreviation": "jpw",
-            "recoveryServicesGeo": "jpw",
-            "timeDifference": "+9:00",
-            "timeZone": "Tokyo Standard Time"
+            "recoveryServicesGeo": "jpw"
         },
         "jioindiacentral": {
             "abbreviation": "injc",
-            "recoveryServicesGeo": "jic",
-            "timeDifference": "+5:30",
-            "timeZone": "India Standard Time"
+            "recoveryServicesGeo": "jic"
         },
         "jioindiawest": {
             "abbreviation": "injw",
-            "recoveryServicesGeo": "jiw",
-            "timeDifference": "+5:30",
-            "timeZone": "India Standard Time"
+            "recoveryServicesGeo": "jiw"
         },
         "koreacentral": {
             "abbreviation": "krc",
-            "recoveryServicesGeo": "krc",
-            "timeDifference": "+9:00",
-            "timeZone": "Korea Standard Time"
+            "recoveryServicesGeo": "krc"
         },
         "koreasouth": {
             "abbreviation": "krs",
-            "recoveryServicesGeo": "krs",
-            "timeDifference": "+9:00",
-            "timeZone": "Korea Standard Time"
+            "recoveryServicesGeo": "krs"
         },
         "northcentralus": {
             "abbreviation": "usnc",
-            "recoveryServicesGeo": "ncus",
-            "timeDifference": "-6:00",
-            "timeZone": "Central Standard Time"
+            "recoveryServicesGeo": "ncus"
         },
         "northeurope": {
             "abbreviation": "eun",
-            "recoveryServicesGeo": "ne",
-            "timeDifference": "0:00",
-            "timeZone": "GMT Standard Time"
+            "recoveryServicesGeo": "ne"
         },
         "norwayeast": {
             "abbreviation": "noe",
-            "recoveryServicesGeo": "nwe",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "nwe"
         },
         "norwaywest": {
             "abbreviation": "now",
-            "recoveryServicesGeo": "nww",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "nww"
         },
         "polandcentral": {
             "abbreviation": "plc",
-            "recoveryServicesGeo": "plc",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "plc"
         },
         "qatarcentral": {
             "abbreviation": "qac",
-            "recoveryServicesGeo": "qac",
-            "timeDifference": "+3:00",
-            "timeZone": "Arabian Standard Time"
+            "recoveryServicesGeo": "qac"
         },
         "southafricanorth": {
             "abbreviation": "zan",
-            "recoveryServicesGeo": "san",
-            "timeDifference": "+2:00",
-            "timeZone": "South Africa Standard Time"
+            "recoveryServicesGeo": "san"
         },
         "southafricawest": {
             "abbreviation": "zaw",
-            "recoveryServicesGeo": "saw",
-            "timeDifference": "+2:00",
-            "timeZone": "South Africa Standard Time"
+            "recoveryServicesGeo": "saw"
         },
         "southcentralus": {
             "abbreviation": "ussc",
-            "recoveryServicesGeo": "scus",
-            "timeDifference": "-6:00",
-            "timeZone": "Central Standard Time"
+            "recoveryServicesGeo": "scus"
         },
         "southeastasia": {
             "abbreviation": "asse",
-            "recoveryServicesGeo": "sea",
-            "timeDifference": "+8:00",
-            "timeZone": "Singapore Standard Time"
+            "recoveryServicesGeo": "sea"
         },
         "southindia": {
             "abbreviation": "ins",
-            "recoveryServicesGeo": "ins",
-            "timeDifference": "+5:30",
-            "timeZone": "India Standard Time"
+            "recoveryServicesGeo": "ins"
         },
         "swedencentral": {
             "abbreviation": "sec",
-            "recoveryServicesGeo": "sdc",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "sdc"
         },
         "switzerlandnorth": {
             "abbreviation": "chn",
-            "recoveryServicesGeo": "szn",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "szn"
         },
         "switzerlandwest": {
             "abbreviation": "chw",
-            "recoveryServicesGeo": "szw",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "szw"
         },
         "uaecentral": {
             "abbreviation": "aec",
-            "recoveryServicesGeo": "uac",
-            "timeDifference": "+3:00",
-            "timeZone": "Arabian Standard Time"
+            "recoveryServicesGeo": "uac"
         },
         "uaenorth": {
             "abbreviation": "aen",
-            "recoveryServicesGeo": "uan",
-            "timeDifference": "+3:00",
-            "timeZone": "Arabian Standard Time"
+            "recoveryServicesGeo": "uan"
         },
         "uksouth": {
             "abbreviation": "uks",
-            "recoveryServicesGeo": "uks",
-            "timeDifference": "0:00",
-            "timeZone": "GMT Standard Time"
+            "recoveryServicesGeo": "uks"            
         },
         "ukwest": {
             "abbreviation": "ukw",
-            "recoveryServicesGeo": "ukw",
-            "timeDifference": "0:00",
-            "timeZone": "GMT Standard Time"
+            "recoveryServicesGeo": "ukw"
         },
         "westcentralus": {
             "abbreviation": "uswc",
-            "recoveryServicesGeo": "wcus",
-            "timeDifference": "-7:00",
-            "timeZone": "Mountain Standard Time"
+            "recoveryServicesGeo": "wcus"
         },
         "westeurope": {
             "abbreviation": "euw",
-            "recoveryServicesGeo": "we",
-            "timeDifference": "+1:00",
-            "timeZone": "Central Europe Standard Time"
+            "recoveryServicesGeo": "we"
         },
         "westindia": {
             "abbreviation": "inw",
-            "recoveryServicesGeo": "inw",
-            "timeDifference": "+5:30",
-            "timeZone": "India Standard Time"
+            "recoveryServicesGeo": "inw"
         },
         "westus": {
             "abbreviation": "usw",
-            "recoveryServicesGeo": "wus",
-            "timeDifference": "-8:00",
-            "timeZone": "Pacific Standard Time"
+            "recoveryServicesGeo": "wus"
         },
         "westus2": {
             "abbreviation": "usw2",
-            "recoveryServicesGeo": "wus2",
-            "timeDifference": "-8:00",
-            "timeZone": "Pacific Standard Time"
+            "recoveryServicesGeo": "wus2"
         },
         "westus3": {
             "abbreviation": "usw3",
-            "recoveryServicesGeo": "wus3",
-            "timeDifference": "-7:00",
-            "timeZone": "Mountain Standard Time"
+            "recoveryServicesGeo": "wus3"
         }
     },
     "AzureUSGovernment": {
         "usdodcentral": {
             "abbreviation": "dodc",
-            "recoveryServicesGeo": "udc",
-            "timeDifference": "-6:00",
-            "timeZone": "Central Standard Time"
+            "recoveryServicesGeo": "udc"
         },
         "usdodeast": {
             "abbreviation": "dode",
-            "recoveryServicesGeo": "ude",
-            "timeDifference": "-5:00",
-            "timeZone": "Eastern Standard Time"
+            "recoveryServicesGeo": "ude"
         },
         "usgovarizona": {
             "abbreviation": "az",
-            "recoveryServicesGeo": "uga",
-            "timeDifference": "-7:00",
-            "timeZone": "Mountain Standard Time"
+            "recoveryServicesGeo": "uga"
         },
         "usgovtexas": {
             "abbreviation": "tx",
-            "recoveryServicesGeo": "ugt",
-            "timeDifference": "-6:00",
-            "timeZone": "Central Standard Time"
+            "recoveryServicesGeo": "ugt"
         },
         "usgovvirginia": {
             "abbreviation": "va",
-            "recoveryServicesGeo": "ugv",
-            "timeDifference": "-5:00",
-            "timeZone": "Eastern Standard Time"
-        }
-    },
-    "USNat": {
-        "usnateast": {
-            "abbreviation": "east",
-            "recoveryServicesGeo": "exe",
-            "timeDifference": "-5:00",
-            "timeZone": "Eastern Standard Time"
-        },
-        "usnatwest": {
-            "abbreviation": "west",
-            "recoveryServicesGeo": "exw",
-            "timeDifference": "-8:00",
-            "timeZone": "Pacific Standard Time"
-        }
-    },
-    "USSec": {
-        "usseceast": {
-            "abbreviation": "east",
-            "recoveryServicesGeo": "rxe",
-            "timeDifference": "-5:00",
-            "timeZone": "Eastern Standard Time"
-        },
-        "ussecwest": {
-            "abbreviation": "west",
-            "recoveryServicesGeo": "rxw",
-            "timeDifference": "-8:00",
-            "timeZone": "Pacific Standard Time"
+            "recoveryServicesGeo": "ugv"
         }
     }
 }

@@ -7,37 +7,37 @@ then zip up all subfolders and upload all blobs to a storage account blob contai
 
 param(
     # the temp folder to where the artifact sources are prepared to be uploaded to the storage account.
-    [Parameter(ParameterSetName='Deploy', Mandatory=$false)]
-    [Parameter(ParameterSetName='UpdateOnly')]
+    [Parameter(ParameterSetName = 'Deploy', Mandatory = $false)]
+    [Parameter(ParameterSetName = 'UpdateOnly')]
     [string] $TempDir = "$Env:Temp",
 
     # Determines whether or not to delete existing blobs in the storage account before uploading new blobs.
-    [Parameter(ParameterSetName='Deploy', Mandatory=$false)]
-    [Parameter(ParameterSetName='UpdateOnly', Mandatory=$false)]
+    [Parameter(ParameterSetName = 'Deploy', Mandatory = $false)]
+    [Parameter(ParameterSetName = 'UpdateOnly', Mandatory = $false)]
     [switch] $DeleteExistingBlobs,
 
     # Determines whether or not to download new sources from the internet.
-    [Parameter(ParameterSetName='Deploy', Mandatory=$false)]
-    [Parameter(ParameterSetName='UpdateOnly', Mandatory=$false)]
+    [Parameter(ParameterSetName = 'Deploy', Mandatory = $false)]
+    [Parameter(ParameterSetName = 'UpdateOnly', Mandatory = $false)]
     [switch] $SkipDownloadingNewSources,
 
     # Determines whether or not to deploy/redeploy the storage account using BICEP and the parameter file contained in the storageAccount folder
-    [Parameter(ParameterSetName='Deploy')]
+    [Parameter(ParameterSetName = 'Deploy')]
     [switch]$DeployImageManagementResources,
 
     # The Location where the AVD Management Resources are being deployed.
-    [Parameter(Mandatory=$true, ParameterSetName='Deploy')]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Deploy')]
     [string]$Location,
 
     # The full resource ID of the existing storage account to update.
-    [Parameter(ParameterSetName='UpdateOnly', Mandatory=$true)]
+    [Parameter(ParameterSetName = 'UpdateOnly', Mandatory = $true)]
     [string]$StorageAccountResourceId,
 
-    [Parameter(ParameterSetName='UpdateOnly', Mandatory=$true)]
+    [Parameter(ParameterSetName = 'UpdateOnly', Mandatory = $true)]
     [string]$ManagedIdentityResourceID,
     
     # The container where the artifacts will be stored.
-    [Parameter(ParameterSetName='UpdateOnly', Mandatory=$false)]
+    [Parameter(ParameterSetName = 'UpdateOnly', Mandatory = $false)]
     [string]$ArtifactsContainerName = 'artifacts'
 )
 
@@ -49,12 +49,20 @@ $Context = Get-AzContext
 If ($null -eq $Context) {
     Throw 'You are not logged in to Azure. Please login to azure before continuing'
     Exit
-} Else {
+}
+Else {
     $Environment = $Context.Environment.Name
+    $StorageEndpointSuffix = $Context.Environment.StorageEndpointSuffix
+    $EnvSuffix = $StorageEndpointSuffix.Substring(5, ($StorageEndpointSuffix.length - 5))
     If ($Environment -eq 'AzureCloud' -or $Environment -eq 'AzureUSGovernment') {
         $downloadsParametersPrefix = 'public'
-    } Else {
-        $downloadsParametersPrefix = $Environment
+    }
+    Elseif ($Environment -match 'USN') {
+
+        $downloadsParametersPrefix = 'topsecret'
+    }
+    Else {
+        $downloadsParametersPrefix = 'secret'    
     }
 }
 
@@ -110,17 +118,18 @@ If ($DeployImageManagementResources) {
     Write-Output "`t`$StorageAccountResourceID  = $StorageAccountResourceId"
     Write-Output "`t`$ManagedIdentityResourceID = $ManagedIdentityResourceId"
     Write-Output "`t`$ArtifactsContainerName    = $ArtifactsContainerName"
-} Else {
+}
+Else {
     Write-Output "Gathering variables from provided Parameters:`n"
     Write-Output "`t`$StorageAccountResourceId = '$StorageAccountResourceId'"
     Write-Output "`t`$ArtifactsContainerName = '$ArtifactsContainerName'"
-    $SubscriptionId = ($StorageAccountResourceId -Split('/'))[2]
+    $SubscriptionId = ($StorageAccountResourceId -Split ('/'))[2]
     Write-Output "`t`$SubscriptionId = '$SubscriptionId'"
     If ((Get-AzContext).Subscription -ne $SubscriptionId) { Set-AzContext -Subscription $SubscriptionId }
 }
-$StorageAccountResourceGroup = ($StorageAccountResourceId -split('/'))[4]
+$StorageAccountResourceGroup = ($StorageAccountResourceId -split ('/'))[4]
 Write-Output "`t`$StorageAccountResourceGroup = $StorageAccountResourceGroup"
-$StorageAccountName = ($StorageAccountResourceId -split('/'))[-1]
+$StorageAccountName = ($StorageAccountResourceId -split ('/'))[-1]
 Write-Output "`t`$StorageAccountName = $StorageAccountName"
 $BlobEndpoint = (Get-AzStorageAccount -ResourceGroupName $StorageAccountResourceGroup -StorageAccountName $StorageAccountName).PrimaryEndpoints.Blob
 $ArtifactsContainerUrl = $BlobEndpoint + $ArtifactsContainerName.toLower() + '/'
@@ -132,6 +141,7 @@ Write-Output "`t`$ArtifactsContainerUrl = $ArtifactsContainerUrl"
 
 $downloadFilePath = (Join-Path -Path "$PSScriptRoot\imageManagement\parameters" -ChildPath "$downloadsParametersPrefix.downloads.parameters.json")
 if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
+
     Write-Verbose "###########################################################################"
     Write-Verbose "## 2 - Download New Source Files into the artifacts Directory            ##"
     Write-Verbose "###########################################################################"
@@ -140,6 +150,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
     $FileVersionInfoFile = Join-Path -Path $ArtifactsDir -ChildPath 'uploadedFileVersionInfo.txt'
     New-Item -Path $FileVersionInfoFile -ItemType File -Force
     $downloadJson = Get-Content -Path $downloadFilePath -Raw -ErrorAction 'Stop'
+    $downloadJson = $downloadJson -replace 'ENVSUFFIX', $EnvSuffix
     try {
         $Downloads = $downloadJson | ConvertFrom-Json -ErrorAction 'Stop'
     }
@@ -156,12 +167,12 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             $SearchString = $Download.SearchString
             Write-Output "Determining download Url for latest version of '$SoftwareName' from '$WebsiteUrl'."
             $DownloadUrl = Get-InternetUrl -WebSiteUrl $WebSiteUrl -searchstring $SearchString -ErrorAction SilentlyContinue
-            If($null -eq $DownloadUrl -and $Download.DownloadUrl -ne '') {
+            If ($null -eq $DownloadUrl -and $Download.DownloadUrl -ne '') {
                 Write-Output "Download Url directly available."
                 $DownloadUrl = $Download.DownloadUrl
             }
         }
-        ElseIf($Download.DownloadUrl -ne '') {
+        ElseIf ($Download.DownloadUrl -ne '') {
             Write-Output "Download Url directly available."
             $DownloadUrl = $Download.DownloadUrl
         }
@@ -169,12 +180,12 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             $APIUrl = $Download.APIUrl
             $EdgeUpdatesJSON = Invoke-WebRequest -Uri $APIUrl -UseBasicParsing
             $content = $EdgeUpdatesJSON.content | ConvertFrom-Json      
-            $Edgereleases = ($content | Where-Object {$_.Product -eq 'Stable'}).releases
-            $latestrelease = $Edgereleases | Where-Object {$_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64'} | Sort-Object ProductVersion | Select-Object -last 1
+            $Edgereleases = ($content | Where-Object { $_.Product -eq 'Stable' }).releases
+            $latestrelease = $Edgereleases | Where-Object { $_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64' } | Sort-Object ProductVersion | Select-Object -last 1
             $EdgeUrl = $latestrelease.artifacts.location
             $EdgeLatestStableVersion = $latestrelease.ProductVersion
-            $policyfiles = ($content | Where-Object {$_.Product -eq 'Policy'}).releases
-            $latestPolicyFile = $policyfiles | Where-Object {$_.ProductVersion -eq $EdgeLatestStableVersion}
+            $policyfiles = ($content | Where-Object { $_.Product -eq 'Policy' }).releases
+            $latestPolicyFile = $policyfiles | Where-Object { $_.ProductVersion -eq $EdgeLatestStableVersion }
             If (-not($latestPolicyFile)) {   
                 $latestpolicyfile = $policyfiles | Sort-Object ProductVersion | Select-Object -last 1
             }  
@@ -219,7 +230,8 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                         $VersionText += "Download File = $DownloadedFile"
                         Rename-Item -Path $DownloadedFileFullName -NewName $DestFileName -Force
                     }
-                } Catch {
+                }
+                Catch {
                     $DownloadedFileFullName = Get-InternetFile -Url $DownloadUrl -OutputDirectory $TempSoftwareDownloadDir -OutputFileName $DestFileName
                     $VersionText += "Download File = $(split-path $DownloadedFileFullName -leaf)"
                 }
@@ -227,7 +239,8 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                 Write-Output "Saving File Information to '$FileVersionInfoFile'"
                 If ([System.IO.Path]::GetExtension($DestFileFullName) -eq '.msi') {
                     $VersionText += Get-MSIInfo -Path $DestFileFullName
-                } Elseif ([System.IO.Path]::GetExtension($DestFileFullName) -eq '.exe') {
+                }
+                Elseif ([System.IO.Path]::GetExtension($DestFileFullName) -eq '.exe') {
                     $Version = (Get-ItemProperty -Path $DestFileFullName).VersionInfo | Select-Object ProductVersion, FileVersion
                     $VersionText += "$Version"
                 }
@@ -273,7 +286,7 @@ if ($PSCmdlet.ShouldProcess("[$ArtifactsDir] subfolders as .zip and store them i
     Write-Verbose "Artifact Source Files compression finished"
 }
 Write-Verbose "Copying files in root of '$ArtifactsDir' to '$TempArtifactsDir'."
-Get-ChildItem -Path $ArtifactsDir -file | Where-Object {$_.FullName -ne "$downloadFilePath"} | Copy-Item -Destination $TempArtifactsDir -Force
+Get-ChildItem -Path $ArtifactsDir -file | Where-Object { $_.FullName -ne "$downloadFilePath" } | Copy-Item -Destination $TempArtifactsDir -Force
 
 #endregion Compress Artifacts
 

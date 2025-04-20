@@ -4,7 +4,7 @@ param location string = resourceGroup().location
 param userAssignedIdentityClientId string
 param virtualMachineName string
 
-var apiVersion = environment().name == 'USNat' ? '2017-08-01' : '2018-02-01'
+var apiVersion = startsWith(environment().name, 'USN') ? '2017-08-01' : '2018-02-01'
 
 var customizers = [for customization in customizations: {
   name: replace(customization.name, ' ', '-')

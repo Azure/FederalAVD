@@ -80,8 +80,8 @@ param installTeams bool = false
   'GCC'
   'GCCH'
   'DoD'
-  'USSec'
-  'USNat'
+  'GovSecret'
+  'GovTopSecret'
   'Gallatin'
 ])
 @description('Optional. The Teams Governmant Cloud type.')
@@ -280,10 +280,10 @@ var cloud = toLower(environment().name)
 
 var locations = loadJsonContent('../../../.common/data/locations.json')[environment().name]
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
-var downloads = cloud == 'usnat'
-  ? loadJsonContent('../parameters/usnat.downloads.parameters.json')
-  : cloud == 'ussec'
-      ? loadJsonContent('../parameters/ussec.downloads.parameters.json')
+var downloads = startsWith(cloud, 'usn')
+  ? loadJsonContent('../parameters/topsecret.downloads.parameters.json')
+  : startsWith(cloud, 'uss')
+      ? loadJsonContent('../parameters/secret.downloads.parameters.json')
       : loadJsonContent('../parameters/public.downloads.parameters.json')
 
 var computeLocation = vnet.location

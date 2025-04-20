@@ -117,11 +117,11 @@ if ($AppsToInstall -notcontains 'Word') {
 }
 
 $Content += '<Configuration>'
-If ($Environment -eq 'ussec') {
+If ($Environment -match 'uss') {
     $Content += '  <Add AllowCdnFallback="TRUE" SourcePath="https://officexo.azurefd.microsoft.scloud/prsstelecontainer/55336b82-a18d-4dd6-b5f6-9e5095c314a6/" Channel="MonthlyEnterprise" OfficeClientEdition="64">'
 
 }
-Elseif ($Environment -eq 'usnat') {
+Elseif ($Environment -match 'usn') {
     $Content += '  <Add AllowCdnFallback="TRUE" SourcePath="https://officexo.azurefd.eaglex.ic.gov/prsstelecontainer/55336b82-a18d-4dd6-b5f6-9e5095c314a6/" Channel="MonthlyEnterprise" OfficeClientEdition="64">'
 }
 Else {

@@ -16,7 +16,7 @@ param aadJoin bool = true
 @description('The virtual machine is managed by Intune')
 param intune bool = true
 
-var sessionHostRegistrationDSCStorageAccount = environment().name =~ 'USNat'
+var sessionHostRegistrationDSCStorageAccount = startsWith(environment().name, 'USN')
   ? 'wvdexportalcontainer'
   : 'wvdportalstorageblob'
 var sessionHostRegistrationDSCUrl = startsWith(avdAgentsDSCPackage, 'https://')

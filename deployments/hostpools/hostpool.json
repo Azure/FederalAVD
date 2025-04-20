@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.34.44.8038",
-      "templateHash": "2137982965177940570"
+      "templateHash": "3377313914339300097"
     }
   },
   "parameters": {
@@ -38,6 +38,13 @@
       ],
       "metadata": {
         "description": "Optional. The type of deployment to perform.  A \"Complete\" deployment will deploy the host pool, selected other resources, and session hosts.  A \"SessionHostsOnly\" deployment will only deploy the session hosts."
+      }
+    },
+    "virtualMachinesTimeZone": {
+      "type": "string",
+      "defaultValue": "Eastern Standard Time",
+      "metadata": {
+        "description": "Optional. The TimeZone of the AVD session hosts."
       }
     },
     "existingHostPoolResourceId": {
@@ -1022,7 +1029,7 @@
     }
   },
   "variables": {
-    "sessionHostRegistrationDSCStorageAccount": "[if(equals(toLower(environment().name), toLower('USNat')), 'wvdexportalcontainer', 'wvdportalstorageblob')]",
+    "sessionHostRegistrationDSCStorageAccount": "[if(startsWith(environment().name, 'USN'), 'wvdexportalcontainer', 'wvdportalstorageblob')]",
     "sessionHostRegistrationDSCUrl": "[if(startsWith(parameters('avdAgentsDSCPackage'), 'https://'), parameters('avdAgentsDSCPackage'), format('https://{0}.blob.{1}/galleryartifacts/{2}', variables('sessionHostRegistrationDSCStorageAccount'), environment().suffixes.storage, parameters('avdAgentsDSCPackage')))]",
     "deployDiskAccessResource": "[if(and(and(contains(parameters('hostPoolType'), 'Personal'), parameters('recoveryServices')), parameters('deployPrivateEndpoints')), true(), false())]",
     "resourceGroupsCount": "[add(add(add(3, if(empty(parameters('existingFeedWorkspaceResourceId')), 1, 0)), if(parameters('deployFSLogixStorage'), 1, 0)), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), 1, 0))]"
@@ -1070,7 +1077,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.34.44.8038",
-              "templateHash": "11858274540684878682"
+              "templateHash": "9814322305939314577"
             }
           },
           "parameters": {
@@ -1104,386 +1111,224 @@
           },
           "variables": {
             "$fxv#0": {
-              "AzureChina": {
-                "chinaeast": {
-                  "abbreviation": "cne",
-                  "recoveryServicesGeo": "sha",
-                  "timeDifference": "+8:00",
-                  "timeZone": "China Standard Time"
-                },
-                "chinaeast2": {
-                  "abbreviation": "cne2",
-                  "recoveryServicesGeo": "sha2",
-                  "timeDifference": "+8:00",
-                  "timeZone": "China Standard Time"
-                },
-                "chinanorth": {
-                  "abbreviation": "cnn",
-                  "recoveryServicesGeo": "bjb",
-                  "timeDifference": "+8:00",
-                  "timeZone": "China Standard Time"
-                },
-                "chinanorth2": {
-                  "abbreviation": "cnn2",
-                  "recoveryServicesGeo": "bjb2",
-                  "timeDifference": "+8:00",
-                  "timeZone": "China Standard Time"
-                }
-              },
               "AzureCloud": {
                 "australiacentral": {
                   "abbreviation": "auc",
-                  "recoveryServicesGeo": "acl",
-                  "timeDifference": "+10:00",
-                  "timeZone": "AUS Eastern Standard Time"
+                  "recoveryServicesGeo": "acl"
                 },
                 "australiacentral2": {
                   "abbreviation": "auc2",
-                  "recoveryServicesGeo": "acl2",
-                  "timeDifference": "+10:00",
-                  "timeZone": "AUS Eastern Standard Time"
+                  "recoveryServicesGeo": "acl2"
                 },
                 "australiaeast": {
                   "abbreviation": "aue",
-                  "recoveryServicesGeo": "ae",
-                  "timeDifference": "+10:00",
-                  "timeZone": "AUS Eastern Standard Time"
+                  "recoveryServicesGeo": "ae"
                 },
                 "australiasoutheast": {
                   "abbreviation": "ause",
-                  "recoveryServicesGeo": "ase",
-                  "timeDifference": "+10:00",
-                  "timeZone": "AUS Eastern Standard Time"
+                  "recoveryServicesGeo": "ase"
                 },
                 "brazilsouth": {
                   "abbreviation": "brs",
-                  "recoveryServicesGeo": "brs",
-                  "timeDifference": "-3:00",
-                  "timeZone": "E. South America Standard Time"
+                  "recoveryServicesGeo": "brs"
                 },
                 "brazilsoutheast": {
                   "abbreviation": "brse",
-                  "recoveryServicesGeo": "bse",
-                  "timeDifference": "-3:00",
-                  "timeZone": "E. South America Standard Time"
+                  "recoveryServicesGeo": "bse"
                 },
                 "canadacentral": {
                   "abbreviation": "cac",
-                  "recoveryServicesGeo": "cnc",
-                  "timeDifference": "-5:00",
-                  "timeZone": "Eastern Standard Time"
+                  "recoveryServicesGeo": "cnc"
                 },
                 "canadaeast": {
                   "abbreviation": "cae",
-                  "recoveryServicesGeo": "cne",
-                  "timeDifference": "-5:00",
-                  "timeZone": "Eastern Standard Time"
+                  "recoveryServicesGeo": "cne"
                 },
                 "centralindia": {
                   "abbreviation": "inc",
-                  "recoveryServicesGeo": "inc",
-                  "timeDifference": "+5:30",
-                  "timeZone": "India Standard Time"
+                  "recoveryServicesGeo": "inc"
                 },
                 "centralus": {
                   "abbreviation": "usc",
-                  "recoveryServicesGeo": "cus",
-                  "timeDifference": "-6:00",
-                  "timeZone": "Central Standard Time"
+                  "recoveryServicesGeo": "cus"
                 },
                 "eastasia": {
                   "abbreviation": "ase",
-                  "recoveryServicesGeo": "ea",
-                  "timeDifference": "+8:00",
-                  "timeZone": "China Standard Time"
+                  "recoveryServicesGeo": "ea"
                 },
                 "eastus": {
                   "abbreviation": "use",
-                  "recoveryServicesGeo": "eus",
-                  "timeDifference": "-5:00",
-                  "timeZone": "Eastern Standard Time"
+                  "recoveryServicesGeo": "eus"
                 },
                 "eastus2": {
                   "abbreviation": "use2",
-                  "recoveryServicesGeo": "eus2",
-                  "timeDifference": "-5:00",
-                  "timeZone": "Eastern Standard Time"
+                  "recoveryServicesGeo": "eus2"
                 },
                 "francecentral": {
                   "abbreviation": "frc",
-                  "recoveryServicesGeo": "frc",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "frc"
                 },
                 "francesouth": {
                   "abbreviation": "frs",
-                  "recoveryServicesGeo": "frs",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "frs"
                 },
                 "germanynorth": {
                   "abbreviation": "den",
-                  "recoveryServicesGeo": "gn",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "gn"
                 },
                 "germanywestcentral": {
                   "abbreviation": "dewc",
-                  "recoveryServicesGeo": "gwc",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "gwc"
                 },
                 "israelcentral": {
                   "abbreviation": "ilc",
-                  "recoveryServicesGeo": "ilc",
-                  "timeDifference": "+2:00",
-                  "timeZone": "Israel Standard Time"
+                  "recoveryServicesGeo": "ilc"
                 },
                 "italynorth": {
                   "abbreviation": "itn",
-                  "recoveryServicesGeo": "itn",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "itn"
                 },
                 "japaneast": {
                   "abbreviation": "jpe",
-                  "recoveryServicesGeo": "jpe",
-                  "timeDifference": "+9:00",
-                  "timeZone": "Tokyo Standard Time"
+                  "recoveryServicesGeo": "jpe"
                 },
                 "japanwest": {
                   "abbreviation": "jpw",
-                  "recoveryServicesGeo": "jpw",
-                  "timeDifference": "+9:00",
-                  "timeZone": "Tokyo Standard Time"
+                  "recoveryServicesGeo": "jpw"
                 },
                 "jioindiacentral": {
                   "abbreviation": "injc",
-                  "recoveryServicesGeo": "jic",
-                  "timeDifference": "+5:30",
-                  "timeZone": "India Standard Time"
+                  "recoveryServicesGeo": "jic"
                 },
                 "jioindiawest": {
                   "abbreviation": "injw",
-                  "recoveryServicesGeo": "jiw",
-                  "timeDifference": "+5:30",
-                  "timeZone": "India Standard Time"
+                  "recoveryServicesGeo": "jiw"
                 },
                 "koreacentral": {
                   "abbreviation": "krc",
-                  "recoveryServicesGeo": "krc",
-                  "timeDifference": "+9:00",
-                  "timeZone": "Korea Standard Time"
+                  "recoveryServicesGeo": "krc"
                 },
                 "koreasouth": {
                   "abbreviation": "krs",
-                  "recoveryServicesGeo": "krs",
-                  "timeDifference": "+9:00",
-                  "timeZone": "Korea Standard Time"
+                  "recoveryServicesGeo": "krs"
                 },
                 "northcentralus": {
                   "abbreviation": "usnc",
-                  "recoveryServicesGeo": "ncus",
-                  "timeDifference": "-6:00",
-                  "timeZone": "Central Standard Time"
+                  "recoveryServicesGeo": "ncus"
                 },
                 "northeurope": {
                   "abbreviation": "eun",
-                  "recoveryServicesGeo": "ne",
-                  "timeDifference": "0:00",
-                  "timeZone": "GMT Standard Time"
+                  "recoveryServicesGeo": "ne"
                 },
                 "norwayeast": {
                   "abbreviation": "noe",
-                  "recoveryServicesGeo": "nwe",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "nwe"
                 },
                 "norwaywest": {
                   "abbreviation": "now",
-                  "recoveryServicesGeo": "nww",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "nww"
                 },
                 "polandcentral": {
                   "abbreviation": "plc",
-                  "recoveryServicesGeo": "plc",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "plc"
                 },
                 "qatarcentral": {
                   "abbreviation": "qac",
-                  "recoveryServicesGeo": "qac",
-                  "timeDifference": "+3:00",
-                  "timeZone": "Arabian Standard Time"
+                  "recoveryServicesGeo": "qac"
                 },
                 "southafricanorth": {
                   "abbreviation": "zan",
-                  "recoveryServicesGeo": "san",
-                  "timeDifference": "+2:00",
-                  "timeZone": "South Africa Standard Time"
+                  "recoveryServicesGeo": "san"
                 },
                 "southafricawest": {
                   "abbreviation": "zaw",
-                  "recoveryServicesGeo": "saw",
-                  "timeDifference": "+2:00",
-                  "timeZone": "South Africa Standard Time"
+                  "recoveryServicesGeo": "saw"
                 },
                 "southcentralus": {
                   "abbreviation": "ussc",
-                  "recoveryServicesGeo": "scus",
-                  "timeDifference": "-6:00",
-                  "timeZone": "Central Standard Time"
+                  "recoveryServicesGeo": "scus"
                 },
                 "southeastasia": {
                   "abbreviation": "asse",
-                  "recoveryServicesGeo": "sea",
-                  "timeDifference": "+8:00",
-                  "timeZone": "Singapore Standard Time"
+                  "recoveryServicesGeo": "sea"
                 },
                 "southindia": {
                   "abbreviation": "ins",
-                  "recoveryServicesGeo": "ins",
-                  "timeDifference": "+5:30",
-                  "timeZone": "India Standard Time"
+                  "recoveryServicesGeo": "ins"
                 },
                 "swedencentral": {
                   "abbreviation": "sec",
-                  "recoveryServicesGeo": "sdc",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "sdc"
                 },
                 "switzerlandnorth": {
                   "abbreviation": "chn",
-                  "recoveryServicesGeo": "szn",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "szn"
                 },
                 "switzerlandwest": {
                   "abbreviation": "chw",
-                  "recoveryServicesGeo": "szw",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "szw"
                 },
                 "uaecentral": {
                   "abbreviation": "aec",
-                  "recoveryServicesGeo": "uac",
-                  "timeDifference": "+3:00",
-                  "timeZone": "Arabian Standard Time"
+                  "recoveryServicesGeo": "uac"
                 },
                 "uaenorth": {
                   "abbreviation": "aen",
-                  "recoveryServicesGeo": "uan",
-                  "timeDifference": "+3:00",
-                  "timeZone": "Arabian Standard Time"
+                  "recoveryServicesGeo": "uan"
                 },
                 "uksouth": {
                   "abbreviation": "uks",
-                  "recoveryServicesGeo": "uks",
-                  "timeDifference": "0:00",
-                  "timeZone": "GMT Standard Time"
+                  "recoveryServicesGeo": "uks"
                 },
                 "ukwest": {
                   "abbreviation": "ukw",
-                  "recoveryServicesGeo": "ukw",
-                  "timeDifference": "0:00",
-                  "timeZone": "GMT Standard Time"
+                  "recoveryServicesGeo": "ukw"
                 },
                 "westcentralus": {
                   "abbreviation": "uswc",
-                  "recoveryServicesGeo": "wcus",
-                  "timeDifference": "-7:00",
-                  "timeZone": "Mountain Standard Time"
+                  "recoveryServicesGeo": "wcus"
                 },
                 "westeurope": {
                   "abbreviation": "euw",
-                  "recoveryServicesGeo": "we",
-                  "timeDifference": "+1:00",
-                  "timeZone": "Central Europe Standard Time"
+                  "recoveryServicesGeo": "we"
                 },
                 "westindia": {
                   "abbreviation": "inw",
-                  "recoveryServicesGeo": "inw",
-                  "timeDifference": "+5:30",
-                  "timeZone": "India Standard Time"
+                  "recoveryServicesGeo": "inw"
                 },
                 "westus": {
                   "abbreviation": "usw",
-                  "recoveryServicesGeo": "wus",
-                  "timeDifference": "-8:00",
-                  "timeZone": "Pacific Standard Time"
+                  "recoveryServicesGeo": "wus"
                 },
                 "westus2": {
                   "abbreviation": "usw2",
-                  "recoveryServicesGeo": "wus2",
-                  "timeDifference": "-8:00",
-                  "timeZone": "Pacific Standard Time"
+                  "recoveryServicesGeo": "wus2"
                 },
                 "westus3": {
                   "abbreviation": "usw3",
-                  "recoveryServicesGeo": "wus3",
-                  "timeDifference": "-7:00",
-                  "timeZone": "Mountain Standard Time"
+                  "recoveryServicesGeo": "wus3"
                 }
               },
               "AzureUSGovernment": {
                 "usdodcentral": {
                   "abbreviation": "dodc",
-                  "recoveryServicesGeo": "udc",
-                  "timeDifference": "-6:00",
-                  "timeZone": "Central Standard Time"
+                  "recoveryServicesGeo": "udc"
                 },
                 "usdodeast": {
                   "abbreviation": "dode",
-                  "recoveryServicesGeo": "ude",
-                  "timeDifference": "-5:00",
-                  "timeZone": "Eastern Standard Time"
+                  "recoveryServicesGeo": "ude"
                 },
                 "usgovarizona": {
                   "abbreviation": "az",
-                  "recoveryServicesGeo": "uga",
-                  "timeDifference": "-7:00",
-                  "timeZone": "Mountain Standard Time"
+                  "recoveryServicesGeo": "uga"
                 },
                 "usgovtexas": {
                   "abbreviation": "tx",
-                  "recoveryServicesGeo": "ugt",
-                  "timeDifference": "-6:00",
-                  "timeZone": "Central Standard Time"
+                  "recoveryServicesGeo": "ugt"
                 },
                 "usgovvirginia": {
                   "abbreviation": "va",
-                  "recoveryServicesGeo": "ugv",
-                  "timeDifference": "-5:00",
-                  "timeZone": "Eastern Standard Time"
-                }
-              },
-              "USNat": {
-                "usnateast": {
-                  "abbreviation": "east",
-                  "recoveryServicesGeo": "exe",
-                  "timeDifference": "-5:00",
-                  "timeZone": "Eastern Standard Time"
-                },
-                "usnatwest": {
-                  "abbreviation": "west",
-                  "recoveryServicesGeo": "exw",
-                  "timeDifference": "-8:00",
-                  "timeZone": "Pacific Standard Time"
-                }
-              },
-              "USSec": {
-                "usseceast": {
-                  "abbreviation": "east",
-                  "recoveryServicesGeo": "rxe",
-                  "timeDifference": "-5:00",
-                  "timeZone": "Eastern Standard Time"
-                },
-                "ussecwest": {
-                  "abbreviation": "west",
-                  "recoveryServicesGeo": "rxw",
-                  "timeDifference": "-8:00",
-                  "timeZone": "Pacific Standard Time"
+                  "recoveryServicesGeo": "ugv"
                 }
               }
             },
@@ -1520,7 +1365,9 @@
               "workspaces": "vdws",
               "imageDefinitions": "vmid"
             },
-            "locations": "[variables('$fxv#0')[environment().name]]",
+            "locations": "[if(startsWith(environment().name, 'US'), null(), variables('$fxv#0')[environment().name])]",
+            "locationVirtualMachinesAbbreviation": "[if(startsWith(environment().name, 'US'), substring(parameters('locationVirtualMachines'), 5, sub(length(parameters('locationVirtualMachines')), 5)), variables('locations')[parameters('locationVirtualMachines')].abbreviation)]",
+            "locationControlPlaneAbbreviation": "[if(startsWith(environment().name, 'US'), substring(parameters('locationControlPlane'), 5, sub(length(parameters('locationVirtualMachines')), 5)), variables('locations')[parameters('locationControlPlane')].abbreviation)]",
             "resourceAbbreviations": "[variables('$fxv#1')]",
             "hpBaseName": "[if(empty(parameters('index')), parameters('identifier'), format('{0}-{1}', parameters('identifier'), parameters('index')))]",
             "hpResPrfx": "[if(parameters('nameConvResTypeAtEnd'), variables('hpBaseName'), format('RESOURCETYPE-{0}', variables('hpBaseName')))]",
@@ -1529,44 +1376,44 @@
             "nameConv_Shared_Resources": "[if(parameters('nameConvResTypeAtEnd'), format('avd-TOKEN-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-TOKEN-{0}', variables('nameConvSuffix')))]",
             "nameConv_HP_ResGroups": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-TOKEN-{1}', variables('hpBaseName'), variables('nameConvSuffix')), format('RESOURCETYPE-avd-{0}-TOKEN-{1}', variables('hpBaseName'), variables('nameConvSuffix')))]",
             "nameConv_HP_Resources": "[format('{0}-TOKEN-{1}', variables('hpResPrfx'), variables('nameConvSuffix'))]",
-            "resourceGroupDeployment": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'deployment'), 'LOCATION', format('{0}', variables('locations')[parameters('locationVirtualMachines')].abbreviation)), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
-            "depVirtualMachineNameTemp": "[replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', ''), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation), 'TOKEN-', ''), '-', '')]",
+            "resourceGroupDeployment": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'deployment'), 'LOCATION', format('{0}', variables('locationVirtualMachinesAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
+            "depVirtualMachineNameTemp": "[replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', ''), 'LOCATION', variables('locationVirtualMachinesAbbreviation')), 'TOKEN-', ''), '-', '')]",
             "depVirtualMachineName": "[take(format('{0}{1}', variables('depVirtualMachineNameTemp'), uniqueString(variables('depVirtualMachineNameTemp'))), 15)]",
             "depVirtualMachineDiskName": "[format('{0}-{1}', variables('depVirtualMachineName'), variables('resourceAbbreviations').osdisks)]",
             "depVirtualMachineNicName": "[format('{0}-{1}', variables('depVirtualMachineName'), variables('resourceAbbreviations').networkInterfaces)]",
-            "resourceGroupManagement": "[replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'management'), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
+            "resourceGroupManagement": "[replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'management'), 'LOCATION', variables('locationVirtualMachinesAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
             "uniqueStringManagement": "[uniqueString(subscription().subscriptionId, variables('resourceGroupManagement'))]",
-            "appServicePlanName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').appServicePlans), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation), 'TOKEN-', '')]",
-            "keyVaultNameSecrets": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'TOKEN', format('sec-{0}', take(variables('uniqueStringManagement'), 8))), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults)]",
-            "keyVaultNameEncryption": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'TOKEN', format('enc-{0}', take(variables('uniqueStringManagement'), 8))), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults)]",
-            "dataCollectionEndpointName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').dataCollectionEndpoints), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation), 'TOKEN-', '')]",
-            "logAnalyticsWorkspaceName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').logAnalyticsWorkspaces), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation), 'TOKEN-', '')]",
-            "globalFeedResourceGroupName": "[if(not(empty(parameters('locationGlobalFeed'))), replace(replace(if(parameters('nameConvResTypeAtEnd'), format('avd-global-feed-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-global-feed-{0}', variables('nameConvSuffix'))), 'LOCATION', format('{0}', variables('locations')[parameters('locationGlobalFeed')].abbreviation)), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups)), '')]",
+            "appServicePlanName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').appServicePlans), 'LOCATION', variables('locationVirtualMachinesAbbreviation')), 'TOKEN-', '')]",
+            "keyVaultNameSecrets": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'TOKEN', format('sec-{0}', take(variables('uniqueStringManagement'), 8))), 'LOCATION', variables('locationVirtualMachinesAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults)]",
+            "keyVaultNameEncryption": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'TOKEN', format('enc-{0}', take(variables('uniqueStringManagement'), 8))), 'LOCATION', variables('locationVirtualMachinesAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults)]",
+            "dataCollectionEndpointName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').dataCollectionEndpoints), 'LOCATION', variables('locationVirtualMachinesAbbreviation')), 'TOKEN-', '')]",
+            "logAnalyticsWorkspaceName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').logAnalyticsWorkspaces), 'LOCATION', variables('locationVirtualMachinesAbbreviation')), 'TOKEN-', '')]",
+            "globalFeedResourceGroupName": "[if(not(empty(parameters('locationGlobalFeed'))), replace(replace(if(parameters('nameConvResTypeAtEnd'), format('avd-global-feed-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-global-feed-{0}', variables('nameConvSuffix'))), 'LOCATION', variables('locationControlPlaneAbbreviation')), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups)), '')]",
             "globalFeedWorkspaceName": "[replace(if(parameters('nameConvResTypeAtEnd'), 'avd-global-feed-RESOURCETYPE', 'RESOURCETYPE-avd-global-feed'), 'RESOURCETYPE', variables('resourceAbbreviations').workspaces)]",
-            "resourceGroupControlPlane": "[if(empty(parameters('existingFeedWorkspaceResourceId')), replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'control-plane'), 'LOCATION', format('{0}', variables('locations')[parameters('locationControlPlane')].abbreviation)), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups)), split(parameters('existingFeedWorkspaceResourceId'), '/')[4])]",
-            "workspaceName": "[if(empty(parameters('existingFeedWorkspaceResourceId')), replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').workspaces), 'LOCATION', variables('locations')[parameters('locationControlPlane')].abbreviation), 'TOKEN-', ''), last(split(parameters('existingFeedWorkspaceResourceId'), '/')))]",
-            "desktopApplicationGroupName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').desktopApplicationGroups), 'LOCATION', variables('locations')[parameters('locationControlPlane')].abbreviation)]",
-            "hostPoolName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').hostPools), 'LOCATION', variables('locations')[parameters('locationControlPlane')].abbreviation)]",
-            "scalingPlanName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').scalingPlans), 'LOCATION', variables('locations')[parameters('locationControlPlane')].abbreviation)]",
+            "resourceGroupControlPlane": "[if(empty(parameters('existingFeedWorkspaceResourceId')), replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'control-plane'), 'LOCATION', format('{0}', variables('locationControlPlaneAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups)), split(parameters('existingFeedWorkspaceResourceId'), '/')[4])]",
+            "workspaceName": "[if(empty(parameters('existingFeedWorkspaceResourceId')), replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').workspaces), 'LOCATION', variables('locationControlPlaneAbbreviation')), 'TOKEN-', ''), last(split(parameters('existingFeedWorkspaceResourceId'), '/')))]",
+            "desktopApplicationGroupName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').desktopApplicationGroups), 'LOCATION', variables('locationControlPlaneAbbreviation'))]",
+            "hostPoolName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').hostPools), 'LOCATION', variables('locationControlPlaneAbbreviation'))]",
+            "scalingPlanName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').scalingPlans), 'LOCATION', variables('locationControlPlaneAbbreviation'))]",
             "uniqueStringHosts": "[uniqueString(subscription().subscriptionId, variables('resourceGroupHosts'))]",
-            "appInsightsNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').applicationInsights), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation)]",
-            "functionAppNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').functionApps), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation)]",
+            "appInsightsNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').applicationInsights), 'LOCATION', variables('locationVirtualMachinesAbbreviation'))]",
+            "functionAppNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').functionApps), 'LOCATION', variables('locationVirtualMachinesAbbreviation'))]",
             "privateEndpointNameConv": "[replace(if(parameters('nameConvResTypeAtEnd'), 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE', 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID'), 'RESOURCETYPE', variables('resourceAbbreviations').privateEndpoints)]",
             "privateEndpointNICNameConvTemp": "[if(parameters('nameConvResTypeAtEnd'), format('{0}-RESOURCETYPE', variables('privateEndpointNameConv')), format('RESOURCETYPE-{0}', variables('privateEndpointNameConv')))]",
             "privateEndpointNICNameConv": "[replace(variables('privateEndpointNICNameConvTemp'), 'RESOURCETYPE', variables('resourceAbbreviations').networkInterfaces)]",
-            "recoveryServicesVaultsNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').recoveryServicesVaults), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation)]",
-            "userAssignedIdentityNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation)]",
-            "resourceGroupHosts": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('locations')[parameters('locationVirtualMachines')].abbreviation)), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
+            "recoveryServicesVaultsNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').recoveryServicesVaults), 'LOCATION', variables('locationVirtualMachinesAbbreviation'))]",
+            "userAssignedIdentityNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'LOCATION', variables('locationVirtualMachinesAbbreviation'))]",
+            "resourceGroupHosts": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('locationVirtualMachinesAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
             "vmNamePrefixWithoutDash": "[toLower(if(equals(last(parameters('virtualMachineNamePrefix')), '-'), take(parameters('virtualMachineNamePrefix'), sub(length(parameters('virtualMachineNamePrefix')), 1)), parameters('virtualMachineNamePrefix')))]",
             "availabilitySetNamePrefix": "[if(parameters('nameConvResTypeAtEnd'), format('{0}-{1}-', variables('vmNamePrefixWithoutDash'), variables('resourceAbbreviations').availabilitySets), format('{0}-{1}-', variables('resourceAbbreviations').availabilitySets, variables('vmNamePrefixWithoutDash')))]",
             "virtualMachineNameConv": "[if(parameters('nameConvResTypeAtEnd'), format('{0}###-{1}', parameters('virtualMachineNamePrefix'), variables('resourceAbbreviations').virtualMachines), format('{0}-{1}###', variables('resourceAbbreviations').virtualMachines, parameters('virtualMachineNamePrefix')))]",
             "diskNameConv": "[if(parameters('nameConvResTypeAtEnd'), format('{0}###-{1}', parameters('virtualMachineNamePrefix'), variables('resourceAbbreviations').osdisks), format('{0}-{1}###', variables('resourceAbbreviations').osdisks, parameters('virtualMachineNamePrefix')))]",
             "networkInterfaceNameConv": "[if(parameters('nameConvResTypeAtEnd'), format('{0}###-{1}', parameters('virtualMachineNamePrefix'), variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}###', variables('resourceAbbreviations').networkInterfaces, parameters('virtualMachineNamePrefix')))]",
-            "diskAccessName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').diskAccesses), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation), 'TOKEN-', '')]",
-            "diskEncryptionSetNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').diskEncryptionSets), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation)]",
-            "resourceGroupStorage": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'storage'), 'LOCATION', format('{0}', variables('locations')[parameters('locationVirtualMachines')].abbreviation)), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
-            "netAppAccountName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').netAppAccounts), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation), 'TOKEN-', '')]",
-            "netAppCapacityPoolName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').netAppCapacityPools), 'LOCATION', variables('locations')[parameters('locationVirtualMachines')].abbreviation), 'TOKEN-', '')]",
+            "diskAccessName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').diskAccesses), 'LOCATION', variables('locationVirtualMachinesAbbreviation')), 'TOKEN-', '')]",
+            "diskEncryptionSetNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').diskEncryptionSets), 'LOCATION', variables('locationVirtualMachinesAbbreviation'))]",
+            "resourceGroupStorage": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'storage'), 'LOCATION', format('{0}', variables('locationVirtualMachinesAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
+            "netAppAccountName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').netAppAccounts), 'LOCATION', variables('locationVirtualMachinesAbbreviation')), 'TOKEN-', '')]",
+            "netAppCapacityPoolName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').netAppCapacityPools), 'LOCATION', variables('locationVirtualMachinesAbbreviation')), 'TOKEN-', '')]",
             "appAttachStorageAccountName": "[take(format('appattach{0}', variables('uniqueStringManagement')), 15)]",
             "uniqueStringStorage": "[uniqueString(subscription().subscriptionId, variables('resourceGroupStorage'))]",
             "fslogixStorageAccountNamePrefix": "[if(empty(parameters('fslogixStorageCustomPrefix')), take(format('fslogix{0}', variables('uniqueStringStorage')), 13), toLower(parameters('fslogixStorageCustomPrefix')))]",
@@ -1900,7 +1747,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.34.44.8038",
-              "templateHash": "14737074633881638706"
+              "templateHash": "14151279180530579313"
             }
           },
           "parameters": {
@@ -2080,9 +1927,7 @@
             "smbServerLocation": "[parameters('locations')[parameters('locationVirtualMachines')].abbreviation]",
             "fslogixStorageSku": "[if(equals(parameters('fslogixStorageService'), 'None'), 'None', split(parameters('fslogixStorageService'), ' ')[1])]",
             "fslogixStorageSolution": "[split(parameters('fslogixStorageService'), ' ')[0]]",
-            "storageSuffix": "[environment().suffixes.storage]",
-            "timeDifference": "[parameters('locations')[parameters('locationVirtualMachines')].timeDifference]",
-            "timeZone": "[parameters('locations')[parameters('locationVirtualMachines')].timeZone]"
+            "storageSuffix": "[environment().suffixes.storage]"
           },
           "resources": [],
           "outputs": {
@@ -2169,14 +2014,6 @@
             "tags": {
               "type": "object",
               "value": "[variables('varTags')]"
-            },
-            "timeDifference": {
-              "type": "string",
-              "value": "[variables('timeDifference')]"
-            },
-            "timeZone": {
-              "type": "string",
-              "value": "[variables('timeZone')]"
             }
           }
         }
@@ -2352,7 +2189,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.34.44.8038",
-              "templateHash": "10077919629558117422"
+              "templateHash": "3081887227879470178"
             }
           },
           "parameters": {
@@ -2883,7 +2720,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.34.44.8038",
-                      "templateHash": "13619045944237940302"
+                      "templateHash": "1013323439710943104"
                     }
                   },
                   "parameters": {
@@ -3045,7 +2882,7 @@
                       ]
                     },
                     {
-                      "condition": "[not(equals(environment().name, 'USNAT'))]",
+                      "condition": "[not(startsWith(environment().name, 'USN'))]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2021-03-01",
                       "name": "[format('{0}/{1}', parameters('virtualMachineName'), 'IaaSAntimalware')]",
@@ -6076,7 +5913,7 @@
             "value": "[parameters('timeStamp')]"
           },
           "virtualMachinesTimeZone": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.timeZone.value]"
+            "value": "[parameters('virtualMachinesTimeZone')]"
           },
           "workspaceFeedPrivateEndpointSubnetResourceId": {
             "value": "[parameters('workspaceFeedPrivateEndpointSubnetResourceId')]"
@@ -8482,7 +8319,7 @@
             "value": "[parameters('timeStamp')]"
           },
           "timeZone": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.timeZone.value]"
+            "value": "[parameters('virtualMachinesTimeZone')]"
           },
           "userAssignedIdentityNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.userAssignedIdentityNameConv.value]"
@@ -14118,7 +13955,7 @@
             "value": "[parameters('timeStamp')]"
           },
           "timeZone": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.timeZone.value]"
+            "value": "[parameters('virtualMachinesTimeZone')]"
           },
           "useAgentDownloadEndpoint": {
             "value": "[parameters('useAgentDownloadEndpoint')]"
@@ -14146,7 +13983,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.34.44.8038",
-              "templateHash": "2567722371196156708"
+              "templateHash": "9022451298697088498"
             }
           },
           "parameters": {
@@ -16610,7 +16447,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.34.44.8038",
-                      "templateHash": "7156994296214306222"
+                      "templateHash": "3512352010210522969"
                     }
                   },
                   "parameters": {
@@ -17057,7 +16894,7 @@
                         "name": "extension_IaasAntimalware",
                         "count": "[length(range(0, parameters('sessionHostCount')))]"
                       },
-                      "condition": "[not(equals(environment().name, 'USNAT'))]",
+                      "condition": "[not(startsWith(environment().name, 'USN'))]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2021-03-01",
                       "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), 'IaaSAntimalware')]",
@@ -17434,7 +17271,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.34.44.8038",
-                              "templateHash": "4260757481114778274"
+                              "templateHash": "967082805131979046"
                             }
                           },
                           "parameters": {
@@ -17468,7 +17305,7 @@
                               }
                             ],
                             "$fxv#0": "param(\r\n  [string]$APIVersion,\r\n  [string]$Arguments='',\r\n  [string]$BlobStorageSuffix,\r\n  [string]$BuildDir='',\r\n  [string]$Name,\r\n  [string]$Uri,\r\n  [string]$UserAssignedIdentityClientId\r\n)\r\n\r\nfunction Write-OutputWithTimeStamp {\r\n  param(\r\n      [string]$Message\r\n  )    \r\n  $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'\r\n  $Entry = '[' + $Timestamp + '] ' + $Message\r\n  Write-Output $Entry\r\n}\r\n\r\nStart-Transcript -Path \"$env:SystemRoot\\Logs\\$Name.log\" -Force\r\nWrite-OutputWithTimeStamp \"Starting '$Name' script with the following parameters.\"\r\nWrite-Output ( $PSBoundParameters | Format-Table -AutoSize )\r\nIf ($Arguments -eq '') { $Arguments = $null }\r\nIf ($BuildDir -ne '') {\r\n  $TempDir = Join-Path $BuildDir -ChildPath $Name\r\n} Else {\r\n  $TempDir = Join-Path $Env:TEMP -ChildPath $Name\r\n}\r\nNew-Item -Path $TempDir -ItemType Directory -Force | Out-Null\r\n$WebClient = New-Object System.Net.WebClient\r\nIf ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n  Write-OutputWithTimeStamp \"Getting access token for '$Uri' using User Assigned Identity.\"\r\n  $StorageEndpoint = ($Uri -split \"://\")[0] + \"://\" + ($Uri -split \"/\")[2] + \"/\"\r\n  $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n  $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n  $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n  $webClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n}\r\n$SourceFileName = ($Uri -Split \"/\")[-1]\r\nWrite-OutputWithTimeStamp \"Downloading '$Uri' to '$TempDir'.\"\r\n$DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName\r\n$webClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\nStart-Sleep -Seconds 10\r\nIf (!(Test-Path -Path $DestFile)) { Write-Error \"Failed to download $SourceFileName\"; Exit 1 }\r\nWrite-OutputWithTimeStamp 'Finished downloading'\r\nSet-Location -Path $TempDir\r\n$Ext = [System.IO.Path]::GetExtension($DestFile).ToLower().Replace('.','')\r\nswitch ($Ext) {\r\n  'exe' {\r\n      If ($Arguments) {\r\n        Write-OutputWithTimeStamp \"Executing '`\"$DestFile`\" $Arguments'\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -ArgumentList $Arguments -NoNewWindow -Wait -PassThru\r\n        Write-OutputWithTimeStamp \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }\r\n      Else {\r\n        Write-OutputWithTimeStamp \"Executing `\"$DestFile`\"\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -NoNewWindow -Wait -PassThru\r\n        Write-OutputWithTimeStamp \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }      \r\n    }\r\n  'msi' {\r\n    If ($Arguments) {\r\n      If ($Arguments -notcontains $SourceFileName) {\r\n        $Arguments = \"/i $DestFile $Arguments\"\r\n      }\r\n      Write-OutputWithTimeStamp \"Executing 'msiexec.exe $Arguments'\"\r\n      $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $Arguments -Wait -PassThru\r\n      Write-OutputWithTimeStamp \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Executing 'msiexec.exe /i $DestFile /qn'\"\r\n      $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList \"/i $DestFile /qn\" -Wait -PassThru\r\n      Write-OutputWithTimeStamp \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n    }    \r\n  }\r\n  'bat' {\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Executing 'cmd.exe `\"$DestFile`\" $Arguments'\"\r\n      Start-Process -FilePath cmd.exe -ArgumentList \"`\"$DestFile`\" $Arguments\" -Wait\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Executing 'cmd.exe `\"$DestFile`\"'\"\r\n      Start-Process -FilePath cmd.exe -ArgumentList \"`\"$DestFile`\"\" -Wait\r\n    }\r\n  }\r\n  'ps1' {\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile' with arguments '$Arguments'\"\r\n      & $DestFile $Arguments\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile'\"\r\n      & $DestFile\r\n    }\r\n  }\r\n  'zip' {\r\n    $DestinationPath = Join-Path -Path \"$TempDir\" -ChildPath $([System.IO.Path]::GetFileNameWithoutExtension($SourceFileName))\r\n    Write-OutputWithTimeStamp \"Extracting '$DestFile' to '$DestinationPath'.\"\r\n    Expand-Archive -Path $DestFile -DestinationPath $DestinationPath -Force\r\n    Write-OutputWithTimeStamp \"Finding PowerShell script in root of '$DestinationPath'.\"\r\n    $PSScript = (Get-ChildItem -Path $DestinationPath -filter '*.ps1').FullName\r\n    If ($PSScript.count -gt 1) { $PSScript = $PSScript[0] }\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$PSScript' with arguments '$Arguments'\"\r\n      & $PSScript $Arguments\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$PSScript'\"         \r\n      & $PSScript\r\n    }\r\n  }\r\n}\r\nIf ((Split-Path $TempDir -Parent) -eq $Env:Temp) {Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue}\r\nStop-Transcript",
-                            "apiVersion": "[if(equals(environment().name, 'USNat'), '2017-08-01', '2018-02-01')]"
+                            "apiVersion": "[if(startsWith(environment().name, 'USN'), '2017-08-01', '2018-02-01')]"
                           },
                           "resources": [
                             {

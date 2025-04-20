@@ -35,7 +35,7 @@ There are several Azure resource prerequisite that are required to run this depl
   
   Machines on this network need to be able to connect to the following network destinations:
   <ul>
-  <li>Resource Manager Url TCP Port 443 (Commercial - management.azure.com, US Gov - management.usgovcloudapi.net, USSec - management.microsoft.scloud, USNat - management.eaglex.ic.gov). You can leverage the [AzureResourceManager service tag](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/service-tags) in NSGs and the Azure Firewall to configure this access.
+  <li>Resource Manager Url TCP Port 443 (Commercial - management.azure.com, US Gov - management.usgovcloudapi.net). See [Air-Gapped Cloud Information](imageAir-GappedCloud.md) for the Azure Secret and Azure Top Secret environment information. You can leverage the [AzureResourceManager service tag](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/service-tags) in NSGs and the Azure Firewall to configure this access.
   </li>
   </ul>
   </details>
@@ -86,8 +86,8 @@ There are several Azure resource prerequisite that are required to run this depl
     | **Azure Table Storage**<br>- storage quota function app | privatelink.table.core.windows.net | privatelink.table.core.usgovcloudapi.net |
     | **Azure Web Sites**<br>- storage quota function app | privatelink.azurewebsites.net | privatelink.azurewebsites.us |
 
-    - For Private DNS values on USSec, see [USSec Private DNS Zone Values](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/services/networking/private-link/private-endpoint-dns?branch=main)
-    - For Private DNS zone values on USNat, see [USNat Private DNS Zone Values](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/services/networking/private-link/private-endpoint-dns?branch=main)
+    - For Private DNS values on Azure Secret, see [Azure Government Secret Private DNS Zone Values](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/services/networking/private-link/private-endpoint-dns?branch=main)
+    - For Private DNS zone values on Azure Top Secret, see [Azure Government Top Secret Private DNS Zone Values](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/services/networking/private-link/private-endpoint-dns?branch=main)
   </details>
 - <details><summary><b>Domain Permissions</b></summary>
   <ul>
@@ -230,7 +230,7 @@ Additional Information can be found [here](https://learn.microsoft.com/en-us/azu
 
 ### Authentication to Azure
 
-1. Connect to the correct Azure Environment where `<Environment>` equals "AzureCloud", "AzureUSGovernment", "USNat", or "USSec".
+1. Connect to the correct Azure Environment where `<Environment>` equals "AzureCloud", "AzureUSGovernment", or the Air-Gapped equivalents.
 
    ``` powershell
    Connect-AzAccount -Environment <Environment>
@@ -258,7 +258,7 @@ For more information see [Template-Specs | Microsoft Learn](https://learn.micros
 
 The AVD deployments created in this repo come with the custom portal forms for each template. The easiest way to create the Template Specs from the templates in this repo is to utilize the **New-TemplateSpecs.ps1** file located in the **deployments** folder. Follow these instructions to execute this script.
 
-1. Connect to the correct Azure Environment where `<Environment>` equals 'AzureCloud', 'AzureUSGovernment', 'USNat', or 'USSec'.
+1. Connect to the correct Azure Environment where `<Environment>` equals 'AzureCloud', 'AzureUSGovernment', or the Air-Gapped equivalent.
 
    ``` powershell
    Connect-AzAccount -Environment <Environment>
@@ -347,7 +347,7 @@ The [deployments/Deploy-ImageManagement.ps1](../deployments/Deploy-ImageManageme
 
 1. **[Optional]** The `SkipDownloadingNewSources` switch parameter will disable the downloading of the latest installers (or other files) from the Internet (or other network). Do not use this switch if you want to enable an "evergreen" capability that helps you keep your images and session hosts up to date. In addition, update the Urls specified in the `<environment>.downloads.parameters.json`[^2] file in the [deployments/imageManagement/parameters](../deployments/imageManagement/parameters) folder to match your network environment. You can also not depend on this automated capability and add source files directly to the appropriate location in the [.common/artifacts](../.common/artifacts/) folder. This directory is processed by zipping the contents of each child directory into a zip file and then all existing files in the root plus the zip files are added to the blob storage container in the Storage Account.
 
-1. Open the PowerShell version where you installed the Az module above. If not already connected to your Azure Environment, then connect to the correct Azure Environment where `<Environment>` equals "AzureCloud", "AzureUSGovernment", "USNat", or "USSec".
+1. Open the PowerShell version where you installed the Az module above. If not already connected to your Azure Environment, then connect to the correct Azure Environment where `<Environment>` equals "AzureCloud", "AzureUSGovernment", or the Air-Gapped equivalent.
 
     ``` powershell
     Connect-AzAccount -Environment <Environment>
@@ -478,4 +478,4 @@ The VM should appear and allow you to log in. Authentication depends on the iden
 
 [^1]: To determine the value of `<geo>`, see the [locations](../.common/data/locations.json) file in this repo. The recoveryServicesGeo property of each location from each cloud is listed.
 
-[^2]: The value of `<environment>` is 'public' for the Azure Cloud and Azure US Government environments. The value of `<environment>` is 'ussec' for the USSEC air-gapped cloud and 'usnat' for the USNAT air-gapped cloud.
+[^2]: The value of `<environment>` is 'public' for the Azure Cloud and Azure US Government environments. The value of `<environment>` is 'secret' for the Azure US Secret air-gapped cloud and 'topsecret' for the Azure Government Top Secret air-gapped cloud.

@@ -723,12 +723,12 @@
 												"value": "DOD"
 											},
 											{
-												"label": "USSec",
-												"value": "USSec"
+												"label": "GovSecret",
+												"value": "GovSecret"
 											},
 											{
-												"label": "USNat",
-												"value": "USNat"
+												"label": "GovTopSecret",
+												"value": "GovTopSecret"
 											},
 											{
 												"label": "Gallatin",

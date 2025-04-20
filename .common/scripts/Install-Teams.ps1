@@ -166,10 +166,10 @@ Switch ($TeamsCloudType) {
     "DOD" {
         $CloudType = 4
     }
-    "USSec" {
+    "GovSecret" {
         $CloudType = 5
     }
-    "USNat" {
+    "GovTopSecret" {
         $CloudType = 6
     }
     "Gallatin" {

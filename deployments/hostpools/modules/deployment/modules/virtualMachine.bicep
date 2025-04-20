@@ -114,7 +114,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2021-11-01' = {
   }
 }
 
-resource extension_IaasAntimalware 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = if(environment().name != 'USNAT') {
+resource extension_IaasAntimalware 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = if(!startsWith(environment().name, 'USN')) {
   parent: virtualMachine
   name: 'IaaSAntimalware'
   location: location

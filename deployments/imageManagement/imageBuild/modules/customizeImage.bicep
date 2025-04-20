@@ -26,7 +26,7 @@ param wsusServer string
 
 var buildDir = 'c:\\BuildDir'
 
-var apiVersion = cloud == 'usnat' ? '2017-08-01' : '2018-02-01'
+var apiVersion = startsWith(cloud, 'usn') ? '2017-08-01' : '2018-02-01'
 
 var customizers = [
   for customization in customizations: {
@@ -81,6 +81,8 @@ var restartVMParameters = [
     value: imageVm.id
   }
 ]
+
+var envSuffix = substring(environment().suffixes.storage, 5, length(environment().suffixes.storage) - 5)
 
 resource imageVm 'Microsoft.Compute/virtualMachines@2022-11-01' existing = {
   name: imageVmName
@@ -245,7 +247,7 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
       }
       {
         name: 'Uri'
-        value: cloud != 'usnat' && cloud != 'ussec' && (downloadLatestMicrosoftContent || empty(artifactsContainerUri))
+        value: !startsWith(cloud, 'us') && (downloadLatestMicrosoftContent || empty(artifactsContainerUri))
           ? downloads.FSLogix.DownloadUrl
           : '${artifactsContainerUri}/${downloads.FSLogix.DestinationFileName}'
       }
@@ -298,7 +300,7 @@ resource office 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if 
       {
         name: 'Uri'
         value: downloadLatestMicrosoftContent || empty(artifactsContainerUri)
-          ? downloads.Office365DeploymentTool.DownloadUrl
+          ? replace(downloads.Office365DeploymentTool.DownloadUrl, 'ENVSUFFIX', envSuffix)
           : '${artifactsContainerUri}/${downloads.Office365DeploymentTool.DestinationFileName}'
       }
     ])
@@ -343,7 +345,7 @@ resource onedrive 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = i
       {
         name: 'Uri'
         value: downloadLatestMicrosoftContent || empty(artifactsContainerUri)
-          ? downloads.OneDrive.DownloadUrl
+          ? replace(downloads.OneDrive.DownloadUrl, 'ENVSUFFIX', envSuffix)
           : '${artifactsContainerUri}/${downloads.OneDrive.DestinationFileName}'
       }
     ])
@@ -359,7 +361,7 @@ resource onedrive 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = i
   ]
 }
 
-var teamsUris = cloud != 'usnat' && cloud != 'ussec'
+var teamsUris = !startsWith(cloud, 'us')
   ? downloadLatestMicrosoftContent || empty(artifactsContainerUri)
       ? [
           downloads.TeamsBootstrapper.DownloadUrl
@@ -377,13 +379,13 @@ var teamsUris = cloud != 'usnat' && cloud != 'ussec'
         ]
   : empty(artifactsContainerUri)
       ? [
-          downloads.TeamsBootstrapper.DownloadUrl
-          downloads.Teams64BitMSIX.DownloadUrl
+          replace(downloads.TeamsBootstrapper.DownloadUrl, 'ENVSUFFIX', envSuffix)
+          replace(downloads.Teams64BitMSIX.DownloadUrl, 'ENVSUFFIX', envSuffix)
         ]
       : downloadLatestMicrosoftContent
           ? [
-              downloads.TeamsBootstrapper.DownloadUrl
-              downloads.Teams64BitMSIX.DownloadUrl
+              replace(downloads.TeamsBootstrapper.DownloadUrl, 'ENVSUFFIX', envSuffix)
+              replace(downloads.Teams64BitMSIX.DownloadUrl, 'ENVSUFFIX', envSuffix)
               '${artifactsContainerUri}/${downloads.WebView2RunTime.DestinationFileName}'
               '${artifactsContainerUri}/${downloads.VisualStudioRedistributables.DestinationFileName}'
               '${artifactsContainerUri}/${downloads.RemoteDesktopWebRTCRedirectorService.DestinationFileName}'
@@ -574,7 +576,7 @@ resource vdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (i
       }
       {
         name: 'Uri'
-        value: cloud != 'usnat' && cloud != 'ussec' && (downloadLatestMicrosoftContent || empty(artifactsContainerUri))
+        value: !startsWith(cloud, 'us') && (downloadLatestMicrosoftContent || empty(artifactsContainerUri))
           ? downloads.VirtualDesktopOptimizationTool.DownloadUrl
           : '${artifactsContainerUri}/${downloads.VirtualDesktopOptimizationTool.DestinationFileName}'
       }

@@ -67,7 +67,7 @@
 									"lastname": "value[*].name|[0]"
 								}
 							}
-						},						
+						},
 						{
 							"name": "scope",
 							"type": "Microsoft.Common.ResourceScope",
@@ -78,6 +78,43 @@
 									"Microsoft.resources/resourceGroups"
 								]
 							}
+						},
+						{
+							"name": "timeZone",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Virtual Machines Time Zone",
+							"toolTip": "Select the time zone for the virtual machines.",
+							"defaultValue": "Eastern Standard Time",
+							"constraints": {
+								"allowedValues": [
+									{
+										"label": "Central European Standard Time",
+										"value": "Central European Standard Time"
+									},
+									{
+										"label": "GMT Standard Time",
+										"value": "GMT Standard Time"
+									},
+									{
+										"label": "Eastern Standard Time",
+										"value": "Eastern Standard Time"
+									},
+									{
+										"label": "Central Standard Time",
+										"value": "Central Standard Time"
+									},
+									{
+										"label": "Mountain Standard Time",
+										"value": "Mountain Standard Time"
+									},
+									{
+										"label": "Pacific Standard Time",
+										"value": "Pacific Standard Time"
+									}
+								],
+								"required": true
+							},
+							"visible": "[equals(steps('basics').deploymentType, 'Complete')]"
 						},
 						{
 							"name": "subscriptionsApi",
@@ -1210,7 +1247,7 @@
 									"confidentialVMSizes": "value[?resourceType=='virtualMachines'&&ends_with(name, `v5`)&&(starts_with(name, `Standard_DC`)||starts_with(name, `Standard_EC`)||starts_with(name, `Standard_NCC`))]|[*].{label:name, value:name}"
 								}
 							}
-						},						
+						},
 						{
 							"name": "naming",
 							"type": "Microsoft.Common.Section",
@@ -1368,7 +1405,7 @@
 										"required": true
 									},
 									"visible": "[equals(steps('hosts').image.source, 'marketplace')]"
-								},								
+								},
 								{
 									"name": "gallerySubscription",
 									"type": "Microsoft.Common.DropDown",
@@ -1379,7 +1416,7 @@
 										"required": false
 									},
 									"visible": "[equals(steps('hosts').image.source, 'gallery')]"
-								},								
+								},
 								{
 									"name": "galleriesApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
@@ -1516,7 +1553,7 @@
 											"uri": "http://go.microsoft.com/fwlink/?LinkId=2133517"
 										}
 									}
-								},								
+								},
 								{
 									"name": "encryptionAtHost",
 									"type": "Microsoft.Common.CheckBox",
@@ -1650,7 +1687,7 @@
 								},
 								{
 									"name": "confDiskEncryptionServicePrincipalPickerBlade",
-									"type": "Microsoft.Solutions.BladeInvokeControl",									
+									"type": "Microsoft.Solutions.BladeInvokeControl",
 									"openBladeStatus": "[steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalSelector.changing]",
 									"bladeReference": {
 										"name": "ObjectPickerBlade",
@@ -3417,7 +3454,7 @@
 									"constraints": {
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.managementSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]",
 										"required": true
-									},									
+									},
 									"visible": "[and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
@@ -3611,7 +3648,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": false
 									}
-								}								
+								}
 							]
 						},
 						{
@@ -4127,6 +4164,7 @@
 				"test": "[int(substring(steps('basics').sessionHostsApi.transformed.lastname, sub(length(steps('basics').sessionHostsApi.transformed.lastname), 3), 3))]",
 				"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), coalesce(first(skip(split(steps('basics').hostPoolApi.tags.vmSubnetId, '/'), 8)), ''), '')]",
 				"deploymentType": "[steps('basics').deploymentType]",
+				"virtualMachinesTimeZone": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('basics').timeZone, '')]",
 				"identifier": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('basics').naming.identifier, '')]",
 				"index": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('basics').naming.index, '')]",
 				"nameConvResTypeAtEnd": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('basics').naming.nameConvResTypeAtEnd, false)]",
@@ -4215,8 +4253,8 @@
 				"existingRecoveryServicesVaultResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolApi.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices), steps('management').backup.recoveryServicesVault, '')]",
 				"existingDiskAccessResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolApi.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices, steps('management').backup.associateDiskAccessResource), steps('management').backup.diskAccess, '')]",
 				"deploySecretsKeyVault": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual')), steps('management').keyVaults.deploySecretsKeyVault, false)]",
-				"secretsKeyVaultEnableSoftDelete" : "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault), steps('management').keyVaults.enableSoftDelete, false)]",
-				"secretsKeyVaultEnablePurgeProtection" : "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault, steps('management').keyVaults.enableSoftDelete), steps('management').keyVaults.enablePurgeProtection, false)]",
+				"secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault), steps('management').keyVaults.enableSoftDelete, false)]",
+				"secretsKeyVaultEnablePurgeProtection": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault, steps('management').keyVaults.enableSoftDelete), steps('management').keyVaults.enablePurgeProtection, false)]",
 				"keyVaultRetentionInDays": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(steps('management').keyVaults.deploySecretsKeyVault, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.keyVaultRetentionInDays, 7)]",
 				"keyExpirationInDays": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.keyExpirationInDays, 180)]",
 				"enableMonitoring": "[steps('management').monitoring.enableMonitoring]",
