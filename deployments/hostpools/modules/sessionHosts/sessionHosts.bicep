@@ -35,6 +35,7 @@ param divisionRemainderValue int
 param domainName string
 param drainMode bool
 param enableAcceleratedNetworking bool
+param enableIPv6 bool
 param encryptionAtHost bool
 param encryptionKeyName string
 param encryptionKeyVaultResourceId string
@@ -263,6 +264,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     domainName: domainName
     drainMode: drainMode
     enableAcceleratedNetworking: enableAcceleratedNetworking
+    enableIPv6: enableIPv6
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts

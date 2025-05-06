@@ -270,6 +270,9 @@ param memoryGB int = 0
 @description('Optional. Determines whether or not to enable accelerated networking for the session host VMs.')
 param enableAcceleratedNetworking bool = true
 
+@description('Optional. Enables IPv6 on the session host VMs.')
+param enableIPv6 bool = false
+
 @description('Optional. Determines whether or not to enable hibernation for the session host VMs.')
 param hibernationEnabled bool = false
 
@@ -663,6 +666,7 @@ var hostPoolVmTemplate = {
   }
   encryptionAtHost: encryptionAtHost
   acceleratedNetworking: enableAcceleratedNetworking
+  enableIPv6: enableIPv6
   diskEncryptionSetName: confidentialVMOSDiskEncryption
     ? resourceNames.outputs.diskEncryptionSetNames.confidentialVMs
     : startsWith(keyManagementDisks, 'CustomerManaged')
@@ -1079,6 +1083,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     domainName: domainName
     drainMode: drainMode
     enableAcceleratedNetworking: enableAcceleratedNetworking
+    enableIPv6: enableIPv6
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
     encryptionKeyName: confidentialVMOSDiskEncryption ? resourceNames.outputs.encryptionKeyNames.confidentialVMs : resourceNames.outputs.encryptionKeyNames.virtualMachines

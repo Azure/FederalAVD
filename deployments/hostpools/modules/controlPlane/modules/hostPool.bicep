@@ -52,6 +52,7 @@ var hostPoolVmTemplateTags = union(
     vmAvailability: virtualMachineTemplate.availability
     vmEncryptionAtHost: virtualMachineTemplate.?encryptionAtHost ?? false
     vmAcceleratedNetworking: virtualMachineTemplate.?acceleratedNetworking ?? false
+    vmEnableIPv6: virtualMachineTemplate.?enableIPv6 ?? false
     vmHibernate: virtualMachineTemplate.?hibernate ?? false
     vmSecurityType: virtualMachineTemplate.?securityType ?? 'Standard'
     vmSecureBoot: virtualMachineTemplate.?secureBoot ?? false
