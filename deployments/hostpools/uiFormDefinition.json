@@ -1330,6 +1330,23 @@
 										"required": true,
 										"allowedValues": "[map(steps('hosts').network.hostsSubnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
 									}
+								},
+								{
+									"name": "hostsSubnetApi",
+									"condition": "[not(empty(steps('hosts').network.hostsSubnet))]",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('hosts').network.hostsSubnet, '?api-version=2022-05-01')]"
+									}
+								},
+								{
+									"name": "enableIPv6",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable IPv6",
+									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'Complete'), empty(steps('basics').hostPoolApi.tags.vmEnableIPv6)), false, bool(steps('basics').hostPoolApi.tags.vmEnableIPv6))]",
+									"toolTip": "Enable private IPv6 Dynamic IP address.",
+									"visible": "[not(empty(filter(steps('hosts').network.hostsSubnetApi.properties.addressPrefixes, (ap) => contains(ap, ':'))))]"
 								}
 							]
 						},
@@ -1950,7 +1967,7 @@
 									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'Complete'), empty(steps('basics').hostPoolApi.tags.vmAcceleratedNetworking)), true, bool(steps('basics').hostPoolApi.tags.vmAcceleratedNetworking))]",
 									"toolTip": "Enables low latency and high throughput on the network interface.",
 									"visible": "[and(bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported)))]"
-								},
+								},								
 								{
 									"name": "hibernationEnabled",
 									"type": "Microsoft.Common.CheckBox",
@@ -4161,8 +4178,6 @@
 		},
 		"outputs": {
 			"parameters": {
-				"test": "[int(substring(steps('basics').sessionHostsApi.transformed.lastname, sub(length(steps('basics').sessionHostsApi.transformed.lastname), 3), 3))]",
-				"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), coalesce(first(skip(split(steps('basics').hostPoolApi.tags.vmSubnetId, '/'), 8)), ''), '')]",
 				"deploymentType": "[steps('basics').deploymentType]",
 				"virtualMachinesTimeZone": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('basics').timeZone, '')]",
 				"identifier": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('basics').naming.identifier, '')]",
@@ -4193,6 +4208,7 @@
 				"sessionHostIndex": "[steps('hosts').naming.index]",
 				"sessionHostCount": "[steps('hosts').specs.count]",
 				"virtualMachineSubnetResourceId": "[steps('hosts').network.hostsSubnet]",
+				"enableIPv6": "[if(empty(filter(steps('hosts').network.hostsSubnetApi.properties.addressPrefixes, (ap) => contains(ap, ':'))), false, steps('hosts').network.enableIPv6)]",
 				"imageOffer": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.offer, '')]",
 				"imagePublisher": "[if(equals(steps('hosts').image.source, 'marketplace'), 'MicrosoftWindowsDesktop', '')]",
 				"imageSku": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.sku, '')]",
