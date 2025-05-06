@@ -543,6 +543,18 @@
 									}
 								},
 								{
+									"name": "azureRecoveryServicesGeoCode",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Recovery Services Geo Code (Air-Gapped Cloud Only)",
+									"toolTip": "This value is a combination of the cloud program name initials plus the first character of the location.",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9A-Z]{1,6}$",
+										"validationMessage": "Only alphanumeric characters are allowed, and the value must be 2-6 characters long."
+									},
+									"visible": "[and(startsWith(toLower(steps('basics').scope.location.name), 'us'), steps('basics').features.recoveryServices, empty(steps('privateDNSZones').zones.azureBackup), steps('privateDNSZones').zones.deployMissingZones)]"
+								},
+								{
 									"name": "keyVaultsHeader",
 									"type": "Microsoft.Common.TextBlock",
 									"visible": true,
@@ -670,10 +682,11 @@
 										"allowedValues": "[map(filter(steps('privateDNSZones').zones.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": false
 									}
-								},								
+								},
 								{
 									"name": "deployMissingZones",
 									"type": "Microsoft.Common.CheckBox",
+									"defaultValue": true,
 									"label": "Deploy any missing Private DNS Zones",
 									"toolTip": "Select this box to automatically deploy any missing Private DNS Zones to the subscription above.",
 									"visible": "[or(if(equals(steps('basics').features.recoveryServices, true), empty(steps('privateDNSZones').zones.azureBackup), false), if(or(equals(steps('basics').features.customImage, true), equals(steps('basics').features.recoveryServices, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureBlob), false), if(or(equals(steps('basics').features.azureFiles, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureFiles), false), if(or(equals(steps('basics').features.recoveryServices, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureQueue), false), if(equals(steps('basics').features.storageQuotaAutomation, true), empty(steps('privateDNSZones').zones.azureTable), false), empty(steps('privateDNSZones').zones.azureKeyVault), if(equals(steps('basics').features.avdPrivateLink, true), or(empty(steps('privateDNSZones').zones.avdFeedAndConnections), empty(steps('privateDNSZones').zones.globalFeed)), false), if(equals(steps('basics').features.storageQuotaAutomation, true), empty(steps('privateDNSZones').zones.azureWebApp), false))]"
@@ -758,6 +771,7 @@
 				"deployPrivateDNSZonesResourceGroup": "[if(and(steps('basics').features.privateEndpoints, steps('privateDNSZones').zones.deployMissingZones, equals(steps('privateDNSZones').zones.resourceGroup.mode, 'New')), true, false)]",
 				"privateDNSZonesResourceGroupName": "[if(and(steps('basics').features.privateEndpoints, steps('privateDNSZones').zones.deployMissingZones), steps('privateDNSZones').zones.resourceGroup.value.name, '')]",
 				"createAzureBackupZone": "[if(and(steps('basics').features.recoveryServices, steps('privateDNSZones').zones.deployMissingZones), empty(steps('privateDNSZones').zones.azureBackup), false)]",
+				"azureRecoveryServicesGeoCode": "[if(and(startsWith(toLower(steps('basics').scope.location.name), 'us'), steps('basics').features.recoveryServices, empty(steps('privateDNSZones').zones.azureBackup), steps('privateDNSZones').zones.deployMissingZones), steps('privateDNSZones').zones.azureRecoveryServicesGeoCode, '')]",
 				"azureBackupZoneId": "[if(steps('basics').features.recoveryServices, steps('privateDNSZones').zones.azureBackup, '')]",
 				"createAzureBlobZone": "[if(and(or(steps('basics').features.customImage, steps('basics').features.recoveryServices, steps('basics').features.storageQuotaAutomation), steps('privateDNSZones').zones.deployMissingZones), empty(steps('privateDNSZones').zones.azureBlob), false)]",
 				"azureBlobZoneId": "[if(or(steps('basics').features.customImage, steps('basics').features.recoveryServices, steps('basics').features.storageQuotaAutomation), steps('privateDNSZones').zones.azureBlob, '')]",

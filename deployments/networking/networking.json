@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.35.1.17967",
-      "templateHash": "626543145269809816"
+      "templateHash": "693281927520671712"
     }
   },
   "parameters": {
@@ -152,6 +152,13 @@
       "defaultValue": false,
       "metadata": {
         "description": "Optional. Determines if the Azure Backup private DNS zone should be created."
+      }
+    },
+    "azureRecoveryServicesGeoCode": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The Air-Gapped Cloud Recovery Services RegionCode."
       }
     },
     "azureBackupZoneId": {
@@ -563,7 +570,7 @@
     "cloudSuffix": "[replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')]",
     "locations": "[if(startsWith(variables('cloud'), 'us'), null(), variables('$fxv#0')[environment().name])]",
     "locationAbbreviation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), variables('locations')[parameters('location')].abbreviation)]",
-    "recoveryServicesGeo": "[if(startsWith(variables('cloud'), 'us'), if(contains(variables('cloud'), 'n'), format('ex{0}', substring(variables('locationAbbreviation'), 0, 1)), format('rx{0}', substring(variables('locationAbbreviation'), 0, 1))), variables('locations')[parameters('location')].recoveryServicesGeo)]",
+    "recoveryServicesGeo": "[if(startsWith(variables('cloud'), 'us'), parameters('azureRecoveryServicesGeoCode'), variables('locations')[parameters('location')].recoveryServicesGeo)]",
     "resourceAbbreviations": "[variables('$fxv#1')]",
     "nameConvSuffix": "[if(parameters('nameConvResTypeAtEnd'), 'LOCATION-RESOURCETYPE', 'LOCATION')]",
     "nameConv_Shared_Resources": "[if(parameters('nameConvResTypeAtEnd'), format('avd-TOKEN-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-TOKEN-{0}', variables('nameConvSuffix')))]",
@@ -593,7 +600,7 @@
     "tablePrivateDnsZone": "[if(parameters('createAzureTableZone'), format('privatelink.table.{0}', environment().suffixes.storage), '')]",
     "keyVaultPrivateDnsZone": "[if(parameters('createAzureKeyVaultZone'), format('privatelink{0}', replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore')), '')]",
     "avdFeedPrivateDnsZone": "[if(parameters('createAvdFeedZone'), if(startsWith(variables('cloud'), 'us'), format('privatelink.wvd.{0}', variables('cloudSuffix')), variables('privateDnsZones_AzureVirtualDesktop')[environment().name]), '')]",
-    "avdGlobalFeedPrivateDnsZone": "[if(parameters('createAvdGlobalFeedZone'), if(startsWith(environment().name, 'US'), format('privatelink.wvd.{0}', variables('cloudSuffix')), variables('privateDnsZones_AzureVirtualDesktopGlobalFeed')[environment().name]), '')]",
+    "avdGlobalFeedPrivateDnsZone": "[if(parameters('createAvdGlobalFeedZone'), if(startsWith(variables('cloud'), 'us'), format('privatelink.wvd.{0}', variables('cloudSuffix')), variables('privateDnsZones_AzureVirtualDesktopGlobalFeed')[environment().name]), '')]",
     "webAppPrivateDnsZone": "[if(parameters('createAzureWebAppZone'), if(startsWith(variables('cloud'), 'us'), format('privatelink.azurewebsites.{0}', variables('cloudSuffix')), format('privatelink.azurewebsites.{0}', variables('privateDnsZoneSuffixes_AzureWebApps')[environment().name])), '')]",
     "privateDnsZones": [
       "[variables('backupPrivateDnsZone')]",

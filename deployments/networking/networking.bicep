@@ -65,6 +65,9 @@ param privateDNSZonesResourceGroupName string = ''
 @description('Optional. Determines if the Azure Backup private DNS zone should be created.')
 param createAzureBackupZone bool = false
 
+@description('Optional. The Air-Gapped Cloud Recovery Services RegionCode.')
+param azureRecoveryServicesGeoCode string = ''
+
 @description('Optional. The Resource Id of the existing Azure Backup Private DNS Zone.')
 param azureBackupZoneId string = ''
 
@@ -137,7 +140,7 @@ var cloudSuffix = replace(replace(replace(environment().resourceManager, 'https:
 var locations = startsWith(cloud, 'us') ? null : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
 #disable-next-line BCP329
 var locationAbbreviation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : locations[location].abbreviation
-var recoveryServicesGeo = startsWith(cloud, 'us') ? contains(cloud, 'n') ? 'ex${substring(locationAbbreviation, 0, 1)}' : 'rx${substring(locationAbbreviation, 0, 1)}' : locations[location].recoveryServicesGeo
+var recoveryServicesGeo = startsWith(cloud, 'us') ? azureRecoveryServicesGeoCode : locations[location].recoveryServicesGeo
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 var nameConvSuffix = nameConvResTypeAtEnd ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
 
@@ -173,7 +176,7 @@ var queuePrivateDnsZone = createAzureQueueZone ? 'privatelink.queue.${environmen
 var tablePrivateDnsZone = createAzureTableZone ? 'privatelink.table.${environment().suffixes.storage}' : ''
 var keyVaultPrivateDnsZone = createAzureKeyVaultZone ? 'privatelink${replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore')}' : ''
 var avdFeedPrivateDnsZone = createAvdFeedZone ? startsWith(cloud, 'us') ? 'privatelink.wvd.${cloudSuffix}' : privateDnsZones_AzureVirtualDesktop[environment().name] : ''
-var avdGlobalFeedPrivateDnsZone = createAvdGlobalFeedZone ? startsWith(environment().name, 'US') ? 'privatelink.wvd.${cloudSuffix}' : privateDnsZones_AzureVirtualDesktopGlobalFeed[environment().name] : ''
+var avdGlobalFeedPrivateDnsZone = createAvdGlobalFeedZone ? startsWith(cloud, 'us') ? 'privatelink.wvd.${cloudSuffix}' : privateDnsZones_AzureVirtualDesktopGlobalFeed[environment().name] : ''
 var webAppPrivateDnsZone = createAzureWebAppZone ? startsWith(cloud, 'us') ? 'privatelink.azurewebsites.${cloudSuffix}' : 'privatelink.azurewebsites.${privateDnsZoneSuffixes_AzureWebApps[environment().name]}' : ''
 
 var privateDnsZones = [
