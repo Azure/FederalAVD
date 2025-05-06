@@ -130,54 +130,21 @@ param tags object = {}
 param timeStamp string = utcNow('yyyyMMddhhmmss')
 
 var createPrivateDNSZones = createAzureBackupZone || createAzureBlobZone || createAzureFilesZone || createAzureQueueZone || createAzureTableZone || createAzureKeyVaultZone || createAvdFeedZone || createAvdGlobalFeedZone || createAzureWebAppZone
-var locations = startsWith(environment().name, 'US')
-  ? null
-  : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
-var locationAbbreviation = startsWith(environment().name, 'US')
-  ? substring(location, 5, length(location) - 5)
-  : locations[location].abbreviation
-var recoveryServicesGeo = startsWith(environment().name, 'US')
-  ? contains(environment().name, 'N') ? 'ex${substring(locationAbbreviation, 0, 1)}' : 'rx${substring(locationAbbreviation, 0, 1)}'
-  : locations[location].recoveryServicesGeo
+
+var cloud = toLower(environment().name)
+var cloudSuffix = replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')
+
+var locations = startsWith(cloud, 'us') ? null : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
+#disable-next-line BCP329
+var locationAbbreviation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : locations[location].abbreviation
+var recoveryServicesGeo = startsWith(cloud, 'us') ? contains(cloud, 'n') ? 'ex${substring(locationAbbreviation, 0, 1)}' : 'rx${substring(locationAbbreviation, 0, 1)}' : locations[location].recoveryServicesGeo
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 var nameConvSuffix = nameConvResTypeAtEnd ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
 
-var nameConv_Shared_Resources = nameConvResTypeAtEnd
-  ? 'avd-TOKEN-${nameConvSuffix}'
-  : 'RESOURCETYPE-avd-TOKEN-${nameConvSuffix}'
-var natGatewayName = replace(
-  replace(
-    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.natGateways),
-    'LOCATION',
-    locationAbbreviation
-  ),
-  'TOKEN-',
-  ''
-)
-var publicIPName = replace(
-  replace(
-    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.publicIPAddresses),
-    'LOCATION',
-    locationAbbreviation
-  ),
-  'TOKEN-',
-  ''
-)
-var routeTableName = replace(
-  replace(
-    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.routeTables),
-    'LOCATION',
-    locationAbbreviation
-  ),
-  'TOKEN-',
-  ''
-)
-
-var cloudSuffix = replace(
-  replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''),
-  '/',
-  ''
-)
+var nameConv_Shared_Resources = nameConvResTypeAtEnd ? 'avd-TOKEN-${nameConvSuffix}' : 'RESOURCETYPE-avd-TOKEN-${nameConvSuffix}'
+var natGatewayName = replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.natGateways), 'LOCATION', locationAbbreviation), 'TOKEN-', '')
+var publicIPName = replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.publicIPAddresses), 'LOCATION', locationAbbreviation), 'TOKEN-', '')
+var routeTableName = replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.routeTables), 'LOCATION', locationAbbreviation), 'TOKEN-',  '')
 
 var privateDnsZones_AzureVirtualDesktop = {
   AzureCloud: 'privatelink.wvd.microsoft.com'
@@ -199,33 +166,15 @@ var privateDnsZoneSuffixes_Backup = {
   AzureUSGovernment: 'us'
 }
 
-var backupPrivateDnsZone = createAzureBackupZone
-  ? startsWith(environment().name, 'US')
-      ? 'privatelink.${recoveryServicesGeo}.backup.windowsazure.${cloudSuffix}'
-      : 'privatelink.${recoveryServicesGeo}.backup.windowsazure.${privateDnsZoneSuffixes_Backup[environment().name]}'
-  : ''
+var backupPrivateDnsZone = createAzureBackupZone ? startsWith(cloud, 'us') ? 'privatelink.${recoveryServicesGeo}.backup.windowsazure.${cloudSuffix}' : 'privatelink.${recoveryServicesGeo}.backup.windowsazure.${privateDnsZoneSuffixes_Backup[environment().name]}' : ''
 var blobPrivateDnsZone = createAzureBlobZone ? 'privatelink.blob.${environment().suffixes.storage}' : ''
 var filesPrivateDnsZone = createAzureFilesZone ? 'privatelink.file.${environment().suffixes.storage}' : ''
 var queuePrivateDnsZone = createAzureQueueZone ? 'privatelink.queue.${environment().suffixes.storage}' : ''
 var tablePrivateDnsZone = createAzureTableZone ? 'privatelink.table.${environment().suffixes.storage}' : ''
-var keyVaultPrivateDnsZone = createAzureKeyVaultZone
-  ? 'privatelink${replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore')}'
-  : ''
-var avdFeedPrivateDnsZone = createAvdFeedZone
-  ? startsWith(environment().name, 'US')
-      ? 'privatelink.wvd.${cloudSuffix}'
-      : privateDnsZones_AzureVirtualDesktop[environment().name]
-  : ''
-var avdGlobalFeedPrivateDnsZone = createAvdGlobalFeedZone
-  ? startsWith(environment().name, 'US')
-      ? 'privatelink.wvd.${cloudSuffix}'
-      : privateDnsZones_AzureVirtualDesktopGlobalFeed[environment().name]
-  : ''
-var webAppPrivateDnsZone = createAzureWebAppZone
-  ? startsWith(environment().name, 'US')
-      ? 'privatelink.azurewebsites.${cloudSuffix}'
-      : 'privatelink.azurewebsites.${privateDnsZoneSuffixes_AzureWebApps[environment().name]}'
-  : ''
+var keyVaultPrivateDnsZone = createAzureKeyVaultZone ? 'privatelink${replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore')}' : ''
+var avdFeedPrivateDnsZone = createAvdFeedZone ? startsWith(cloud, 'us') ? 'privatelink.wvd.${cloudSuffix}' : privateDnsZones_AzureVirtualDesktop[environment().name] : ''
+var avdGlobalFeedPrivateDnsZone = createAvdGlobalFeedZone ? startsWith(environment().name, 'US') ? 'privatelink.wvd.${cloudSuffix}' : privateDnsZones_AzureVirtualDesktopGlobalFeed[environment().name] : ''
+var webAppPrivateDnsZone = createAzureWebAppZone ? startsWith(cloud, 'us') ? 'privatelink.azurewebsites.${cloudSuffix}' : 'privatelink.azurewebsites.${privateDnsZoneSuffixes_AzureWebApps[environment().name]}' : ''
 
 var privateDnsZones = [
   backupPrivateDnsZone
@@ -239,6 +188,8 @@ var privateDnsZones = [
   webAppPrivateDnsZone
 ]
 
+var dedupedPrivateDnsZones = union(privateDnsZones, privateDnsZones)
+
 var existingPrivateDnsZones = [
   azureBackupZoneId
   azureBlobZoneId
@@ -250,6 +201,8 @@ var existingPrivateDnsZones = [
   avdGlobalFeedZoneId
   azureWebAppZoneId
 ]
+
+var dedupedExistingPrivateDnsZones = union(existingPrivateDnsZones, existingPrivateDnsZones)
 
 module vnetResources 'modules/vnet-sub-module.bicep' = if (deployVnet) {
   name: 'Network-Resources-${timeStamp}'
@@ -284,10 +237,10 @@ module privateDNSZonesResources 'modules/privateDNS-sub-module.bicep' = if (crea
   params: {
     createPrivateDNSZones: createPrivateDNSZones
     deployPrivateDNSZonesResourceGroup: deployPrivateDNSZonesResourceGroup
-    existingPrivateDnsZoneIds: filter(existingPrivateDnsZones, (zone) => !empty(zone))
+    existingPrivateDnsZoneIds: filter(dedupedExistingPrivateDnsZones, (zone) => !empty(zone))
     location: location
     privateDNSZonesResourceGroupName: privateDNSZonesResourceGroupName
-    privateDnsZonesToCreate: filter(privateDnsZones, (zone) => !empty(zone))
+    privateDnsZonesToCreate: filter(dedupedPrivateDnsZones, (zone) => !empty(zone))
     privateDnsZonesVnetId: !empty(privateDnsZonesVnetId)
       ? privateDnsZonesVnetId
       : (linkPrivateDnsZonesToNewVnet ? vnetResources.outputs.vNetResourceId : '')

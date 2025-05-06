@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.34.44.8038",
-      "templateHash": "8154947489103340225"
+      "version": "0.35.1.17967",
+      "templateHash": "626543145269809816"
     }
   },
   "parameters": {
@@ -559,16 +559,17 @@
       "imageDefinitions": "vmid"
     },
     "createPrivateDNSZones": "[or(or(or(or(or(or(or(or(parameters('createAzureBackupZone'), parameters('createAzureBlobZone')), parameters('createAzureFilesZone')), parameters('createAzureQueueZone')), parameters('createAzureTableZone')), parameters('createAzureKeyVaultZone')), parameters('createAvdFeedZone')), parameters('createAvdGlobalFeedZone')), parameters('createAzureWebAppZone'))]",
-    "locations": "[if(startsWith(environment().name, 'US'), null(), variables('$fxv#0')[environment().name])]",
-    "locationAbbreviation": "[if(startsWith(environment().name, 'US'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), variables('locations')[parameters('location')].abbreviation)]",
-    "recoveryServicesGeo": "[if(startsWith(environment().name, 'US'), if(contains(environment().name, 'N'), format('ex{0}', substring(variables('locationAbbreviation'), 0, 1)), format('rx{0}', substring(variables('locationAbbreviation'), 0, 1))), variables('locations')[parameters('location')].recoveryServicesGeo)]",
+    "cloud": "[toLower(environment().name)]",
+    "cloudSuffix": "[replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')]",
+    "locations": "[if(startsWith(variables('cloud'), 'us'), null(), variables('$fxv#0')[environment().name])]",
+    "locationAbbreviation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), variables('locations')[parameters('location')].abbreviation)]",
+    "recoveryServicesGeo": "[if(startsWith(variables('cloud'), 'us'), if(contains(variables('cloud'), 'n'), format('ex{0}', substring(variables('locationAbbreviation'), 0, 1)), format('rx{0}', substring(variables('locationAbbreviation'), 0, 1))), variables('locations')[parameters('location')].recoveryServicesGeo)]",
     "resourceAbbreviations": "[variables('$fxv#1')]",
     "nameConvSuffix": "[if(parameters('nameConvResTypeAtEnd'), 'LOCATION-RESOURCETYPE', 'LOCATION')]",
     "nameConv_Shared_Resources": "[if(parameters('nameConvResTypeAtEnd'), format('avd-TOKEN-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-TOKEN-{0}', variables('nameConvSuffix')))]",
     "natGatewayName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').natGateways), 'LOCATION', variables('locationAbbreviation')), 'TOKEN-', '')]",
     "publicIPName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').publicIPAddresses), 'LOCATION', variables('locationAbbreviation')), 'TOKEN-', '')]",
     "routeTableName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').routeTables), 'LOCATION', variables('locationAbbreviation')), 'TOKEN-', '')]",
-    "cloudSuffix": "[replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')]",
     "privateDnsZones_AzureVirtualDesktop": {
       "AzureCloud": "privatelink.wvd.microsoft.com",
       "AzureUSGovernment": "privatelink.wvd.azure.us"
@@ -585,15 +586,15 @@
       "AzureCloud": "com",
       "AzureUSGovernment": "us"
     },
-    "backupPrivateDnsZone": "[if(parameters('createAzureBackupZone'), if(startsWith(environment().name, 'US'), format('privatelink.{0}.backup.windowsazure.{1}', variables('recoveryServicesGeo'), variables('cloudSuffix')), format('privatelink.{0}.backup.windowsazure.{1}', variables('recoveryServicesGeo'), variables('privateDnsZoneSuffixes_Backup')[environment().name])), '')]",
+    "backupPrivateDnsZone": "[if(parameters('createAzureBackupZone'), if(startsWith(variables('cloud'), 'us'), format('privatelink.{0}.backup.windowsazure.{1}', variables('recoveryServicesGeo'), variables('cloudSuffix')), format('privatelink.{0}.backup.windowsazure.{1}', variables('recoveryServicesGeo'), variables('privateDnsZoneSuffixes_Backup')[environment().name])), '')]",
     "blobPrivateDnsZone": "[if(parameters('createAzureBlobZone'), format('privatelink.blob.{0}', environment().suffixes.storage), '')]",
     "filesPrivateDnsZone": "[if(parameters('createAzureFilesZone'), format('privatelink.file.{0}', environment().suffixes.storage), '')]",
     "queuePrivateDnsZone": "[if(parameters('createAzureQueueZone'), format('privatelink.queue.{0}', environment().suffixes.storage), '')]",
     "tablePrivateDnsZone": "[if(parameters('createAzureTableZone'), format('privatelink.table.{0}', environment().suffixes.storage), '')]",
     "keyVaultPrivateDnsZone": "[if(parameters('createAzureKeyVaultZone'), format('privatelink{0}', replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore')), '')]",
-    "avdFeedPrivateDnsZone": "[if(parameters('createAvdFeedZone'), if(startsWith(environment().name, 'US'), format('privatelink.wvd.{0}', variables('cloudSuffix')), variables('privateDnsZones_AzureVirtualDesktop')[environment().name]), '')]",
+    "avdFeedPrivateDnsZone": "[if(parameters('createAvdFeedZone'), if(startsWith(variables('cloud'), 'us'), format('privatelink.wvd.{0}', variables('cloudSuffix')), variables('privateDnsZones_AzureVirtualDesktop')[environment().name]), '')]",
     "avdGlobalFeedPrivateDnsZone": "[if(parameters('createAvdGlobalFeedZone'), if(startsWith(environment().name, 'US'), format('privatelink.wvd.{0}', variables('cloudSuffix')), variables('privateDnsZones_AzureVirtualDesktopGlobalFeed')[environment().name]), '')]",
-    "webAppPrivateDnsZone": "[if(parameters('createAzureWebAppZone'), if(startsWith(environment().name, 'US'), format('privatelink.azurewebsites.{0}', variables('cloudSuffix')), format('privatelink.azurewebsites.{0}', variables('privateDnsZoneSuffixes_AzureWebApps')[environment().name])), '')]",
+    "webAppPrivateDnsZone": "[if(parameters('createAzureWebAppZone'), if(startsWith(variables('cloud'), 'us'), format('privatelink.azurewebsites.{0}', variables('cloudSuffix')), format('privatelink.azurewebsites.{0}', variables('privateDnsZoneSuffixes_AzureWebApps')[environment().name])), '')]",
     "privateDnsZones": [
       "[variables('backupPrivateDnsZone')]",
       "[variables('blobPrivateDnsZone')]",
@@ -605,6 +606,7 @@
       "[variables('avdGlobalFeedPrivateDnsZone')]",
       "[variables('webAppPrivateDnsZone')]"
     ],
+    "dedupedPrivateDnsZones": "[union(variables('privateDnsZones'), variables('privateDnsZones'))]",
     "existingPrivateDnsZones": [
       "[parameters('azureBackupZoneId')]",
       "[parameters('azureBlobZoneId')]",
@@ -615,7 +617,8 @@
       "[parameters('avdFeedZoneId')]",
       "[parameters('avdGlobalFeedZoneId')]",
       "[parameters('azureWebAppZoneId')]"
-    ]
+    ],
+    "dedupedExistingPrivateDnsZones": "[union(variables('existingPrivateDnsZones'), variables('existingPrivateDnsZones'))]"
   },
   "resources": [
     {
@@ -690,8 +693,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "5761539410135316073"
+              "version": "0.35.1.17967",
+              "templateHash": "18062045815928776736"
             }
           },
           "parameters": {
@@ -843,8 +846,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "14478965955570952268"
+                      "version": "0.35.1.17967",
+                      "templateHash": "10981612069763626321"
                     }
                   },
                   "parameters": {
@@ -1049,8 +1052,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "2101720848356620957"
+                              "version": "0.35.1.17967",
+                              "templateHash": "3341600507433643689"
                             }
                           },
                           "parameters": {
@@ -1143,8 +1146,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "2101720848356620957"
+                              "version": "0.35.1.17967",
+                              "templateHash": "3341600507433643689"
                             }
                           },
                           "parameters": {
@@ -1246,7 +1249,7 @@
             "value": "[parameters('deployPrivateDNSZonesResourceGroup')]"
           },
           "existingPrivateDnsZoneIds": {
-            "value": "[filter(variables('existingPrivateDnsZones'), lambda('zone', not(empty(lambdaVariables('zone')))))]"
+            "value": "[filter(variables('dedupedExistingPrivateDnsZones'), lambda('zone', not(empty(lambdaVariables('zone')))))]"
           },
           "location": {
             "value": "[parameters('location')]"
@@ -1255,7 +1258,7 @@
             "value": "[parameters('privateDNSZonesResourceGroupName')]"
           },
           "privateDnsZonesToCreate": {
-            "value": "[filter(variables('privateDnsZones'), lambda('zone', not(empty(lambdaVariables('zone')))))]"
+            "value": "[filter(variables('dedupedPrivateDnsZones'), lambda('zone', not(empty(lambdaVariables('zone')))))]"
           },
           "privateDnsZonesVnetId": "[if(not(empty(parameters('privateDnsZonesVnetId'))), createObject('value', parameters('privateDnsZonesVnetId')), if(parameters('linkPrivateDnsZonesToNewVnet'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Network-Resources-{0}', parameters('timeStamp'))), '2022-09-01').outputs.vNetResourceId.value), createObject('value', '')))]",
           "tags": {
@@ -1271,8 +1274,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "551783851789011579"
+              "version": "0.35.1.17967",
+              "templateHash": "16611689734680839495"
             }
           },
           "parameters": {
@@ -1338,8 +1341,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "11681786936504849344"
+                      "version": "0.35.1.17967",
+                      "templateHash": "2166502719781747423"
                     }
                   },
                   "parameters": {
@@ -1405,8 +1408,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "11638945878867567305"
+                      "version": "0.35.1.17967",
+                      "templateHash": "17097183868220650003"
                     }
                   },
                   "parameters": {
@@ -1450,8 +1453,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "10976189809667207336"
+                              "version": "0.35.1.17967",
+                              "templateHash": "4237715251254812695"
                             }
                           },
                           "parameters": {
