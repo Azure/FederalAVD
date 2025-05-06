@@ -652,7 +652,7 @@ var hostPoolVmTemplate = {
   customImageId: empty(customImageResourceId) ? null : customImageResourceId
   galleryImageOffer: empty(customImageResourceId) ? imageOffer : null
   galleryImagePublisher: empty(customImageResourceId) ? imagePublisher : null
-  galleryImageSKU: empty(customImageResourceId) ? imageSku : null
+  galleryImageSku: empty(customImageResourceId) ? imageSku : null
   osDiskType: diskSku
   diskSizeGB: diskSizeGB
   useManagedDisks: true

@@ -49,24 +49,3 @@ resource CustomScriptExtension 'Microsoft.Compute/virtualMachines/extensions@202
     }
   }
 }
-
-param joinEntra bool
-
-param userAssignedIdentityResourceIds array = []
-
-var formattedUserAssignedIdentities = reduce(
-  map((userAssignedIdentityResourceIds ?? []), (id) => { '${id}': {} }),
-  {},
-  (cur, next) => union(cur, next)
-) // Converts the flat array to an object like { '${id1}': {}, '${id2}': {} }
-
-var cseUserAssignedIdentity = cseExtensionProtectedProperties.?userAssignedIdentityResourceId
-  ? { '${cseExtensionProtectedProperties.userAssignedIdentityResourceId}': {} }
-  : {}
-
-var managedIdentities = union(cseUserAssignedIdentity, formattedUserAssignedIdentities)
-
-var identity = {
-  type: !empty(managedIdentities) ? 'SystemAssigned, UserAssigned' : 'SystemAssigned'
-  userAssignedIdentities: !empty(managedIdentities) ? managedIdentities : null
-}

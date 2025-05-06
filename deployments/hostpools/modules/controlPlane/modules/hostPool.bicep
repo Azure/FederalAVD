@@ -34,7 +34,7 @@ var vmImageOffer = empty(virtualMachineTemplate.galleryImageOffer)
 var vmImagePublisher = empty(virtualMachineTemplate.galleryImagePublisher)
   ? {}
   : { vmImagePublisher: virtualMachineTemplate.galleryImagePublisher }
-var vmImageSKU = empty(virtualMachineTemplate.galleryImageSKU)
+var vmImageSku = empty(virtualMachineTemplate.galleryImageSku)
   ? {}
   : { vmImageSku: virtualMachineTemplate.galleryImageSKU }
 var vmDiskEncryptionSetName = empty(virtualMachineTemplate.diskEncryptionSetName)
@@ -64,7 +64,7 @@ var hostPoolVmTemplateTags = union(
   vmCustomImageId,
   vmImageOffer,
   vmImagePublisher,
-  vmImageSKU,
+  vmImageSku,
   vmDiskEncryptionSetName
 )
 
