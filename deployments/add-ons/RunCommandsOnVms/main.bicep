@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 @description('The location of the virtual machines where the run commands will be executed.')
-param location string
+param location string = deployment().location
 
 @description('Required. The name of the resource group in which to deploy the resources.')
 param resourceGroupName string
@@ -39,8 +39,8 @@ param scriptContent string = ''
 @description('Optional. The URI of the script to run.')
 param scriptUri string = ''
 
-@description('Optional. The timeout in seconds for the script execution. Default is -1 (no timeout).')
-param timeoutInSeconds int = -1
+@description('Optional. The timeout in seconds for the script execution. Default is 5400 (90 minutes).')
+param timeoutInSeconds int = 5400
 
 @description('Optional. The parameters to pass to the script.')
 param parameters array = []

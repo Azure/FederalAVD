@@ -44,7 +44,7 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
             clientId: scriptsUserAssignedIdentityClientId
           }
     }
-    timeoutInSeconds: timeoutInSeconds == -1 ? null : timeoutInSeconds
+    timeoutInSeconds: timeoutInSeconds == 5400 ? null : timeoutInSeconds
     treatFailureAsDeploymentFailure: true
   }
 }

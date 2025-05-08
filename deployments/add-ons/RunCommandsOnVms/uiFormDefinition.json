@@ -302,8 +302,9 @@
 								{
 									"name": "timeout",
 									"type": "Microsoft.Common.TextBox",
-									"label": "Script timeout in Seconds",
+									"label": "Script timeout in <u>seconds</u>",
 									"toolTip": "Optionally, enter the amount of seconds that the script will be allowed to run on the virtual machine before timing out.",
+									"defaultValue": 5400,
 									"constraints": {
 										"regex": "^[0-9]{1,5}$",
 										"required": false
@@ -501,15 +502,15 @@
 				"scriptContent": "[if(and(equals(steps('scripts').multipleScripts, false), equals(steps('scripts').single.source, 'paste')), steps('scripts').single.scriptContent, '')]",
 				"scriptUri": "[if(equals(steps('scripts').multipleScripts, false), if(equals(steps('scripts').single.source, 'blob'), first(split(steps('scripts').single.storageBlobSelection.sasUri, '?')) , if(equals(steps('scripts').single.source, 'uri'), steps('scripts').single.scriptUri, '')), '')]",
 				"scriptsUserAssignedIdentityResourceId": "[if(equals(steps('scripts').multipleScripts, false), if(equals(steps('scripts').single.source, 'blob'), steps('scripts').single.userAssignedIdentity.id, ''), if(steps('scripts').multiple.runFromStorage, steps('scripts').multiple.userAssignedIdentity.id, ''))]",
-				"scriptParameters": "[if(and(equals(steps('scripts').multipleScripts, false), steps('scripts').single.defineParameters), steps('scripts').single.parameters, parse('[]'))]",
-				"scriptProtectedParameter": "[if(and(equals(steps('scripts').multipleScripts, false), steps('scripts').single.defineProtectedParameter), first(steps('scripts').single.protectedParameter), parse('{}'))]",
-				"scriptTimeout": "[if(and(equals(steps('scripts').multipleScripts, false), not(empty(steps('scripts').single.timeout))), steps('scripts').single.timeout, -1)]",
+				"parameters": "[if(and(equals(steps('scripts').multipleScripts, false), steps('scripts').single.defineParameters), steps('scripts').single.parameters, parse('[]'))]",
+				"protectedParameter": "[if(and(equals(steps('scripts').multipleScripts, false), steps('scripts').single.defineProtectedParameter), first(steps('scripts').single.protectedParameter), parse('{}'))]",
 				"scriptsStorageAccountName": "[if(and(equals(steps('scripts').multipleScripts, true), steps('scripts').multiple.runFromStorage), steps('scripts').multiple.storageAccount.name, '')]",
 				"scriptsContainerName": "[if(and(equals(steps('scripts').multipleScripts, true), steps('scripts').multiple.runFromStorage), steps('scripts').multiple.container, '')]",
 				"scripts": "[if(equals(steps('scripts').multipleScripts, true), steps('scripts').multiple.scripts, parse('[]'))]",
 				"logsStorageAccountName": "[if(steps('scripts').logging.enable, steps('scripts').logging.storageAccount.name, '')]",
 				"logsContainerName": "[if(steps('scripts').logging.enable, steps('scripts').logging.container, '')]",
-				"logsUserAssignedIdentityResourceId": "[if(steps('scripts').logging.enable, steps('scripts').logging.userAssignedIdentity.id,'')]"
+				"logsUserAssignedIdentityResourceId": "[if(steps('scripts').logging.enable, steps('scripts').logging.userAssignedIdentity.id,'')]",
+				"timeoutInSeconds": "[if(equals(steps('scripts').multipleScripts, false), steps('scripts').single.timeout, 5400)]"
 			},
 			"kind": "Subscription",
 			"location": "[steps('basics').scope.location.name]",

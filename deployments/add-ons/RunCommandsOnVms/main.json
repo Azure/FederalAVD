@@ -5,12 +5,13 @@
     "_generator": {
       "name": "bicep",
       "version": "0.35.1.17967",
-      "templateHash": "16051831137296500747"
+      "templateHash": "2207856557508602354"
     }
   },
   "parameters": {
     "location": {
       "type": "string",
+      "defaultValue": "[deployment().location]",
       "metadata": {
         "description": "The location of the virtual machines where the run commands will be executed."
       }
@@ -99,9 +100,9 @@
     },
     "timeoutInSeconds": {
       "type": "int",
-      "defaultValue": -1,
+      "defaultValue": 5400,
       "metadata": {
-        "description": "Optional. The timeout in seconds for the script execution. Default is -1 (no timeout)."
+        "description": "Optional. The timeout in seconds for the script execution. Default is 5400 (90 minutes)."
       }
     },
     "parameters": {
@@ -325,7 +326,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.35.1.17967",
-              "templateHash": "4397283146258426242"
+              "templateHash": "5834266827291575130"
             }
           },
           "parameters": {
@@ -387,7 +388,7 @@
                   "script": "[if(empty(parameters('scriptContent')), null(), parameters('scriptContent'))]",
                   "scriptUriManagedIdentity": "[if(empty(parameters('scriptsUserAssignedIdentityClientId')), null(), createObject('clientId', parameters('scriptsUserAssignedIdentityClientId')))]"
                 },
-                "timeoutInSeconds": "[if(equals(parameters('timeoutInSeconds'), -1), null(), parameters('timeoutInSeconds'))]",
+                "timeoutInSeconds": "[if(equals(parameters('timeoutInSeconds'), 5400), null(), parameters('timeoutInSeconds'))]",
                 "treatFailureAsDeploymentFailure": true
               }
             }
