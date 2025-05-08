@@ -1,0 +1,519 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+	"view": {
+		"kind": "Form",
+		"properties": {
+			"title": "Run Scripts on Virtual Machines",
+			"steps": [
+				{
+					"name": "basics",
+					"label": "Virtual Machines",
+					"elements": [
+						{
+							"name": "introBox",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": true,
+							"options": {
+								"text": "This solution allows you to run one or multiple scripts on selected virtual machines in a resource group using managed Run Commands.",
+								"link": {
+									"label": "Microsoft Learn | Managed Run Commands",
+									"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/run-command-managed"
+								}
+							}
+						},
+						{
+							"name": "scope",
+							"type": "Microsoft.Common.ResourceScope",
+							"instanceDetailsLabel": "Deployment Details",
+							"location": {
+								"label": "Deployment Location",
+								"resourceTypes": [
+									"Microsoft.compute/virtualMachines"
+								]
+							}
+						},
+						{
+							"type": "Microsoft.Common.ResourceGroupSelector",
+							"name": "resourceGroup",
+							"label": "Virtual Machine(s) Resource Group",
+							"allowedMode": "UseExisting",
+							"required": true,
+							"scope": {
+								"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
+							}
+						},
+						{
+							"name": "virtualMachinesApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('basics').resourceGroup))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').scope.subscription.id, '/resourceGroups/', steps('basics').resourceGroup.value.name, '/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01')]"
+							}
+						},
+						{
+							"name": "vmNames",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Virtual Machines",
+							"multiselect": true,
+							"toolTip": "Select the virtual machine(s) on which to run the script.",
+							"constraints": {
+								"allowedValues": "[map(steps('basics').virtualMachinesApi.value, (vm) => parse(concat('{\"label\":\"', vm.name, '\",\"value\":\"', vm.name, '\"}')))]",
+								"required": true
+							}
+						}
+					]
+				},
+				{
+					"name": "scripts",
+					"label": "Scripts",
+					"elements": [
+						{
+							"name": "multipleScripts",
+							"type": "Microsoft.Common.OptionsGroup",
+							"label": "Run Multiple Scripts",
+							"toolTip": "Select 'Yes' to run multiple scripts on each VM.",
+							"constraints": {
+								"allowedValues": [
+									{
+										"label": "No",
+										"value": false
+									},
+									{
+										"label": "Yes",
+										"value": true
+									}
+								]
+							},
+							"defaultValue": "No"
+						},
+						{
+							"name": "single",
+							"type": "Microsoft.Common.Section",
+							"label": "",
+							"visible": "[equals(steps('scripts').multipleScripts, false)]",
+							"elements": [
+								{
+									"name": "runCommandName",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Run Command Name",
+									"toolTip": "Use only allowed characters",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9A-Z]{1,30}$",
+										"validationMessage": "Only alphanumeric characters are allowed, and the value must be 1-30 characters long."
+									}
+								},
+								{
+									"name": "source",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Script Source",
+									"toolTip": "Select 'Paste in Content' to paste the script into a text box. Select 'Storage Account Blob' to select a blob from a storage account and, if required, a user-assigned identity for accessing the storage account. Select 'Uri' to provide a script Uri.",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Paste in Content",
+												"value": "paste"
+											},
+											{
+												"label": "Storage Account Blob",
+												"value": "blob"
+											},
+											{
+												"label": "Uri",
+												"value": "uri"
+											}
+										],
+										"required": true
+									},
+									"visible": true
+								},
+								{
+									"name": "scriptContent",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Script Content",
+									"multiLine": true,
+									"toolTip": "Paste in the PowerShell Script",
+									"constraints": {
+										"required": true
+									},
+									"visible": "[equals(steps('scripts').single.source, 'paste')]"
+								},
+								{
+									"name": "storageBlobSelection",
+									"type": "Microsoft.Storage.StorageBlobSelector",
+									"visible": "[equals(steps('scripts').single.source, 'blob')]",
+									"toolTip": "Select storage blob",
+									"label": "PowerShell Script",
+									"options": {
+										"text": "Select PowerShell Script"
+									},
+									"constraints": {
+										"allowedFileExtensions": [
+											"ps1"
+										]
+									}
+								},
+								{
+									"name": "scriptUri",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Script Uri",
+									"toolTip": "Provide the full Url to the script. This script must be accessible without authentication.",
+									"constraints": {
+										"regex": "^(https?|ftp):\\/\\/[^\\s/$.?#].[^\\s]*\\/[^\\/]+\\.[a-zA-Z0-9]+$",
+										"required": true
+									},
+									"visible": "[equals(steps('scripts').single.source, 'uri')]"
+								},
+								{
+									"name": "userAssignedIdentity",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "User Assigned Identity",
+									"toolTip": "Select an existing User Assigned Identity which has been assigned data plane rights of at least 'Storage Blob Data Reader' to the blob Selected above.",
+									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+									"visible": "[equals(steps('scripts').single.source, 'blob')]"
+								},
+								{
+									"name": "parametersHeading",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "<b>Script Parameters</b>"
+									}
+								},
+								{
+									"name": "parametersText",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "You can define up to 5 script parameters if desired. These parameters show up in plain text in your deployment history."
+									}
+								},
+								{
+									"name": "defineParameters",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Define Parameters"
+								},
+								{
+									"name": "parameters",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Script Parameters",
+									"label": "Script Parameters",
+									"visible": "[steps('scripts').single.defineParameters]",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 1,
+												"max": 5
+											}
+										},
+										"columns": [
+											{
+												"id": "name",
+												"header": "Name",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"validations": [
+														{
+															"regex": "^[A-Za-z0-9]{1,24}$",
+															"message": "Only alphanumerics are allowed up to 24 characters"
+														}
+													]
+												}
+											},
+											{
+												"id": "value",
+												"header": "Value",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"constraints": {
+														"required": true
+													}
+												}
+											}
+										]
+									}
+								},
+								{
+									"name": "protectedParametersHeading",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "<b>Script Protected Parameter</b>"
+									}
+								},
+								{
+									"name": "protectedParametersText",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "You can also define a protected parameter. This parameter name and value will not show up in your deployment history."
+									}
+								},
+								{
+									"name": "defineProtectedParameter",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Define Protected Parameter"
+								},
+								{
+									"name": "protectedParameter",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Script Parameters",
+									"label": "Script Parameters",
+									"visible": "[steps('scripts').single.defineProtectedParameter]",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 1,
+												"max": 1
+											}
+										},
+										"columns": [
+											{
+												"id": "name",
+												"header": "Name",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"validations": [
+														{
+															"regex": "^[A-Za-z0-9]{1,24}$",
+															"message": "Only alphanumerics are allowed up to 24 characters"
+														}
+													]
+												}
+											},
+											{
+												"id": "value",
+												"header": "Value",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"constraints": {
+														"required": true
+													}
+												}
+											}
+										]
+									}
+								},
+								{
+									"name": "timeout",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Script timeout in Seconds",
+									"toolTip": "Optionally, enter the amount of seconds that the script will be allowed to run on the virtual machine before timing out.",
+									"constraints": {
+										"regex": "^[0-9]{1,5}$",
+										"required": false
+									}
+								}
+							]
+						},
+						{
+							"name": "multiple",
+							"type": "Microsoft.Common.Section",
+							"label": "",
+							"visible": "[equals(steps('scripts').multipleScripts, true)]",
+							"elements": [
+								{
+									"name": "multipleIntroBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "This solution uses a wrapper script to automatically download and run PowerShell scripts, cmd scripts, executables (exe), and installers (msi). It can also process zip files that contain a PowerShell script within the root. The wrapper script will downloaded and extract the zip file and then search for a PowerShell script in the root of the extracted directory and run that script."
+									}
+								},
+								{
+									"name": "runFromStorage",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Download scripts/artifacts from a storage account using a user-assigned managed identity",
+									"toolTip": "Select to download artifacts from a storage account."
+								},
+								{
+									"name": "storageAccount",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Storage Account",
+									"toolTip": "Select an existing Storage Account.",
+									"resourceType": "Microsoft.storage/storageAccounts",
+									"constraints": {
+										"required": true
+									},
+									"visible": "[steps('scripts').multiple.runFromStorage]"
+								},
+								{
+									"name": "containersApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('scripts').multiple.storageAccount))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('scripts').multiple.storageAccount.id, '/blobServices/default/containers?api-version=2023-01-01')]"
+									}
+								},
+								{
+									"name": "container",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Container",
+									"defaultValue": "",
+									"toolTip": "Select the container where the scripts are stored.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(steps('scripts').multiple.containersApi.value, (container) => parse(concat('{\"label\":\"', container.name, '\",\"value\":\"', container.name, '\"}')))]"
+									},
+									"visible": "[steps('scripts').multiple.runFromStorage]"
+								},
+								{
+									"name": "userAssignedIdentity",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "User-Assigned Identity",
+									"toolTip": "Select an existing User Assigned Identity which has been assigned data plane rights of at least 'Storage Blob Data Reader' to the blob container selected above.",
+									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+									"visible": "[steps('scripts').multiple.runFromStorage]"
+								},
+								{
+									"name": "artifactText",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Enter the information about each script/artifact below.</br><ul><li>Enter the run command name in the first column.</li><li>Enter either the case-sensitive blob name (when downloading from a storage account) or the full URL in the second column.</li><li>Enter any arguments in the third column.</li><ul>"
+									}
+								},
+								{
+									"name": "scripts",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Scripts",
+									"label": "Scripts and Software",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 1,
+												"max": 25
+											}
+										},
+										"columns": [
+											{
+												"id": "name",
+												"header": "Name",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "Example: vscode",
+													"validations": [
+														{
+															"regex": "^[A-Za-z0-9-]{1,24}$",
+															"message": "Only alphanumerics and dashes (-) are allowed up to 24 characters"
+														}
+													]
+												}
+											},
+											{
+												"id": "blobNameOrUri",
+												"header": "Blob Name or URI",
+												"width": "10fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "Example: VSCodeSetup-x64-1.81.1.exe",
+													"constraints": {
+														"required": true
+													}
+												}
+											},
+											{
+												"id": "arguments",
+												"header": "Arguments",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "Example: /verysilent /mergetasks='!runcode'",
+													"constraints": {
+														"required": false
+													}
+												}
+											}
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "logging",
+							"type": "Microsoft.Common.Section",
+							"label": "Logging",
+							"elements": [
+								{
+									"name": "enable",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Script Logging"
+								},
+								{
+									"name": "storageAccount",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Storage Account",
+									"toolTip": "Select an existing Storage Account.",
+									"resourceType": "Microsoft.storage/storageAccounts",
+									"constraints": {
+										"required": true
+									},
+									"visible": "[steps('scripts').logging.enable]"
+								},
+								{
+									"name": "containersApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('scripts').logging.storageAccount))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('scripts').logging.storageAccount.id, '/blobServices/default/containers?api-version=2023-01-01')]"
+									}
+								},
+								{
+									"name": "container",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Log Blob Container",
+									"defaultValue": "",
+									"toolTip": "Select the container where logs will be saved.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(steps('scripts').logging.containersApi.value, (container) => parse(concat('{\"label\":\"', container.name, '\",\"value\":\"', container.name, '\"}')))]"
+									},
+									"visible": "[steps('scripts').logging.enable]"
+								},
+								{
+									"name": "userAssignedIdentity",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "User Assigned Identity",
+									"toolTip": "Select an existing User Assigned Identity which has been assigned data plane rights of at least 'Storage Blob Data Writer' to the blob container selected above.",
+									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+									"visible": "[steps('scripts').logging.enable]"
+								}
+							],
+							"visible": true
+						}
+					]
+				}
+			]
+		},
+		"outputs": {
+			"parameters": {
+				"resourceGroupName": "[steps('basics').resourceGroup.value.name]",
+				"vmNames": "[steps('basics').vmNames]",
+				"runCommandName": "[if(equals(steps('scripts').multipleScripts, false), steps('scripts').single.runCommandName, '')]",
+				"scriptContent": "[if(and(equals(steps('scripts').multipleScripts, false), equals(steps('scripts').single.source, 'paste')), steps('scripts').single.scriptContent, '')]",
+				"scriptUri": "[if(equals(steps('scripts').multipleScripts, false), if(equals(steps('scripts').single.source, 'blob'), first(split(steps('scripts').single.storageBlobSelection.sasUri, '?')) , if(equals(steps('scripts').single.source, 'uri'), steps('scripts').single.scriptUri, '')), '')]",
+				"scriptsUserAssignedIdentityResourceId": "[if(equals(steps('scripts').multipleScripts, false), if(equals(steps('scripts').single.source, 'blob'), steps('scripts').single.userAssignedIdentity.id, ''), if(steps('scripts').multiple.runFromStorage, steps('scripts').multiple.userAssignedIdentity.id, ''))]",
+				"scriptParameters": "[if(and(equals(steps('scripts').multipleScripts, false), steps('scripts').single.defineParameters), steps('scripts').single.parameters, parse('[]'))]",
+				"scriptProtectedParameter": "[if(and(equals(steps('scripts').multipleScripts, false), steps('scripts').single.defineProtectedParameter), first(steps('scripts').single.protectedParameter), parse('{}'))]",
+				"scriptTimeout": "[if(and(equals(steps('scripts').multipleScripts, false), not(empty(steps('scripts').single.timeout))), steps('scripts').single.timeout, -1)]",
+				"scriptsStorageAccountName": "[if(and(equals(steps('scripts').multipleScripts, true), steps('scripts').multiple.runFromStorage), steps('scripts').multiple.storageAccount.name, '')]",
+				"scriptsContainerName": "[if(and(equals(steps('scripts').multipleScripts, true), steps('scripts').multiple.runFromStorage), steps('scripts').multiple.container, '')]",
+				"scripts": "[if(equals(steps('scripts').multipleScripts, true), steps('scripts').multiple.scripts, parse('[]'))]",
+				"logsStorageAccountName": "[if(steps('scripts').logging.enable, steps('scripts').logging.storageAccount.name, '')]",
+				"logsContainerName": "[if(steps('scripts').logging.enable, steps('scripts').logging.container, '')]",
+				"logsUserAssignedIdentityResourceId": "[if(steps('scripts').logging.enable, steps('scripts').logging.userAssignedIdentity.id,'')]"
+			},
+			"kind": "Subscription",
+			"location": "[steps('basics').scope.location.name]",
+			"subscriptionId": "[steps('basics').scope.subscription.id]"
+		}
+	}
+}
