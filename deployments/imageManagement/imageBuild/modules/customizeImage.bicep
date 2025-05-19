@@ -81,7 +81,7 @@ var restartVMParameters = [
     value: imageVm.id
   }
 ]
-
+#disable-next-line BCP329
 var envSuffix = substring(environment().suffixes.storage, 5, length(environment().suffixes.storage) - 5)
 
 resource imageVm 'Microsoft.Compute/virtualMachines@2022-11-01' existing = {

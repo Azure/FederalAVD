@@ -258,8 +258,8 @@
 										"required": true,
 										"validations": [
 											{
-												"regex": "^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$",
-												"message": "Only alphanumeric characters and dashes '-' are allowed. Dashes must only be specified between alphanumeric characters."
+												"regex": "^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)?$",
+												"message": "Only alphanumeric characters and a single dash '-' are allowed. The dash must be specified between alphanumeric characters."
 											},
 											{
 												"isValid": "[not(greater(add(length(steps('basics').naming.identifier), length(steps('basics').naming.index)), 9))]",

@@ -1,5 +1,6 @@
 targetScope = 'subscription'
 
+param existingHostPoolResourceId string
 param existingFeedWorkspaceResourceId string
 param fslogixStorageCustomPrefix string
 param identifier string
@@ -11,26 +12,38 @@ param nameConvResTypeAtEnd bool
 param virtualMachineNamePrefix string
 
 var locations = startsWith(environment().name, 'US') ? null : (loadJsonContent('../../../.common/data/locations.json'))[environment().name]
+#disable-next-line BCP329
 var locationVirtualMachinesAbbreviation = startsWith(environment().name, 'US') ? substring(locationVirtualMachines, 5, length(locationVirtualMachines) - 5): locations[locationVirtualMachines].abbreviation
+#disable-next-line BCP329
 var locationControlPlaneAbbreviation = startsWith(environment().name, 'US') ? substring(locationControlPlane, 5, length(locationVirtualMachines) - 5): locations[locationControlPlane].abbreviation
 
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
-var hpBaseName = empty(index) ? identifier : '${identifier}-${index}'
-var hpResPrfx = nameConvResTypeAtEnd ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
+var existingHostPoolName = empty(existingHostPoolResourceId) ? '' : split(existingHostPoolResourceId, '/')[8]
 
-var nameConvSuffix = nameConvResTypeAtEnd ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
+var nameConvReversed = !empty(existingHostPoolName) ? !startsWith(existingHostPoolName, resourceAbbreviations.hostPools) : nameConvResTypeAtEnd
+
+var arrHostPoolName = split(existingHostPoolName, '-')
+var lengthArrHostPoolName = length(arrHostPoolName)
+
+var hpIdentifier = !empty(existingHostPoolName) ? nameConvReversed ? lengthArrHostPoolName < 5 ? arrHostPoolName[0] : '${arrHostPoolName[0]}-${arrHostPoolName[1]}' : lengthArrHostPoolName < 5 ? arrHostPoolName[1] : '${arrHostPoolName[1]}-${arrHostPoolName[2]}' : identifier
+var hpIndex = !empty(existingHostPoolName) ? lengthArrHostPoolName == 3 ? '' : nameConvReversed ? lengthArrHostPoolName < 5 ? arrHostPoolName[1] : arrHostPoolName[2] : lengthArrHostPoolName < 5 ? arrHostPoolName[2] : arrHostPoolName[3] : index  
+
+var hpBaseName = empty(hpIndex) ? hpIdentifier : '${hpIdentifier}-${hpIndex}'
+var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
+
+var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
 
 // Management, Monitoring, and Control Plane Resource Naming Conventions
-var nameConv_Shared_ResGroup = nameConvResTypeAtEnd
+var nameConv_Shared_ResGroup = nameConvReversed
   ? 'avd-TOKEN-${nameConvSuffix}'
   : 'RESOURCETYPE-avd-TOKEN-${nameConvSuffix}'
-var nameConv_Shared_Resources = nameConvResTypeAtEnd
+var nameConv_Shared_Resources = nameConvReversed
   ? 'avd-TOKEN-${nameConvSuffix}'
   : 'RESOURCETYPE-avd-TOKEN-${nameConvSuffix}'
 
 // HostPool Specific Resource Naming Conventions
-var nameConv_HP_ResGroups = nameConvResTypeAtEnd
+var nameConv_HP_ResGroups = nameConvReversed
   ? 'avd-${hpBaseName}-TOKEN-${nameConvSuffix}'
   : 'RESOURCETYPE-avd-${hpBaseName}-TOKEN-${nameConvSuffix}'
 var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
@@ -127,7 +140,7 @@ var logAnalyticsWorkspaceName = replace(
 var globalFeedResourceGroupName = !(empty(locationGlobalFeed))
   ? replace(
       replace(
-        (nameConvResTypeAtEnd ? 'avd-global-feed-${nameConvSuffix}' : 'RESOURCETYPE-avd-global-feed-${nameConvSuffix}'),
+        (nameConvReversed ? 'avd-global-feed-${nameConvSuffix}' : 'RESOURCETYPE-avd-global-feed-${nameConvSuffix}'),
         'LOCATION',
         locationControlPlaneAbbreviation
       ),
@@ -136,23 +149,25 @@ var globalFeedResourceGroupName = !(empty(locationGlobalFeed))
     )
   : ''
 var globalFeedWorkspaceName = replace(
-  (nameConvResTypeAtEnd ? 'avd-global-feed-RESOURCETYPE' : 'RESOURCETYPE-avd-global-feed'),
+  (nameConvReversed ? 'avd-global-feed-RESOURCETYPE' : 'RESOURCETYPE-avd-global-feed'),
   'RESOURCETYPE',
   resourceAbbreviations.workspaces
 )
 
 // Control Plane Shared Resources
-var resourceGroupControlPlane = empty(existingFeedWorkspaceResourceId)
-  ? replace(
-      replace(
-        replace(nameConv_Shared_ResGroup, 'TOKEN', 'control-plane'),
-        'LOCATION',
-        '${locationControlPlaneAbbreviation}'
-      ),
-      'RESOURCETYPE',
-      '${resourceAbbreviations.resourceGroups}'
-    )
-  : split(existingFeedWorkspaceResourceId, '/')[4]
+var resourceGroupControlPlane = empty(existingHostPoolResourceId)
+  ? empty(existingFeedWorkspaceResourceId)
+    ? replace(
+        replace(
+          replace(nameConv_Shared_ResGroup, 'TOKEN', 'control-plane'),
+          'LOCATION',
+          '${locationControlPlaneAbbreviation}'
+        ),
+        'RESOURCETYPE',
+        '${resourceAbbreviations.resourceGroups}'
+      )
+    : split(existingFeedWorkspaceResourceId, '/')[4]
+  : split(existingHostPoolResourceId, '/')[4]
 
 var workspaceName = empty(existingFeedWorkspaceResourceId)
   ? replace(
@@ -197,11 +212,11 @@ var functionAppNameConv = replace(
 )
 
 var privateEndpointNameConv = replace(
-  nameConvResTypeAtEnd ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
+  nameConvReversed ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
   'RESOURCETYPE',
   resourceAbbreviations.privateEndpoints
 )
-var privateEndpointNICNameConvTemp = nameConvResTypeAtEnd
+var privateEndpointNICNameConvTemp = nameConvReversed
   ? '${privateEndpointNameConv}-RESOURCETYPE'
   : 'RESOURCETYPE-${privateEndpointNameConv}'
 var privateEndpointNICNameConv = replace(
@@ -233,16 +248,16 @@ var resourceGroupHosts = replace(
 var vmNamePrefixWithoutDash = toLower(last(virtualMachineNamePrefix) == '-'
   ? take(virtualMachineNamePrefix, length(virtualMachineNamePrefix) - 1)
   : virtualMachineNamePrefix)
-var availabilitySetNamePrefix = nameConvResTypeAtEnd
+var availabilitySetNamePrefix = nameConvReversed
   ? '${vmNamePrefixWithoutDash}-${resourceAbbreviations.availabilitySets}-'
   : '${resourceAbbreviations.availabilitySets}-${vmNamePrefixWithoutDash}-'
-var virtualMachineNameConv = nameConvResTypeAtEnd
+var virtualMachineNameConv = nameConvReversed
   ? '${virtualMachineNamePrefix}###-${resourceAbbreviations.virtualMachines}'
   : '${resourceAbbreviations.virtualMachines}-${virtualMachineNamePrefix}###'
-var diskNameConv = nameConvResTypeAtEnd
+var diskNameConv = nameConvReversed
   ? '${virtualMachineNamePrefix}###-${resourceAbbreviations.osdisks}'
   : '${resourceAbbreviations.osdisks}-${virtualMachineNamePrefix}###'
-var networkInterfaceNameConv = nameConvResTypeAtEnd
+var networkInterfaceNameConv = nameConvReversed
   ? '${virtualMachineNamePrefix}###-${resourceAbbreviations.networkInterfaces}'
   : '${resourceAbbreviations.networkInterfaces}-${virtualMachineNamePrefix}###'
 var diskAccessName = replace(

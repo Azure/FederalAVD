@@ -1,6 +1,7 @@
 targetScope = 'subscription'
 
 param confidentialVMOSDiskEncryption bool
+param deploymentType string
 param diskSku string
 @secure()
 param domainJoinUserPassword string
@@ -89,7 +90,7 @@ var roleAssignmentsHosts = [
   }
 ]
 
-var roleAssignmentsManagement = confidentialVMOSDiskEncryption && keyManagementDisks == 'CustomerManagedHSM'
+var roleAssignmentsManagement = deploymentType == 'Complete' && confidentialVMOSDiskEncryption && keyManagementDisks == 'CustomerManagedHSM'
   ? [
       {
         roleDefinitionId: roleDefinitions.KeyVaultCryptoOfficer // (Purpose: Retrieve the customer managed keys from the key vault for idempotent deployment)
@@ -100,7 +101,7 @@ var roleAssignmentsManagement = confidentialVMOSDiskEncryption && keyManagementD
     ]
   : []
 
-var roleAssignmentStorage = fslogix && contains(identitySolution, 'DomainServices')
+var roleAssignmentsStorage = deploymentType == 'Complete' && fslogix && contains(identitySolution, 'DomainServices')
   ? [
       {
         roleDefinitionId: roleDefinitions.StorageAccountContributor // (Purpose: domain join storage account & set NTFS permissions on the file share)
@@ -122,7 +123,7 @@ var roleAssignments = union(
   roleAssignmentsDeployment,
   roleAssignmentsHosts,
   roleAssignmentsManagement,
-  roleAssignmentStorage
+  roleAssignmentsStorage
 )
 
 module deploymentUserAssignedIdentity '../../../sharedModules/resources/managed-identity/user-assigned-identity/main.bicep' = {

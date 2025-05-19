@@ -650,7 +650,7 @@ var resGroupControlPlane = deployControlPlaneRG ? [resourceNames.outputs.resourc
 var resGroupGlobalFeed = avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) ? [resourceNames.outputs.resourceGroupGlobalFeed] : []
 var resGroupStorage = deployFSLogixStorage ? [resourceNames.outputs.resourceGroupStorage] : []
 var resGroupHosts = deploymentType == 'Complete' ? [resourceNames.outputs.resourceGroupHosts] : []
-var rgNames = union(
+var resourceGroupsToCreate = union(
   resGroupDeployment,
   resGroupManagement,
   resGroupControlPlane,
@@ -658,7 +658,6 @@ var rgNames = union(
   resGroupStorage,
   resGroupHosts
 )
-var resourceGroupNames = union(rgNames, rgNames)
 
 var fslogixFileShareNames = resourceNames.outputs.fslogixFileShareNames[fslogixContainerType]
 var fslogixNTFSGroups = empty(fslogixUserGroups) ? appGroupSecurityGroups : fslogixUserGroups
@@ -830,6 +829,8 @@ resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!em
 module resourceNames 'modules/resourceNames.bicep' = {
   name: 'ResourceNames_${timeStamp}'
   params: {
+    existingFeedWorkspaceResourceId: existingFeedWorkspaceResourceId
+    existingHostPoolResourceId: existingHostPoolResourceId
     fslogixStorageCustomPrefix: fslogixStorageCustomPrefix
     identifier: identifier
     index: index
@@ -840,7 +841,6 @@ module resourceNames 'modules/resourceNames.bicep' = {
       ? nameConvResTypeAtEnd
       : bool(existingHostPool.tags.?nameConvResTypeAtEnd) ?? false
     virtualMachineNamePrefix: virtualMachineNamePrefix
-    existingFeedWorkspaceResourceId: existingFeedWorkspaceResourceId
   }
 }
 
@@ -849,11 +849,11 @@ module rgs 'modules/resourceGroups.bicep' = [
   for i in range(0, resourceGroupsCount): {
     name: 'ResourceGroup_${i}_${timeStamp}'
     params: {
-      location: contains(resourceGroupNames[i], 'control-plane')
+      location: contains(resourceGroupsToCreate[i], 'control-plane')
         ? locationControlPlane
-        : (contains(resourceGroupNames[i], 'global-feed') ? locationGlobalFeed : locationVirtualMachines)
-      resourceGroupName: resourceGroupNames[i]
-      tags: contains(resourceGroupNames[i], 'storage') || contains(resourceGroupNames[i], 'hosts')
+        : (contains(resourceGroupsToCreate[i], 'global-feed') ? locationGlobalFeed : locationVirtualMachines)
+      resourceGroupName: resourceGroupsToCreate[i]
+      tags: contains(resourceGroupsToCreate[i], 'storage') || contains(resourceGroupsToCreate[i], 'hosts')
         ? union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, {
             'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'
           })
@@ -875,6 +875,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
   name: 'Deployment_Prereqs_${timeStamp}'
   params: {
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
+    deploymentType: deploymentType
     deploymentVmSize: deploymentVmSize
     diskSku: diskSku
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPassword) ? domainJoinUserPassword : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : '' : ''
@@ -887,9 +888,9 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     keyManagementDisks: keyManagementDisks
     locationVirtualMachines: locationVirtualMachines
     ouPath: vmOUPath
-    resourceGroupControlPlane: resourceNames.outputs.resourceGroupControlPlane
+    resourceGroupControlPlane: deploymentType == 'Complete' ? resourceNames.outputs.resourceGroupControlPlane : split(existingHostPoolResourceId, '/')[4]
     resourceGroupDeployment: resourceNames.outputs.resourceGroupDeployment
-    resourceGroupHosts: resourceNames.outputs.resourceGroupHosts
+    resourceGroupHosts: deploymentType == 'Complete' ? resourceNames.outputs.resourceGroupHosts : existingHostsResourceGroupName
     resourceGroupManagement: resourceNames.outputs.resourceGroupManagement
     resourceGroupStorage: resourceNames.outputs.resourceGroupStorage
     tags: tags
