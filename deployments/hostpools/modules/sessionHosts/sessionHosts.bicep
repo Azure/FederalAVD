@@ -1,6 +1,7 @@
 targetScope = 'subscription'
 
 param deploymentType string
+param appGroupSecurityGroups array
 param artifactsContainerUri string
 param artifactsUserAssignedIdentityResourceId string
 param availability string
@@ -124,6 +125,19 @@ resource hostPoolGet 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' exis
   name: last(split(hostPoolResourceId, '/'))
   scope: resourceGroup(split(hostPoolResourceId, '/')[4])
 }
+
+// Required for EntraID login
+module roleAssignment_VirtualMachineUserLogin '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
+  for i in range(0, length(appGroupSecurityGroups)): if (deploymentType == 'Complete' && !contains(identitySolution, 'DomainServices')) {
+    name: 'RA-Hosts-VMLoginUser-${i}_${timeStamp}'
+    scope: resourceGroup(resourceGroupHosts)
+    params: {
+      principalId: appGroupSecurityGroups[i]
+      principalType: 'Group'
+      roleDefinitionId: 'fb879df8-f326-4884-b1cf-06f3ad86be52' // Virtual Machine User Login
+    }
+  }
+]
 
 module hostPoolUpdate 'modules/hostPoolUpdate.bicep' = if(deploymentType != 'Complete') {
   name: 'HostPoolRegistrationTokenUpdate_${timeStamp}'

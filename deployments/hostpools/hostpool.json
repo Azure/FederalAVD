@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.34.44.8038",
-      "templateHash": "3377313914339300097"
+      "version": "0.35.1.17967",
+      "templateHash": "6669991228099301928"
     }
   },
   "parameters": {
@@ -527,14 +527,16 @@
     },
     "virtualMachineAdminPassword": {
       "type": "securestring",
+      "defaultValue": "",
       "metadata": {
-        "description": "Required. Local administrator password for the AVD session hosts"
+        "description": "Conditional. Local administrator password for the AVD session hosts"
       }
     },
     "virtualMachineAdminUserName": {
       "type": "securestring",
+      "defaultValue": "",
       "metadata": {
-        "description": "Required. The Local Administrator Username for the Session Hosts"
+        "description": "Conditional. The Local Administrator Username for the Session Hosts"
       }
     },
     "domainJoinUserPassword": {
@@ -1029,10 +1031,27 @@
     }
   },
   "variables": {
+    "maxResourcesPerTemplateDeployment": 40,
+    "divisionValue": "[div(parameters('sessionHostCount'), variables('maxResourcesPerTemplateDeployment'))]",
+    "divisionRemainderValue": "[mod(parameters('sessionHostCount'), variables('maxResourcesPerTemplateDeployment'))]",
+    "sessionHostBatchCount": "[if(greater(variables('divisionRemainderValue'), 0), add(variables('divisionValue'), 1), variables('divisionValue'))]",
+    "maxAvSetMembers": 200,
+    "beginAvSetRange": "[div(parameters('sessionHostIndex'), variables('maxAvSetMembers'))]",
+    "endAvSetRange": "[div(add(parameters('sessionHostCount'), parameters('sessionHostIndex')), variables('maxAvSetMembers'))]",
+    "availabilitySetsCount": "[length(range(variables('beginAvSetRange'), add(sub(variables('endAvSetRange'), variables('beginAvSetRange')), 1)))]",
+    "createDeploymentVm": "[or(or(or(and(equals(parameters('deploymentType'), 'Complete'), or(parameters('confidentialVMOSDiskEncryption'), not(empty(parameters('desktopFriendlyName'))))), contains(parameters('identitySolution'), 'DomainServices')), contains(parameters('fslogixStorageService'), 'AzureNetApp')), parameters('drainMode'))]",
+    "deployControlPlaneRG": "[and(equals(parameters('deploymentType'), 'Complete'), empty(parameters('existingFeedWorkspaceResourceId')))]",
+    "resourceGroupsCount": "[add(add(add(add(if(variables('createDeploymentVm'), 1, 0), if(equals(parameters('deploymentType'), 'Complete'), 2, 0)), if(variables('deployControlPlaneRG'), 1, 0)), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), 1, 0)), if(parameters('deployFSLogixStorage'), 1, 0))]",
+    "fslogixNTFSGroups": "[if(empty(parameters('fslogixUserGroups')), parameters('appGroupSecurityGroups'), parameters('fslogixUserGroups'))]",
+    "fslogixStorageCount": "[if(or(or(equals(parameters('identitySolution'), 'EntraId'), equals(parameters('identitySolution'), 'EntraIdIntuneEnrollment')), equals(parameters('fslogixShardOptions'), 'None')), 1, length(variables('fslogixNTFSGroups')))]",
+    "scalingPlanSchedules": "[if(parameters('deployScalingPlan'), createArray(createObject('rampUpStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]))), 'peakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]))), 'rampDownStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]))), 'offPeakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]))), 'name', 'weekdays_schedule', 'daysOfWeek', createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 'rampUpLoadBalancingAlgorithm', parameters('scalingPlanRampUpSchedule').loadBalancingAlgorithm, 'rampUpMinimumHostsPct', parameters('scalingPlanRampUpSchedule').minimumHostsPct, 'rampUpCapacityThresholdPct', parameters('scalingPlanRampUpSchedule').capacityThresholdPct, 'peakLoadBalancingAlgorithm', parameters('scalingPlanPeakSchedule').loadBalancingAlgorithm, 'rampDownLoadBalancingAlgorithm', parameters('scalingPlanRampDownSchedule').loadBalancingAlgorithm, 'rampDownMinimumHostsPct', parameters('scalingPlanRampDownSchedule').minimumHostsPct, 'rampDownCapacityThresholdPct', parameters('scalingPlanRampDownSchedule').capacityThresholdPct, 'rampDownForceLogoffUsers', parameters('scalingPlanForceLogoff'), 'rampDownWaitTimeMinutes', parameters('scalingPlanMinsBeforeLogoff'), 'rampDownNotificationMessage', if(parameters('scalingPlanForceLogoff'), format('You will be logged off in {0} minutes. Make sure to save your work.', parameters('scalingPlanMinsBeforeLogoff')), null()), 'rampDownStopHostsWhen', 'ZeroSessions', 'offPeakLoadBalancingAlgorithm', parameters('scalingPlanOffPeakSchedule').loadBalancingAlgorithm)), createArray())]",
     "sessionHostRegistrationDSCStorageAccount": "[if(startsWith(environment().name, 'USN'), 'wvdexportalcontainer', 'wvdportalstorageblob')]",
     "sessionHostRegistrationDSCUrl": "[if(startsWith(parameters('avdAgentsDSCPackage'), 'https://'), parameters('avdAgentsDSCPackage'), format('https://{0}.blob.{1}/galleryartifacts/{2}', variables('sessionHostRegistrationDSCStorageAccount'), environment().suffixes.storage, parameters('avdAgentsDSCPackage')))]",
     "deployDiskAccessResource": "[if(and(and(contains(parameters('hostPoolType'), 'Personal'), parameters('recoveryServices')), parameters('deployPrivateEndpoints')), true(), false())]",
-    "resourceGroupsCount": "[add(add(add(3, if(empty(parameters('existingFeedWorkspaceResourceId')), 1, 0)), if(parameters('deployFSLogixStorage'), 1, 0)), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), 1, 0))]"
+    "exclusionTag": "[if(and(not(empty(parameters('scalingPlanExclusionTag'))), parameters('deployScalingPlan')), createObject('Microsoft.Compute/virtualMachines', createObject(format('{0}', parameters('scalingPlanExclusionTag')), '')), createObject())]",
+    "hostTags": "[if(not(empty(variables('exclusionTag'))), union(parameters('tags'), variables('exclusionTag')), parameters('tags'))]",
+    "dedicatedHostGroupName": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[8], if(not(empty(parameters('dedicatedHostGroupResourceId'))), last(split(parameters('dedicatedHostGroupResourceId'), '/')), ''))]",
+    "dedicatedHostRG": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[4], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[4], ''))]"
   },
   "resources": [
     {
@@ -1076,8 +1095,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "9814322305939314577"
+              "version": "0.35.1.17967",
+              "templateHash": "16765855435265920252"
             }
           },
           "parameters": {
@@ -1615,419 +1634,10 @@
       }
     },
     {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
-      "name": "[format('Logic_{0}', parameters('timeStamp'))]",
-      "location": "[deployment().location]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "appGroupSecurityGroups": {
-            "value": "[parameters('appGroupSecurityGroups')]"
-          },
-          "avdPrivateLinkPrivateRoutes": {
-            "value": "[parameters('avdPrivateLinkPrivateRoutes')]"
-          },
-          "globalFeedPrivateEndpointSubnetResourceId": {
-            "value": "[parameters('globalFeedPrivateEndpointSubnetResourceId')]"
-          },
-          "dedicatedHostGroupResourceId": {
-            "value": "[parameters('dedicatedHostGroupResourceId')]"
-          },
-          "dedicatedHostResourceId": {
-            "value": "[parameters('dedicatedHostResourceId')]"
-          },
-          "deployFSLogixStorage": {
-            "value": "[parameters('deployFSLogixStorage')]"
-          },
-          "deploymentType": {
-            "value": "[parameters('deploymentType')]"
-          },
-          "deployScalingPlan": {
-            "value": "[parameters('deployScalingPlan')]"
-          },
-          "drainMode": {
-            "value": "[parameters('drainMode')]"
-          },
-          "domainName": {
-            "value": "[parameters('domainName')]"
-          },
-          "fslogixContainerType": {
-            "value": "[parameters('fslogixContainerType')]"
-          },
-          "fslogixFileShareNames": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.fslogixFileShareNames.value]"
-          },
-          "fslogixOUPath": {
-            "value": "[parameters('fslogixOUPath')]"
-          },
-          "fslogixShardOptions": {
-            "value": "[parameters('fslogixShardOptions')]"
-          },
-          "fslogixShardGroups": {
-            "value": "[parameters('fslogixUserGroups')]"
-          },
-          "fslogixStorageService": {
-            "value": "[parameters('fslogixStorageService')]"
-          },
-          "hostPoolType": {
-            "value": "[parameters('hostPoolType')]"
-          },
-          "identitySolution": {
-            "value": "[parameters('identitySolution')]"
-          },
-          "locations": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.locations.value]"
-          },
-          "locationVirtualMachines": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
-          },
-          "resourceGroupControlPlane": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value]"
-          },
-          "resourceGroupDeployment": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value]"
-          },
-          "resourceGroupGlobalFeed": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupGlobalFeed.value]"
-          },
-          "resourceGroupHosts": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value]"
-          },
-          "resourceGroupManagement": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value]"
-          },
-          "resourceGroupStorage": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value]"
-          },
-          "scalingPlanExclusionTag": {
-            "value": "[parameters('scalingPlanExclusionTag')]"
-          },
-          "scalingPlanForceLogoff": {
-            "value": "[parameters('scalingPlanForceLogoff')]"
-          },
-          "scalingPlanMinsBeforeLogoff": {
-            "value": "[parameters('scalingPlanMinsBeforeLogoff')]"
-          },
-          "scalingPlanRampUpSchedule": {
-            "value": "[parameters('scalingPlanRampUpSchedule')]"
-          },
-          "scalingPlanPeakSchedule": {
-            "value": "[parameters('scalingPlanPeakSchedule')]"
-          },
-          "scalingPlanRampDownSchedule": {
-            "value": "[parameters('scalingPlanRampDownSchedule')]"
-          },
-          "scalingPlanOffPeakSchedule": {
-            "value": "[parameters('scalingPlanOffPeakSchedule')]"
-          },
-          "sessionHostCount": {
-            "value": "[parameters('sessionHostCount')]"
-          },
-          "sessionHostIndex": {
-            "value": "[parameters('sessionHostIndex')]"
-          },
-          "tags": {
-            "value": "[parameters('tags')]"
-          },
-          "vmOUPath": {
-            "value": "[parameters('vmOUPath')]"
-          },
-          "workspaceResourceId": {
-            "value": "[parameters('existingFeedWorkspaceResourceId')]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "14151279180530579313"
-            }
-          },
-          "parameters": {
-            "appGroupSecurityGroups": {
-              "type": "array"
-            },
-            "avdPrivateLinkPrivateRoutes": {
-              "type": "string"
-            },
-            "globalFeedPrivateEndpointSubnetResourceId": {
-              "type": "string"
-            },
-            "dedicatedHostGroupResourceId": {
-              "type": "string"
-            },
-            "dedicatedHostResourceId": {
-              "type": "string"
-            },
-            "deployFSLogixStorage": {
-              "type": "bool"
-            },
-            "deploymentType": {
-              "type": "string"
-            },
-            "deployScalingPlan": {
-              "type": "bool",
-              "defaultValue": false
-            },
-            "domainName": {
-              "type": "string"
-            },
-            "drainMode": {
-              "type": "bool"
-            },
-            "fslogixContainerType": {
-              "type": "string"
-            },
-            "fslogixFileShareNames": {
-              "type": "object"
-            },
-            "fslogixOUPath": {
-              "type": "string"
-            },
-            "fslogixShardOptions": {
-              "type": "string"
-            },
-            "fslogixShardGroups": {
-              "type": "array"
-            },
-            "fslogixStorageService": {
-              "type": "string"
-            },
-            "hostPoolType": {
-              "type": "string",
-              "defaultValue": "Pooled DepthFirst"
-            },
-            "identitySolution": {
-              "type": "string"
-            },
-            "locations": {
-              "type": "object"
-            },
-            "locationVirtualMachines": {
-              "type": "string"
-            },
-            "resourceGroupControlPlane": {
-              "type": "string"
-            },
-            "resourceGroupDeployment": {
-              "type": "string"
-            },
-            "resourceGroupGlobalFeed": {
-              "type": "string"
-            },
-            "resourceGroupHosts": {
-              "type": "string"
-            },
-            "resourceGroupManagement": {
-              "type": "string"
-            },
-            "resourceGroupStorage": {
-              "type": "string"
-            },
-            "scalingPlanExclusionTag": {
-              "type": "string"
-            },
-            "scalingPlanForceLogoff": {
-              "type": "bool",
-              "defaultValue": false
-            },
-            "scalingPlanMinsBeforeLogoff": {
-              "type": "int",
-              "defaultValue": 0
-            },
-            "scalingPlanOffPeakSchedule": {
-              "type": "object",
-              "defaultValue": {}
-            },
-            "scalingPlanPeakSchedule": {
-              "type": "object",
-              "defaultValue": {}
-            },
-            "scalingPlanRampDownSchedule": {
-              "type": "object",
-              "defaultValue": {}
-            },
-            "scalingPlanRampUpSchedule": {
-              "type": "object",
-              "defaultValue": {}
-            },
-            "sessionHostCount": {
-              "type": "int"
-            },
-            "sessionHostIndex": {
-              "type": "int"
-            },
-            "tags": {
-              "type": "object"
-            },
-            "vmOUPath": {
-              "type": "string"
-            },
-            "workspaceResourceId": {
-              "type": "string"
-            }
-          },
-          "variables": {
-            "dedicatedHostGroupName": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[8], if(not(empty(parameters('dedicatedHostGroupResourceId'))), last(split(parameters('dedicatedHostGroupResourceId'), '/')), ''))]",
-            "dedicatedHostRG": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[4], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[4], ''))]",
-            "scalingPlanSchedules": "[if(parameters('deployScalingPlan'), createArray(createObject('rampUpStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]))), 'peakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]))), 'rampDownStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]))), 'offPeakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]))), 'name', 'weekdays_schedule', 'daysOfWeek', createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 'rampUpLoadBalancingAlgorithm', parameters('scalingPlanRampUpSchedule').loadBalancingAlgorithm, 'rampUpMinimumHostsPct', parameters('scalingPlanRampUpSchedule').minimumHostsPct, 'rampUpCapacityThresholdPct', parameters('scalingPlanRampUpSchedule').capacityThresholdPct, 'peakLoadBalancingAlgorithm', parameters('scalingPlanPeakSchedule').loadBalancingAlgorithm, 'rampDownLoadBalancingAlgorithm', parameters('scalingPlanRampDownSchedule').loadBalancingAlgorithm, 'rampDownMinimumHostsPct', parameters('scalingPlanRampDownSchedule').minimumHostsPct, 'rampDownCapacityThresholdPct', parameters('scalingPlanRampDownSchedule').capacityThresholdPct, 'rampDownForceLogoffUsers', parameters('scalingPlanForceLogoff'), 'rampDownWaitTimeMinutes', parameters('scalingPlanMinsBeforeLogoff'), 'rampDownNotificationMessage', if(parameters('scalingPlanForceLogoff'), format('You will be logged off in {0} minutes. Make sure to save your work.', parameters('scalingPlanMinsBeforeLogoff')), null()), 'rampDownStopHostsWhen', 'ZeroSessions', 'offPeakLoadBalancingAlgorithm', parameters('scalingPlanOffPeakSchedule').loadBalancingAlgorithm)), createArray())]",
-            "exclusionTag": "[if(not(empty(parameters('scalingPlanExclusionTag'))), createObject('Microsoft.Compute/virtualMachines', createObject(format('{0}', parameters('scalingPlanExclusionTag')), '')), createObject())]",
-            "varTags": "[if(not(empty(variables('exclusionTag'))), union(parameters('tags'), variables('exclusionTag')), parameters('tags'))]",
-            "maxResourcesPerTemplateDeployment": 40,
-            "divisionValue": "[div(parameters('sessionHostCount'), variables('maxResourcesPerTemplateDeployment'))]",
-            "divisionRemainderValue": "[mod(parameters('sessionHostCount'), variables('maxResourcesPerTemplateDeployment'))]",
-            "sessionHostBatchCount": "[if(greater(variables('divisionRemainderValue'), 0), add(variables('divisionValue'), 1), variables('divisionValue'))]",
-            "maxAvSetMembers": 200,
-            "beginAvSetRange": "[div(parameters('sessionHostIndex'), variables('maxAvSetMembers'))]",
-            "endAvSetRange": "[div(add(parameters('sessionHostCount'), parameters('sessionHostIndex')), variables('maxAvSetMembers'))]",
-            "availabilitySetsCount": "[length(range(variables('beginAvSetRange'), add(sub(variables('endAvSetRange'), variables('beginAvSetRange')), 1)))]",
-            "fslogixFileShares": "[parameters('fslogixFileShareNames')[parameters('fslogixContainerType')]]",
-            "fslogixUserGroups": "[if(empty(parameters('fslogixShardGroups')), parameters('appGroupSecurityGroups'), parameters('fslogixShardGroups'))]",
-            "countStorage": "[if(or(or(equals(parameters('identitySolution'), 'EntraId'), equals(parameters('identitySolution'), 'EntraIdIntuneEnrollment')), equals(parameters('fslogixShardOptions'), 'None')), 1, length(variables('fslogixUserGroups')))]",
-            "netbios": "[split(parameters('domainName'), '.')[0]]",
-            "pooledHostPool": "[if(equals(split(parameters('hostPoolType'), ' ')[0], 'Pooled'), true(), false())]",
-            "resGroupDeployment": "[if(or(equals(parameters('deploymentType'), 'Complete'), parameters('drainMode')), createArray(parameters('resourceGroupDeployment')), createArray())]",
-            "resGroupHosts": [
-              "[parameters('resourceGroupHosts')]"
-            ],
-            "resGroupControlPlane": "[if(empty(parameters('workspaceResourceId')), createArray(parameters('resourceGroupControlPlane')), createArray())]",
-            "resGroupGlobalFeed": "[if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createArray(parameters('resourceGroupGlobalFeed')), createArray())]",
-            "resGroupManagement": [
-              "[parameters('resourceGroupManagement')]"
-            ],
-            "resGroupStorage": "[if(parameters('deployFSLogixStorage'), createArray(parameters('resourceGroupStorage')), createArray())]",
-            "resourceGroupNames": "[union(variables('resGroupDeployment'), variables('resGroupHosts'), variables('resGroupControlPlane'), variables('resGroupGlobalFeed'), variables('resGroupManagement'), variables('resGroupStorage'))]",
-            "roleDefinitions": {
-              "Contributor": "b24988ac-6180-42a0-ab88-20f7382dd24c",
-              "DesktopVirtualizationApplicationGroupContributor": "86240b0e-9422-4c43-887b-b61143f32ba8",
-              "DesktopVirtualizationPowerOnContributor": "489581de-a3bd-480d-9518-53dea7416b33",
-              "DesktopVirtualizationPowerOnOffContributor": "40c5ff49-9181-41f8-ae61-143b0e78555e",
-              "DesktopVirtualizationSessionHostOperator": "2ad6aaab-ead9-4eaa-8ac5-da422f562408",
-              "DesktopVirtualizationUser": "1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63",
-              "DesktopVirtualizationWorkspaceContributor": "21efdde3-836f-432b-bf3d-3e8e734d4b2b",
-              "KeyVaultCryptoOfficer": "14b46e9e-c2b7-41b4-b07b-48a6ebf60603",
-              "KeyVaultCryptoServiceEncryptionUser": "e147488a-f6f5-4113-8e2d-b22465e65bf6",
-              "KeyVaultCryptoServiceReleaseUser": "08bbd89e-9f13-488c-ac41-acfcb10c90ab",
-              "KeyVaultReader": "21090545-7ca7-4776-b22c-e363652d74d2",
-              "Reader": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
-              "RoleBasedAccessControlAdministrator": "f58310d9-a9f6-439a-9e8d-f62e7b41a168",
-              "StorageAccountContributor": "17d1049b-9a84-46fb-8f53-869881c3d3ab",
-              "StorageBlobDataReader": "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",
-              "VirtualMachineContributor": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c",
-              "VirtualMachineUserLogin": "fb879df8-f326-4884-b1cf-06f3ad86be52"
-            },
-            "SecurityGroupsCount": "[length(parameters('appGroupSecurityGroups'))]",
-            "smbServerLocation": "[parameters('locations')[parameters('locationVirtualMachines')].abbreviation]",
-            "fslogixStorageSku": "[if(equals(parameters('fslogixStorageService'), 'None'), 'None', split(parameters('fslogixStorageService'), ' ')[1])]",
-            "fslogixStorageSolution": "[split(parameters('fslogixStorageService'), ' ')[0]]",
-            "storageSuffix": "[environment().suffixes.storage]"
-          },
-          "resources": [],
-          "outputs": {
-            "availabilitySetsCount": {
-              "type": "int",
-              "value": "[variables('availabilitySetsCount')]"
-            },
-            "beginAvSetRange": {
-              "type": "int",
-              "value": "[variables('beginAvSetRange')]"
-            },
-            "dedicatedHostGroupZones": {
-              "type": "array",
-              "value": "[if(not(empty(variables('dedicatedHostGroupName'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dedicatedHostRG')), 'Microsoft.Compute/hostGroups', variables('dedicatedHostGroupName')), '2020-12-01', 'full').zones, createArray())]"
-            },
-            "divisionRemainderValue": {
-              "type": "int",
-              "value": "[variables('divisionRemainderValue')]"
-            },
-            "fslogixFileShareNames": {
-              "type": "array",
-              "value": "[variables('fslogixFileShares')]"
-            },
-            "fslogixOUPath": {
-              "type": "string",
-              "value": "[if(empty(parameters('fslogixOUPath')), parameters('vmOUPath'), parameters('fslogixOUPath'))]"
-            },
-            "fslogixStorageCount": {
-              "type": "int",
-              "value": "[variables('countStorage')]"
-            },
-            "fslogixStorageSku": {
-              "type": "string",
-              "value": "[variables('fslogixStorageSku')]"
-            },
-            "fslogixStorageSolution": {
-              "type": "string",
-              "value": "[variables('fslogixStorageSolution')]"
-            },
-            "fslogixUserGroups": {
-              "type": "array",
-              "value": "[variables('fslogixUserGroups')]"
-            },
-            "maxResourcesPerTemplateDeployment": {
-              "type": "int",
-              "value": "[variables('maxResourcesPerTemplateDeployment')]"
-            },
-            "netbios": {
-              "type": "string",
-              "value": "[variables('netbios')]"
-            },
-            "pooledHostPool": {
-              "type": "bool",
-              "value": "[variables('pooledHostPool')]"
-            },
-            "resourceGroupNames": {
-              "type": "array",
-              "value": "[variables('resourceGroupNames')]"
-            },
-            "roleDefinitions": {
-              "type": "object",
-              "value": "[variables('roleDefinitions')]"
-            },
-            "scalingPlanSchedules": {
-              "type": "array",
-              "value": "[variables('scalingPlanSchedules')]"
-            },
-            "sessionHostBatchCount": {
-              "type": "int",
-              "value": "[variables('sessionHostBatchCount')]"
-            },
-            "SecurityGroupsCount": {
-              "type": "int",
-              "value": "[variables('SecurityGroupsCount')]"
-            },
-            "smbServerLocation": {
-              "type": "string",
-              "value": "[variables('smbServerLocation')]"
-            },
-            "storageSuffix": {
-              "type": "string",
-              "value": "[variables('storageSuffix')]"
-            },
-            "tags": {
-              "type": "object",
-              "value": "[variables('varTags')]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp')))]"
-      ]
-    },
-    {
       "copy": {
         "name": "rgs",
         "count": "[length(range(0, variables('resourceGroupsCount')))]"
       },
-      "condition": "[equals(parameters('deploymentType'), 'Complete')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2022-09-01",
       "name": "[format('ResourceGroup_{0}_{1}', range(0, variables('resourceGroupsCount'))[copyIndex()], parameters('timeStamp'))]",
@@ -2038,11 +1648,11 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "location": "[if(contains(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupNames.value[range(0, variables('resourceGroupsCount'))[copyIndex()]], 'control-plane'), createObject('value', parameters('locationControlPlane')), if(contains(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupNames.value[range(0, variables('resourceGroupsCount'))[copyIndex()]], 'global-feed'), if(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[2], split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), createObject('value', '')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)))]",
+          "location": "[if(contains(union(union(if(variables('createDeploymentVm'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value), createArray()), if(variables('deployControlPlaneRG'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value), createArray()), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupGlobalFeed.value), createArray()), if(parameters('deployFSLogixStorage'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value), createArray())), union(if(variables('createDeploymentVm'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value), createArray()), if(variables('deployControlPlaneRG'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value), createArray()), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupGlobalFeed.value), createArray()), if(parameters('deployFSLogixStorage'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value), createArray())))[range(0, variables('resourceGroupsCount'))[copyIndex()]], 'control-plane'), createObject('value', parameters('locationControlPlane')), if(contains(union(union(if(variables('createDeploymentVm'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value), createArray()), if(variables('deployControlPlaneRG'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value), createArray()), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupGlobalFeed.value), createArray()), if(parameters('deployFSLogixStorage'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value), createArray())), union(if(variables('createDeploymentVm'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value), createArray()), if(variables('deployControlPlaneRG'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value), createArray()), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupGlobalFeed.value), createArray()), if(parameters('deployFSLogixStorage'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value), createArray())))[range(0, variables('resourceGroupsCount'))[copyIndex()]], 'global-feed'), if(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[2], split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), createObject('value', '')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)))]",
           "resourceGroupName": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupNames.value[range(0, variables('resourceGroupsCount'))[copyIndex()]]]"
+            "value": "[union(union(if(variables('createDeploymentVm'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value), createArray()), if(variables('deployControlPlaneRG'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value), createArray()), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupGlobalFeed.value), createArray()), if(parameters('deployFSLogixStorage'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value), createArray())), union(if(variables('createDeploymentVm'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value), createArray()), if(variables('deployControlPlaneRG'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value), createArray()), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupGlobalFeed.value), createArray()), if(parameters('deployFSLogixStorage'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value), createArray())))[range(0, variables('resourceGroupsCount'))[copyIndex()]]]"
           },
-          "tags": "[if(or(contains(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupNames.value[range(0, variables('resourceGroupsCount'))[copyIndex()]], 'storage'), contains(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupNames.value[range(0, variables('resourceGroupsCount'))[copyIndex()]], 'hosts')), createObject('value', union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.hostPoolName.value)))), createObject('value', coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())))]"
+          "tags": "[if(or(contains(union(union(if(variables('createDeploymentVm'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value), createArray()), if(variables('deployControlPlaneRG'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value), createArray()), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupGlobalFeed.value), createArray()), if(parameters('deployFSLogixStorage'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value), createArray())), union(if(variables('createDeploymentVm'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value), createArray()), if(variables('deployControlPlaneRG'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value), createArray()), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupGlobalFeed.value), createArray()), if(parameters('deployFSLogixStorage'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value), createArray())))[range(0, variables('resourceGroupsCount'))[copyIndex()]], 'storage'), contains(union(union(if(variables('createDeploymentVm'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value), createArray()), if(variables('deployControlPlaneRG'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value), createArray()), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupGlobalFeed.value), createArray()), if(parameters('deployFSLogixStorage'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value), createArray())), union(if(variables('createDeploymentVm'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupManagement.value), createArray()), if(variables('deployControlPlaneRG'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value), createArray()), if(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupGlobalFeed.value), createArray()), if(parameters('deployFSLogixStorage'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value), createArray()), if(equals(parameters('deploymentType'), 'Complete'), createArray(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value), createArray())))[range(0, variables('resourceGroupsCount'))[copyIndex()]], 'hosts')), createObject('value', union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupControlPlane.value, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.hostPoolName.value)))), createObject('value', coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())))]"
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
@@ -2050,8 +1660,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "7430052904510100539"
+              "version": "0.35.1.17967",
+              "templateHash": "14596935775923886558"
             }
           },
           "parameters": {
@@ -2077,12 +1687,79 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp')))]"
       ]
     },
     {
-      "condition": "[or(equals(parameters('deploymentType'), 'Complete'), parameters('drainMode'))]",
+      "condition": "[and(equals(parameters('deploymentType'), 'Complete'), or(parameters('deployScalingPlan'), parameters('startVmOnConnect')))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('Subscription_RoleAssignments_{0}', parameters('timeStamp'))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "avdObjectId": {
+            "value": "[parameters('avdObjectId')]"
+          },
+          "deployScalingPlan": {
+            "value": "[parameters('deployScalingPlan')]"
+          },
+          "startVmOnConnect": {
+            "value": "[parameters('startVmOnConnect')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.35.1.17967",
+              "templateHash": "1351845737027940908"
+            }
+          },
+          "parameters": {
+            "avdObjectId": {
+              "type": "string"
+            },
+            "deployScalingPlan": {
+              "type": "bool"
+            },
+            "startVmOnConnect": {
+              "type": "bool"
+            }
+          },
+          "resources": [
+            {
+              "condition": "[and(not(parameters('deployScalingPlan')), parameters('startVmOnConnect'))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(parameters('avdObjectId'), '489581de-a3bd-480d-9518-53dea7416b33', subscription().id)]",
+              "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', '489581de-a3bd-480d-9518-53dea7416b33')]",
+                "principalId": "[parameters('avdObjectId')]"
+              }
+            },
+            {
+              "condition": "[parameters('deployScalingPlan')]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(parameters('avdObjectId'), '40c5ff49-9181-41f8-ae61-143b0e78555e', subscription().id)]",
+              "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', '40c5ff49-9181-41f8-ae61-143b0e78555e')]",
+                "principalId": "[parameters('avdObjectId')]"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "condition": "[variables('createDeploymentVm')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2022-09-01",
       "name": "[format('Deployment_Prereqs_{0}', parameters('timeStamp'))]",
@@ -2093,17 +1770,8 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "appGroupSecurityGroups": {
-            "value": "[map(parameters('appGroupSecurityGroups'), lambda('group', lambdaVariables('group').objectId))]"
-          },
-          "avdObjectId": {
-            "value": "[parameters('avdObjectId')]"
-          },
           "confidentialVMOSDiskEncryption": {
             "value": "[parameters('confidentialVMOSDiskEncryption')]"
-          },
-          "deployScalingPlan": {
-            "value": "[parameters('deployScalingPlan')]"
           },
           "deploymentVmSize": {
             "value": "[parameters('deploymentVmSize')]"
@@ -2152,12 +1820,6 @@
           "resourceGroupStorage": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value]"
           },
-          "roleDefinitions": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.roleDefinitions.value]"
-          },
-          "startVmOnConnect": {
-            "value": "[parameters('startVmOnConnect')]"
-          },
           "tags": {
             "value": "[parameters('tags')]"
           },
@@ -2167,8 +1829,8 @@
           "userAssignedIdentityNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.userAssignedIdentityNameConv.value]"
           },
-          "virtualMachineAdminPassword": "[if(not(empty(parameters('virtualMachineAdminPassword'))), createObject('value', parameters('virtualMachineAdminPassword')), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminPassword')))]",
-          "virtualMachineAdminUserName": "[if(not(empty(parameters('virtualMachineAdminUserName'))), createObject('value', parameters('virtualMachineAdminUserName')), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminUserName')))]",
+          "virtualMachineAdminPassword": "[if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminPassword')), createObject('value', parameters('virtualMachineAdminPassword')))]",
+          "virtualMachineAdminUserName": "[if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminUserName')), createObject('value', parameters('virtualMachineAdminUserName')))]",
           "virtualMachineName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.depVirtualMachineName.value]"
           },
@@ -2188,21 +1850,12 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "3081887227879470178"
+              "version": "0.35.1.17967",
+              "templateHash": "3272558827429307217"
             }
           },
           "parameters": {
-            "appGroupSecurityGroups": {
-              "type": "array"
-            },
-            "avdObjectId": {
-              "type": "string"
-            },
             "confidentialVMOSDiskEncryption": {
-              "type": "bool"
-            },
-            "deployScalingPlan": {
               "type": "bool"
             },
             "diskSku": {
@@ -2256,12 +1909,6 @@
             "resourceGroupStorage": {
               "type": "string"
             },
-            "roleDefinitions": {
-              "type": "object"
-            },
-            "startVmOnConnect": {
-              "type": "bool"
-            },
             "tags": {
               "type": "object"
             },
@@ -2292,21 +1939,30 @@
           },
           "variables": {
             "deploymentUserAssignedIdentityName": "[replace(parameters('userAssignedIdentityNameConv'), 'TOKEN', 'avd-deployment')]",
+            "roleDefinitions": {
+              "Contributor": "b24988ac-6180-42a0-ab88-20f7382dd24c",
+              "DesktopVirtualizationApplicationGroupContributor": "86240b0e-9422-4c43-887b-b61143f32ba8",
+              "DesktopVirtualizationSessionHostOperator": "2ad6aaab-ead9-4eaa-8ac5-da422f562408",
+              "KeyVaultCryptoOfficer": "14b46e9e-c2b7-41b4-b07b-48a6ebf60603",
+              "RoleBasedAccessControlAdministrator": "f58310d9-a9f6-439a-9e8d-f62e7b41a168",
+              "StorageAccountContributor": "17d1049b-9a84-46fb-8f53-869881c3d3ab",
+              "VirtualMachineContributor": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c"
+            },
             "roleAssignmentsControlPlane": [
               {
-                "roleDefinitionId": "[parameters('roleDefinitions').DesktopVirtualizationApplicationGroupContributor]",
+                "roleDefinitionId": "[variables('roleDefinitions').DesktopVirtualizationApplicationGroupContributor]",
                 "depName": "ControlPlane-DVAppGroupCont",
                 "resourceGroup": "[parameters('resourceGroupControlPlane')]",
                 "subscription": "[subscription().subscriptionId]"
               },
               {
-                "roleDefinitionId": "[parameters('roleDefinitions').DesktopVirtualizationSessionHostOperator]",
+                "roleDefinitionId": "[variables('roleDefinitions').DesktopVirtualizationSessionHostOperator]",
                 "depName": "ControlPlane-DVSessionHostOp",
                 "resourceGroup": "[parameters('resourceGroupControlPlane')]",
                 "subscription": "[subscription().subscriptionId]"
               },
               {
-                "roleDefinitionId": "[parameters('roleDefinitions').RoleBasedAccessControlAdministrator]",
+                "roleDefinitionId": "[variables('roleDefinitions').RoleBasedAccessControlAdministrator]",
                 "depName": "ControlPlane-RBACAdmin",
                 "resourceGroup": "[parameters('resourceGroupControlPlane')]",
                 "subscription": "[subscription().subscriptionId]"
@@ -2314,7 +1970,7 @@
             ],
             "roleAssignmentsDeployment": [
               {
-                "roleDefinitionId": "[parameters('roleDefinitions').Contributor]",
+                "roleDefinitionId": "[variables('roleDefinitions').Contributor]",
                 "depName": "Deployment-Cont",
                 "resourceGroup": "[parameters('resourceGroupDeployment')]",
                 "subscription": "[subscription().subscriptionId]"
@@ -2322,43 +1978,23 @@
             ],
             "roleAssignmentsHosts": [
               {
-                "roleDefinitionId": "[parameters('roleDefinitions').VirtualMachineContributor]",
+                "roleDefinitionId": "[variables('roleDefinitions').VirtualMachineContributor]",
                 "depName": "Hosts-VMCont",
                 "resourceGroup": "[parameters('resourceGroupHosts')]",
                 "subscription": "[subscription().subscriptionId]"
               },
               {
-                "roleDefinitionId": "[parameters('roleDefinitions').RoleBasedAccessControlAdministrator]",
+                "roleDefinitionId": "[variables('roleDefinitions').RoleBasedAccessControlAdministrator]",
                 "depName": "Hosts-RBACAdmin",
                 "resourceGroup": "[parameters('resourceGroupHosts')]",
                 "subscription": "[subscription().subscriptionId]"
               }
             ],
-            "roleAssignmentsManagement": "[if(and(parameters('confidentialVMOSDiskEncryption'), equals(parameters('keyManagementDisks'), 'CustomerManagedHSM')), createArray(createObject('roleDefinitionId', parameters('roleDefinitions').KeyVaultCryptoOfficer, 'depName', 'Management-KVCryptoOff', 'resourceGroup', parameters('resourceGroupManagement'), 'subscription', subscription().subscriptionId)), createArray())]",
-            "roleAssignmentStorage": "[if(and(parameters('fslogix'), contains(parameters('identitySolution'), 'DomainServices')), createArray(createObject('roleDefinitionId', parameters('roleDefinitions').StorageAccountContributor, 'depName', 'Storage-StorageAcctCont', 'resourceGroup', parameters('resourceGroupStorage'), 'subscription', subscription().subscriptionId), createObject('roleDefinitionId', parameters('roleDefinitions').RoleBasedAccessControlAdministrator, 'depName', 'Storage-RBACAdmin', 'resourceGroup', parameters('resourceGroupStorage'), 'subscription', subscription().subscriptionId)), createArray())]",
+            "roleAssignmentsManagement": "[if(and(parameters('confidentialVMOSDiskEncryption'), equals(parameters('keyManagementDisks'), 'CustomerManagedHSM')), createArray(createObject('roleDefinitionId', variables('roleDefinitions').KeyVaultCryptoOfficer, 'depName', 'Management-KVCryptoOff', 'resourceGroup', parameters('resourceGroupManagement'), 'subscription', subscription().subscriptionId)), createArray())]",
+            "roleAssignmentStorage": "[if(and(parameters('fslogix'), contains(parameters('identitySolution'), 'DomainServices')), createArray(createObject('roleDefinitionId', variables('roleDefinitions').StorageAccountContributor, 'depName', 'Storage-StorageAcctCont', 'resourceGroup', parameters('resourceGroupStorage'), 'subscription', subscription().subscriptionId), createObject('roleDefinitionId', variables('roleDefinitions').RoleBasedAccessControlAdministrator, 'depName', 'Storage-RBACAdmin', 'resourceGroup', parameters('resourceGroupStorage'), 'subscription', subscription().subscriptionId)), createArray())]",
             "roleAssignments": "[union(variables('roleAssignmentsControlPlane'), variables('roleAssignmentsDeployment'), variables('roleAssignmentsHosts'), variables('roleAssignmentsManagement'), variables('roleAssignmentStorage'))]"
           },
           "resources": [
-            {
-              "condition": "[and(not(parameters('deployScalingPlan')), parameters('startVmOnConnect'))]",
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2022-04-01",
-              "name": "[guid(parameters('avdObjectId'), parameters('roleDefinitions').DesktopVirtualizationPowerOnContributor, subscription().id)]",
-              "properties": {
-                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitions').DesktopVirtualizationPowerOnContributor)]",
-                "principalId": "[parameters('avdObjectId')]"
-              }
-            },
-            {
-              "condition": "[parameters('deployScalingPlan')]",
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2022-04-01",
-              "name": "[guid(parameters('avdObjectId'), parameters('roleDefinitions').DesktopVirtualizationPowerOnOffContributor, subscription().id)]",
-              "properties": {
-                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitions').DesktopVirtualizationPowerOnOffContributor)]",
-                "principalId": "[parameters('avdObjectId')]"
-              }
-            },
             {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2022-09-01",
@@ -2386,8 +2022,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "14469373193012697693"
+                      "version": "0.35.1.17967",
+                      "templateHash": "7223037469739127119"
                     }
                   },
                   "parameters": {
@@ -2435,109 +2071,6 @@
             },
             {
               "copy": {
-                "name": "roleAssignment_VirtualMachineUserLogin",
-                "count": "[length(range(0, length(parameters('appGroupSecurityGroups'))))]"
-              },
-              "condition": "[not(contains(parameters('identitySolution'), 'DomainServices'))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
-              "name": "[format('RA-Hosts-VMLoginUser-{0}_{1}', range(0, length(parameters('appGroupSecurityGroups')))[copyIndex()], parameters('timeStamp'))]",
-              "resourceGroup": "[parameters('resourceGroupHosts')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "principalId": {
-                    "value": "[parameters('appGroupSecurityGroups')[range(0, length(parameters('appGroupSecurityGroups')))[copyIndex()]]]"
-                  },
-                  "principalType": {
-                    "value": "Group"
-                  },
-                  "roleDefinitionId": {
-                    "value": "[parameters('roleDefinitions').VirtualMachineUserLogin]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "6525434110057138837"
-                    }
-                  },
-                  "parameters": {
-                    "roleDefinitionId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. You can provide either the role definition GUID or its fully qualified ID in the following format: \\'/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11\\'.\nYou can find the GUIDs in the ID column on the table at https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles.\n"
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. The Principal or Object ID of the Security Principal (User, Group, Service Principal, Managed Identity)."
-                      }
-                    },
-                    "resourceGroupName": {
-                      "type": "string",
-                      "defaultValue": "[resourceGroup().name]",
-                      "metadata": {
-                        "description": "Optional. Name of the Resource Group to assign the RBAC role to. If not provided, will use the current scope for deployment."
-                      }
-                    },
-                    "subscriptionId": {
-                      "type": "string",
-                      "defaultValue": "[subscription().subscriptionId]",
-                      "metadata": {
-                        "description": "Optional. Subscription ID of the subscription to assign the RBAC role to. If not provided, will use the current scope for deployment."
-                      }
-                    },
-                    "principalType": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "allowedValues": [
-                        "ServicePrincipal",
-                        "Group",
-                        "User",
-                        "ForeignGroup",
-                        "Device",
-                        ""
-                      ],
-                      "metadata": {
-                        "description": "Optional. The principal type of the assigned principal ID."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "name": "[guid(parameters('subscriptionId'), parameters('resourceGroupName'), variables('roleDefinitionIdVar'), parameters('principalId'))]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(parameters('subscriptionId'), parameters('resourceGroupName'), variables('roleDefinitionIdVar'), parameters('principalId')))]"
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "copy": {
                 "name": "roleAssignments_deployment",
                 "count": "[length(range(0, length(variables('roleAssignments'))))]"
               },
@@ -2568,8 +2101,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "6525434110057138837"
+                      "version": "0.35.1.17967",
+                      "templateHash": "16632942609114401251"
                     }
                   },
                   "parameters": {
@@ -2719,8 +2252,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "1013323439710943104"
+                      "version": "0.35.1.17967",
+                      "templateHash": "15410223720482295382"
                     }
                   },
                   "parameters": {
@@ -3004,7 +2537,6 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp')))]",
         "rgs"
       ]
@@ -3115,8 +2647,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "10689830983204496338"
+              "version": "0.35.1.17967",
+              "templateHash": "6196694890075289055"
             }
           },
           "parameters": {
@@ -3265,8 +2797,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "5694340932988629233"
+                      "version": "0.35.1.17967",
+                      "templateHash": "1564737594051290683"
                     }
                   },
                   "parameters": {
@@ -3574,8 +3106,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "8509222346352098988"
+                              "version": "0.35.1.17967",
+                              "templateHash": "1529978796435635393"
                             }
                           },
                           "parameters": {
@@ -3699,8 +3231,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "6134864855795773090"
+                              "version": "0.35.1.17967",
+                              "templateHash": "7982212884660654592"
                             }
                           },
                           "parameters": {
@@ -3852,8 +3384,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "1183013297500085975"
+                              "version": "0.35.1.17967",
+                              "templateHash": "16721328752939913346"
                             },
                             "name": "Private Endpoints"
                           },
@@ -3990,8 +3522,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "8915024968289799956"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "8187759041132427019"
                                     }
                                   },
                                   "parameters": {
@@ -4192,8 +3724,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "5694340932988629233"
+                      "version": "0.35.1.17967",
+                      "templateHash": "1564737594051290683"
                     }
                   },
                   "parameters": {
@@ -4501,8 +4033,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "8509222346352098988"
+                              "version": "0.35.1.17967",
+                              "templateHash": "1529978796435635393"
                             }
                           },
                           "parameters": {
@@ -4626,8 +4158,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "6134864855795773090"
+                              "version": "0.35.1.17967",
+                              "templateHash": "7982212884660654592"
                             }
                           },
                           "parameters": {
@@ -4779,8 +4311,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "1183013297500085975"
+                              "version": "0.35.1.17967",
+                              "templateHash": "16721328752939913346"
                             },
                             "name": "Private Endpoints"
                           },
@@ -4917,8 +4449,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "8915024968289799956"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "8187759041132427019"
                                     }
                                   },
                                   "parameters": {
@@ -5105,8 +4637,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "11524334342226904419"
+                      "version": "0.35.1.17967",
+                      "templateHash": "14031280064954670505"
                     }
                   },
                   "parameters": {
@@ -5184,8 +4716,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "16232228338602198061"
+                      "version": "0.35.1.17967",
+                      "templateHash": "1389614215205903806"
                     }
                   },
                   "parameters": {
@@ -5329,8 +4861,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "3533574574379547843"
+                      "version": "0.35.1.17967",
+                      "templateHash": "8292064194255275434"
                     }
                   },
                   "parameters": {
@@ -5452,8 +4984,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "787505678276091093"
+                      "version": "0.35.1.17967",
+                      "templateHash": "13129262554527043125"
                     }
                   },
                   "parameters": {
@@ -5524,8 +5056,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "1660174567512534540"
+                      "version": "0.35.1.17967",
+                      "templateHash": "14017725321139818552"
                     }
                   },
                   "parameters": {
@@ -5565,8 +5097,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "17390454559028996338"
+                              "version": "0.35.1.17967",
+                              "templateHash": "5473122101270690344"
                             }
                           },
                           "parameters": {
@@ -5643,8 +5175,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "6076631269012240476"
+                      "version": "0.35.1.17967",
+                      "templateHash": "14935042936752818493"
                     }
                   },
                   "parameters": {
@@ -5788,12 +5320,16 @@
           "deployScalingPlan": {
             "value": "[parameters('deployScalingPlan')]"
           },
-          "deploymentUserAssignedIdentityClientId": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
+          "deploymentUserAssignedIdentityClientId": "[if(and(equals(parameters('deploymentType'), 'Complete'), not(empty(parameters('desktopFriendlyName')))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
+          "deploymentVirtualMachineName": "[if(and(equals(parameters('deploymentType'), 'Complete'), not(empty(parameters('desktopFriendlyName')))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.virtualMachineName.value), createObject('value', ''))]",
           "desktopApplicationGroupName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.desktopApplicationGroupName.value]"
           },
           "desktopFriendlyName": {
             "value": "[parameters('desktopFriendlyName')]"
+          },
+          "enableMonitoring": {
+            "value": "[parameters('enableMonitoring')]"
           },
           "existingFeedWorkspaceResourceId": {
             "value": "[parameters('existingFeedWorkspaceResourceId')]"
@@ -5872,10 +5408,6 @@
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
           "logAnalyticsWorkspaceResourceId": "[if(and(parameters('enableMonitoring'), equals(parameters('deploymentType'), 'Complete')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', ''))]",
-          "deploymentVirtualMachineName": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.virtualMachineName.value), createObject('value', ''))]",
-          "enableMonitoring": {
-            "value": "[parameters('enableMonitoring')]"
-          },
           "privateEndpointNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.privateEndpointNameConv.value]"
           },
@@ -5891,14 +5423,11 @@
           "resourceGroupDeployment": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value]"
           },
-          "roleDefinitions": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.roleDefinitions.value]"
-          },
           "scalingPlanName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.scalingPlanName.value]"
           },
           "scalingPlanSchedules": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.scalingPlanSchedules.value]"
+            "value": "[variables('scalingPlanSchedules')]"
           },
           "scalingPlanExclusionTag": {
             "value": "[parameters('scalingPlanExclusionTag')]"
@@ -5934,8 +5463,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "12461135744397623854"
+              "version": "0.35.1.17967",
+              "templateHash": "4138407585796502612"
             }
           },
           "parameters": {
@@ -6032,9 +5561,6 @@
             "resourceGroupGlobalFeed": {
               "type": "string"
             },
-            "roleDefinitions": {
-              "type": "object"
-            },
             "scalingPlanExclusionTag": {
               "type": "string"
             },
@@ -6100,8 +5626,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "9406235504191906031"
+                      "version": "0.35.1.17967",
+                      "templateHash": "2855360297688464665"
                     }
                   },
                   "parameters": {
@@ -6141,8 +5667,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "9406235504191906031"
+                      "version": "0.35.1.17967",
+                      "templateHash": "2855360297688464665"
                     }
                   },
                   "parameters": {
@@ -6182,8 +5708,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "9406235504191906031"
+                      "version": "0.35.1.17967",
+                      "templateHash": "2855360297688464665"
                     }
                   },
                   "parameters": {
@@ -6272,8 +5798,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "170056655592690182"
+                      "version": "0.35.1.17967",
+                      "templateHash": "4448995079449668769"
                     }
                   },
                   "parameters": {
@@ -6436,8 +5962,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "1183013297500085975"
+                              "version": "0.35.1.17967",
+                              "templateHash": "16721328752939913346"
                             },
                             "name": "Private Endpoints"
                           },
@@ -6574,8 +6100,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "8915024968289799956"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "8187759041132427019"
                                     }
                                   },
                                   "parameters": {
@@ -6735,9 +6261,6 @@
                   "resourceGroupDeployment": {
                     "value": "[parameters('resourceGroupDeployment')]"
                   },
-                  "roleDefinitions": {
-                    "value": "[parameters('roleDefinitions')]"
-                  },
                   "appGroupSecurityGroups": {
                     "value": "[parameters('appGroupSecurityGroups')]"
                   },
@@ -6754,8 +6277,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "7007147591269158028"
+                      "version": "0.35.1.17967",
+                      "templateHash": "4309560649078828716"
                     }
                   },
                   "parameters": {
@@ -6783,9 +6306,6 @@
                     "deploymentVirtualMachineName": {
                       "type": "string"
                     },
-                    "roleDefinitions": {
-                      "type": "object"
-                    },
                     "resourceGroupDeployment": {
                       "type": "string"
                     },
@@ -6806,7 +6326,7 @@
                         "enabled": true
                       }
                     ],
-                    "desktopVirtualizationUserRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitions').DesktopVirtualizationUser)]"
+                    "desktopVirtualizationUserRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]"
                   },
                   "resources": [
                     {
@@ -6888,8 +6408,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "13541559409024036656"
+                              "version": "0.35.1.17967",
+                              "templateHash": "12433917788940418245"
                             }
                           },
                           "parameters": {
@@ -7037,8 +6557,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "13678765670731695382"
+                      "version": "0.35.1.17967",
+                      "templateHash": "15377062149278558588"
                     }
                   },
                   "parameters": {
@@ -7170,8 +6690,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "1183013297500085975"
+                              "version": "0.35.1.17967",
+                              "templateHash": "16721328752939913346"
                             },
                             "name": "Private Endpoints"
                           },
@@ -7308,8 +6828,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "8915024968289799956"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "8187759041132427019"
                                     }
                                   },
                                   "parameters": {
@@ -7472,8 +6992,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "2754618590366156433"
+                      "version": "0.35.1.17967",
+                      "templateHash": "2815854447506049166"
                     }
                   },
                   "parameters": {
@@ -7760,8 +7280,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "13678765670731695382"
+                      "version": "0.35.1.17967",
+                      "templateHash": "15377062149278558588"
                     }
                   },
                   "parameters": {
@@ -7893,8 +7413,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "1183013297500085975"
+                              "version": "0.35.1.17967",
+                              "templateHash": "16721328752939913346"
                             },
                             "name": "Private Endpoints"
                           },
@@ -8031,8 +7551,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "8915024968289799956"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "8187759041132427019"
                                     }
                                   },
                                   "parameters": {
@@ -8160,7 +7680,6 @@
       },
       "dependsOn": [
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp')))]",
         "rgs"
@@ -8202,33 +7721,39 @@
           "azureTablePrivateDnsZoneResourceId": {
             "value": "[parameters('azureTablePrivateDnsZoneResourceId')]"
           },
-          "deploymentUserAssignedIdentityClientId": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
-          "deploymentVirtualMachineName": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.virtualMachineName.value), createObject('value', ''))]",
+          "deploymentUserAssignedIdentityClientId": "[if(and(equals(parameters('deploymentType'), 'Complete'), or(contains(parameters('identitySolution'), 'DomainServices'), contains(parameters('fslogixStorageService'), 'AzureNetApp'))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
+          "deploymentVirtualMachineName": "[if(and(equals(parameters('deploymentType'), 'Complete'), or(contains(parameters('identitySolution'), 'DomainServices'), contains(parameters('fslogixStorageService'), 'AzureNetApp'))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.virtualMachineName.value), createObject('value', ''))]",
           "domainJoinUserPassword": "[if(contains(parameters('identitySolution'), 'DomainServices'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
           "domainJoinUserPrincipalName": "[if(contains(parameters('identitySolution'), 'DomainServices'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
           "domainName": {
             "value": "[parameters('domainName')]"
           },
+          "encryptionKeyVaultResourceId": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultResourceId.value), createObject('value', ''))]",
+          "encryptionKeyVaultUri": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultUri.value), createObject('value', ''))]",
           "fslogixAdminGroups": {
             "value": "[parameters('fslogixAdminGroups')]"
           },
+          "fslogixEncryptionKeyNameConv": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyNames.value.fslogix]"
+          },
           "fslogixFileShares": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.fslogixFileShareNames.value]"
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.fslogixFileShareNames.value[parameters('fslogixContainerType')]]"
           },
           "fslogixShardOptions": {
             "value": "[parameters('fslogixShardOptions')]"
           },
-          "encryptionKeyVaultResourceId": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultResourceId.value), createObject('value', ''))]",
-          "encryptionKeyVaultUri": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultUri.value), createObject('value', ''))]",
-          "fslogixEncryptionKeyNameConv": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyNames.value.fslogix]"
-          },
           "fslogixUserGroups": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.fslogixUserGroups.value]"
+            "value": "[variables('fslogixNTFSGroups')]"
+          },
+          "functionAppDelegatedSubnetResourceId": {
+            "value": "[parameters('functionAppSubnetResourceId')]"
           },
           "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ControlPlane_{0}', parameters('timeStamp'))), '2022-09-01').outputs.hostPoolResourceId.value), createObject('value', parameters('existingHostPoolResourceId')))]",
           "identitySolution": {
             "value": "[parameters('identitySolution')]"
+          },
+          "increaseQuota": {
+            "value": "[parameters('deployIncreaseQuota')]"
           },
           "increaseQuotaAppInsightsName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.appInsightsNames.value.increaseStorageQuota]"
@@ -8264,9 +7789,7 @@
           "netAppCapacityPoolName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.netAppCapacityPoolName.value]"
           },
-          "ouPath": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.fslogixOUPath.value]"
-          },
+          "ouPath": "[if(empty(parameters('fslogixOUPath')), createObject('value', parameters('vmOUPath')), createObject('value', parameters('fslogixOUPath')))]",
           "privateEndpoint": {
             "value": "[parameters('deployPrivateEndpoints')]"
           },
@@ -8278,6 +7801,9 @@
           },
           "privateEndpointSubnetResourceId": {
             "value": "[parameters('hostPoolResourcesPrivateEndpointSubnetResourceId')]"
+          },
+          "privateLinkScopeResourceId": {
+            "value": "[parameters('azureMonitorPrivateLinkScopeResourceId')]"
           },
           "recoveryServices": {
             "value": "[parameters('recoveryServices')]"
@@ -8291,26 +7817,25 @@
           "resourceGroupStorage": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupStorage.value]"
           },
+          "serverFarmId": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.appServicePlanId.value), createObject('value', ''))]",
           "shareSizeInGB": {
             "value": "[parameters('fslogixShareSizeInGB')]"
           },
           "smbServerLocation": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.smbServerLocation.value]"
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.locations.value[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location].abbreviation]"
           },
           "storageAccountNamePrefix": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.storageAccountNames.value.fslogix]"
           },
           "storageCount": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.fslogixStorageCount.value]"
+            "value": "[variables('fslogixStorageCount')]"
           },
           "storageIndex": {
             "value": "[parameters('fslogixStorageIndex')]"
           },
-          "storageSku": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.fslogixStorageSku.value]"
-          },
+          "storageSku": "[if(equals(parameters('fslogixStorageService'), 'None'), createObject('value', 'None'), createObject('value', split(parameters('fslogixStorageService'), ' ')[1]))]",
           "storageSolution": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.fslogixStorageSolution.value]"
+            "value": "[split(parameters('fslogixStorageService'), ' ')[0]]"
           },
           "tags": {
             "value": "[parameters('tags')]"
@@ -8323,17 +7848,7 @@
           },
           "userAssignedIdentityNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.userAssignedIdentityNameConv.value]"
-          },
-          "functionAppDelegatedSubnetResourceId": {
-            "value": "[parameters('functionAppSubnetResourceId')]"
-          },
-          "increaseQuota": {
-            "value": "[parameters('deployIncreaseQuota')]"
-          },
-          "privateLinkScopeResourceId": {
-            "value": "[parameters('azureMonitorPrivateLinkScopeResourceId')]"
-          },
-          "serverFarmId": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.appServicePlanId.value), createObject('value', ''))]"
+          }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
@@ -8341,8 +7856,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "16276660074897622642"
+              "version": "0.35.1.17967",
+              "templateHash": "12651170016296090515"
             }
           },
           "parameters": {
@@ -8580,8 +8095,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "11166503403568315534"
+                      "version": "0.35.1.17967",
+                      "templateHash": "14194574250055049654"
                     }
                   },
                   "parameters": {
@@ -8695,8 +8210,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "6134864855795773090"
+                              "version": "0.35.1.17967",
+                              "templateHash": "7982212884660654592"
                             }
                           },
                           "parameters": {
@@ -8848,8 +8363,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "6134864855795773090"
+                              "version": "0.35.1.17967",
+                              "templateHash": "7982212884660654592"
                             }
                           },
                           "parameters": {
@@ -8965,8 +8480,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "14469373193012697693"
+                              "version": "0.35.1.17967",
+                              "templateHash": "7223037469739127119"
                             }
                           },
                           "parameters": {
@@ -9049,8 +8564,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "790700466623368904"
+                              "version": "0.35.1.17967",
+                              "templateHash": "14734313407027087108"
                             }
                           },
                           "parameters": {
@@ -9124,8 +8639,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "790700466623368904"
+                              "version": "0.35.1.17967",
+                              "templateHash": "14734313407027087108"
                             }
                           },
                           "parameters": {
@@ -9254,8 +8769,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "10626815180458099694"
+                      "version": "0.35.1.17967",
+                      "templateHash": "8826197841211345115"
                     }
                   },
                   "parameters": {
@@ -9440,8 +8955,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "13547910057401883719"
+                              "version": "0.35.1.17967",
+                              "templateHash": "19180658463487527"
                             }
                           },
                           "parameters": {
@@ -9680,6 +9195,9 @@
                   "deploymentUserAssignedIdentityClientId": {
                     "value": "[parameters('deploymentUserAssignedIdentityClientId')]"
                   },
+                  "deploymentVirtualMachineName": {
+                    "value": "[parameters('deploymentVirtualMachineName')]"
+                  },
                   "domainJoinUserPassword": "[if(contains(parameters('identitySolution'), 'DomainServices'), createObject('value', parameters('domainJoinUserPassword')), createObject('value', ''))]",
                   "domainJoinUserPrincipalName": "[if(contains(parameters('identitySolution'), 'DomainServices'), createObject('value', parameters('domainJoinUserPrincipalName')), createObject('value', ''))]",
                   "encryptionKeyVaultUri": {
@@ -9727,9 +9245,6 @@
                   },
                   "logAnalyticsWorkspaceId": {
                     "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
-                  },
-                  "deploymentVirtualMachineName": {
-                    "value": "[parameters('deploymentVirtualMachineName')]"
                   },
                   "ouPath": {
                     "value": "[parameters('ouPath')]"
@@ -9808,8 +9323,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "390184324961339199"
+                      "version": "0.35.1.17967",
+                      "templateHash": "6812079040858532470"
                     }
                   },
                   "parameters": {
@@ -9835,6 +9350,9 @@
                       "type": "string"
                     },
                     "deploymentUserAssignedIdentityClientId": {
+                      "type": "string"
+                    },
+                    "deploymentVirtualMachineName": {
                       "type": "string"
                     },
                     "domainJoinUserPassword": {
@@ -9889,9 +9407,6 @@
                       "type": "string"
                     },
                     "logAnalyticsWorkspaceId": {
-                      "type": "string"
-                    },
-                    "deploymentVirtualMachineName": {
                       "type": "string"
                     },
                     "ouPath": {
@@ -10146,8 +9661,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "11439588710375647528"
+                              "version": "0.35.1.17967",
+                              "templateHash": "672649860393984779"
                             }
                           },
                           "parameters": {
@@ -10221,8 +9736,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "7642656671179755957"
+                              "version": "0.35.1.17967",
+                              "templateHash": "17467722044526334947"
                             }
                           },
                           "parameters": {
@@ -10307,8 +9822,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "1183013297500085975"
+                              "version": "0.35.1.17967",
+                              "templateHash": "16721328752939913346"
                             },
                             "name": "Private Endpoints"
                           },
@@ -10445,8 +9960,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "8915024968289799956"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "8187759041132427019"
                                     }
                                   },
                                   "parameters": {
@@ -10628,8 +10143,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "13547910057401883719"
+                              "version": "0.35.1.17967",
+                              "templateHash": "19180658463487527"
                             }
                           },
                           "parameters": {
@@ -10895,8 +10410,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "10356910932308442433"
+                              "version": "0.35.1.17967",
+                              "templateHash": "6776772689445481220"
                             }
                           },
                           "parameters": {
@@ -11186,8 +10701,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "16022161484318206459"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "294187350952567963"
                                     }
                                   },
                                   "parameters": {
@@ -11264,8 +10779,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.34.44.8038",
-                                              "templateHash": "1997934252589248725"
+                                              "version": "0.35.1.17967",
+                                              "templateHash": "4379851230440853091"
                                             },
                                             "name": "Recovery Services Vault Replication Fabric Replication Protection Containers",
                                             "description": "This module deploys a Recovery Services Vault Replication Protection Container.\r\n\r\n> **Note**: this version of the module only supports the `instanceType: 'A2A'` scenario.",
@@ -11359,8 +10874,8 @@
                                                   "metadata": {
                                                     "_generator": {
                                                       "name": "bicep",
-                                                      "version": "0.34.44.8038",
-                                                      "templateHash": "18325076108424275611"
+                                                      "version": "0.35.1.17967",
+                                                      "templateHash": "7903851955280521026"
                                                     },
                                                     "name": "Recovery Services Vault Replication Fabric Replication Protection Container Replication Protection Container Mappings",
                                                     "description": "This module deploys a Recovery Services Vault (RSV) Replication Protection Container Mapping.\r\n\r\n> **Note**: this version of the module only supports the `instanceType: 'A2A'` scenario.",
@@ -11576,8 +11091,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "14233407496937287355"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "9566894333475316453"
                                     }
                                   },
                                   "parameters": {
@@ -11698,8 +11213,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "17986907261288750890"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "16338603576692067709"
                                     }
                                   },
                                   "parameters": {
@@ -11822,8 +11337,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "3021376645187625391"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "5145395848376497391"
                                     }
                                   },
                                   "parameters": {
@@ -11960,8 +11475,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.34.44.8038",
-                                              "templateHash": "5899289881117393051"
+                                              "version": "0.35.1.17967",
+                                              "templateHash": "10627512779401929238"
                                             }
                                           },
                                           "parameters": {
@@ -12123,8 +11638,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "11970709779153542286"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "6046044451365347305"
                                     }
                                   },
                                   "parameters": {
@@ -12229,8 +11744,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "671954963682415545"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "8916985775571682859"
                                     }
                                   },
                                   "parameters": {
@@ -12399,8 +11914,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "4888582588782926387"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "5286180321221735862"
                                     }
                                   },
                                   "parameters": {
@@ -12543,8 +12058,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "1183013297500085975"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "16721328752939913346"
                                     },
                                     "name": "Private Endpoints"
                                   },
@@ -12681,8 +12196,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.34.44.8038",
-                                              "templateHash": "8915024968289799956"
+                                              "version": "0.35.1.17967",
+                                              "templateHash": "8187759041132427019"
                                             }
                                           },
                                           "parameters": {
@@ -12948,8 +12463,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "2759704036377064069"
+                              "version": "0.35.1.17967",
+                              "templateHash": "7484202764977465105"
                             }
                           },
                           "parameters": {
@@ -13337,8 +12852,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "1660174567512534540"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "14017725321139818552"
                                     }
                                   },
                                   "parameters": {
@@ -13378,8 +12893,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.34.44.8038",
-                                              "templateHash": "17390454559028996338"
+                                              "version": "0.35.1.17967",
+                                              "templateHash": "5473122101270690344"
                                             }
                                           },
                                           "parameters": {
@@ -13445,8 +12960,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "6525434110057138837"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "16632942609114401251"
                                     }
                                   },
                                   "parameters": {
@@ -13550,8 +13065,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "11439588710375647528"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "672649860393984779"
                                     }
                                   },
                                   "parameters": {
@@ -13636,8 +13151,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "17497334492830622587"
+                              "version": "0.35.1.17967",
+                              "templateHash": "15550944484201633464"
                             }
                           },
                           "parameters": {
@@ -13713,7 +13228,6 @@
       "dependsOn": [
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('ControlPlane_{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp')))]"
       ]
@@ -13729,6 +13243,7 @@
         },
         "mode": "Incremental",
         "parameters": {
+          "appGroupSecurityGroups": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', map(parameters('appGroupSecurityGroups'), lambda('group', lambdaVariables('group').objectId))), createObject('value', createArray()))]",
           "artifactsContainerUri": {
             "value": "[parameters('artifactsContainerUri')]"
           },
@@ -13743,10 +13258,10 @@
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.availabilitySetNamePrefix.value]"
           },
           "availabilitySetsCount": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.availabilitySetsCount.value]"
+            "value": "[variables('availabilitySetsCount')]"
           },
           "availabilitySetsIndex": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.beginAvSetRange.value]"
+            "value": "[variables('beginAvSetRange')]"
           },
           "availabilityZones": {
             "value": "[parameters('availabilityZones')]"
@@ -13773,9 +13288,7 @@
           "dedicatedHostGroupResourceId": {
             "value": "[parameters('dedicatedHostGroupResourceId')]"
           },
-          "dedicatedHostGroupZones": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.dedicatedHostGroupZones.value]"
-          },
+          "dedicatedHostGroupZones": "[if(not(empty(variables('dedicatedHostGroupName'))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dedicatedHostRG')), 'Microsoft.Compute/hostGroups', variables('dedicatedHostGroupName')), '2024-11-01', 'full').zones), createObject('value', createArray()))]",
           "dedicatedHostResourceId": {
             "value": "[parameters('dedicatedHostResourceId')]"
           },
@@ -13788,8 +13301,8 @@
           "deploymentType": {
             "value": "[parameters('deploymentType')]"
           },
-          "deploymentUserAssignedIdentityClientId": "[if(or(equals(parameters('deploymentType'), 'Complete'), parameters('drainMode')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
-          "deploymentVirtualMachineName": "[if(or(equals(parameters('deploymentType'), 'Complete'), parameters('drainMode')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.virtualMachineName.value), createObject('value', ''))]",
+          "deploymentUserAssignedIdentityClientId": "[if(or(parameters('drainMode'), and(equals(parameters('deploymentType'), 'Complete'), or(parameters('confidentialVMOSDiskEncryption'), parameters('drainMode')))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
+          "deploymentVirtualMachineName": "[if(or(parameters('drainMode'), and(equals(parameters('deploymentType'), 'Complete'), or(parameters('confidentialVMOSDiskEncryption'), parameters('drainMode')))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.virtualMachineName.value), createObject('value', ''))]",
           "diskAccessName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.diskAccessName.value]"
           },
@@ -13803,7 +13316,7 @@
             "value": "[parameters('diskSku')]"
           },
           "divisionRemainderValue": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.divisionRemainderValue.value]"
+            "value": "[variables('divisionRemainderValue')]"
           },
           "domainJoinUserPassword": "[if(contains(parameters('identitySolution'), 'DomainServices'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
           "domainJoinUserPrincipalName": "[if(contains(parameters('identitySolution'), 'DomainServices'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
@@ -13823,12 +13336,8 @@
             "value": "[parameters('encryptionAtHost')]"
           },
           "encryptionKeyName": "[if(parameters('confidentialVMOSDiskEncryption'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyNames.value.confidentialVMs), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyNames.value.virtualMachines))]",
-          "encryptionKeyVaultResourceId": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultResourceId.value]"
-          },
-          "encryptionKeyVaultUri": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultUri.value]"
-          },
+          "encryptionKeyVaultResourceId": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultResourceId.value), createObject('value', ''))]",
+          "encryptionKeyVaultUri": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp'))), '2022-09-01').outputs.encryptionKeyVaultUri.value), createObject('value', ''))]",
           "existingDiskAccessResourceId": {
             "value": "[parameters('existingDiskAccessResourceId')]"
           },
@@ -13845,7 +13354,7 @@
             "value": "[parameters('fslogixContainerType')]"
           },
           "fslogixFileShareNames": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.fslogixFileShareNames.value]"
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.fslogixFileShareNames.value[parameters('fslogixContainerType')]]"
           },
           "fslogixLocalStorageAccountResourceIds": "[if(and(equals(parameters('deploymentType'), 'Complete'), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix_{0}', parameters('timeStamp'))), '2022-09-01').outputs.storageAccountResourceIds.value), createObject('value', parameters('fslogixExistingLocalStorageAccountResourceIds')))]",
           "fslogixLocalNetAppVolumeResourceIds": "[if(and(equals(parameters('deploymentType'), 'Complete'), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix_{0}', parameters('timeStamp'))), '2022-09-01').outputs.netAppVolumeResourceIds.value), createObject('value', parameters('fslogixExistingLocalNetAppVolumeResourceIds')))]",
@@ -13889,7 +13398,7 @@
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
           "maxResourcesPerTemplateDeployment": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.maxResourcesPerTemplateDeployment.value]"
+            "value": "[variables('maxResourcesPerTemplateDeployment')]"
           },
           "osDiskNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.virtualMachineDiskNameConv.value]"
@@ -13897,9 +13406,7 @@
           "ouPath": {
             "value": "[parameters('vmOUPath')]"
           },
-          "pooledHostPool": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.pooledHostPool.value]"
-          },
+          "pooledHostPool": "[if(equals(split(parameters('hostPoolType'), ' ')[0], 'Pooled'), createObject('value', true()), createObject('value', false()))]",
           "privateEndpoint": {
             "value": "[parameters('deployPrivateEndpoints')]"
           },
@@ -13933,7 +13440,7 @@
             "value": "[parameters('secureBootEnabled')]"
           },
           "sessionHostBatchCount": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.sessionHostBatchCount.value]"
+            "value": "[variables('sessionHostBatchCount')]"
           },
           "sessionHostCustomizations": {
             "value": "[parameters('sessionHostCustomizations')]"
@@ -13945,12 +13452,14 @@
             "value": "[variables('sessionHostRegistrationDSCUrl')]"
           },
           "storageSuffix": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.storageSuffix.value]"
+            "value": "[environment().suffixes.storage]"
           },
           "subnetResourceId": {
             "value": "[parameters('virtualMachineSubnetResourceId')]"
           },
-          "tags": "[if(parameters('deployScalingPlan'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp'))), '2022-09-01').outputs.tags.value), createObject('value', parameters('tags')))]",
+          "tags": {
+            "value": "[variables('hostTags')]"
+          },
           "timeStamp": {
             "value": "[parameters('timeStamp')]"
           },
@@ -13960,8 +13469,8 @@
           "useAgentDownloadEndpoint": {
             "value": "[parameters('useAgentDownloadEndpoint')]"
           },
-          "virtualMachineAdminPassword": "[if(not(empty(parameters('virtualMachineAdminPassword'))), createObject('value', parameters('virtualMachineAdminPassword')), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminPassword')))]",
-          "virtualMachineAdminUserName": "[if(not(empty(parameters('virtualMachineAdminUserName'))), createObject('value', parameters('virtualMachineAdminUserName')), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminUserName')))]",
+          "virtualMachineAdminPassword": "[if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminPassword')), createObject('value', parameters('virtualMachineAdminPassword')))]",
+          "virtualMachineAdminUserName": "[if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminUserName')), createObject('value', parameters('virtualMachineAdminUserName')))]",
           "virtualMachineNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.virtualMachineNameConv.value]"
           },
@@ -13982,13 +13491,16 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "9022451298697088498"
+              "version": "0.35.1.17967",
+              "templateHash": "3121642393898737206"
             }
           },
           "parameters": {
             "deploymentType": {
               "type": "string"
+            },
+            "appGroupSecurityGroups": {
+              "type": "array"
             },
             "artifactsContainerUri": {
               "type": "string"
@@ -14288,6 +13800,109 @@
           },
           "resources": [
             {
+              "copy": {
+                "name": "roleAssignment_VirtualMachineUserLogin",
+                "count": "[length(range(0, length(parameters('appGroupSecurityGroups'))))]"
+              },
+              "condition": "[and(equals(parameters('deploymentType'), 'Complete'), not(contains(parameters('identitySolution'), 'DomainServices')))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2022-09-01",
+              "name": "[format('RA-Hosts-VMLoginUser-{0}_{1}', range(0, length(parameters('appGroupSecurityGroups')))[copyIndex()], parameters('timeStamp'))]",
+              "resourceGroup": "[parameters('resourceGroupHosts')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "principalId": {
+                    "value": "[parameters('appGroupSecurityGroups')[range(0, length(parameters('appGroupSecurityGroups')))[copyIndex()]]]"
+                  },
+                  "principalType": {
+                    "value": "Group"
+                  },
+                  "roleDefinitionId": {
+                    "value": "fb879df8-f326-4884-b1cf-06f3ad86be52"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.35.1.17967",
+                      "templateHash": "16632942609114401251"
+                    }
+                  },
+                  "parameters": {
+                    "roleDefinitionId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. You can provide either the role definition GUID or its fully qualified ID in the following format: \\'/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11\\'.\nYou can find the GUIDs in the ID column on the table at https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles.\n"
+                      }
+                    },
+                    "principalId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. The Principal or Object ID of the Security Principal (User, Group, Service Principal, Managed Identity)."
+                      }
+                    },
+                    "resourceGroupName": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().name]",
+                      "metadata": {
+                        "description": "Optional. Name of the Resource Group to assign the RBAC role to. If not provided, will use the current scope for deployment."
+                      }
+                    },
+                    "subscriptionId": {
+                      "type": "string",
+                      "defaultValue": "[subscription().subscriptionId]",
+                      "metadata": {
+                        "description": "Optional. Subscription ID of the subscription to assign the RBAC role to. If not provided, will use the current scope for deployment."
+                      }
+                    },
+                    "principalType": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "allowedValues": [
+                        "ServicePrincipal",
+                        "Group",
+                        "User",
+                        "ForeignGroup",
+                        "Device",
+                        ""
+                      ],
+                      "metadata": {
+                        "description": "Optional. The principal type of the assigned principal ID."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "name": "[guid(parameters('subscriptionId'), parameters('resourceGroupName'), variables('roleDefinitionIdVar'), parameters('principalId'))]",
+                      "properties": {
+                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(parameters('subscriptionId'), parameters('resourceGroupName'), variables('roleDefinitionIdVar'), parameters('principalId')))]"
+                    }
+                  }
+                }
+              }
+            },
+            {
               "condition": "[not(equals(parameters('deploymentType'), 'Complete'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2022-09-01",
@@ -14311,8 +13926,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "5459656956360228503"
+                      "version": "0.35.1.17967",
+                      "templateHash": "17638290625834575705"
                     }
                   },
                   "parameters": {
@@ -14402,8 +14017,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "17444623113956598397"
+                      "version": "0.35.1.17967",
+                      "templateHash": "1070140431662590801"
                     }
                   },
                   "parameters": {
@@ -14489,8 +14104,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "1183013297500085975"
+                              "version": "0.35.1.17967",
+                              "templateHash": "16721328752939913346"
                             },
                             "name": "Private Endpoints"
                           },
@@ -14627,8 +14242,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "8915024968289799956"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "8187759041132427019"
                                     }
                                   },
                                   "parameters": {
@@ -14773,8 +14388,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "4486459036674400979"
+                      "version": "0.35.1.17967",
+                      "templateHash": "15069600444008488471"
                     }
                   },
                   "parameters": {
@@ -14856,8 +14471,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "214853337794461351"
+                              "version": "0.35.1.17967",
+                              "templateHash": "16545644524279712660"
                             }
                           },
                           "parameters": {
@@ -14967,8 +14582,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "8381990915516201527"
+                      "version": "0.35.1.17967",
+                      "templateHash": "17848307777579986313"
                     }
                   },
                   "parameters": {
@@ -15088,8 +14703,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "6134864855795773090"
+                              "version": "0.35.1.17967",
+                              "templateHash": "7982212884660654592"
                             }
                           },
                           "parameters": {
@@ -15230,8 +14845,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "17312699116475120160"
+                              "version": "0.35.1.17967",
+                              "templateHash": "5835519831802579"
                             },
                             "name": "Virtual Machine RunCommand",
                             "description": "This module deploys a Virtual Machine Run Command.",
@@ -15447,8 +15062,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "790700466623368904"
+                              "version": "0.35.1.17967",
+                              "templateHash": "14734313407027087108"
                             }
                           },
                           "parameters": {
@@ -15521,8 +15136,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "13626591985675589670"
+                              "version": "0.35.1.17967",
+                              "templateHash": "5662035552211489852"
                             }
                           },
                           "parameters": {
@@ -15674,8 +15289,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "10870084527836200119"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "16359292015566206732"
                                     }
                                   },
                                   "parameters": {
@@ -15753,8 +15368,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.34.44.8038",
-                                              "templateHash": "237304901007533823"
+                                              "version": "0.35.1.17967",
+                                              "templateHash": "16934152336260557347"
                                             }
                                           },
                                           "parameters": {
@@ -15885,8 +15500,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "790700466623368904"
+                              "version": "0.35.1.17967",
+                              "templateHash": "14734313407027087108"
                             }
                           },
                           "parameters": {
@@ -15957,8 +15572,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "10609106190886129308"
+                      "version": "0.35.1.17967",
+                      "templateHash": "5452699988713900091"
                     }
                   },
                   "parameters": {
@@ -16024,8 +15639,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "4483979345839065885"
+                      "version": "0.35.1.17967",
+                      "templateHash": "15165188745881781765"
                     },
                     "name": "Availability Sets",
                     "description": "This module deploys an Availability Set.",
@@ -16157,8 +15772,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "8258583180595769194"
+                      "version": "0.35.1.17967",
+                      "templateHash": "15323630621820534561"
                     }
                   },
                   "parameters": {
@@ -16202,8 +15817,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "8258583180595769194"
+                      "version": "0.35.1.17967",
+                      "templateHash": "15323630621820534561"
                     }
                   },
                   "parameters": {
@@ -16446,8 +16061,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "3512352010210522969"
+                      "version": "0.35.1.17967",
+                      "templateHash": "12480268520840959334"
                     }
                   },
                   "parameters": {
@@ -17270,8 +16885,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "967082805131979046"
+                              "version": "0.35.1.17967",
+                              "templateHash": "2290590488027709457"
                             }
                           },
                           "parameters": {
@@ -17397,8 +17012,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "3754476303649588219"
+                              "version": "0.35.1.17967",
+                              "templateHash": "6728984626657406033"
                             }
                           },
                           "parameters": {
@@ -17448,8 +17063,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "13372130225809528729"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "15693775441999765361"
                                     }
                                   },
                                   "parameters": {
@@ -17554,8 +17169,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "17312699116475120160"
+                              "version": "0.35.1.17967",
+                              "templateHash": "5835519831802579"
                             },
                             "name": "Virtual Machine RunCommand",
                             "description": "This module deploys a Virtual Machine Run Command.",
@@ -17840,8 +17455,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "10356910932308442433"
+                      "version": "0.35.1.17967",
+                      "templateHash": "6776772689445481220"
                     }
                   },
                   "parameters": {
@@ -18131,8 +17746,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "16022161484318206459"
+                              "version": "0.35.1.17967",
+                              "templateHash": "294187350952567963"
                             }
                           },
                           "parameters": {
@@ -18209,8 +17824,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "1997934252589248725"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "4379851230440853091"
                                     },
                                     "name": "Recovery Services Vault Replication Fabric Replication Protection Containers",
                                     "description": "This module deploys a Recovery Services Vault Replication Protection Container.\r\n\r\n> **Note**: this version of the module only supports the `instanceType: 'A2A'` scenario.",
@@ -18304,8 +17919,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.34.44.8038",
-                                              "templateHash": "18325076108424275611"
+                                              "version": "0.35.1.17967",
+                                              "templateHash": "7903851955280521026"
                                             },
                                             "name": "Recovery Services Vault Replication Fabric Replication Protection Container Replication Protection Container Mappings",
                                             "description": "This module deploys a Recovery Services Vault (RSV) Replication Protection Container Mapping.\r\n\r\n> **Note**: this version of the module only supports the `instanceType: 'A2A'` scenario.",
@@ -18521,8 +18136,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "14233407496937287355"
+                              "version": "0.35.1.17967",
+                              "templateHash": "9566894333475316453"
                             }
                           },
                           "parameters": {
@@ -18643,8 +18258,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "17986907261288750890"
+                              "version": "0.35.1.17967",
+                              "templateHash": "16338603576692067709"
                             }
                           },
                           "parameters": {
@@ -18767,8 +18382,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "3021376645187625391"
+                              "version": "0.35.1.17967",
+                              "templateHash": "5145395848376497391"
                             }
                           },
                           "parameters": {
@@ -18905,8 +18520,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "5899289881117393051"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "10627512779401929238"
                                     }
                                   },
                                   "parameters": {
@@ -19068,8 +18683,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "11970709779153542286"
+                              "version": "0.35.1.17967",
+                              "templateHash": "6046044451365347305"
                             }
                           },
                           "parameters": {
@@ -19174,8 +18789,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "671954963682415545"
+                              "version": "0.35.1.17967",
+                              "templateHash": "8916985775571682859"
                             }
                           },
                           "parameters": {
@@ -19344,8 +18959,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "4888582588782926387"
+                              "version": "0.35.1.17967",
+                              "templateHash": "5286180321221735862"
                             }
                           },
                           "parameters": {
@@ -19488,8 +19103,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.34.44.8038",
-                              "templateHash": "1183013297500085975"
+                              "version": "0.35.1.17967",
+                              "templateHash": "16721328752939913346"
                             },
                             "name": "Private Endpoints"
                           },
@@ -19626,8 +19241,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.34.44.8038",
-                                      "templateHash": "8915024968289799956"
+                                      "version": "0.35.1.17967",
+                                      "templateHash": "8187759041132427019"
                                     }
                                   },
                                   "parameters": {
@@ -19816,8 +19431,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "5086551182371861184"
+                      "version": "0.35.1.17967",
+                      "templateHash": "3897411168803802557"
                     }
                   },
                   "parameters": {
@@ -19902,8 +19517,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "17244242018915762710"
+                      "version": "0.35.1.17967",
+                      "templateHash": "18389308373791301428"
                     }
                   },
                   "parameters": {
@@ -19937,14 +19552,13 @@
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('ControlPlane_{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix_{0}', parameters('timeStamp')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Logic_{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Management_{0}', parameters('timeStamp')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp')))]",
         "rgs"
       ]
     },
     {
-      "condition": "[or(equals(parameters('deploymentType'), 'Complete'), parameters('drainMode'))]",
+      "condition": "[variables('createDeploymentVm')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2022-09-01",
       "name": "[format('CleanUp_{0}', parameters('timeStamp'))]",
@@ -19958,18 +19572,18 @@
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "deploymentVirtualMachineName": "[if(or(equals(parameters('deploymentType'), 'Complete'), parameters('drainMode')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.virtualMachineName.value), createObject('value', ''))]",
+          "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.virtualMachineName.value), createObject('value', ''))]",
           "resourceGroupDeployment": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupDeployment.value]"
           },
           "resourceGroupHosts": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ResourceNames_{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceGroupHosts.value]"
           },
-          "roleAssignmentIds": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.deploymentUserAssignedIdentityRoleAssignmentIds.value), createObject('value', createArray()))]",
+          "roleAssignmentIds": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.deploymentUserAssignedIdentityRoleAssignmentIds.value), createObject('value', createArray()))]",
           "timeStamp": {
             "value": "[parameters('timeStamp')]"
           },
-          "userAssignedIdentityClientId": "[if(or(equals(parameters('deploymentType'), 'Complete'), parameters('drainMode')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
+          "userAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment_Prereqs_{0}', parameters('timeStamp'))), '2022-09-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
           "virtualMachineNames": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('SessionHosts_{0}', parameters('timeStamp'))), '2022-09-01').outputs.virtualMachineNames.value]"
           }
@@ -19980,8 +19594,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "17380450953548056822"
+              "version": "0.35.1.17967",
+              "templateHash": "15707469674656060249"
             }
           },
           "parameters": {
@@ -20047,8 +19661,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "8819735287416205337"
+                      "version": "0.35.1.17967",
+                      "templateHash": "10278687958179834589"
                     }
                   },
                   "parameters": {
@@ -20147,8 +19761,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "3527000233158051869"
+                      "version": "0.35.1.17967",
+                      "templateHash": "10666641494183312815"
                     }
                   },
                   "parameters": {
@@ -20236,8 +19850,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.34.44.8038",
-                      "templateHash": "12894929512875346015"
+                      "version": "0.35.1.17967",
+                      "templateHash": "11933331220774828111"
                     }
                   },
                   "parameters": {

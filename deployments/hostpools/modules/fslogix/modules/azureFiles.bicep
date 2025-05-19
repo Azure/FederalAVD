@@ -6,6 +6,7 @@ param azureFunctionAppPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
 param azureTablePrivateDnsZoneResourceId string
 param deploymentUserAssignedIdentityClientId string
+param deploymentVirtualMachineName string
 @secure()
 param domainJoinUserPassword string
 @secure()
@@ -26,7 +27,6 @@ param kerberosEncryptionType string
 param keyManagementStorageAccounts string
 param location string
 param logAnalyticsWorkspaceId string
-param deploymentVirtualMachineName string
 param ouPath string
 param privateEndpoint bool
 param privateEndpointLocation string

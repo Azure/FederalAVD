@@ -122,6 +122,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
+    deploymentVirtualMachineName: deploymentVirtualMachineName
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? domainJoinUserPassword : ''
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? domainJoinUserPrincipalName : ''
     encryptionKeyVaultUri: encryptionKeyVaultUri
@@ -140,7 +141,6 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     keyManagementStorageAccounts: keyManagementStorageAccounts
     location: location
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
-    deploymentVirtualMachineName: deploymentVirtualMachineName
     ouPath: ouPath
     privateEndpoint: privateEndpoint
     privateEndpointLocation: privateEndpoint && !empty(privateEndpointSubnetResourceId) ? reference(split(privateEndpointSubnetResourceId, '/subnets/')[0], '2020-06-01', 'Full').location : ''

@@ -31,7 +31,6 @@ param privateEndpointNICNameConv string
 param resourceGroupControlPlane string
 param resourceGroupDeployment string
 param resourceGroupGlobalFeed string
-param roleDefinitions object
 param scalingPlanExclusionTag string
 param scalingPlanName string
 param scalingPlanSchedules array
@@ -149,7 +148,6 @@ module applicationGroup 'modules/applicationGroup.bicep' = {
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     deploymentVirtualMachineName: deploymentVirtualMachineName
     resourceGroupDeployment: resourceGroupDeployment
-    roleDefinitions: roleDefinitions
     appGroupSecurityGroups: appGroupSecurityGroups
     tags: tags
     timeStamp: timeStamp

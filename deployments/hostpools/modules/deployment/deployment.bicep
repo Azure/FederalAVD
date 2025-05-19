@@ -1,9 +1,6 @@
 targetScope = 'subscription'
 
-param appGroupSecurityGroups array
-param avdObjectId string
 param confidentialVMOSDiskEncryption bool
-param deployScalingPlan bool
 param diskSku string
 @secure()
 param domainJoinUserPassword string
@@ -23,8 +20,6 @@ param resourceGroupDeployment string
 param resourceGroupHosts string
 param resourceGroupManagement string
 param resourceGroupStorage string
-param roleDefinitions object
-param startVmOnConnect bool
 param tags object
 param timeStamp string
 param userAssignedIdentityNameConv string
@@ -38,6 +33,16 @@ param virtualMachineAdminUserName string
 param virtualMachineSubnetResourceId string
 
 var deploymentUserAssignedIdentityName = replace(userAssignedIdentityNameConv, 'TOKEN', 'avd-deployment')
+
+var roleDefinitions = {
+  Contributor: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
+  DesktopVirtualizationApplicationGroupContributor: '86240b0e-9422-4c43-887b-b61143f32ba8'
+  DesktopVirtualizationSessionHostOperator: '2ad6aaab-ead9-4eaa-8ac5-da422f562408'
+  KeyVaultCryptoOfficer: '14b46e9e-c2b7-41b4-b07b-48a6ebf60603'
+  RoleBasedAccessControlAdministrator: 'f58310d9-a9f6-439a-9e8d-f62e7b41a168'
+  StorageAccountContributor: '17d1049b-9a84-46fb-8f53-869881c3d3ab'
+  VirtualMachineContributor: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
+}
 
 var roleAssignmentsControlPlane = [
   {
@@ -134,43 +139,6 @@ module deploymentUserAssignedIdentity '../../../sharedModules/resources/managed-
     )
   }
 }
-
-// Role Assignment required for Start VM On Connect
-resource roleAssignment_PowerOnContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!deployScalingPlan && startVmOnConnect) {
-  name: guid(avdObjectId, roleDefinitions.DesktopVirtualizationPowerOnContributor, subscription().id)
-  properties: {
-    roleDefinitionId: resourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      roleDefinitions.DesktopVirtualizationPowerOnContributor
-    )
-    principalId: avdObjectId
-  }
-}
-
-// Role Assignment required for Scaling Plans
-resource roleAssignment_PowerOnOffContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployScalingPlan) {
-  name: guid(avdObjectId, roleDefinitions.DesktopVirtualizationPowerOnOffContributor, subscription().id)
-  properties: {
-    roleDefinitionId: resourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      roleDefinitions.DesktopVirtualizationPowerOnOffContributor
-    )
-    principalId: avdObjectId
-  }
-}
-
-// Required for EntraID login
-module roleAssignment_VirtualMachineUserLogin '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
-  for i in range(0, length(appGroupSecurityGroups)): if (!contains(identitySolution, 'DomainServices')) {
-    name: 'RA-Hosts-VMLoginUser-${i}_${timeStamp}'
-    scope: resourceGroup(resourceGroupHosts)
-    params: {
-      principalId: appGroupSecurityGroups[i]
-      principalType: 'Group'
-      roleDefinitionId: roleDefinitions.VirtualMachineUserLogin
-    }
-  }
-]
 
 module roleAssignments_deployment '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
   for i in range(0, length(roleAssignments)): {
