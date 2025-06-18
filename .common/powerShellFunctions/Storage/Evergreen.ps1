@@ -1,12 +1,14 @@
 Function Install-Evergreen {
     $adminCheck = [Security.Principal.WindowsPrincipal]([Security.Principal.WindowsIdentity]::GetCurrent())
     $Admin = $adminCheck.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (Get-PSRepository | Where-Object { $_.Name -eq "PSGallery" -and $_.InstallationPolicy -ne "Trusted" }) {
+    If (Get-PSRepository | Where-Object { $_.Name -eq "PSGallery" -and $_.InstallationPolicy -ne "Trusted" }) {
+        Set-PSRepository -Name "PSGallery" -InstallationPolicy "Trusted"
+    }
+    If (-not (Get-PackageProvider | Where-Object {$_.Name -eq 'NuGet'})) {
         if ($Admin) {
-            Set-PSRepository -Name "PSGallery" -InstallationPolicy "Trusted"
-            Install-PackageProvider -Name "NuGet" -MinimumVersion 2.8.5.208 -Force
+            Install-PackageProvider -Name "NuGet" -Force
         } else {
-            Install-PackageProvider -Name "NuGet" -MinimumVersion 2.8.5.208 -Force -Scope CurrentUser
+            Install-PackageProvider -Name "NuGet" -Scope CurrentUser -Force
         }
     }
     $Installed = Get-Module -Name "Evergreen" -ListAvailable | `
