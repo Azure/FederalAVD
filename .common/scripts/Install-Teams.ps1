@@ -12,6 +12,7 @@ $ErrorActionPreference = 'Stop'
 
 function Write-OutputWithTimeStamp {
     param(
+        [Parameter(Mandatory = $true, Position = 0)]
         [string]$Message
     )    
     $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'
@@ -150,7 +151,9 @@ If ($null -ne $webRTCFile) {
 Write-OutputWithTimeStamp "Starting Teams installation."
 $TeamsInstall = Start-Process -FilePath "$BootStrapperFile" -ArgumentList "-p -o `"$MSIXFile`"" -Wait -PassThru
 If ($($TeamsInstall.ExitCode) -eq 0) {
-    Write-OutputWithTimeStamp "Installed Teams successfully."
+    # Get Version of currently installed new Teams Package
+    $TeamsVersion = (Get-AppxPackage -Name MSTeams).Version
+    Write-OutputWithTimeStamp "Installed Teams Version $TeamsVersion successfully."
 }
 Else {
     Write-OutputWithTimeStamp "Teams installation failed with exit code $($TeamsInstall.ExitCode)"
@@ -183,6 +186,32 @@ If ($CloudType) {
     [System.GC]::Collect()
     $null = Start-Process -FilePath reg.exe -ArgumentList "UNLOAD HKLM\Default" -Wait -PassThru
 }
+# Teams Meeting Add-in
+# Get Teams Meeting Addin Version
+$TMAPath = "{0}\WindowsApps\MSTeams_{1}_x64__8wekyb3d8bbwe\MicrosoftTeamsMeetingAddInInstaller.msi" -f $env:programfiles, $TeamsVersion
+$TMAVersion = (Get-AppLockerFileInformation -Path $TMAPath | Select-Object -ExpandProperty Publisher).BinaryVersion
+Write-OutputWithTimeStamp "Found Teams Meeting Addin Version: $TMAVersion"
+# Install parameters
+$TargetDir = "{0}\Microsoft\TeamsMeetingAdd-in\{1}\" -f ${env:ProgramFiles(x86)}, $TMAVersion
+$params = '/i "{0}" TARGETDIR="{1}" /qn ALLUSERS=1' -f $TMAPath, $TargetDir
+# Start the install process
+Write-OutputWithTimeStamp "executing msiexec.exe $params"
+$install = Start-Process -FilePath 'msiexec.exe' -ArgumentList $params -PassThru
+$timeout = 30
+
+for ($elapsed = 0; $elapsed -lt $timeout; $elapsed++) {
+    if ($install.HasExited) {
+        Write-OutputWithTimeStamp "msiexec closed with exit code: $($install.ExitCode)"
+        break
+    }
+    Start-Sleep -Seconds 1
+}
+
+if (-not $install.HasExited) {
+    Write-OutputWithTimeStamp "msiexec did not exit within $timeout seconds. Terminating process."
+    Stop-Process -Id $install.Id -Force
+}
+
 If ((Split-Path $TempDir -Parent) -eq $Env:Temp) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }
 Write-OutputWithTimeStamp "Completed Installation of all components."
 Stop-Transcript

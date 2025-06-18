@@ -5,15 +5,12 @@ param availability string
 param availabilitySetNamePrefix string
 param availabilityZones array
 param avdInsightsDataCollectionRulesResourceId string
-param batchCount int
 param confidentialVMOSDiskEncryptionType string
 param customImageResourceId string
 param dataCollectionEndpointResourceId string
 param dedicatedHostGroupResourceId string
 param dedicatedHostGroupZones array
 param dedicatedHostResourceId string
-param deploymentUserAssignedIdentityClientId string
-param deploymentVirtualMachineName string
 param diskAccessId string
 param diskEncryptionSetResourceId string
 param diskSizeGB int
@@ -23,7 +20,6 @@ param domainJoinUserPassword string
 @secure()
 param domainJoinUserPrincipalName string
 param domainName string
-param drainMode bool
 param enableAcceleratedNetworking bool
 param enableIPv6 bool
 param enableMonitoring bool
@@ -48,7 +44,6 @@ param location string
 param networkInterfaceNameConv string
 param osDiskNameConv string
 param ouPath string
-param resourceGroupDeployment string
 param sessionHostCustomizations array
 param sessionHostCount int
 param sessionHostIndex int
@@ -792,48 +787,6 @@ module updateOSDiskNetworkAccess 'getOSDisk.bicep' = [
     }
   }
 ]
-
-// Enables drain mode on the session hosts so users cannot login to hosts immediately after the deployment
-module setDrainMode '../../../../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = if (drainMode) {
-  name: 'DrainMode_${batchCount}_${timeStamp}'
-  scope: resourceGroup(resourceGroupDeployment)
-  params: {
-    location: location
-    name: 'DrainMode_${batchCount}_${timeStamp}'
-    parameters: [
-      {
-        name: 'HostPoolResourceId'
-        value: hostPoolResourceId
-      }
-      {
-        name: 'ResourceManagerUri'
-        value: environment().resourceManager
-      }
-      {
-        name: 'SessionHostCount'
-        value: string(sessionHostCount)
-      }
-      {
-        name: 'SessionHostIndex'
-        value: string(sessionHostIndex)
-      }
-      {
-        name: 'UserAssignedIdentityClientId'
-        value: deploymentUserAssignedIdentityClientId
-      }
-      {
-        name: 'VirtualMachineNamePrefix'
-        value: virtualMachineNamePrefix
-      }
-    ]
-    script: loadTextContent('../../../../../.common/scripts/Set-AvdDrainMode.ps1')
-    treatFailureAsDeploymentFailure: true
-    virtualMachineName: deploymentVirtualMachineName
-  }
-  dependsOn: [
-    extension_DSC_installAvdAgents
-  ]
-}
 
 // debugging outputs
 output virtualMachineNames array = [for i in range(0, sessionHostCount): virtualMachine[i].name]

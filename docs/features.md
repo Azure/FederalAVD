@@ -15,17 +15,6 @@ This optional feature enables backups to protect user profile data. When selecte
 - Protection Container (File Share Only)
 - Protected Item
 
-## Drain Mode
-
-When this optional feature is deployed, the sessions hosts will be put in drain mode to ensure the end users cannot access them until they have been validated.
-
-**Reference:** [Drain Mode - Microsoft Docs](https://docs.microsoft.com/en-us/azure/virtual-desktop/drain-mode)
-
-**Deployed Resources:**
-
-- Virtual Machine
-  - Run Command
-  
 ## FSLogix
 
 If selected, this solution will deploy the required resources and configurations so that FSLogix is fully configured and ready for immediate use post deployment.

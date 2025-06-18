@@ -364,7 +364,7 @@ var galleryImageDefinitionSecurityType = empty(imageDefinitionResourceId)
       : 'Standard'
 var galleryImageDefinitionSku = !empty(imageDefinitionSku) ? replace(imageDefinitionSku, ' ', '') : mpSku
 // build an image version from the ISO 8601 timestamp
-var autoImageVersionName = '${substring(timeStamp, 2, 2)}.${substring(timeStamp, 4, 4)}.${substring(timeStamp, 9, 4)}'
+var autoImageVersionName = '${substring(timeStamp, 0, 4)}.${substring(timeStamp, 4, 4)}.${substring(timeStamp, 9, 4)}'
 var imageVersionName = imageMajorVersion != -1 && imageMajorVersion != -1 && imagePatch != -1
   ? '${imageMajorVersion}.${imageMinorVersion}.${imagePatch}'
   : autoImageVersionName
@@ -758,6 +758,8 @@ module customizeImage 'modules/customizeImage.bicep' = {
   name: '${depPrefix}Customize-Image-${timeStamp}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
+    adminPw: adminPw
+    adminUserName: adminUserName
     cloud: cloud
     appsToRemove: appsToRemove
     location: computeLocation

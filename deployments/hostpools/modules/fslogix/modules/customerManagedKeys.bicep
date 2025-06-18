@@ -124,3 +124,5 @@ module roleAssignment_UAI_EncryptionUser_increaseQuota '../../management/modules
 }
 
 output userAssignedIdentityResourceId string = userAssignedIdentity.outputs.resourceId
+output storageAccountKeyRoleAssignments array = [ for i in range(0, storageCount): roleAssignment_UAI_EncryptionUser_FSLogix[i].outputs.roleAssignmentId ]
+output increaseQuotaKeyRoleAssignmentId string = increaseQuota ? roleAssignment_UAI_EncryptionUser_increaseQuota.outputs.roleAssignmentId : ''

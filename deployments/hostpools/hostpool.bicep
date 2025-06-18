@@ -158,9 +158,6 @@ param scalingPlanMinsBeforeLogoff int = 0
 
 // Session Host Configuration
 
-@description('Optional. Enable drain mode on new sessions hosts to prevent users from accessing them until they are validated.')
-param drainMode bool = false
-
 @minLength(2)
 @maxLength(12)
 @description('Required. The Virtual Machine Name prefix.')
@@ -640,7 +637,7 @@ var beginAvSetRange = sessionHostIndex / maxAvSetMembers // This determines the 
 var endAvSetRange = (sessionHostCount + sessionHostIndex) / maxAvSetMembers // This determines the availability set to end with.
 var availabilitySetsCount = length(range(beginAvSetRange, (endAvSetRange - beginAvSetRange) + 1))
 
-var createDeploymentVm = (deploymentType == 'Complete' && (confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)) || contains(identitySolution, 'DomainServices') || contains(fslogixStorageService, 'AzureNetApp')) || drainMode
+var createDeploymentVm = deploymentType == 'Complete' && (confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)) || contains(identitySolution, 'DomainServices') || contains(fslogixStorageService, 'AzureNetApp')
 
 var deployControlPlaneRG = deploymentType == 'Complete' && empty(existingFeedWorkspaceResourceId)
 var resourceGroupsCount = ( createDeploymentVm ? 1 : 0 ) + ( deploymentType == 'Complete' ? 2 : 0 ) + ( deployControlPlaneRG ? 1 : 0 ) + ( avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) ? 1 : 0 ) + ( deployFSLogixStorage ? 1 : 0 ) 
@@ -1089,8 +1086,8 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     deployDiskAccessPolicy: deployDiskAccessPolicy
     deployDiskAccessResource: deployDiskAccessResource
     deploymentType: deploymentType
-    deploymentUserAssignedIdentityClientId: drainMode || ( deploymentType == 'Complete' && (confidentialVMOSDiskEncryption || drainMode) ) ? deploymentPrereqs.outputs.deploymentUserAssignedIdentityClientId : ''
-    deploymentVirtualMachineName: drainMode || (deploymentType == 'Complete' && (confidentialVMOSDiskEncryption || drainMode))  ? deploymentPrereqs.outputs.virtualMachineName : ''
+    deploymentUserAssignedIdentityClientId: deploymentType == 'Complete' && confidentialVMOSDiskEncryption ? deploymentPrereqs.outputs.deploymentUserAssignedIdentityClientId : ''
+    deploymentVirtualMachineName: deploymentType == 'Complete' && confidentialVMOSDiskEncryption ? deploymentPrereqs.outputs.virtualMachineName : ''
     diskAccessName: resourceNames.outputs.diskAccessName
     diskEncryptionSetNames: resourceNames.outputs.diskEncryptionSetNames
     diskSizeGB: diskSizeGB
@@ -1099,7 +1096,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPassword) ? domainJoinUserPassword : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : '' : ''
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPrincipalName) ? domainJoinUserPrincipalName : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : '' : ''
     domainName: domainName
-    drainMode: drainMode
     enableAcceleratedNetworking: enableAcceleratedNetworking
     enableIPv6: enableIPv6
     enableMonitoring: enableMonitoring

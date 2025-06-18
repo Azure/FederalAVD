@@ -182,7 +182,7 @@ module dataCollectionEndpoint 'modules/dataCollectionEndpoint.bicep' = if (enabl
     location: location
     tags: tags[?'Microsoft.Insights/dataCollectionEndpoints'] ?? {}
     name: dataCollectionEndpointName
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: empty(azureMonitorPrivateLinkScopeResourceId) ? 'Enabled' : 'Disabled'
   }
 }
 

@@ -21,6 +21,7 @@ param storageSolution string
 param tagsNetAppAccount object
 param timeStamp string
 
+#disable-next-line BCP329
 var ouRelativePath = contains(ouPath, 'DC') ? substring(split(ouPath, 'DC')[0], 0, length(split(ouPath, 'DC')[0]) - 1) : ouPath
 var shareSizeInBytes = shareSizeInGB * 1024 * 1024 * 1024
 

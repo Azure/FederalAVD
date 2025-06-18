@@ -58,7 +58,6 @@ Else {
         $downloadsParametersPrefix = 'public'
     }
     Elseif ($Environment -match 'USN') {
-
         $downloadsParametersPrefix = 'topsecret'
     }
     Else {

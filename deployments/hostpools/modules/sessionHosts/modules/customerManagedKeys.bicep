@@ -137,3 +137,5 @@ module roleAssignment_DiskEncryptionSet_EncryptUser '../../management/modules/ke
 }
 
 output diskEncryptionSetResourceId string = diskEncryptionSet.outputs.resourceId
+output diskEncryptionSetRoleAssignmentId string = roleAssignment_DiskEncryptionSet_EncryptUser.outputs.roleAssignmentId
+output confidentialVMOrchestratorRoleAssignmentId string = confidentialVMOSDiskEncryption ? roleAssignment_ConfVMOrchestrator_ReleaseUser.outputs.roleAssignmentId : ''

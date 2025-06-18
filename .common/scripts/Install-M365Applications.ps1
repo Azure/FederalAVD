@@ -8,36 +8,6 @@ param(
     [string]$UserAssignedIdentityClientId
 )
 $ErrorActionPreference = "Stop"
-Function Get-InternetUrl {
-    [CmdletBinding()]
-    Param (
-        [Parameter(
-            Mandatory,
-            HelpMessage = "Specifies the website that contains a link to the desired download."
-        )]
-        [uri]$WebSiteUrl,
-
-        [Parameter(
-            Mandatory,
-            HelpMessage = "Specifies the search string. Wildcard '*' can be used."    
-        )]
-        [string]$SearchString
-    )
-
-    $HTML = Invoke-WebRequest -Uri $WebSiteUrl -UseBasicParsing
-    $Links = $HTML.Links
-    #First try to find search string in actual link href
-    $LinkHref = $HTML.Links.Href | Get-Unique | Where-Object { $_ -like "*$SearchString*" }
-    If ($LinkHref) {
-        Return $LinkHref
-    }
-    #If not found, try to find search string in the outer html
-    $LinkHrefs = $Links | Where-Object { $_.OuterHTML -like "*$SearchString*" }
-    If ($LinkHrefs) {
-        Return $LinkHrefs.href
-    }
-    Return $null
-}
 
 function Write-OutputWithTimeStamp {
     param(
@@ -47,6 +17,8 @@ function Write-OutputWithTimeStamp {
     $Entry = '[' + $Timestamp + '] ' + $Message
     Write-Output $Entry
 }
+
+$EnvSuffix = $BlobStorageSuffix.Substring(10, ($BlobStorageSuffix.length - 10))
 
 $SoftwareName = 'Microsoft-365-Applications'
 Start-Transcript -Path "$env:SystemRoot\Logs\Install-$SoftwareName.log" -Force
@@ -117,12 +89,8 @@ if ($AppsToInstall -notcontains 'Word') {
 }
 
 $Content += '<Configuration>'
-If ($Environment -match 'uss') {
-    $Content += '  <Add AllowCdnFallback="TRUE" SourcePath="https://officexo.azurefd.microsoft.scloud/prsstelecontainer/55336b82-a18d-4dd6-b5f6-9e5095c314a6/" Channel="MonthlyEnterprise" OfficeClientEdition="64">'
-
-}
-Elseif ($Environment -match 'usn') {
-    $Content += '  <Add AllowCdnFallback="TRUE" SourcePath="https://officexo.azurefd.eaglex.ic.gov/prsstelecontainer/55336b82-a18d-4dd6-b5f6-9e5095c314a6/" Channel="MonthlyEnterprise" OfficeClientEdition="64">'
+If ($Environment -match '^us') {
+    $Content += '  <Add AllowCdnFallback="TRUE" SourcePath="https://officexo.azurefd.' + $EnvSuffix + '/prsstelecontainer/55336b82-a18d-4dd6-b5f6-9e5095c314a6/" Channel="MonthlyEnterprise" OfficeClientEdition="64">'
 }
 Else {
     $Content += '  <Add OfficeClientEdition="64" Channel="MonthlyEnterprise">'
@@ -154,11 +122,12 @@ $Content += '  <Display Level="None" AcceptEULA="TRUE" />'
 $Content += '</Configuration>'
 Add-Content -Path $ConfigFile -Value $Content
 Write-OutputWithTimeStamp "Config File Content:"
-Write-OutputWithTimeStamp "---------------------------------------------------------------------------------------------------------"
+Write-Output "---------------------------------------------------------------------------------------------------------"
 $ConfigFileContent = Get-Content -Path $ConfigFile
 Write-Output $ConfigFileContent
-Write-OutputWithTimeStamp "---------------------------------------------------------------------------------------------------------"
+Write-Output "---------------------------------------------------------------------------------------------------------"
 Write-OutputWithTimeStamp "Starting setup process."
+Write-Output "Command Line: $Setup /configure `"$ConfigFile`""
 $Install = Start-Process -FilePath $Setup -ArgumentList "/configure `"$ConfigFile`"" -Wait -PassThru -ErrorAction "Stop"
 If ($($Install.ExitCode) -eq 0) {
     Write-OutputWithTimeStamp "'$SoftwareName' installed successfully."

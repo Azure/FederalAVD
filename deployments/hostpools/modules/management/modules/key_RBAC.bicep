@@ -24,3 +24,5 @@ resource keyVaultKeyRBAC 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
     principalType: principalType
   }
 }
+
+output roleAssignmentId string = keyVaultKeyRBAC.id
