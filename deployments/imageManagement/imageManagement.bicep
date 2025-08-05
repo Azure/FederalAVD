@@ -155,5 +155,6 @@ module remoteImageGallery '../sharedModules/resources/compute/gallery/main.bicep
 
 output storageAccountResourceId string    = resources.outputs.storageAccountResourceId
 output blobContainerName string           = resources.outputs.blobContainerName
+output blobContainerUrl string = resources.outputs.blobcontainerUrl
 output managedIdentityClientId string     = resources.outputs.managedIdentityClientId
 output managedIdentityResourceId string   = resources.outputs.managedIdentityResourceId

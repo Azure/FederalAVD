@@ -34,8 +34,9 @@ Function Get-InternetUrl {
     )
 
     $HTML = Invoke-WebRequest -Uri $WebSiteUrl -UseBasicParsing
-    $Links = $HTML.Links
     #First try to find search string in actual link href
+    $Links = $HTML.Links
+    $LinkHref = $HTML
     $LinkHref = $HTML.Links.Href | Get-Unique | Where-Object { $_ -like $SearchString }
     If ($LinkHref) {
         if ($LinkHref.Contains('http://') -or $LinkHref.Contains('https://')) {
@@ -52,21 +53,9 @@ Function Get-InternetUrl {
     If ($LinkHref) {
         Return $LinkHref.href
     }
-    Else {
-        $Pattern = '"url":\s*"(https://[^"]*?' + $SearchString.Replace('.', '\.').Replace('*', '.*').Replace('+', '\+') + ')"' 
-        If ($HTML.Content -match $Pattern) {
-            If ($matches[1].Contains('"')) {
-                Return $matches[1].Substring(0, $matches[1].IndexOf('"'))
-            }
-            Else {
-                Return $matches[1]
-            }
-
-        }
-        else {
-            Write-Warning "No download URL found using search term."
-            Return $null
-        }
-    }
-
+    # Escape user input for regex and convert * to regex wildcard
+    $escapedPattern = [Regex]::Escape($SearchString) -replace '\\\*', '[^""''\s>]*'
+    # Match http or https URLs ending in the desired filename pattern
+    $regex = "https?://[^""'\s>]*$escapedPattern"
+    Return ([regex]::Matches($html.Content, $regex)).Value
 }

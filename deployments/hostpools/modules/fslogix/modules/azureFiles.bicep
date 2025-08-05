@@ -36,7 +36,7 @@ param privateEndpointSubnetResourceId string
 param privateLinkScopeResourceId string
 param recoveryServices bool
 param recoveryServicesVaultName string
-param resourceGroupDeployment string
+param deploymentResourceGroupName string
 param resourceGroupStorage string
 param serverFarmId string
 param shardingOptions string
@@ -57,6 +57,10 @@ var adminRoleDefinitionId = 'a7264617-510b-434b-a828-9731dc254ea7' // Storage Fi
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
+
+var privateEndpointVnetId = length(privateEndpointVnetName) < 37
+  ? privateEndpointVnetName
+  : uniqueString(privateEndpointVnetName)
 
 var smbMultiChannel = {
   multichannel: {
@@ -98,10 +102,12 @@ resource storageAccounts 'Microsoft.Storage/storageAccounts@2022-09-01' = [
       allowCrossTenantReplication: false
       allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
       allowSharedKeyAccess: true
-      azureFilesIdentityBasedAuthentication: contains(identitySolution, 'DomainServices') ? {
-        defaultSharePermission: 'StorageFileDataSmbShareContributor'
-        directoryServiceOptions: identitySolution == 'EntraDomainServices' ? 'AADDS' : 'None'
-      } : null
+      azureFilesIdentityBasedAuthentication: contains(identitySolution, 'DomainServices')
+        ? {
+            defaultSharePermission: 'StorageFileDataSmbShareContributor'
+            directoryServiceOptions: identitySolution == 'EntraDomainServices' ? 'AADDS' : 'None'
+          }
+        : null
       defaultToOAuthAuthentication: false
       dnsEndpointType: 'Standard'
       encryption: {
@@ -152,7 +158,7 @@ resource storageAccounts 'Microsoft.Storage/storageAccounts@2022-09-01' = [
     sku: {
       name: '${storageSku}${storageRedundancy}'
     }
-    tags: union({ 'cm-resource-parent' : hostPoolResourceId }, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
+    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
   }
 ]
 
@@ -206,7 +212,7 @@ module privateEndpoints '../../../../sharedModules/resources/network/private-end
       customNetworkInterfaceName: replace(
         replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'file'), 'RESOURCE', '${storageAccounts[i].name}'),
         'VNETID',
-        privateEndpointVnetName
+        privateEndpointVnetId
       )
       groupIds: [
         'file'
@@ -215,13 +221,15 @@ module privateEndpoints '../../../../sharedModules/resources/network/private-end
       name: replace(
         replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'file'), 'RESOURCE', '${storageAccounts[i].name}'),
         'VNETID',
-        privateEndpointVnetName
+        privateEndpointVnetId
       )
-      privateDnsZoneGroup: empty(azureFilePrivateDnsZoneResourceId) ? null : {
-        privateDNSResourceIds: [
-          azureFilePrivateDnsZoneResourceId
-        ]
-      }
+      privateDnsZoneGroup: empty(azureFilePrivateDnsZoneResourceId)
+        ? null
+        : {
+            privateDNSResourceIds: [
+              azureFilePrivateDnsZoneResourceId
+            ]
+          }
       serviceResourceId: storageAccounts[i].id
       subnetResourceId: privateEndpointSubnetResourceId
       tags: union(
@@ -274,7 +282,7 @@ resource storageAccounts_file_diagnosticSettings 'Microsoft.Insights/diagnosticS
 
 module SetNTFSPermissions 'domainJoinSetNTFSPermissions.bicep' = if (contains(identitySolution, 'DomainServices')) {
   name: 'Set-NTFSPermissions_${timeStamp}'
-  scope: resourceGroup(resourceGroupDeployment)
+  scope: resourceGroup(deploymentResourceGroupName)
   params: {
     adminGroupNames: map(shareAdminGroups, group => group.displayName)
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
@@ -343,7 +351,7 @@ module recoveryServicesVault '../../../../sharedModules/resources/recovery-servi
           {
             customNetworkInterfaceName: replace(
               replace(
-                replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'AzureBackup'),
+                replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'azurebackup'),
                 'RESOURCE',
                 recoveryServicesVaultName
               ),
@@ -352,16 +360,18 @@ module recoveryServicesVault '../../../../sharedModules/resources/recovery-servi
             )
             name: replace(
               replace(
-                replace(privateEndpointNameConv, 'SUBRESOURCE', 'AzureBackup'),
+                replace(privateEndpointNameConv, 'SUBRESOURCE', 'azurebackup'),
                 'RESOURCE',
                 recoveryServicesVaultName
               ),
               'VNETID',
               '${split(privateEndpointSubnetResourceId, '/')[8]}'
             )
-            privateDnsZoneGroup: empty(nonEmptyBackupPrivateDNSZoneResourceIds) ? null : {
-              privateDNSResourceIds: nonEmptyBackupPrivateDNSZoneResourceIds
-            }
+            privateDnsZoneGroup: empty(nonEmptyBackupPrivateDNSZoneResourceIds)
+              ? null
+              : {
+                  privateDNSResourceIds: nonEmptyBackupPrivateDNSZoneResourceIds
+                }
             service: 'AzureBackup'
             subnetResourceId: privateEndpointSubnetResourceId
             tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
@@ -442,11 +452,11 @@ module increaseQuotaFunction '../../common/functionApp/function.bicep' = if (sto
   name: 'IncreaseQuotaFunction_${timeStamp}'
   params: {
     files: {
-      'requirements.psd1': loadTextContent('../../../../../.common/scripts//auto-increase-file-share/requirements.psd1')
-      'run.ps1': loadTextContent('../../../../../.common/scripts//auto-increase-file-share/run.ps1')
-      '../profile.ps1': loadTextContent('../../../../../.common/scripts//auto-increase-file-share/profile.ps1')
+      'requirements.psd1': loadTextContent('../../../../../.common/scripts/auto-increase-file-share/requirements.psd1')
+      'run.ps1': loadTextContent('../../../../../.common/scripts/auto-increase-file-share/run.ps1')
+      '../profile.ps1': loadTextContent('../../../../../.common/scripts/auto-increase-file-share/profile.ps1')
     }
-    functionAppName: increaseQuotaFunctionApp.outputs.functionAppName
+    functionAppName: increaseQuotaFunctionApp!.outputs.functionAppName
     functionName: 'auto-increase-file-share-quota'
     schedule: '0 */15 * * * *'
   }

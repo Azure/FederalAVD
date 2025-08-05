@@ -206,7 +206,8 @@ module customerManagedKeys 'modules/customerManagedKeys.bicep' =  if (deployment
     keyName: encryptionKeyName
     keyVaultResourceId: encryptionKeyVaultResourceId
     keyVaultUri: encryptionKeyVaultUri
-    resourceGroupDeployment: resourceGroupDeployment
+    location: location
+    deploymentResourceGroupName: resourceGroupDeployment
     tags: tags
     timeStamp: timeStamp
   }

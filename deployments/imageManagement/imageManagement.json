@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.34.44.8038",
-      "templateHash": "17196419422134390071"
+      "version": "0.36.177.2456",
+      "templateHash": "6080012377272065800"
     }
   },
   "parameters": {
@@ -382,6 +382,7 @@
       "netAppAccounts": "naa",
       "netAppCapacityPools": "nacp",
       "networkInterfaces": "nic",
+      "networkSecurityGroups": "nsg",
       "osdisks": "osdisk",
       "privateEndpoints": "pe",
       "privateLinkScopes": "pls",
@@ -504,8 +505,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.34.44.8038",
-              "templateHash": "2583817799858683985"
+              "version": "0.36.177.2456",
+              "templateHash": "11980299989394995277"
             }
           },
           "parameters": {
@@ -862,6 +863,10 @@
               "type": "string",
               "value": "[parameters('blobContainerName')]"
             },
+            "blobcontainerUrl": {
+              "type": "string",
+              "value": "[format('{0}{1}', reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2022-09-01').primaryEndpoints.blob, parameters('blobContainerName'))]"
+            },
             "managedIdentityClientId": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('managedIdentityName')), '2023-01-31').clientId]"
@@ -905,12 +910,9 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.33.93.31351",
-              "templateHash": "2039503176102821969"
-            },
-            "name": "Azure Compute Galleries",
-            "description": "This module deploys an Azure Compute Gallery (formerly known as Shared Image Gallery).",
-            "owner": "Azure/module-maintainers"
+              "version": "0.36.177.2456",
+              "templateHash": "15348478390269751572"
+            }
           },
           "parameters": {
             "name": {
@@ -1000,6 +1002,10 @@
     "blobContainerName": {
       "type": "string",
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Image-Management-Resources-{0}', parameters('timeStamp'))), '2022-09-01').outputs.blobContainerName.value]"
+    },
+    "blobContainerUrl": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Image-Management-Resources-{0}', parameters('timeStamp'))), '2022-09-01').outputs.blobcontainerUrl.value]"
     },
     "managedIdentityClientId": {
       "type": "string",

@@ -293,119 +293,94 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [
   }
 ]
 
-resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [
-  for i in range(0, sessionHostCount): {
-    name: replace(virtualMachineNameConv, '###', padLeft((i + sessionHostIndex), 3, '0'))
-    location: location
-    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
-    zones: !empty(dedicatedHostResourceId) || !empty(dedicatedHostGroupResourceId)
-      ? dedicatedHostGroupZones
-      : availability == 'availabilityZones' && !empty(availabilityZones)
-          ? [
-              availabilityZones[i % length(availabilityZones)]
-            ]
-          : null
-    identity: identity
-    properties: {
-      additionalCapabilities: {
-        hibernationEnabled: hibernationEnabled
-      }
-      availabilitySet: availability == 'AvailabilitySets'
-        ? {
-            id: resourceId(
-              'Microsoft.Compute/availabilitySets',
-              '${availabilitySetNamePrefix}-${(i + sessionHostIndex) / 200}'
-            )
-          }
-        : null
-      hardwareProfile: {
-        vmSize: virtualMachineSize
-      }
-      host: !empty(dedicatedHostResourceId)
-        ? {
-            id: dedicatedHostResourceId
-          }
-        : null
-      hostGroup: !empty(dedicatedHostGroupResourceId) && empty(dedicatedHostResourceId)
-        ? {
-            id: dedicatedHostGroupResourceId
-          }
-        : null
-      storageProfile: {
-        imageReference: ImageReference
-        osDisk: {
-          diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
-          name: replace(osDiskNameConv, '###', padLeft((i + sessionHostIndex), 3, '0'))
-          osType: 'Windows'
-          createOption: 'FromImage'
-          caching: 'ReadWrite'
-          deleteOption: 'Delete'
-          managedDisk: {
-            diskEncryptionSet: securityType != 'ConfidentialVM' && !empty(diskEncryptionSetResourceId)
-              ? {
-                  id: diskEncryptionSetResourceId
-                }
-              : null
-            securityProfile: securityType == 'ConfidentialVM'
-              ? {
-                  diskEncryptionSet: !empty(diskEncryptionSetResourceId)
-                    ? {
-                        id: diskEncryptionSetResourceId
-                      }
-                    : null
-                  securityEncryptionType: confidentialVMOSDiskEncryptionType
-                }
-              : null
-            storageAccountType: diskSku
-          }
-        }
-        dataDisks: []
-      }
-      osProfile: {
-        computerName: '${virtualMachineNamePrefix}${padLeft((i + sessionHostIndex), 3, '0')}'
-        adminUsername: virtualMachineAdminUserName
-        adminPassword: virtualMachineAdminPassword
-        windowsConfiguration: {
-          provisionVMAgent: true
-          enableAutomaticUpdates: false
-        }
-        secrets: []
-        allowExtensionOperations: true
-      }
-      networkProfile: {
-        networkInterfaces: [
-          {
-            id: networkInterface[i].id
-            properties: {
-              deleteOption: 'Delete'
-            }
-          }
-        ]
-      }
-      securityProfile: {
-        encryptionAtHost: encryptionAtHost
-        securityType: securityType != 'Standard' ? securityType : null
-        uefiSettings: securityType != 'Standard'
-          ? {
-              secureBootEnabled: secureBootEnabled
-              vTpmEnabled: vTpmEnabled
-            }
-          : null
-      }
-      diagnosticsProfile: {
-        bootDiagnostics: {
-          enabled: false
-        }
-      }
-      licenseType: ((imagePublisher == 'MicrosoftWindowsDesktop' || !empty(customImageResourceId))
-        ? 'Windows_Client'
-        : 'Windows_Server')
+resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i in range(0, sessionHostCount): {
+  name: replace(virtualMachineNameConv, '###', padLeft((i + sessionHostIndex), 3, '0'))
+  location: location
+  tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
+  zones: !empty(dedicatedHostResourceId) || !empty(dedicatedHostGroupResourceId) ? dedicatedHostGroupZones : availability == 'availabilityZones' && !empty(availabilityZones) ? [
+    availabilityZones[i % length(availabilityZones)]
+  ] : null
+  identity: identity
+  properties: {
+    additionalCapabilities: {
+      hibernationEnabled: hibernationEnabled
     }
-    dependsOn: [
-      networkInterface
-    ]
+    availabilitySet: availability == 'AvailabilitySets' ? {
+      id: resourceId('Microsoft.Compute/availabilitySets', '${availabilitySetNamePrefix}-${(i + sessionHostIndex) / 200}')
+    } : null
+    hardwareProfile: {
+      vmSize: virtualMachineSize
+    }
+    host: !empty(dedicatedHostResourceId) ? {
+      id: dedicatedHostResourceId
+    } : null
+    hostGroup: !empty(dedicatedHostGroupResourceId) && empty(dedicatedHostResourceId) ? {
+      id: dedicatedHostGroupResourceId
+    } : null
+    storageProfile: {
+      imageReference: ImageReference
+      osDisk: {
+        diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
+        name: replace(osDiskNameConv, '###', padLeft((i + sessionHostIndex), 3, '0'))
+        osType: 'Windows'
+        createOption: 'FromImage'
+        caching: 'ReadWrite'
+        deleteOption: 'Delete'
+        managedDisk: {
+          diskEncryptionSet: securityType != 'ConfidentialVM' && !empty(diskEncryptionSetResourceId) ? {
+            id: diskEncryptionSetResourceId
+          } : null
+          securityProfile: securityType == 'ConfidentialVM' ? {
+            diskEncryptionSet: !empty(diskEncryptionSetResourceId) ? {
+              id: diskEncryptionSetResourceId
+            } : null
+            securityEncryptionType: confidentialVMOSDiskEncryptionType
+          } : null
+          storageAccountType: diskSku
+        }
+      }
+      dataDisks: []
+    }
+    osProfile: {
+      computerName: '${virtualMachineNamePrefix}${padLeft((i + sessionHostIndex), 3, '0')}'
+      adminUsername: virtualMachineAdminUserName
+      adminPassword: virtualMachineAdminPassword
+      windowsConfiguration: {
+        provisionVMAgent: true
+        enableAutomaticUpdates: false
+      }
+      secrets: []
+      allowExtensionOperations: true
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterface[i].id
+          properties: {
+            deleteOption: 'Delete'
+          }
+        }
+      ]
+    }
+    securityProfile: {
+      encryptionAtHost: encryptionAtHost ? true : null
+      securityType: securityType != 'Standard' ? securityType : null
+      uefiSettings: securityType != 'Standard' ? {
+        secureBootEnabled: secureBootEnabled
+        vTpmEnabled: vTpmEnabled
+      } : null 
+    }
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: false
+      }
+    }
+    licenseType: ((imagePublisher == 'MicrosoftWindowsDesktop' || !empty(customImageResourceId)) ? 'Windows_Client' : 'Windows_Server')
   }
-]
+  dependsOn: [
+    networkInterface
+  ]
+}]
 
 resource extension_JsonADDomainExtension 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
   for i in range(0, sessionHostCount): if (contains(identitySolution, 'DomainServices')) {

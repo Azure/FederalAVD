@@ -1,2 +1,0 @@
-DownloadUrl = https://aka.ms/vs/17/release/vc_redist.x64.exe
-Download File = vc_redist.x64.exe

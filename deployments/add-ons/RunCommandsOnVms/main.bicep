@@ -52,14 +52,13 @@ param protectedParameter object = {}
 @description('Do Not Update. Used to name deployments and logs.')
 param timeStamp string = utcNow('yyyyMMddHHmm')
 
-
 var logsContainerUri = empty(logsContainerName) || empty(logsStorageAccountName)
   ? ''
-  : 'https://${logsStorageAccountName}.blob.${environment().suffixes.storage}/${logsContainerName}/'
+  : 'https://${logsStorageAccountName}.blob.${environment().suffixes.storage}/${logsContainerName}'
 
 var scriptsContainerUri = empty(scriptsContainerName) || empty(scriptsStorageAccountName)
   ? ''
-  : 'https://${scriptsStorageAccountName}.blob.${environment().suffixes.storage}/${scriptsContainerName}/'
+  : 'https://${scriptsStorageAccountName}.blob.${environment().suffixes.storage}/${scriptsContainerName}'
 
 var multipleScripts = [
   for script in scripts: {
@@ -85,9 +84,34 @@ resource scriptsUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIden
   )
 }
 
+resource existingVms 'Microsoft.Compute/virtualMachines@2023-03-01' existing = [
+  for (vmName, i) in vmNames: {
+    name: vmName
+    scope: resourceGroup(resourceGroupName)
+  }
+]
+
+module updateVms 'virtualMachineUpdate.bicep' = [
+   for (vmName, i) in vmNames: if(!empty(logsUserAssignedIdentityResourceId) || !empty(scriptsUserAssignedIdentityResourceId)) {
+    name: 'VirtualMachineUpdate-${vmName}-${timeStamp}'
+    scope: resourceGroup(resourceGroupName)
+    params: {
+      location: location
+      name: vmNames[i]
+      identity: existingVms[i].?identity
+      logsUserAssignedIdentityResourceId: logsUserAssignedIdentityResourceId
+      scriptsUserAssignedIdentityResourceId: scriptsUserAssignedIdentityResourceId
+      hardwareProfile: existingVms[i].properties.hardwareProfile
+      storageProfile: existingVms[i].properties.storageProfile
+      osProfile: existingVms[i].properties.osProfile
+      networkProfile: existingVms[i].properties.networkProfile
+    }
+  }
+]
+
 module runCommands 'runCommands.bicep' = [
-  for (vm, i) in vmNames: if (!empty(scripts)) {
-    name: 'RunCommands-${vm}-${timeStamp}'
+  for (vmName, i) in vmNames: if (!empty(scripts)) {
+    name: 'RunCommands-${vmName}-${timeStamp}'
     scope: resourceGroup(resourceGroupName)
     params: {
       scripts: multipleScripts
@@ -96,16 +120,21 @@ module runCommands 'runCommands.bicep' = [
       logsUserAssignedIdentityClientId: empty(logsUserAssignedIdentityResourceId)
         ? ''
         : logsUserAssignedIdentity.properties.clientId
-      scriptsUserAssignedIdentityClientId: scriptsUserAssignedIdentity.properties.clientId
+      scriptsUserAssignedIdentityClientId: empty(scriptsUserAssignedIdentityResourceId)
+        ? ''
+        : scriptsUserAssignedIdentity.properties.clientId
       timeStamp: timeStamp
       virtualMachineName: vmNames[i]
     }
+    dependsOn: [
+      updateVms[i]
+    ]
   }
 ]
 
 module runCommand 'runCommand.bicep' = [
-  for (vm, i) in vmNames: if (empty(scripts)) {
-    name: 'RunCommand-${vm}-${timeStamp}'
+  for (vmName, i) in vmNames: if (empty(scripts)) {
+    name: 'RunCommand-${vmName}-${timeStamp}'
     scope: resourceGroup(resourceGroupName)
     params: {
       location: location
@@ -125,5 +154,8 @@ module runCommand 'runCommand.bicep' = [
       timeoutInSeconds: timeoutInSeconds
       timeStamp: timeStamp
     }
+    dependsOn: [
+      updateVms[i]
+    ]
   }
 ]

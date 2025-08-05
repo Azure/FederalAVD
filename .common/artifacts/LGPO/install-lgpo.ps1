@@ -133,8 +133,8 @@ function New-Log {
     #>
 
     Param (
-        [Parameter(Mandatory = $true, Position=0)]
-        [string] $Path
+        [Parameter(Position=0)]
+        [string]$Path = (Join-Path -Path $env:SystemRoot -ChildPath 'Logs')
     )
 
     # Create central log file with given date
@@ -157,33 +157,21 @@ function New-Log {
 $Script:Name = 'Install-LGPO'
 $Script:TempDir = Join-Path -Path $env:Temp -ChildPath $Script:Name
 $null = New-Item -Path $TempDir -ItemType Directory -Force
-New-Log (Join-Path -Path $env:SystemRoot -ChildPath $Script:Name)
+New-Log
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
 #endregion Initialization
 
 #region main
 $LGPOZip = Join-Path -Path $PSScriptRoot -ChildPath 'LGPO.zip'
-If (Test-Path -Path $LGPOZip) {
-    Write-Log -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
-    Expand-Archive -path $LGPOZip -DestinationPath $Script:TempDir -force
-    $algpoexe = Get-ChildItem -Path $Script:TempDir -filter 'lgpo.exe' -recurse
-    If ($algpoexe.count -gt 0) {
-        $fileLGPO = $algpoexe[0].FullName
-        Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
-        Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -force        
-    }
-} Else {
-    $urlLGPO = 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip'
-    $LGPOZip = Get-InternetFile -Url $urlLGPO -OutputDirectory $Script:TempDir -Verbose
-    $outputDir = Join-Path $Script:TempDir -ChildPath 'LGPO'
-    Expand-Archive -Path $LGPOZip -DestinationPath $outputDir
-    Remove-Item $LGPOZip -Force
-    $fileLGPO = (Get-ChildItem -Path $outputDir -file -Filter 'lgpo.exe' -Recurse)[0].FullName
-    Write-Log -Message "Copying `"$fileLGPO`" to System32"
-    Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
-    Remove-Item -Path $outputDir -Recurse -Force
+If (-not(Test-Path -Path $LGPOZip)) {
+    $LGPOZip = Get-InternetFile -Url 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip' -OutputDirectory $Script:TempDir -Verbose
 }
+Write-Log -Category Info -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
+Expand-Archive -Path $LGPOZip -DestinationPath $Script:TempDir -Force
+$fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse)[0].FullName
+Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
+Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
 Remove-Item -Path $Script:TempDir -Recurse -Force
 #endregion Main
 Write-Log -category Info -message "Ending '$PSCommandPath'."

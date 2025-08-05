@@ -1,3 +1,6 @@
+param deploymentVirtualMachineName string
+param deploymentResourceGroupName string
+param deploymentUserAssignedIdentityClientId string
 param hostPoolResourceId string
 param keyExpirationInDays int
 param keyManagementStorageAccounts string
@@ -14,16 +17,17 @@ param userAssignedIdentityNameConv string
 
 var keyVaultName = last(split(keyVaultResourceId, '/'))
 var keyVaultResourceGroup = split(keyVaultResourceId, '/')[4]
+var roleKeyVaultCryptoUser = 'e147488a-f6f5-4113-8e2d-b22465e65bf6' //Key Vault Crypto Service Encryption User
 
 module fslogixStorageAccountEncryptionKeys '../../../../sharedModules/resources/key-vault/vault/key/main.bicep' = [for i in range(0, storageCount) : {
   name: 'StorageEncryptionKey_${i + storageIndex}_${timeStamp}'
   scope: resourceGroup(keyVaultResourceGroup)
   params: {
-    keyVaultName: keyVaultName
-    name: replace(fslogixEncryptionKeyNameConv, '##', padLeft(i + storageIndex, 2, '0'))
     attributesExportable: false
     keySize: 4096
+    keyVaultName: keyVaultName
     kty: contains(keyManagementStorageAccounts, 'HSM') ? 'RSA-HSM' : 'RSA'
+    name: replace(fslogixEncryptionKeyNameConv, '##', padLeft(i + storageIndex, 2, '0'))
     rotationPolicy: {
       attributes: {
         expiryTime: 'P${string(keyExpirationInDays)}D'
@@ -55,11 +59,11 @@ module increaseQuotaStorageAccountEncryptionKey '../../../../sharedModules/resou
   name: 'IncreaseQuotaEncryptionKey_${timeStamp}'
   scope: resourceGroup(keyVaultResourceGroup)
   params: {
-    keyVaultName: keyVaultName
-    name: increaseQuotaEncryptionKeyName
     attributesExportable: false
     keySize: 4096
+    keyVaultName: keyVaultName
     kty: contains(keyManagementStorageAccounts, 'HSM') ? 'RSA-HSM' : 'RSA'
+    name: increaseQuotaEncryptionKeyName
     rotationPolicy: {
       attributes: {
         expiryTime: 'P${string(keyExpirationInDays)}D'
@@ -107,7 +111,7 @@ module roleAssignment_UAI_EncryptionUser_FSLogix '../../management/modules/key_R
     keyVaultName: keyVaultName
     principalId: userAssignedIdentity.outputs.principalId
     principalType: 'ServicePrincipal'
-    roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6' // Key Vault Crypto Service Encryption User
+    roleDefinitionId: roleKeyVaultCryptoUser
   }  
 }]
 
@@ -115,14 +119,30 @@ module roleAssignment_UAI_EncryptionUser_increaseQuota '../../management/modules
   name: 'RA_Encryption_User_IncreaseQuota-${timeStamp}'
   scope: resourceGroup(keyVaultResourceGroup)
   params: {
-    keyName: increaseQuotaStorageAccountEncryptionKey.outputs.name
+    keyName: increaseQuotaStorageAccountEncryptionKey!.outputs.name
     keyVaultName: keyVaultName
     principalId: userAssignedIdentity.outputs.principalId
     principalType: 'ServicePrincipal'
-    roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6' // Key Vault Crypto Service Encryption User
+    roleDefinitionId: roleKeyVaultCryptoUser
   }  
 }
 
+module getRoleAssignments '../../common/get-RoleAssignments.bicep' = {
+  name: 'Get_UAI_KeyVault_Key_RoleAssignments_${timeStamp}'
+  scope: resourceGroup(deploymentResourceGroupName)
+  params: {
+    location: location
+    principalId: userAssignedIdentity.outputs.principalId
+    resourceIds: [for i in range(0, storageCount): fslogixStorageAccountEncryptionKeys[i].outputs.resourceId]
+    roleDefinitionId: roleKeyVaultCryptoUser
+    runCommandName: 'Get-KeyVaultKeyRoleAssignmentsForUserAssignedIdentity'
+    userAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
+    virtualMachineName: deploymentVirtualMachineName
+  }
+  dependsOn: [
+    roleAssignment_UAI_EncryptionUser_FSLogix
+  ]
+}
+
 output userAssignedIdentityResourceId string = userAssignedIdentity.outputs.resourceId
-output storageAccountKeyRoleAssignments array = [ for i in range(0, storageCount): roleAssignment_UAI_EncryptionUser_FSLogix[i].outputs.roleAssignmentId ]
-output increaseQuotaKeyRoleAssignmentId string = increaseQuota ? roleAssignment_UAI_EncryptionUser_increaseQuota.outputs.roleAssignmentId : ''
+output encryptionKeys array = [for i in range(0, storageCount): fslogixStorageAccountEncryptionKeys[i].outputs.resourceId]

@@ -190,8 +190,8 @@
     },
     "DoDInstallRoot": {
         "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/InstallRoot_5.6x64_NonAdmin.msi",
-        "WebSiteUrl": "",
-        "SearchString": "",
+        "WebSiteUrl": "https://public.cyber.mil/pki-pke/tools-configuration-files",
+        "SearchString": "InstallRoot*x64_NonAdmin.msi",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",

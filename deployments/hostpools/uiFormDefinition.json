@@ -84,33 +84,86 @@
 							"type": "Microsoft.Common.DropDown",
 							"label": "Virtual Machines Time Zone",
 							"toolTip": "Select the time zone for the virtual machines.",
-							"defaultValue": "Eastern Standard Time",
+							"defaultValue": "(UTC-05:00) Eastern Time (US & Canada)",
 							"constraints": {
 								"allowedValues": [
 									{
-										"label": "Central European Standard Time",
-										"value": "Central European Standard Time"
+										"label": "(UTC-10:00) Hawaii",
+										"value": "Hawaiian Standard Time"
 									},
 									{
-										"label": "GMT Standard Time",
-										"value": "GMT Standard Time"
+										"label": "(UTC-09:00) Alaska",
+										"value": "Alaskan Standard Time"
 									},
 									{
-										"label": "Eastern Standard Time",
-										"value": "Eastern Standard Time"
+										"label": "(UTC-08:00) Pacific Time (US & Canada)",
+										"value": "Pacific Standard Time"
 									},
 									{
-										"label": "Central Standard Time",
-										"value": "Central Standard Time"
+										"label": "(UTC-07:00) Arizona",
+										"value": "US Mountain Standard Time"
 									},
 									{
-										"label": "Mountain Standard Time",
+										"label": "(UTC-07:00) Mountain Time (US & Canada)",
 										"value": "Mountain Standard Time"
 									},
 									{
-										"label": "Pacific Standard Time",
-										"value": "Pacific Standard Time"
+										"label": "(UTC-06:00) Central Time (US & Canada)",
+										"value": "Central Standard Time"
+									},
+									{
+										"label": "(UTC-05:00) Eastern Time (US & Canada)",
+										"value": "Eastern Standard Time"
+									},
+									{
+										"label": "(UTC+00:00) Dublin, Edinburgh, Lisbon, London",
+										"value": "GMT Standard Time"
+									},
+									{
+										"label": "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris",
+										"value": "Romance Standard Time"
+									},
+									{
+										"label": "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb",
+										"value": "Central European Standard Time"
+									},
+									{
+										"label": "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague",
+										"value": "Central Europe Standard Time"
+									},
+									{
+										"label": "(UTC+01:00) West Central Africa",
+										"value": "W. Central Africa Standard Time"
+									},
+									{
+										"label": "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna",
+										"value": "W. Europe Standard Time"
+									},
+									{
+										"label": "(UTC+02:00) Jerusalem",
+										"value": "Israel Standard Time"
+									},
+									{
+										"label": "(UTC+03:00) Kuwait, Riyadh",
+										"value": "Arab Standard Time"
+									},
+									{
+										"label": "(UTC+03:00) Nairobi",
+										"value": "E. Africa Standard Time"
+									},
+									{
+										"label": "(UTC+09:00) Osaka, Sapporo, Tokyo",
+										"value": "Tokyo Standard Time"
+									},
+									{
+										"label": "(UTC+09:00) Seoul",
+										"value": "Korea Standard Time"
+									},
+									{
+										"label": "(UTC+10:00) Guam, Port Moresby",
+										"value": "West Pacific Standard Time"
 									}
+
 								],
 								"required": true
 							},

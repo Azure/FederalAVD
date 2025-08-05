@@ -397,6 +397,25 @@
 									}
 								},
 								{
+									"name": "collectNSGDiagLogs",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Send NSG Diagnostic Logs to Log Analytics Workspace"
+								},
+								{
+									"name": "logAnalyticsWorkspace",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Select Log Analytics Workspace",
+									"resourceType": "Microsoft.OperationalInsights/workspaces",
+									"toolTip": "Select an existing log analytics workspace to which to send NSG diagnostic logs.",
+									"scope": {
+										"location": "[steps('basics').scope.location.name]"
+									},
+									"constraints": {
+										"required": false
+									},
+									"visible": "[steps('virtualNetwork').deploy.collectNSGDiagLogs]"
+								},
+								{
 									"name": "deployDDoSNetworkProtection",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable DDoS Network Protection",
@@ -739,6 +758,7 @@
 							"resources": [
 								"Microsoft.Network/ddosProtectionPlans",
 								"Microsoft.Network/natGateways",
+								"Microsoft.Network/networkSecurityGroups",
 								"Microsoft.Network/privateDnsZones",
 								"Microsoft.Network/publicIPAddresses",
 								"Microsoft.Network/routeTables",
@@ -766,6 +786,7 @@
 				"deployDDoSNetworkProtection": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.deployDDoSNetworkProtection, false)]",
 				"hubVnetResourceId": "[if(steps('virtualNetwork').deployVnet, if(steps('virtualNetwork').deploy.peerVnetToHub, steps('virtualNetwork').deploy.hubVnet.id, ''), '')]",
 				"virtualNetworkGatewayOnHub": "[if(steps('virtualNetwork').deployVnet, if(steps('virtualNetwork').deploy.peerVnetToHub, steps('virtualNetwork').deploy.hubVirtualNetworkGateway, ''), '')]",
+				"logAnalyticsWorkspaceId": "[if(and(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.collectNSGDiagLogs), steps('virtualNetwork').deploy.logAnalyticsWorkspace.id, '')]",
 				"nameConvResTypeAtEnd": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.nameConvResTypeAtEnd, false)]",
 				"privateDNSZonesSubscriptionId": "[if(and(steps('basics').features.privateEndpoints, steps('privateDNSZones').zones.deployMissingZones), steps('privateDNSZones').zones.subscription.subscriptionId, '')]",
 				"deployPrivateDNSZonesResourceGroup": "[if(and(steps('basics').features.privateEndpoints, steps('privateDNSZones').zones.deployMissingZones, equals(steps('privateDNSZones').zones.resourceGroup.mode, 'New')), true, false)]",

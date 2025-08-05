@@ -17,6 +17,7 @@
     "netAppAccounts": "naa",
     "netAppCapacityPools": "nacp",
     "networkInterfaces": "nic",
+    "networkSecurityGroups": "nsg",
     "osdisks": "osdisk",
     "privateEndpoints": "pe",
     "privateLinkScopes": "pls",

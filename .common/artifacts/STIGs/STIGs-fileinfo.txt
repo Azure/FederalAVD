@@ -1,2 +1,0 @@
-DownloadUrl = https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_April_2024.zip
-Download File = U_STIG_GPO_Package_April_2024.zip

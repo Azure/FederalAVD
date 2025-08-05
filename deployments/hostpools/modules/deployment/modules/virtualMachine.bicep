@@ -99,7 +99,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2021-11-01' = {
         vTpmEnabled: true
       }
       securityType: 'trustedLaunch'
-      encryptionAtHost: encryptionAtHost
+      encryptionAtHost: encryptionAtHost ? true : null
     }
     diagnosticsProfile: {
       bootDiagnostics: {

@@ -85,7 +85,7 @@ var resourceGroupManagement = replace(
   'RESOURCETYPE',
   resourceAbbreviations.resourceGroups
 )
-var uniqueStringManagement = uniqueString(subscription().subscriptionId, resourceGroupManagement)
+var uniqueStringManagement = take(uniqueString(subscription().subscriptionId, resourceGroupManagement), 6)
 var appServicePlanName = replace(
   replace(
     replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
@@ -99,7 +99,7 @@ var appServicePlanName = replace(
 // key vaults must be named with a length of 3 - 24 characters and must be globally unique.
 var keyVaultNameSecrets = replace(
   replace(
-    replace(nameConv_Shared_Resources, 'TOKEN', 'sec-${take(uniqueStringManagement, 8)}'),
+    replace(nameConv_Shared_Resources, 'TOKEN', 'sec-${uniqueStringManagement}'),
     'LOCATION',
     locationVirtualMachinesAbbreviation
   ),
@@ -108,7 +108,7 @@ var keyVaultNameSecrets = replace(
 )
 var keyVaultNameEncryption = replace(
   replace(
-    replace(nameConv_Shared_Resources, 'TOKEN', 'enc-${take(uniqueStringManagement, 8)}'),
+    replace(nameConv_Shared_Resources, 'TOKEN', 'enc-${uniqueStringManagement}'),
     'LOCATION',
     locationVirtualMachinesAbbreviation
   ),
@@ -199,7 +199,7 @@ var scalingPlanName = replace(
 )
 
 // Common HostPool Specific Resource Naming Conventions
-var uniqueStringHosts = uniqueString(subscription().subscriptionId, resourceGroupHosts)
+var uniqueStringHosts = take(uniqueString(subscription().subscriptionId, resourceGroupHosts), 6)
 var appInsightsNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
   'LOCATION',
@@ -307,11 +307,11 @@ var netAppCapacityPoolName = replace(
 
 // App Attach and FSLogix Storage Account Naming Convention (max 15 characters for domain join)
 var appAttachStorageAccountName = take('appattach${uniqueStringManagement}', 15)
-var uniqueStringStorage = uniqueString(subscription().subscriptionId, resourceGroupStorage)
+var uniqueStringStorage = take(uniqueString(subscription().subscriptionId, resourceGroupStorage), 6)
 var fslogixStorageAccountNamePrefix = empty(fslogixStorageCustomPrefix)
-  ? take('fslogix${uniqueStringStorage}', 13)
+  ? 'fslogix${uniqueStringStorage}'
   : toLower(fslogixStorageCustomPrefix)
-var increaseQuotaFAStorageAccountName = take('saquota${uniqueStringStorage}', 13)
+var increaseQuotaFAStorageAccountName = 'saquota${uniqueStringStorage}'
 var sessionHostReplacerFAStorageAccountName = 'shreplacer${uniqueStringHosts}'
 
 var fslogixfileShareNames = {
@@ -332,8 +332,8 @@ var fslogixfileShareNames = {
 }
 
 output appInsightsNames object = {
-  increaseStorageQuota: replace(appInsightsNameConv, 'TOKEN-', 'saquota-')
-  sessionHostReplacement: replace(appInsightsNameConv, 'TOKEN-', 'shreplacer-')
+  increaseStorageQuota: replace(appInsightsNameConv, 'TOKEN-', 'saquota-${uniqueStringStorage}-')
+  sessionHostReplacement: replace(appInsightsNameConv, 'TOKEN-', 'shreplacer-${uniqueStringHosts}-')
 }
 output appServicePlanName string = appServicePlanName
 output availabilitySetNamePrefix string = availabilitySetNamePrefix
@@ -350,8 +350,8 @@ output diskEncryptionSetNames object = {
 }
 output fslogixFileShareNames object = fslogixfileShareNames
 output functionAppNames object = {
-  increaseStorageQuota: replace(functionAppNameConv, 'TOKEN-', 'saquota-')
-  sessionHostReplacement: replace(functionAppNameConv, 'TOKEN-', 'shreplacer-')
+  increaseStorageQuota: replace(functionAppNameConv, 'TOKEN-', 'saquota-${uniqueStringStorage}-')
+  sessionHostReplacement: replace(functionAppNameConv, 'TOKEN-', 'shreplacer-${uniqueStringHosts}-')
 }
 output globalFeedWorkspaceName string = globalFeedWorkspaceName
 output hostPoolName string = hostPoolName
@@ -374,8 +374,8 @@ output netAppCapacityPoolName string = netAppCapacityPoolName
 output privateEndpointNameConv string = privateEndpointNameConv
 output privateEndpointNICNameConv string = privateEndpointNICNameConv
 output recoveryServicesVaultNames object = {
-  fslogixStorage: replace(recoveryServicesVaultsNameConv, 'TOKEN-', 'fslogix-storage-')
-  virtualMachines: replace(recoveryServicesVaultsNameConv, 'TOKEN-', 'virtual-machines-')
+  fslogixStorage: replace(recoveryServicesVaultsNameConv, 'TOKEN-', 'fslogix-')
+  virtualMachines: replace(recoveryServicesVaultsNameConv, 'TOKEN-', 'vms-')
 }
 output resourceGroupControlPlane string = resourceGroupControlPlane
 output resourceGroupGlobalFeed string = globalFeedResourceGroupName

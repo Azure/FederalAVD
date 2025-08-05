@@ -9,11 +9,13 @@ param domainJoinUserPassword string
 param domainJoinUserPrincipalName string
 param domainName string
 param deploymentVmSize string
+param desktopFriendlyName string
 param encryptionAtHost bool
 param fslogix bool
 param hostPoolName string
 param identitySolution string
 param keyManagementDisks string
+param keyManagementStorageAccounts string
 param locationVirtualMachines string
 param ouPath string
 param resourceGroupControlPlane string
@@ -38,33 +40,26 @@ var deploymentUserAssignedIdentityName = replace(userAssignedIdentityNameConv, '
 var roleDefinitions = {
   Contributor: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
   DesktopVirtualizationApplicationGroupContributor: '86240b0e-9422-4c43-887b-b61143f32ba8'
-  DesktopVirtualizationSessionHostOperator: '2ad6aaab-ead9-4eaa-8ac5-da422f562408'
   KeyVaultCryptoOfficer: '14b46e9e-c2b7-41b4-b07b-48a6ebf60603'
   RoleBasedAccessControlAdministrator: 'f58310d9-a9f6-439a-9e8d-f62e7b41a168'
   StorageAccountContributor: '17d1049b-9a84-46fb-8f53-869881c3d3ab'
   VirtualMachineContributor: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
 }
 
-var roleAssignmentsControlPlane = [
+var roleAssignmentsControlPlane = !empty(desktopFriendlyName) ? [
   {
     roleDefinitionId: roleDefinitions.DesktopVirtualizationApplicationGroupContributor // (Purpose: updates the friendly name for the desktop)
     depName: 'ControlPlane-DVAppGroupCont'
     resourceGroup: resourceGroupControlPlane
     subscription: subscription().subscriptionId
-  }
-  {
-    roleDefinitionId: roleDefinitions.DesktopVirtualizationSessionHostOperator // (Purpose: sets drain mode on the AVD session hosts)
-    depName: 'ControlPlane-DVSessionHostOp'
-    resourceGroup: resourceGroupControlPlane
-    subscription: subscription().subscriptionId
-  }
+  } 
   {
     roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the control plane role assignments for the deployment identity. This role Assignment must remain last in the list.)
     depName: 'ControlPlane-RBACAdmin'
     resourceGroup: resourceGroupControlPlane
     subscription: subscription().subscriptionId
   }
-]
+] : []
 
 var roleAssignmentsDeployment = [
   {
@@ -90,7 +85,7 @@ var roleAssignmentsHosts = [
   }
 ]
 
-var roleAssignmentsManagement = deploymentType == 'Complete' && confidentialVMOSDiskEncryption && keyManagementDisks == 'CustomerManagedHSM'
+var roleAssignmentsManagementConfidentialVMDiskEncryption = confidentialVMOSDiskEncryption && keyManagementDisks == 'CustomerManagedHSM'
   ? [
       {
         roleDefinitionId: roleDefinitions.KeyVaultCryptoOfficer // (Purpose: Retrieve the customer managed keys from the key vault for idempotent deployment)
@@ -101,7 +96,23 @@ var roleAssignmentsManagement = deploymentType == 'Complete' && confidentialVMOS
     ]
   : []
 
-var roleAssignmentsStorage = deploymentType == 'Complete' && fslogix && contains(identitySolution, 'DomainServices')
+var roleAssignmentsManagementRBACAdmin = contains(keyManagementDisks, 'CustomManaged') || contains(keyManagementStorageAccounts, 'CustomerManaged') || !empty(roleAssignmentsManagementConfidentialVMDiskEncryption)
+  ? [
+      {
+        roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the management resource group role assignments for the deployment identity. This role assignment must remain last in the list if assignments are made.)
+        depName: 'Management-RBACAdmin'
+        resourceGroup: resourceGroupManagement
+        subscription: subscription().subscriptionId
+      }
+    ]
+  : []
+
+var roleAssignmentsManagement = union(
+  roleAssignmentsManagementConfidentialVMDiskEncryption,
+  roleAssignmentsManagementRBACAdmin
+)
+
+var roleAssignmentsStorage = fslogix && contains(identitySolution, 'DomainServices')
   ? [
       {
         roleDefinitionId: roleDefinitions.StorageAccountContributor // (Purpose: domain join storage account & set NTFS permissions on the file share)

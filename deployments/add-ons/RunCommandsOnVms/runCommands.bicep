@@ -27,7 +27,7 @@ resource runCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
         }
     errorBlobUri: empty(logsContainerUri)
       ? null
-      : '${logsContainerUri}${virtualMachineName}-${script.name}-error-${timeStamp}.log'
+      : '${logsContainerUri}/${virtualMachineName}-${script.name}-error-${timeStamp}.log'
     outputBlobManagedIdentity: empty(logsContainerUri)
       ? null
       : {
@@ -35,7 +35,7 @@ resource runCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
         }
     outputBlobUri: empty(logsContainerUri)
       ? null
-      : '${logsContainerUri}${virtualMachineName}-${script.name}-output-${timeStamp}.log'
+      : '${logsContainerUri}/${virtualMachineName}-${script.name}-output-${timeStamp}.log'
     parameters: [
       {
         name: 'APIVersion'

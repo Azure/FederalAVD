@@ -36,8 +36,8 @@ Function Get-InternetFile {
             Else {
                 Write-Log -Message "${CmdletName}: Url does not contain file name. Trying 'Location' Response Header."
                 $request = [System.Net.WebRequest]::Create($url)
-                $request.AllowAutoRedirect=$false
-                $response=$request.GetResponse()
+                $request.AllowAutoRedirect = $false
+                $response = $request.GetResponse()
                 $Location = $response.GetResponseHeader("Location")
                 If ($Location) {
                     $OutputFileName = [System.IO.Path]::GetFileName($Location)
@@ -48,7 +48,7 @@ Function Get-InternetFile {
                     $result = Invoke-WebRequest -Method GET -Uri $Url -UseBasicParsing
                     $contentDisposition = $result.Headers.'Content-Disposition'
                     If ($contentDisposition) {
-                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"","")
+                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"", "")
                         Write-Log -Message "${CmdletName}: File Name from 'Content-Disposition' Response Header is '$OutputFileName'."
                     }
                 }
@@ -111,8 +111,8 @@ Function Update-LocalGPOTextFile {
         [switch]$Delete,
         [Parameter(Mandatory = $false, ParameterSetName = 'DeleteAllValues')]
         [switch]$DeleteAllValues,
-        [string]$outputDir = "$TempDir\LGPO",
-        [string]$outfileprefix = $AppName
+        [string]$outputDir = "$Script:TempDir\LGPO",
+        [string]$outfileprefix = $Script:AppName
     )
     Begin {
         [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
@@ -168,7 +168,7 @@ Function Update-LocalGPOTextFile {
 Function Invoke-LGPO {
     [CmdletBinding()]
     Param (
-        [string]$InputDir = "$TempDir\LGPO",
+        [string]$InputDir = "$Script:TempDir\LGPO",
         [string]$SearchTerm
     )
     Begin {
@@ -190,6 +190,55 @@ Function Invoke-LGPO {
         }
     }
     End {
+    }
+}
+
+Function Set-RegistryValue {
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [string]
+        $Name,
+        [Parameter()]
+        [string]
+        $Path,
+        [Parameter()]
+        [string]$PropertyType,
+        [Parameter()]
+        $Value
+    )
+    Begin {
+        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
+    }
+    Process {
+        Write-Log -Message "${CmdletName}: Setting Registry Value $Path\$Name"
+        # Create the registry Key(s) if necessary.
+        If (!(Test-Path -Path $Path)) {
+            Write-Log -Message "${CmdletName}: Creating Registry Key: $Path"
+            New-Item -Path $Path -Force | Out-Null
+        }
+        # Check for existing registry setting
+        $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
+        If ($RemoteValue) {
+            # Get current Value
+            $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name
+            Write-Log -Message "${CmdletName}: Current Value of $($Path)\$($Name) : $CurrentValue"
+            If ($Value -ne $CurrentValue) {
+                Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
+                Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
+            }
+            Else {
+                Write-Log -Message "${CmdletName}: Value of $($Path)\$($Name) is already set to $Value"
+            }           
+        }
+        Else {
+            Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
+            New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    End {
+        Write-Log -Message "Ending ${CmdletName}"
     }
 }
 
@@ -241,42 +290,34 @@ function New-Log {
 #region Initialization
 [int]$MaxIdleTime = $MaxIdleTime
 [int]$MaxDisconnectTime = $MaxDisconnectTime
-[string]$AppName = 'RDServicesPolicy'
+[string]$Script:AppName = 'RDServicesPolicy'
 [string]$Script:Name = "Configure-RemoteDesktopServicesPolicy"
-[string]$TempDir = Join-Path -Path $env:Temp -ChildPath $ScriptName
-$Null = New-Item $TempDir -ItemType Directory -Force
-New-Log (Join-Path -Path $env:SystemRoot -ChildPath 'Logs')
+[string]$Script:TempDir = Join-Path -Path $env:Temp -ChildPath $ScriptName
+$Null = New-Item $Script:TempDir -ItemType Directory -Force
+New-Log -Path (Join-Path -Path $env:SystemRoot -ChildPath 'Logs')
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
 #endregion
 
-Write-Log -message "Checking for lgpo.exe in '$env:SystemRoot\system32'."
+Write-Log -Message "Checking for lgpo.exe in '$env:SystemRoot\system32'."
 
-If (-not(Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe")) {
-    $LGPOZip = Join-Path -Path $PSScriptRoot -ChildPath 'LGPO.zip'
-    If (Test-Path -Path $LGPOZip) {
-        Write-Log -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
-        Expand-Archive -path $LGPOZip -DestinationPath $Script:TempDir -force
-        $algpoexe = Get-ChildItem -Path $Script:TempDir -filter 'lgpo.exe' -recurse
-        If ($algpoexe.count -gt 0) {
-            $fileLGPO = $algpoexe[0].FullName
-            Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
-            Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -force        
-        }
-    } Else {
-        $urlLGPO = 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip'
-        $LGPOZip = Get-InternetFile -Url $urlLGPO -OutputDirectory $Script:TempDir -Verbose
-        $outputDir = Join-Path $Script:TempDir -ChildPath 'LGPO'
-        Expand-Archive -Path $LGPOZip -DestinationPath $outputDir
-        Remove-Item $LGPOZip -Force
-        $fileLGPO = (Get-ChildItem -Path $outputDir -file -Filter 'lgpo.exe' -Recurse)[0].FullName
-        Write-Log -Message "Copying `"$fileLGPO`" to System32"
+If (-not(Test-Path -Path "$env:SystemRoot\System32\lgpo.exe")) {
+    Write-Log -Category Info -Message "'lgpo.exe' not found in '$env:SystemRoot\system32'."
+    $LGPOZip = Get-ChildItem -Path $PSScriptRoot -Filter 'LGPO.zip' -Recurse | Select-Object -First 1
+    If (-not($LGPOZip)) {
+        Write-Log -Category Info -Message "Downloading LGPO tool."
+        $LGPOZip = Get-InternetFile -Url 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip' -OutputDirectory $Script:TempDir -Verbose
+    }    
+    If ($LGPOZip) {
+        Write-Log -Category Info -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
+        Expand-Archive -Path $LGPOZip -DestinationPath $Script:TempDir -Force
+        $fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse)[0].FullName
+        Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
         Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
-        Remove-Item -Path $outputDir -Recurse -Force
     }
 }
 
-If (Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe") {
+If (Test-Path -Path "$env:SystemRoot\System32\lgpo.exe") {
     Write-Log -category Info -message "Now Configuring Remote Desktop Services Timeout Settings."
     Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Windows NT\Terminal Services' -RegistryValue 'MaxDisconnectionTime' -RegistryType 'DWORD' -RegistryData $MaxDisconnectTime -outfileprefix $appName -Verbose
     Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Windows NT\Terminal Services' -RegistryValue 'MaxIdleTime' -RegistryType 'DWORD' -RegistryData $MaxIdleTime -outfileprefix $appName -Verbose
@@ -286,8 +327,12 @@ If (Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe") {
     Write-Log -category Info -message "Remote Desktop Services Timeout Settings Configured."
 }
 Else {
-    Write-Log -category Error -message "Unable to configure local policy with lgpo tool because it was not found."
-    Exit 2
+    Write-Log -Category Warning -Message "Unable to configure local policy with lgpo tool because it was not found. Updating registry settings instead."
+    Set-RegistryValue -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'MaxDisconnectionTime' -PropertyType 'DWord' -Value $MaxDisconnectTime
+    Set-RegistryValue -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'MaxIdleTime' -PropertyType 'DWord' -Value $MaxIdleTime
+    Set-RegistryValue -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'fResetBroken' -PropertyType 'DWord' -Value 1
+    Set-RegistryValue -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'fEnableTimeZoneRedirection' -PropertyType 'DWord' -Value 1
+    Write-Log -Category Info -Message "Remote Desktop Services Timeout Settings Configured via Registry."
 }
 
-Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path $Script:TempDir -Recurse -Force -ErrorAction SilentlyContinue

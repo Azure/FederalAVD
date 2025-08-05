@@ -637,7 +637,7 @@ var beginAvSetRange = sessionHostIndex / maxAvSetMembers // This determines the 
 var endAvSetRange = (sessionHostCount + sessionHostIndex) / maxAvSetMembers // This determines the availability set to end with.
 var availabilitySetsCount = length(range(beginAvSetRange, (endAvSetRange - beginAvSetRange) + 1))
 
-var createDeploymentVm = deploymentType == 'Complete' && (confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)) || contains(identitySolution, 'DomainServices') || contains(fslogixStorageService, 'AzureNetApp')
+var createDeploymentVm = deploymentType == 'Complete' && (contains(keyManagementStorageAccounts, 'CustomerManaged') || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName) || contains(identitySolution, 'DomainServices') || contains(fslogixStorageService, 'AzureNetApp'))
 
 var deployControlPlaneRG = deploymentType == 'Complete' && empty(existingFeedWorkspaceResourceId)
 var resourceGroupsCount = ( createDeploymentVm ? 1 : 0 ) + ( deploymentType == 'Complete' ? 2 : 0 ) + ( deployControlPlaneRG ? 1 : 0 ) + ( avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) ? 1 : 0 ) + ( deployFSLogixStorage ? 1 : 0 ) 
@@ -874,6 +874,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
     deploymentType: deploymentType
     deploymentVmSize: deploymentVmSize
+    desktopFriendlyName: desktopFriendlyName
     diskSku: diskSku
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPassword) ? domainJoinUserPassword : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : '' : ''
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPrincipalName) ? domainJoinUserPrincipalName : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : '' : ''
@@ -883,6 +884,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     hostPoolName: resourceNames.outputs.hostPoolName
     identitySolution: identitySolution
     keyManagementDisks: keyManagementDisks
+    keyManagementStorageAccounts: keyManagementStorageAccounts
     locationVirtualMachines: locationVirtualMachines
     ouPath: vmOUPath
     resourceGroupControlPlane: deploymentType == 'Complete' ? resourceNames.outputs.resourceGroupControlPlane : split(existingHostPoolResourceId, '/')[4]
@@ -953,8 +955,8 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
     avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
     avdPrivateLinkPrivateRoutes: avdPrivateLinkPrivateRoutes
     deployScalingPlan: deployScalingPlan
-    deploymentUserAssignedIdentityClientId: deploymentType == 'Complete' && !empty(desktopFriendlyName) ? deploymentPrereqs.outputs.deploymentUserAssignedIdentityClientId : ''
-    deploymentVirtualMachineName: deploymentType == 'Complete' && !empty(desktopFriendlyName) ? deploymentPrereqs.outputs.virtualMachineName : ''
+    deploymentUserAssignedIdentityClientId: createDeploymentVm ? deploymentPrereqs.outputs.deploymentUserAssignedIdentityClientId : ''
+    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs.outputs.virtualMachineName : ''
     desktopApplicationGroupName: resourceNames.outputs.desktopApplicationGroupName
     desktopFriendlyName: desktopFriendlyName
     enableMonitoring: enableMonitoring
@@ -1008,8 +1010,8 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType == 'Complete
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
-    deploymentUserAssignedIdentityClientId: deploymentType == 'Complete' && ( contains(identitySolution, 'DomainServices') || contains(fslogixStorageService, 'AzureNetApp') ) ? deploymentPrereqs.outputs.deploymentUserAssignedIdentityClientId : ''
-    deploymentVirtualMachineName: deploymentType == 'Complete' && ( contains(identitySolution, 'DomainServices') || contains(fslogixStorageService, 'AzureNetApp') ) ? deploymentPrereqs.outputs.virtualMachineName : ''
+    deploymentUserAssignedIdentityClientId: createDeploymentVm ? deploymentPrereqs.outputs.deploymentUserAssignedIdentityClientId : ''
+    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs.outputs.virtualMachineName : ''
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPassword) ? domainJoinUserPassword : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : '' : ''
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPrincipalName) ? domainJoinUserPrincipalName : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : '' : ''
     domainName: domainName
@@ -1059,6 +1061,9 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType == 'Complete
     timeZone: virtualMachinesTimeZone
     userAssignedIdentityNameConv: resourceNames.outputs.userAssignedIdentityNameConv
   }
+  dependsOn: [
+    rgs
+  ]
 }
 
 module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
@@ -1086,8 +1091,8 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     deployDiskAccessPolicy: deployDiskAccessPolicy
     deployDiskAccessResource: deployDiskAccessResource
     deploymentType: deploymentType
-    deploymentUserAssignedIdentityClientId: deploymentType == 'Complete' && confidentialVMOSDiskEncryption ? deploymentPrereqs.outputs.deploymentUserAssignedIdentityClientId : ''
-    deploymentVirtualMachineName: deploymentType == 'Complete' && confidentialVMOSDiskEncryption ? deploymentPrereqs.outputs.virtualMachineName : ''
+    deploymentUserAssignedIdentityClientId: createDeploymentVm ? deploymentPrereqs.outputs.deploymentUserAssignedIdentityClientId : ''
+    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs.outputs.virtualMachineName : ''
     diskAccessName: resourceNames.outputs.diskAccessName
     diskEncryptionSetNames: resourceNames.outputs.diskEncryptionSetNames
     diskSizeGB: diskSizeGB
@@ -1181,4 +1186,12 @@ module cleanUp 'modules/cleanUp/cleanUp.bicep' = if (createDeploymentVm) {
       : ''
     virtualMachineNames: sessionHosts.outputs.virtualMachineNames
   }
+  dependsOn: [
+    rgs
+  ]
 }
+
+output hostPoolResourceId string = deploymentType == 'Complete' ? controlPlane.outputs.hostPoolResourceId : existingHostPoolResourceId
+output workspaceResourceId string = deploymentType == 'Complete' ? ( empty(existingFeedWorkspaceResourceId) ? controlPlane.outputs.workspaceResourceId : existingFeedWorkspaceResourceId ) : ''
+output fslogixLocalStorageAccountResourceIds array = deploymentType == 'Complete' && deployFSLogixStorage ? fslogix.outputs.storageAccountResourceIds : fslogixExistingLocalStorageAccountResourceIds
+output virtualMachineNames array = sessionHosts.outputs.virtualMachineNames

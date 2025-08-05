@@ -10,6 +10,8 @@ param defaultRouting string
 param natGatewayName string
 param publicIPName string
 param routeTableName string
+param nsgName string
+param logAnalyticsWorkspaceResourceId string
 param nvaIPAddress string
 param customDNSServers array
 param deployDDoSNetworkProtection bool
@@ -41,6 +43,8 @@ module vnetResources 'vnetResources.bicep' = {
     natGatewayName: natGatewayName
     publicIPName: publicIPName
     routeTableName: routeTableName
+    nsgName: nsgName
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     nvaIPAddress: nvaIPAddress
     customDNSServers: customDNSServers
     deployDDoSNetworkProtection: deployDDoSNetworkProtection

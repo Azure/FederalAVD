@@ -249,5 +249,6 @@ resource storageBlobReaderAssignment 'Microsoft.Authorization/roleAssignments@20
 
 output storageAccountResourceId string    = storageAccount.id
 output blobContainerName string           = blobContainer.name
+output blobcontainerUrl string = '${storageAccount.properties.primaryEndpoints.blob}${blobContainerName}'
 output managedIdentityClientId string     = managedIdentity.properties.clientId
 output managedIdentityResourceId string   = managedIdentity.id

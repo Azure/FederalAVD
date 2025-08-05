@@ -316,8 +316,8 @@ function New-Log {
     #>
 
     Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [string] $Path
+        [Parameter(Position = 0)]
+        [string] $Path = (Join-Path -Path $env:SystemRoot -ChildPath 'Logs')
     )
 
     # Create central log file with given date
@@ -492,33 +492,24 @@ Function Update-LocalGPOTextFile {
 
 #region Main
 
-New-Log -Path (Join-Path -Path $env:SystemRoot -ChildPath 'Logs')
+New-Log
 Write-Log -Message "Starting '$PSCommandPath'."
 [array]$AppsToSTIG = ConvertFrom-JsonString -JsonString $ApplicationsToSTIG -Name 'AppsToSTIG'
 
-If (-not(Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe")) {
+Write-Log -message "Checking for 'lgpo.exe' in '$env:SystemRoot\system32'."
+
+If (-not(Test-Path -Path "$env:SystemRoot\System32\lgpo.exe")) {
+    Write-Log -category Info -message "'lgpo.exe' not found in '$env:SystemRoot\system32'."
     $LGPOZip = Join-Path -Path $PSScriptRoot -ChildPath 'LGPO.zip'
-    If (Test-Path -Path $LGPOZip) {
-        Write-Log -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
-        Expand-Archive -path $LGPOZip -DestinationPath $Script:TempDir -force
-        $algpoexe = Get-ChildItem -Path $Script:TempDir -filter 'lgpo.exe' -recurse
-        If ($algpoexe.count -gt 0) {
-            $fileLGPO = $algpoexe[0].FullName
-            Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
-            Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -force        
-        }
+    If (-not(Test-Path -Path $LGPOZip)) {
+        Write-Log -category Info -Message "Downloading LGPO tool."
+        $LGPOZip = Get-InternetFile -Url 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip' -OutputDirectory $Script:TempDir -Verbose    
     }
-    Else {
-        $urlLGPO = 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip'
-        $LGPOZip = Get-InternetFile -Url $urlLGPO -OutputDirectory $Script:TempDir -Verbose
-        $outputDir = Join-Path $Script:TempDir -ChildPath 'LGPO'
-        Expand-Archive -Path $LGPOZip -DestinationPath $outputDir
-        Remove-Item $LGPOZip -Force
-        $fileLGPO = (Get-ChildItem -Path $outputDir -file -Filter 'lgpo.exe' -Recurse)[0].FullName
-        Write-Log -Message "Copying `"$fileLGPO`" to System32"
-        Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
-        Remove-Item -Path $outputDir -Recurse -Force
-    }
+    Write-Log -Category Info -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
+    Expand-Archive -Path $LGPOZip -DestinationPath $Script:TempDir -Force
+    $fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse)[0].FullName
+    Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
+    Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
 }
 
 $stigZip = Join-Path -Path $PSScriptRoot -ChildPath 'STIGs.zip'
@@ -558,10 +549,28 @@ ForEach ($folder in $ApplicableFolders.FullName) {
     $GPOFolders += $gpoFolderPath
 }
 ForEach ($gpoFolder in $GPOFolders) {
-    Write-Log -Message "Running 'LGPO.exe /g `"$gpoFolder`"'"
-    $lgpo = Start-Process -FilePath "$env:SystemRoot\System32\lgpo.exe" -ArgumentList "/g `"$gpoFolder`"" -Wait -PassThru
-    Write-Log -Message "'lgpo.exe' exited with code [$($lgpo.ExitCode)]."
+    If ($gpoFolder -like "DoD*Windows $osVersion*") {
+        <# Remove the policies that disable and rename the administrator account.
+            # this should be done via the following code in run commands.
+            
+            # Get the built-in Administrator account (RID 500)
+            $adminAccount = Get-LocalUser | Where-Object { $_.SID -like "*-500" }
+
+            # Rename the Administrator account
+            Rename-LocalUser -Name $adminAccount.Name -NewName $newAdminName
+
+            # Disable the renamed account
+            Disable-LocalUser -Name $newAdminName
+        #>
+        $SecEditFile = (Get-ChildItem -Path $gpoFolder -Recurse -Filter "GptTmpl.inf" | Where-Object { $_.DirectoryName -match "SecEdit" }).FullName
+        $Content = Get-Content $SecEditFile
+        $filteredLines = $Content | Where-Object {-not ($_ -match "^NewAdministratorName") -and -not ($_ -match "^EnableAdminAccount") }
+        Set-Content -Path $SecEditFile -Value $filteredLines
+    }
 }
+Write-Log -Message "Running 'LGPO.exe /g `"$gpoFolder`"'"
+$lgpo = Start-Process -FilePath "$env:SystemRoot\System32\lgpo.exe" -ArgumentList "/g `"$gpoFolder`"" -Wait -PassThru
+Write-Log -Message "'lgpo.exe' exited with code [$($lgpo.ExitCode)]."
 
 Write-Log -Message "Applying AVD Exceptions"
 $OutputFilePrefix = 'AVD-Exceptions'
@@ -571,8 +580,6 @@ Unicode=yes
 [Version]
 signature="$CHICAGO$"
 Revision=1
-[System Access]
-EnableAdminAccount = 1
 [Registry Values]
 MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Pku2u\AllowOnlineID=4,1
 [Privilege Rights]

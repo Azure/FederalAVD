@@ -43,48 +43,53 @@ param workspaceFriendlyName string
 param workspaceName string
 param workspacePublicNetworkAccess string
 
-var feedPrivateEndpointName = (avdPrivateLinkPrivateRoutes != 'None' || avdPrivateLinkPrivateRoutes != 'HostPool') && !empty(workspaceFeedPrivateEndpointSubnetResourceId)
-  ? replace(
-      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'feed'), 'RESOURCE', workspaceName),
-      'VNETID',
-      '${split(workspaceFeedPrivateEndpointSubnetResourceId, '/')[8]}'
-    )
-  : 'feedPrivateEndpointName'
-var feedPrivateEndpointNICName = (avdPrivateLinkPrivateRoutes != 'None' || avdPrivateLinkPrivateRoutes != 'HostPool') && !empty(workspaceFeedPrivateEndpointSubnetResourceId)
-  ? replace(
-      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'feed'), 'RESOURCE', workspaceName),
-      'VNETID',
-      '${split(workspaceFeedPrivateEndpointSubnetResourceId, '/')[8]}'
-    )
-  : 'feedPrivateEndpointName'
-var globalFeedPrivateEndpointName = avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId)
-  ? replace(
-      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'global'), 'RESOURCE', workspaceName),
-      'VNETID',
-      '${split(globalFeedPrivateEndpointSubnetResourceId, '/')[8]}'
-    )
-  : 'globalFeedPrivateEndpointName'
-var globalFeedPrivateEndpointNICName = avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId)
-  ? replace(
-      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'global'), 'RESOURCE', workspaceName),
-      'VNETID',
-      '${split(globalFeedPrivateEndpointSubnetResourceId, '/')[8]}'
-    )
-  : 'globalFeedPrivateEndpointName'
-var hostPoolPrivateEndpointName = avdPrivateLinkPrivateRoutes != 'None' && !empty(hostPoolPrivateEndpointSubnetResourceId)
-  ? replace(
-      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'connection'), 'RESOURCE', hostPoolName),
-      'VNETID',
-      '${split(hostPoolPrivateEndpointSubnetResourceId, '/')[8]}'
-    )
-  : 'hostPoolPrivateEndpointName'
-var hostPoolPrivateEndpointNICName = avdPrivateLinkPrivateRoutes != 'None' && !empty(hostPoolPrivateEndpointSubnetResourceId)
-  ? replace(
-      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'connection'), 'RESOURCE', hostPoolName),
-      'VNETID',
-      '${split(hostPoolPrivateEndpointSubnetResourceId, '/')[8]}'
-    )
-  : 'hostPoolPrivateEndpointName'
+var globalFeedVnetName = !empty(globalFeedPrivateEndpointSubnetResourceId)
+  ? split(globalFeedPrivateEndpointSubnetResourceId, '/')[8]
+  : ''
+var globalFeedVnetId = length(globalFeedVnetName) < 37 ? globalFeedVnetName : uniqueString(globalFeedVnetName)
+var workspaceFeedVnetName = !empty(workspaceFeedPrivateEndpointSubnetResourceId)
+  ? split(workspaceFeedPrivateEndpointSubnetResourceId, '/')[8]
+  : ''
+var workspaceFeedVnetId = length(workspaceFeedVnetName) < 37
+  ? workspaceFeedVnetName
+  : uniqueString(workspaceFeedVnetName)
+var hostPoolVnetName = !empty(hostPoolPrivateEndpointSubnetResourceId)
+  ? split(hostPoolPrivateEndpointSubnetResourceId, '/')[8]
+  : ''
+var hostPoolVnetId = length(hostPoolVnetName) < 37 ? hostPoolVnetName : uniqueString(hostPoolVnetName)
+
+var feedPrivateEndpointName = replace(
+  replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'feed'), 'RESOURCE', workspaceName),
+  'VNETID',
+  workspaceFeedVnetId
+)
+var feedPrivateEndpointNICName = replace(
+  replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'feed'), 'RESOURCE', workspaceName),
+  'VNETID',
+  workspaceFeedVnetId
+)
+var globalFeedPrivateEndpointName = replace(
+  replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'global'), 'RESOURCE', workspaceName),
+  'VNETID',
+  globalFeedVnetId
+)
+
+var globalFeedPrivateEndpointNICName = replace(
+  replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'global'), 'RESOURCE', workspaceName),
+  'VNETID',
+  globalFeedVnetId
+)
+
+var hostPoolPrivateEndpointName = replace(
+  replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'connection'), 'RESOURCE', hostPoolName),
+  'VNETID',
+  hostPoolVnetId
+)
+var hostPoolPrivateEndpointNICName = replace(
+  replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'connection'), 'RESOURCE', hostPoolName),
+  'VNETID',
+  hostPoolVnetId
+)
 
 module hostPoolPrivateEndpointVnet '../common/vnetLocation.bicep' = if (avdPrivateLinkPrivateRoutes != 'None' && !empty(hostPoolPrivateEndpointSubnetResourceId)) {
   name: 'HostPoolPrivateEndpointVnet_${timeStamp}'
@@ -129,7 +134,7 @@ module hostPool 'modules/hostPool.bicep' = {
     privateEndpointNICName: hostPoolPrivateEndpointNICName
     privateEndpointSubnetResourceId: hostPoolPrivateEndpointSubnetResourceId
     startVmOnConnect: startVmOnConnect
-    tags: tags 
+    tags: tags
     timeStamp: timeStamp
     virtualMachineTemplate: hostPoolVmTemplate
   }
@@ -241,3 +246,6 @@ module globalWorkspace 'modules/workspace.bicep' = if (empty(existingGlobalWorks
 }
 
 output hostPoolResourceId string = hostPool.outputs.resourceId
+output workspaceResourceId string = empty(existingFeedWorkspaceResourceId)
+  ? feedWorkspace.outputs.resourceId
+  : existingFeedWorkspaceResourceId

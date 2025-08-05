@@ -49,8 +49,8 @@ Function Get-InternetFile {
             Else {
                 Write-Log -Message "${CmdletName}: Url does not contain file name. Trying 'Location' Response Header."
                 $request = [System.Net.WebRequest]::Create($url)
-                $request.AllowAutoRedirect=$false
-                $response=$request.GetResponse()
+                $request.AllowAutoRedirect = $false
+                $response = $request.GetResponse()
                 $Location = $response.GetResponseHeader("Location")
                 If ($Location) {
                     $OutputFileName = [System.IO.Path]::GetFileName($Location)
@@ -61,7 +61,7 @@ Function Get-InternetFile {
                     $result = Invoke-WebRequest -Method GET -Uri $Url -UseBasicParsing
                     $contentDisposition = $result.Headers.'Content-Disposition'
                     If ($contentDisposition) {
-                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"","")
+                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"", "")
                         Write-Log -Message "${CmdletName}: File Name from 'Content-Disposition' Response Header is '$OutputFileName'."
                     }
                 }
@@ -115,34 +115,30 @@ Function Get-InternetUrl {
     )
 
     $HTML = Invoke-WebRequest -Uri $WebSiteUrl -UseBasicParsing
-    $Links = $HTML.Links
     #First try to find search string in actual link href
-    $LinkHref = $HTML.Links.Href | Get-Unique | Where-Object { $_ -like "*$SearchString*" }
+    $Links = $HTML.Links
+    $LinkHref = $HTML
+    $LinkHref = $HTML.Links.Href | Get-Unique | Where-Object { $_ -like $SearchString }
     If ($LinkHref) {
+        if ($LinkHref.Contains('http://') -or $LinkHref.Contains('https://')) {
+            Return $LinkHref
+        }
+        Else {
+            $LinkHref = $WebSiteUrl.AbsoluteUri + $LinkHref
+            Return $LinkHref
+        }
         Return $LinkHref
     }
     #If not found, try to find search string in the outer html
-    $LinkHrefs = $Links | Where-Object { $_.OuterHTML -like "*$SearchString*" }
-    If ($LinkHrefs) {
-        Return $LinkHrefs.href
+    $LinkHref = $Links | Where-Object { $_.OuterHTML -like $SearchString }
+    If ($LinkHref) {
+        Return $LinkHref.href
     }
-    Else {
-        $Pattern = '"url":\s*"(https://[^"]*?' + $SearchString.Replace('.', '\.').Replace('*', '.*').Replace('+', '\+') + ')"' 
-        If ($HTML.Content -match $Pattern) {
-            If ($matches[1].Contains('"')) {
-                Return $matches[1].Substring(0, $matches[1].IndexOf('"'))
-            }
-            Else {
-                Return $matches[1]
-            }
-
-        }
-        else {
-            Write-Log -Category Error -Message "No download URL found using search term."
-            Return $null
-        }
-    }
-
+    # Escape user input for regex and convert * to regex wildcard
+    $escapedPattern = [Regex]::Escape($SearchString) -replace '\\\*', '[^""''\s>]*'
+    # Match http or https URLs ending in the desired filename pattern
+    $regex = "https?://[^""'\s>]*$escapedPattern"
+    Return ([regex]::Matches($html.Content, $regex)).Value
 }
 
 Function Set-RegistryValue {
@@ -218,7 +214,7 @@ Function Update-LocalGPOTextFile {
         [switch]$Delete,
         [Parameter(Mandatory = $false, ParameterSetName = 'DeleteAllValues')]
         [switch]$DeleteAllValues,
-        [string]$outputDir = "$TempDir\LGPO",
+        [string]$outputDir = "$Script:TempDir\LGPO",
         [string]$outfileprefix = $AppName
     )
     Begin {
@@ -275,7 +271,7 @@ Function Update-LocalGPOTextFile {
 Function Invoke-LGPO {
     [CmdletBinding()]
     Param (
-        [string]$InputDir = "$TempDir\LGPO",
+        [string]$InputDir = "$Script:TempDir\LGPO",
         [string]$SearchTerm
     )
     Begin {
@@ -378,8 +374,8 @@ function New-Log {
 #region Initialization
 [string]$AppName = 'Office365'
 [string]$Script:Name = "Configure-Office365Policy"
-[string]$TempDir = Join-Path -Path $env:Temp -ChildPath $Script:Name
-$null = New-Item -Path $TempDir -ItemType Directory -Force
+[string]$Script:TempDir = Join-Path -Path $env:Temp -ChildPath $Script:Name
+$null = New-Item -Path $Script:TempDir -ItemType Directory -Force
 New-Log (Join-Path -Path $env:SystemRoot -ChildPath 'Logs')
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
@@ -393,10 +389,12 @@ If (-not $O365TemplatesExe) {
     $SearchString = "admintemplates_x64*.exe"
     Write-Log -Category Info -message "Downloading Office 365 Templates from '$WebsiteUrl'."
     $O365TemplatesDownloadUrl = Get-InternetUrl -WebSiteUrl $WebsiteUrl -SearchString $SearchString
-    $O365TemplatesExe = Get-InternetFile -Url $O365TemplatesDownloadUrl -OutputDirectory $TempDir
+    If ($O365TemplatesDownloadUrl) {
+        $O365TemplatesExe = Get-InternetFile -Url $O365TemplatesDownloadUrl -OutputDirectory $Script:TempDir
+    }    
 }
-If ($null -ne $O365TemplatesExe) {
-    $DirTemplates = Join-Path -Path $TempDir -ChildPath 'Office365Templates'
+If ($O365TemplatesExe) {
+    $DirTemplates = Join-Path -Path $Script:TempDir -ChildPath 'Office365Templates'
     $null = New-Item -Path $DirTemplates -ItemType Directory
     $null = Start-Process -FilePath $O365TemplatesExe -ArgumentList "/extract:$DirTemplates /quiet" -Wait -PassThru
     Write-Log -message "Copying ADMX and ADML files to PolicyDefinitions folder."
@@ -404,37 +402,29 @@ If ($null -ne $O365TemplatesExe) {
     $null = Get-ChildItem -Path $DirTemplates -Directory -Recurse | Where-Object { $_.Name -eq 'en-us' } | Get-ChildItem -File -recurse -filter '*.adml' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\en-us\" -Force }
 }
 
-Write-Log -message "Checking for lgpo.exe in '$env:SystemRoot\system32'."
+Write-Log -Message "Checking for lgpo.exe in '$env:SystemRoot\system32'."
 
-If (-not(Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe")) {
-    $LGPOZip = Join-Path -Path $PSScriptRoot -ChildPath 'LGPO.zip'
-    If (Test-Path -Path $LGPOZip) {
-        Write-Log -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
-        Expand-Archive -path $LGPOZip -DestinationPath $Script:TempDir -force
-        $algpoexe = Get-ChildItem -Path $Script:TempDir -filter 'lgpo.exe' -recurse
-        If ($algpoexe.count -gt 0) {
-            $fileLGPO = $algpoexe[0].FullName
-            Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
-            Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -force        
-        }
-    } Else {
-        $urlLGPO = 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip'
-        $LGPOZip = Get-InternetFile -Url $urlLGPO -OutputDirectory $Script:TempDir -Verbose
-        $outputDir = Join-Path $Script:TempDir -ChildPath 'LGPO'
-        Expand-Archive -Path $LGPOZip -DestinationPath $outputDir
-        Remove-Item $LGPOZip -Force
-        $fileLGPO = (Get-ChildItem -Path $outputDir -file -Filter 'lgpo.exe' -Recurse)[0].FullName
-        Write-Log -Message "Copying `"$fileLGPO`" to System32"
+If (-not(Test-Path -Path "$env:SystemRoot\System32\lgpo.exe")) {
+    Write-Log -Category Info -Message "'lgpo.exe' not found in '$env:SystemRoot\system32'."
+    $LGPOZip = Get-ChildItem -Path $PSScriptRoot -Filter 'LGPO.zip' -Recurse | Select-Object -First 1
+    If (-not($LGPOZip)) {
+        Write-Log -Category Info -Message "Downloading LGPO tool."
+        $LGPOZip = Get-InternetFile -Url 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip' -OutputDirectory $Script:TempDir -Verbose
+    }    
+    If ($LGPOZip) {
+        Write-Log -Category Info -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
+        Expand-Archive -Path $LGPOZip -DestinationPath $Script:TempDir -Force
+        $fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse)[0].FullName
+        Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
         Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
-        Remove-Item -Path $outputDir -Recurse -Force
     }
 }
 
-If (Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe") {
+If (Test-Path -Path "$env:SystemRoot\System32\lgpo.exe") {
     Write-Log -category Info -message "Now Configuring Office 365 Group Policy."
     Write-Log -Message "Update User LGPO registry text file."
     # Turn off insider notifications
-    Update-LocalGPOTextFile -Scope User -RegistryKeyPath 'Software\policies\microsoft\office\16.0\common' -RegistryValue InsiderSlabBehavior -RegistryType DWord -RegistryData 2
+    Update-LocalGPOTextFile -Scope User -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Common' -RegistryValue 'InsiderSlabBehavior' -RegistryType DWord -RegistryData 2
     
     If (($EmailCacheTime -ne 'Not Configured') -or ($CalendarSync -ne 'Not Configured') -or ($CalendarSyncMonths -ne 'Not Configured')) {
         # Enable Outlook Cached Mode
@@ -498,6 +488,7 @@ If (Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe") {
             Write-Log -Message "Hive unloaded successfully."
         }
     }
+
     Write-Log -Message "Update Computer LGPO registry text file."
     $RegistryKeyPath = 'SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate'
     # Hide Office Update Notifications
@@ -512,8 +503,81 @@ If (Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe") {
     Write-Log -category Info -message "Completed Configuring Office 365 Group Policy."
 }
 Else {
-    Write-Log -category Error -message "Unable to configure local policy with lgpo tool because it was not found."
-    Exit 2
+    Write-Log -Category Warning -Message "Unable to configure local policy with lgpo tool because it was not found. Updating registry settings instead."
+    # Turn off insider notifications
+    REG LOAD HKLM\DefaultUser "$env:SystemDrive\Users\Default User\NtUser.dat"
+    Set-RegistryValue -Path 'HKLM:\DefaultUser\Software\Policies\Microsoft\Office\16.0\Common' -Name InsiderSlabBehavior -PropertyType DWord -Value 2    
+    If (($EmailCacheTime -ne 'Not Configured') -or ($CalendarSync -ne 'Not Configured') -or ($CalendarSyncMonths -ne 'Not Configured')) {
+        # Enable Outlook Cached Mode
+        Write-Log -Message "Configuring Outlook Cached Mode."
+        Set-RegistryValue -Path 'HKLM:\DefaultUser\Software\Policies\Microsoft\Office\16.0\Outlook\Cached Mode' -Name Enable -PropertyType DWord -Value 1
+    }
+    
+    # Cached Exchange Mode Settings: https://support.microsoft.com/en-us/help/3115009/update-lets-administrators-set-additional-default-sync-slider-windows
+    If ($EmailCacheTime -eq '3 days') { $SyncWindowSetting = 0; $SyncWindowSettingDays = 3 }
+    If ($EmailCacheTime -eq '1 week') { $SyncWindowSetting = 0; $SyncWindowSettingDays = 7 }
+    If ($EmailCacheTime -eq '2 weeks') { $SyncWindowSetting = 0; $SyncWindowSettingDays = 14 }
+    If ($EmailCacheTime -eq '1 month') { $SyncWindowSetting = 1 }
+    If ($EmailCacheTime -eq '3 months') { $SyncWindowSetting = 3 }
+    If ($EmailCacheTime -eq '6 months') { $SyncWindowSetting = 6 }
+    If ($EmailCacheTime -eq '12 months') { $SyncWindowSetting = 12 }
+    If ($EmailCacheTime -eq '24 months') { $SyncWindowSetting = 24 }
+    If ($EmailCacheTime -eq '36 months') { $SyncWindowSetting = 36 }
+    If ($EmailCacheTime -eq '60 months') { $SyncWindowSetting = 60 }
+    If ($EmailCacheTime -eq 'All') { $SyncWindowSetting = 0; $SyncWindowSettingDays = 0 }
+
+    If ($SyncWindowSetting) {
+        Set-RegistryValue -Path 'HKLM:\DefaultUser\Software\Policies\Microsoft\Office\16.0\Outlook\Cached Mode' -Name SyncWindowSetting -PropertyType DWord -Value $SyncWindowSetting
+    }
+    If ($SyncWindowSettingDays) {
+        Set-RegistryValue -Path 'HKLM:\DefaultUser\Software\Policies\Microsoft\Office\16.0\Outlook\Cached Mode' -Name SyncWindowSettingDays -PropertyType DWord -Value $SyncWindowSettingDays
+    }
+    # Calendar Sync Settings: https://support.microsoft.com/en-us/help/2768656/outlook-performance-issues-when-there-are-too-many-items-or-folders-in
+    If ($CalendarSync -eq 'Inactive') {
+        $CalendarSyncWindowSetting = 0 
+    }
+    If ($CalendarSync -eq 'Primary Calendar Only') {
+        $CalendarSyncWindowSetting = 1
+    }
+    If ($CalendarSync -eq 'All Calendar Folders') {
+        $CalendarSyncWindowSetting = 2
+    }
+
+    If ($CaldendarSyncWindowSetting) {
+        Set-RegistryValue -Path 'HKLM:\DefaultUser\Software\Policies\Microsoft\Office16.0\Outlook\Cached Mode' -Name CalendarSyncWindowSetting -Type DWord -Value $CalendarSyncWindowSetting
+        If ($CalendarSyncMonths -ne 'Not Configured') {
+            Set-RegistryValue -Path 'HKCU:\DefaultUser\Software\Policies\Microsoft\Office\16.0\Outlook\Cached Mode' -Name CalendarSyncWindowSettingMonths -Type DWord -Value $CalendarSyncMonths
+        }        
+    }
+    Write-Log -Message "Unloading default user hive."
+    $null = cmd /c REG UNLOAD "HKLM\DefaultUser" '2>&1'
+    If ($LastExitCode -ne 0) {
+        # sometimes the registry doesn't unload properly so we have to perform powershell garbage collection first.
+        [GC]::Collect()
+        [GC]::WaitForPendingFinalizers()
+        Start-Sleep -Seconds 5
+        $null = cmd /c REG UNLOAD "HKLM\DefaultUser" '2>&1'
+        If ($LastExitCode -eq 0) {
+            Write-Log -Message "Hive unloaded successfully."
+        }
+        Else {
+            Write-Log -category Error -Message "Default User hive unloaded with exit code [$LastExitCode]."
+        }
+    }
+    Else {
+        Write-Log -Message "Hive unloaded successfully."
+    }
+    Write-Log -Message "Update Computer LGPO registry text file."
+    $RegistryKeyPath = 'SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate'
+    # Hide Office Update Notifications
+    Set-RegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate" -Name 'HideUpdateNotifications' -PropertyType DWord -Value 1
+    # Hide and Disable Updates
+    Set-RegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate" -Name 'HideEnableDisableUpdates' -PropertyType DWord -Value 1
+    If ($DisableUpdates) {
+        # Disable Updates
+        Set-RegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate" -Name 'EnableAutomaticUpdates' -PropertyType DWord -Value 0            
+    }
+    Write-Log -category Info -message "Completed Configuring Office 365 Group Policy."
 }
 
-Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path $Script:TempDir -Recurse -Force -ErrorAction SilentlyContinue

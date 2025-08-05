@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.36.1.42791",
-      "templateHash": "13794384970618092960"
+      "version": "0.36.177.2456",
+      "templateHash": "5798464716424608414"
     }
   },
   "parameters": {
@@ -124,6 +124,13 @@
       "defaultValue": false,
       "metadata": {
         "description": "Optional. Determines if a virtual network gateway is present on the hub virtual network."
+      }
+    },
+    "logAnalyticsWorkspaceResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The resource Id of an existing log analytics workspace to which to send nsg diagnostic logs."
       }
     },
     "privateDNSZonesSubscriptionId": {
@@ -551,6 +558,7 @@
       "netAppAccounts": "naa",
       "netAppCapacityPools": "nacp",
       "networkInterfaces": "nic",
+      "networkSecurityGroups": "nsg",
       "osdisks": "osdisk",
       "privateEndpoints": "pe",
       "privateLinkScopes": "pls",
@@ -577,6 +585,7 @@
     "natGatewayName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').natGateways), 'LOCATION', variables('locationAbbreviation')), 'TOKEN-', '')]",
     "publicIPName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').publicIPAddresses), 'LOCATION', variables('locationAbbreviation')), 'TOKEN-', '')]",
     "routeTableName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').routeTables), 'LOCATION', variables('locationAbbreviation')), 'TOKEN-', '')]",
+    "nsgName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').networkSecurityGroups), 'LOCATION', variables('locationAbbreviation')), 'TOKEN-', '')]",
     "privateDnsZones_AzureVirtualDesktop": {
       "AzureCloud": "privatelink.wvd.microsoft.com",
       "AzureUSGovernment": "privatelink.wvd.azure.us"
@@ -664,8 +673,14 @@
           "location": {
             "value": "[parameters('location')]"
           },
+          "logAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+          },
           "natGatewayName": {
             "value": "[variables('natGatewayName')]"
+          },
+          "nsgName": {
+            "value": "[variables('nsgName')]"
           },
           "nvaIPAddress": "[if(not(empty(parameters('nvaIPAddress'))), createObject('value', parameters('nvaIPAddress')), createObject('value', ''))]",
           "privateEndpointsSubnet": "[if(not(empty(parameters('privateEndpointsSubnet'))), createObject('value', parameters('privateEndpointsSubnet')), createObject('value', createObject()))]",
@@ -700,8 +715,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.36.1.42791",
-              "templateHash": "7970147417304229540"
+              "version": "0.36.177.2456",
+              "templateHash": "4748573053937211545"
             }
           },
           "parameters": {
@@ -733,6 +748,12 @@
               "type": "string"
             },
             "routeTableName": {
+              "type": "string"
+            },
+            "nsgName": {
+              "type": "string"
+            },
+            "logAnalyticsWorkspaceResourceId": {
               "type": "string"
             },
             "nvaIPAddress": {
@@ -816,6 +837,12 @@
                   "routeTableName": {
                     "value": "[parameters('routeTableName')]"
                   },
+                  "nsgName": {
+                    "value": "[parameters('nsgName')]"
+                  },
+                  "logAnalyticsWorkspaceResourceId": {
+                    "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+                  },
                   "nvaIPAddress": {
                     "value": "[parameters('nvaIPAddress')]"
                   },
@@ -853,8 +880,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.36.1.42791",
-                      "templateHash": "614970764605151587"
+                      "version": "0.36.177.2456",
+                      "templateHash": "16012610682007146887"
                     }
                   },
                   "parameters": {
@@ -883,6 +910,12 @@
                       "type": "string"
                     },
                     "routeTableName": {
+                      "type": "string"
+                    },
+                    "nsgName": {
+                      "type": "string"
+                    },
+                    "logAnalyticsWorkspaceResourceId": {
                       "type": "string"
                     },
                     "nvaIPAddress": {
@@ -925,7 +958,10 @@
                         "properties": {
                           "addressPrefix": "[parameters('hostsSubnet').addressPrefix]",
                           "natGateway": "[if(equals(parameters('defaultRouting'), 'nat'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null())]",
-                          "routeTable": "[if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]"
+                          "routeTable": "[if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
+                          "networkSecurityGroup": {
+                            "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]"
+                          }
                         }
                       }
                     ],
@@ -952,6 +988,50 @@
                         "routes": "[if(equals(parameters('defaultRouting'), 'default'), variables('defaultUDRs'), if(equals(parameters('defaultRouting'), 'nva'), createArray(createObject('name', 'DefaultRoute', 'properties', createObject('addressPrefix', '0.0.0.0/0', 'nextHopType', 'VirtualAppliance', 'nextHopIpAddress', parameters('nvaIPAddress')))), createArray()))]"
                       },
                       "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/routeTables'), createObject())]"
+                    },
+                    {
+                      "type": "Microsoft.Network/networkSecurityGroups",
+                      "apiVersion": "2021-05-01",
+                      "name": "[parameters('nsgName')]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "securityRules": [
+                          {
+                            "name": "RDPShortpath",
+                            "properties": {
+                              "priority": 150,
+                              "access": "Allow",
+                              "description": "Session host traffic to RDP Shortpath Listener",
+                              "destinationAddressPrefix": "VirtualNetwork",
+                              "direction": "Inbound",
+                              "sourcePortRange": "*",
+                              "destinationPortRange": "3390",
+                              "protocol": "Udp",
+                              "sourceAddressPrefix": "VirtualNetwork"
+                            }
+                          }
+                        ]
+                      },
+                      "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/networkSecurityGroups'), createObject())]"
+                    },
+                    {
+                      "condition": "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]",
+                      "type": "Microsoft.Insights/diagnosticSettings",
+                      "apiVersion": "2021-05-01-preview",
+                      "scope": "[format('Microsoft.Network/networkSecurityGroups/{0}', parameters('nsgName'))]",
+                      "name": "[format('{0}-diagnosticSettings', parameters('nsgName'))]",
+                      "properties": {
+                        "logs": [
+                          {
+                            "categoryGroup": "allLogs",
+                            "enabled": true
+                          }
+                        ],
+                        "workspaceId": "[parameters('logAnalyticsWorkspaceResourceId')]"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]"
+                      ]
                     },
                     {
                       "condition": "[equals(parameters('defaultRouting'), 'nat')]",
@@ -1022,6 +1102,7 @@
                       "properties": "[variables('subnets')[copyIndex()].properties]",
                       "dependsOn": [
                         "[resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))]",
+                        "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]",
                         "[resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))]",
                         "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
                       ]
@@ -1059,8 +1140,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.36.1.42791",
-                              "templateHash": "2867570365079538111"
+                              "version": "0.36.177.2456",
+                              "templateHash": "5652972202101744962"
                             }
                           },
                           "parameters": {
@@ -1153,8 +1234,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.36.1.42791",
-                              "templateHash": "2867570365079538111"
+                              "version": "0.36.177.2456",
+                              "templateHash": "5652972202101744962"
                             }
                           },
                           "parameters": {
@@ -1281,8 +1362,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.36.1.42791",
-              "templateHash": "7933369031821904975"
+              "version": "0.36.177.2456",
+              "templateHash": "8391430426786133343"
             }
           },
           "parameters": {
@@ -1348,8 +1429,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.36.1.42791",
-                      "templateHash": "1484058157851408998"
+                      "version": "0.36.177.2456",
+                      "templateHash": "9451105516418288976"
                     }
                   },
                   "parameters": {
@@ -1415,8 +1496,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.36.1.42791",
-                      "templateHash": "14139566526003951092"
+                      "version": "0.36.177.2456",
+                      "templateHash": "6359306260421221184"
                     }
                   },
                   "parameters": {
@@ -1460,8 +1541,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.36.1.42791",
-                              "templateHash": "8087988206222529306"
+                              "version": "0.36.177.2456",
+                              "templateHash": "18297893090085661258"
                             }
                           },
                           "parameters": {

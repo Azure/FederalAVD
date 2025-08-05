@@ -37,8 +37,8 @@ Function Get-InternetFile {
             Else {
                 Write-Log -Message "${CmdletName}: Url does not contain file name. Trying 'Location' Response Header."
                 $request = [System.Net.WebRequest]::Create($url)
-                $request.AllowAutoRedirect=$false
-                $response=$request.GetResponse()
+                $request.AllowAutoRedirect = $false
+                $response = $request.GetResponse()
                 $Location = $response.GetResponseHeader("Location")
                 If ($Location) {
                     $OutputFileName = [System.IO.Path]::GetFileName($Location)
@@ -49,7 +49,7 @@ Function Get-InternetFile {
                     $result = Invoke-WebRequest -Method GET -Uri $Url -UseBasicParsing
                     $contentDisposition = $result.Headers.'Content-Disposition'
                     If ($contentDisposition) {
-                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"","")
+                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"", "")
                         Write-Log -Message "${CmdletName}: File Name from 'Content-Disposition' Response Header is '$OutputFileName'."
                     }
                 }
@@ -112,8 +112,8 @@ Function Update-LocalGPOTextFile {
         [switch]$Delete,
         [Parameter(Mandatory = $false, ParameterSetName = 'DeleteAllValues')]
         [switch]$DeleteAllValues,
-        [string]$outputDir = "$TempDir\LGPO",
-        [string]$outfileprefix = $AppName
+        [string]$outputDir = "$Script:TempDir\LGPO",
+        [string]$outfileprefix = $Script:AppName
     )
     Begin {
         [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
@@ -146,7 +146,7 @@ Function Update-LocalGPOTextFile {
             $null = New-Item -Path $outputdir -Name "$OutFilePrefix-$Scope.txt" -ItemType File -ErrorAction Stop
         }
 
-        Write-Log -message "${CmdletName}: Adding registry information to '$outfile' for LGPO.exe"
+        Write-Log -Message "${CmdletName}: Adding registry information to '$outfile' for LGPO.exe"
         # Update file with information
         Add-Content -Path $Outfile -Value $Scope
         Add-Content -Path $Outfile -Value $RegistryKeyPath
@@ -169,14 +169,14 @@ Function Update-LocalGPOTextFile {
 Function Invoke-LGPO {
     [CmdletBinding()]
     Param (
-        [string]$InputDir = "$TempDir\LGPO",
+        [string]$InputDir = "$Script:TempDir\LGPO",
         [string]$SearchTerm
     )
     Begin {
         [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
     }
     Process {
-        Write-Log -category Info -message "${CmdletName}: Gathering Registry text files for LGPO from '$InputDir'"
+        Write-Log -category Info -Message "${CmdletName}: Gathering Registry text files for LGPO from '$InputDir'"
         If ($SearchTerm) {
             $InputFiles = Get-ChildItem -Path $InputDir -Filter "$SearchTerm*.txt"
         }
@@ -185,12 +185,61 @@ Function Invoke-LGPO {
         }
         ForEach ($RegistryFile in $inputFiles) {
             $TxtFilePath = $RegistryFile.FullName
-            Write-Log -message "${CmdletName}: Now applying settings from '$txtFilePath' to Local Group Policy via LGPO.exe."
+            Write-Log -Message "${CmdletName}: Now applying settings from '$txtFilePath' to Local Group Policy via LGPO.exe."
             $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/t `"$TxtFilePath`"" -Wait -PassThru
-            Write-Log -message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
+            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
         }
     }
     End {
+    }
+}
+
+Function Set-RegistryValue {
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [string]
+        $Name,
+        [Parameter()]
+        [string]
+        $Path,
+        [Parameter()]
+        [string]$PropertyType,
+        [Parameter()]
+        $Value
+    )
+    Begin {
+        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
+    }
+    Process {
+        Write-Log -Message "${CmdletName}: Setting Registry Value $Path\$Name"
+        # Create the registry Key(s) if necessary.
+        If (!(Test-Path -Path $Path)) {
+            Write-Log -Message "${CmdletName}: Creating Registry Key: $Path"
+            New-Item -Path $Path -Force | Out-Null
+        }
+        # Check for existing registry setting
+        $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
+        If ($RemoteValue) {
+            # Get current Value
+            $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name
+            Write-Log -Message "${CmdletName}: Current Value of $($Path)\$($Name) : $CurrentValue"
+            If ($Value -ne $CurrentValue) {
+                Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
+                Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
+            }
+            Else {
+                Write-Log -Message "${CmdletName}: Value of $($Path)\$($Name) is already set to $Value"
+            }           
+        }
+        Else {
+            Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
+            New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    End {
+        Write-Log -Message "Ending ${CmdletName}"
     }
 }
 
@@ -219,7 +268,7 @@ function Write-Log {
 }
 
 function New-Log {
-     Param (
+    Param (
         [Parameter(Mandatory = $true, Position = 0)]
         [string] $Path
     )
@@ -238,16 +287,18 @@ function New-Log {
 
     Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
 }
+
 #endregion Functions
 
 #region Initialization
-[string]$AppName = 'OneDrive'
+[string]$Script:AppName = 'OneDrive'
 [string]$Script:Name = "Configure-OneDrivePolicy"
-[string]$TempDir = Join-Path -Path $env:Temp -ChildPath $ScriptName
-$null = New-Item -Path $TempDir -ItemType Directory -Force
-New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
+[string]$Script:TempDir = Join-Path -Path $env:Temp -ChildPath $ScriptName
+[string]$LGPO = "$env:SystemRoot\System32\lgpo.exe"
+$null = New-Item -Path $Script:TempDir -ItemType Directory -Force
+New-Log -Path (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
 $ErrorActionPreference = 'Stop'
-Write-Log -category Info -message "Starting '$PSCommandPath'."
+Write-Log -category Info -Message "Starting '$PSCommandPath'."
 #endregion
 $ref = "https://learn.microsoft.com/en-us/sharepoint/redirect-known-folders"
 Write-Log -Message "Starting OneDrive configuration in accordance with '$ref'."
@@ -256,6 +307,7 @@ $InstallDir = "${env:ProgramFiles(x86)}\Microsoft OneDrive"
 $OnedriveVersion = (Get-ItemProperty -Path "$installDir\onedrive.exe").VersionInfo.ProductVersion
 
 If (Test-Path -Path "$installDir\$onedriveversion") {
+    Write-Log -Message "Found OneDrive version folder '$OnedriveVersion' in '$InstallDir'."
     $null = Get-ChildItem -Path "$installDir\$onedriveversion" -File -Recurse -Filter '*.admx' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\" -Force }
     $ADML = (get-childitem "$InstallDir\$OneDriveVersion" -file -filter '*.adml' -recurse | Where-object { $_.Directory -like '*adm' })
     If ($null -ne $ADML) {
@@ -268,49 +320,49 @@ If (Test-Path -Path "$installDir\$onedriveversion") {
     }    
 }
 
-Write-Log -message "Checking for lgpo.exe in '$env:SystemRoot\system32'."
+Write-Log -Message "Checking for lgpo.exe in '$env:SystemRoot\system32'."
 
-If (-not(Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe")) {
-    $LGPOZip = Join-Path -Path $PSScriptRoot -ChildPath 'LGPO.zip'
-    If (Test-Path -Path $LGPOZip) {
-        Write-Log -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
-        Expand-Archive -path $LGPOZip -DestinationPath $Script:TempDir -force
-        $algpoexe = Get-ChildItem -Path $Script:TempDir -filter 'lgpo.exe' -recurse
-        If ($algpoexe.count -gt 0) {
-            $fileLGPO = $algpoexe[0].FullName
-            Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
-            Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -force        
-        }
-    } Else {
-        $urlLGPO = 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip'
-        $LGPOZip = Get-InternetFile -Url $urlLGPO -OutputDirectory $Script:TempDir -Verbose
-        $outputDir = Join-Path $Script:TempDir -ChildPath 'LGPO'
-        Expand-Archive -Path $LGPOZip -DestinationPath $outputDir
-        Remove-Item $LGPOZip -Force
-        $fileLGPO = (Get-ChildItem -Path $outputDir -file -Filter 'lgpo.exe' -Recurse)[0].FullName
-        Write-Log -Message "Copying `"$fileLGPO`" to System32"
+If (-not(Test-Path -Path "$env:SystemRoot\System32\lgpo.exe")) {
+    Write-Log -Category Info -Message "'lgpo.exe' not found in '$env:SystemRoot\system32'."
+    $LGPOZip = Get-ChildItem -Path $PSScriptRoot -Filter 'LGPO.zip' -Recurse | Select-Object -First 1
+    If (-not($LGPOZip)) {
+        Write-Log -Category Info -Message "Downloading LGPO tool."
+        $LGPOZip = Get-InternetFile -Url 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip' -OutputDirectory $Script:TempDir -Verbose
+    }    
+    If ($LGPOZip) {
+        Write-Log -Category Info -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
+        Expand-Archive -Path $LGPOZip -DestinationPath $Script:TempDir -Force
+        $fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse)[0].FullName
+        Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
         Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
-        Remove-Item -Path $outputDir -Recurse -Force
     }
 }
 
-If (Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe") {
-    Write-Log -message "Now Configuring OneDrive Group Policy."
+If (Test-Path -Path $LGPO) {
+    Write-Log -Message "Now Configuring OneDrive Group Policy."
     If ($TenantID -and $TenantID -ne '') {
         Write-Log -Message "Now Configuring OneDrive to automatically sign-in with logged on user credentials."
         Update-LocalGPOTextFile -scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'SilentAccountConfig' -RegistryType DWord -RegistryData 1
         Write-Log -Message "Enabling Files on Demand"
         Update-LocalGPOTextFile -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'FilesOnDemandEnabled' -RegistryType DWORD -RegistryData 1
-        Write-Log -message "Applying OneDrive Known Folder Move Silent Configuration Settings."
-        Update-LocalGPOTextFile -Scope Computer -RegistryKeyPath "SOFTWARE\Policies\Microsoft\OneDrive" -RegistryValue 'KFMSilentOptIn' -RegistryType String -RegistryData "$AADTenantID"
+        Write-Log -Message "Applying OneDrive Known Folder Move Silent Configuration Settings."
+        Update-LocalGPOTextFile -Scope Computer -RegistryKeyPath "SOFTWARE\Policies\Microsoft\OneDrive" -RegistryValue 'KFMSilentOptIn' -RegistryType String -RegistryData "$TenantID"
         Update-LocalGPOTextFile -Scope Computer -RegistryKeyPath "SOFTWARE\Policies\Microsoft\OneDrive" -RegistryValue 'KFMBlockOptOut' -RegistryType DWORD -RegistryData 1
     }
     Invoke-LGPO -Verbose
-    Write-Log -message "OneDrive Group Policy Configuration Complete."
+    Write-Log -Message "OneDrive Group Policy Configuration Complete."
 }
 Else {
-    Write-Log -category Error -message "Unable to configure local policy with lgpo tool because it was not found."
-    Exit 2
+    Write-Log -Category Warning -Message "Unable to configure local policy with lgpo tool because it was not found. Updating registry settings instead."
+    If ($TenantID -and $TenantID -ne '') {
+        Write-Log -Message "Now Configuring OneDrive to automatically sign-in with logged on user credentials."
+        Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' -Name 'SilentAccountConfig' -PropertyType DWord -Value 1
+        Write-Log -Message "Enabling Files on Demand"
+        Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' -Name 'FilesOnDemandEnabled' -PropertyType DWord -Value 1
+        Write-Log -Message "Applying OneDrive Known Folder Move Silent Configuration Settings."
+        Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' -Name 'KFMSilentOptIn' -PropertyType String -Value "$TenantID"
+        Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' -Name 'KFMBlockOptOut' -PropertyType DWord -Value 1
+    }
 }
 
-Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path $Script:TempDir -Recurse -Force -ErrorAction SilentlyContinue

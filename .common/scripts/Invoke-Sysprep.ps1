@@ -2,7 +2,6 @@ param (
     [string]$APIVersion,
     [string]$UserAssignedIdentityClientId,
     [string]$LogBlobContainerUri,
-    [string]$AdminUserName,
     [string]$AdminUserPw
 )
 Function Write-Message {
@@ -43,6 +42,11 @@ ForEach ($File in $Files) {
         Remove-Item $File -Force
     }
 }
+$AdminAccount = Get-LocalUser | Where-Object { $_.SID -like '*-500' }
+If (-Not $AdminAccount.Enabled) {
+    Enable-LocalUser -Name $AdminAccount.Name
+}
+
 Write-Message -Message "Creating a Scheduled Task to start Sysprep using the local admin account credentials."
 $TaskName = "RunSysprep"
 $TaskDescription = "Runs Sysprep with OOBE, Generalize, and VM Mode as Administrator"
@@ -51,7 +55,7 @@ $Action = New-ScheduledTaskAction -Execute "C:\Windows\System32\Sysprep\sysprep.
 # Create the task trigger (run once, immediately)
 $Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(20)
 # Register the scheduled task
-Register-ScheduledTask -TaskName $TaskName -Description $TaskDescription -Action $Action -User $AdminUserName -Password $AdminUserPw -Trigger $Trigger -RunLevel Highest -Force
+Register-ScheduledTask -TaskName $TaskName -Description $TaskDescription -Action $Action -User $AdminAccount.Name -Password $AdminUserPw -Trigger $Trigger -RunLevel Highest -Force
 Do {
     Start-Sleep -Seconds 5
 } Until (Get-Process | Where-Object { $_.Name -eq 'sysprep' })

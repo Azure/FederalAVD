@@ -19,8 +19,8 @@ module policyDefinition_AUAI '../../deployments/sharedModules/resources/authoriz
     displayName: policyDefinitionDisplayNameAUAI
     description: policyDefinitionDescriptionAUAI
     subscriptionId: subscriptionId
-    parameters: loadJsonContent('../definitions/policy-AssignUser-AssignedIdentity.json', 'parameters')
-    policyRule: loadJsonContent('../definitions/policy-AssignUser-AssignedIdentity.json', 'policyRule')
+    parameters: loadJsonContent('../definitions/AssignUserAssignedIdentity.policyDefintion.json', 'parameters')
+    policyRule: loadJsonContent('../definitions/AssignUserAssignedIdentity.policyDefintion.json', 'policyRule')
   }
 }
 

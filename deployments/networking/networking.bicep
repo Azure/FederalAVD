@@ -53,6 +53,9 @@ param hubVnetResourceId string = ''
 @description('Optional. Determines if a virtual network gateway is present on the hub virtual network.')
 param virtualNetworkGatewayOnHub bool = false
 
+@description('Optional. The resource Id of an existing log analytics workspace to which to send nsg diagnostic logs.')
+param logAnalyticsWorkspaceResourceId string = ''
+
 @description('Optional. The subscription id of the subscription to where the private DNS zones should be deployed.')
 param privateDNSZonesSubscriptionId string = subscription().subscriptionId
 
@@ -148,6 +151,7 @@ var nameConv_Shared_Resources = nameConvResTypeAtEnd ? 'avd-TOKEN-${nameConvSuff
 var natGatewayName = replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.natGateways), 'LOCATION', locationAbbreviation), 'TOKEN-', '')
 var publicIPName = replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.publicIPAddresses), 'LOCATION', locationAbbreviation), 'TOKEN-', '')
 var routeTableName = replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.routeTables), 'LOCATION', locationAbbreviation), 'TOKEN-',  '')
+var nsgName = replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.networkSecurityGroups), 'LOCATION', locationAbbreviation), 'TOKEN-', '')
 
 var privateDnsZones_AzureVirtualDesktop = {
   AzureCloud: 'privatelink.wvd.microsoft.com'
@@ -220,7 +224,9 @@ module vnetResources 'modules/vnet-sub-module.bicep' = if (deployVnet) {
     hubVnetResourceGroup: !empty(hubVnetResourceId) ? split(hubVnetResourceId, '/')[4] : ''
     hubVnetSubscriptionId: !empty(hubVnetResourceId) ? split(hubVnetResourceId, '/')[2] : ''
     location: location
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     natGatewayName: natGatewayName
+    nsgName: nsgName
     nvaIPAddress: !empty(nvaIPAddress) ? nvaIPAddress : ''
     privateEndpointsSubnet: !empty(privateEndpointsSubnet) ? privateEndpointsSubnet : {}
     publicIPName: publicIPName
@@ -246,8 +252,10 @@ module privateDNSZonesResources 'modules/privateDNS-sub-module.bicep' = if (crea
     privateDnsZonesToCreate: filter(dedupedPrivateDnsZones, (zone) => !empty(zone))
     privateDnsZonesVnetId: !empty(privateDnsZonesVnetId)
       ? privateDnsZonesVnetId
-      : (linkPrivateDnsZonesToNewVnet ? vnetResources.outputs.vNetResourceId : '')
+      : (linkPrivateDnsZonesToNewVnet ? vnetResources!.outputs.vNetResourceId : '')
     tags: tags
     timeStamp: timeStamp
   }
 }
+
+output vnetResourceId string = deployVnet ? vnetResources.outputs.vNetResourceId : ''

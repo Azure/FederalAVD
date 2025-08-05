@@ -35,6 +35,14 @@ param virtualMachineAdminPassword string
 param virtualMachineAdminUserName string
 param zoneRedundant bool
 
+var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
+  ? split(privateEndpointSubnetResourceId, '/')[8]
+  : ''
+
+var privateEndpointVnetId = length(privateEndpointVnetName) < 37
+  ? privateEndpointVnetName
+  : uniqueString(privateEndpointVnetName)
+
 var secretList = union(
   !empty(domainJoinUserPassword)
     ? [{ name: 'DomainJoinUserPassword', value: domainJoinUserPassword }]
@@ -68,12 +76,12 @@ module secretsKeyVault '../../../sharedModules/resources/key-vault/vault/main.bi
             customNetworkInterfaceName: replace(
               replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', secretsKeyVaultName),
               'VNETID',
-              '${split(privateEndpointSubnetResourceId, '/')[8]}'
+              privateEndpointVnetId
             )
             name: replace(
               replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', secretsKeyVaultName),
               'VNETID',
-              '${split(privateEndpointSubnetResourceId, '/')[8]}'
+              privateEndpointVnetId
             )
             privateDnsZoneGroup: empty(azureKeyVaultPrivateDnsZoneResourceId)
               ? null
@@ -114,12 +122,12 @@ module encryptionKeyVault '../../../sharedModules/resources/key-vault/vault/main
             customNetworkInterfaceName: replace(
               replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeysKeyVaultName),
               'VNETID',
-              '${split(privateEndpointSubnetResourceId, '/')[8]}'
+              privateEndpointVnetId
             )
             name: replace(
               replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeysKeyVaultName),
               'VNETID',
-              '${split(privateEndpointSubnetResourceId, '/')[8]}'
+              privateEndpointVnetId
             )
             privateDnsZoneGroup: empty(azureKeyVaultPrivateDnsZoneResourceId)
               ? null
@@ -207,7 +215,7 @@ module hostingPlan 'modules/functionAppHostingPlan.bicep' = if (enableQuotaManag
     logAnalyticsWorkspaceId: enableMonitoring ? logAnalyticsWorkspace.outputs.resourceId : ''
     location: location
     name: appServicePlanName
-    planPricing: 'PremiumV3_P0v3'
+    planPricing: 'PremiumV3_P1v3'
     tags: tags[?'Microsoft.Web/serverfarms'] ?? {}
     zoneRedundant: zoneRedundant
   }

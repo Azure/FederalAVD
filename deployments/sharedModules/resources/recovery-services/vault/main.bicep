@@ -74,10 +74,10 @@ param diagnosticLogCategoriesToEnable array = [
 
 @description('Optional. The name of metrics that will be streamed.')
 @allowed([
-  'Health'
+  'AllMetrics'
 ])
 param diagnosticMetricsToEnable array = [
-  'Health'
+  'AllMetrics'
 ]
 
 @description('Optional. The name of the diagnostic setting, if deployed. If left empty, it defaults to "<resourceName>-diagnosticSettings".')

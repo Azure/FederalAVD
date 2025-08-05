@@ -24,7 +24,7 @@ resource workspace 'Microsoft.DesktopVirtualization/workspaces@2023-09-05' = {
   location: empty(existingWorkspaceProperties) ? location : existingWorkspaceProperties.location
   tags: empty(existingWorkspaceProperties) ? tags[?'Microsoft.DesktopVirtualization/Workspaces'] ?? {} : existingWorkspaceProperties.tags
   properties: {
-    applicationGroupReferences: empty(existingWorkspaceProperties) ? [applicationGroupResourceId] : union(existingWorkspaceReferences, [appGroupResId])
+    applicationGroupReferences: empty(existingWorkspaceProperties) ? ( empty(applicationGroupResourceId) ? null : [applicationGroupResourceId] ) : union(existingWorkspaceReferences, [appGroupResId])
     friendlyName: empty(existingWorkspaceProperties) ? friendlyName : existingWorkspaceProperties.friendlyName
     publicNetworkAccess: empty(existingWorkspaceProperties) ? publicNetworkAccess : existingWorkspaceProperties.publicNetworkAccess
   }
@@ -70,3 +70,5 @@ resource workspace_diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01
     workspaceId: logAnalyticsWorkspaceResourceId
   }
 }
+
+output resourceId string = workspace.id

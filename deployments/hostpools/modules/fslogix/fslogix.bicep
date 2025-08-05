@@ -61,10 +61,13 @@ param timeStamp string
 param timeZone string
 param userAssignedIdentityNameConv string
 
-module customerManagedKeys 'modules/customerManagedKeys.bicep' = if(storageSolution == 'AzureFiles' && keyManagementStorageAccounts != 'MicrosoftManaged') {
+module customerManagedKeys 'modules/customerManagedKeys.bicep' = if (storageSolution == 'AzureFiles' && keyManagementStorageAccounts != 'MicrosoftManaged') {
   name: 'CustomerManagedKeys_${timeStamp}'
   scope: resourceGroup(resourceGroupStorage)
   params: {
+    deploymentResourceGroupName: resourceGroupDeployment
+    deploymentVirtualMachineName: deploymentVirtualMachineName
+    deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     hostPoolResourceId: hostPoolResourceId
     keyExpirationInDays: keyExpirationInDays
     keyManagementStorageAccounts: keyManagementStorageAccounts
@@ -82,12 +85,15 @@ module customerManagedKeys 'modules/customerManagedKeys.bicep' = if(storageSolut
 }
 
 // Azure NetApp files for fslogix
-module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution == 'AzureNetAppFiles' && contains(identitySolution, 'DomainServices')) {
+module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution == 'AzureNetAppFiles' && contains(
+  identitySolution,
+  'DomainServices'
+)) {
   name: 'AzureNetAppFiles_${timeStamp}'
   scope: resourceGroup(resourceGroupStorage)
   params: {
     activeDirectoryConnection: activeDirectoryConnection
-    deploymentVirtualMachineName: deploymentVirtualMachineName 
+    deploymentVirtualMachineName: deploymentVirtualMachineName
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
@@ -95,7 +101,7 @@ module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution =
     shareSizeInGB: shareSizeInGB
     shareAdminGroups: fslogixAdminGroups
     shareUserGroups: fslogixUserGroups
-    location: location    
+    location: location
     netAppAccountName: netAppAccountName
     netAppCapacityPoolName: netAppCapacityPoolName
     netAppVolumesSubnetResourceId: netAppVolumesSubnetResourceId
@@ -104,7 +110,10 @@ module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution =
     smbServerLocation: smbServerLocation
     storageSku: storageSku
     storageSolution: storageSolution
-    tagsNetAppAccount: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.NetApp/netAppAccounts'] ?? {})
+    tagsNetAppAccount: union(
+      { 'cm-resource-parent': hostPoolResourceId },
+      tags[?'Microsoft.NetApp/netAppAccounts'] ?? {}
+    )
     timeStamp: timeStamp
   }
 }
@@ -123,10 +132,13 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     deploymentVirtualMachineName: deploymentVirtualMachineName
+    deploymentResourceGroupName: resourceGroupDeployment
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? domainJoinUserPassword : ''
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? domainJoinUserPrincipalName : ''
     encryptionKeyVaultUri: encryptionKeyVaultUri
-    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'MicrosoftManaged' ? '' : customerManagedKeys.outputs.userAssignedIdentityResourceId
+    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'MicrosoftManaged'
+      ? ''
+      : customerManagedKeys.outputs.userAssignedIdentityResourceId
     fileShares: fslogixFileShares
     fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
     functionAppDelegatedSubnetResourceId: functionAppDelegatedSubnetResourceId
@@ -143,14 +155,15 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     ouPath: ouPath
     privateEndpoint: privateEndpoint
-    privateEndpointLocation: privateEndpoint && !empty(privateEndpointSubnetResourceId) ? reference(split(privateEndpointSubnetResourceId, '/subnets/')[0], '2020-06-01', 'Full').location : ''
+    privateEndpointLocation: privateEndpoint && !empty(privateEndpointSubnetResourceId)
+      ? reference(split(privateEndpointSubnetResourceId, '/subnets/')[0], '2020-06-01', 'Full').location
+      : ''
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
     recoveryServices: recoveryServices
     recoveryServicesVaultName: recoveryServicesVaultName
-    resourceGroupDeployment: resourceGroupDeployment
     resourceGroupStorage: resourceGroupStorage
     serverFarmId: serverFarmId
     shardingOptions: fslogixShardOptions
@@ -168,5 +181,9 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   }
 }
 
-output netAppVolumeResourceIds array = storageSolution == 'AzureNetAppFiles' ? azureNetAppFiles.outputs.volumeResourceIds : []
-output storageAccountResourceIds array = storageSolution == 'AzureFiles' ? azureFiles.outputs.storageAccountResourceIds : []
+output netAppVolumeResourceIds array = storageSolution == 'AzureNetAppFiles'
+  ? azureNetAppFiles.outputs.volumeResourceIds
+  : []
+output storageAccountResourceIds array = storageSolution == 'AzureFiles'
+  ? azureFiles.outputs.storageAccountResourceIds
+  : []

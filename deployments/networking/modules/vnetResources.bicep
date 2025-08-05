@@ -7,6 +7,8 @@ param defaultRouting string
 param natGatewayName string
 param publicIPName string
 param routeTableName string
+param nsgName string
+param logAnalyticsWorkspaceResourceId string
 param nvaIPAddress string
 param customDNSServers array
 param deployDDoSNetworkProtection bool
@@ -123,6 +125,9 @@ var snetHosts = [
             id: routeTable.id
           }
         : null
+      networkSecurityGroup: {
+        id: nsg.id
+      }
     }
   }
 ]
@@ -187,6 +192,44 @@ resource routeTable 'Microsoft.Network/routeTables@2023-04-01' = if (defaultRout
   tags: tags[?'Microsoft.Network/routeTables'] ?? {}
 }
 
+resource nsg 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+  name: nsgName
+  location: location
+  properties: {
+    securityRules: [
+      {
+        name: 'RDPShortpath'
+        properties: {
+          priority: 150
+          access: 'Allow'
+          description: 'Session host traffic to RDP Shortpath Listener'
+          destinationAddressPrefix: 'VirtualNetwork'
+          direction: 'Inbound'
+          sourcePortRange: '*'
+          destinationPortRange: '3390'
+          protocol: 'Udp'
+          sourceAddressPrefix: 'VirtualNetwork'
+        }
+      }
+    ]
+  }
+  tags: tags[?'Microsoft.Network/networkSecurityGroups'] ?? {}
+}
+
+resource nsgDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceResourceId)) {
+  name: '${nsgName}-diagnosticSettings'
+  scope: nsg
+  properties: {
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    workspaceId: logAnalyticsWorkspaceResourceId
+  }
+}
+
 resource publicIp 'Microsoft.Network/publicIPAddresses@2021-05-01' = if (defaultRouting == 'nat') {
   name: publicIPName
   location: location
@@ -210,7 +253,7 @@ resource natGateway 'Microsoft.Network/natGateways@2024-01-01' = if (defaultRout
         id: publicIp.id
       }
     ]
-    idleTimeoutInMinutes: 4    
+    idleTimeoutInMinutes: 4
   }
   sku: {
     name: 'Standard'
@@ -241,13 +284,15 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
 }
 
 @batchSize(1)
-resource snets 'Microsoft.Network/virtualNetworks/subnets@2022-05-01' = [for subnet in subnets: {
-  name: subnet.name
-  parent: vnet
-  properties: subnet.properties
-}]
+resource snets 'Microsoft.Network/virtualNetworks/subnets@2022-05-01' = [
+  for subnet in subnets: {
+    name: subnet.name
+    parent: vnet
+    properties: subnet.properties
+  }
+]
 
-module localVnetPeering './virtual-network-peering.bicep' = if(!empty(hubVnetName)) {
+module localVnetPeering './virtual-network-peering.bicep' = if (!empty(hubVnetName)) {
   name: 'localVnetPeering-${timeStamp}'
   params: {
     allowForwardedTraffic: true
@@ -261,7 +306,7 @@ module localVnetPeering './virtual-network-peering.bicep' = if(!empty(hubVnetNam
   ]
 }
 
-module remoteVnetPeering './virtual-network-peering.bicep' = if(!empty(hubVnetName)) {
+module remoteVnetPeering './virtual-network-peering.bicep' = if (!empty(hubVnetName)) {
   name: 'remoteVnetPeering-${timeStamp}'
   scope: resourceGroup(hubVnetSubscriptionId, hubVnetResourceGroup)
   params: {
