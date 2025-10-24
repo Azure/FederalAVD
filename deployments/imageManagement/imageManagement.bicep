@@ -7,8 +7,8 @@ param artifactsContainerName string = 'artifacts'
 
 param location string = deployment().location
 
-@description('Optional. Custom Resource Group Name. If not provided, a resource group will be created using the Cloud Adoption Framework naming convention.')
-param customResourceGroupName string = ''
+@description('Optional. Custom workload identifier to use when naming the resource group and resources. If not specified then "image-management" will be used. All resources will be created using the Cloud Adoption Framework naming convention.')
+param customIdentifier string = ''
 
 @description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
 param nameConvResTypeAtEnd bool = false
@@ -92,10 +92,11 @@ var locations = startsWith(cloud, 'us') ? (loadJsonContent('../../.common/data/l
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 var nameConv_Suffix_withoutResType = 'LOCATION'
 var nameConvSuffix = nameConvResTypeAtEnd ? '${nameConv_Suffix_withoutResType}-RESOURCETYPE' : nameConv_Suffix_withoutResType
-var nameConv_ImageManagement_ResGroup = nameConvResTypeAtEnd ? 'avd-image-management-${nameConvSuffix}' : 'RESOURCETYPE-avd-image-management-${nameConvSuffix}'
-var nameConv_ImageManagement_Resources = nameConvResTypeAtEnd ? 'avd-image-management-${nameConvSuffix}' : 'RESOURCETYPE-avd-image-management-${nameConvSuffix}'
+var identifier = empty(customIdentifier) ? 'image-management' : customIdentifier
+var nameConv_ImageManagement_ResGroup = nameConvResTypeAtEnd ? 'avd-${identifier}-${nameConvSuffix}' : 'RESOURCETYPE-avd-${identifier}-${nameConvSuffix}'
+var nameConv_ImageManagement_Resources = nameConvResTypeAtEnd ? 'avd-${identifier}-${nameConvSuffix}' : 'RESOURCETYPE-avd-${identifier}-${nameConvSuffix}'
 #disable-next-line BCP329
-var resourceGroupName = empty(customResourceGroupName) ? replace(replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varLocation].abbreviation), 'RESOURCETYPE', resourceAbbreviations.resourceGroups) : customResourceGroupName
+var resourceGroupName = replace(replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varLocation].abbreviation), 'RESOURCETYPE', resourceAbbreviations.resourceGroups)
 #disable-next-line BCP329
 var remoteResourceGroupName = !empty(remoteLocation) ? replace(replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varRemoteLocation].abbreviation), 'RESOURCETYPE', resourceAbbreviations.resourceGroups) : ''
 var blobContainerName = replace(replace(toLower(artifactsContainerName), '_', '-'), ' ', '-')

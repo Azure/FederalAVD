@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.38.33.27573",
-      "templateHash": "17423661337884665677"
+      "templateHash": "16971517385080010750"
     }
   },
   "parameters": {
@@ -22,11 +22,11 @@
       "type": "string",
       "defaultValue": "[deployment().location]"
     },
-    "customResourceGroupName": {
+    "customIdentifier": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. Custom Resource Group Name. If not provided, a resource group will be created using the Cloud Adoption Framework naming convention."
+        "description": "Optional. Custom workload identifier to use when naming the resource group and resources. If not specified then \"image-management\" will be used. All resources will be created using the Cloud Adoption Framework naming convention."
       }
     },
     "nameConvResTypeAtEnd": {
@@ -691,9 +691,10 @@
     "resourceAbbreviations": "[variables('$fxv#2')]",
     "nameConv_Suffix_withoutResType": "LOCATION",
     "nameConvSuffix": "[if(parameters('nameConvResTypeAtEnd'), format('{0}-RESOURCETYPE', variables('nameConv_Suffix_withoutResType')), variables('nameConv_Suffix_withoutResType'))]",
-    "nameConv_ImageManagement_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-image-management-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-image-management-{0}', variables('nameConvSuffix')))]",
-    "nameConv_ImageManagement_Resources": "[if(parameters('nameConvResTypeAtEnd'), format('avd-image-management-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-image-management-{0}', variables('nameConvSuffix')))]",
-    "resourceGroupName": "[if(empty(parameters('customResourceGroupName')), replace(replace(variables('nameConv_ImageManagement_ResGroup'), 'LOCATION', variables('locations')[variables('varLocation')].abbreviation), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups), parameters('customResourceGroupName'))]",
+    "identifier": "[if(empty(parameters('customIdentifier')), 'image-management', parameters('customIdentifier'))]",
+    "nameConv_ImageManagement_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-{1}', variables('identifier'), variables('nameConvSuffix')), format('RESOURCETYPE-avd-{0}-{1}', variables('identifier'), variables('nameConvSuffix')))]",
+    "nameConv_ImageManagement_Resources": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-{1}', variables('identifier'), variables('nameConvSuffix')), format('RESOURCETYPE-avd-{0}-{1}', variables('identifier'), variables('nameConvSuffix')))]",
+    "resourceGroupName": "[replace(replace(variables('nameConv_ImageManagement_ResGroup'), 'LOCATION', variables('locations')[variables('varLocation')].abbreviation), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
     "remoteResourceGroupName": "[if(not(empty(parameters('remoteLocation'))), replace(replace(variables('nameConv_ImageManagement_ResGroup'), 'LOCATION', variables('locations')[variables('varRemoteLocation')].abbreviation), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups), '')]",
     "blobContainerName": "[replace(replace(toLower(parameters('artifactsContainerName')), '_', '-'), ' ', '-')]",
     "galleryName": "[replace(replace(replace(variables('nameConv_ImageManagement_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').computeGalleries), 'LOCATION', variables('locations')[variables('varLocation')].abbreviation), '-', '_')]",
