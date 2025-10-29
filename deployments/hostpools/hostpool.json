@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.38.33.27573",
-      "templateHash": "10097622496318559036"
+      "templateHash": "12000140971540320076"
     }
   },
   "parameters": {
@@ -17,7 +17,7 @@
     },
     "avdAgentsDSCPackage": {
       "type": "string",
-      "defaultValue": "Configuration_1.0.03166.887.zip",
+      "defaultValue": "Configuration_1.0.03211.1002.zip",
       "metadata": {
         "description": "Optional. The DSC package name or full Url used by the PowerShell DSC extension to install the AVD Agent and register the virtual machine as a Session Host."
       }

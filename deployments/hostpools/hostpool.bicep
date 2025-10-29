@@ -6,7 +6,7 @@ targetScope = 'subscription'
 param avdObjectId string
 
 @description('Optional. The DSC package name or full Url used by the PowerShell DSC extension to install the AVD Agent and register the virtual machine as a Session Host.')
-param avdAgentsDSCPackage string = 'Configuration_1.0.03166.887.zip'
+param avdAgentsDSCPackage string = 'Configuration_1.0.03211.1002.zip'
 
 @description('Optional. Instruct the AVD Agent Installation script to automatically download the latest agent version during installation.zip.')
 param useAgentDownloadEndpoint bool = false
