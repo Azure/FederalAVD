@@ -1,3 +1,48 @@
+<#
+.SYNOPSIS
+    Configures a custom desktop background for Azure Virtual Desktop session hosts.
+
+.DESCRIPTION
+    This script sets a custom desktop background image using Group Policy settings via LGPO.exe
+    but can fall back to using the WMI Bridge for CSP if LGPO.exe is not available.
+
+    The script is designed to be used during Azure Virtual Desktop image customization or
+    session host deployment.
+
+.NOTES
+    IMPORTANT: Custom Desktop Background Configuration
+    
+    Before using this script, you must replace the default 'sunrise.jpg' file in this directory 
+    with your custom desktop background image. In an offline environment, you should download LGPO.zip
+    from https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip
+    and place it in the same directory as this script.
+    
+    Desktop Background Requirements:
+    - File format: JPG (JPEG)
+    - Resolution: High resolution (4K recommended - 3840x2560 pixels)
+    - Aspect ratio: 3:2 (width:height)
+    - File name: Must be named with the .jpg extension
+    - File size: Consider file size for deployment efficiency
+    
+    For detailed guidance on desktop background configuration in enterprise environments,
+    refer to the official Microsoft Learn documentation:
+    https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/wallpaper-and-themes-windows-11
+    
+    Additional Considerations:
+    - Ensure the image is appropriate for your organization's environment
+    - Test the background across different monitor resolutions and aspect ratios
+    - Consider accessibility and readability of desktop icons over the background
+    - Verify compliance with your organization's branding guidelines
+
+.EXAMPLE
+    PS C:\> .\Set-DesktopBackground.ps1
+    
+    Configures the desktop background using the 'sunrise.jpg' file in the script directory.
+
+.LINK
+    https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/wallpaper-and-themes-windows-11
+#>
+
 [uri]$LGPOUrl = 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip'
 #region Functions
 
