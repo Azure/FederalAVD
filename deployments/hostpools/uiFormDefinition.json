@@ -3216,7 +3216,7 @@
 									"constraints": {
 										"required": true
 									},
-									"link": "[if(empty(steps('management').servicePrincipals.avdServicePrincipalPickerBlade), 'Select the AVD Microsoft Application', first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
+									"link": "[if(empty(steps('management').servicePrincipals.avdServicePrincipalPickerBlade), 'Select the Azure Virtual Desktop Application', first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
 									"visible": "[and(empty(first(steps('management').avdServicePrincipalApi.value)), or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan))]"
 								}
 							]
