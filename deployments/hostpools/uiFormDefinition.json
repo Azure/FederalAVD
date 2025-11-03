@@ -3184,15 +3184,15 @@
 										"name": "ObjectPickerBlade",
 										"extension": "Microsoft_AAD_IAM",
 										"parameters": {
-											"queries": 4,
-											"bladeSubtitle": "Azure/Windows Virtual Desktop Enterprise Application",
+											"queries": 16777216,
+											"bladeSubtitle": "Azure/Windows Virtual Desktop Application",
 											"additionalQueriesOnSearch": 0,
 											"advancedQueryOptions": {},
 											"selectionMaximum": 1,
 											"selectionMinimum": 1,
-											"bladeTitle": "Select the Enterprise Application",
+											"bladeTitle": "Select the Application",
 											"informationHeader": {
-												"informationText": "Select the 'Azure/Windows Virtual Desktop' Enterprise Application."
+												"informationText": "Select the 'Azure/Windows Virtual Desktop' Application."
 											},
 											"searchBoxLabel": "Copy '9cdead84-a844-4324-93f2-b2e6bb768d07' into the search box",
 											"searchBoxPlaceHolderText": "Enter '9cdead84-a844-4324-93f2-b2e6bb768d07'",
