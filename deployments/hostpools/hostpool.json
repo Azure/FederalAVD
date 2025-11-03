@@ -5,14 +5,15 @@
     "_generator": {
       "name": "bicep",
       "version": "0.38.33.27573",
-      "templateHash": "12000140971540320076"
+      "templateHash": "8748800036565401201"
     }
   },
   "parameters": {
     "avdObjectId": {
       "type": "string",
+      "defaultValue": "",
       "metadata": {
-        "description": "The Object ID for the Windows Virtual Desktop Enterprise Application in Azure AD.  The Object ID can found by selecting Microsoft Applications using the Application type filter in the Enterprise Applications blade of Azure AD."
+        "description": "Conditional.\nThe Object ID for the Windows Virtual Desktop Enterprise Application in Azure AD.\nThe Object ID can found by selecting Microsoft Applications using the Application type filter in the Enterprise Applications blade of Entra Id.\nRequired when Start VM On Connect is selected or you deploy a scaling plan.\n"
       }
     },
     "avdAgentsDSCPackage": {

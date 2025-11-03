@@ -2,8 +2,12 @@ targetScope = 'subscription'
 
 // Deployment Prerequisites
 
-@description('The Object ID for the Windows Virtual Desktop Enterprise Application in Azure AD.  The Object ID can found by selecting Microsoft Applications using the Application type filter in the Enterprise Applications blade of Azure AD.')
-param avdObjectId string
+@description('''Conditional.
+The Object ID for the Windows Virtual Desktop Enterprise Application in Azure AD.
+The Object ID can found by selecting Microsoft Applications using the Application type filter in the Enterprise Applications blade of Entra Id.
+Required when Start VM On Connect is selected or you deploy a scaling plan.
+''')
+param avdObjectId string = ''
 
 @description('Optional. The DSC package name or full Url used by the PowerShell DSC extension to install the AVD Agent and register the virtual machine as a Session Host.')
 param avdAgentsDSCPackage string = 'Configuration_1.0.03211.1002.zip'
