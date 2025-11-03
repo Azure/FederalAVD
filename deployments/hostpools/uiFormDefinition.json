@@ -3190,16 +3190,16 @@
 											"advancedQueryOptions": {},
 											"selectionMaximum": 1,
 											"selectionMinimum": 1,
-											"bladeTitle": "Select the Application",
+											"bladeTitle": "Select the Microsoft Application",
 											"informationHeader": {
 												"informationText": "Select the 'Azure/Windows Virtual Desktop' Application."
 											},
 											"searchBoxLabel": "Copy '9cdead84-a844-4324-93f2-b2e6bb768d07' into the search box",
 											"searchBoxPlaceHolderText": "Enter '9cdead84-a844-4324-93f2-b2e6bb768d07'",
-											"searchGridNoRowsMessage": "No Enterprise Applications found",
-											"selectButtonText": "Select Enterprise Application",
-											"selectedGridLabel": "Selected Enterprise Application",
-											"selectedGridNoRowsMessage": "You must select the 'Azure/Windows Virtual Desktop' Enterprise Application"
+											"searchGridNoRowsMessage": "No Microsoft Applications found",
+											"selectButtonText": "Select Microsoft Application",
+											"selectedGridLabel": "Selected Microsoft Application",
+											"selectedGridNoRowsMessage": "You must select the 'Azure/Windows Virtual Desktop' Microsoft Application"
 										}
 									},
 									"transforms": {
@@ -3209,7 +3209,7 @@
 								{
 									"name": "avdServicePrincipalSelector",
 									"type": "Microsoft.Common.Selector",
-									"label": "Select the <b>Azure Virtual Desktop</b> Enterprise Application",
+									"label": "Select the <b>Azure Virtual Desktop</b> Microsoft Application",
 									"keyPath": "displayName",
 									"value": "[steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection]",
 									"barColor": "[if(empty(steps('management').servicePrincipals.avdServicePrincipalPickerBlade), '#FF0000', '#7fba00')]",
