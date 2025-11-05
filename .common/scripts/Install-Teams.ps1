@@ -188,28 +188,50 @@ If ($CloudType) {
 }
 # Teams Meeting Add-in
 # Get Teams Meeting Addin Version
-$TMAPath = "{0}\WindowsApps\MSTeams_{1}_x64__8wekyb3d8bbwe\MicrosoftTeamsMeetingAddInInstaller.msi" -f $env:programfiles, $TeamsVersion
-$TMAVersion = (Get-AppLockerFileInformation -Path $TMAPath | Select-Object -ExpandProperty Publisher).BinaryVersion
-Write-OutputWithTimeStamp "Found Teams Meeting Addin Version: $TMAVersion"
-# Install parameters
-$TargetDir = "{0}\Microsoft\TeamsMeetingAdd-in\{1}\" -f ${env:ProgramFiles(x86)}, $TMAVersion
-$params = '/i "{0}" TARGETDIR="{1}" /qn ALLUSERS=1' -f $TMAPath, $TargetDir
-# Start the install process
-Write-OutputWithTimeStamp "executing msiexec.exe $params"
-$install = Start-Process -FilePath 'msiexec.exe' -ArgumentList $params -PassThru
-$timeout = 30
-
-for ($elapsed = 0; $elapsed -lt $timeout; $elapsed++) {
-    if ($install.HasExited) {
-        Write-OutputWithTimeStamp "msiexec closed with exit code: $($install.ExitCode)"
-        break
+If (-not ($CloudType -eq 5 -or $CloudType -eq 6 -or $CloudType -eq 7)) {
+    #https://learn.microsoft.com/en-us/microsoftteams/teams-client-vdi-requirements-deploy#deployment-method-for-non-persistent-environments-where-teams-autoupdate-is-disabled
+    $TeamsMeetingAddinInstall = Start-Process -FilePath "$BootStrapperFile" -ArgumentList "--installTMA" -Wait -PassThru
+    If ($($TeamsMeetingAddinInstall.ExitCode) -eq 0) {
+        Write-OutputWithTimeStamp "Installed Teams Meeting Add-in successfully."
+        $TMAInstalled
     }
-    Start-Sleep -Seconds 1
+    Else {
+        Write-OutputWithTimeStamp "Teams Meeting Add-in installation failed with exit code $($TeamsMeetingAddinInstall.ExitCode)"
+    }
 }
+If (-not $TMAInstalled) {
+    Write-OutputWithTimeStamp "Attempting to install the Teams Meeting Add-in via msi installer."
+    $TMAPath = "{0}\WindowsApps\MSTeams_{1}_x64__8wekyb3d8bbwe\MicrosoftTeamsMeetingAddInInstaller.msi" -f $env:programfiles, $TeamsVersion    
+    If ($TMAPath -and (Test-Path -Path $TMAPath)) {
 
-if (-not $install.HasExited) {
-    Write-OutputWithTimeStamp "msiexec did not exit within $timeout seconds. Terminating process."
-    Stop-Process -Id $install.Id -Force
+        Write-OutputWithTimeStamp "Found Teams Meeting Add-in installer at path: $TMAPath"
+        $TMAVersion = (Get-AppLockerFileInformation -Path $TMAPath | Select-Object -ExpandProperty Publisher).BinaryVersion
+        Write-OutputWithTimeStamp "Found Teams Meeting Addin Version: $TMAVersion"
+        # Install parameters
+        $TargetDir = "{0}\Microsoft\TeamsMeetingAdd-in\{1}\" -f ${env:ProgramFiles(x86)}, $TMAVersion
+        $params = '/i "{0}" TARGETDIR="{1}" /qn ALLUSERS=1' -f $TMAPath, $TargetDir
+        # Start the install process
+        Write-OutputWithTimeStamp "executing msiexec.exe $params"
+        $install = Start-Process -FilePath 'msiexec.exe' -ArgumentList $params -PassThru
+        $timeout = 30
+
+        for ($elapsed = 0; $elapsed -lt $timeout; $elapsed++) {
+            if ($install.HasExited) {
+                Write-OutputWithTimeStamp "msiexec closed with exit code: $($install.ExitCode)"
+                break
+            }
+            Start-Sleep -Seconds 1
+        }
+
+        if (-not $install.HasExited) {
+            Write-OutputWithTimeStamp "msiexec did not exit within $timeout seconds. Terminating process."
+            Stop-Process -Id $install.Id -Force
+        }
+    }
+    Else {
+        Write-OutputWithTimeStamp "Error: Teams Meeting Add-in installer not found at path: $TMAPath"
+    }
+    
 }
 
 If ((Split-Path $TempDir -Parent) -eq $Env:Temp) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }
