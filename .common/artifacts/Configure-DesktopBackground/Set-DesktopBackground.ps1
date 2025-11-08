@@ -341,14 +341,16 @@ Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 
 $BackgroundSourceImage = Get-ChildItem -Path $PSScriptRoot -Filter '*.jpg'
 If ($BackgroundSourceImage) {
+    Write-Log -Category Info -Message "Found Background Image: '$($BackgroundSourceImage.Name)'."
     $CustomWallpaperDirectory = "$env:SystemRoot\Web\Wallpaper\Custom"
     If (-not(Test-Path -Path $CustomWallpaperDirectory)) {
         Write-Log -Category Info -Message "Creating Wallpaper Custom directory at '$CustomWallpaperDirectory'."
         New-Item -Path "$CustomWallpaperDirectory" -ItemType Directory -Force | Out-Null
     }
-    $BackgroundDestinationImage = Join-Path -Path "$CustomWallpaperDirectory" -ChildPath $BackupgroundSourceImage.Name
-    Write-Log -Category Info -Message "Copying Background Image from '$($BackgroundSourceImage.FullName)' to '$CustomWallpaperDirectory'."
+    $BackgroundImagePath = Join-Path -Path $CustomWallpaperDirectory -ChildPath $($BackgroundSourceImage.Name)
+    Write-Log -Category Info -Message "Copying Background from '$PSScriptRoot' to '$CustomWallpaperDirectory'."
     Copy-Item -Path $($BackgroundSourceImage.FullName) -Destination $CustomWallpaperDirectory -Force
+    Write-Log -Category Info -Message "Preparing to configure Background Image Path as '$BackgroundImagePath'."
 }
 Else {
     Write-Log -Category Error -Message "No Background Image found in '$PSScriptRoot'. Exiting Script."
@@ -375,7 +377,7 @@ If (Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe") {
     Write-Log -Category Info -Message "Preparing LGPO text file to set Desktop Background and prevent changes."
     # Create LGPO text file to set Desktop Background and prevent changes.
     Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop' -RegistryValue 'NoChangingWallPaper' -RegistryType 'DWORD' -RegistryData 1
-    Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\System' -RegistryValue 'Wallpaper' -RegistryType 'String' -RegistryData ($BackgroundDestinationImage.Replace('\', '\\'))
+    Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\System' -RegistryValue 'Wallpaper' -RegistryType 'String' -RegistryData ($BackgroundImagePath.Replace('\', '\\'))
     Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\System' -RegistryValue 'WallpaperStyle' -RegistryType 'String' -RegistryData 4
     Write-Log -Category Info -Message "Applying LGPO settings to Local Group Policy."
     Invoke-LGPO
@@ -385,7 +387,7 @@ Else {
     Write-Log -Category Warning -Message "Unable to configure local policy with lgpo tool because it was not found. Reverting to WMI Bridge for CSP."
 
     # Convert to file URI
-    $imageURL = 'file:///' + $BackgroundDestinationImage.Replace('\', '/')
+    $imageURL = 'file:///' + $BackgroundImagePath.Replace('\', '/')
     # Set the desktop background using WMI Bridge for CSP
     $namespace = "root\cimv2\mdm\dmmap"
     $className = "MDM_Personalization"

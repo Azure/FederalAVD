@@ -68,6 +68,9 @@ var multipleScripts = [
   }
 ]
 
+// Encode script content to base64 if provided to prevent issues with special characters
+var base64ScriptContent = empty(scriptContent) ? '' : base64(replace(replace(scriptContent, '\r\n', '\n'), '\r', '\n'))
+
 resource logsUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(logsUserAssignedIdentityResourceId)) {
   name: last(split(logsUserAssignedIdentityResourceId, '/'))
   scope: resourceGroup(
@@ -149,7 +152,7 @@ module runCommand 'runCommand.bicep' = [
         : scriptsUserAssignedIdentity!.properties.clientId
       parameters: parameters
       protectedParameter: protectedParameter
-      scriptContent: scriptContent
+      base64ScriptContent: base64ScriptContent
       scriptUri: scriptUri
       timeoutInSeconds: timeoutInSeconds
       timeStamp: timeStamp
