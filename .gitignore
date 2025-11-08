@@ -4,4 +4,4 @@
 *.msix
 *.zip
 temp/**
-*/parameters/m365x.*
+**/parameters/m365x*
