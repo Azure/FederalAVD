@@ -1,0 +1,258 @@
+{
+    "AzCli": {
+        "Description": "Optional: Azure CLI Installer",
+        "DownloadUrl": "https://aka.ms/installazurecliwindowsx64",
+        "WebSiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "azclix64.msi",
+        "DestinationFolders": [
+            "AzCLI"
+        ]
+    },
+    "LGPO": {
+        "Description": "Optional: Local Group Policy Object (LGPO) Tool. Used for configuring local group policies.",
+        "DownloadUrl": "https://download.microsoft.com/download/8/5/c/85c25433-a1b0-4ffa-9429-7e023e7da8d8/LGPO.zip",
+        "WebSiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "lgpo.zip",
+        "DestinationFolders": [
+            "Configure-DesktopBackground",
+            "Configure-EdgePolicy",
+            "Configure-Office365Policy",
+            "Configure-OneDriveKFMPolicy",
+            "Configure-RemoteDesktopPolicy",
+            "Configure-WindowsUpdatePolicy",
+            "LGPO",
+            "STIGs"
+        ]
+    },
+    "FSLogix": {
+        "Description": "Required: FSLogix",
+        "DownloadUrl": "https://aka.ms/fslogix_download",
+        "WebSiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "FSLogix.zip",
+        "DestinationFolders": [
+            "",
+            "Install-FSLogix"
+        ]
+    },
+    "Office365DeploymentTool": {
+        "Description": "Required: Office 365 Deployment Tool",
+        "DownloadUrl": "https://officecdn.microsoft.com/pr/wsus/setup.exe",
+        "WebSiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "Office365DeploymentTool.exe",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "Office365AdministrativeTemplates": {
+        "Description": "Optional: Office 365 Administrative Templates. Used for Office 365 policy configuration via LGPO.",
+        "DownloadUrl": "https://download.microsoft.com/download/2/e/e/2eeec938-c014-419d-bb4b-d184871450f1/admintemplates_x64_5486-1000_en-us.exe",
+        "WebsiteUrl": "https://www.microsoft.com/en-us/download/details.aspx?id=49030",
+        "SearchString": "*admintemplates_x64*.exe",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "AdminTemplates_x64.exe",
+        "DestinationFolders": [
+            "Configure-Office365Policy"
+        ]
+    },
+    "OneDrive": {
+        "Description": "Required: OneDrive Sync Client",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/p/?linkid=2121808",
+        "WebSiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "OneDriveSetup.exe",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "TeamsBootstrapper": {
+        "Description": "Required: Microsoft Teams Bootstrapper",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2243204&clcid=0x409",
+        "WebSiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "teamsbootstrapper.exe",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "Teams64BitMSIX": {
+        "Description": "Required: Microsoft Teams 64-bit MSIX",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2196106",
+        "WebSiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "MSTeams-x64.msix",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "WebView2Runtime": {
+        "Description": "Required: Microsoft Edge WebView2 Runtime",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2124703",
+        "WebSiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "WebView2.exe",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "RemoteDesktopWebRTCRedirectorService": {
+        "Description": "Required: Microsoft Remote Desktop WebRTC Redirector Service",
+        "DownloadUrl": "https://aka.ms/msrdcwebrtcsvc/msi",
+        "WebsiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "MsRdcWebRTCSvc.msi",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "VisualStudioRedistributables": {
+        "Description": "Optional: Visual Studio C++ Redistributables",
+        "DownloadUrl": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+        "WebSiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "vc_redist.x64.exe",
+        "DestinationFolders": [
+            "",
+            "VisualCPlusPlusRedistributables"
+        ]
+    },
+    "EdgeEnterpriseAdministrativeTemplates": {
+        "Description": "Optional: Microsoft Edge Enterprise Administrative Templates. Used for Edge policy configuration via LGPO.",
+        "DownloadUrl": "",
+        "WebsiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "https://edgeupdates.microsoft.com/api/products?view=enterprise",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "EdgeEnterprisePolicyTemplates.cab",
+        "DestinationFolders": [
+            "Configure-EdgePolicy"
+        ]
+    },
+    "PowerShellAzModule": {
+        "Description": "Optional: PowerShell Az Module",
+        "DownloadUrl": "",
+        "WebSiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "Azure/azure-powershell",
+        "GitHubFileNamePattern": "Az-Cmdlets-*-x64.msi",
+        "DestinationFileName": "PowerShell-Az.msi",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "Powershell7": {
+        "Description": "Optional: PowerShell 7",
+        "DownloadUrl": "",
+        "WebsiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "PowerShell/PowerShell",
+        "GitHubFileNamePattern": "*win-x64.msi",
+        "DestinationFileName": "Powershell.msi",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "VSCode": {
+        "Description": "Optional: Visual Studio Code",
+        "DownloadUrl": "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64",
+        "WebsiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "VSCodesetup.exe",
+        "DestinationFolders": [
+            "VSCode"
+        ]
+    },
+    "DoDInstallRoot": {
+        "Description": "Optional: DoD InstallRoot Application",
+        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/InstallRoot_5.6x64.msi",
+        "WebSiteUrl": "https://public.cyber.mil/pki-pke/tools-configuration-files",
+        "SearchString": "InstallRoot*x64.msi",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "InstallRoot.msi",
+        "DestinationFolders": [
+            "InstallRoot"
+        ]
+    },
+    "DoDSTIGGPOPackage": {
+        "Description": "Optional: DoD STIG GPO Package - Keep it updated! Used for applying STIGs via LGPO.",
+        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_July_2025.zip",
+        "WebSiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "STIGs.zip",
+        "DestinationFolders": [
+            "STIGs"
+        ]
+    },
+    "VirtualDesktopOptimizationTool": {
+        "Description": "Optional: Virtual Desktop Optimization Tool (VDOT) used by the image build solution when selected.",
+        "DownloadUrl": "https://github.com/The-Virtual-Desktop-Team/Virtual-Desktop-Optimization-Tool/archive/refs/heads/main.zip",
+        "WebsiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "",
+        "GitHubFileNamePattern": "",
+        "DestinationFileName": "VDOT.zip",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "GitForWindows": {
+        "Description":"Optional: Git for Windows Installer",
+        "DownloadUrl": "",
+        "WebsiteUrl": "",
+        "SearchString": "",
+        "APIUrl": "",
+        "GitHubRepo": "git-for-windows/git",
+        "GitHubFileNamePattern": "*64-bit.exe",
+        "DestinationFileName": "Git-64-bit.exe",
+        "DestinationFolders": [
+            "Git"
+        ]
+    }
+}
