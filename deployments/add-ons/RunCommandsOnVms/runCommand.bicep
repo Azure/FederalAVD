@@ -28,16 +28,6 @@ var protectedParametersForScriptContent = empty(protectedParameter)
         value: protectedParameter
       }
     ])
-// must build a single element array for parameters when using base64 script content
-var parametersForScriptContent = [
-  {
-    name: 'Parameters'
-    value: map(parameters, param => {
-      name: param.name
-      value: param.value
-    })
-  }
-]
 
 resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' existing = {
   name: vmName
@@ -64,10 +54,8 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
     outputBlobUri: empty(logsContainerUri) || empty(logsUserAssignedIdentityClientId)
       ? null
       : '${logsContainerUri}/${vm}-${runCommandName}-output-${timeStamp}.log'
-    parameters: empty(base64ScriptContent) ? (empty(parameters) ? null : parameters) : parametersForScriptContent
-    protectedParameters: empty(base64ScriptContent)
-      ? (empty(protectedParameter) ? null : [protectedParameter])
-      : protectedParametersForScriptContent
+    parameters: !empty(base64ScriptContent) || empty(parameters) ?  null : parameters
+    protectedParameters: !empty(base64ScriptContent) || empty(protectedParameter) ? null : [protectedParameter]
     source: {
       scriptUri: empty(scriptUri) ? null : scriptUri
       script: empty(base64ScriptContent) ? null : loadTextContent('Execute-Base64Script.ps1')

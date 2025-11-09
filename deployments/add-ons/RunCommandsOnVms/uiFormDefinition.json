@@ -176,7 +176,7 @@
 								{
 									"name": "parametersHeading",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
+									"visible": "[not(equals(steps('scripts').single.source, 'paste'))]",
 									"options": {
 										"text": "<b>Script Parameters</b>"
 									}
@@ -184,6 +184,7 @@
 								{
 									"name": "parametersText",
 									"type": "Microsoft.Common.TextBlock",
+									"visible": "[not(equals(steps('scripts').single.source, 'paste'))]",
 									"options": {
 										"text": "You can define up to 5 script parameters if desired. These parameters show up in plain text in your deployment history."
 									}
@@ -191,6 +192,7 @@
 								{
 									"name": "defineParameters",
 									"type": "Microsoft.Common.CheckBox",
+									"visible": "[not(equals(steps('scripts').single.source, 'paste'))]",
 									"label": "Define Parameters"
 								},
 								{
@@ -239,7 +241,7 @@
 								{
 									"name": "protectedParametersHeading",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
+									"visible": "[not(equals(steps('scripts').single.source, 'paste'))]",
 									"options": {
 										"text": "<b>Script Protected Parameter</b>"
 									}
@@ -247,6 +249,7 @@
 								{
 									"name": "protectedParametersText",
 									"type": "Microsoft.Common.TextBlock",
+									"visible": "[not(equals(steps('scripts').single.source, 'paste'))]",
 									"options": {
 										"text": "You can also define a protected parameter. This parameter name and value will not show up in your deployment history."
 									}
@@ -254,13 +257,14 @@
 								{
 									"name": "defineProtectedParameter",
 									"type": "Microsoft.Common.CheckBox",
+									"visible": "[not(equals(steps('scripts').single.source, 'paste'))]",
 									"label": "Define Protected Parameter"
 								},
 								{
 									"name": "protectedParameter",
 									"type": "Microsoft.Common.EditableGrid",
-									"ariaLabel": "Script Parameters",
-									"label": "Script Parameters",
+									"ariaLabel": "Protected Parameter",
+									"label": "Protected Parameter",
 									"visible": "[steps('scripts').single.defineProtectedParameter]",
 									"constraints": {
 										"width": "Full",
