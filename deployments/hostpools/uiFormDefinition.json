@@ -1616,7 +1616,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Encryption At Host",
 									"toolTip": "Check to enable Encryption At Host",
-									"defaultValue": "[if(not(equals(steps('hosts').encryptionAtHostFeatureApi.properties.state, 'Registered')), false, if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), true, bool(steps('controlPlane').hostPoolApi.tags.vmEncryptionAtHost)))]",
+									"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), bool(steps('controlPlane').hostPoolApi.tags.vmEncryptionAtHost), true)]",
 									"visible": "[not(equals(steps('hosts').security.securityType, 'ConfidentialVM'))]"
 								},
 								{
