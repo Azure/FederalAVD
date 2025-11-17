@@ -3,6 +3,7 @@ targetScope = 'subscription'
 param appGroupSecurityGroups array
 param avdPrivateDnsZoneResourceId string
 param avdPrivateLinkPrivateRoutes string
+param deploymentSuffix string
 param deploymentUserAssignedIdentityClientId string
 param deploymentVirtualMachineName string
 param deployScalingPlan bool
@@ -22,9 +23,9 @@ param hostPoolRDPProperties string
 param hostPoolType string
 param hostPoolValidationEnvironment bool
 param hostPoolVmTemplate object
-param locationControlPlane string
-param locationGlobalFeed string
-param locationVirtualMachines string
+param controlPlaneLocation string
+param globalFeedLocation string
+param virtualMachinesLocation string
 param logAnalyticsWorkspaceResourceId string
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
@@ -36,7 +37,7 @@ param scalingPlanName string
 param scalingPlanSchedules array
 param startVmOnConnect bool
 param tags object
-param deploymentSuffix string
+param virtualMachinesSubscriptionId string
 param virtualMachinesTimeZone string
 param workspaceFeedPrivateEndpointSubnetResourceId string
 param workspaceFriendlyName string
@@ -122,7 +123,7 @@ module hostPool 'modules/hostPool.bicep' = {
     hostPoolPublicNetworkAccess: hostPoolPublicNetworkAccess
     hostPoolType: hostPoolType
     hostPoolValidationEnvironment: hostPoolValidationEnvironment
-    location: locationControlPlane
+    location: controlPlaneLocation
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     hostPoolMaxSessionLimit: hostPoolMaxSessionLimit
     enableMonitoring: enableMonitoring
@@ -144,17 +145,18 @@ module applicationGroup 'modules/applicationGroup.bicep' = {
   name: 'ApplicationGroup-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
+    deploymentSuffix: deploymentSuffix
     deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     desktopApplicationGroupName: desktopApplicationGroupName
     desktopFriendlyName: desktopFriendlyName
     hostPoolResourceId: hostPool.outputs.resourceId
-    location: locationControlPlane
-    locationVirtualMachines: locationVirtualMachines
+    location: controlPlaneLocation
+    virtualMachinesLocation: virtualMachinesLocation
     deploymentVirtualMachineName: deploymentVirtualMachineName
     resourceGroupDeployment: resourceGroupDeployment
     appGroupSecurityGroups: appGroupSecurityGroups
     tags: tags
-    deploymentSuffix: deploymentSuffix
+    virtualMachinesSubscriptionId: virtualMachinesSubscriptionId
   }
 }
 
@@ -182,7 +184,7 @@ module feedWorkspace 'modules/workspace.bicep' = {
       : {}
     friendlyName: workspaceFriendlyName
     groupIds: ['feed']
-    location: locationControlPlane
+    location: controlPlaneLocation
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     privateDnsZoneResourceId: avdPrivateDnsZoneResourceId
     privateEndpoint: avdPrivateLinkPrivateRoutes != 'None' || avdPrivateLinkPrivateRoutes != 'HostPool' ? true : false
@@ -207,7 +209,7 @@ module scalingPlan 'modules/scalingPlan.bicep' = if (deployScalingPlan && contai
     exclusionTag: scalingPlanExclusionTag
     hostPoolResourceId: hostPool.outputs.resourceId
     hostPoolType: split(hostPoolType, ' ')[0]
-    location: locationVirtualMachines
+    location: virtualMachinesLocation
     name: scalingPlanName
     schedules: scalingPlanSchedules
     tags: tags
@@ -224,7 +226,7 @@ module globalWorkspace 'modules/workspace.bicep' = if (empty(existingGlobalWorks
     enableMonitoring: enableMonitoring
     friendlyName: ''
     groupIds: ['global']
-    location: locationGlobalFeed
+    location: globalFeedLocation
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     privateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
     privateEndpoint: true

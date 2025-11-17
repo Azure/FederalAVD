@@ -123,7 +123,7 @@ var nonEmptyBackupPrivateDNSZoneResourceIds = filter(backupPrivateDNSZoneResourc
 // Call on the hotspool
 resource hostPoolGet 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = if(deploymentType != 'Complete') {
   name: last(split(hostPoolResourceId, '/'))
-  scope: resourceGroup(split(hostPoolResourceId, '/')[4])
+  scope: resourceGroup(split(hostPoolResourceId, '/')[2], split(hostPoolResourceId, '/')[4])
 }
 
 // Required for EntraID login
@@ -141,7 +141,7 @@ module roleAssignment_VirtualMachineUserLogin '../../../sharedModules/resources/
 
 module hostPoolUpdate 'modules/hostPoolUpdate.bicep' = if(deploymentType != 'Complete') {
   name: 'HostPoolRegistrationTokenUpdate-${deploymentSuffix}'
-  scope: resourceGroup(split(hostPoolResourceId, '/')[4])
+  scope: resourceGroup(split(hostPoolResourceId, '/')[2], split(hostPoolResourceId, '/')[4])
   params: {
     hostPoolType: deploymentType != 'Complete' ? hostPoolGet!.properties.hostPoolType : ''
     loadBalancerType: deploymentType != 'Complete' ? hostPoolGet!.properties.loadBalancerType : ''

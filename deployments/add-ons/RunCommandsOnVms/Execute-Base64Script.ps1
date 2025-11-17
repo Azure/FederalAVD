@@ -1,7 +1,7 @@
 param(
     [securestring]
     [Parameter(Mandatory = $true)]
-    [string] $ScriptB64,
+    [string] $ScriptB64
 )
 
 $ErrorActionPreference = 'Stop'

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.38.33.27573",
-      "templateHash": "574833173898096494"
+      "templateHash": "3051626703645004045"
     }
   },
   "parameters": {
@@ -436,7 +436,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.38.33.27573",
-              "templateHash": "3359438536715127749"
+              "templateHash": "4753061174854474979"
             }
           },
           "parameters": {
@@ -481,7 +481,7 @@
             }
           },
           "variables": {
-            "$fxv#0": "param(\r\n    [securestring]\r\n    [Parameter(Mandatory = $true)]\r\n    [string] $ScriptB64,\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n# Decode the base64-encoded script\r\n$bytes = [Convert]::FromBase64String($ScriptB64)\r\n$script = [Text.Encoding]::UTF8.GetString($bytes)\r\n\r\n# Normalize line endings (optional but safe)\r\n$script = $script -replace \"`r`n\", \"`n\" -replace \"`r\", \"`n\"\r\n\r\n# Execute\r\n$sb = [ScriptBlock]::Create($script)\r\ntry {\r\n    Write-Host \"----- Begin user script output -----\"\r\n    & $sb\r\n    $exitCode = if ($LASTEXITCODE) { $LASTEXITCODE } else { 0 }\r\n    Write-Host \"----- End user script output -----\"\r\n    exit $exitCode\r\n}\r\ncatch {\r\n    Write-Error (\"User script threw: \" + $_.Exception.Message)\r\n    Write-Error $_.Exception | Format-List * -Force\r\n    exit 1\r\n}",
+            "$fxv#0": "param(\r\n    [securestring]\r\n    [Parameter(Mandatory = $true)]\r\n    [string] $ScriptB64\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n# Decode the base64-encoded script\r\n$bytes = [Convert]::FromBase64String($ScriptB64)\r\n$script = [Text.Encoding]::UTF8.GetString($bytes)\r\n\r\n# Normalize line endings (optional but safe)\r\n$script = $script -replace \"`r`n\", \"`n\" -replace \"`r\", \"`n\"\r\n\r\n# Execute\r\n$sb = [ScriptBlock]::Create($script)\r\ntry {\r\n    Write-Host \"----- Begin user script output -----\"\r\n    & $sb\r\n    $exitCode = if ($LASTEXITCODE) { $LASTEXITCODE } else { 0 }\r\n    Write-Host \"----- End user script output -----\"\r\n    exit $exitCode\r\n}\r\ncatch {\r\n    Write-Error (\"User script threw: \" + $_.Exception.Message)\r\n    Write-Error $_.Exception | Format-List * -Force\r\n    exit 1\r\n}",
             "scriptContentAsParameter": "[if(empty(parameters('base64ScriptContent')), createObject(), createObject('name', 'ScriptB64', 'value', parameters('base64ScriptContent')))]",
             "protectedParametersForScriptContent": "[if(empty(parameters('protectedParameter')), createArray(variables('scriptContentAsParameter')), union(createArray(variables('scriptContentAsParameter')), createArray(createObject('name', 'SecureParameter', 'value', parameters('protectedParameter')))))]"
           },

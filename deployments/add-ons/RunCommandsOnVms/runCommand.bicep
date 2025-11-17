@@ -12,23 +12,6 @@ param scriptsUserAssignedIdentityClientId string
 param timeoutInSeconds int
 param timeStamp string
 
-// Prepare protected parameters, combine protectedParameters and base64 encoded script for inline script
-var scriptContentAsParameter = empty(base64ScriptContent)
-  ? {}
-  : {
-      name: 'ScriptB64'
-      value: base64ScriptContent
-    }
-
-var protectedParametersForScriptContent = empty(protectedParameter)
-  ? [scriptContentAsParameter]
-  : union([scriptContentAsParameter], [
-      {
-        name: 'SecureParameter'
-        value: protectedParameter
-      }
-    ])
-
 resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' existing = {
   name: vmName
 }
@@ -54,8 +37,15 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
     outputBlobUri: empty(logsContainerUri) || empty(logsUserAssignedIdentityClientId)
       ? null
       : '${logsContainerUri}/${vm}-${runCommandName}-output-${timeStamp}.log'
-    parameters: !empty(base64ScriptContent) || empty(parameters) ?  null : parameters
-    protectedParameters: !empty(base64ScriptContent) || empty(protectedParameter) ? null : [protectedParameter]
+    parameters: empty(parameters) ? null : parameters
+    protectedParameters: empty(base64ScriptContent)
+      ? (empty(protectedParameter) ? null : [protectedParameter])
+      : [
+          {
+            name: 'ScriptB64'
+            value: base64ScriptContent
+          }
+        ]
     source: {
       scriptUri: empty(scriptUri) ? null : scriptUri
       script: empty(base64ScriptContent) ? null : loadTextContent('Execute-Base64Script.ps1')

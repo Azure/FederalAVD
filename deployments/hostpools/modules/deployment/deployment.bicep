@@ -1,6 +1,7 @@
 targetScope = 'subscription'
 
 param confidentialVMOSDiskEncryption bool
+param controlPlaneSubscriptionId string
 param diskSku string
 @secure()
 param domainJoinUserPassword string
@@ -15,7 +16,7 @@ param hostPoolName string
 param identitySolution string
 param keyManagementDisks string
 param keyManagementStorageAccounts string
-param locationVirtualMachines string
+param managementSubscriptionId string
 param ouPath string
 param resourceGroupControlPlane string
 param resourceGroupDeployment string
@@ -25,6 +26,7 @@ param resourceGroupStorage string
 param tags object
 param deploymentSuffix string
 param userAssignedIdentityNameConv string
+param virtualMachineLocation string
 param virtualMachineName string
 param virtualMachineNICName string
 param virtualMachineDiskName string
@@ -51,13 +53,13 @@ var roleAssignmentsControlPlane = !empty(desktopFriendlyName) ? [
     roleDefinitionId: roleDefinitions.DesktopVirtualizationApplicationGroupContributor // (Purpose: updates the friendly name for the desktop)
     depName: 'ControlPlane-DVAppGroupCont'
     resourceGroup: resourceGroupControlPlane
-    subscription: subscription().subscriptionId
+    subscription: controlPlaneSubscriptionId
   } 
   {
     roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the control plane role assignments for the deployment identity. This role Assignment must remain last in the list.)
     depName: 'ControlPlane-RBACAdmin'
     resourceGroup: resourceGroupControlPlane
-    subscription: subscription().subscriptionId
+    subscription: controlPlaneSubscriptionId
   }
 ] : []
 
@@ -91,7 +93,7 @@ var roleAssignmentsManagementConfidentialVMDiskEncryption = confidentialVMOSDisk
         roleDefinitionId: roleDefinitions.KeyVaultCryptoOfficer // (Purpose: Retrieve the customer managed keys from the key vault for idempotent deployment)
         depName: 'Management-KVCryptoOff'
         resourceGroup: resourceGroupManagement
-        subscription: subscription().subscriptionId
+        subscription: managementSubscriptionId
       }
     ]
   : []
@@ -102,7 +104,7 @@ var roleAssignmentsManagementRBACAdmin = contains(keyManagementDisks, 'CustomMan
         roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the management resource group role assignments for the deployment identity. This role assignment must remain last in the list if assignments are made.)
         depName: 'Management-RBACAdmin'
         resourceGroup: resourceGroupManagement
-        subscription: subscription().subscriptionId
+        subscription: managementSubscriptionId
       }
     ]
   : []
@@ -147,7 +149,7 @@ module deploymentUserAssignedIdentity '../../../sharedModules/resources/managed-
   name: 'UserAssignedIdentity-Deployment-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
-    location: locationVirtualMachines
+    location: virtualMachineLocation
     name: deploymentUserAssignedIdentityName
     tags: union(
       {
@@ -175,14 +177,15 @@ module virtualMachine 'modules/virtualMachine.bicep' = {
   name: 'VirtualMachine-Deployment-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
-    identitySolution: identitySolution
+    deploymentSuffix: deploymentSuffix
     diskName: virtualMachineDiskName
     diskSku: diskSku
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
     encryptionAtHost: encryptionAtHost
-    location: locationVirtualMachines
+    identitySolution: identitySolution
+    location: virtualMachineLocation
     networkInterfaceName: virtualMachineNICName
     ouPath: ouPath
     subnetResourceId: virtualMachineSubnetResourceId
@@ -198,7 +201,7 @@ module virtualMachine 'modules/virtualMachine.bicep' = {
       },
       tags[?'Microsoft.Compute/virtualMachines'] ?? {}
     )
-    deploymentSuffix: deploymentSuffix
+
     userAssignedIdentitiesResourceIds: {
       '${deploymentUserAssignedIdentity.outputs.resourceId}': {}
     }
