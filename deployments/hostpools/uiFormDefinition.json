@@ -14,7 +14,7 @@
 							"type": "Microsoft.Common.TextBlock",
 							"visible": true,
 							"options": {
-								"text": "Please select your deployment type below.<ul><li><b>Complete</b>: This solution will deploy a fully functioning Azure Virtual Desktop hostpool along with associated resources depending on the options chosen. All resources and resource groups are named in accordance with Cloud Adoption Framework (CAF) naming standards.</li><li><b>Hostpool resources only</b>: The solution will deploy the resources necessary to support a hostpool including the hostpool object, desktop application group, virtual machines, and storage for FSLogix (if selected). You'll have the option to select existing management, monitoring, and control plane resources.</li><li><b>Add session hosts to an existing hostpool</b>: The solution will only add session hosts to an existing hostpool allowing you to select existing resources when required to customize your session hosts.</li></ul>"
+								"text": "This solution is designed to deploy an Azure Virtual Desktop hostpool according to Cloud Adoption Framework (CAF) best practices. Please complete the sections of this form to get started."
 							}
 						},
 						{
@@ -22,7 +22,7 @@
 							"type": "Microsoft.Common.OptionsGroup",
 							"label": "Deployment Mode",
 							"defaultValue": "Complete",
-							"toolTip": "Select the Deployment Type",
+							"toolTip": "Select the deployment type from:<br><ul><li><b>Complete</b>: This solution will deploy a fully functioning Azure Virtual Desktop hostpool along with associated resources depending on the options chosen. All resources and resource groups are named in accordance with Cloud Adoption Framework (CAF) naming standards.</li><br><li><b>Hostpool resources only</b>: The solution will deploy the resources necessary to support a hostpool including the hostpool object, desktop application group, virtual machines, and storage for FSLogix (if selected). You'll have the option to select existing management, monitoring, and control plane resources.</li><br><li><b>Add session hosts to an existing hostpool</b>: The solution will only add session hosts to an existing hostpool allowing you to select existing resources when required to customize your session hosts.</li></ul>",
 							"constraints": {
 								"allowedValues": [
 									{
@@ -3200,7 +3200,7 @@
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
 										"style": "Info",
-										"text": "The 'Azure/Windows Virtual Desktop' Microsoft Application (AppId: 9cdead84-a844-4324-93f2-b2e6bb768d07) must be assigned the required RBAC roles to the subscription to ensure the scaling plan and/or Power On Connect options work correctly.",
+										"text": "The 'Azure/Windows Virtual Desktop' Microsoft Application (AppId: 9cdead84-a844-4324-93f2-b2e6bb768d07) must be assigned the required RBAC roles to the subscription to ensure the Scaling Plan and/or Start VM on Connect options work correctly.",
 										"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/autoscale-create-assign-scaling-plan?tabs=portal%2Cintune&pivots=power-management#assign-permissions-to-the-azure-virtual-desktop-service-principal"
 									}
 								},
@@ -3626,7 +3626,7 @@
 											"label": "Microsoft Learn | Private Link Deployment in a Hub and Spoke Network",
 											"uri": "https://learn.microsoft.com/en-us/azure/architecture/networking/guide/private-link-hub-spoke-network"
 										},
-										"text": "When deploying private endpoints, you must select the subnet to which they will be attached and the Private DNS Zones to enable DNS resolution. Since this deployment expects that an Azure Landing Zone has already been deployed, you may be utilizing multiple subscriptions for different components of your architecture. To support this, the following drop downs allow you to select the subscription(s) containing the subnets and the Private DNS zones required to support Zero Trust. Once you select the subscription(s), you'll be able to select the virtual network, subnet, and appropropriate Private DNS Zones from these subscriptions.<br><br>See the documentation in the source repo to determine the correct fully-qualified domain name for each zone based on the cloud."
+										"text": "When deploying private endpoints, you will be prompted to select the subnet and Private DNS Zones required for DNS resolution. The available virtual networks and subnets are dynamically filtered according to the subscriptions and regions specified for the resource types in earlier configuration screens. This approach supports architectures that span multiple subscriptions, such as those based on Azure Landing Zones. The drop-down menus will present only the virtual networks, subnets, and Private DNS Zones that match your prior selections, ensuring that you can choose the appropriate resources for your Zero Trust implementation."
 									}
 								},
 								{
@@ -3648,6 +3648,7 @@
 								{
 									"name": "managementVirtualNetwork",
 									"type": "Microsoft.Solutions.ResourceSelector",
+									"toolTip": "Select the appropriate virtual network from the subscription you selected on the Management configuration screen that is also in the same region as the session hosts.",
 									"label": "Virtual Network",
 									"resourceType": "Microsoft.Network/virtualNetworks",
 									"scope": {
@@ -3699,6 +3700,7 @@
 									"name": "hostpoolVirtualNetwork",
 									"type": "Microsoft.Solutions.ResourceSelector",
 									"label": "Virtual Network",
+									"toolTip": "Select the appropriate virtual network from the subscription and region you selected on the Hosts configuration screen.",
 									"resourceType": "Microsoft.Network/virtualNetworks",
 									"scope": {
 										"location": "[steps('hosts').scope.location.name]",
