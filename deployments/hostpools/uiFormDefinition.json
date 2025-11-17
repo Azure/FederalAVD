@@ -3759,7 +3759,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Private DNS Zone Subscription",
 									"placeholder": "",
-									"defaultValue": "[steps('hosts').scope.subscription.displayName]",
+									"defaultValue": "[steps('controlPlane').scope.subscription.displayName]",
 									"toolTip": "Select the subscription that contains your Private DNS Zones.",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
@@ -4162,20 +4162,7 @@
 										"subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
 									},
 									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'))]"
-								},
-								{
-									"name": "globalFeedVirtualNetwork",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Virtual Network",
-									"multiLine": true,
-									"toolTip": "Select the virtual network where the AVD Private Link Global Workspace Private Endpoint will be created.",
-									"defaultValue": "[last(split(steps('zeroTrust').avdPrivateLink.feedWorkspaceVirtualNetwork, '/'))]",
-									"constraints": {
-										"allowedValues": "[map(steps('zeroTrust').avdPrivateLink.globalFeedVirtualNetworksApi.value, (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":\"', vnet.id, '\"}')))]",
-										"required": true
-									},
-									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'))]"
-								},
+								},								
 								{
 									"name": "globalFeedSubnetsApi",
 									"condition": "[not(empty(steps('zeroTrust').avdPrivateLink.globalFeedVirtualNetwork))]",
