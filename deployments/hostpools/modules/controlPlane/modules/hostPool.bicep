@@ -6,7 +6,6 @@ param hostPoolType string
 param location string
 param logAnalyticsWorkspaceResourceId string
 param privateEndpoint bool
-param privateEndpointLocation string
 param privateEndpointName string
 param privateEndpointNICName string
 param privateEndpointSubnetResourceId string
@@ -107,7 +106,7 @@ module hostPool_PrivateEndpoint '../../../../sharedModules/resources/network/pri
     groupIds: [
       'connection'
     ]
-    location: !empty(privateEndpointLocation) ? privateEndpointLocation : location
+    location: location
     name: privateEndpointName
     privateDnsZoneGroup: empty(hostPoolPrivateDnsZoneResourceId)
       ? null

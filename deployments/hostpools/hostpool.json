@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.38.33.27573",
-      "templateHash": "12985813759696733670"
+      "templateHash": "4189245642524596415"
     }
   },
   "parameters": {
@@ -5860,7 +5860,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.38.33.27573",
-              "templateHash": "17287687233514159664"
+              "templateHash": "10862173257776056973"
             }
           },
           "parameters": {
@@ -6174,7 +6174,6 @@
                     "value": "[parameters('enableMonitoring')]"
                   },
                   "privateEndpoint": "[if(not(equals(parameters('avdPrivateLinkPrivateRoutes'), 'None')), createObject('value', true()), createObject('value', false()))]",
-                  "privateEndpointLocation": "[if(and(not(equals(parameters('avdPrivateLinkPrivateRoutes'), 'None')), not(empty(parameters('hostPoolPrivateEndpointSubnetResourceId')))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('HostPoolPrivateEndpointVnet-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.location.value), createObject('value', ''))]",
                   "privateEndpointName": {
                     "value": "[variables('hostPoolPrivateEndpointName')]"
                   },
@@ -6204,7 +6203,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.38.33.27573",
-                      "templateHash": "9223883144584197594"
+                      "templateHash": "2551727079408048856"
                     }
                   },
                   "parameters": {
@@ -6231,9 +6230,6 @@
                     },
                     "privateEndpoint": {
                       "type": "bool"
-                    },
-                    "privateEndpointLocation": {
-                      "type": "string"
                     },
                     "privateEndpointName": {
                       "type": "string"
@@ -6347,7 +6343,9 @@
                               "connection"
                             ]
                           },
-                          "location": "[if(not(empty(parameters('privateEndpointLocation'))), createObject('value', parameters('privateEndpointLocation')), createObject('value', parameters('location')))]",
+                          "location": {
+                            "value": "[parameters('location')]"
+                          },
                           "name": {
                             "value": "[parameters('privateEndpointName')]"
                           },
@@ -6624,10 +6622,7 @@
                     }
                   }
                 }
-              },
-              "dependsOn": [
-                "[subscriptionResourceId('Microsoft.Resources/deployments', format('HostPoolPrivateEndpointVnet-{0}', parameters('deploymentSuffix')))]"
-              ]
+              }
             },
             {
               "type": "Microsoft.Resources/deployments",
@@ -6915,7 +6910,6 @@
                     "value": "[parameters('avdPrivateDnsZoneResourceId')]"
                   },
                   "privateEndpoint": "[if(or(not(equals(parameters('avdPrivateLinkPrivateRoutes'), 'None')), not(equals(parameters('avdPrivateLinkPrivateRoutes'), 'HostPool'))), createObject('value', true()), createObject('value', false()))]",
-                  "privateEndpointLocation": "[if(not(empty(parameters('workspaceFeedPrivateEndpointSubnetResourceId'))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('WorkspaceFeedPrivateEndpointVnet-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.location.value), createObject('value', ''))]",
                   "privateEndpointName": {
                     "value": "[variables('feedPrivateEndpointName')]"
                   },
@@ -6945,7 +6939,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.38.33.27573",
-                      "templateHash": "12441217846334127147"
+                      "templateHash": "2657071667613862278"
                     }
                   },
                   "parameters": {
@@ -6975,9 +6969,6 @@
                     },
                     "privateEndpoint": {
                       "type": "bool"
-                    },
-                    "privateEndpointLocation": {
-                      "type": "string"
                     },
                     "privateEndpointName": {
                       "type": "string"
@@ -7058,7 +7049,9 @@
                           "groupIds": {
                             "value": "[parameters('groupIds')]"
                           },
-                          "location": "[if(not(empty(parameters('privateEndpointLocation'))), createObject('value', parameters('privateEndpointLocation')), createObject('value', parameters('location')))]",
+                          "location": {
+                            "value": "[parameters('location')]"
+                          },
                           "name": {
                             "value": "[parameters('privateEndpointName')]"
                           },
@@ -7335,8 +7328,7 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupControlPlane')), 'Microsoft.Resources/deployments', format('ApplicationGroup-{0}', parameters('deploymentSuffix')))]",
-                "[subscriptionResourceId('Microsoft.Resources/deployments', format('WorkspaceFeedPrivateEndpointVnet-{0}', parameters('deploymentSuffix')))]"
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupControlPlane')), 'Microsoft.Resources/deployments', format('ApplicationGroup-{0}', parameters('deploymentSuffix')))]"
               ]
             },
             {
@@ -7644,7 +7636,6 @@
                   "privateEndpoint": {
                     "value": true
                   },
-                  "privateEndpointLocation": "[if(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('GlobalFeedPrivateEndpointVnet-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.location.value), createObject('value', ''))]",
                   "privateEndpointName": {
                     "value": "[variables('globalFeedPrivateEndpointName')]"
                   },
@@ -7674,7 +7665,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.38.33.27573",
-                      "templateHash": "12441217846334127147"
+                      "templateHash": "2657071667613862278"
                     }
                   },
                   "parameters": {
@@ -7704,9 +7695,6 @@
                     },
                     "privateEndpoint": {
                       "type": "bool"
-                    },
-                    "privateEndpointLocation": {
-                      "type": "string"
                     },
                     "privateEndpointName": {
                       "type": "string"
@@ -7787,7 +7775,9 @@
                           "groupIds": {
                             "value": "[parameters('groupIds')]"
                           },
-                          "location": "[if(not(empty(parameters('privateEndpointLocation'))), createObject('value', parameters('privateEndpointLocation')), createObject('value', parameters('location')))]",
+                          "location": {
+                            "value": "[parameters('location')]"
+                          },
                           "name": {
                             "value": "[parameters('privateEndpointName')]"
                           },
@@ -8064,8 +8054,7 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupControlPlane')), 'Microsoft.Resources/deployments', format('WorkspaceFeed-{0}', parameters('deploymentSuffix')))]",
-                "[subscriptionResourceId('Microsoft.Resources/deployments', format('GlobalFeedPrivateEndpointVnet-{0}', parameters('deploymentSuffix')))]"
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupControlPlane')), 'Microsoft.Resources/deployments', format('WorkspaceFeed-{0}', parameters('deploymentSuffix')))]"
               ]
             }
           ],
@@ -8264,7 +8253,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.38.33.27573",
-              "templateHash": "5147087169684807916"
+              "templateHash": "6890940221996802671"
             }
           },
           "parameters": {
@@ -9711,7 +9700,6 @@
                   "privateEndpoint": {
                     "value": "[parameters('privateEndpoint')]"
                   },
-                  "privateEndpointLocation": "[if(and(parameters('privateEndpoint'), not(empty(parameters('privateEndpointSubnetResourceId')))), createObject('value', reference(split(parameters('privateEndpointSubnetResourceId'), '/subnets/')[0], '2020-06-01', 'Full').location), createObject('value', ''))]",
                   "privateEndpointNameConv": {
                     "value": "[parameters('privateEndpointNameConv')]"
                   },
@@ -9777,7 +9765,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.38.33.27573",
-                      "templateHash": "4277431319566415796"
+                      "templateHash": "261598970536494553"
                     }
                   },
                   "parameters": {
@@ -9873,9 +9861,6 @@
                     },
                     "privateEndpoint": {
                       "type": "bool"
-                    },
-                    "privateEndpointLocation": {
-                      "type": "string"
                     },
                     "privateEndpointNameConv": {
                       "type": "string"
@@ -10421,7 +10406,9 @@
                               "file"
                             ]
                           },
-                          "location": "[if(not(empty(parameters('privateEndpointLocation'))), createObject('value', parameters('privateEndpointLocation')), createObject('value', parameters('location')))]",
+                          "location": {
+                            "value": "[parameters('location')]"
+                          },
                           "name": {
                             "value": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'file'), 'RESOURCE', format('{0}', format('{0}{1}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[range(0, parameters('storageCount'))[copyIndex()]], parameters('storageIndex')), 2, '0'))))), 'VNETID', variables('privateEndpointVnetId'))]"
                           },

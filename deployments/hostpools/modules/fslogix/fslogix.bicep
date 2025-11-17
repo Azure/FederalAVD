@@ -157,9 +157,6 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     ouPath: ouPath
     privateEndpoint: privateEndpoint
-    privateEndpointLocation: privateEndpoint && !empty(privateEndpointSubnetResourceId)
-      ? reference(split(privateEndpointSubnetResourceId, '/subnets/')[0], '2020-06-01', 'Full').location
-      : ''
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId

@@ -128,9 +128,6 @@ module hostPool 'modules/hostPool.bicep' = {
     hostPoolMaxSessionLimit: hostPoolMaxSessionLimit
     enableMonitoring: enableMonitoring
     privateEndpoint: avdPrivateLinkPrivateRoutes != 'None' ? true : false
-    privateEndpointLocation: avdPrivateLinkPrivateRoutes != 'None' && !empty(hostPoolPrivateEndpointSubnetResourceId)
-      ? hostPoolPrivateEndpointVnet!.outputs.location
-      : ''
     privateEndpointName: hostPoolPrivateEndpointName
     privateEndpointNICName: hostPoolPrivateEndpointNICName
     privateEndpointSubnetResourceId: hostPoolPrivateEndpointSubnetResourceId
@@ -188,9 +185,6 @@ module feedWorkspace 'modules/workspace.bicep' = {
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     privateDnsZoneResourceId: avdPrivateDnsZoneResourceId
     privateEndpoint: avdPrivateLinkPrivateRoutes != 'None' || avdPrivateLinkPrivateRoutes != 'HostPool' ? true : false
-    privateEndpointLocation: !empty(workspaceFeedPrivateEndpointSubnetResourceId)
-      ? workspaceFeedPrivateEndpointVnet!.outputs.location
-      : ''
     privateEndpointName: feedPrivateEndpointName
     privateEndpointNICName: feedPrivateEndpointNICName
     privateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
@@ -230,9 +224,6 @@ module globalWorkspace 'modules/workspace.bicep' = if (empty(existingGlobalWorks
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     privateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
     privateEndpoint: true
-    privateEndpointLocation: !empty(globalFeedPrivateEndpointSubnetResourceId)
-      ? globalFeedPrivateEndpointVnet!.outputs.location
-      : ''
     privateEndpointName: globalFeedPrivateEndpointName
     privateEndpointNICName: globalFeedPrivateEndpointNICName
     privateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId

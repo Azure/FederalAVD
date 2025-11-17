@@ -215,7 +215,7 @@
 							"name": "virtualMachines",
 							"type": "Microsoft.Common.Section",
 							"label": "Virtual Machines",
-							"elements": [								
+							"elements": [
 								{
 									"name": "domainName",
 									"type": "Microsoft.Common.TextBox",
@@ -1315,7 +1315,7 @@
 									"lastname": "value[*].name|[0]"
 								}
 							}
-						},						
+						},
 						{
 							"name": "naming",
 							"type": "Microsoft.Common.Section",
@@ -2093,7 +2093,7 @@
 							"elements": [
 								{
 									"name": "intune",
-									"type": "Microsoft.Common.OptionsGroup",									
+									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Intune Enrollment",
 									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('controlPlane').hostPoolApi.tags.intuneEnrollment)), 'No', if(steps('controlPlane').hostPoolApi.tags.intuneEnrollment, 'Yes', 'No'))]",
 									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting Yes.",
@@ -3224,7 +3224,7 @@
 										"method": "GET",
 										"path": "/v1.0/servicePrincipals?$filter=appId eq '50e95039-b200-4007-bc97-8d5790743a63'"
 									}
-								},								
+								},
 								{
 									"name": "avdServicePrincipalPickerBlade",
 									"type": "Microsoft.Solutions.BladeInvokeControl",
@@ -3638,26 +3638,6 @@
 									}
 								},
 								{
-									"name": "privateEndpointVnetsSubscription",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Subnets Subscription",
-									"defaultValue": "[steps('hosts').scope.subscription.displayName]",
-									"constraints": {
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-										"required": true
-									},
-									"visible": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]"
-								},
-								{
-									"name": "privateEndpointVirtualNetworksApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, not(empty(steps('zeroTrust').privateEndpoints.privateEndpointVnetsSubscription)))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('zeroTrust').privateEndpoints.privateEndpointVnetsSubscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
-									}
-								},
-								{
 									"name": "managementHeader",
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(or(steps('management').keyVaults.deploySecretsKeyVault, steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
@@ -3667,13 +3647,12 @@
 								},
 								{
 									"name": "managementVirtualNetwork",
-									"type": "Microsoft.Common.DropDown",
+									"type": "Microsoft.Solutions.ResourceSelector",
 									"label": "Virtual Network",
-									"multiLine": true,
-									"toolTip": "Select the virtual network containing the subnets to which the shared management resources private endpoints will be attached.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateEndpointVirtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":\"', vnet.id, '\"}')))]",
-										"required": true
+									"resourceType": "Microsoft.Network/virtualNetworks",
+									"scope": {
+										"location": "[steps('management').scope.location.name]",
+										"subscriptionId": "[steps('management').scope.subscription.subscriptionId]"
 									},
 									"visible": "[and(or(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault)), steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
@@ -3683,7 +3662,7 @@
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('zeroTrust').privateEndpoints.managementVirtualNetwork, '/subnets?api-version=2022-05-01')]"
+										"path": "[concat(steps('zeroTrust').privateEndpoints.managementVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
 									}
 								},
 								{
@@ -3718,13 +3697,12 @@
 								},
 								{
 									"name": "hostpoolVirtualNetwork",
-									"type": "Microsoft.Common.DropDown",
+									"type": "Microsoft.Solutions.ResourceSelector",
 									"label": "Virtual Network",
-									"multiLine": true,
-									"toolTip": "Select the virtual network containing the subnets to which the host pool resources private endpoints will be attached.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateEndpointVirtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":\"', vnet.id, '\"}')))]",
-										"required": true
+									"resourceType": "Microsoft.Network/virtualNetworks",
+									"scope": {
+										"location": "[steps('hosts').scope.location.name]",
+										"subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]"
 									},
 									"visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
@@ -3734,7 +3712,7 @@
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('zeroTrust').privateEndpoints.hostpoolVirtualNetwork, '/subnets?api-version=2022-05-01')]"
+										"path": "[concat(steps('zeroTrust').privateEndpoints.hostpoolVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
 									}
 								},
 								{
@@ -4020,41 +3998,17 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]",
 									"options": {
-										"text": "Select the subscription, virtual network, and subnet for the remote session connection private endpoint. The virtual network is limited to the location of the virtual machines selected on the 'Basics' screen."
-									}
-								},
-								{
-									"name": "hostpoolVnetsSubscription",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Private Endpoint Subnets Subscription",
-									"placeholder": "",
-									"defaultValue": "[if(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.privateEndpointVnetsSubscription.displayName, steps('hosts').scope.subscription.displayName)]",
-									"toolTip": "",
-									"constraints": {
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-										"required": true
-									},
-									"visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]"
-								},
-								{
-									"name": "hostpoolVirtualNetworksApi",
-									"condition": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(empty(steps('zeroTrust').avdPrivateLink.hostpoolVnetsSubscription)))]",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('zeroTrust').avdPrivateLink.hostpoolVnetsSubscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+										"text": "Select the virtual network, and subnet for the remote session connection private endpoint. The virtual network is limited to the location of the virtual machines selected on the 'Basics' screen."
 									}
 								},
 								{
 									"name": "hostpoolVirtualNetwork",
-									"type": "Microsoft.Common.DropDown",
+									"type": "Microsoft.Solutions.ResourceSelector",
 									"label": "Virtual Network",
-									"multiLine": true,
-									"toolTip": "Select the virtual network where the AVD Private Link Hostpool Connection private endpoints will be created. Note that only virtual networks located in the same region as the virtual machines are shown.",
-									"defaultValue": "[last(split(steps('zeroTrust').privateEndpoints.hostpoolVirtualNetwork, '/'))]",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').avdPrivateLink.hostpoolVirtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":\"', vnet.id, '\"}')))]",
-										"required": true
+									"resourceType": "Microsoft.Network/virtualNetworks",
+									"scope": {
+										"location": "[steps('controlPlane').scope.location.name]",
+										"subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
 									},
 									"visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]"
 								},
@@ -4064,7 +4018,7 @@
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('zeroTrust').avdPrivateLink.hostpoolVirtualNetwork, '/subnets?api-version=2022-05-01')]"
+										"path": "[concat(steps('zeroTrust').avdPrivateLink.hostpoolVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
 									}
 								},
 								{
@@ -4126,37 +4080,13 @@
 									}
 								},
 								{
-									"name": "feedWorkspaceVnetsSubscription",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Private Endpoint Subnets Subscription",
-									"placeholder": "",
-									"defaultValue": "[if(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.privateEndpointVnetsSubscription.displayName, steps('hosts').scope.subscription.displayName)]",
-									"toolTip": "",
-									"constraints": {
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-										"required": true
-									},
-									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool')))]"
-								},
-								{
-									"name": "feedWorkspaceVirtualNetworksApi",
-									"condition": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(empty(steps('zeroTrust').avdPrivateLink.feedWorkspaceVnetsSubscription)))]",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('zeroTrust').avdPrivateLink.feedWorkspaceVnetsSubscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
-									}
-								},
-								{
 									"name": "feedWorkspaceVirtualNetwork",
-									"type": "Microsoft.Common.DropDown",
+									"type": "Microsoft.Solutions.ResourceSelector",
 									"label": "Virtual Network",
-									"multiLine": true,
-									"toolTip": "Select the virtual network where the AVD Private Link Workspace feed download private endpoints will be created. Note that only virtual networks located in the same region as the control plane are shown.",
-									"defaultValue": "[last(split(steps('zeroTrust').privateEndpoints.managementVirtualNetwork, '/'))]",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').avdPrivateLink.feedWorkspaceVirtualNetworksApi.value, (vnet) => equals(vnet.location, steps('controlPlane').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":\"', vnet.id, '\"}')))]",
-										"required": true
+									"resourceType": "Microsoft.Network/virtualNetworks",
+									"scope": {
+										"location": "[steps('controlPlane').scope.location.name]",
+										"subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
 									},
 									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool')))]"
 								},
@@ -4166,7 +4096,7 @@
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('zeroTrust').avdPrivateLink.feedWorkspaceVirtualNetwork, '/subnets?api-version=2022-05-01')]"
+										"path": "[concat(steps('zeroTrust').avdPrivateLink.feedWorkspaceVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
 									}
 								},
 								{
@@ -4223,25 +4153,15 @@
 									}
 								},
 								{
-									"name": "globalFeedVnetSubscription",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Global Feed Virtual Network Subscription",
-									"defaultValue": "[steps('zeroTrust').avdPrivateLink.feedWorkspaceVnetsSubscription.displayName]",
-									"toolTip": "Select the subscription that contains the virtual network to which the global feed private endpoint will be connected.",
-									"constraints": {
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-										"required": true
+									"name": "globalFeedVirtualNetwork",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Virtual Network",
+									"resourceType": "Microsoft.Network/virtualNetworks",
+									"scope": {
+										"location": "[steps('controlPlane').scope.location.name]",
+										"subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
 									},
 									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'))]"
-								},
-								{
-									"name": "globalFeedVirtualNetworksApi",
-									"condition": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(empty(steps('zeroTrust').avdPrivateLink.globalFeedVnetSubscription)))]",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('zeroTrust').avdPrivateLink.globalFeedVnetSubscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
-									}
 								},
 								{
 									"name": "globalFeedVirtualNetwork",
@@ -4262,7 +4182,7 @@
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('zeroTrust').avdPrivateLink.globalFeedVirtualNetwork, '/subnets?api-version=2022-05-01')]"
+										"path": "[concat(steps('zeroTrust').avdPrivateLink.globalFeedVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
 									}
 								},
 								{
@@ -4425,10 +4345,10 @@
 				"scalingPlanRampDownSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayRampDownSchedule), parse('{}'))]",
 				"scalingPlanOffPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayOffPeakSchedule), parse('{}'))]",
 				"scalingPlanForceLogoff": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff, false)]",
-				"scalingPlanMinsBeforeLogoff": "[if(and(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff), steps('controlPlane').scalingPlan.minsToLogoff, 0)]",				
+				"scalingPlanMinsBeforeLogoff": "[if(and(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff), steps('controlPlane').scalingPlan.minsToLogoff, 0)]",
 				"existingHostsResourceGroupName": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('hosts').scope.resourceGroup.name, '')]",
 				"virtualMachinesTimeZone": "[steps('hosts').scope.timeZone]",
-				"virtualMachineNamePrefix": "[steps('hosts').naming.virtualMachineNamePrefix]",				
+				"virtualMachineNamePrefix": "[steps('hosts').naming.virtualMachineNamePrefix]",
 				"sessionHostIndex": "[steps('hosts').naming.index]",
 				"sessionHostCount": "[steps('hosts').specs.count]",
 				"virtualMachineSubnetResourceId": "[steps('hosts').network.hostsSubnet]",

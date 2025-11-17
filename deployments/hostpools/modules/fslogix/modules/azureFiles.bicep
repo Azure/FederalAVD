@@ -31,7 +31,6 @@ param location string
 param logAnalyticsWorkspaceId string
 param ouPath string
 param privateEndpoint bool
-param privateEndpointLocation string
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
@@ -252,7 +251,7 @@ module privateEndpoints '../../../../sharedModules/resources/network/private-end
       groupIds: [
         'file'
       ]
-      location: !empty(privateEndpointLocation) ? privateEndpointLocation : location
+      location: location
       name: replace(
         replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'file'), 'RESOURCE', '${storageAccounts[i].name}'),
         'VNETID',
