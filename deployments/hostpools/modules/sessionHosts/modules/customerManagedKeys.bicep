@@ -16,7 +16,7 @@ param deploymentSuffix string
 
 var keyVaultName = last(split(keyVaultResourceId, '/'))
 var keyVaultResourceGroup = split(keyVaultResourceId, '/')[4]
-var keyVaultSubscription = split(keyVaultResourceId, '/')[2]
+var keyVaultSubscriptionId = split(keyVaultResourceId, '/')[2]
 var roleKeyVaultCryptoUser = 'e147488a-f6f5-4113-8e2d-b22465e65bf6' //Key Vault Crypto Service Encryption User
 var roleKeyVaultCryptoReleaseUser = '08bbd89e-9f13-488c-ac41-acfcb10c90ab' // Key Vault Crypto Service Release User 
 
@@ -28,7 +28,7 @@ var diskEncryptionSetEncryptionType = confidentialVMOSDiskEncryption
 
 module key '../../../../sharedModules/resources/key-vault/vault/key/main.bicep' = if (!confidentialVMOSDiskEncryption) {
   name: 'Encryption-Key-${deploymentSuffix}'
-  scope: resourceGroup(keyVaultSubscription, keyVaultResourceGroup)
+  scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
   params: {
     attributesEnabled: true
     attributesExportable: false
@@ -94,7 +94,7 @@ module confidentialVM_key '../../../../sharedModules/resources/compute/virtual-m
 
 module roleAssignment_ConfVMOrchestrator_ReleaseUser '../../management/modules/key_RBAC.bicep' = if (confidentialVMOSDiskEncryption) {
   name: 'RoleAssignment-ConfVMOrchestrator-ReleaseUser-${deploymentSuffix}'
-  scope: resourceGroup(keyVaultSubscription, keyVaultResourceGroup)
+  scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
   params: {
     keyName: keyName
     keyVaultName: keyVaultName
@@ -130,7 +130,7 @@ module diskEncryptionSet '../../../../sharedModules/resources/compute/disk-encry
 
 module roleAssignment_DiskEncryptionSet_EncryptUser '../../management/modules/key_RBAC.bicep' = {
   name: 'RA-DiskEncryptionSet-CryptoServiceEncryptionUser-${deploymentSuffix}'
-  scope: resourceGroup(keyVaultSubscription, keyVaultResourceGroup)
+  scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
   params: {
     keyName: keyName
     keyVaultName: keyVaultName
