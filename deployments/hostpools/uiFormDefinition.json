@@ -3652,7 +3652,7 @@
 									"label": "Virtual Network",
 									"resourceType": "Microsoft.Network/virtualNetworks",
 									"scope": {
-										"location": "[steps('management').scope.location.name]",
+										"location": "[steps('hosts').scope.location.name]",
 										"subscriptionId": "[steps('management').scope.subscription.subscriptionId]"
 									},
 									"visible": "[and(or(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault)), steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
