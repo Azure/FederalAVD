@@ -8,7 +8,7 @@ resource privateLinkScope 'Microsoft.Insights/privateLinkScopes@2021-09-01' exis
 
 resource scopedResources 'Microsoft.Insights/privateLinkScopes/scopedResources@2021-07-01-preview' = [for resourceId in scopedResourceIds: {
   parent: privateLinkScope
-  name: last(split(resourceId, '/'))
+  name: uniqueString(resourceId)
   properties: {
     linkedResourceId: resourceId
   }
