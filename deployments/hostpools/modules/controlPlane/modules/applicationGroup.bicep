@@ -9,7 +9,6 @@ param deploymentVirtualMachineName string
 param resourceGroupDeployment string
 param appGroupSecurityGroups array
 param tags object
-param virtualMachinesSubscriptionId string
 
 var desktopVirtualizationUserRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')
 
@@ -26,7 +25,7 @@ resource applicationGroup 'Microsoft.DesktopVirtualization/applicationGroups@202
 // Adds a friendly name to the SessionDesktop application for the desktop application group
 module updateDesktopFriendlyName 'updateDesktopFriendlyName.bicep' = if (!empty(desktopFriendlyName)) {
   name: 'DesktopFriendlyName-${deploymentSuffix}'
-  scope: resourceGroup(virtualMachinesSubscriptionId, resourceGroupDeployment)
+  scope: resourceGroup(resourceGroupDeployment)
   params: {
     applicationGroupResourceId: applicationGroup.id
     desktopFriendlyName: desktopFriendlyName

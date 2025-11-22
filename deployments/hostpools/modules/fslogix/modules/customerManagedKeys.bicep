@@ -17,12 +17,11 @@ param userAssignedIdentityNameConv string
 
 var keyVaultName = last(split(keyVaultResourceId, '/'))
 var keyVaultResourceGroup = split(keyVaultResourceId, '/')[4]
-var keyVaultSubscriptionId = split(keyVaultResourceId, '/')[2]
 var roleKeyVaultCryptoUser = 'e147488a-f6f5-4113-8e2d-b22465e65bf6' //Key Vault Crypto Service Encryption User
 
 module fslogixStorageAccountEncryptionKeys '../../../../sharedModules/resources/key-vault/vault/key/main.bicep' = [for i in range(0, storageCount) : {
   name: 'StorageEncryptionKey-${i + storageIndex}-${deploymentSuffix}'
-  scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
+  scope: resourceGroup(keyVaultResourceGroup)
   params: {
     attributesExportable: false
     keySize: 4096
@@ -58,7 +57,7 @@ module fslogixStorageAccountEncryptionKeys '../../../../sharedModules/resources/
 
 module increaseQuotaStorageAccountEncryptionKey '../../../../sharedModules/resources/key-vault/vault/key/main.bicep' = if (increaseQuota) {
   name: 'IncreaseQuotaEncryptionKey-${deploymentSuffix}'
-  scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
+  scope: resourceGroup(keyVaultResourceGroup)
   params: {
     attributesExportable: false
     keySize: 4096
@@ -106,7 +105,7 @@ module userAssignedIdentity '../../../../sharedModules/resources/managed-identit
 
 module roleAssignment_UAI_EncryptionUser_FSLogix '../../management/modules/key_RBAC.bicep' = [for i in range(0, storageCount): {
   name: 'RA-Encryption-User-FSLogix-${padLeft(i + storageIndex, 2, '0')}-${deploymentSuffix}'
-  scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
+  scope: resourceGroup(keyVaultResourceGroup)
   params: {
     keyName: fslogixStorageAccountEncryptionKeys[i].outputs.name
     keyVaultName: keyVaultName
@@ -118,7 +117,7 @@ module roleAssignment_UAI_EncryptionUser_FSLogix '../../management/modules/key_R
 
 module roleAssignment_UAI_EncryptionUser_increaseQuota '../../management/modules/key_RBAC.bicep' = if (increaseQuota) {
   name: 'RA-Encryption-User-IncreaseQuota-${deploymentSuffix}'
-  scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
+  scope: resourceGroup(keyVaultResourceGroup)
   params: {
     keyName: increaseQuotaStorageAccountEncryptionKey!.outputs.name
     keyVaultName: keyVaultName

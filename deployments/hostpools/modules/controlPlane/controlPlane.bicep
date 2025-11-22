@@ -37,7 +37,6 @@ param scalingPlanName string
 param scalingPlanSchedules array
 param startVmOnConnect bool
 param tags object
-param virtualMachinesSubscriptionId string
 param virtualMachinesTimeZone string
 param workspaceFeedPrivateEndpointSubnetResourceId string
 param workspaceFriendlyName string
@@ -153,7 +152,6 @@ module applicationGroup 'modules/applicationGroup.bicep' = {
     resourceGroupDeployment: resourceGroupDeployment
     appGroupSecurityGroups: appGroupSecurityGroups
     tags: tags
-    virtualMachinesSubscriptionId: virtualMachinesSubscriptionId
   }
 }
 

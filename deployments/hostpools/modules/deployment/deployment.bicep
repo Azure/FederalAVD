@@ -1,7 +1,6 @@
 targetScope = 'subscription'
 
 param confidentialVMOSDiskEncryption bool
-param controlPlaneSubscriptionId string
 param diskSku string
 @secure()
 param domainJoinUserPassword string
@@ -16,7 +15,6 @@ param hostPoolName string
 param identitySolution string
 param keyManagementDisks string
 param keyManagementStorageAccounts string
-param managementSubscriptionId string
 param ouPath string
 param resourceGroupControlPlane string
 param resourceGroupDeployment string
@@ -53,13 +51,11 @@ var roleAssignmentsControlPlane = !empty(desktopFriendlyName) ? [
     roleDefinitionId: roleDefinitions.DesktopVirtualizationApplicationGroupContributor // (Purpose: updates the friendly name for the desktop)
     depName: 'ControlPlane-DVAppGroupCont'
     resourceGroup: resourceGroupControlPlane
-    subscription: controlPlaneSubscriptionId
   } 
   {
     roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the control plane role assignments for the deployment identity. This role Assignment must remain last in the list.)
     depName: 'ControlPlane-RBACAdmin'
     resourceGroup: resourceGroupControlPlane
-    subscription: controlPlaneSubscriptionId
   }
 ] : []
 
@@ -68,7 +64,6 @@ var roleAssignmentsDeployment = [
     roleDefinitionId: roleDefinitions.Contributor // (Purpose: remove the deployment resource group during cleanup as there won't be any resources within.)
     depName: 'Deployment-Cont'
     resourceGroup: resourceGroupDeployment
-    subscription: subscription().subscriptionId
   }
 ]
 
@@ -77,13 +72,11 @@ var roleAssignmentsHosts = [
     roleDefinitionId: roleDefinitions.VirtualMachineContributor // (Purpose: remove the run commands from the host VMs)
     depName: 'Hosts-VMCont'
     resourceGroup: resourceGroupHosts
-    subscription: subscription().subscriptionId
   }
   {
     roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the hosts resource group role assignment for the deployment identity. This role Assignment must remain last in the list.)
     depName: 'Hosts-RBACAdmin'
     resourceGroup: resourceGroupHosts
-    subscription: subscription().subscriptionId
   }
 ]
 
@@ -93,7 +86,6 @@ var roleAssignmentsManagementConfidentialVMDiskEncryption = confidentialVMOSDisk
         roleDefinitionId: roleDefinitions.KeyVaultCryptoOfficer // (Purpose: Retrieve the customer managed keys from the key vault for idempotent deployment)
         depName: 'Management-KVCryptoOff'
         resourceGroup: resourceGroupManagement
-        subscription: managementSubscriptionId
       }
     ]
   : []
@@ -104,7 +96,6 @@ var roleAssignmentsManagementRBACAdmin = contains(keyManagementDisks, 'CustomMan
         roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the management resource group role assignments for the deployment identity. This role assignment must remain last in the list if assignments are made.)
         depName: 'Management-RBACAdmin'
         resourceGroup: resourceGroupManagement
-        subscription: managementSubscriptionId
       }
     ]
   : []
@@ -120,19 +111,16 @@ var roleAssignmentsStorage = fslogix && contains(identitySolution, 'DomainServic
         roleDefinitionId: roleDefinitions.StorageAccountContributor // (Purpose: domain join storage account)
         depName: 'Storage-StorageAcctCont'
         resourceGroup: resourceGroupStorage
-        subscription: subscription().subscriptionId
       }
       {
         roleDefinitionId: roleDefinitions.storageFileDataPrivilegedContributor // (Purpose: set NTFS permissions on the file share)
         depName: 'Storage-StorageFileDataPrivCont'
         resourceGroup: resourceGroupStorage
-        subscription: subscription().subscriptionId
       }
       {
         roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the control plane role assignments for the deployment identity. This role assignment must remain last in the list.)
         depName: 'Storage-RBACAdmin'
         resourceGroup: resourceGroupStorage
-        subscription: subscription().subscriptionId
       }
     ]
   : []
@@ -162,7 +150,7 @@ module deploymentUserAssignedIdentity '../../../sharedModules/resources/managed-
 
 module roleAssignments_deployment '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
   for i in range(0, length(roleAssignments)): {
-    scope: resourceGroup(roleAssignments[i].subscription, roleAssignments[i].resourceGroup)
+    scope: resourceGroup(roleAssignments[i].resourceGroup)
     name: 'RA-${roleAssignments[i].depName}-${deploymentSuffix}'
     params: {
       principalId: deploymentUserAssignedIdentity.outputs.principalId
