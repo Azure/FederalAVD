@@ -506,14 +506,16 @@ param secretsKeyVaultEnablePurgeProtection bool = true
 @maxValue(90)
 param keyVaultRetentionInDays int = 90
 
+// Monitoring
+
 @description('Optional. Deploys the required monitoring resources to enable AVD and VM Insights and monitor features in the automation account.')
 param enableMonitoring bool = true
 
-@description('Optional. The resource Id of the existing Log Analytics Workspace for AVD Control Plane monitoring solution. Only used when "DeploymentType" is "HostpoolOnly".')
-param existingControlPlaneLogAnalyticsWorkspaceResourceId string = ''
+@description('Optional. The subscription Id where monitoring resources will be deployed. If not provided, the current subscription will be used.')
+param monitoringSubscriptionId string = subscription().subscriptionId
 
-@description('Optional. The resource Id of the existing Log Analytics Workspace for AVD Storage or Recovery Services Vault diagnostic settings. Only used when "DeploymentType" is "HostpoolOnly".')
-param existingHostsLogAnalyticsWorkspaceResourceId string = ''
+@description('Optional. The resource Id of the existing Log Analytics Workspace for AVD Control Plane monitoring solution. Only used when "DeploymentType" is "HostpoolOnly".')
+param existingLogAnalyticsWorkspaceResourceId string = ''
 
 @description('Optional. The resource Id of the existing AVD Insights Data Collection Rule. Only used when "DeploymentType" is "SessionHostOnly".')
 param existingAVDInsightsDataCollectionRuleResourceId string = ''
@@ -864,7 +866,7 @@ module resourceNames 'modules/resourceNames.bicep' = {
 
 // Resource Groups
 module deploymentResourceGroup 'modules/resourceGroups.bicep' = if (createDeploymentVm) {
-  name: 'Resource-Group-deployment-${deploymentSuffix}'
+  name: 'Resource-Group-Deployment-${deploymentSuffix}'
   params: {
     location: virtualMachinesLocation
     resourceGroupName: resourceNames.outputs.resourceGroupDeployment
@@ -872,17 +874,18 @@ module deploymentResourceGroup 'modules/resourceGroups.bicep' = if (createDeploy
   }
 }
 
-module controlPlaneResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType == 'Complete' && empty(existingFeedWorkspaceResourceId)) {
-  name: 'Resource-Group-controlplane-${deploymentSuffix}'
+module monitoringResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType == 'Complete' && enableMonitoring) {
+  name: 'Resource-Group-Monitoring-${deploymentSuffix}'
+  scope: subscription(monitoringSubscriptionId)
   params: {
-    location: controlPlaneLocation
-    resourceGroupName: resourceNames.outputs.resourceGroupControlPlane
+    location: virtualMachinesLocation
+    resourceGroupName: resourceNames.outputs.resourceGroupMonitoring
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
 }
 
-module managementResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType == 'Complete' && ( enableMonitoring || deploySecretsKeyVault || contains(keyManagementStorageAccounts, 'CustomerManaged') || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption )) {
-  name: 'Resource-Group-management-${deploymentSuffix}'
+module managementResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType == 'Complete' && ( deployIncreaseQuota || deploySecretsKeyVault || contains(keyManagementStorageAccounts, 'CustomerManaged') || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption )) {
+  name: 'Resource-Group-Management-${deploymentSuffix}'
   params: {
     location: virtualMachinesLocation
     resourceGroupName: resourceNames.outputs.resourceGroupManagement
@@ -890,8 +893,17 @@ module managementResourceGroup 'modules/resourceGroups.bicep' = if (deploymentTy
   }
 }
 
+module controlPlaneResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType == 'Complete' && empty(existingFeedWorkspaceResourceId)) {
+  name: 'Resource-Group-Control-Plane-${deploymentSuffix}'
+  params: {
+    location: controlPlaneLocation
+    resourceGroupName: resourceNames.outputs.resourceGroupControlPlane
+    tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
+  }
+}
+
 module globalFeedResourceGroup 'modules/resourceGroups.bicep' = if (avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) && empty(existingGlobalFeedResourceId)) {
-  name: 'Resource-Group-globalfeed-${deploymentSuffix}'
+  name: 'Resource-Group-Global-Feed-${deploymentSuffix}'
   params: {
     location: globalFeedLocation!
     resourceGroupName: resourceNames.outputs.resourceGroupGlobalFeed
@@ -900,7 +912,7 @@ module globalFeedResourceGroup 'modules/resourceGroups.bicep' = if (avdPrivateLi
 }
 
 module hostsResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType != 'SessionHostsOnly') {
-  name: 'Resource-Group-hosts-${deploymentSuffix}'
+  name: 'Resource-Group-Hosts-${deploymentSuffix}'
   params: {
     location: virtualMachinesLocation
     resourceGroupName: resourceNames.outputs.resourceGroupHosts
@@ -909,7 +921,7 @@ module hostsResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType !=
 }
 
 module storageResourceGroup 'modules/resourceGroups.bicep' = if (deployFSLogixStorage) {
-  name: 'Resource-Group-storage-${deploymentSuffix}'
+  name: 'Resource-Group-FSLogix-Storage-${deploymentSuffix}'
   params: {
     location: virtualMachinesLocation
     resourceGroupName: resourceNames.outputs.resourceGroupStorage
@@ -968,16 +980,32 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
   ]
 }
 
+module monitoring 'modules/monitoring/monitoring.bicep' = if (deploymentType == 'Complete' && enableMonitoring) {
+  name: 'Monitoring-${deploymentSuffix}'
+  scope: subscription(monitoringSubscriptionId)
+  params: {
+    azureMonitorPrivateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
+    dataCollectionEndpointName: resourceNames.outputs.dataCollectionEndpointName
+    deploymentSuffix: deploymentSuffix
+    location: virtualMachinesLocation
+    logAnalyticsWorkspaceName: resourceNames.outputs.logAnalyticsWorkspaceName
+    logAnalyticsWorkspaceRetention: logAnalyticsWorkspaceRetention
+    logAnalyticsWorkspaceSku: logAnalyticsWorkspaceSku
+    resourceGroupMonitoring: resourceNames.outputs.resourceGroupMonitoring
+    tags: tags
+  }
+  dependsOn: [
+    monitoringResourceGroup
+  ]
+}
+
 // Management Services: Monitoring, secrets, and App Service Plan (if needed)
 module management 'modules/management/management.bicep' = if (deploymentType == 'Complete') {
   name: 'Management-${deploymentSuffix}'
   params: {
     appServicePlanName: resourceNames.outputs.appServicePlanName
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
-    azureMonitorPrivateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
-    dataCollectionEndpointName: resourceNames.outputs.dataCollectionEndpointName
     deploymentSuffix: deploymentSuffix
-    enableMonitoring: enableMonitoring
     enableQuotaManagement: deployIncreaseQuota
     encryptionKeysKeyVaultName: resourceNames.outputs.keyVaultNames.encryptionKeys
     domainJoinUserPassword: domainJoinUserPassword
@@ -989,9 +1017,7 @@ module management 'modules/management/management.bicep' = if (deploymentType == 
     secretsKeyVaultName: resourceNames.outputs.keyVaultNames.secrets
     keyVaultRetentionInDays: keyVaultRetentionInDays
     location: virtualMachinesLocation
-    logAnalyticsWorkspaceName: resourceNames.outputs.logAnalyticsWorkspaceName
-    logAnalyticsWorkspaceRetention: logAnalyticsWorkspaceRetention
-    logAnalyticsWorkspaceSku: logAnalyticsWorkspaceSku
+    logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete') ? monitoring!.outputs.logAnalyticsWorkspaceResourceId : existingLogAnalyticsWorkspaceResourceId : ''
     privateEndpointSubnetResourceId: keyVaultPrivateEndpointSubnetResourceId
     privateEndpoint: deployPrivateEndpoints
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
@@ -1016,9 +1042,7 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
     avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
     avdPrivateLinkPrivateRoutes: avdPrivateLinkPrivateRoutes
     deployScalingPlan: deployScalingPlan
-    deploymentUserAssignedIdentityClientId: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
-      : ''
+    deploymentUserAssignedIdentityClientId: createDeploymentVm ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId : ''
     deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
     desktopApplicationGroupName: resourceNames.outputs.desktopApplicationGroupName
     desktopFriendlyName: desktopFriendlyName
@@ -1039,7 +1063,7 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
     controlPlaneLocation: controlPlaneLocation
     globalFeedLocation: globalFeedLocation!
     virtualMachinesLocation: virtualMachinesLocation
-    logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete' ? management!.outputs.logAnalyticsWorkspaceResourceId : existingControlPlaneLogAnalyticsWorkspaceResourceId) : ''
+    logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete' ? monitoring!.outputs.logAnalyticsWorkspaceResourceId : existingLogAnalyticsWorkspaceResourceId) : ''
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
     resourceGroupControlPlane: resourceNames.outputs.resourceGroupControlPlane
@@ -1100,7 +1124,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     keyExpirationInDays: keyExpirationInDays
     keyManagementStorageAccounts: keyManagementStorageAccounts
     location: virtualMachinesLocation
-    logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete' ? management!.outputs.logAnalyticsWorkspaceResourceId : existingHostsLogAnalyticsWorkspaceResourceId) : ''
+    logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete' ? monitoring!.outputs.logAnalyticsWorkspaceResourceId : existingLogAnalyticsWorkspaceResourceId) : ''
     netAppVolumesSubnetResourceId: netAppVolumesSubnetResourceId
     netAppAccountName: resourceNames.outputs.netAppAccountName
     netAppCapacityPoolName: resourceNames.outputs.netAppCapacityPoolName
@@ -1138,7 +1162,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     appGroupSecurityGroups: deploymentType == 'Complete' ? map(appGroupSecurityGroups, group => group.id) : []
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
-    avdInsightsDataCollectionRulesResourceId: enableMonitoring ? (deploymentType != 'Complete' ? existingAVDInsightsDataCollectionRuleResourceId : management!.outputs.avdInsightsDataCollectionRulesResourceId) : ''
+    avdInsightsDataCollectionRulesResourceId: enableMonitoring ? (deploymentType != 'Complete' ? existingAVDInsightsDataCollectionRuleResourceId : monitoring!.outputs.avdInsightsDataCollectionRulesResourceId) : ''
     availability: availability
     availabilitySetNamePrefix: resourceNames.outputs.availabilitySetNamePrefix
     availabilitySetsCount: availabilitySetsCount
@@ -1150,7 +1174,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
     customImageResourceId: customImageResourceId
-    dataCollectionEndpointResourceId: enableMonitoring ? (deploymentType != 'SessionHostsOnly' ? existingDataCollectionEndpointResourceId : management!.outputs.dataCollectionEndpointResourceId) : ''
+    dataCollectionEndpointResourceId: enableMonitoring ? (deploymentType != 'SessionHostsOnly' ? existingDataCollectionEndpointResourceId : monitoring!.outputs.dataCollectionEndpointResourceId) : ''
     dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
     dedicatedHostGroupZones: !empty(dedicatedHostGroupName) ? dedicatedHostGroup!.zones : []
     dedicatedHostResourceId: dedicatedHostResourceId
@@ -1206,7 +1230,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     intuneEnrollment: intuneEnrollment
     keyExpirationInDays: keyExpirationInDays
     keyManagementDisks: keyManagementDisks    
-    logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete' ? management!.outputs.logAnalyticsWorkspaceResourceId : existingHostsLogAnalyticsWorkspaceResourceId) : ''
+    logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete' ? monitoring!.outputs.logAnalyticsWorkspaceResourceId : existingLogAnalyticsWorkspaceResourceId) : ''
     location: vmVirtualNetwork.location
     maxResourcesPerTemplateDeployment: maxResourcesPerTemplateDeployment
     osDiskNameConv: resourceNames.outputs.virtualMachineDiskNameConv
@@ -1241,7 +1265,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     virtualMachineNameConv: resourceNames.outputs.virtualMachineNameConv
     virtualMachineNamePrefix: virtualMachineNamePrefix
     virtualMachineSize: virtualMachineSize
-    vmInsightsDataCollectionRulesResourceId: enableMonitoring ? (deploymentType == 'Complete' ? management!.outputs.vmInsightsDataCollectionRulesResourceId : existingVMInsightsDataCollectionRuleResourceId) : ''
+    vmInsightsDataCollectionRulesResourceId: enableMonitoring ? (deploymentType == 'Complete' ? monitoring!.outputs.vmInsightsDataCollectionRulesResourceId : existingVMInsightsDataCollectionRuleResourceId) : ''
     vTpmEnabled: vTpmEnabled
   }
   dependsOn: [

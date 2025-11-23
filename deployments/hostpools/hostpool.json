@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "5996416143039557909"
+      "templateHash": "15222685035598330654"
     }
   },
   "parameters": {
@@ -809,18 +809,18 @@
         "description": "Optional. Deploys the required monitoring resources to enable AVD and VM Insights and monitor features in the automation account."
       }
     },
-    "existingControlPlaneLogAnalyticsWorkspaceResourceId": {
+    "monitoringSubscriptionId": {
+      "type": "string",
+      "defaultValue": "[subscription().subscriptionId]",
+      "metadata": {
+        "description": "Optional. The subscription Id where monitoring resources will be deployed. If not provided, the current subscription will be used."
+      }
+    },
+    "existingLogAnalyticsWorkspaceResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
         "description": "Optional. The resource Id of the existing Log Analytics Workspace for AVD Control Plane monitoring solution. Only used when \"DeploymentType\" is \"HostpoolOnly\"."
-      }
-    },
-    "existingHostsLogAnalyticsWorkspaceResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. The resource Id of the existing Log Analytics Workspace for AVD Storage or Recovery Services Vault diagnostic settings. Only used when \"DeploymentType\" is \"HostpoolOnly\"."
       }
     },
     "existingAVDInsightsDataCollectionRuleResourceId": {
@@ -1143,7 +1143,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "18023811586886299303"
+              "templateHash": "5365265654230792561"
             }
           },
           "parameters": {
@@ -1492,6 +1492,7 @@
             "depVirtualMachineDiskName": "[format('{0}-{1}', variables('depVirtualMachineName'), variables('resourceAbbreviations').osdisks)]",
             "depVirtualMachineNicName": "[format('{0}-{1}', variables('depVirtualMachineName'), variables('resourceAbbreviations').networkInterfaces)]",
             "resourceGroupManagement": "[replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'management'), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
+            "resourceGroupMonitoring": "[replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'monitoring'), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
             "uniqueStringManagement": "[take(uniqueString(subscription().subscriptionId, variables('resourceGroupManagement')), 6)]",
             "appServicePlanName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').appServicePlans), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'TOKEN-', '')]",
             "keyVaultNameSecrets": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'TOKEN', format('sec-{0}', variables('uniqueStringManagement'))), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults)]",
@@ -1683,6 +1684,10 @@
               "type": "string",
               "value": "[variables('resourceGroupManagement')]"
             },
+            "resourceGroupMonitoring": {
+              "type": "string",
+              "value": "[variables('resourceGroupMonitoring')]"
+            },
             "resourceGroupStorage": {
               "type": "string",
               "value": "[variables('resourceGroupStorage')]"
@@ -1728,7 +1733,7 @@
       "condition": "[variables('createDeploymentVm')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Resource-Group-deployment-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('Resource-Group-Deployment-{0}', variables('deploymentSuffix'))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1783,10 +1788,11 @@
       ]
     },
     {
-      "condition": "[and(equals(parameters('deploymentType'), 'Complete'), empty(parameters('existingFeedWorkspaceResourceId')))]",
+      "condition": "[and(equals(parameters('deploymentType'), 'Complete'), parameters('enableMonitoring'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Resource-Group-controlplane-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('Resource-Group-Monitoring-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[parameters('monitoringSubscriptionId')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1795,10 +1801,10 @@
         "mode": "Incremental",
         "parameters": {
           "location": {
-            "value": "[parameters('controlPlaneLocation')]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
           "resourceGroupName": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupControlPlane.value]"
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupMonitoring.value]"
           },
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
@@ -1841,10 +1847,10 @@
       ]
     },
     {
-      "condition": "[and(equals(parameters('deploymentType'), 'Complete'), or(or(or(or(parameters('enableMonitoring'), parameters('deploySecretsKeyVault')), contains(parameters('keyManagementStorageAccounts'), 'CustomerManaged')), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption')))]",
+      "condition": "[and(equals(parameters('deploymentType'), 'Complete'), or(or(or(or(parameters('deployIncreaseQuota'), parameters('deploySecretsKeyVault')), contains(parameters('keyManagementStorageAccounts'), 'CustomerManaged')), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Resource-Group-management-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('Resource-Group-Management-{0}', variables('deploymentSuffix'))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1899,10 +1905,68 @@
       ]
     },
     {
+      "condition": "[and(equals(parameters('deploymentType'), 'Complete'), empty(parameters('existingFeedWorkspaceResourceId')))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('Resource-Group-Control-Plane-{0}', variables('deploymentSuffix'))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('controlPlaneLocation')]"
+          },
+          "resourceGroupName": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupControlPlane.value]"
+          },
+          "tags": {
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "5702097722183372969"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "resourceGroupName": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Resources/resourceGroups",
+              "apiVersion": "2020-10-01",
+              "name": "[parameters('resourceGroupName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
+      ]
+    },
+    {
       "condition": "[and(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), empty(parameters('existingGlobalFeedResourceId')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Resource-Group-globalfeed-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('Resource-Group-Global-Feed-{0}', variables('deploymentSuffix'))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1958,7 +2022,7 @@
       "condition": "[not(equals(parameters('deploymentType'), 'SessionHostsOnly'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Resource-Group-hosts-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('Resource-Group-Hosts-{0}', variables('deploymentSuffix'))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2016,7 +2080,7 @@
       "condition": "[parameters('deployFSLogixStorage')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Resource-Group-storage-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('Resource-Group-FSLogix-Storage-{0}', variables('deploymentSuffix'))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2903,7 +2967,627 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-deployment-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Deployment-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
+      ]
+    },
+    {
+      "condition": "[and(equals(parameters('deploymentType'), 'Complete'), parameters('enableMonitoring'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('Monitoring-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[parameters('monitoringSubscriptionId')]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "azureMonitorPrivateLinkScopeResourceId": {
+            "value": "[parameters('azureMonitorPrivateLinkScopeResourceId')]"
+          },
+          "dataCollectionEndpointName": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointName.value]"
+          },
+          "deploymentSuffix": {
+            "value": "[variables('deploymentSuffix')]"
+          },
+          "location": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
+          },
+          "logAnalyticsWorkspaceName": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceName.value]"
+          },
+          "logAnalyticsWorkspaceRetention": {
+            "value": "[parameters('logAnalyticsWorkspaceRetention')]"
+          },
+          "logAnalyticsWorkspaceSku": {
+            "value": "[parameters('logAnalyticsWorkspaceSku')]"
+          },
+          "resourceGroupMonitoring": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupMonitoring.value]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "1676449010230222878"
+            }
+          },
+          "parameters": {
+            "azureMonitorPrivateLinkScopeResourceId": {
+              "type": "string"
+            },
+            "dataCollectionEndpointName": {
+              "type": "string"
+            },
+            "deploymentSuffix": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "logAnalyticsWorkspaceName": {
+              "type": "string"
+            },
+            "logAnalyticsWorkspaceRetention": {
+              "type": "int"
+            },
+            "logAnalyticsWorkspaceSku": {
+              "type": "string"
+            },
+            "resourceGroupMonitoring": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('LogAnalytics-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupMonitoring')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "logAnalyticsWorkspaceName": {
+                    "value": "[parameters('logAnalyticsWorkspaceName')]"
+                  },
+                  "logAnalyticsWorkspaceRetention": {
+                    "value": "[parameters('logAnalyticsWorkspaceRetention')]"
+                  },
+                  "logAnalyticsWorkspaceSku": {
+                    "value": "[parameters('logAnalyticsWorkspaceSku')]"
+                  },
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.OperationalInsights/workspaces'), createObject())]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.39.26.7824",
+                      "templateHash": "4187040984716377407"
+                    }
+                  },
+                  "parameters": {
+                    "location": {
+                      "type": "string"
+                    },
+                    "logAnalyticsWorkspaceName": {
+                      "type": "string"
+                    },
+                    "logAnalyticsWorkspaceRetention": {
+                      "type": "int"
+                    },
+                    "logAnalyticsWorkspaceSku": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "object"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces",
+                      "apiVersion": "2021-06-01",
+                      "name": "[parameters('logAnalyticsWorkspaceName')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "sku": {
+                          "name": "[parameters('logAnalyticsWorkspaceSku')]"
+                        },
+                        "retentionInDays": "[parameters('logAnalyticsWorkspaceRetention')]",
+                        "workspaceCapping": {
+                          "dailyQuotaGb": -1
+                        },
+                        "publicNetworkAccessForIngestion": "Enabled",
+                        "publicNetworkAccessForQuery": "Enabled"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('AVDInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupMonitoring')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "dataCollectionEndpointId": {
+                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                  },
+                  "logAWorkspaceResourceId": {
+                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/dataCollectionRules'), createObject())]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.39.26.7824",
+                      "templateHash": "4958163036418765225"
+                    }
+                  },
+                  "parameters": {
+                    "dataCollectionEndpointId": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "logAWorkspaceResourceId": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "object"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Insights/dataCollectionRules",
+                      "apiVersion": "2022-06-01",
+                      "name": "[format('microsoft-avdi-{0}', parameters('location'))]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "kind": "Windows",
+                      "properties": {
+                        "dataCollectionEndpointId": "[if(not(empty(parameters('dataCollectionEndpointId'))), parameters('dataCollectionEndpointId'), null())]",
+                        "dataSources": {
+                          "performanceCounters": [
+                            {
+                              "streams": [
+                                "Microsoft-Perf"
+                              ],
+                              "samplingFrequencyInSeconds": 30,
+                              "counterSpecifiers": [
+                                "\\LogicalDisk(C:)\\Avg. Disk Queue Length",
+                                "\\LogicalDisk(C:)\\Current Disk Queue Length",
+                                "\\Memory\\Available Mbytes",
+                                "\\Memory\\Page Faults/sec",
+                                "\\Memory\\Pages/sec",
+                                "\\Memory\\% Committed Bytes In Use",
+                                "\\PhysicalDisk(*)\\Avg. Disk Queue Length",
+                                "\\PhysicalDisk(*)\\Avg. Disk sec/Read",
+                                "\\PhysicalDisk(*)\\Avg. Disk sec/Transfer",
+                                "\\PhysicalDisk(*)\\Avg. Disk sec/Write",
+                                "\\Processor Information(_Total)\\% Processor Time",
+                                "\\User Input Delay per Process(*)\\Max Input Delay",
+                                "\\User Input Delay per Session(*)\\Max Input Delay"
+                              ],
+                              "name": "perfCounterDataSource30"
+                            },
+                            {
+                              "streams": [
+                                "Microsoft-Perf"
+                              ],
+                              "samplingFrequencyInSeconds": 60,
+                              "counterSpecifiers": [
+                                "\\LogicalDisk(C:)\\% Free Space",
+                                "\\LogicalDisk(C:)\\Avg. Disk sec/Transfer"
+                              ],
+                              "name": "perfCounterDataSource60"
+                            }
+                          ],
+                          "windowsEventLogs": [
+                            {
+                              "streams": [
+                                "Microsoft-Event"
+                              ],
+                              "xPathQueries": [
+                                "Microsoft-Windows-TerminalServices-RemoteConnectionManager/Admin!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]",
+                                "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]",
+                                "System!*",
+                                "Microsoft-FSLogix-Apps/Operational!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]",
+                                "Application!*[System[(Level=2 or Level=3)]]",
+                                "Microsoft-FSLogix-Apps/Admin!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]"
+                              ],
+                              "name": "eventLogsDataSource"
+                            }
+                          ]
+                        },
+                        "destinations": {
+                          "logAnalytics": [
+                            {
+                              "workspaceResourceId": "[parameters('logAWorkspaceResourceId')]",
+                              "name": "la-workspace"
+                            }
+                          ]
+                        },
+                        "dataFlows": [
+                          {
+                            "streams": [
+                              "Microsoft-Perf",
+                              "Microsoft-Event"
+                            ],
+                            "destinations": [
+                              "la-workspace"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "dataCollectionRulesId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', format('microsoft-avdi-{0}', parameters('location')))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix')))]",
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('VMInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupMonitoring')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "dataCollectionEndpointId": {
+                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "logAWorkspaceResourceId": {
+                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                  },
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/dataCollectionRules'), createObject())]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.39.26.7824",
+                      "templateHash": "6280630425439226598"
+                    }
+                  },
+                  "parameters": {
+                    "dataCollectionEndpointId": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "logAWorkspaceResourceId": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "object"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Insights/dataCollectionRules",
+                      "apiVersion": "2022-06-01",
+                      "name": "[format('MSVMI-{0}', parameters('location'))]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "dataCollectionEndpointId": "[if(not(empty(parameters('dataCollectionEndpointId'))), parameters('dataCollectionEndpointId'), null())]",
+                        "description": "Data collection rule for VM Insights.",
+                        "dataSources": {
+                          "performanceCounters": [
+                            {
+                              "name": "VMInsightsPerfCounters",
+                              "streams": [
+                                "Microsoft-InsightsMetrics"
+                              ],
+                              "samplingFrequencyInSeconds": 60,
+                              "counterSpecifiers": [
+                                "\\VmInsights\\DetailedMetrics"
+                              ]
+                            }
+                          ]
+                        },
+                        "destinations": {
+                          "logAnalytics": [
+                            {
+                              "workspaceResourceId": "[parameters('logAWorkspaceResourceId')]",
+                              "name": "VMInsightsPerf-Logs-Dest"
+                            }
+                          ]
+                        },
+                        "dataFlows": [
+                          {
+                            "streams": [
+                              "Microsoft-InsightsMetrics"
+                            ],
+                            "destinations": [
+                              "VMInsightsPerf-Logs-Dest"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "dataCollectionRulesId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', format('MSVMI-{0}', parameters('location')))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix')))]",
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupMonitoring')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "name": {
+                    "value": "[parameters('dataCollectionEndpointName')]"
+                  },
+                  "publicNetworkAccess": "[if(empty(parameters('azureMonitorPrivateLinkScopeResourceId')), createObject('value', 'Enabled'), createObject('value', 'Disabled'))]",
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/dataCollectionEndpoints'), createObject())]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.39.26.7824",
+                      "templateHash": "3917131243388682566"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "publicNetworkAccess": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "object"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Insights/dataCollectionEndpoints",
+                      "apiVersion": "2022-06-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "networkAcls": {
+                          "publicNetworkAccess": "[parameters('publicNetworkAccess')]"
+                        }
+                      },
+                      "tags": "[parameters('tags')]"
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('name'))]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('azureMonitorPrivateLinkScopeResourceId')))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('PrivateLlinkScope-{0}', parameters('deploymentSuffix'))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "deploymentSuffix": {
+                    "value": "[parameters('deploymentSuffix')]"
+                  },
+                  "privateLinkScopeResourceId": {
+                    "value": "[parameters('azureMonitorPrivateLinkScopeResourceId')]"
+                  },
+                  "scopedResourceIds": {
+                    "value": [
+                      "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]",
+                      "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                    ]
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.39.26.7824",
+                      "templateHash": "17290229534485454366"
+                    }
+                  },
+                  "parameters": {
+                    "privateLinkScopeResourceId": {
+                      "type": "string"
+                    },
+                    "scopedResourceIds": {
+                      "type": "array"
+                    },
+                    "deploymentSuffix": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('addScopedResources-{0}', parameters('deploymentSuffix'))]",
+                      "subscriptionId": "[split(parameters('privateLinkScopeResourceId'), '/')[2]]",
+                      "resourceGroup": "[split(parameters('privateLinkScopeResourceId'), '/')[4]]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "privateLinkScopeResourceId": {
+                            "value": "[parameters('privateLinkScopeResourceId')]"
+                          },
+                          "scopedResourceIds": {
+                            "value": "[parameters('scopedResourceIds')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.39.26.7824",
+                              "templateHash": "5758136482480486201"
+                            }
+                          },
+                          "parameters": {
+                            "scopedResourceIds": {
+                              "type": "array"
+                            },
+                            "privateLinkScopeResourceId": {
+                              "type": "string"
+                            }
+                          },
+                          "resources": [
+                            {
+                              "copy": {
+                                "name": "scopedResources",
+                                "count": "[length(parameters('scopedResourceIds'))]"
+                              },
+                              "type": "Microsoft.Insights/privateLinkScopes/scopedResources",
+                              "apiVersion": "2021-07-01-preview",
+                              "name": "[format('{0}/{1}', last(split(parameters('privateLinkScopeResourceId'), '/')), uniqueString(parameters('scopedResourceIds')[copyIndex()]))]",
+                              "properties": {
+                                "linkedResourceId": "[parameters('scopedResourceIds')[copyIndex()]]"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix')))]",
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "avdInsightsDataCollectionRulesResourceId": {
+              "type": "string",
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('AVDInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionRulesId.value]"
+            },
+            "dataCollectionEndpointResourceId": {
+              "type": "string",
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+            },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string",
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+            },
+            "vmInsightsDataCollectionRulesResourceId": {
+              "type": "string",
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('VMInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionRulesId.value]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Resource-Group-Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },
@@ -2925,17 +3609,8 @@
           "azureKeyVaultPrivateDnsZoneResourceId": {
             "value": "[parameters('azureKeyVaultPrivateDnsZoneResourceId')]"
           },
-          "azureMonitorPrivateLinkScopeResourceId": {
-            "value": "[parameters('azureMonitorPrivateLinkScopeResourceId')]"
-          },
-          "dataCollectionEndpointName": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointName.value]"
-          },
           "deploymentSuffix": {
             "value": "[variables('deploymentSuffix')]"
-          },
-          "enableMonitoring": {
-            "value": "[parameters('enableMonitoring')]"
           },
           "enableQuotaManagement": {
             "value": "[parameters('deployIncreaseQuota')]"
@@ -2970,15 +3645,7 @@
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "logAnalyticsWorkspaceName": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceName.value]"
-          },
-          "logAnalyticsWorkspaceRetention": {
-            "value": "[parameters('logAnalyticsWorkspaceRetention')]"
-          },
-          "logAnalyticsWorkspaceSku": {
-            "value": "[parameters('logAnalyticsWorkspaceSku')]"
-          },
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpointSubnetResourceId": {
             "value": "[parameters('keyVaultPrivateEndpointSubnetResourceId')]"
           },
@@ -3014,7 +3681,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "2840786517815890086"
+              "templateHash": "4110740963398268082"
             }
           },
           "parameters": {
@@ -3024,16 +3691,7 @@
             "azureKeyVaultPrivateDnsZoneResourceId": {
               "type": "string"
             },
-            "azureMonitorPrivateLinkScopeResourceId": {
-              "type": "string"
-            },
-            "dataCollectionEndpointName": {
-              "type": "string"
-            },
             "deploySecretsKeyVault": {
-              "type": "bool"
-            },
-            "enableMonitoring": {
               "type": "bool"
             },
             "enableQuotaManagement": {
@@ -3066,13 +3724,7 @@
             "location": {
               "type": "string"
             },
-            "logAnalyticsWorkspaceName": {
-              "type": "string"
-            },
-            "logAnalyticsWorkspaceRetention": {
-              "type": "int"
-            },
-            "logAnalyticsWorkspaceSku": {
+            "logAnalyticsWorkspaceResourceId": {
               "type": "string"
             },
             "privateEndpointSubnetResourceId": {
@@ -3127,7 +3779,9 @@
                   "name": {
                     "value": "[parameters('secretsKeyVaultName')]"
                   },
-                  "diagnosticWorkspaceId": "[if(parameters('enableMonitoring'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value), createObject('value', ''))]",
+                  "diagnosticWorkspaceId": {
+                    "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+                  },
                   "enablePurgeProtection": {
                     "value": "[parameters('keyVaultEnablePurgeProtection')]"
                   },
@@ -4039,10 +4693,7 @@
                     }
                   }
                 }
-              },
-              "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
-              ]
+              }
             },
             {
               "condition": "[parameters('deployEncryptionKeysKeyVault')]",
@@ -4059,7 +4710,9 @@
                   "name": {
                     "value": "[parameters('encryptionKeysKeyVaultName')]"
                   },
-                  "diagnosticWorkspaceId": "[if(parameters('enableMonitoring'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value), createObject('value', ''))]",
+                  "diagnosticWorkspaceId": {
+                    "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+                  },
                   "enablePurgeProtection": {
                     "value": true
                   },
@@ -4966,519 +5619,7 @@
                     }
                   }
                 }
-              },
-              "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
-              ]
-            },
-            {
-              "condition": "[parameters('enableMonitoring')]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('LogAnalytics-{0}', parameters('deploymentSuffix'))]",
-              "resourceGroup": "[parameters('resourceGroupManagement')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "logAnalyticsWorkspaceName": {
-                    "value": "[parameters('logAnalyticsWorkspaceName')]"
-                  },
-                  "logAnalyticsWorkspaceRetention": {
-                    "value": "[parameters('logAnalyticsWorkspaceRetention')]"
-                  },
-                  "logAnalyticsWorkspaceSku": {
-                    "value": "[parameters('logAnalyticsWorkspaceSku')]"
-                  },
-                  "location": {
-                    "value": "[parameters('location')]"
-                  },
-                  "tags": {
-                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.OperationalInsights/workspaces'), createObject())]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "4187040984716377407"
-                    }
-                  },
-                  "parameters": {
-                    "location": {
-                      "type": "string"
-                    },
-                    "logAnalyticsWorkspaceName": {
-                      "type": "string"
-                    },
-                    "logAnalyticsWorkspaceRetention": {
-                      "type": "int"
-                    },
-                    "logAnalyticsWorkspaceSku": {
-                      "type": "string"
-                    },
-                    "tags": {
-                      "type": "object"
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.OperationalInsights/workspaces",
-                      "apiVersion": "2021-06-01",
-                      "name": "[parameters('logAnalyticsWorkspaceName')]",
-                      "location": "[parameters('location')]",
-                      "tags": "[parameters('tags')]",
-                      "properties": {
-                        "sku": {
-                          "name": "[parameters('logAnalyticsWorkspaceSku')]"
-                        },
-                        "retentionInDays": "[parameters('logAnalyticsWorkspaceRetention')]",
-                        "workspaceCapping": {
-                          "dailyQuotaGb": -1
-                        },
-                        "publicNetworkAccessForIngestion": "Enabled",
-                        "publicNetworkAccessForQuery": "Enabled"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
-                    }
-                  }
-                }
               }
-            },
-            {
-              "condition": "[parameters('enableMonitoring')]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('AVDInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))]",
-              "resourceGroup": "[parameters('resourceGroupManagement')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "dataCollectionEndpointId": "[if(parameters('enableMonitoring'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value), createObject('value', ''))]",
-                  "logAWorkspaceResourceId": "[if(parameters('enableMonitoring'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value), createObject('value', ''))]",
-                  "location": {
-                    "value": "[parameters('location')]"
-                  },
-                  "tags": {
-                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/dataCollectionRules'), createObject())]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "4958163036418765225"
-                    }
-                  },
-                  "parameters": {
-                    "dataCollectionEndpointId": {
-                      "type": "string"
-                    },
-                    "location": {
-                      "type": "string"
-                    },
-                    "logAWorkspaceResourceId": {
-                      "type": "string"
-                    },
-                    "tags": {
-                      "type": "object"
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Insights/dataCollectionRules",
-                      "apiVersion": "2022-06-01",
-                      "name": "[format('microsoft-avdi-{0}', parameters('location'))]",
-                      "location": "[parameters('location')]",
-                      "tags": "[parameters('tags')]",
-                      "kind": "Windows",
-                      "properties": {
-                        "dataCollectionEndpointId": "[if(not(empty(parameters('dataCollectionEndpointId'))), parameters('dataCollectionEndpointId'), null())]",
-                        "dataSources": {
-                          "performanceCounters": [
-                            {
-                              "streams": [
-                                "Microsoft-Perf"
-                              ],
-                              "samplingFrequencyInSeconds": 30,
-                              "counterSpecifiers": [
-                                "\\LogicalDisk(C:)\\Avg. Disk Queue Length",
-                                "\\LogicalDisk(C:)\\Current Disk Queue Length",
-                                "\\Memory\\Available Mbytes",
-                                "\\Memory\\Page Faults/sec",
-                                "\\Memory\\Pages/sec",
-                                "\\Memory\\% Committed Bytes In Use",
-                                "\\PhysicalDisk(*)\\Avg. Disk Queue Length",
-                                "\\PhysicalDisk(*)\\Avg. Disk sec/Read",
-                                "\\PhysicalDisk(*)\\Avg. Disk sec/Transfer",
-                                "\\PhysicalDisk(*)\\Avg. Disk sec/Write",
-                                "\\Processor Information(_Total)\\% Processor Time",
-                                "\\User Input Delay per Process(*)\\Max Input Delay",
-                                "\\User Input Delay per Session(*)\\Max Input Delay"
-                              ],
-                              "name": "perfCounterDataSource30"
-                            },
-                            {
-                              "streams": [
-                                "Microsoft-Perf"
-                              ],
-                              "samplingFrequencyInSeconds": 60,
-                              "counterSpecifiers": [
-                                "\\LogicalDisk(C:)\\% Free Space",
-                                "\\LogicalDisk(C:)\\Avg. Disk sec/Transfer"
-                              ],
-                              "name": "perfCounterDataSource60"
-                            }
-                          ],
-                          "windowsEventLogs": [
-                            {
-                              "streams": [
-                                "Microsoft-Event"
-                              ],
-                              "xPathQueries": [
-                                "Microsoft-Windows-TerminalServices-RemoteConnectionManager/Admin!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]",
-                                "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]",
-                                "System!*",
-                                "Microsoft-FSLogix-Apps/Operational!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]",
-                                "Application!*[System[(Level=2 or Level=3)]]",
-                                "Microsoft-FSLogix-Apps/Admin!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]"
-                              ],
-                              "name": "eventLogsDataSource"
-                            }
-                          ]
-                        },
-                        "destinations": {
-                          "logAnalytics": [
-                            {
-                              "workspaceResourceId": "[parameters('logAWorkspaceResourceId')]",
-                              "name": "la-workspace"
-                            }
-                          ]
-                        },
-                        "dataFlows": [
-                          {
-                            "streams": [
-                              "Microsoft-Perf",
-                              "Microsoft-Event"
-                            ],
-                            "destinations": [
-                              "la-workspace"
-                            ]
-                          }
-                        ]
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "dataCollectionRulesId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', format('microsoft-avdi-{0}', parameters('location')))]"
-                    }
-                  }
-                }
-              },
-              "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix')))]",
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
-              ]
-            },
-            {
-              "condition": "[parameters('enableMonitoring')]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('VMInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))]",
-              "resourceGroup": "[parameters('resourceGroupManagement')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "dataCollectionEndpointId": "[if(parameters('enableMonitoring'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value), createObject('value', ''))]",
-                  "logAWorkspaceResourceId": "[if(parameters('enableMonitoring'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value), createObject('value', ''))]",
-                  "location": {
-                    "value": "[parameters('location')]"
-                  },
-                  "tags": {
-                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/dataCollectionRules'), createObject())]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "6280630425439226598"
-                    }
-                  },
-                  "parameters": {
-                    "dataCollectionEndpointId": {
-                      "type": "string"
-                    },
-                    "location": {
-                      "type": "string"
-                    },
-                    "logAWorkspaceResourceId": {
-                      "type": "string"
-                    },
-                    "tags": {
-                      "type": "object"
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Insights/dataCollectionRules",
-                      "apiVersion": "2022-06-01",
-                      "name": "[format('MSVMI-{0}', parameters('location'))]",
-                      "location": "[parameters('location')]",
-                      "tags": "[parameters('tags')]",
-                      "properties": {
-                        "dataCollectionEndpointId": "[if(not(empty(parameters('dataCollectionEndpointId'))), parameters('dataCollectionEndpointId'), null())]",
-                        "description": "Data collection rule for VM Insights.",
-                        "dataSources": {
-                          "performanceCounters": [
-                            {
-                              "name": "VMInsightsPerfCounters",
-                              "streams": [
-                                "Microsoft-InsightsMetrics"
-                              ],
-                              "samplingFrequencyInSeconds": 60,
-                              "counterSpecifiers": [
-                                "\\VmInsights\\DetailedMetrics"
-                              ]
-                            }
-                          ]
-                        },
-                        "destinations": {
-                          "logAnalytics": [
-                            {
-                              "workspaceResourceId": "[parameters('logAWorkspaceResourceId')]",
-                              "name": "VMInsightsPerf-Logs-Dest"
-                            }
-                          ]
-                        },
-                        "dataFlows": [
-                          {
-                            "streams": [
-                              "Microsoft-InsightsMetrics"
-                            ],
-                            "destinations": [
-                              "VMInsightsPerf-Logs-Dest"
-                            ]
-                          }
-                        ]
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "dataCollectionRulesId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', format('MSVMI-{0}', parameters('location')))]"
-                    }
-                  }
-                }
-              },
-              "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix')))]",
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
-              ]
-            },
-            {
-              "condition": "[parameters('enableMonitoring')]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))]",
-              "resourceGroup": "[parameters('resourceGroupManagement')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "location": {
-                    "value": "[parameters('location')]"
-                  },
-                  "tags": {
-                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/dataCollectionEndpoints'), createObject())]"
-                  },
-                  "name": {
-                    "value": "[parameters('dataCollectionEndpointName')]"
-                  },
-                  "publicNetworkAccess": "[if(empty(parameters('azureMonitorPrivateLinkScopeResourceId')), createObject('value', 'Enabled'), createObject('value', 'Disabled'))]"
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "3917131243388682566"
-                    }
-                  },
-                  "parameters": {
-                    "name": {
-                      "type": "string"
-                    },
-                    "location": {
-                      "type": "string"
-                    },
-                    "publicNetworkAccess": {
-                      "type": "string"
-                    },
-                    "tags": {
-                      "type": "object"
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Insights/dataCollectionEndpoints",
-                      "apiVersion": "2022-06-01",
-                      "name": "[parameters('name')]",
-                      "location": "[parameters('location')]",
-                      "properties": {
-                        "networkAcls": {
-                          "publicNetworkAccess": "[parameters('publicNetworkAccess')]"
-                        }
-                      },
-                      "tags": "[parameters('tags')]"
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('name'))]"
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('azureMonitorPrivateLinkScopeResourceId'))))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('PrivateLlinkScope-{0}', parameters('deploymentSuffix'))]",
-              "location": "[deployment().location]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "privateLinkScopeResourceId": {
-                    "value": "[parameters('azureMonitorPrivateLinkScopeResourceId')]"
-                  },
-                  "scopedResourceIds": {
-                    "value": [
-                      "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]",
-                      "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
-                    ]
-                  },
-                  "deploymentSuffix": {
-                    "value": "[parameters('deploymentSuffix')]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "17290229534485454366"
-                    }
-                  },
-                  "parameters": {
-                    "privateLinkScopeResourceId": {
-                      "type": "string"
-                    },
-                    "scopedResourceIds": {
-                      "type": "array"
-                    },
-                    "deploymentSuffix": {
-                      "type": "string"
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2025-04-01",
-                      "name": "[format('addScopedResources-{0}', parameters('deploymentSuffix'))]",
-                      "subscriptionId": "[split(parameters('privateLinkScopeResourceId'), '/')[2]]",
-                      "resourceGroup": "[split(parameters('privateLinkScopeResourceId'), '/')[4]]",
-                      "properties": {
-                        "expressionEvaluationOptions": {
-                          "scope": "inner"
-                        },
-                        "mode": "Incremental",
-                        "parameters": {
-                          "privateLinkScopeResourceId": {
-                            "value": "[parameters('privateLinkScopeResourceId')]"
-                          },
-                          "scopedResourceIds": {
-                            "value": "[parameters('scopedResourceIds')]"
-                          }
-                        },
-                        "template": {
-                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                          "contentVersion": "1.0.0.0",
-                          "metadata": {
-                            "_generator": {
-                              "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "5758136482480486201"
-                            }
-                          },
-                          "parameters": {
-                            "scopedResourceIds": {
-                              "type": "array"
-                            },
-                            "privateLinkScopeResourceId": {
-                              "type": "string"
-                            }
-                          },
-                          "resources": [
-                            {
-                              "copy": {
-                                "name": "scopedResources",
-                                "count": "[length(parameters('scopedResourceIds'))]"
-                              },
-                              "type": "Microsoft.Insights/privateLinkScopes/scopedResources",
-                              "apiVersion": "2021-07-01-preview",
-                              "name": "[format('{0}/{1}', last(split(parameters('privateLinkScopeResourceId'), '/')), uniqueString(parameters('scopedResourceIds')[copyIndex()]))]",
-                              "properties": {
-                                "linkedResourceId": "[parameters('scopedResourceIds')[copyIndex()]]"
-                              }
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix')))]",
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
-              ]
             },
             {
               "condition": "[parameters('enableQuotaManagement')]",
@@ -5498,7 +5639,9 @@
                   "hostingPlanType": {
                     "value": "FunctionsPremium"
                   },
-                  "logAnalyticsWorkspaceId": "[if(parameters('enableMonitoring'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value), createObject('value', ''))]",
+                  "logAnalyticsWorkspaceId": {
+                    "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+                  },
                   "location": {
                     "value": "[parameters('location')]"
                   },
@@ -5599,32 +5742,13 @@
                     }
                   }
                 }
-              },
-              "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
-              ]
+              }
             }
           ],
           "outputs": {
             "appServicePlanId": {
               "type": "string",
               "value": "[if(parameters('enableQuotaManagement'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.hostingPlanId.value, '')]"
-            },
-            "avdInsightsDataCollectionRulesResourceId": {
-              "type": "string",
-              "value": "[if(parameters('enableMonitoring'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('AVDInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionRulesId.value, '')]"
-            },
-            "dataCollectionEndpointResourceId": {
-              "type": "string",
-              "value": "[if(parameters('enableMonitoring'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value, '')]"
-            },
-            "logAnalyticsWorkspaceResourceId": {
-              "type": "string",
-              "value": "[if(parameters('enableMonitoring'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value, '')]"
-            },
-            "vmInsightsDataCollectionRulesResourceId": {
-              "type": "string",
-              "value": "[if(parameters('enableMonitoring'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupManagement')), 'Microsoft.Resources/deployments', format('VMInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionRulesId.value, '')]"
             },
             "encryptionKeyVaultResourceId": {
               "type": "string",
@@ -5638,7 +5762,8 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-management-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Management-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },
@@ -5754,7 +5879,7 @@
           "virtualMachinesLocation": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingControlPlaneLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpointNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.privateEndpointNameConv.value]"
           },
@@ -8012,9 +8137,9 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-controlplane-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Control-Plane-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },
@@ -8115,7 +8240,7 @@
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingHostsLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "netAppVolumesSubnetResourceId": {
             "value": "[parameters('netAppVolumesSubnetResourceId')]"
           },
@@ -13853,8 +13978,9 @@
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-storage-{0}', variables('deploymentSuffix')))]"
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-FSLogix-Storage-{0}', variables('deploymentSuffix')))]"
       ]
     },
     {
@@ -13875,7 +14001,7 @@
           "artifactsUserAssignedIdentityResourceId": {
             "value": "[parameters('artifactsUserAssignedIdentityResourceId')]"
           },
-          "avdInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(not(equals(parameters('deploymentType'), 'Complete')), createObject('value', parameters('existingAVDInsightsDataCollectionRuleResourceId')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.avdInsightsDataCollectionRulesResourceId.value)), createObject('value', ''))]",
+          "avdInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(not(equals(parameters('deploymentType'), 'Complete')), createObject('value', parameters('existingAVDInsightsDataCollectionRuleResourceId')), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.avdInsightsDataCollectionRulesResourceId.value)), createObject('value', ''))]",
           "availability": {
             "value": "[parameters('availability')]"
           },
@@ -13909,7 +14035,7 @@
           "customImageResourceId": {
             "value": "[parameters('customImageResourceId')]"
           },
-          "dataCollectionEndpointResourceId": "[if(parameters('enableMonitoring'), if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', parameters('existingDataCollectionEndpointResourceId')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointResourceId.value)), createObject('value', ''))]",
+          "dataCollectionEndpointResourceId": "[if(parameters('enableMonitoring'), if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', parameters('existingDataCollectionEndpointResourceId')), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointResourceId.value)), createObject('value', ''))]",
           "dedicatedHostGroupResourceId": {
             "value": "[parameters('dedicatedHostGroupResourceId')]"
           },
@@ -14021,7 +14147,7 @@
           "keyManagementDisks": {
             "value": "[parameters('keyManagementDisks')]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingHostsLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
@@ -14108,7 +14234,7 @@
           "virtualMachineSize": {
             "value": "[parameters('virtualMachineSize')]"
           },
-          "vmInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.vmInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingVMInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
+          "vmInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.vmInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingVMInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
           "vTpmEnabled": {
             "value": "[parameters('vTpmEnabled')]"
           }
@@ -20090,8 +20216,9 @@
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-hosts-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Hosts-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },
@@ -20450,7 +20577,7 @@
       },
       "dependsOn": [
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-deployment-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Deployment-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix')))]"
       ]

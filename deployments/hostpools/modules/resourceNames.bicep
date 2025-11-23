@@ -81,10 +81,19 @@ var depVirtualMachineName = take('${depVirtualMachineNameTemp}${uniqueString(dep
 var depVirtualMachineDiskName = '${depVirtualMachineName}-${resourceAbbreviations.osdisks}'
 var depVirtualMachineNicName = '${depVirtualMachineName}-${resourceAbbreviations.networkInterfaces}'
 
-// Management and Monitoring Resource Names
+// KeyVaults, App Service Plan, Log Analytics Workspace, and Data Collection Endpoint Resource Naming Conventions
 var resourceGroupManagement = replace(
   replace(
     replace(nameConv_Shared_ResGroup, 'TOKEN', 'management'),
+    'LOCATION',
+    virtualMachinesLocationAbbreviation
+  ),
+  'RESOURCETYPE',
+  resourceAbbreviations.resourceGroups
+)
+var resourceGroupMonitoring = replace(
+  replace(
+    replace(nameConv_Shared_ResGroup, 'TOKEN', 'monitoring'),
     'LOCATION',
     virtualMachinesLocationAbbreviation
   ),
@@ -388,6 +397,7 @@ output resourceGroupGlobalFeed string = globalFeedResourceGroupName
 output resourceGroupHosts string = resourceGroupHosts
 output resourceGroupDeployment string = resourceGroupDeployment
 output resourceGroupManagement string = resourceGroupManagement
+output resourceGroupMonitoring string = resourceGroupMonitoring
 output resourceGroupStorage string = resourceGroupStorage
 output scalingPlanName string = scalingPlanName
 output storageAccountNames object = {
