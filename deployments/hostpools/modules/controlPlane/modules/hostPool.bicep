@@ -45,8 +45,10 @@ var vmDiskEncryptionSetName = empty(virtualMachineTemplate.diskEncryptionSetName
 
 var hostPoolVmTemplateTags = union(
   {
+    vmResourceGroup: virtualMachineTemplate.resourceGroup
     vmIdentityType: virtualMachineTemplate.identityType
     vmNamePrefix: virtualMachineTemplate.namePrefix
+    vmIndexPadding: virtualMachineTemplate.indexPadding
     vmImageType: virtualMachineTemplate.imageType
     vmOSDiskType: virtualMachineTemplate.osDiskType
     vmDiskSizeGB: virtualMachineTemplate.diskSizeGB

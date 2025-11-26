@@ -15,6 +15,7 @@ param hostPoolName string
 param identitySolution string
 param keyManagementDisks string
 param keyManagementStorageAccounts string
+param location string
 param ouPath string
 param resourceGroupControlPlane string
 param resourceGroupDeployment string
@@ -24,7 +25,6 @@ param resourceGroupStorage string
 param tags object
 param deploymentSuffix string
 param userAssignedIdentityNameConv string
-param virtualMachineLocation string
 param virtualMachineName string
 param virtualMachineNICName string
 param virtualMachineDiskName string
@@ -137,7 +137,7 @@ module deploymentUserAssignedIdentity '../../../sharedModules/resources/managed-
   name: 'UserAssignedIdentity-Deployment-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
-    location: virtualMachineLocation
+    location: location
     name: deploymentUserAssignedIdentityName
     tags: union(
       {
@@ -173,7 +173,7 @@ module virtualMachine 'modules/virtualMachine.bicep' = {
     domainName: domainName
     encryptionAtHost: encryptionAtHost
     identitySolution: identitySolution
-    location: virtualMachineLocation
+    location: location
     networkInterfaceName: virtualMachineNICName
     ouPath: ouPath
     subnetResourceId: virtualMachineSubnetResourceId

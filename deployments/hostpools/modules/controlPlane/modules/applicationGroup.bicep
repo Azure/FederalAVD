@@ -4,7 +4,7 @@ param desktopApplicationGroupName string
 param desktopFriendlyName string
 param hostPoolResourceId string
 param location string
-param virtualMachinesLocation string
+param virtualMachinesRegion string
 param deploymentVirtualMachineName string
 param resourceGroupDeployment string
 param appGroupSecurityGroups array
@@ -30,7 +30,7 @@ module updateDesktopFriendlyName 'updateDesktopFriendlyName.bicep' = if (!empty(
     applicationGroupResourceId: applicationGroup.id
     desktopFriendlyName: desktopFriendlyName
     userAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
-    location: virtualMachinesLocation
+    location: virtualMachinesRegion
     deploymentSuffix: deploymentSuffix
     virtualMachineName: deploymentVirtualMachineName
   }

@@ -5,9 +5,9 @@ param existingFeedWorkspaceResourceId string
 param fslogixStorageCustomPrefix string
 param identifier string
 param index string
-param controlPlaneLocation string
-param globalFeedLocation string
-param virtualMachinesLocation string
+param controlPlaneRegion string
+param globalFeedRegion string
+param virtualMachinesRegion string
 param nameConvResTypeAtEnd bool
 param virtualMachineNamePrefix string
 
@@ -17,11 +17,11 @@ var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : environment().nam
 var locations = locationsObject[locationsEnvProperty]
 
 #disable-next-line BCP329
-var varLocationVirtualMachines = startsWith(cloud, 'us') ? substring(virtualMachinesLocation, 5, length(virtualMachinesLocation)-5) : virtualMachinesLocation
-var virtualMachinesLocationAbbreviation = locations[varLocationVirtualMachines].abbreviation
+var varLocationVirtualMachines = startsWith(cloud, 'us') ? substring(virtualMachinesRegion, 5, length(virtualMachinesRegion)-5) : virtualMachinesRegion
+var virtualMachinesRegionAbbreviation = locations[varLocationVirtualMachines].abbreviation
 #disable-next-line BCP329
-var varLocationControlPlane = startsWith(cloud, 'us') ? substring(controlPlaneLocation, 5, length(controlPlaneLocation)-5) : controlPlaneLocation
-var controlPlaneLocationAbbreviation = locations[varLocationControlPlane].abbreviation
+var varLocationControlPlane = startsWith(cloud, 'us') ? substring(controlPlaneRegion, 5, length(controlPlaneRegion)-5) : controlPlaneRegion
+var controlPlaneRegionAbbreviation = locations[varLocationControlPlane].abbreviation
 
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
@@ -59,7 +59,7 @@ var resourceGroupDeployment = replace(
   replace(
     replace(nameConv_HP_ResGroups, 'TOKEN', 'deployment'),
     'LOCATION',
-    '${virtualMachinesLocationAbbreviation}'
+    '${virtualMachinesRegionAbbreviation}'
   ),
   'RESOURCETYPE',
   '${resourceAbbreviations.resourceGroups}'
@@ -69,7 +69,7 @@ var depVirtualMachineNameTemp = replace(
     replace(
       replace(nameConv_HP_Resources, 'RESOURCETYPE', ''),
       'LOCATION',
-      virtualMachinesLocationAbbreviation
+      virtualMachinesRegionAbbreviation
     ),
     'TOKEN-',
     ''
@@ -86,7 +86,7 @@ var resourceGroupManagement = replace(
   replace(
     replace(nameConv_Shared_ResGroup, 'TOKEN', 'management'),
     'LOCATION',
-    virtualMachinesLocationAbbreviation
+    virtualMachinesRegionAbbreviation
   ),
   'RESOURCETYPE',
   resourceAbbreviations.resourceGroups
@@ -95,7 +95,7 @@ var resourceGroupMonitoring = replace(
   replace(
     replace(nameConv_Shared_ResGroup, 'TOKEN', 'monitoring'),
     'LOCATION',
-    virtualMachinesLocationAbbreviation
+    virtualMachinesRegionAbbreviation
   ),
   'RESOURCETYPE',
   resourceAbbreviations.resourceGroups
@@ -105,7 +105,7 @@ var appServicePlanName = replace(
   replace(
     replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
     'LOCATION',
-    virtualMachinesLocationAbbreviation
+    virtualMachinesRegionAbbreviation
   ),
   'TOKEN-',
   ''
@@ -116,7 +116,7 @@ var keyVaultNameSecrets = replace(
   replace(
     replace(nameConv_Shared_Resources, 'TOKEN', 'sec-${uniqueStringManagement}'),
     'LOCATION',
-    virtualMachinesLocationAbbreviation
+    virtualMachinesRegionAbbreviation
   ),
   'RESOURCETYPE',
   resourceAbbreviations.keyVaults
@@ -125,7 +125,7 @@ var keyVaultNameEncryption = replace(
   replace(
     replace(nameConv_Shared_Resources, 'TOKEN', 'enc-${uniqueStringManagement}'),
     'LOCATION',
-    virtualMachinesLocationAbbreviation
+    virtualMachinesRegionAbbreviation
   ),
   'RESOURCETYPE',
   resourceAbbreviations.keyVaults
@@ -135,7 +135,7 @@ var dataCollectionEndpointName = replace(
   replace(
     replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.dataCollectionEndpoints),
     'LOCATION',
-    virtualMachinesLocationAbbreviation
+    virtualMachinesRegionAbbreviation
   ),
   'TOKEN-',
   ''
@@ -145,19 +145,19 @@ var logAnalyticsWorkspaceName = replace(
   replace(
     replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.logAnalyticsWorkspaces),
     'LOCATION',
-    virtualMachinesLocationAbbreviation
+    virtualMachinesRegionAbbreviation
   ),
   'TOKEN-',
   ''
 )
 
 // Global Feed Resources
-var globalFeedResourceGroupName = !(empty(globalFeedLocation))
+var globalFeedResourceGroupName = !(empty(globalFeedRegion))
   ? replace(
       replace(
         (nameConvReversed ? 'avd-global-feed-${nameConvSuffix}' : 'RESOURCETYPE-avd-global-feed-${nameConvSuffix}'),
         'LOCATION',
-        controlPlaneLocationAbbreviation
+        controlPlaneRegionAbbreviation
       ),
       'RESOURCETYPE',
       '${resourceAbbreviations.resourceGroups}'
@@ -176,7 +176,7 @@ var resourceGroupControlPlane = empty(existingHostPoolResourceId)
         replace(
           replace(nameConv_Shared_ResGroup, 'TOKEN', 'control-plane'),
           'LOCATION',
-          '${controlPlaneLocationAbbreviation}'
+          '${controlPlaneRegionAbbreviation}'
         ),
         'RESOURCETYPE',
         '${resourceAbbreviations.resourceGroups}'
@@ -189,7 +189,7 @@ var workspaceName = empty(existingFeedWorkspaceResourceId)
       replace(
         replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.workspaces),
         'LOCATION',
-        controlPlaneLocationAbbreviation
+        controlPlaneRegionAbbreviation
       ),
       'TOKEN-',
       ''
@@ -200,17 +200,17 @@ var workspaceName = empty(existingFeedWorkspaceResourceId)
 var desktopApplicationGroupName = replace(
   replace(replace(nameConv_HP_Resources, 'TOKEN-', ''), 'RESOURCETYPE', resourceAbbreviations.desktopApplicationGroups),
   'LOCATION',
-  controlPlaneLocationAbbreviation
+  controlPlaneRegionAbbreviation
 )
 var hostPoolName = replace(
   replace(replace(nameConv_HP_Resources, 'TOKEN-', ''), 'RESOURCETYPE', resourceAbbreviations.hostPools),
   'LOCATION',
-  controlPlaneLocationAbbreviation
+  controlPlaneRegionAbbreviation
 )
 var scalingPlanName = replace(
   replace(replace(nameConv_HP_Resources, 'TOKEN-', ''), 'RESOURCETYPE', resourceAbbreviations.scalingPlans),
   'LOCATION',
-  controlPlaneLocationAbbreviation
+  controlPlaneRegionAbbreviation
 )
 
 // Common HostPool Specific Resource Naming Conventions
@@ -218,12 +218,12 @@ var uniqueStringHosts = take(uniqueString(subscription().subscriptionId, resourc
 var appInsightsNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
   'LOCATION',
-  virtualMachinesLocationAbbreviation
+  virtualMachinesRegionAbbreviation
 )
 var functionAppNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
   'LOCATION',
-  virtualMachinesLocationAbbreviation
+  virtualMachinesRegionAbbreviation
 )
 
 var privateEndpointNameConv = replace(
@@ -242,12 +242,12 @@ var privateEndpointNICNameConv = replace(
 var recoveryServicesVaultsNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.recoveryServicesVaults),
   'LOCATION',
-  virtualMachinesLocationAbbreviation
+  virtualMachinesRegionAbbreviation
 )
 var userAssignedIdentityNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
   'LOCATION',
-  virtualMachinesLocationAbbreviation
+  virtualMachinesRegionAbbreviation
 )
 
 // Compute Resources
@@ -255,7 +255,7 @@ var resourceGroupHosts = replace(
   replace(
     replace(nameConv_HP_ResGroups, 'TOKEN', 'hosts'),
     'LOCATION',
-    '${virtualMachinesLocationAbbreviation}'
+    '${virtualMachinesRegionAbbreviation}'
   ),
   'RESOURCETYPE',
   '${resourceAbbreviations.resourceGroups}'
@@ -279,7 +279,7 @@ var diskAccessName = replace(
   replace(
     replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.diskAccesses),
     'LOCATION',
-    virtualMachinesLocationAbbreviation
+    virtualMachinesRegionAbbreviation
   ),
   'TOKEN-',
   ''
@@ -288,7 +288,7 @@ var diskAccessName = replace(
 var diskEncryptionSetNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.diskEncryptionSets),
   'LOCATION',
-  virtualMachinesLocationAbbreviation
+  virtualMachinesRegionAbbreviation
 )
 
 // Storage Resources
@@ -296,7 +296,7 @@ var resourceGroupStorage = replace(
   replace(
     replace(nameConv_HP_ResGroups, 'TOKEN', 'storage'),
     'LOCATION',
-    '${virtualMachinesLocationAbbreviation}'
+    '${virtualMachinesRegionAbbreviation}'
   ),
   'RESOURCETYPE',
   '${resourceAbbreviations.resourceGroups}'
@@ -305,7 +305,7 @@ var netAppAccountName = replace(
   replace(
     replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.netAppAccounts),
     'LOCATION',
-    virtualMachinesLocationAbbreviation
+    virtualMachinesRegionAbbreviation
   ),
   'TOKEN-',
   ''
@@ -314,7 +314,7 @@ var netAppCapacityPoolName = replace(
   replace(
     replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.netAppCapacityPools),
     'LOCATION',
-    virtualMachinesLocationAbbreviation
+    virtualMachinesRegionAbbreviation
   ),
   'TOKEN-',
   ''
@@ -382,7 +382,7 @@ output encryptionKeyNames object = {
   virtualMachines: '${hpBaseName}-encryption-key-vms'
   confidentialVMs: '${hpBaseName}-encryption-key-confidential-vms'
 }
-output smbServerLocation string = virtualMachinesLocationAbbreviation
+output smbServerLocation string = virtualMachinesRegionAbbreviation
 output logAnalyticsWorkspaceName string = logAnalyticsWorkspaceName
 output netAppAccountName string = netAppAccountName
 output netAppCapacityPoolName string = netAppCapacityPoolName

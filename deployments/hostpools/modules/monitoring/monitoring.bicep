@@ -13,8 +13,8 @@ param tags object
 // Log Analytics Workspace for AVD Insights and VM Insights
 
 module logAnalyticsWorkspace 'modules/logAnalyticsWorkspace.bicep' = {
-  scope: resourceGroup(resourceGroupMonitoring)
   name: 'LogAnalytics-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupMonitoring)
   params: {
     location: location
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName

@@ -85,6 +85,7 @@ param sessionHostBatchCount int
 param sessionHostCustomizations array
 param sessionHostRegistrationDSCUrl string
 param sessionHostIndex int
+param vmNameIndexLength int
 param storageSuffix string
 param subnetResourceId string
 param tags object
@@ -121,14 +122,14 @@ var backupPrivateDNSZoneResourceIds = [
 var nonEmptyBackupPrivateDNSZoneResourceIds = filter(backupPrivateDNSZoneResourceIds, zone => !empty(zone))
 
 // Call on the hotspool
-resource hostPoolGet 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = if(deploymentType != 'Complete') {
+resource hostPoolGet 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = if(deploymentType == 'SessionHostsOnly') {
   name: last(split(hostPoolResourceId, '/'))
   scope: resourceGroup(split(hostPoolResourceId, '/')[2], split(hostPoolResourceId, '/')[4])
 }
 
 // Required for EntraID login
 module roleAssignment_VirtualMachineUserLogin '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
-  for i in range(0, length(appGroupSecurityGroups)): if (deploymentType == 'Complete' && !contains(identitySolution, 'DomainServices')) {
+  for i in range(0, length(appGroupSecurityGroups)): if (deploymentType != 'SessionHostsOnly' && !contains(identitySolution, 'DomainServices')) {
     name: 'RA-Hosts-VMLoginUser-${i}-${deploymentSuffix}'
     scope: resourceGroup(resourceGroupHosts)
     params: {
@@ -139,19 +140,19 @@ module roleAssignment_VirtualMachineUserLogin '../../../sharedModules/resources/
   }
 ]
 
-module hostPoolUpdate 'modules/hostPoolUpdate.bicep' = if(deploymentType != 'Complete') {
+module hostPoolUpdate 'modules/hostPoolUpdate.bicep' = if(deploymentType == 'SessionHostsOnly') {
   name: 'HostPoolRegistrationTokenUpdate-${deploymentSuffix}'
   scope: resourceGroup(split(hostPoolResourceId, '/')[2], split(hostPoolResourceId, '/')[4])
   params: {
-    hostPoolType: deploymentType != 'Complete' ? hostPoolGet!.properties.hostPoolType : ''
-    loadBalancerType: deploymentType != 'Complete' ? hostPoolGet!.properties.loadBalancerType : ''
-    location: deploymentType != 'Complete' ? hostPoolGet!.location : location
-    name: deploymentType != 'Complete' ? hostPoolGet.name : ''
-    preferredAppGroupType: deploymentType != 'Complete' ? hostPoolGet!.properties.preferredAppGroupType : ''
+    hostPoolType: deploymentType == 'SessionHostsOnly' ? hostPoolGet!.properties.hostPoolType : ''
+    loadBalancerType: deploymentType == 'SessionHostsOnly' ? hostPoolGet!.properties.loadBalancerType : ''
+    location: deploymentType == 'SessionHostsOnly' ? hostPoolGet!.location : location
+    name: deploymentType == 'SessionHostsOnly' ? hostPoolGet.name : ''
+    preferredAppGroupType: deploymentType == 'SessionHostsOnly' ? hostPoolGet!.properties.preferredAppGroupType : ''
   } 
 }
 
-module diskAccessResource '../../../sharedModules/resources/compute/disk-access/main.bicep' = if (deployDiskAccessResource && deploymentType == 'Complete') {
+module diskAccessResource '../../../sharedModules/resources/compute/disk-access/main.bicep' = if (deploymentType != 'SessionHostsOnly' && deployDiskAccessResource) {
   scope: resourceGroup(resourceGroupHosts)
   name: 'DiskAccess-${deploymentSuffix}'
   params: {
@@ -183,7 +184,7 @@ module diskAccessResource '../../../sharedModules/resources/compute/disk-access/
   }
 }
 
-module diskAccessPolicy 'modules/diskNetworkAccessPolicy.bicep' = if (deployDiskAccessPolicy) {
+module diskAccessPolicy 'modules/diskNetworkAccessPolicy.bicep' = if (deploymentType != 'SessionHostsOnly' && deployDiskAccessPolicy) {
   name: 'ManagedDisks-NetworkAccess-Policy-${deploymentSuffix}'
   params: {
     diskAccessId: deployDiskAccessResource ? diskAccessResource!.outputs.resourceId : ''
@@ -192,7 +193,7 @@ module diskAccessPolicy 'modules/diskNetworkAccessPolicy.bicep' = if (deployDisk
   }
 }
 
-module customerManagedKeys 'modules/customerManagedKeys.bicep' =  if (deploymentType == 'Complete' && keyManagementDisks != 'PlatformManaged') {
+module customerManagedKeys 'modules/customerManagedKeys.bicep' =  if (deploymentType != 'SessionHostsOnly' && keyManagementDisks != 'PlatformManaged') {
   name: 'Customer-Managed-Keys-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {    
@@ -267,8 +268,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
     dedicatedHostGroupZones: dedicatedHostGroupZones
     dedicatedHostResourceId: dedicatedHostResourceId
-    diskAccessId: deploymentType == 'Complete' ? deployDiskAccessResource ? diskAccessResource!.outputs.resourceId : '' : existingDiskAccessResourceId
-    diskEncryptionSetResourceId: ( deploymentType == 'Complete' && keyManagementDisks != 'PlatformManaged' ) ? customerManagedKeys!.outputs.diskEncryptionSetResourceId : !empty(existingDiskEncryptionSetResourceId) ? existingDiskEncryptionSetResourceId : ''
+    diskAccessId: deploymentType != 'SessionHostsOnly' ? deployDiskAccessResource ? diskAccessResource!.outputs.resourceId : '' : existingDiskAccessResourceId
+    diskEncryptionSetResourceId: ( deploymentType != 'SessionHostsOnly' && keyManagementDisks != 'PlatformManaged' ) ? customerManagedKeys!.outputs.diskEncryptionSetResourceId : !empty(existingDiskEncryptionSetResourceId) ? existingDiskEncryptionSetResourceId : ''
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     domainJoinUserPassword: domainJoinUserPassword
@@ -288,7 +289,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     fslogixSizeInMBs: fslogixSizeInMBs    
     fslogixStorageService: fslogixStorageService
     hibernationEnabled: hibernationEnabled
-    hostPoolResourceId: deploymentType == 'Complete' ? hostPoolResourceId : hostPoolUpdate!.outputs.resourceId
+    hostPoolResourceId: deploymentType != 'SessionHostsOnly' ? hostPoolResourceId : hostPoolUpdate!.outputs.resourceId
     identitySolution: identitySolution
     imageOffer: imageOffer
     imagePublisher: imagePublisher
@@ -305,6 +306,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     securityType: securityType
     sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxResourcesPerTemplateDeployment
     sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxResourcesPerTemplateDeployment) + sessionHostIndex
+    vmNameIndexLength: vmNameIndexLength
     sessionHostRegistrationDSCUrl: sessionHostRegistrationDSCUrl
     storageSuffix: storageSuffix
     subnetResourceId: subnetResourceId
@@ -325,7 +327,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
   ]
 }]
 
-module recoveryServicesVault '../../../sharedModules/resources/recovery-services/vault/main.bicep' = if (deploymentType == 'Complete' && recoveryServices) {
+module recoveryServicesVault '../../../sharedModules/resources/recovery-services/vault/main.bicep' = if (deploymentType != 'SessionHostsOnly' && recoveryServices) {
   name: 'RecoveryServicesVault-VirtualMachines-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
@@ -391,7 +393,7 @@ module recoveryServicesVault '../../../sharedModules/resources/recovery-services
 }
 
 /* Disabled temporarily until we can figure out why protected Items fail via ARM/Bicep.
-module protectedItems_Vm 'modules/protectedItems.bicep' = [for i in range(1, sessionHostBatchCount): if (recoveryServices && (deploymentType == 'Complete' || !empty(existingRecoveryServicesVaultResourceId))) {
+module protectedItems_Vm 'modules/protectedItems.bicep' = [for i in range(1, sessionHostBatchCount): if (recoveryServices && (deploymentType != 'SessionHostsOnly' || !empty(existingRecoveryServicesVaultResourceId))) {
   name: 'BackupProtectedItems-VirtualMachines-${i-1}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {

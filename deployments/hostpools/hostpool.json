@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "15222685035598330654"
+      "templateHash": "11075667397598423448"
     }
   },
   "parameters": {
@@ -18,7 +18,7 @@
         "SessionHostsOnly"
       ],
       "metadata": {
-        "description": "Optional. The type of deployment to perform.  A \"Complete\" deployment will deploy the host pool, selected other resources, and session hosts.  A \"SessionHostsOnly\" deployment will only deploy the session hosts."
+        "description": "Optional. The type of deployment to perform.\n- \"Complete\" deployment will deploy the host pool, selected other resources, and session hosts.\n- \"HostpoolOnly\" deployment will only deploy the host pool portion of the control plane and the session hosts, while referencing existing resources for management and monitoring.\n- \"SessionHostsOnly\" deployment will only deploy the session hosts.\n"
       }
     },
     "identifier": {
@@ -26,7 +26,7 @@
       "defaultValue": "",
       "maxLength": 9,
       "metadata": {
-        "description": "Required. Identifier used to describe the persona of the hostpool(s).\nA persona refers to a detailed profile that represents a specific user type, considering their unique needs,\nusage patterns, and requirements. Essentially, it's a fictional character that helps IT professionals\nunderstand and address the varying demands of different users within an organization.\nEach persona might include details like:\n  Role: What job they perform within the organization.  \n  Applications: What applications they use regularly.\n  Workload: The intensity of resource usage, such as compute, storage, and network.\n  Access Needs: How they access the virtual desktop—remotely or on-premises.\n  Security Requirements: Specific security measures necessary for their role.\nThis identifier combined with the index parameter (when provided) is used to create the host pool, desktop application group,\nand other host pool specific resource names.\n"
+        "description": "Required. Identifier used to describe the persona of the hostpool(s).\nA persona refers to a detailed profile that represents a specific user type, considering their unique needs,\nusage patterns, and requirements. Essentially, it's a fictional character that helps IT professionals\nunderstand and address the varying demands of different users within an organization.\nEach persona might include details like:\n- Role: What job they perform within the organization.  \n- Applications: What applications they use regularly.\n- Workload: The intensity of resource usage, such as compute, storage, and network.\n- Access Needs: How they access the virtual desktop—remotely or on-premises.\n- Security Requirements: Specific security measures necessary for their role.\nThis identifier combined with the index parameter (when provided) is used to create the host pool, desktop application group,\nand other host pool specific resource names.\n"
       }
     },
     "index": {
@@ -34,7 +34,7 @@
       "defaultValue": "",
       "maxLength": 2,
       "metadata": {
-        "description": "Optional. An index value used to distinquish each host pool with the same persona identifier. This can be provided to shard\nthe host pool across multiple groups for performance reasons or to uniquely define host pools under the same identifier.\n"
+        "description": "Optional. An index value used to distinquish each host pool with the same persona identifier.\nThis can be provided to shard the host pool across multiple groups for performance reasons or to uniquely define host pools under the same identifier.\n"
       }
     },
     "nameConvResTypeAtEnd": {
@@ -88,7 +88,7 @@
       "type": "securestring",
       "defaultValue": "",
       "metadata": {
-        "description": "Conditional. The UPN of the privileged account to domain join the AVD session hosts to your domain. This should be an account the resides within the domain you are joining. Required when \"identitySolution\" contains \"DomainServices\"."
+        "description": "Conditional. The UPN of the privileged account to domain join the AVD session hosts to your domain.\nThis should be an account the resides within the domain you are joining. Required when \"identitySolution\" contains \"DomainServices\".\n"
       }
     },
     "credentialsKeyVaultResourceId": {
@@ -121,9 +121,16 @@
     },
     "controlPlaneLocation": {
       "type": "string",
-      "defaultValue": "[deployment().location]",
+      "defaultValue": "",
       "metadata": {
-        "description": "Optional. The deployment location for the AVD Control Plane resources."
+        "description": "Conditional. The deployment location for the AVD Control Plane resources. Required when DeploymentType is \"Complete\" or \"HostpoolOnly\"."
+      }
+    },
+    "controlPlaneSubscriptionId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The subscription Id where the AVD Control Plane resources are deployed. If not provided, the deployment subscription will be used."
       }
     },
     "existingHostPoolResourceId": {
@@ -292,13 +299,13 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. The name of the existing hosts resource group. Only used used when \"DeploymentType\" is \"SessionHostOnly\"."
+        "description": "Conditional. The name of the existing hosts resource group. Only used used when \"DeploymentType\" is \"SessionHostOnly\"."
       }
     },
     "virtualMachineNamePrefix": {
       "type": "string",
       "minLength": 2,
-      "maxLength": 12,
+      "maxLength": 13,
       "metadata": {
         "description": "Required. The Virtual Machine Name prefix."
       }
@@ -320,6 +327,12 @@
       "metadata": {
         "description": "Optional. The starting number for the session hosts. This is important when adding virtual machines to ensure an update deployment is not performed on an exiting, active session host."
       }
+    },
+    "vmNameIndexLength": {
+      "type": "int",
+      "defaultValue": 3,
+      "minValue": 1,
+      "maxValue": 4
     },
     "virtualMachineSubnetResourceId": {
       "type": "string",
@@ -619,7 +632,7 @@
         "ShardPerms"
       ],
       "metadata": {
-        "description": "Optional.\nDetermines whether or not to Shard Azure Files Storage by deploying more than one storage account, and if so how the Session Hosts are Configured.\nIf 'None' is selected, then no sharding is performed and only 1 storage account is deployed when deploying storage accounts.\nIf 'ShardOSS' is selected, then the fslogixShardGroups are used to assign share permissions and configure the session hosts with Object Specific Settings.\nIf 'ShardPerms' is selected, then storage account permissions are assigned based on the groups defined in \"appGroupSecurityGroups\" or \"fslogixShardPrincpals\".\n"
+        "description": "Optional.\nDetermines whether or not to Shard Azure Files Storage by deploying more than one storage account, and if so how the Session Hosts are Configured.\n- If 'None' is selected, then no sharding is performed and only 1 storage account is deployed when deploying storage accounts.\n- If 'ShardOSS' is selected, then the fslogixShardGroups are used to assign share permissions and configure the session hosts with Object Specific Settings.\n- If 'ShardPerms' is selected, then storage account permissions are assigned based on the groups defined in \"appGroupSecurityGroups\" or \"fslogixShardPrincpals\".\n"
       }
     },
     "fslogixAdminGroups": {
@@ -811,9 +824,9 @@
     },
     "monitoringSubscriptionId": {
       "type": "string",
-      "defaultValue": "[subscription().subscriptionId]",
+      "defaultValue": "",
       "metadata": {
-        "description": "Optional. The subscription Id where monitoring resources will be deployed. If not provided, the current subscription will be used."
+        "description": "Optional. The subscription Id where monitoring resources will be deployed. If not provided, the deployment subscription will be used."
       }
     },
     "existingLogAnalyticsWorkspaceResourceId": {
@@ -1076,6 +1089,19 @@
   },
   "variables": {
     "deploymentSuffix": "[if(startsWith(deployment().name, 'Microsoft.Template-'), substring(deployment().name, 19, 14), parameters('timeStamp'))]",
+    "controlPlaneSubscription": "[if(empty(parameters('controlPlaneSubscriptionId')), subscription().subscriptionId, parameters('controlPlaneSubscriptionId'))]",
+    "monitoringSubscription": "[if(empty(parameters('monitoringSubscriptionId')), subscription().subscriptionId, parameters('monitoringSubscriptionId'))]",
+    "hostsSubscription": "[subscription().subscriptionId]",
+    "deploymentSubscription": "[subscription().subscriptionId]",
+    "managementSubscription": "[subscription().subscriptionId]",
+    "storageSubscription": "[subscription().subscriptionId]",
+    "rbacSubs": "[union(createArray(variables('controlPlaneSubscription')), createArray(variables('hostsSubscription')))]",
+    "createDeploymentVm": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), or(or(or(or(or(contains(parameters('keyManagementStorageAccounts'), 'CustomerManaged'), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption')), not(empty(parameters('desktopFriendlyName')))), contains(parameters('identitySolution'), 'DomainServices')), contains(parameters('fslogixStorageService'), 'AzureNetApp')))]",
+    "scalingPlanSchedules": "[if(parameters('deployScalingPlan'), createArray(createObject('rampUpStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]))), 'peakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]))), 'rampDownStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]))), 'offPeakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]))), 'name', 'weekdays_schedule', 'daysOfWeek', createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 'rampUpLoadBalancingAlgorithm', parameters('scalingPlanRampUpSchedule').loadBalancingAlgorithm, 'rampUpMinimumHostsPct', parameters('scalingPlanRampUpSchedule').minimumHostsPct, 'rampUpCapacityThresholdPct', parameters('scalingPlanRampUpSchedule').capacityThresholdPct, 'peakLoadBalancingAlgorithm', parameters('scalingPlanPeakSchedule').loadBalancingAlgorithm, 'rampDownLoadBalancingAlgorithm', parameters('scalingPlanRampDownSchedule').loadBalancingAlgorithm, 'rampDownMinimumHostsPct', parameters('scalingPlanRampDownSchedule').minimumHostsPct, 'rampDownCapacityThresholdPct', parameters('scalingPlanRampDownSchedule').capacityThresholdPct, 'rampDownForceLogoffUsers', parameters('scalingPlanForceLogoff'), 'rampDownWaitTimeMinutes', parameters('scalingPlanMinsBeforeLogoff'), 'rampDownNotificationMessage', if(parameters('scalingPlanForceLogoff'), format('You will be logged off in {0} minutes. Make sure to save your work.', parameters('scalingPlanMinsBeforeLogoff')), null()), 'rampDownStopHostsWhen', 'ZeroSessions', 'offPeakLoadBalancingAlgorithm', parameters('scalingPlanOffPeakSchedule').loadBalancingAlgorithm)), createArray())]",
+    "exclusionTag": "[if(and(not(empty(parameters('scalingPlanExclusionTag'))), parameters('deployScalingPlan')), createObject('Microsoft.Compute/virtualMachines', createObject(format('{0}', parameters('scalingPlanExclusionTag')), '')), createObject())]",
+    "hostTags": "[if(not(empty(variables('exclusionTag'))), union(parameters('tags'), variables('exclusionTag')), parameters('tags'))]",
+    "fslogixNTFSGroups": "[if(empty(parameters('fslogixUserGroups')), parameters('appGroupSecurityGroups'), parameters('fslogixUserGroups'))]",
+    "fslogixStorageCount": "[if(or(equals(parameters('identitySolution'), 'EntraId'), equals(parameters('fslogixShardOptions'), 'None')), 1, length(variables('fslogixNTFSGroups')))]",
     "maxResourcesPerTemplateDeployment": 40,
     "divisionValue": "[div(parameters('sessionHostCount'), variables('maxResourcesPerTemplateDeployment'))]",
     "divisionRemainderValue": "[mod(parameters('sessionHostCount'), variables('maxResourcesPerTemplateDeployment'))]",
@@ -1084,15 +1110,9 @@
     "beginAvSetRange": "[div(parameters('sessionHostIndex'), variables('maxAvSetMembers'))]",
     "endAvSetRange": "[div(add(parameters('sessionHostCount'), parameters('sessionHostIndex')), variables('maxAvSetMembers'))]",
     "availabilitySetsCount": "[length(range(variables('beginAvSetRange'), add(sub(variables('endAvSetRange'), variables('beginAvSetRange')), 1)))]",
-    "createDeploymentVm": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), or(or(or(or(or(contains(parameters('keyManagementStorageAccounts'), 'CustomerManaged'), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption')), not(empty(parameters('desktopFriendlyName')))), contains(parameters('identitySolution'), 'DomainServices')), contains(parameters('fslogixStorageService'), 'AzureNetApp')))]",
-    "fslogixNTFSGroups": "[if(empty(parameters('fslogixUserGroups')), parameters('appGroupSecurityGroups'), parameters('fslogixUserGroups'))]",
-    "fslogixStorageCount": "[if(or(equals(parameters('identitySolution'), 'EntraId'), equals(parameters('fslogixShardOptions'), 'None')), 1, length(variables('fslogixNTFSGroups')))]",
-    "scalingPlanSchedules": "[if(parameters('deployScalingPlan'), createArray(createObject('rampUpStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]))), 'peakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]))), 'rampDownStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]))), 'offPeakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]))), 'name', 'weekdays_schedule', 'daysOfWeek', createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 'rampUpLoadBalancingAlgorithm', parameters('scalingPlanRampUpSchedule').loadBalancingAlgorithm, 'rampUpMinimumHostsPct', parameters('scalingPlanRampUpSchedule').minimumHostsPct, 'rampUpCapacityThresholdPct', parameters('scalingPlanRampUpSchedule').capacityThresholdPct, 'peakLoadBalancingAlgorithm', parameters('scalingPlanPeakSchedule').loadBalancingAlgorithm, 'rampDownLoadBalancingAlgorithm', parameters('scalingPlanRampDownSchedule').loadBalancingAlgorithm, 'rampDownMinimumHostsPct', parameters('scalingPlanRampDownSchedule').minimumHostsPct, 'rampDownCapacityThresholdPct', parameters('scalingPlanRampDownSchedule').capacityThresholdPct, 'rampDownForceLogoffUsers', parameters('scalingPlanForceLogoff'), 'rampDownWaitTimeMinutes', parameters('scalingPlanMinsBeforeLogoff'), 'rampDownNotificationMessage', if(parameters('scalingPlanForceLogoff'), format('You will be logged off in {0} minutes. Make sure to save your work.', parameters('scalingPlanMinsBeforeLogoff')), null()), 'rampDownStopHostsWhen', 'ZeroSessions', 'offPeakLoadBalancingAlgorithm', parameters('scalingPlanOffPeakSchedule').loadBalancingAlgorithm)), createArray())]",
     "sessionHostRegistrationDSCStorageAccount": "[if(startsWith(environment().name, 'USN'), 'wvdexportalcontainer', 'wvdportalstorageblob')]",
     "sessionHostRegistrationDSCUrl": "[if(startsWith(parameters('avdAgentsDSCPackage'), 'https://'), parameters('avdAgentsDSCPackage'), format('https://{0}.blob.{1}/galleryartifacts/{2}', variables('sessionHostRegistrationDSCStorageAccount'), environment().suffixes.storage, parameters('avdAgentsDSCPackage')))]",
     "deployDiskAccessResource": "[if(and(and(contains(parameters('hostPoolType'), 'Personal'), parameters('recoveryServices')), parameters('deployPrivateEndpoints')), true(), false())]",
-    "exclusionTag": "[if(and(not(empty(parameters('scalingPlanExclusionTag'))), parameters('deployScalingPlan')), createObject('Microsoft.Compute/virtualMachines', createObject(format('{0}', parameters('scalingPlanExclusionTag')), '')), createObject())]",
-    "hostTags": "[if(not(empty(variables('exclusionTag'))), union(parameters('tags'), variables('exclusionTag')), parameters('tags'))]",
     "dedicatedHostGroupName": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[8], if(not(empty(parameters('dedicatedHostGroupResourceId'))), last(split(parameters('dedicatedHostGroupResourceId'), '/')), ''))]",
     "dedicatedHostSub": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[2], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[2], ''))]",
     "dedicatedHostRG": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[4], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[4], ''))]"
@@ -1124,11 +1144,9 @@
           "index": {
             "value": "[parameters('index')]"
           },
-          "controlPlaneLocation": {
-            "value": "[parameters('controlPlaneLocation')]"
-          },
-          "globalFeedLocation": "[if(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), createObject('value', tryGet(if(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[2], split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[8]), '2023-04-01', 'full'), null()), 'location')), createObject('value', ''))]",
-          "virtualMachinesLocation": {
+          "controlPlaneRegion": "[if(empty(parameters('controlPlaneLocation')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), createObject('value', parameters('controlPlaneLocation')))]",
+          "globalFeedRegion": "[if(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), createObject('value', tryGet(if(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[2], split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[8]), '2023-04-01', 'full'), null()), 'location')), createObject('value', ''))]",
+          "virtualMachinesRegion": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
           "nameConvResTypeAtEnd": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', parameters('nameConvResTypeAtEnd')), createObject('value', coalesce(bool(tryGet(tryGet(if(not(empty(parameters('existingHostPoolResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingHostPoolResourceId'), '/')[2], split(parameters('existingHostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('existingHostPoolResourceId'), '/'))), '2024-04-03', 'full'), null()), 'tags'), 'nameConvResTypeAtEnd')), false())))]",
@@ -1143,7 +1161,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "5365265654230792561"
+              "templateHash": "7318881338498869212"
             }
           },
           "parameters": {
@@ -1162,13 +1180,13 @@
             "index": {
               "type": "string"
             },
-            "controlPlaneLocation": {
+            "controlPlaneRegion": {
               "type": "string"
             },
-            "globalFeedLocation": {
+            "globalFeedRegion": {
               "type": "string"
             },
-            "virtualMachinesLocation": {
+            "virtualMachinesRegion": {
               "type": "string"
             },
             "nameConvResTypeAtEnd": {
@@ -1468,10 +1486,10 @@
             "locationsObject": "[variables('$fxv#0')]",
             "locationsEnvProperty": "[if(startsWith(variables('cloud'), 'us'), 'other', environment().name)]",
             "locations": "[variables('locationsObject')[variables('locationsEnvProperty')]]",
-            "varLocationVirtualMachines": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('virtualMachinesLocation'), 5, sub(length(parameters('virtualMachinesLocation')), 5)), parameters('virtualMachinesLocation'))]",
-            "virtualMachinesLocationAbbreviation": "[variables('locations')[variables('varLocationVirtualMachines')].abbreviation]",
-            "varLocationControlPlane": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('controlPlaneLocation'), 5, sub(length(parameters('controlPlaneLocation')), 5)), parameters('controlPlaneLocation'))]",
-            "controlPlaneLocationAbbreviation": "[variables('locations')[variables('varLocationControlPlane')].abbreviation]",
+            "varLocationVirtualMachines": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('virtualMachinesRegion'), 5, sub(length(parameters('virtualMachinesRegion')), 5)), parameters('virtualMachinesRegion'))]",
+            "virtualMachinesRegionAbbreviation": "[variables('locations')[variables('varLocationVirtualMachines')].abbreviation]",
+            "varLocationControlPlane": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('controlPlaneRegion'), 5, sub(length(parameters('controlPlaneRegion')), 5)), parameters('controlPlaneRegion'))]",
+            "controlPlaneRegionAbbreviation": "[variables('locations')[variables('varLocationControlPlane')].abbreviation]",
             "resourceAbbreviations": "[variables('$fxv#1')]",
             "existingHostPoolName": "[if(empty(parameters('existingHostPoolResourceId')), '', split(parameters('existingHostPoolResourceId'), '/')[8])]",
             "nameConvReversed": "[if(not(empty(variables('existingHostPoolName'))), not(startsWith(variables('existingHostPoolName'), variables('resourceAbbreviations').hostPools)), parameters('nameConvResTypeAtEnd'))]",
@@ -1486,45 +1504,45 @@
             "nameConv_Shared_Resources": "[if(variables('nameConvReversed'), format('avd-TOKEN-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-TOKEN-{0}', variables('nameConvSuffix')))]",
             "nameConv_HP_ResGroups": "[if(variables('nameConvReversed'), format('avd-{0}-TOKEN-{1}', variables('hpBaseName'), variables('nameConvSuffix')), format('RESOURCETYPE-avd-{0}-TOKEN-{1}', variables('hpBaseName'), variables('nameConvSuffix')))]",
             "nameConv_HP_Resources": "[format('{0}-TOKEN-{1}', variables('hpResPrfx'), variables('nameConvSuffix'))]",
-            "resourceGroupDeployment": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'deployment'), 'LOCATION', format('{0}', variables('virtualMachinesLocationAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
-            "depVirtualMachineNameTemp": "[replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', ''), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'TOKEN-', ''), '-', '')]",
+            "resourceGroupDeployment": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'deployment'), 'LOCATION', format('{0}', variables('virtualMachinesRegionAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
+            "depVirtualMachineNameTemp": "[replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', ''), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', ''), '-', '')]",
             "depVirtualMachineName": "[take(format('{0}{1}', variables('depVirtualMachineNameTemp'), uniqueString(variables('depVirtualMachineNameTemp'))), 15)]",
             "depVirtualMachineDiskName": "[format('{0}-{1}', variables('depVirtualMachineName'), variables('resourceAbbreviations').osdisks)]",
             "depVirtualMachineNicName": "[format('{0}-{1}', variables('depVirtualMachineName'), variables('resourceAbbreviations').networkInterfaces)]",
-            "resourceGroupManagement": "[replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'management'), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
-            "resourceGroupMonitoring": "[replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'monitoring'), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
+            "resourceGroupManagement": "[replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'management'), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
+            "resourceGroupMonitoring": "[replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'monitoring'), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
             "uniqueStringManagement": "[take(uniqueString(subscription().subscriptionId, variables('resourceGroupManagement')), 6)]",
-            "appServicePlanName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').appServicePlans), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'TOKEN-', '')]",
-            "keyVaultNameSecrets": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'TOKEN', format('sec-{0}', variables('uniqueStringManagement'))), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults)]",
-            "keyVaultNameEncryption": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'TOKEN', format('enc-{0}', variables('uniqueStringManagement'))), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults)]",
-            "dataCollectionEndpointName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').dataCollectionEndpoints), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'TOKEN-', '')]",
-            "logAnalyticsWorkspaceName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').logAnalyticsWorkspaces), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'TOKEN-', '')]",
-            "globalFeedResourceGroupName": "[if(not(empty(parameters('globalFeedLocation'))), replace(replace(if(variables('nameConvReversed'), format('avd-global-feed-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-global-feed-{0}', variables('nameConvSuffix'))), 'LOCATION', variables('controlPlaneLocationAbbreviation')), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups)), '')]",
+            "appServicePlanName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').appServicePlans), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', '')]",
+            "keyVaultNameSecrets": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'TOKEN', format('sec-{0}', variables('uniqueStringManagement'))), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults)]",
+            "keyVaultNameEncryption": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'TOKEN', format('enc-{0}', variables('uniqueStringManagement'))), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults)]",
+            "dataCollectionEndpointName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').dataCollectionEndpoints), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', '')]",
+            "logAnalyticsWorkspaceName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').logAnalyticsWorkspaces), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', '')]",
+            "globalFeedResourceGroupName": "[if(not(empty(parameters('globalFeedRegion'))), replace(replace(if(variables('nameConvReversed'), format('avd-global-feed-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-global-feed-{0}', variables('nameConvSuffix'))), 'LOCATION', variables('controlPlaneRegionAbbreviation')), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups)), '')]",
             "globalFeedWorkspaceName": "[replace(if(variables('nameConvReversed'), 'avd-global-feed-RESOURCETYPE', 'RESOURCETYPE-avd-global-feed'), 'RESOURCETYPE', variables('resourceAbbreviations').workspaces)]",
-            "resourceGroupControlPlane": "[if(empty(parameters('existingHostPoolResourceId')), if(empty(parameters('existingFeedWorkspaceResourceId')), replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'control-plane'), 'LOCATION', format('{0}', variables('controlPlaneLocationAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups)), split(parameters('existingFeedWorkspaceResourceId'), '/')[4]), split(parameters('existingHostPoolResourceId'), '/')[4])]",
-            "workspaceName": "[if(empty(parameters('existingFeedWorkspaceResourceId')), replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').workspaces), 'LOCATION', variables('controlPlaneLocationAbbreviation')), 'TOKEN-', ''), last(split(parameters('existingFeedWorkspaceResourceId'), '/')))]",
-            "desktopApplicationGroupName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').desktopApplicationGroups), 'LOCATION', variables('controlPlaneLocationAbbreviation'))]",
-            "hostPoolName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').hostPools), 'LOCATION', variables('controlPlaneLocationAbbreviation'))]",
-            "scalingPlanName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').scalingPlans), 'LOCATION', variables('controlPlaneLocationAbbreviation'))]",
+            "resourceGroupControlPlane": "[if(empty(parameters('existingHostPoolResourceId')), if(empty(parameters('existingFeedWorkspaceResourceId')), replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'control-plane'), 'LOCATION', format('{0}', variables('controlPlaneRegionAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups)), split(parameters('existingFeedWorkspaceResourceId'), '/')[4]), split(parameters('existingHostPoolResourceId'), '/')[4])]",
+            "workspaceName": "[if(empty(parameters('existingFeedWorkspaceResourceId')), replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').workspaces), 'LOCATION', variables('controlPlaneRegionAbbreviation')), 'TOKEN-', ''), last(split(parameters('existingFeedWorkspaceResourceId'), '/')))]",
+            "desktopApplicationGroupName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').desktopApplicationGroups), 'LOCATION', variables('controlPlaneRegionAbbreviation'))]",
+            "hostPoolName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').hostPools), 'LOCATION', variables('controlPlaneRegionAbbreviation'))]",
+            "scalingPlanName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'TOKEN-', ''), 'RESOURCETYPE', variables('resourceAbbreviations').scalingPlans), 'LOCATION', variables('controlPlaneRegionAbbreviation'))]",
             "uniqueStringHosts": "[take(uniqueString(subscription().subscriptionId, variables('resourceGroupHosts')), 6)]",
-            "appInsightsNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').applicationInsights), 'LOCATION', variables('virtualMachinesLocationAbbreviation'))]",
-            "functionAppNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').functionApps), 'LOCATION', variables('virtualMachinesLocationAbbreviation'))]",
+            "appInsightsNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').applicationInsights), 'LOCATION', variables('virtualMachinesRegionAbbreviation'))]",
+            "functionAppNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').functionApps), 'LOCATION', variables('virtualMachinesRegionAbbreviation'))]",
             "privateEndpointNameConv": "[replace(if(variables('nameConvReversed'), 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE', 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID'), 'RESOURCETYPE', variables('resourceAbbreviations').privateEndpoints)]",
             "privateEndpointNICNameConvTemp": "[if(variables('nameConvReversed'), format('{0}-RESOURCETYPE', variables('privateEndpointNameConv')), format('RESOURCETYPE-{0}', variables('privateEndpointNameConv')))]",
             "privateEndpointNICNameConv": "[replace(variables('privateEndpointNICNameConvTemp'), 'RESOURCETYPE', variables('resourceAbbreviations').networkInterfaces)]",
-            "recoveryServicesVaultsNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').recoveryServicesVaults), 'LOCATION', variables('virtualMachinesLocationAbbreviation'))]",
-            "userAssignedIdentityNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'LOCATION', variables('virtualMachinesLocationAbbreviation'))]",
-            "resourceGroupHosts": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('virtualMachinesLocationAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
+            "recoveryServicesVaultsNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').recoveryServicesVaults), 'LOCATION', variables('virtualMachinesRegionAbbreviation'))]",
+            "userAssignedIdentityNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'LOCATION', variables('virtualMachinesRegionAbbreviation'))]",
+            "resourceGroupHosts": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('virtualMachinesRegionAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
             "vmNamePrefixWithoutDash": "[toLower(if(equals(last(parameters('virtualMachineNamePrefix')), '-'), take(parameters('virtualMachineNamePrefix'), sub(length(parameters('virtualMachineNamePrefix')), 1)), parameters('virtualMachineNamePrefix')))]",
             "availabilitySetNamePrefix": "[if(variables('nameConvReversed'), format('{0}-{1}-', variables('vmNamePrefixWithoutDash'), variables('resourceAbbreviations').availabilitySets), format('{0}-{1}-', variables('resourceAbbreviations').availabilitySets, variables('vmNamePrefixWithoutDash')))]",
             "virtualMachineNameConv": "[if(variables('nameConvReversed'), format('{0}###-{1}', parameters('virtualMachineNamePrefix'), variables('resourceAbbreviations').virtualMachines), format('{0}-{1}###', variables('resourceAbbreviations').virtualMachines, parameters('virtualMachineNamePrefix')))]",
             "diskNameConv": "[if(variables('nameConvReversed'), format('{0}###-{1}', parameters('virtualMachineNamePrefix'), variables('resourceAbbreviations').osdisks), format('{0}-{1}###', variables('resourceAbbreviations').osdisks, parameters('virtualMachineNamePrefix')))]",
             "networkInterfaceNameConv": "[if(variables('nameConvReversed'), format('{0}###-{1}', parameters('virtualMachineNamePrefix'), variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}###', variables('resourceAbbreviations').networkInterfaces, parameters('virtualMachineNamePrefix')))]",
-            "diskAccessName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').diskAccesses), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'TOKEN-', '')]",
-            "diskEncryptionSetNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').diskEncryptionSets), 'LOCATION', variables('virtualMachinesLocationAbbreviation'))]",
-            "resourceGroupStorage": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'storage'), 'LOCATION', format('{0}', variables('virtualMachinesLocationAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
-            "netAppAccountName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').netAppAccounts), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'TOKEN-', '')]",
-            "netAppCapacityPoolName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').netAppCapacityPools), 'LOCATION', variables('virtualMachinesLocationAbbreviation')), 'TOKEN-', '')]",
+            "diskAccessName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').diskAccesses), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', '')]",
+            "diskEncryptionSetNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').diskEncryptionSets), 'LOCATION', variables('virtualMachinesRegionAbbreviation'))]",
+            "resourceGroupStorage": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'storage'), 'LOCATION', format('{0}', variables('virtualMachinesRegionAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
+            "netAppAccountName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').netAppAccounts), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', '')]",
+            "netAppCapacityPoolName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').netAppCapacityPools), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', '')]",
             "appAttachStorageAccountName": "[take(format('appattach{0}', variables('uniqueStringManagement')), 15)]",
             "uniqueStringStorage": "[take(uniqueString(subscription().subscriptionId, variables('resourceGroupStorage')), 6)]",
             "fslogixStorageAccountNamePrefix": "[if(empty(parameters('fslogixStorageCustomPrefix')), format('fslogix{0}', variables('uniqueStringStorage')), toLower(parameters('fslogixStorageCustomPrefix')))]",
@@ -1635,7 +1653,7 @@
             },
             "smbServerLocation": {
               "type": "string",
-              "value": "[variables('virtualMachinesLocationAbbreviation')]"
+              "value": "[variables('virtualMachinesRegionAbbreviation')]"
             },
             "logAnalyticsWorkspaceName": {
               "type": "string",
@@ -1734,6 +1752,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Resource-Group-Deployment-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('deploymentSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1792,7 +1811,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Resource-Group-Monitoring-{0}', variables('deploymentSuffix'))]",
-      "subscriptionId": "[parameters('monitoringSubscriptionId')]",
+      "subscriptionId": "[variables('monitoringSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1851,6 +1870,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Resource-Group-Management-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('managementSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1909,6 +1929,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Resource-Group-Control-Plane-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('controlPlaneSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1916,9 +1937,7 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "location": {
-            "value": "[parameters('controlPlaneLocation')]"
-          },
+          "location": "[if(empty(parameters('controlPlaneLocation')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), createObject('value', parameters('controlPlaneLocation')))]",
           "resourceGroupName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupControlPlane.value]"
           },
@@ -1967,6 +1986,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Resource-Group-Global-Feed-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('controlPlaneSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2023,6 +2043,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Resource-Group-Hosts-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('hostsSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2081,6 +2102,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Resource-Group-FSLogix-Storage-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('storageSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2135,10 +2157,15 @@
       ]
     },
     {
+      "copy": {
+        "name": "rbac",
+        "count": "[length(variables('rbacSubs'))]"
+      },
       "condition": "[and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), not(empty(parameters('avdObjectId')))), or(parameters('deployScalingPlan'), parameters('startVmOnConnect')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Subscription-Role-Assignment-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('Subscription-Role-Assignment-{0}-{1}', copyIndex(), variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('rbacSubs')[copyIndex()]]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2207,6 +2234,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('deploymentSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2252,6 +2280,9 @@
           "keyManagementStorageAccounts": {
             "value": "[parameters('keyManagementStorageAccounts')]"
           },
+          "location": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
+          },
           "ouPath": {
             "value": "[parameters('vmOUPath')]"
           },
@@ -2274,9 +2305,6 @@
           },
           "virtualMachineAdminPassword": "[if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminPassword')), createObject('value', parameters('virtualMachineAdminPassword')))]",
           "virtualMachineAdminUserName": "[if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminUserName')), createObject('value', parameters('virtualMachineAdminUserName')))]",
-          "virtualMachineLocation": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
-          },
           "virtualMachineName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.depVirtualMachineName.value]"
           },
@@ -2297,7 +2325,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "17595581391556749593"
+              "templateHash": "6681746296665472737"
             }
           },
           "parameters": {
@@ -2340,6 +2368,9 @@
             "keyManagementStorageAccounts": {
               "type": "string"
             },
+            "location": {
+              "type": "string"
+            },
             "ouPath": {
               "type": "string"
             },
@@ -2365,9 +2396,6 @@
               "type": "string"
             },
             "userAssignedIdentityNameConv": {
-              "type": "string"
-            },
-            "virtualMachineLocation": {
               "type": "string"
             },
             "virtualMachineName": {
@@ -2439,7 +2467,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "location": {
-                    "value": "[parameters('virtualMachineLocation')]"
+                    "value": "[parameters('location')]"
                   },
                   "name": {
                     "value": "[variables('deploymentUserAssignedIdentityName')]"
@@ -2642,7 +2670,7 @@
                     "value": "[parameters('identitySolution')]"
                   },
                   "location": {
-                    "value": "[parameters('virtualMachineLocation')]"
+                    "value": "[parameters('location')]"
                   },
                   "networkInterfaceName": {
                     "value": "[parameters('virtualMachineNICName')]"
@@ -2967,7 +2995,7 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Deployment-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Deployment-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },
@@ -2976,7 +3004,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Monitoring-{0}', variables('deploymentSuffix'))]",
-      "subscriptionId": "[parameters('monitoringSubscriptionId')]",
+      "subscriptionId": "[variables('monitoringSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -3587,7 +3615,7 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Resource-Group-Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },
@@ -3596,6 +3624,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Management-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('managementSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -3645,7 +3674,7 @@
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpointSubnetResourceId": {
             "value": "[parameters('keyVaultPrivateEndpointSubnetResourceId')]"
           },
@@ -5762,8 +5791,8 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Management-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Management-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },
@@ -5772,6 +5801,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('ControlPlane-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('controlPlaneSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -5788,11 +5818,12 @@
           "avdPrivateLinkPrivateRoutes": {
             "value": "[parameters('avdPrivateLinkPrivateRoutes')]"
           },
+          "controlPlaneRegion": "[if(empty(parameters('controlPlaneLocation')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), createObject('value', parameters('controlPlaneLocation')))]",
           "deployScalingPlan": {
             "value": "[parameters('deployScalingPlan')]"
           },
-          "deploymentUserAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
-          "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineName.value), createObject('value', ''))]",
+          "deploymentUserAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
+          "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineName.value), createObject('value', ''))]",
           "desktopApplicationGroupName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.desktopApplicationGroupName.value]"
           },
@@ -5814,6 +5845,7 @@
           "globalFeedPrivateEndpointSubnetResourceId": {
             "value": "[parameters('globalFeedPrivateEndpointSubnetResourceId')]"
           },
+          "globalFeedRegion": "[if(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), createObject('value', tryGet(if(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[2], split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[8]), '2023-04-01', 'full'), null()), 'location')), createObject('value', ''))]",
           "globalWorkspaceName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.globalFeedWorkspaceName.value]"
           },
@@ -5840,11 +5872,13 @@
           },
           "hostPoolVmTemplate": {
             "value": {
+              "resourceGroup": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupHosts.value]",
               "identityType": "[parameters('identitySolution')]",
               "intuneEnrollment": "[parameters('intuneEnrollment')]",
               "domain": "[if(not(empty(parameters('domainName'))), parameters('domainName'), null())]",
               "ouPath": "[if(not(empty(parameters('vmOUPath'))), parameters('vmOUPath'), null())]",
               "namePrefix": "[parameters('virtualMachineNamePrefix')]",
+              "indexPadding": "[parameters('vmNameIndexLength')]",
               "imageType": "[if(empty(parameters('customImageResourceId')), 'Gallery', 'CustomImage')]",
               "imageUri": null,
               "customImageId": "[if(empty(parameters('customImageResourceId')), null(), parameters('customImageResourceId'))]",
@@ -5872,14 +5906,10 @@
               "nameConvResTypeAtEnd": "[parameters('nameConvResTypeAtEnd')]"
             }
           },
-          "controlPlaneLocation": {
-            "value": "[parameters('controlPlaneLocation')]"
-          },
-          "globalFeedLocation": "[if(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), createObject('value', tryGet(if(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[2], split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[8]), '2023-04-01', 'full'), null()), 'location')), createObject('value', ''))]",
-          "virtualMachinesLocation": {
+          "virtualMachinesRegion": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpointNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.privateEndpointNameConv.value]"
           },
@@ -5936,7 +5966,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "14794309648743239140"
+              "templateHash": "16003034325004518524"
             }
           },
           "parameters": {
@@ -6009,13 +6039,13 @@
             "hostPoolVmTemplate": {
               "type": "object"
             },
-            "controlPlaneLocation": {
+            "controlPlaneRegion": {
               "type": "string"
             },
-            "globalFeedLocation": {
+            "globalFeedRegion": {
               "type": "string"
             },
-            "virtualMachinesLocation": {
+            "virtualMachinesRegion": {
               "type": "string"
             },
             "logAnalyticsWorkspaceResourceId": {
@@ -6235,7 +6265,7 @@
                     "value": "[parameters('hostPoolValidationEnvironment')]"
                   },
                   "location": {
-                    "value": "[parameters('controlPlaneLocation')]"
+                    "value": "[parameters('controlPlaneRegion')]"
                   },
                   "logAnalyticsWorkspaceResourceId": {
                     "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
@@ -6276,7 +6306,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "3280796900641508259"
+                      "templateHash": "12273540182111840978"
                     }
                   },
                   "parameters": {
@@ -6348,7 +6378,7 @@
                     "vmImagePublisher": "[if(empty(parameters('virtualMachineTemplate').galleryImagePublisher), createObject(), createObject('vmImagePublisher', parameters('virtualMachineTemplate').galleryImagePublisher))]",
                     "vmImageSku": "[if(empty(parameters('virtualMachineTemplate').galleryImageSku), createObject(), createObject('vmImageSku', parameters('virtualMachineTemplate').galleryImageSKU))]",
                     "vmDiskEncryptionSetName": "[if(empty(parameters('virtualMachineTemplate').diskEncryptionSetName), createObject(), createObject('vmDiskEncryptionSetName', parameters('virtualMachineTemplate').diskEncryptionSetName))]",
-                    "hostPoolVmTemplateTags": "[union(createObject('vmIdentityType', parameters('virtualMachineTemplate').identityType, 'vmNamePrefix', parameters('virtualMachineTemplate').namePrefix, 'vmImageType', parameters('virtualMachineTemplate').imageType, 'vmOSDiskType', parameters('virtualMachineTemplate').osDiskType, 'vmDiskSizeGB', parameters('virtualMachineTemplate').diskSizeGB, 'vmSize', parameters('virtualMachineTemplate').vmSize.id, 'vmAvailability', parameters('virtualMachineTemplate').availability, 'vmEncryptionAtHost', coalesce(tryGet(parameters('virtualMachineTemplate'), 'encryptionAtHost'), false()), 'vmAcceleratedNetworking', coalesce(tryGet(parameters('virtualMachineTemplate'), 'acceleratedNetworking'), false()), 'vmHibernate', coalesce(tryGet(parameters('virtualMachineTemplate'), 'hibernate'), false()), 'vmSecurityType', coalesce(tryGet(parameters('virtualMachineTemplate'), 'securityType'), 'Standard'), 'vmSecureBoot', coalesce(tryGet(parameters('virtualMachineTemplate'), 'secureBoot'), false()), 'vmVirtualTPM', coalesce(tryGet(parameters('virtualMachineTemplate'), 'vTPM'), false()), 'vmSubnetId', parameters('virtualMachineTemplate').subnetId, 'nameConvResTypeAtEnd', parameters('virtualMachineTemplate').nameConvResTypeAtEnd), variables('vmDomain'), variables('vmOUPath'), variables('vmCustomImageId'), variables('vmImageOffer'), variables('vmImagePublisher'), variables('vmImageSku'), variables('vmIntuneEnrollment'), variables('vmDiskEncryptionSetName'))]"
+                    "hostPoolVmTemplateTags": "[union(createObject('vmResourceGroup', parameters('virtualMachineTemplate').resourceGroup, 'vmIdentityType', parameters('virtualMachineTemplate').identityType, 'vmNamePrefix', parameters('virtualMachineTemplate').namePrefix, 'vmIndexPadding', parameters('virtualMachineTemplate').indexPadding, 'vmImageType', parameters('virtualMachineTemplate').imageType, 'vmOSDiskType', parameters('virtualMachineTemplate').osDiskType, 'vmDiskSizeGB', parameters('virtualMachineTemplate').diskSizeGB, 'vmSize', parameters('virtualMachineTemplate').vmSize.id, 'vmAvailability', parameters('virtualMachineTemplate').availability, 'vmEncryptionAtHost', coalesce(tryGet(parameters('virtualMachineTemplate'), 'encryptionAtHost'), false()), 'vmAcceleratedNetworking', coalesce(tryGet(parameters('virtualMachineTemplate'), 'acceleratedNetworking'), false()), 'vmHibernate', coalesce(tryGet(parameters('virtualMachineTemplate'), 'hibernate'), false()), 'vmSecurityType', coalesce(tryGet(parameters('virtualMachineTemplate'), 'securityType'), 'Standard'), 'vmSecureBoot', coalesce(tryGet(parameters('virtualMachineTemplate'), 'secureBoot'), false()), 'vmVirtualTPM', coalesce(tryGet(parameters('virtualMachineTemplate'), 'vTPM'), false()), 'vmSubnetId', parameters('virtualMachineTemplate').subnetId, 'nameConvResTypeAtEnd', parameters('virtualMachineTemplate').nameConvResTypeAtEnd), variables('vmDomain'), variables('vmOUPath'), variables('vmCustomImageId'), variables('vmImageOffer'), variables('vmImagePublisher'), variables('vmImageSku'), variables('vmIntuneEnrollment'), variables('vmDiskEncryptionSetName'))]"
                   },
                   "resources": [
                     {
@@ -6724,10 +6754,10 @@
                     "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupControlPlane')), 'Microsoft.Resources/deployments', format('HostPool-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
                   },
                   "location": {
-                    "value": "[parameters('controlPlaneLocation')]"
+                    "value": "[parameters('controlPlaneRegion')]"
                   },
-                  "virtualMachinesLocation": {
-                    "value": "[parameters('virtualMachinesLocation')]"
+                  "virtualMachinesRegion": {
+                    "value": "[parameters('virtualMachinesRegion')]"
                   },
                   "deploymentVirtualMachineName": {
                     "value": "[parameters('deploymentVirtualMachineName')]"
@@ -6749,7 +6779,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "62520383923881518"
+                      "templateHash": "14124707028442265553"
                     }
                   },
                   "parameters": {
@@ -6771,7 +6801,7 @@
                     "location": {
                       "type": "string"
                     },
-                    "virtualMachinesLocation": {
+                    "virtualMachinesRegion": {
                       "type": "string"
                     },
                     "deploymentVirtualMachineName": {
@@ -6841,7 +6871,7 @@
                             "value": "[parameters('deploymentUserAssignedIdentityClientId')]"
                           },
                           "location": {
-                            "value": "[parameters('virtualMachinesLocation')]"
+                            "value": "[parameters('virtualMachinesRegion')]"
                           },
                           "deploymentSuffix": {
                             "value": "[parameters('deploymentSuffix')]"
@@ -6967,7 +6997,7 @@
                     ]
                   },
                   "location": {
-                    "value": "[parameters('controlPlaneLocation')]"
+                    "value": "[parameters('controlPlaneRegion')]"
                   },
                   "logAnalyticsWorkspaceResourceId": {
                     "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
@@ -7422,7 +7452,7 @@
                     "value": "[split(parameters('hostPoolType'), ' ')[0]]"
                   },
                   "location": {
-                    "value": "[parameters('virtualMachinesLocation')]"
+                    "value": "[parameters('virtualMachinesRegion')]"
                   },
                   "name": {
                     "value": "[parameters('scalingPlanName')]"
@@ -7691,7 +7721,7 @@
                     ]
                   },
                   "location": {
-                    "value": "[parameters('globalFeedLocation')]"
+                    "value": "[parameters('globalFeedRegion')]"
                   },
                   "logAnalyticsWorkspaceResourceId": {
                     "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
@@ -8137,9 +8167,9 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Control-Plane-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Control-Plane-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },
@@ -8148,6 +8178,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('FSLogix-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('storageSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -8179,8 +8210,8 @@
           "azureTablePrivateDnsZoneResourceId": {
             "value": "[parameters('azureTablePrivateDnsZoneResourceId')]"
           },
-          "deploymentUserAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
-          "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineName.value), createObject('value', ''))]",
+          "deploymentUserAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
+          "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineName.value), createObject('value', ''))]",
           "domainJoinUserPassword": "[if(contains(parameters('identitySolution'), 'DomainServices'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
           "domainJoinUserPrincipalName": "[if(contains(parameters('identitySolution'), 'DomainServices'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
           "domainName": {
@@ -8189,8 +8220,8 @@
           "domainGuid": {
             "value": "[parameters('domainGuid')]"
           },
-          "encryptionKeyVaultResourceId": "[if(or(contains(parameters('keyManagementStorageAccounts'), 'Customer'), contains(parameters('keyManagementDisks'), 'Customer')), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultResourceId.value), createObject('value', parameters('existingEncryptionKeyVaultResourceId'))), createObject('value', ''))]",
-          "encryptionKeyVaultUri": "[if(or(contains(parameters('keyManagementStorageAccounts'), 'Customer'), contains(parameters('keyManagementDisks'), 'Customer')), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultUri.value), if(empty(parameters('existingEncryptionKeyVaultResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingEncryptionKeyVaultResourceId'), '/')[2], split(parameters('existingEncryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('existingEncryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri))), createObject('value', ''))]",
+          "encryptionKeyVaultResourceId": "[if(or(contains(parameters('keyManagementStorageAccounts'), 'Customer'), contains(parameters('keyManagementDisks'), 'Customer')), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultResourceId.value), createObject('value', parameters('existingEncryptionKeyVaultResourceId'))), createObject('value', ''))]",
+          "encryptionKeyVaultUri": "[if(or(contains(parameters('keyManagementStorageAccounts'), 'Customer'), contains(parameters('keyManagementDisks'), 'Customer')), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultUri.value), if(empty(parameters('existingEncryptionKeyVaultResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingEncryptionKeyVaultResourceId'), '/')[2], split(parameters('existingEncryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('existingEncryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri))), createObject('value', ''))]",
           "fslogixAdminGroups": {
             "value": "[parameters('fslogixAdminGroups')]"
           },
@@ -8209,7 +8240,7 @@
           "functionAppDelegatedSubnetResourceId": {
             "value": "[parameters('functionAppSubnetResourceId')]"
           },
-          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
+          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
           "identitySolution": {
             "value": "[parameters('identitySolution')]"
           },
@@ -8240,7 +8271,7 @@
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "netAppVolumesSubnetResourceId": {
             "value": "[parameters('netAppVolumesSubnetResourceId')]"
           },
@@ -8278,7 +8309,7 @@
           "resourceGroupStorage": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupStorage.value]"
           },
-          "serverFarmId": "[if(parameters('deployIncreaseQuota'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.appServicePlanId.value), createObject('value', parameters('existingHostingPlanResourceId'))), createObject('value', ''))]",
+          "serverFarmId": "[if(parameters('deployIncreaseQuota'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.appServicePlanId.value), createObject('value', parameters('existingHostingPlanResourceId'))), createObject('value', ''))]",
           "shareSizeInGB": {
             "value": "[parameters('fslogixShareSizeInGB')]"
           },
@@ -13975,18 +14006,19 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-FSLogix-Storage-{0}', variables('deploymentSuffix')))]"
+        "[subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-FSLogix-Storage-{0}', variables('deploymentSuffix')))]"
       ]
     },
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Session-Hosts-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('hostsSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -14001,7 +14033,7 @@
           "artifactsUserAssignedIdentityResourceId": {
             "value": "[parameters('artifactsUserAssignedIdentityResourceId')]"
           },
-          "avdInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(not(equals(parameters('deploymentType'), 'Complete')), createObject('value', parameters('existingAVDInsightsDataCollectionRuleResourceId')), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.avdInsightsDataCollectionRulesResourceId.value)), createObject('value', ''))]",
+          "avdInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(not(equals(parameters('deploymentType'), 'Complete')), createObject('value', parameters('existingAVDInsightsDataCollectionRuleResourceId')), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.avdInsightsDataCollectionRulesResourceId.value)), createObject('value', ''))]",
           "availability": {
             "value": "[parameters('availability')]"
           },
@@ -14035,7 +14067,7 @@
           "customImageResourceId": {
             "value": "[parameters('customImageResourceId')]"
           },
-          "dataCollectionEndpointResourceId": "[if(parameters('enableMonitoring'), if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', parameters('existingDataCollectionEndpointResourceId')), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointResourceId.value)), createObject('value', ''))]",
+          "dataCollectionEndpointResourceId": "[if(parameters('enableMonitoring'), if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', parameters('existingDataCollectionEndpointResourceId')), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointResourceId.value)), createObject('value', ''))]",
           "dedicatedHostGroupResourceId": {
             "value": "[parameters('dedicatedHostGroupResourceId')]"
           },
@@ -14052,8 +14084,8 @@
           "deploymentType": {
             "value": "[parameters('deploymentType')]"
           },
-          "deploymentUserAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
-          "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineName.value), createObject('value', ''))]",
+          "deploymentUserAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
+          "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineName.value), createObject('value', ''))]",
           "diskAccessName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskAccessName.value]"
           },
@@ -14084,8 +14116,8 @@
             "value": "[parameters('encryptionAtHost')]"
           },
           "encryptionKeyName": "[if(parameters('confidentialVMOSDiskEncryption'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyNames.value.confidentialVMs), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyNames.value.virtualMachines))]",
-          "encryptionKeyVaultResourceId": "[if(or(contains(parameters('keyManagementStorageAccounts'), 'Customer'), contains(parameters('keyManagementDisks'), 'Customer')), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultResourceId.value), createObject('value', parameters('existingEncryptionKeyVaultResourceId'))), createObject('value', ''))]",
-          "encryptionKeyVaultUri": "[if(or(contains(parameters('keyManagementStorageAccounts'), 'Customer'), contains(parameters('keyManagementDisks'), 'Customer')), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultUri.value), if(empty(parameters('existingEncryptionKeyVaultResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingEncryptionKeyVaultResourceId'), '/')[2], split(parameters('existingEncryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('existingEncryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri))), createObject('value', ''))]",
+          "encryptionKeyVaultResourceId": "[if(or(contains(parameters('keyManagementStorageAccounts'), 'Customer'), contains(parameters('keyManagementDisks'), 'Customer')), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultResourceId.value), createObject('value', parameters('existingEncryptionKeyVaultResourceId'))), createObject('value', ''))]",
+          "encryptionKeyVaultUri": "[if(or(contains(parameters('keyManagementStorageAccounts'), 'Customer'), contains(parameters('keyManagementDisks'), 'Customer')), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultUri.value), if(empty(parameters('existingEncryptionKeyVaultResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingEncryptionKeyVaultResourceId'), '/')[2], split(parameters('existingEncryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('existingEncryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri))), createObject('value', ''))]",
           "existingDiskAccessResourceId": {
             "value": "[parameters('existingDiskAccessResourceId')]"
           },
@@ -14104,8 +14136,8 @@
           "fslogixFileShareNames": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.fslogixFileShareNames.value[parameters('fslogixContainerType')]]"
           },
-          "fslogixLocalStorageAccountResourceIds": "[if(and(equals(parameters('deploymentType'), 'Complete'), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value), createObject('value', parameters('fslogixExistingLocalStorageAccountResourceIds')))]",
-          "fslogixLocalNetAppVolumeResourceIds": "[if(and(equals(parameters('deploymentType'), 'Complete'), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppVolumeResourceIds.value), createObject('value', parameters('fslogixExistingLocalNetAppVolumeResourceIds')))]",
+          "fslogixLocalStorageAccountResourceIds": "[if(and(equals(parameters('deploymentType'), 'Complete'), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value), createObject('value', parameters('fslogixExistingLocalStorageAccountResourceIds')))]",
+          "fslogixLocalNetAppVolumeResourceIds": "[if(and(equals(parameters('deploymentType'), 'Complete'), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppVolumeResourceIds.value), createObject('value', parameters('fslogixExistingLocalNetAppVolumeResourceIds')))]",
           "fslogixOSSGroups": "[if(equals(parameters('fslogixShardOptions'), 'ShardOSS'), createObject('value', map(parameters('fslogixUserGroups'), lambda('group', lambdaVariables('group').name))), createObject('value', createArray()))]",
           "fslogixRemoteNetAppVolumeResourceIds": {
             "value": "[parameters('fslogixExistingRemoteNetAppVolumeResourceIds')]"
@@ -14122,7 +14154,7 @@
           "hibernationEnabled": {
             "value": "[parameters('hibernationEnabled')]"
           },
-          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
+          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
           "identitySolution": {
             "value": "[parameters('identitySolution')]"
           },
@@ -14147,7 +14179,7 @@
           "keyManagementDisks": {
             "value": "[parameters('keyManagementDisks')]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
@@ -14202,6 +14234,9 @@
           "sessionHostIndex": {
             "value": "[parameters('sessionHostIndex')]"
           },
+          "vmNameIndexLength": {
+            "value": "[parameters('vmNameIndexLength')]"
+          },
           "sessionHostRegistrationDSCUrl": {
             "value": "[variables('sessionHostRegistrationDSCUrl')]"
           },
@@ -14234,7 +14269,7 @@
           "virtualMachineSize": {
             "value": "[parameters('virtualMachineSize')]"
           },
-          "vmInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.vmInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingVMInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
+          "vmInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.vmInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingVMInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
           "vTpmEnabled": {
             "value": "[parameters('vTpmEnabled')]"
           }
@@ -14246,7 +14281,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "10250446018267648158"
+              "templateHash": "11968872435193118456"
             }
           },
           "parameters": {
@@ -14499,6 +14534,9 @@
             "sessionHostIndex": {
               "type": "int"
             },
+            "vmNameIndexLength": {
+              "type": "int"
+            },
             "storageSuffix": {
               "type": "string"
             },
@@ -14561,7 +14599,7 @@
                 "name": "roleAssignment_VirtualMachineUserLogin",
                 "count": "[length(range(0, length(parameters('appGroupSecurityGroups'))))]"
               },
-              "condition": "[and(equals(parameters('deploymentType'), 'Complete'), not(contains(parameters('identitySolution'), 'DomainServices')))]",
+              "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), not(contains(parameters('identitySolution'), 'DomainServices')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('RA-Hosts-VMLoginUser-{0}-{1}', range(0, length(parameters('appGroupSecurityGroups')))[copyIndex()], parameters('deploymentSuffix'))]",
@@ -14660,7 +14698,7 @@
               }
             },
             {
-              "condition": "[not(equals(parameters('deploymentType'), 'Complete'))]",
+              "condition": "[equals(parameters('deploymentType'), 'SessionHostsOnly')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('HostPoolRegistrationTokenUpdate-{0}', parameters('deploymentSuffix'))]",
@@ -14672,11 +14710,11 @@
                 },
                 "mode": "Incremental",
                 "parameters": {
-                  "hostPoolType": "[if(not(equals(parameters('deploymentType'), 'Complete')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').hostPoolType), createObject('value', ''))]",
-                  "loadBalancerType": "[if(not(equals(parameters('deploymentType'), 'Complete')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').loadBalancerType), createObject('value', ''))]",
-                  "location": "[if(not(equals(parameters('deploymentType'), 'Complete')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05', 'full').location), createObject('value', parameters('location')))]",
-                  "name": "[if(not(equals(parameters('deploymentType'), 'Complete')), createObject('value', last(split(parameters('hostPoolResourceId'), '/'))), createObject('value', ''))]",
-                  "preferredAppGroupType": "[if(not(equals(parameters('deploymentType'), 'Complete')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').preferredAppGroupType), createObject('value', ''))]"
+                  "hostPoolType": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').hostPoolType), createObject('value', ''))]",
+                  "loadBalancerType": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').loadBalancerType), createObject('value', ''))]",
+                  "location": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05', 'full').location), createObject('value', parameters('location')))]",
+                  "name": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', last(split(parameters('hostPoolResourceId'), '/'))), createObject('value', ''))]",
+                  "preferredAppGroupType": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').preferredAppGroupType), createObject('value', ''))]"
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -14736,7 +14774,7 @@
               }
             },
             {
-              "condition": "[and(parameters('deployDiskAccessResource'), equals(parameters('deploymentType'), 'Complete'))]",
+              "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployDiskAccessResource'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('DiskAccess-{0}', parameters('deploymentSuffix'))]",
@@ -15121,7 +15159,7 @@
               }
             },
             {
-              "condition": "[parameters('deployDiskAccessPolicy')]",
+              "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployDiskAccessPolicy'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('ManagedDisks-NetworkAccess-Policy-{0}', parameters('deploymentSuffix'))]",
@@ -15280,7 +15318,7 @@
               ]
             },
             {
-              "condition": "[and(equals(parameters('deploymentType'), 'Complete'), not(equals(parameters('keyManagementDisks'), 'PlatformManaged')))]",
+              "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), not(equals(parameters('keyManagementDisks'), 'PlatformManaged')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('Customer-Managed-Keys-{0}', parameters('deploymentSuffix'))]",
@@ -16902,8 +16940,8 @@
                   "dedicatedHostResourceId": {
                     "value": "[parameters('dedicatedHostResourceId')]"
                   },
-                  "diskAccessId": "[if(equals(parameters('deploymentType'), 'Complete'), if(parameters('deployDiskAccessResource'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value), createObject('value', '')), createObject('value', parameters('existingDiskAccessResourceId')))]",
-                  "diskEncryptionSetResourceId": "[if(and(equals(parameters('deploymentType'), 'Complete'), not(equals(parameters('keyManagementDisks'), 'PlatformManaged'))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('Customer-Managed-Keys-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), if(not(empty(parameters('existingDiskEncryptionSetResourceId'))), createObject('value', parameters('existingDiskEncryptionSetResourceId')), createObject('value', '')))]",
+                  "diskAccessId": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), if(parameters('deployDiskAccessResource'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value), createObject('value', '')), createObject('value', parameters('existingDiskAccessResourceId')))]",
+                  "diskEncryptionSetResourceId": "[if(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), not(equals(parameters('keyManagementDisks'), 'PlatformManaged'))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('Customer-Managed-Keys-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), if(not(empty(parameters('existingDiskEncryptionSetResourceId'))), createObject('value', parameters('existingDiskEncryptionSetResourceId')), createObject('value', '')))]",
                   "diskSizeGB": {
                     "value": "[parameters('diskSizeGB')]"
                   },
@@ -16973,7 +17011,7 @@
                   "hibernationEnabled": {
                     "value": "[parameters('hibernationEnabled')]"
                   },
-                  "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', parameters('hostPoolResourceId')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.Resources/deployments', format('HostPoolRegistrationTokenUpdate-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value))]",
+                  "hostPoolResourceId": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', parameters('hostPoolResourceId')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.Resources/deployments', format('HostPoolRegistrationTokenUpdate-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value))]",
                   "identitySolution": {
                     "value": "[parameters('identitySolution')]"
                   },
@@ -17018,6 +17056,9 @@
                   },
                   "sessionHostCount": "[if(and(equals(range(1, parameters('sessionHostBatchCount'))[copyIndex()], parameters('sessionHostBatchCount')), greater(parameters('divisionRemainderValue'), 0)), createObject('value', parameters('divisionRemainderValue')), createObject('value', parameters('maxResourcesPerTemplateDeployment')))]",
                   "sessionHostIndex": "[if(equals(range(1, parameters('sessionHostBatchCount'))[copyIndex()], 1), createObject('value', parameters('sessionHostIndex')), createObject('value', add(mul(sub(range(1, parameters('sessionHostBatchCount'))[copyIndex()], 1), parameters('maxResourcesPerTemplateDeployment')), parameters('sessionHostIndex'))))]",
+                  "vmNameIndexLength": {
+                    "value": "[parameters('vmNameIndexLength')]"
+                  },
                   "sessionHostRegistrationDSCUrl": {
                     "value": "[parameters('sessionHostRegistrationDSCUrl')]"
                   },
@@ -17068,7 +17109,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "11420868647004349961"
+                      "templateHash": "820055794865802717"
                     }
                   },
                   "parameters": {
@@ -17216,6 +17257,9 @@
                     "sessionHostIndex": {
                       "type": "int"
                     },
+                    "vmNameIndexLength": {
+                      "type": "int"
+                    },
                     "sessionHostRegistrationDSCUrl": {
                       "type": "string"
                     },
@@ -17353,7 +17397,7 @@
                       },
                       "type": "Microsoft.Network/networkInterfaces",
                       "apiVersion": "2020-05-01",
-                      "name": "[replace(parameters('networkInterfaceNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), 3, '0'))]",
+                      "name": "[replace(parameters('networkInterfaceNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))]",
                       "location": "[parameters('location')]",
                       "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/networkInterfaces'), createObject()))]",
                       "properties": {
@@ -17381,7 +17425,7 @@
                       },
                       "type": "Microsoft.Compute/virtualMachines",
                       "apiVersion": "2022-11-01",
-                      "name": "[replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), 3, '0'))]",
+                      "name": "[replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))]",
                       "location": "[parameters('location')]",
                       "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))]",
                       "zones": "[if(or(not(empty(parameters('dedicatedHostResourceId'))), not(empty(parameters('dedicatedHostGroupResourceId')))), parameters('dedicatedHostGroupZones'), if(and(equals(parameters('availability'), 'availabilityZones'), not(empty(parameters('availabilityZones')))), createArray(parameters('availabilityZones')[mod(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), length(parameters('availabilityZones')))]), null()))]",
@@ -17400,7 +17444,7 @@
                           "imageReference": "[variables('ImageReference')]",
                           "osDisk": {
                             "diskSizeGB": "[if(not(equals(parameters('diskSizeGB'), 0)), parameters('diskSizeGB'), null())]",
-                            "name": "[replace(parameters('osDiskNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), 3, '0'))]",
+                            "name": "[replace(parameters('osDiskNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))]",
                             "osType": "Windows",
                             "createOption": "FromImage",
                             "caching": "ReadWrite",
@@ -17414,7 +17458,7 @@
                           "dataDisks": []
                         },
                         "osProfile": {
-                          "computerName": "[format('{0}{1}', parameters('virtualMachineNamePrefix'), padLeft(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), 3, '0'))]",
+                          "computerName": "[format('{0}{1}', parameters('virtualMachineNamePrefix'), padLeft(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))]",
                           "adminUsername": "[parameters('virtualMachineAdminUserName')]",
                           "adminPassword": "[parameters('virtualMachineAdminPassword')]",
                           "windowsConfiguration": {
@@ -17427,7 +17471,7 @@
                         "networkProfile": {
                           "networkInterfaces": [
                             {
-                              "id": "[resourceId('Microsoft.Network/networkInterfaces', replace(parameters('networkInterfaceNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
+                              "id": "[resourceId('Microsoft.Network/networkInterfaces', replace(parameters('networkInterfaceNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
                               "properties": {
                                 "deleteOption": "Delete"
                               }
@@ -17458,7 +17502,7 @@
                       "condition": "[contains(parameters('identitySolution'), 'DomainServices')]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2021-03-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), 'JsonADDomainExtension')]",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'JsonADDomainExtension')]",
                       "location": "[parameters('location')]",
                       "properties": {
                         "forceUpdateTag": "[parameters('deploymentSuffix')]",
@@ -17478,7 +17522,7 @@
                         }
                       },
                       "dependsOn": [
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17489,7 +17533,7 @@
                       "condition": "[or(equals(parameters('identitySolution'), 'EntraId'), equals(parameters('identitySolution'), 'EntraKerberos'))]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2021-03-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), 'AADLoginForWindows')]",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AADLoginForWindows')]",
                       "location": "[parameters('location')]",
                       "properties": {
                         "publisher": "Microsoft.Azure.ActiveDirectory",
@@ -17499,7 +17543,7 @@
                         "settings": "[if(parameters('intuneEnrollment'), createObject('mdmId', '0000000a-0000-0000-c000-000000000000'), null())]"
                       },
                       "dependsOn": [
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17510,7 +17554,7 @@
                       "condition": "[not(startsWith(environment().name, 'USN'))]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2021-03-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), 'IaaSAntimalware')]",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'IaaSAntimalware')]",
                       "location": "[parameters('location')]",
                       "properties": {
                         "publisher": "Microsoft.Azure.Security",
@@ -17534,7 +17578,7 @@
                       "dependsOn": [
                         "extension_AADLoginForWindows",
                         "extension_JsonADDomainExtension",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17545,7 +17589,7 @@
                       "condition": "[parameters('enableMonitoring')]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2023-03-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), 'AzureMonitorAgent')]",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AzureMonitorAgent')]",
                       "location": "[parameters('location')]",
                       "properties": {
                         "publisher": "Microsoft.Azure.Monitor",
@@ -17558,7 +17602,7 @@
                         "extension_AADLoginForWindows",
                         "extension_IaasAntimalware",
                         "extension_JsonADDomainExtension",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17569,7 +17613,7 @@
                       "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('dataCollectionEndpointResourceId'))))]",
                       "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                       "apiVersion": "2022-06-01",
-                      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
+                      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
                       "name": "configurationAccessEndpoint",
                       "properties": {
                         "dataCollectionEndpointId": "[parameters('dataCollectionEndpointResourceId')]",
@@ -17577,7 +17621,7 @@
                       },
                       "dependsOn": [
                         "extension_AzureMonitorWindowsAgent",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17588,16 +17632,16 @@
                       "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('avdInsightsDataCollectionRulesResourceId'))))]",
                       "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                       "apiVersion": "2022-06-01",
-                      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
-                      "name": "[format('{0}-avdInsights-data-coll-rule-assoc', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
+                      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                      "name": "[format('{0}-avdInsights-data-coll-rule-assoc', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
                       "properties": {
                         "dataCollectionRuleId": "[parameters('avdInsightsDataCollectionRulesResourceId')]",
                         "description": "AVD Insights data collection rule association"
                       },
                       "dependsOn": [
                         "extension_AzureMonitorWindowsAgent",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17608,16 +17652,16 @@
                       "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('vmInsightsDataCollectionRulesResourceId'))))]",
                       "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                       "apiVersion": "2022-06-01",
-                      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
-                      "name": "[format('{0}-vmInsights-data-coll-rule-assoc', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
+                      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                      "name": "[format('{0}-vmInsights-data-coll-rule-assoc', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
                       "properties": {
                         "dataCollectionRuleId": "[parameters('vmInsightsDataCollectionRulesResourceId')]",
                         "description": "VM Insights data collection rule association"
                       },
                       "dependsOn": [
                         "extension_AzureMonitorWindowsAgent",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17628,16 +17672,16 @@
                       "condition": "[not(empty(parameters('securityDataCollectionRulesResourceId')))]",
                       "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                       "apiVersion": "2022-06-01",
-                      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
-                      "name": "[format('{0}-security-data-coll-rule-assoc', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
+                      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                      "name": "[format('{0}-security-data-coll-rule-assoc', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
                       "properties": {
                         "dataCollectionRuleId": "[parameters('securityDataCollectionRulesResourceId')]",
                         "description": "Security Events data collection rule association"
                       },
                       "dependsOn": [
                         "extension_AzureMonitorWindowsAgent",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17648,7 +17692,7 @@
                       "condition": "[parameters('integrityMonitoring')]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2023-09-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), 'GuestAttestation')]",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'GuestAttestation')]",
                       "location": "[parameters('location')]",
                       "properties": {
                         "publisher": "Microsoft.Azure.Security.WindowsAttestation",
@@ -17675,7 +17719,7 @@
                         "extension_AzureMonitorWindowsAgent",
                         "extension_IaasAntimalware",
                         "extension_JsonADDomainExtension",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17686,7 +17730,7 @@
                       "condition": "[variables('amdVmSize')]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2021-03-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), 'AmdGpuDriverWindows')]",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AmdGpuDriverWindows')]",
                       "location": "[parameters('location')]",
                       "properties": {
                         "publisher": "Microsoft.HpcCompute",
@@ -17700,7 +17744,7 @@
                         "extension_AzureMonitorWindowsAgent",
                         "extension_IaasAntimalware",
                         "extension_JsonADDomainExtension",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17711,7 +17755,7 @@
                       "condition": "[variables('nvidiaVmSize')]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2021-03-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), 'NvidiaGpuDriverWindows')]",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'NvidiaGpuDriverWindows')]",
                       "location": "[parameters('location')]",
                       "properties": {
                         "publisher": "Microsoft.HpcCompute",
@@ -17724,7 +17768,7 @@
                         "extension_AADLoginForWindows",
                         "extension_AzureMonitorWindowsAgent",
                         "extension_JsonADDomainExtension",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17734,7 +17778,7 @@
                       },
                       "type": "Microsoft.Compute/virtualMachines/runCommands",
                       "apiVersion": "2023-09-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), 'configureSessionHost')]",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'configureSessionHost')]",
                       "location": "[parameters('location')]",
                       "properties": {
                         "parameters": [
@@ -17818,7 +17862,7 @@
                         "extension_IaasAntimalware",
                         "extension_JsonADDomainExtension",
                         "extension_NvidiaGpuDriverWindows",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17828,7 +17872,7 @@
                       },
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2021-03-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), 'AVDAgentInstallandConfig')]",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AVDAgentInstallandConfig')]",
                       "location": "[parameters('location')]",
                       "properties": {
                         "publisher": "Microsoft.Powershell",
@@ -17858,7 +17902,7 @@
                       "dependsOn": [
                         "postDeploymentScripts",
                         "runCommand_ConfigureSessionHost",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17869,7 +17913,7 @@
                       "condition": "[not(empty(parameters('sessionHostCustomizations')))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('{0}-Customizations-{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), parameters('deploymentSuffix'))]",
+                      "name": "[format('{0}-Customizations-{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), parameters('deploymentSuffix'))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -17886,7 +17930,7 @@
                             "value": "[parameters('artifactsUserAssignedIdentityClientId')]"
                           },
                           "virtualMachineName": {
-                            "value": "[replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0'))]"
+                            "value": "[replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))]"
                           }
                         },
                         "template": {
@@ -17982,8 +18026,8 @@
                       },
                       "dependsOn": [
                         "runCommand_ConfigureSessionHost",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
@@ -17993,7 +18037,7 @@
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('{0}-disable-osDisk-PublicAccess-{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')), parameters('deploymentSuffix'))]",
+                      "name": "[format('{0}-disable-osDisk-PublicAccess-{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), parameters('deploymentSuffix'))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -18004,7 +18048,7 @@
                             "value": "[parameters('diskAccessId')]"
                           },
                           "diskName": {
-                            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0'))), '2022-11-01').storageProfile.osDisk.name]"
+                            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))), '2022-11-01').storageProfile.osDisk.name]"
                           },
                           "location": {
                             "value": "[parameters('location')]"
@@ -18013,7 +18057,7 @@
                             "value": "[parameters('deploymentSuffix')]"
                           },
                           "vmName": {
-                            "value": "[replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0'))]"
+                            "value": "[replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))]"
                           }
                         },
                         "template": {
@@ -18112,9 +18156,9 @@
                         }
                       },
                       "dependsOn": [
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0')))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     }
                   ],
@@ -18123,7 +18167,7 @@
                       "type": "array",
                       "copy": {
                         "count": "[length(range(0, parameters('sessionHostCount')))]",
-                        "input": "[replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), 3, '0'))]"
+                        "input": "[replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))]"
                       }
                     },
                     "fslogixPathExclusions": {
@@ -18152,7 +18196,7 @@
               ]
             },
             {
-              "condition": "[and(equals(parameters('deploymentType'), 'Complete'), parameters('recoveryServices'))]",
+              "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('recoveryServices'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('RecoveryServicesVault-VirtualMachines-{0}', parameters('deploymentSuffix'))]",
@@ -20213,12 +20257,12 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Hosts-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId(parameters('monitoringSubscriptionId'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('hostsSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Hosts-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('Management-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },
@@ -20227,6 +20271,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('CleanUp-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('deploymentSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -20237,20 +20282,20 @@
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineName.value), createObject('value', ''))]",
+          "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineName.value), createObject('value', ''))]",
           "resourceGroupDeployment": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupDeployment.value]"
           },
           "resourceGroupHosts": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupHosts.value]"
           },
-          "roleAssignmentIds": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityRoleAssignmentIds.value), createObject('value', createArray()))]",
+          "roleAssignmentIds": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityRoleAssignmentIds.value), createObject('value', createArray()))]",
           "deploymentSuffix": {
             "value": "[variables('deploymentSuffix')]"
           },
-          "userAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
+          "userAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
           "virtualMachineNames": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
+            "value": "[reference(subscriptionResourceId(variables('hostsSubscription'), 'Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
           }
         },
         "template": {
@@ -20576,29 +20621,29 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Deployment-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Deployment-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix')))]"
+        "[subscriptionResourceId(variables('hostsSubscription'), 'Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix')))]"
       ]
     }
   ],
   "outputs": {
     "hostPoolResourceId": {
       "type": "string",
-      "value": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value, parameters('existingHostPoolResourceId'))]"
+      "value": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), reference(subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value, parameters('existingHostPoolResourceId'))]"
     },
     "workspaceResourceId": {
       "type": "string",
-      "value": "[if(empty(parameters('existingFeedWorkspaceResourceId')), if(equals(parameters('deploymentType'), 'Complete'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.workspaceResourceId.value, ''), parameters('existingFeedWorkspaceResourceId'))]"
+      "value": "[if(empty(parameters('existingFeedWorkspaceResourceId')), if(equals(parameters('deploymentType'), 'Complete'), reference(subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.workspaceResourceId.value, ''), parameters('existingFeedWorkspaceResourceId'))]"
     },
     "fslogixLocalStorageAccountResourceIds": {
       "type": "array",
-      "value": "[if(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage')), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value, parameters('fslogixExistingLocalStorageAccountResourceIds'))]"
+      "value": "[if(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage')), reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value, parameters('fslogixExistingLocalStorageAccountResourceIds'))]"
     },
     "virtualMachineNames": {
       "type": "array",
-      "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
+      "value": "[reference(subscriptionResourceId(variables('hostsSubscription'), 'Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
     }
   }
 }
