@@ -16,6 +16,7 @@ param deploymentSuffix string
 
 var keyVaultName = last(split(keyVaultResourceId, '/'))
 var keyVaultResourceGroup = split(keyVaultResourceId, '/')[4]
+
 var roleKeyVaultCryptoUser = 'e147488a-f6f5-4113-8e2d-b22465e65bf6' //Key Vault Crypto Service Encryption User
 var roleKeyVaultCryptoReleaseUser = '08bbd89e-9f13-488c-ac41-acfcb10c90ab' // Key Vault Crypto Service Release User 
 

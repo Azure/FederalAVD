@@ -6,12 +6,12 @@ param hostPoolType string
 param location string
 param logAnalyticsWorkspaceResourceId string
 param privateEndpoint bool
-param privateEndpointLocation string
 param privateEndpointName string
 param privateEndpointNICName string
 param privateEndpointSubnetResourceId string
 param hostPoolMaxSessionLimit int
 param startVmOnConnect bool
+param storageResourceGroup string
 param enableMonitoring bool
 param tags object
 param deploymentSuffix string
@@ -19,6 +19,9 @@ param time string = utcNow('u')
 param hostPoolValidationEnvironment bool
 param virtualMachineTemplate object
 
+var resourceGroupStorage = empty(storageResourceGroup)
+  ? {}
+  : { storageResourceGroup: storageResourceGroup }
 var vmIntuneEnrollment = contains(virtualMachineTemplate.identityType, 'DomainServices')
   ? {}
   : { vmIntuneEnrollment: virtualMachineTemplate.intuneEnrollment }
@@ -45,9 +48,12 @@ var vmDiskEncryptionSetName = empty(virtualMachineTemplate.diskEncryptionSetName
   : { vmDiskEncryptionSetName: virtualMachineTemplate.diskEncryptionSetName }
 
 var hostPoolVmTemplateTags = union(
+  resourceGroupStorage,
   {
+    vmResourceGroup: virtualMachineTemplate.resourceGroup
     vmIdentityType: virtualMachineTemplate.identityType
     vmNamePrefix: virtualMachineTemplate.namePrefix
+    vmIndexPadding: virtualMachineTemplate.indexPadding
     vmImageType: virtualMachineTemplate.imageType
     vmOSDiskType: virtualMachineTemplate.osDiskType
     vmDiskSizeGB: virtualMachineTemplate.diskSizeGB
@@ -107,7 +113,7 @@ module hostPool_PrivateEndpoint '../../../../sharedModules/resources/network/pri
     groupIds: [
       'connection'
     ]
-    location: !empty(privateEndpointLocation) ? privateEndpointLocation : location
+    location: location
     name: privateEndpointName
     privateDnsZoneGroup: empty(hostPoolPrivateDnsZoneResourceId)
       ? null

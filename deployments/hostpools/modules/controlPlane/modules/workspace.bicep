@@ -7,7 +7,6 @@ param enableMonitoring bool
 param groupIds array
 param privateDnsZoneResourceId string
 param privateEndpoint bool
-param privateEndpointLocation string
 param privateEndpointName string
 param privateEndpointNICName string
 param publicNetworkAccess string
@@ -35,7 +34,7 @@ module workspace_privateEndpoint '../../../../sharedModules/resources/network/pr
   params: {
     customNetworkInterfaceName: privateEndpointNICName
     groupIds: groupIds
-    location: !empty(privateEndpointLocation) ? privateEndpointLocation : location
+    location: location
     name: privateEndpointName
     privateDnsZoneGroup: empty(privateDnsZoneResourceId) ? null : {
       privateDNSResourceIds: [

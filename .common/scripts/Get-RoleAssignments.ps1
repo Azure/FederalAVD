@@ -97,7 +97,7 @@ Try {
     } while ($ElapsedTime.TotalSeconds -lt $TimeoutSeconds)
 
     if ($FoundRoleAssignments.Count -eq 0) {
-        Write-Warning = "Role assignment not found on any resources after $TimeoutSeconds seconds. Principal ID: '$PrincipalId', Role Definition ID: '$RoleDefinitionId', Resources checked: $($ResIds -join ', ')"
+        Write-Warning "Role assignment not found on any resources after $TimeoutSeconds seconds. Principal ID: '$PrincipalId', Role Definition ID: '$RoleDefinitionId', Resources checked: $($ResIds -join ', ')"
     } elseif ($FoundRoleAssignments.Count -lt $ResIds.Count) {
         $MissingResources = $ResIds | Where-Object { -not $FoundRoleAssignments.ContainsKey($_) }
         Write-Warning "Role assignment not found on all resources after $TimeoutSeconds seconds. Principal ID: '$PrincipalId', Role Definition ID: '$RoleDefinitionId'. Missing on resources: $($MissingResources -join ', ')"

@@ -2,10 +2,7 @@ targetScope = 'subscription'
 
 param appServicePlanName string
 param azureKeyVaultPrivateDnsZoneResourceId string
-param azureMonitorPrivateLinkScopeResourceId string
-param dataCollectionEndpointName string
 param deploySecretsKeyVault bool
-param enableMonitoring bool
 param enableQuotaManagement bool
 param encryptionKeysKeyVaultName string
 param deployEncryptionKeysKeyVault bool
@@ -19,9 +16,7 @@ param keyVaultEnableSoftDelete bool
 param keyVaultEnablePurgeProtection bool
 param keyVaultRetentionInDays int
 param location string
-param logAnalyticsWorkspaceName string
-param logAnalyticsWorkspaceRetention int
-param logAnalyticsWorkspaceSku string
+param logAnalyticsWorkspaceResourceId string
 param privateEndpointSubnetResourceId string
 param privateEndpoint bool
 param privateEndpointNameConv string
@@ -63,7 +58,7 @@ module secretsKeyVault '../../../sharedModules/resources/key-vault/vault/main.bi
   scope: resourceGroup(resourceGroupManagement)
   params: {
     name: secretsKeyVaultName
-    diagnosticWorkspaceId: enableMonitoring ? logAnalyticsWorkspace!.outputs.resourceId : ''
+    diagnosticWorkspaceId: logAnalyticsWorkspaceResourceId
     enablePurgeProtection: keyVaultEnablePurgeProtection
     enableSoftDelete: keyVaultEnableSoftDelete
     softDeleteRetentionInDays: keyVaultRetentionInDays
@@ -109,7 +104,7 @@ module encryptionKeyVault '../../../sharedModules/resources/key-vault/vault/main
   scope: resourceGroup(resourceGroupManagement)
   params: {
     name: encryptionKeysKeyVaultName
-    diagnosticWorkspaceId: enableMonitoring ? logAnalyticsWorkspace!.outputs.resourceId : ''
+    diagnosticWorkspaceId:logAnalyticsWorkspaceResourceId
     enablePurgeProtection: true
     enableSoftDelete: true
     softDeleteRetentionInDays: keyVaultRetentionInDays
@@ -147,72 +142,13 @@ module encryptionKeyVault '../../../sharedModules/resources/key-vault/vault/main
   }
 }
 
-module logAnalyticsWorkspace 'modules/logAnalyticsWorkspace.bicep' = if (enableMonitoring) {
-  scope: resourceGroup(resourceGroupManagement)
-  name: 'LogAnalytics-${deploymentSuffix}'
-  params: {
-    logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
-    logAnalyticsWorkspaceRetention: logAnalyticsWorkspaceRetention
-    logAnalyticsWorkspaceSku: logAnalyticsWorkspaceSku
-    location: location
-    tags: tags[?'Microsoft.OperationalInsights/workspaces'] ?? {}
-  }
-}
-
-// Data Collection Rule for AVD Insights required for the Azure Monitor Agent
-module avdInsightsDataCollectionRules 'modules/avdInsightsDataCollectionRules.bicep' = if (enableMonitoring) {
-  name: 'AVDInsights-DataCollectionRule-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupManagement)
-  params: {
-    dataCollectionEndpointId: enableMonitoring ? dataCollectionEndpoint!.outputs.resourceId : ''
-    logAWorkspaceResourceId: enableMonitoring ? logAnalyticsWorkspace!.outputs.resourceId : ''
-    location: location
-    tags: tags[?'Microsoft.Insights/dataCollectionRules'] ?? {}
-  }
-}
-
-// Data Collection Rule for VM Insights required for the Azure Monitor Agent
-module vmInsightsDataCollectionRules 'modules/vmInsightsDataCollectionRules.bicep' = if (enableMonitoring) {
-  name: 'VMInsights-DataCollectionRule-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupManagement)
-  params: {
-    dataCollectionEndpointId: enableMonitoring ? dataCollectionEndpoint!.outputs.resourceId : ''
-    logAWorkspaceResourceId: enableMonitoring ? logAnalyticsWorkspace!.outputs.resourceId : ''
-    location: location
-    tags: tags[?'Microsoft.Insights/dataCollectionRules'] ?? {}
-  }
-}
-
-module dataCollectionEndpoint 'modules/dataCollectionEndpoint.bicep' = if (enableMonitoring) {
-  name: 'DataCollectionEndpoint-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupManagement)
-  params: {
-    location: location
-    tags: tags[?'Microsoft.Insights/dataCollectionEndpoints'] ?? {}
-    name: dataCollectionEndpointName
-    publicNetworkAccess: empty(azureMonitorPrivateLinkScopeResourceId) ? 'Enabled' : 'Disabled'
-  }
-}
-
-module updatePrivateLinkScope '../common/privateLinkScopes/get-PrivateLinkScope.bicep' = if (enableMonitoring && !empty(azureMonitorPrivateLinkScopeResourceId)) {
-  name: 'PrivateLlinkScope-${deploymentSuffix}'
-  params: {
-    privateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
-    scopedResourceIds: [
-      logAnalyticsWorkspace!.outputs.resourceId
-      dataCollectionEndpoint!.outputs.resourceId
-    ]
-    deploymentSuffix: deploymentSuffix
-  }
-}
-
 module hostingPlan 'modules/functionAppHostingPlan.bicep' = if (enableQuotaManagement) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupManagement)
   params: {
     functionAppKind: 'functionApp'
     hostingPlanType: 'FunctionsPremium'
-    logAnalyticsWorkspaceId: enableMonitoring ? logAnalyticsWorkspace!.outputs.resourceId : ''
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     location: location
     name: appServicePlanName
     planPricing: 'PremiumV3_P1v3'
@@ -222,13 +158,5 @@ module hostingPlan 'modules/functionAppHostingPlan.bicep' = if (enableQuotaManag
 }
 
 output appServicePlanId string = enableQuotaManagement ? hostingPlan!.outputs.hostingPlanId : ''
-output avdInsightsDataCollectionRulesResourceId string = enableMonitoring
-  ? avdInsightsDataCollectionRules!.outputs.dataCollectionRulesId
-  : ''
-output dataCollectionEndpointResourceId string = enableMonitoring ? dataCollectionEndpoint!.outputs.resourceId : ''
-output logAnalyticsWorkspaceResourceId string = enableMonitoring ? logAnalyticsWorkspace!.outputs.resourceId : ''
-output vmInsightsDataCollectionRulesResourceId string = enableMonitoring
-  ? vmInsightsDataCollectionRules!.outputs.dataCollectionRulesId
-  : ''
 output encryptionKeyVaultResourceId string = deployEncryptionKeysKeyVault ? encryptionKeyVault!.outputs.resourceId : ''
 output encryptionKeyVaultUri string = deployEncryptionKeysKeyVault ? encryptionKeyVault!.outputs.uri : ''
