@@ -1050,7 +1050,7 @@ module management 'modules/management/management.bicep' = if (deploymentType == 
     secretsKeyVaultName: resourceNames.outputs.keyVaultNames.secrets
     keyVaultRetentionInDays: keyVaultRetentionInDays
     location: virtualMachinesRegion
-    logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete') ? monitoring!.outputs.logAnalyticsWorkspaceResourceId : existingLogAnalyticsWorkspaceResourceId : ''
+    logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete' ? monitoring!.outputs.logAnalyticsWorkspaceResourceId : existingLogAnalyticsWorkspaceResourceId) : ''
     privateEndpointSubnetResourceId: keyVaultPrivateEndpointSubnetResourceId
     privateEndpoint: deployPrivateEndpoints
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
@@ -1200,7 +1200,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     appGroupSecurityGroups: deploymentType == 'Complete' ? map(appGroupSecurityGroups, group => group.id) : []
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
-    avdInsightsDataCollectionRulesResourceId: enableMonitoring ? (deploymentType != 'Complete' ? existingAVDInsightsDataCollectionRuleResourceId : monitoring!.outputs.avdInsightsDataCollectionRulesResourceId) : ''
+    avdInsightsDataCollectionRulesResourceId: enableMonitoring ? (deploymentType == 'Complete' ? monitoring!.outputs.avdInsightsDataCollectionRulesResourceId : existingAVDInsightsDataCollectionRuleResourceId) : ''
     availability: availability
     availabilitySetNamePrefix: resourceNames.outputs.availabilitySetNamePrefix
     availabilitySetsCount: availabilitySetsCount
@@ -1212,16 +1212,14 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
     customImageResourceId: customImageResourceId
-    dataCollectionEndpointResourceId: enableMonitoring ? (deploymentType != 'SessionHostsOnly' ? existingDataCollectionEndpointResourceId : monitoring!.outputs.dataCollectionEndpointResourceId) : ''
+    dataCollectionEndpointResourceId: enableMonitoring ? (deploymentType == 'Complete' ? monitoring!.outputs.dataCollectionEndpointResourceId : existingDataCollectionEndpointResourceId) : ''
     dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
     dedicatedHostGroupZones: !empty(dedicatedHostGroupName) ? dedicatedHostGroup!.zones : []
     dedicatedHostResourceId: dedicatedHostResourceId
     deployDiskAccessPolicy: deployDiskAccessPolicy
     deployDiskAccessResource: deployDiskAccessResource
     deploymentType: deploymentType
-    deploymentUserAssignedIdentityClientId: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
-      : ''
+    deploymentUserAssignedIdentityClientId: createDeploymentVm ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId : ''
     deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
     diskAccessName: resourceNames.outputs.diskAccessName
     diskEncryptionSetNames: resourceNames.outputs.diskEncryptionSetNames

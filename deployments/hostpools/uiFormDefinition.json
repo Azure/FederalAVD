@@ -3149,7 +3149,7 @@
 							"name": "shareManagement",
 							"type": "Microsoft.Common.Section",
 							"label": "Share Management",
-							"visible": "[steps('userProfiles').deployStorage]",
+							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly', steps('userProfiles').deployStorage)]",
 							"elements": [
 								{
 									"name": "shareManagementTextBox1",
@@ -4446,8 +4446,6 @@
 				"keyExpirationInDays": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.keyExpirationInDays, 180)]",
 				"enableMonitoring": "[steps('management').monitoring.enableMonitoring]",
 				"monitoringSubscriptionId": "[if(steps('management').monitoring.enableMonitoring, steps('management').monitoring.subscription.subscriptionId, '')]",
-				"logAnalyticsWorkspaceRetention": 30,
-				"logAnalyticsWorkspaceSku": "PerGB2018",
 				"existingLogAnalyticsWorkspaceResourceId": "[if(and(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').monitoring.enableMonitoring), steps('management').monitoring.logAnalyticsWorkspace, '')]",
 				"existingAVDInsightsDataCollectionRuleResourceId": "[if(and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring), steps('management').monitoring.avdInsightsDataCollectionRule, '')]",
 				"existingVMInsightsDataCollectionRuleResourceId": "[if(and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring), steps('management').monitoring.vmInsightsDataCollectionRule, '')]",

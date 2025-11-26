@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "2443000953652312412"
+      "templateHash": "6155262840878434245"
     }
   },
   "parameters": {
@@ -14044,7 +14044,7 @@
           "artifactsUserAssignedIdentityResourceId": {
             "value": "[parameters('artifactsUserAssignedIdentityResourceId')]"
           },
-          "avdInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(not(equals(parameters('deploymentType'), 'Complete')), createObject('value', parameters('existingAVDInsightsDataCollectionRuleResourceId')), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.avdInsightsDataCollectionRulesResourceId.value)), createObject('value', ''))]",
+          "avdInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.avdInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingAVDInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
           "availability": {
             "value": "[parameters('availability')]"
           },
@@ -14078,7 +14078,7 @@
           "customImageResourceId": {
             "value": "[parameters('customImageResourceId')]"
           },
-          "dataCollectionEndpointResourceId": "[if(parameters('enableMonitoring'), if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', parameters('existingDataCollectionEndpointResourceId')), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointResourceId.value)), createObject('value', ''))]",
+          "dataCollectionEndpointResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointResourceId.value), createObject('value', parameters('existingDataCollectionEndpointResourceId'))), createObject('value', ''))]",
           "dedicatedHostGroupResourceId": {
             "value": "[parameters('dedicatedHostGroupResourceId')]"
           },
