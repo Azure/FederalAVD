@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "11075667397598423448"
+      "templateHash": "2443000953652312412"
     }
   },
   "parameters": {
@@ -5937,6 +5937,7 @@
           "startVmOnConnect": {
             "value": "[parameters('startVmOnConnect')]"
           },
+          "storageResourceGroup": "[if(parameters('deployFSLogixStorage'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupStorage.value), createObject('value', ''))]",
           "tags": {
             "value": "[parameters('tags')]"
           },
@@ -5966,7 +5967,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "16003034325004518524"
+              "templateHash": "779465603363269184"
             }
           },
           "parameters": {
@@ -6077,6 +6078,9 @@
             },
             "startVmOnConnect": {
               "type": "bool"
+            },
+            "storageResourceGroup": {
+              "type": "string"
             },
             "tags": {
               "type": "object"
@@ -6289,6 +6293,9 @@
                   "startVmOnConnect": {
                     "value": "[parameters('startVmOnConnect')]"
                   },
+                  "storageResourceGroup": {
+                    "value": "[parameters('storageResourceGroup')]"
+                  },
                   "tags": {
                     "value": "[parameters('tags')]"
                   },
@@ -6306,7 +6313,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "12273540182111840978"
+                      "templateHash": "5869243656523356782"
                     }
                   },
                   "parameters": {
@@ -6349,6 +6356,9 @@
                     "startVmOnConnect": {
                       "type": "bool"
                     },
+                    "storageResourceGroup": {
+                      "type": "string"
+                    },
                     "enableMonitoring": {
                       "type": "bool"
                     },
@@ -6370,6 +6380,7 @@
                     }
                   },
                   "variables": {
+                    "resourceGroupStorage": "[if(empty(parameters('storageResourceGroup')), createObject(), createObject('storageResourceGroup', parameters('storageResourceGroup')))]",
                     "vmIntuneEnrollment": "[if(contains(parameters('virtualMachineTemplate').identityType, 'DomainServices'), createObject(), createObject('vmIntuneEnrollment', parameters('virtualMachineTemplate').intuneEnrollment))]",
                     "vmDomain": "[if(empty(parameters('virtualMachineTemplate').domain), createObject(), createObject('vmDomain', parameters('virtualMachineTemplate').domain))]",
                     "vmOUPath": "[if(empty(parameters('virtualMachineTemplate').ouPath), createObject(), createObject('vmOUPath', parameters('virtualMachineTemplate').ouPath))]",
@@ -6378,7 +6389,7 @@
                     "vmImagePublisher": "[if(empty(parameters('virtualMachineTemplate').galleryImagePublisher), createObject(), createObject('vmImagePublisher', parameters('virtualMachineTemplate').galleryImagePublisher))]",
                     "vmImageSku": "[if(empty(parameters('virtualMachineTemplate').galleryImageSku), createObject(), createObject('vmImageSku', parameters('virtualMachineTemplate').galleryImageSKU))]",
                     "vmDiskEncryptionSetName": "[if(empty(parameters('virtualMachineTemplate').diskEncryptionSetName), createObject(), createObject('vmDiskEncryptionSetName', parameters('virtualMachineTemplate').diskEncryptionSetName))]",
-                    "hostPoolVmTemplateTags": "[union(createObject('vmResourceGroup', parameters('virtualMachineTemplate').resourceGroup, 'vmIdentityType', parameters('virtualMachineTemplate').identityType, 'vmNamePrefix', parameters('virtualMachineTemplate').namePrefix, 'vmIndexPadding', parameters('virtualMachineTemplate').indexPadding, 'vmImageType', parameters('virtualMachineTemplate').imageType, 'vmOSDiskType', parameters('virtualMachineTemplate').osDiskType, 'vmDiskSizeGB', parameters('virtualMachineTemplate').diskSizeGB, 'vmSize', parameters('virtualMachineTemplate').vmSize.id, 'vmAvailability', parameters('virtualMachineTemplate').availability, 'vmEncryptionAtHost', coalesce(tryGet(parameters('virtualMachineTemplate'), 'encryptionAtHost'), false()), 'vmAcceleratedNetworking', coalesce(tryGet(parameters('virtualMachineTemplate'), 'acceleratedNetworking'), false()), 'vmHibernate', coalesce(tryGet(parameters('virtualMachineTemplate'), 'hibernate'), false()), 'vmSecurityType', coalesce(tryGet(parameters('virtualMachineTemplate'), 'securityType'), 'Standard'), 'vmSecureBoot', coalesce(tryGet(parameters('virtualMachineTemplate'), 'secureBoot'), false()), 'vmVirtualTPM', coalesce(tryGet(parameters('virtualMachineTemplate'), 'vTPM'), false()), 'vmSubnetId', parameters('virtualMachineTemplate').subnetId, 'nameConvResTypeAtEnd', parameters('virtualMachineTemplate').nameConvResTypeAtEnd), variables('vmDomain'), variables('vmOUPath'), variables('vmCustomImageId'), variables('vmImageOffer'), variables('vmImagePublisher'), variables('vmImageSku'), variables('vmIntuneEnrollment'), variables('vmDiskEncryptionSetName'))]"
+                    "hostPoolVmTemplateTags": "[union(variables('resourceGroupStorage'), createObject('vmResourceGroup', parameters('virtualMachineTemplate').resourceGroup, 'vmIdentityType', parameters('virtualMachineTemplate').identityType, 'vmNamePrefix', parameters('virtualMachineTemplate').namePrefix, 'vmIndexPadding', parameters('virtualMachineTemplate').indexPadding, 'vmImageType', parameters('virtualMachineTemplate').imageType, 'vmOSDiskType', parameters('virtualMachineTemplate').osDiskType, 'vmDiskSizeGB', parameters('virtualMachineTemplate').diskSizeGB, 'vmSize', parameters('virtualMachineTemplate').vmSize.id, 'vmAvailability', parameters('virtualMachineTemplate').availability, 'vmEncryptionAtHost', coalesce(tryGet(parameters('virtualMachineTemplate'), 'encryptionAtHost'), false()), 'vmAcceleratedNetworking', coalesce(tryGet(parameters('virtualMachineTemplate'), 'acceleratedNetworking'), false()), 'vmHibernate', coalesce(tryGet(parameters('virtualMachineTemplate'), 'hibernate'), false()), 'vmSecurityType', coalesce(tryGet(parameters('virtualMachineTemplate'), 'securityType'), 'Standard'), 'vmSecureBoot', coalesce(tryGet(parameters('virtualMachineTemplate'), 'secureBoot'), false()), 'vmVirtualTPM', coalesce(tryGet(parameters('virtualMachineTemplate'), 'vTPM'), false()), 'vmSubnetId', parameters('virtualMachineTemplate').subnetId, 'nameConvResTypeAtEnd', parameters('virtualMachineTemplate').nameConvResTypeAtEnd), variables('vmDomain'), variables('vmOUPath'), variables('vmCustomImageId'), variables('vmImageOffer'), variables('vmImagePublisher'), variables('vmImageSku'), variables('vmIntuneEnrollment'), variables('vmDiskEncryptionSetName'))]"
                   },
                   "resources": [
                     {

@@ -3071,7 +3071,7 @@
 									"multiselect": true,
 									"toolTip": "",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.location, steps('hosts').scope.location.name)), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('basics').hostPoolApi.tags))), equals(first(skip(split(sa.id, '/'), 4)), steps('basics').hostPoolApi.tags.storageResourceGroup), equals(sa.location, steps('hosts').scope.location.name))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
 										"required": true
 									},
 									"visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)))]"
@@ -3736,7 +3736,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Network",
 									"multiLine": true,
-									"defaultValue": "[steps('zeroTrust').privateEndpoints.managementVirtualNetwork.name]",
+									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
 									"toolTip": "Select the virtual network for the storage account and/or recovery services vault private endpoints.<br><br><b>Important:</b> The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
@@ -3758,7 +3758,6 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Private Endpoints Subnet",
 									"toolTip": "Select an existing subnet for the private Endpoints.",
-									"defaultValue": "[steps('zeroTrust').privateEndpoints.keyVaultsSubnet.name]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.hostpoolSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
 										"required": true
@@ -4046,7 +4045,7 @@
 									"label": "Virtual Network",
 									"multiLine": true,
 									"toolTip": "Select the virtual network where the AVD Private Link Hostpool Connection private endpoints will be created. Note that only virtual networks located in the same region as the host pool (selected on the Control Plane blade).",
-									"defaultValue": "[steps('zeroTrust').privateEndpoints.hostpoolVirtualNetwork.id]",
+									"defaultValue": "[steps('zeroTrust').privateEndpoints.hostpoolVirtualNetwork.name]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('controlPlane').virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('controlPlane').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true

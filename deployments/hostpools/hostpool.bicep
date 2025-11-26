@@ -1106,6 +1106,7 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
     scalingPlanSchedules: scalingPlanSchedules
     scalingPlanExclusionTag: scalingPlanExclusionTag
     startVmOnConnect: startVmOnConnect
+    storageResourceGroup: deployFSLogixStorage ? resourceNames.outputs.resourceGroupStorage : ''
     tags: tags
     deploymentSuffix: deploymentSuffix
     virtualMachinesTimeZone: virtualMachinesTimeZone
