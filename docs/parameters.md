@@ -6,12 +6,11 @@
 
 ### Required Parameters
 
-| Parameter | Description | Type | Allowed | Default |
-| --------- | ----------- | :--: | :-----: | ------- |
-
-| `identitySolution` | The service providing domain services for Azure Virtual Desktop.  This is needed to properly configure the session hosts and if applicable, the Azure Storage Account. | string | 'ActiveDirectoryDomainServices'<br/>'EntraDomainServices'<br/>'EntraId'<br/>'EntraKerberos' | |
-| `virtualMachineNamePrefix` | The prefix of the virtual machine name. Virtual Machines are named based on the prefix with the 3 character index incremented at the end (i.e., prefix001, prefix002, etc.) | string | 2 - 12 characters | |
-| `virtualMachineSubnetResourceId` | The resource Id of the subnet onto which the Virtual Machines will be deployed. | string | resource id | |
+| Parameter | Description | Type | Allowed |
+| --------- | ----------- | :--: | :-----: |
+| `identitySolution` | The service providing domain services for Azure Virtual Desktop.  This is needed to properly configure the session hosts and if applicable, the Azure Storage Account. | string | 'ActiveDirectoryDomainServices'<br/>'EntraDomainServices'<br/>'EntraId'<br/>'EntraKerberos' |
+| `virtualMachineNamePrefix` | The prefix of the virtual machine name. Virtual Machines are named based on the prefix with the 3 character index incremented at the end (i.e., prefix001, prefix002, etc.) | string | 2 - 12 characters |
+| `virtualMachineSubnetResourceId` | The resource Id of the subnet onto which the Virtual Machines will be deployed. | string | resource id |
 
 ### Conditional Parameters
 
@@ -53,6 +52,7 @@
 | `avdPrivateLinkPrivateRoutes` | Determines if Azure Private Link with Azure Virtual Desktop is enabled. Selecting "None" disables AVD Private Link deployment. Selecting one of the other options enables deployment of the required endpoints. See [AVD Private Link Setup](https://learn.microsoft.com/en-us/azure/virtual-desktop/private-link-setup?tabs=portal%2Cportal-2) for more information. | string | 'None'<br/>'HostPool'<br/>'FeedAndHostPool' | 'None' |
 | `azureMonitorPrivateLinkScopeResourceId` | The resource Id of an existing Azure Monitor Private Link Scope resource. If specified, the log analytics workspace and data collection endpoint created by this solution will automatically be associated to this resource to configure private routing of Azure Monitor traffic. | string | valid resource Id | '' |
 | `confidentialVMOSDiskEncryption` | Confidential disk encryption is an additional layer of encryption which binds the disk encryption keys to the virtual machine TPM and makes the disk content accessible only to the VM. | bool | true<br/>false | false |
+| `controlPlaneLocation` | The region to which the control plane resources should be deployed. If this is not set, the control plane will be deployed to the same region as the virtual machines and overall deployment | string | region | '' |
 | `controlPlaneSubscriptionId `| The subscription ID to which the control plane resources should be deployed. If this is not set, the control plane will be deployed to the same subscription as the virtual machines and the overall deployment. | string | subscription id | '' |
 | `customImageResourceId` | The resource ID for the Compute Gallery Image Version. Do not set this value if using a marketplace image. | string | resource id | '' |
 | `dedicatedHostResourceId` | The resource Id of a specific Dedicated Host on which to deploy the Virtual Machines. This parameter takes precedence over the `dedicatedHostGroupResourceId` parameter. | string | resource id | '' |
@@ -64,8 +64,7 @@
 | `diskSizeGB` | The size of the session host OS disks. When set to 0, it defaults to the image size. | int | 0<br/>32<br/>64<br/>128<br/>256<br/>512<br/>1024<br/>2048<br/> | 0 |
 | `enableAcceleratedNetworking` | Determines whether or not to enable accelerated networking on the session host vms. | bool | true<br/>false | true | 
 | `existingAVDInsightsDataCollectionRuleResourceId` | The resource Id of the AVD Insights data collection rule to use when `deploymentType` = 'SessionHostsOnly'. | string | resourceId | '' |
-| `existingControlPlaneLogAnalyticsWorkspaceResourceId` | The resource id of the existing log analytics workspace to which diagnostic logs from the control plane should be sent. This will be used when the `deploymentType` = 'HostpoolOnly'. | resource id | | '' |
-| `existingHostsLogAnalyticsWorkspaceResourceId` | The resource id of the existing log analytics workspace to which storage account diagnostic logs will be sent. This will be used when the `deploymentType` = 'HostpoolOnly'. | resource id | | '' |
+| `existingLogAnalyticsWorkspaceResourceId` | The resource id of the existing log analytics workspace to which storage account diagnostic logs will be sent. This will be used when the `deploymentType` = 'HostpoolOnly'. | resource id | | '' |
 | `existingDataCollectionEndpointResourceId` | The resource Id of the Data Collection Endpoint to use when `deploymentType` = 'SessionHostsOnly'. | string | resourceId | '' |
 | `existingDiskAccessResourceId` | The resource Id of the disk access to use when `deploymentType` = 'SessionHostsOnly' and the host pool type is personal. Used for allowing recovery services vault access to the managed disk in a zero trust configuration. | string | resourceId | '' |
 | `existingDiskEncryptionSetResourceId` | The resource Id of the disk encryption set to use when `deploymentType` = 'SessionHostsOnly'. Used for customer-managed keys. | string | resourceId | '' |
@@ -118,7 +117,7 @@
 | `keyVaultRetentionInDays` | The amount of time in days that a keyvault will be retained in soft delete status before being automatically purged. If purge protection is enabled as will be the case with the key vaults used for customer-managed keys, then this determines the time before a key vault can be permanent deleted. | int | | 90 |
 | `managementPrivateEndpoints` | Determines if private endpoints are created for all management resources (i.e., Automation Accounts, Key Vaults) | bool | true<br/>false | false |
 | `managementPrivateEndpointSubnetResourceId` | The resource id of the subnet on which to create the management resource private endpoints. | string | resource id | '' |
-| `managementSubscriptionId` | The subscription id of the subscription to which the management resources will be deployed. If not provided the virtual machine or overall deployment subscription Id will be used. | string | subscription id | '' |
+| `monitoringSubscriptionId` | The subscription id of the subscription to which the monitoring resources will be deployed. If not provided the virtual machine or overall deployment subscription Id will be used. | string | subscription id | '' |
 | `storagePrivateEndpoints` | Determines if private endpoints are created for all storage resources. | bool | true<br/>false | false |
 | `nameConvResTypeAtEnd` | Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name. | bool | true<br/>false | false |
 | `regionControlPlane` | The deployment location for the AVD Control Plane resources (i.e., Host Pool, Workspace, and Application Group). Is not used if you specify an existing `workspaceResourceId`. | string | valid region | deployment.location |
