@@ -3071,7 +3071,7 @@
 									"multiselect": true,
 									"toolTip": "",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('basics').hostPoolApi.tags))), equals(first(skip(split(sa.id, '/'), 4)), steps('basics').hostPoolApi.tags.storageResourceGroup), equals(sa.location, steps('hosts').scope.location.name))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.location, steps('hosts').scope.location.name)), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
 										"required": true
 									},
 									"visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)))]"
@@ -3149,7 +3149,7 @@
 							"name": "shareManagement",
 							"type": "Microsoft.Common.Section",
 							"label": "Share Management",
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly', steps('userProfiles').deployStorage)]",
+							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('userProfiles').deployStorage)]",
 							"elements": [
 								{
 									"name": "shareManagementTextBox1",
@@ -3172,7 +3172,7 @@
 										"name": "ObjectPickerBlade",
 										"extension": "Microsoft_AAD_IAM",
 										"parameters": {
-											"queries": "[if(or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraKerberos')), 4194304, 32)]",
+											"queries": "[if(or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraKerberos')), 4194304, 2)]",
 											"disablers": 4,
 											"bladeSubtitle": "Pick the groups to assign",
 											"additionalQueriesOnSearch": 0,
@@ -3207,8 +3207,8 @@
 									"label": "Select Admin Groups",
 									"keyPath": "displayName",
 									"descriptionKeyPath": "id",
-									"value": "[steps('controlPlane').assignments.groupPickerBlade.transformed.groups]",
-									"visible": "[steps('userProfiles').shareManagement.configureAdminAccess]",
+									"value": "[steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups]",
+									"visible": "[equals(steps('userProfiles').shareManagement.configureAdminAccess, true)]",
 									"barColor": "[if(empty(steps('userProfiles').shareManagement.groupPickerBlade), '#FF0000', '#7fba00')]",
 									"constraints": {
 										"required": true

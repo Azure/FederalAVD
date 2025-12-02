@@ -660,7 +660,7 @@ param tags object = {}
 // Non-Specified Values
 
 @description('Optional. The vm size of the management VM.')
-param deploymentVmSize string = 'Standard_B2s'
+param deploymentVmSize string = virtualMachineSize
 
 @description('DO NOT MODIFY THIS VALUE! The timeStamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddHHmmss')

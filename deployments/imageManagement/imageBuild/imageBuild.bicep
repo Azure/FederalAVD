@@ -41,6 +41,13 @@ param customBuildResourceGroupName string = ''
 @description('Optional. The resource Id of the source image to use for the image build. If not provided, the latest image from the specified publisher, offer, and sku will be used.')
 param customSourceImageResourceId string = ''
 
+@allowed([
+  'SCSI'
+  'NVMe'
+])
+@description('Optional. The disk controller type to use for the orchestration VM. If not provided, the default is SCSI.')
+param diskControllerType string = 'SCSI'
+
 @description('The Marketplace Image publisher')
 param mpPublisher string
 
@@ -662,6 +669,7 @@ module orchestrationVm '../../sharedModules/resources/compute/virtual-machine/ma
         storageAccountType: 'Standard_LRS'
       }
     }
+    diskControllerType: diskControllerType
     osType: 'Windows'
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
     userAssignedIdentities: empty(userAssignedIdentityResourceId)
@@ -671,7 +679,7 @@ module orchestrationVm '../../sharedModules/resources/compute/virtual-machine/ma
       : {
           '${userAssignedIdentityResourceId}': {}
         }
-    vmSize: 'Standard_B2s'
+    vmSize: vmSize
   }
   dependsOn: [
     imageBuildRg
