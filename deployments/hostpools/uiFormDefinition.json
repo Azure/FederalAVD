@@ -1668,14 +1668,6 @@
 									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
 								},
 								{
-									"name": "offPeakTextBlock",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]",
-									"options": {
-										"text": "<b>Off Peak</b><br>Configures the time at which the scaling plan enters the off-peak usage phase."
-									}
-								},
-								{
 									"name": "personalWeekdayOffPeakSchedule",
 									"type": "Microsoft.Common.EditableGrid",
 									"ariaLabel": "Enter Weekday Off Peak Schedule Information",
@@ -1714,6 +1706,11 @@
 																	"Sunday"
 																]
 															}
+														],
+														"required": true
+													}
+												}
+											}
 														],
 														"required": true
 													}
@@ -5045,10 +5042,10 @@
 				"appGroupSecurityGroups": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').assignments.groupPickerBlade.transformed.groups, parse('[]'))]",
 				"deployScalingPlan": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').scalingPlan.deployScalingPlan, false)]",
 				"scalingPlanExclusionTag": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.exclusionTag, '')]",
-				"scalingPlanRampUpSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('controlPlane').scalingPlan.personalWeekdayRampUpSchedule, first(steps('controlPlane').scalingPlan.weekdayRampUpSchedule)), parse('{}'))]",
-				"scalingPlanPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('controlPlane').scalingPlan.personalWeekdayPeakSchedule, first(steps('controlPlane').scalingPlan.weekdayPeakSchedule)), parse('{}'))]",
-				"scalingPlanRampDownSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('controlPlane').scalingPlan.personalWeekdayRampDownSchedule, first(steps('controlPlane').scalingPlan.weekdayRampDownSchedule)), parse('{}'))]",
-				"scalingPlanOffPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), first(steps('controlPlane').scalingPlan.personalWeekdayOffPeakSchedule), first(steps('controlPlane').scalingPlan.weekdayOffPeakSchedule)), parse('{}'))]",
+				"scalingPlanRampUpSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('controlPlane').scalingPlan.personalWeekdayRampUpSchedule, steps('controlPlane').scalingPlan.weekdayRampUpSchedule), parse('[]'))]",
+				"scalingPlanPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('controlPlane').scalingPlan.personalWeekdayPeakSchedule, steps('controlPlane').scalingPlan.weekdayPeakSchedule), parse('[]'))]",
+				"scalingPlanRampDownSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('controlPlane').scalingPlan.personalWeekdayRampDownSchedule, steps('controlPlane').scalingPlan.weekdayRampDownSchedule), parse('[]'))]",
+				"scalingPlanOffPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('controlPlane').scalingPlan.personalWeekdayOffPeakSchedule, steps('controlPlane').scalingPlan.weekdayOffPeakSchedule), parse('[]'))]",
 				"scalingPlanForceLogoff": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff, false)]",
 				"scalingPlanMinsBeforeLogoff": "[if(and(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff), steps('controlPlane').scalingPlan.minsToLogoff, 0)]",
 				"existingHostsResourceGroupName": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('hosts').scope.resourceGroup.name, '')]",

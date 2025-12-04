@@ -148,33 +148,17 @@ param avdObjectId string = ''
 @description('Optional. The tag used to exclude virtual machines from the scaling plan.')
 param scalingPlanExclusionTag string = ''
 
-@description('Optional. The scaling plan weekday ramp up schedule')
-param scalingPlanRampUpSchedule object = {
-  startTime: '8:00'
-  minimumHostsPct: 20
-  capacityThresholdPct: 60
-  loadBalancingAlgorithm: 'DepthFirst'
-}
+@description('Optional. The scaling plan ramp up schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends).')
+param scalingPlanRampUpSchedule array = []
 
-@description('Optional. The scaling plan weekday peak schedule.')
-param scalingPlanPeakSchedule object = {
-  startTime: '9:00'
-  loadBalancingAlgorithm: 'DepthFirst'
-}
+@description('Optional. The scaling plan peak schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends).')
+param scalingPlanPeakSchedule array = []
 
-@description('Optional. The scaling plan weekday rampdown schedule.')
-param scalingPlanRampDownSchedule object = {
-  startTime: '17:00'
-  minimumHostsPct: 10
-  capacityThresholdPct: 90
-  loadBalancingAlgorithm: 'DepthFirst'
-}
+@description('Optional. The scaling plan rampdown schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends).')
+param scalingPlanRampDownSchedule array = []
 
-@description('Optional. The scaling plan weakday off peak schedule.')
-param scalingPlanOffPeakSchedule object = {
-  startTime: '20:00'
-  loadBalancingAlgorithm: 'DepthFirst'
-}
+@description('Optional. The scaling plan off peak schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends).')
+param scalingPlanOffPeakSchedule array = []
 
 @description('Optional. Determines if the scaling plan will forcefully log off users when scaling down.')
 param scalingPlanForceLogoff bool = false
@@ -727,60 +711,84 @@ var hostPoolVmTemplate = {
   nameConvResTypeAtEnd: nameConvResTypeAtEnd
 }
 
-var scalingPlanSchedules = deployScalingPlan
-  ? [
-      {
-        rampUpStartTime: {
-          hour: first(split(scalingPlanRampUpSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanRampUpSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanRampUpSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanRampUpSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanRampUpSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanRampUpSchedule.startTime, ':')[1])
-        }
-        peakStartTime: {
-          hour: first(split(scalingPlanPeakSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanPeakSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanPeakSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanPeakSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanPeakSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanPeakSchedule.startTime, ':')[1])
-        }
-        rampDownStartTime: {
-          hour: first(split(scalingPlanRampDownSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanRampDownSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanRampDownSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanRampDownSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanRampDownSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanRampDownSchedule.startTime, ':')[1])
-        }
-        offPeakStartTime: {
-          hour: first(split(scalingPlanOffPeakSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanOffPeakSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanOffPeakSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanOffPeakSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanOffPeakSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanOffPeakSchedule.startTime, ':')[1])
-        }
-        name: 'weekdays_schedule'
-        daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-        rampUpLoadBalancingAlgorithm: scalingPlanRampUpSchedule.loadBalancingAlgorithm
-        rampUpMinimumHostsPct: scalingPlanRampUpSchedule.minimumHostsPct
-        rampUpCapacityThresholdPct: scalingPlanRampUpSchedule.capacityThresholdPct
-        peakLoadBalancingAlgorithm: scalingPlanPeakSchedule.loadBalancingAlgorithm
-        rampDownLoadBalancingAlgorithm: scalingPlanRampDownSchedule.loadBalancingAlgorithm
-        rampDownMinimumHostsPct: scalingPlanRampDownSchedule.minimumHostsPct
-        rampDownCapacityThresholdPct: scalingPlanRampDownSchedule.capacityThresholdPct
-        rampDownForceLogoffUsers: scalingPlanForceLogoff
-        rampDownWaitTimeMinutes: scalingPlanMinsBeforeLogoff
-        rampDownNotificationMessage: scalingPlanForceLogoff
-          ? 'You will be logged off in ${scalingPlanMinsBeforeLogoff} minutes. Make sure to save your work.'
-          : null
-        rampDownStopHostsWhen: 'ZeroSessions'
-        offPeakLoadBalancingAlgorithm: scalingPlanOffPeakSchedule.loadBalancingAlgorithm
-      }
-    ]
-  : []
+var scalingPlanSchedulesArray = [for i in range(0, length(scalingPlanRampUpSchedule)): {
+  rampUpStartTime: {
+    hour: first(split(scalingPlanRampUpSchedule[i].startTime, ':')[0]) == '0'
+      ? int(last(split(scalingPlanRampUpSchedule[i].startTime, ':')[0]))
+      : int(split(scalingPlanRampUpSchedule[i].startTime, ':')[0])
+    minute: first(split(scalingPlanRampUpSchedule[i].startTime, ':')[1]) == '0'
+      ? int(last(split(scalingPlanRampUpSchedule[i].startTime, ':')[1]))
+      : int(split(scalingPlanRampUpSchedule[i].startTime, ':')[1])
+  }
+  peakStartTime: {
+    hour: first(split(scalingPlanPeakSchedule[i].startTime, ':')[0]) == '0'
+      ? int(last(split(scalingPlanPeakSchedule[i].startTime, ':')[0]))
+      : int(split(scalingPlanPeakSchedule[i].startTime, ':')[0])
+    minute: first(split(scalingPlanPeakSchedule[i].startTime, ':')[1]) == '0'
+      ? int(last(split(scalingPlanPeakSchedule[i].startTime, ':')[1]))
+      : int(split(scalingPlanPeakSchedule[i].startTime, ':')[1])
+  }
+  rampDownStartTime: {
+    hour: first(split(scalingPlanRampDownSchedule[i].startTime, ':')[0]) == '0'
+      ? int(last(split(scalingPlanRampDownSchedule[i].startTime, ':')[0]))
+      : int(split(scalingPlanRampDownSchedule[i].startTime, ':')[0])
+    minute: first(split(scalingPlanRampDownSchedule[i].startTime, ':')[1]) == '0'
+      ? int(last(split(scalingPlanRampDownSchedule[i].startTime, ':')[1]))
+      : int(split(scalingPlanRampDownSchedule[i].startTime, ':')[1])
+  }
+  offPeakStartTime: {
+    hour: first(split(scalingPlanOffPeakSchedule[i].startTime, ':')[0]) == '0'
+      ? int(last(split(scalingPlanOffPeakSchedule[i].startTime, ':')[0]))
+      : int(split(scalingPlanOffPeakSchedule[i].startTime, ':')[0])
+    minute: first(split(scalingPlanOffPeakSchedule[i].startTime, ':')[1]) == '0'
+      ? int(last(split(scalingPlanOffPeakSchedule[i].startTime, ':')[1]))
+      : int(split(scalingPlanOffPeakSchedule[i].startTime, ':')[1])
+  }
+  name: contains(scalingPlanRampUpSchedule[i], 'days') 
+    ? (contains(scalingPlanRampUpSchedule[i].days, 'Saturday') || contains(scalingPlanRampUpSchedule[i].days, 'Sunday') 
+      ? 'weekends_schedule' 
+      : 'weekdays_schedule')
+    : 'weekdays_schedule'
+  daysOfWeek: scalingPlanRampUpSchedule[i].?days ?? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+  rampUpLoadBalancingAlgorithm: scalingPlanRampUpSchedule[i].?loadBalancingAlgorithm ?? 'DepthFirst'
+  rampUpMinimumHostsPct: scalingPlanRampUpSchedule[i].?minimumHostsPct
+  rampUpCapacityThresholdPct: scalingPlanRampUpSchedule[i].?capacityThresholdPct
+  rampUpStartVMOnConnect: scalingPlanRampUpSchedule[i].?startVMs == 'None' ? 'Disable' : (scalingPlanRampUpSchedule[i].?startVMs != null ? 'Enable' : null)
+  rampUpActionOnDisconnect: scalingPlanRampUpSchedule[i].?disconnectAction
+  rampUpMinutesToWaitOnDisconnect: scalingPlanRampUpSchedule[i].?disconnectMinutes != null ? int(scalingPlanRampUpSchedule[i].disconnectMinutes) : null
+  rampUpActionOnLogoff: scalingPlanRampUpSchedule[i].?logoffAction
+  rampUpMinutesToWaitOnLogoff: scalingPlanRampUpSchedule[i].?logoffMinutes != null ? int(scalingPlanRampUpSchedule[i].logoffMinutes) : null
+  peakLoadBalancingAlgorithm: scalingPlanPeakSchedule[i].?loadBalancingAlgorithm ?? 'DepthFirst'
+  peakStartVMOnConnect: scalingPlanPeakSchedule[i].?startVMs == 'None' ? 'Disable' : (scalingPlanPeakSchedule[i].?startVMs != null ? 'Enable' : null)
+  peakActionOnDisconnect: scalingPlanPeakSchedule[i].?disconnectAction
+  peakMinutesToWaitOnDisconnect: scalingPlanPeakSchedule[i].?disconnectMinutes != null ? int(scalingPlanPeakSchedule[i].disconnectMinutes) : null
+  peakActionOnLogoff: scalingPlanPeakSchedule[i].?logoffAction
+  peakMinutesToWaitOnLogoff: scalingPlanPeakSchedule[i].?logoffMinutes != null ? int(scalingPlanPeakSchedule[i].logoffMinutes) : null
+  rampDownLoadBalancingAlgorithm: scalingPlanRampDownSchedule[i].?loadBalancingAlgorithm ?? 'DepthFirst'
+  rampDownMinimumHostsPct: scalingPlanRampDownSchedule[i].?minimumHostsPct
+  rampDownCapacityThresholdPct: scalingPlanRampDownSchedule[i].?capacityThresholdPct
+  rampDownForceLogoffUsers: scalingPlanForceLogoff
+  rampDownWaitTimeMinutes: scalingPlanMinsBeforeLogoff
+  rampDownNotificationMessage: scalingPlanForceLogoff
+    ? 'You will be logged off in ${scalingPlanMinsBeforeLogoff} minutes. Make sure to save your work.'
+    : null
+  rampDownStopHostsWhen: 'ZeroSessions'
+  rampDownStartVMOnConnect: scalingPlanRampDownSchedule[i].?startVMs == 'None' ? 'Disable' : (scalingPlanRampDownSchedule[i].?startVMs != null ? 'Enable' : null)
+  rampDownActionOnDisconnect: scalingPlanRampDownSchedule[i].?disconnectAction
+  rampDownMinutesToWaitOnDisconnect: scalingPlanRampDownSchedule[i].?disconnectMinutes != null ? int(scalingPlanRampDownSchedule[i].disconnectMinutes) : null
+  rampDownActionOnLogoff: scalingPlanRampDownSchedule[i].?logoffAction
+  rampDownMinutesToWaitOnLogoff: scalingPlanRampDownSchedule[i].?logoffMinutes != null ? int(scalingPlanRampDownSchedule[i].logoffMinutes) : null
+  offPeakLoadBalancingAlgorithm: scalingPlanOffPeakSchedule[i].?loadBalancingAlgorithm ?? 'DepthFirst'
+  offPeakStartVMOnConnect: scalingPlanOffPeakSchedule[i].?startVMs == 'None' ? 'Disable' : (scalingPlanOffPeakSchedule[i].?startVMs != null ? 'Enable' : null)
+  offPeakActionOnDisconnect: scalingPlanOffPeakSchedule[i].?disconnectAction
+  offPeakMinutesToWaitOnDisconnect: scalingPlanOffPeakSchedule[i].?disconnectMinutes != null ? int(scalingPlanOffPeakSchedule[i].disconnectMinutes) : null
+  offPeakActionOnLogoff: scalingPlanOffPeakSchedule[i].?logoffAction
+  offPeakMinutesToWaitOnLogoff: scalingPlanOffPeakSchedule[i].?logoffMinutes != null ? int(scalingPlanOffPeakSchedule[i].logoffMinutes) : null
+}]
+
+var scalingPlanSchedules = !deployScalingPlan || empty(scalingPlanRampUpSchedule) || empty(scalingPlanPeakSchedule) || empty(scalingPlanRampDownSchedule) || empty(scalingPlanOffPeakSchedule) 
+  ? [] 
+  : scalingPlanSchedulesArray
 
 var exclusionTag = !empty(scalingPlanExclusionTag) && deployScalingPlan
   ? {
