@@ -1,5 +1,6 @@
 param appDisplayNamePrefix string
 param location string
+param privateEndpoint bool
 param userAssignedIdentityResourceId string
 param virtualMachineName string
 
@@ -32,6 +33,10 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
       {
         name: 'GraphEndpoint'
         value: graphEndpoint
+      }
+      {
+        name: 'PrivateEndpoint'
+        value: string(privateEndpoint)
       }
       {
         name: 'TenantId'

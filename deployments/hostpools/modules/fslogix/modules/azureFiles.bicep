@@ -344,7 +344,8 @@ module updateStorageApplications 'updateEntraIdStorageKerbApps.bicep' = if (iden
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     appDisplayNamePrefix: '[Storage Account] ${storageAccountNamePrefix}'
-    location: location    
+    location: location
+    privateEndpoint: privateEndpoint    
     userAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
     virtualMachineName: deploymentVirtualMachineName
   }
