@@ -943,20 +943,11 @@
 														"allowedValues": [
 															{
 																"label": "Weekdays",
-																"value": [
-																	"Monday",
-																	"Tuesday",
-																	"Wednesday",
-																	"Thursday",
-																	"Friday"
-																]
+																"value": "Weekdays"
 															},
 															{
 																"label": "Weekends",
-																"value": [
-																	"Saturday",
-																	"Sunday"
-																]
+																"value": "Weekends"
 															}
 														],
 														"required": true
@@ -1189,20 +1180,11 @@
 														"allowedValues": [
 															{
 																"label": "Weekdays",
-																"value": [
-																	"Monday",
-																	"Tuesday",
-																	"Wednesday",
-																	"Thursday",
-																	"Friday"
-																]
+																"value": "Weekdays"
 															},
 															{
 																"label": "Weekends",
-																"value": [
-																	"Saturday",
-																	"Sunday"
-																]
+																"value": "Weekends"
 															}
 														],
 														"required": true
@@ -1445,20 +1427,11 @@
 														"allowedValues": [
 															{
 																"label": "Weekdays",
-																"value": [
-																	"Monday",
-																	"Tuesday",
-																	"Wednesday",
-																	"Thursday",
-																	"Friday"
-																]
+																"value": "Weekdays"
 															},
 															{
 																"label": "Weekends",
-																"value": [
-																	"Saturday",
-																	"Sunday"
-																]
+																"value": "Weekends"
 															}
 														],
 														"required": true
@@ -1691,20 +1664,11 @@
 														"allowedValues": [
 															{
 																"label": "Weekdays",
-																"value": [
-																	"Monday",
-																	"Tuesday",
-																	"Wednesday",
-																	"Thursday",
-																	"Friday"
-																]
+																"value": "Weekdays"
 															},
 															{
 																"label": "Weekends",
-																"value": [
-																	"Saturday",
-																	"Sunday"
-																]
+																"value": "Weekends"
 															}
 														],
 														"required": true
