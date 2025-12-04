@@ -912,6 +912,15 @@
 									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
 								},
 								{
+									"name": "personalScheduleDayWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]",
+									"options": {
+										"text": "When configuring the schedules below, ensure that you do not select the same day of the week more than once per schedule section.",
+										"style": "Warning"
+									}
+								},
+								{
 									"name": "personalWeekdayRampUpSchedule",
 									"type": "Microsoft.Common.EditableGrid",
 									"ariaLabel": "Enter Schedule Information",
@@ -1689,10 +1698,52 @@
 										"rows": {
 											"count": {
 												"min": 1,
-												"max": 1
+												"max": 7
 											}
 										},
 										"columns": [
+											{
+												"id": "days",
+												"header": "Days",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"multiselect": true,
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "Monday",
+																"value": "Monday"
+															},
+															{
+																"label": "Tuesday",
+																"value": "Tuesday"
+															},
+															{
+																"label": "Wednesday",
+																"value": "Wednesday"
+															},
+															{
+																"label": "Thursday",
+																"value": "Thursday"
+															},
+															{
+																"label": "Friday",
+																"value": "Friday"
+															},
+															{
+																"label": "Saturday",
+																"value": "Saturday"
+															},
+															{
+																"label": "Sunday",
+																"value": "Sunday"
+															}
+														],
+														"required": true
+													}
+												}
+											},
 											{
 												"id": "startTime",
 												"header": "Off Peak Start Time",
