@@ -1710,11 +1710,6 @@
 														"required": true
 													}
 												}
-											}
-														],
-														"required": true
-													}
-												}
 											},
 											{
 												"id": "startTime",
