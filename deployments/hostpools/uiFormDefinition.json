@@ -950,6 +950,7 @@
 																"value": "Weekends"
 															}
 														],
+														"defaultValue": "Weekdays",
 														"required": true
 													}
 												}
@@ -1187,6 +1188,7 @@
 																"value": "Weekends"
 															}
 														],
+														"defaultValue": "Weekdays",
 														"required": true
 													}
 												}
@@ -1434,6 +1436,7 @@
 																"value": "Weekends"
 															}
 														],
+														"defaultValue": "Weekdays",
 														"required": true
 													}
 												}
@@ -1671,6 +1674,7 @@
 																"value": "Weekends"
 															}
 														],
+														"defaultValue": "Weekdays",
 														"required": true
 													}
 												}
