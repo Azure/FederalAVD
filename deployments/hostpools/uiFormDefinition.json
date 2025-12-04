@@ -914,17 +914,59 @@
 								{
 									"name": "personalWeekdayRampUpSchedule",
 									"type": "Microsoft.Common.EditableGrid",
-									"ariaLabel": "Enter Weekday Schedule Information",
-									"label": "Weekday Ramp Up Schedule",
+									"ariaLabel": "Enter Schedule Information",
+									"label": "Ramp Up Schedule",
 									"constraints": {
 										"width": "Full",
 										"rows": {
 											"count": {
 												"min": 1,
-												"max": 1
+												"max": 7
 											}
 										},
 										"columns": [
+											{
+												"id": "days",
+												"header": "Days",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"multiselect": true,
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "Monday",
+																"value": "Monday"
+															},
+															{
+																"label": "Tuesday",
+																"value": "Tuesday"
+															},
+															{
+																"label": "Wednesday",
+																"value": "Wednesday"
+															},
+															{
+																"label": "Thursday",
+																"value": "Thursday"
+															},
+															{
+																"label": "Friday",
+																"value": "Friday"
+															},
+															{
+																"label": "Saturday",
+																"value": "Saturday"
+															},
+															{
+																"label": "Sunday",
+																"value": "Sunday"
+															}
+														],
+														"required": true
+													}
+												}
+											},
 											{
 												"id": "startTime",
 												"header": "Ramp Up Time",
@@ -1122,17 +1164,59 @@
 								{
 									"name": "personalWeekdayPeakSchedule",
 									"type": "Microsoft.Common.EditableGrid",
-									"ariaLabel": "Enter Weekday Schedule Information",
-									"label": "Weekday Peak Schedule",
+									"ariaLabel": "Enter Schedule Information",
+									"label": "Peak Schedule",
 									"constraints": {
 										"width": "Full",
 										"rows": {
 											"count": {
 												"min": 1,
-												"max": 1
+												"max": 7
 											}
 										},
 										"columns": [
+											{
+												"id": "days",
+												"header": "Days",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"multiselect": true,
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "Monday",
+																"value": "Monday"
+															},
+															{
+																"label": "Tuesday",
+																"value": "Tuesday"
+															},
+															{
+																"label": "Wednesday",
+																"value": "Wednesday"
+															},
+															{
+																"label": "Thursday",
+																"value": "Thursday"
+															},
+															{
+																"label": "Friday",
+																"value": "Friday"
+															},
+															{
+																"label": "Saturday",
+																"value": "Saturday"
+															},
+															{
+																"label": "Sunday",
+																"value": "Sunday"
+															}
+														],
+														"required": true
+													}
+												}
+											},
 											{
 												"id": "startTime",
 												"header": "Peak Start Time",
@@ -1340,17 +1424,59 @@
 								{
 									"name": "personalWeekdayRampDownSchedule",
 									"type": "Microsoft.Common.EditableGrid",
-									"ariaLabel": "Enter Weekday Schedule Information",
-									"label": "Weekday Ramp Down Schedule",
+									"ariaLabel": "Enter Schedule Information",
+									"label": "Ramp Down Schedule",
 									"constraints": {
 										"width": "Full",
 										"rows": {
 											"count": {
 												"min": 1,
-												"max": 1
+												"max": 7
 											}
 										},
 										"columns": [
+											{
+												"id": "days",
+												"header": "Days",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"multiselect": true,
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "Monday",
+																"value": "Monday"
+															},
+															{
+																"label": "Tuesday",
+																"value": "Tuesday"
+															},
+															{
+																"label": "Wednesday",
+																"value": "Wednesday"
+															},
+															{
+																"label": "Thursday",
+																"value": "Thursday"
+															},
+															{
+																"label": "Friday",
+																"value": "Friday"
+															},
+															{
+																"label": "Saturday",
+																"value": "Saturday"
+															},
+															{
+																"label": "Sunday",
+																"value": "Sunday"
+															}
+														],
+														"required": true
+													}
+												}
+											},
 											{
 												"id": "startTime",
 												"header": "Ramp Down Start Time",
