@@ -419,6 +419,52 @@
 									"visible": true
 								},
 								{
+									"name": "orchestrationVmDiskType",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Orchestration VM Disk Type",
+									"defaultValue": "Standard HDD",
+									"toolTip": "Select the disk type for the orchestration virtual machine.",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Standard HDD",
+												"value": "Standard_LRS"
+											},
+											{
+												"label": "Standard SSD",
+												"value": "StandardSSD_LRS"
+											},
+											{
+												"label": "Premium SSD",
+												"value": "Premium_LRS"
+											}
+										],
+										"required": true
+									},
+									"visible": true
+								},
+								{
+									"name": "diskControllerType",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Orchestration VM Disk Controller Type",
+									"defaultValue": "SCSI",
+									"toolTip": "Select the disk controller type for the orchestration virtual machine.",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "SCSI",
+												"value": "SCSI"
+											},
+											{
+												"label": "NVMe",
+												"value": "NVMe"
+											}
+										],
+										"required": true
+									},
+									"visible": true
+								},
+								{
 									"name": "encryptionAtHost",
 									"type": "Microsoft.Common.CheckBox",
 									"visible": true,
@@ -2042,6 +2088,8 @@
 				"userAssignedIdentityResourceId": "[if(steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.userAssignedIdentity.id, '')]",
 				"subnetResourceId": "[steps('prereqs').network.subnet]",
 				"vmSize": "[steps('imageVm').vmProps.vmSize]",
+				"orchestrationVmDiskType": "[steps('imageVm').vmProps.orchestrationVmDiskType]",
+				"diskControllerType": "[steps('imageVm').vmProps.diskControllerType]",
 				"encryptionAtHost": "[steps('imageVm').vmProps.encryptionAtHost]",
 				"customSourceImageResourceId": "[if(equals(steps('imageVm').imageSource.source, 'gallery'), steps('imageVm').imageSource.imageDefinition.id, '')]",
 				"mpPublisher": "[steps('imageVm').imageSource.publisher]",
