@@ -912,12 +912,11 @@
 									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
 								},
 								{
-									"name": "personalScheduleDayWarning",
-									"type": "Microsoft.Common.InfoBox",
+									"name": "rampUpTextBlock",
+									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]",
 									"options": {
-										"text": "When configuring the schedules below, ensure that you do not select the same day of the week more than once per schedule section.",
-										"style": "Warning"
+										"text": "<b>Ramp Up</b><br>Configures the time at which the scaling plan will begin to start VM's and make them available for users."
 									}
 								},
 								{
@@ -930,46 +929,34 @@
 										"rows": {
 											"count": {
 												"min": 1,
-												"max": 7
+												"max": 2
 											}
 										},
 										"columns": [
 											{
 												"id": "days",
-												"header": "Days",
+												"header": "Schedule Type",
 												"width": "1fr",
 												"element": {
 													"type": "Microsoft.Common.DropDown",
-													"multiselect": true,
 													"constraints": {
 														"allowedValues": [
 															{
-																"label": "Monday",
-																"value": "Monday"
+																"label": "Weekdays",
+																"value": [
+																	"Monday",
+																	"Tuesday",
+																	"Wednesday",
+																	"Thursday",
+																	"Friday"
+																]
 															},
 															{
-																"label": "Tuesday",
-																"value": "Tuesday"
-															},
-															{
-																"label": "Wednesday",
-																"value": "Wednesday"
-															},
-															{
-																"label": "Thursday",
-																"value": "Thursday"
-															},
-															{
-																"label": "Friday",
-																"value": "Friday"
-															},
-															{
-																"label": "Saturday",
-																"value": "Saturday"
-															},
-															{
-																"label": "Sunday",
-																"value": "Sunday"
+																"label": "Weekends",
+																"value": [
+																	"Saturday",
+																	"Sunday"
+																]
 															}
 														],
 														"required": true
@@ -1171,6 +1158,14 @@
 									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
 								},
 								{
+									"name": "peakTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]",
+									"options": {
+										"text": "<b>Peak</b><br>Configures the time at which the scaling plan enters the peak usage phase."
+									}
+								},
+								{
 									"name": "personalWeekdayPeakSchedule",
 									"type": "Microsoft.Common.EditableGrid",
 									"ariaLabel": "Enter Schedule Information",
@@ -1180,46 +1175,34 @@
 										"rows": {
 											"count": {
 												"min": 1,
-												"max": 7
+												"max": 2
 											}
 										},
 										"columns": [
 											{
 												"id": "days",
-												"header": "Days",
+												"header": "Schedule Type",
 												"width": "1fr",
 												"element": {
 													"type": "Microsoft.Common.DropDown",
-													"multiselect": true,
 													"constraints": {
 														"allowedValues": [
 															{
-																"label": "Monday",
-																"value": "Monday"
+																"label": "Weekdays",
+																"value": [
+																	"Monday",
+																	"Tuesday",
+																	"Wednesday",
+																	"Thursday",
+																	"Friday"
+																]
 															},
 															{
-																"label": "Tuesday",
-																"value": "Tuesday"
-															},
-															{
-																"label": "Wednesday",
-																"value": "Wednesday"
-															},
-															{
-																"label": "Thursday",
-																"value": "Thursday"
-															},
-															{
-																"label": "Friday",
-																"value": "Friday"
-															},
-															{
-																"label": "Saturday",
-																"value": "Saturday"
-															},
-															{
-																"label": "Sunday",
-																"value": "Sunday"
+																"label": "Weekends",
+																"value": [
+																	"Saturday",
+																	"Sunday"
+																]
 															}
 														],
 														"required": true
@@ -1431,6 +1414,14 @@
 									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
 								},
 								{
+									"name": "rampDownTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]",
+									"options": {
+										"text": "<b>Ramp Down</b><br>Configures the time at which the scaling plan begins to stop VM's and force logoff users (if configured)."
+									}
+								},
+								{
 									"name": "personalWeekdayRampDownSchedule",
 									"type": "Microsoft.Common.EditableGrid",
 									"ariaLabel": "Enter Schedule Information",
@@ -1440,46 +1431,34 @@
 										"rows": {
 											"count": {
 												"min": 1,
-												"max": 7
+												"max": 2
 											}
 										},
 										"columns": [
 											{
 												"id": "days",
-												"header": "Days",
+												"header": "Schedule Type",
 												"width": "1fr",
 												"element": {
 													"type": "Microsoft.Common.DropDown",
-													"multiselect": true,
 													"constraints": {
 														"allowedValues": [
 															{
-																"label": "Monday",
-																"value": "Monday"
+																"label": "Weekdays",
+																"value": [
+																	"Monday",
+																	"Tuesday",
+																	"Wednesday",
+																	"Thursday",
+																	"Friday"
+																]
 															},
 															{
-																"label": "Tuesday",
-																"value": "Tuesday"
-															},
-															{
-																"label": "Wednesday",
-																"value": "Wednesday"
-															},
-															{
-																"label": "Thursday",
-																"value": "Thursday"
-															},
-															{
-																"label": "Friday",
-																"value": "Friday"
-															},
-															{
-																"label": "Saturday",
-																"value": "Saturday"
-															},
-															{
-																"label": "Sunday",
-																"value": "Sunday"
+																"label": "Weekends",
+																"value": [
+																	"Saturday",
+																	"Sunday"
+																]
 															}
 														],
 														"required": true
@@ -1689,6 +1668,14 @@
 									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
 								},
 								{
+									"name": "offPeakTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]",
+									"options": {
+										"text": "<b>Off Peak</b><br>Configures the time at which the scaling plan enters the off-peak usage phase."
+									}
+								},
+								{
 									"name": "personalWeekdayOffPeakSchedule",
 									"type": "Microsoft.Common.EditableGrid",
 									"ariaLabel": "Enter Weekday Off Peak Schedule Information",
@@ -1698,46 +1685,34 @@
 										"rows": {
 											"count": {
 												"min": 1,
-												"max": 7
+												"max": 2
 											}
 										},
 										"columns": [
 											{
 												"id": "days",
-												"header": "Days",
+												"header": "Schedule Type",
 												"width": "1fr",
 												"element": {
 													"type": "Microsoft.Common.DropDown",
-													"multiselect": true,
 													"constraints": {
 														"allowedValues": [
 															{
-																"label": "Monday",
-																"value": "Monday"
+																"label": "Weekdays",
+																"value": [
+																	"Monday",
+																	"Tuesday",
+																	"Wednesday",
+																	"Thursday",
+																	"Friday"
+																]
 															},
 															{
-																"label": "Tuesday",
-																"value": "Tuesday"
-															},
-															{
-																"label": "Wednesday",
-																"value": "Wednesday"
-															},
-															{
-																"label": "Thursday",
-																"value": "Thursday"
-															},
-															{
-																"label": "Friday",
-																"value": "Friday"
-															},
-															{
-																"label": "Saturday",
-																"value": "Saturday"
-															},
-															{
-																"label": "Sunday",
-																"value": "Sunday"
+																"label": "Weekends",
+																"value": [
+																	"Saturday",
+																	"Sunday"
+																]
 															}
 														],
 														"required": true
