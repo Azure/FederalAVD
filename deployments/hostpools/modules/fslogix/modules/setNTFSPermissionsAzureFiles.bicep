@@ -1,12 +1,12 @@
-param adminGroups array = []
+param adminGroups array
 param location string
 param shardingOptions string
 param shares array
-param storageAccountNamePrefix string = ''
+param storageAccountNamePrefix string
 param storageCount int = 0
 param storageIndex int = 0
-param userGroups array = []
-param userAssignedIdentityClientId string = ''
+param userGroups array
+param userAssignedIdentityClientId string
 param virtualMachineName string
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' existing = {
@@ -21,7 +21,7 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
     asyncExecution: false
     parameters: [
       {
-        name: 'AdminGroupNames'
+        name: 'AdminGroups'
         value: string(adminGroups)
       }
       {
@@ -53,7 +53,7 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
         value: userAssignedIdentityClientId
       }
       {
-        name: 'UserGroupNames'
+        name: 'UserGroups'
         value: string(userGroups)
       }
     ]

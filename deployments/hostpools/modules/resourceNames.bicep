@@ -13,27 +13,39 @@ param virtualMachineNamePrefix string
 
 var cloud = toLower(environment().name)
 var locationsObject = loadJsonContent('../../../.common/data/locations.json')
-var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : environment().name 
+var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : environment().name
 var locations = locationsObject[locationsEnvProperty]
 
 #disable-next-line BCP329
-var varLocationVirtualMachines = startsWith(cloud, 'us') ? substring(virtualMachinesRegion, 5, length(virtualMachinesRegion)-5) : virtualMachinesRegion
+var varLocationVirtualMachines = startsWith(cloud, 'us') ? substring(virtualMachinesRegion, 5, length(virtualMachinesRegion) - 5) : virtualMachinesRegion
 var virtualMachinesRegionAbbreviation = locations[varLocationVirtualMachines].abbreviation
 #disable-next-line BCP329
-var varLocationControlPlane = startsWith(cloud, 'us') ? substring(controlPlaneRegion, 5, length(controlPlaneRegion)-5) : controlPlaneRegion
+var varLocationControlPlane = startsWith(cloud, 'us') ? substring(controlPlaneRegion, 5, length(controlPlaneRegion) - 5) : controlPlaneRegion
 var controlPlaneRegionAbbreviation = locations[varLocationControlPlane].abbreviation
 
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
 var existingHostPoolName = empty(existingHostPoolResourceId) ? '' : split(existingHostPoolResourceId, '/')[8]
 
-var nameConvReversed = !empty(existingHostPoolName) ? !startsWith(existingHostPoolName, resourceAbbreviations.hostPools) : nameConvResTypeAtEnd
+var nameConvReversed = !empty(existingHostPoolName)
+  ? !startsWith(existingHostPoolName, resourceAbbreviations.hostPools)
+  : nameConvResTypeAtEnd
 
 var arrHostPoolName = split(existingHostPoolName, '-')
 var lengthArrHostPoolName = length(arrHostPoolName)
 
-var hpIdentifier = !empty(existingHostPoolName) ? nameConvReversed ? lengthArrHostPoolName < 5 ? arrHostPoolName[0] : '${arrHostPoolName[0]}-${arrHostPoolName[1]}' : lengthArrHostPoolName < 5 ? arrHostPoolName[1] : '${arrHostPoolName[1]}-${arrHostPoolName[2]}' : identifier
-var hpIndex = !empty(existingHostPoolName) ? lengthArrHostPoolName == 3 ? '' : nameConvReversed ? lengthArrHostPoolName < 5 ? arrHostPoolName[1] : arrHostPoolName[2] : lengthArrHostPoolName < 5 ? arrHostPoolName[2] : arrHostPoolName[3] : index  
+var hpIdentifier = !empty(existingHostPoolName)
+  ? nameConvReversed
+      ? lengthArrHostPoolName < 5 ? arrHostPoolName[0] : '${arrHostPoolName[0]}-${arrHostPoolName[1]}'
+      : lengthArrHostPoolName < 5 ? arrHostPoolName[1] : '${arrHostPoolName[1]}-${arrHostPoolName[2]}'
+  : toLower(identifier)
+var hpIndex = !empty(existingHostPoolName)
+  ? lengthArrHostPoolName == 3
+      ? ''
+      : nameConvReversed
+          ? lengthArrHostPoolName < 5 ? arrHostPoolName[1] : arrHostPoolName[2]
+          : lengthArrHostPoolName < 5 ? arrHostPoolName[2] : arrHostPoolName[3]
+  : index
 
 var hpBaseName = empty(hpIndex) ? hpIdentifier : '${hpIdentifier}-${hpIndex}'
 var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
@@ -56,21 +68,13 @@ var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
 
 // Deployment Resources (temporary resource group for deployment purposes)
 var resourceGroupDeployment = replace(
-  replace(
-    replace(nameConv_HP_ResGroups, 'TOKEN', 'deployment'),
-    'LOCATION',
-    '${virtualMachinesRegionAbbreviation}'
-  ),
+  replace(replace(nameConv_HP_ResGroups, 'TOKEN', 'deployment'), 'LOCATION', '${virtualMachinesRegionAbbreviation}'),
   'RESOURCETYPE',
   '${resourceAbbreviations.resourceGroups}'
 )
 var depVirtualMachineNameTemp = replace(
   replace(
-    replace(
-      replace(nameConv_HP_Resources, 'RESOURCETYPE', ''),
-      'LOCATION',
-      virtualMachinesRegionAbbreviation
-    ),
+    replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', virtualMachinesRegionAbbreviation),
     'TOKEN-',
     ''
   ),
@@ -83,20 +87,12 @@ var depVirtualMachineNicName = '${depVirtualMachineName}-${resourceAbbreviations
 
 // KeyVaults, App Service Plan, Log Analytics Workspace, and Data Collection Endpoint Resource Naming Conventions
 var resourceGroupManagement = replace(
-  replace(
-    replace(nameConv_Shared_ResGroup, 'TOKEN', 'management'),
-    'LOCATION',
-    virtualMachinesRegionAbbreviation
-  ),
+  replace(replace(nameConv_Shared_ResGroup, 'TOKEN', 'management'), 'LOCATION', virtualMachinesRegionAbbreviation),
   'RESOURCETYPE',
   resourceAbbreviations.resourceGroups
 )
 var resourceGroupMonitoring = replace(
-  replace(
-    replace(nameConv_Shared_ResGroup, 'TOKEN', 'monitoring'),
-    'LOCATION',
-    virtualMachinesRegionAbbreviation
-  ),
+  replace(replace(nameConv_Shared_ResGroup, 'TOKEN', 'monitoring'), 'LOCATION', virtualMachinesRegionAbbreviation),
   'RESOURCETYPE',
   resourceAbbreviations.resourceGroups
 )
@@ -172,16 +168,16 @@ var globalFeedWorkspaceName = replace(
 // Control Plane Shared Resources
 var resourceGroupControlPlane = empty(existingHostPoolResourceId)
   ? empty(existingFeedWorkspaceResourceId)
-    ? replace(
-        replace(
-          replace(nameConv_Shared_ResGroup, 'TOKEN', 'control-plane'),
-          'LOCATION',
-          '${controlPlaneRegionAbbreviation}'
-        ),
-        'RESOURCETYPE',
-        '${resourceAbbreviations.resourceGroups}'
-      )
-    : split(existingFeedWorkspaceResourceId, '/')[4]
+      ? replace(
+          replace(
+            replace(nameConv_Shared_ResGroup, 'TOKEN', 'control-plane'),
+            'LOCATION',
+            '${controlPlaneRegionAbbreviation}'
+          ),
+          'RESOURCETYPE',
+          '${resourceAbbreviations.resourceGroups}'
+        )
+      : split(existingFeedWorkspaceResourceId, '/')[4]
   : split(existingHostPoolResourceId, '/')[4]
 
 var workspaceName = empty(existingFeedWorkspaceResourceId)
@@ -252,11 +248,7 @@ var userAssignedIdentityNameConv = replace(
 
 // Compute Resources
 var resourceGroupHosts = replace(
-  replace(
-    replace(nameConv_HP_ResGroups, 'TOKEN', 'hosts'),
-    'LOCATION',
-    '${virtualMachinesRegionAbbreviation}'
-  ),
+  replace(replace(nameConv_HP_ResGroups, 'TOKEN', 'hosts'), 'LOCATION', '${virtualMachinesRegionAbbreviation}'),
   'RESOURCETYPE',
   '${resourceAbbreviations.resourceGroups}'
 )
@@ -293,11 +285,7 @@ var diskEncryptionSetNameConv = replace(
 
 // Storage Resources
 var resourceGroupStorage = replace(
-  replace(
-    replace(nameConv_HP_ResGroups, 'TOKEN', 'storage'),
-    'LOCATION',
-    '${virtualMachinesRegionAbbreviation}'
-  ),
+  replace(replace(nameConv_HP_ResGroups, 'TOKEN', 'storage'), 'LOCATION', '${virtualMachinesRegionAbbreviation}'),
   'RESOURCETYPE',
   '${resourceAbbreviations.resourceGroups}'
 )

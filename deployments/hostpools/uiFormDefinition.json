@@ -234,8 +234,12 @@
 										"value": "EntraId"
 									},
 									{
+										"label": "Entra Kerberos (Cloud Only Identities) (Preview)",
+										"value": "EntraKerberos-CloudOnly"
+									},
+									{
 										"label": "Entra Kerberos (Hybrid Identities)",
-										"value": "EntraKerberos"
+										"value": "EntraKerberos-Hybrid"
 									}
 								]
 							}
@@ -243,10 +247,20 @@
 						{
 							"name": "entraKerberosInfoBox",
 							"type": "Microsoft.Common.InfoBox",
-							"visible": "[equals(steps('identity').solution, 'EntraKerberos')]",
+							"visible": "[equals(steps('identity').solution, 'EntraKerberos-Hybrid')]",
 							"options": {
 								"text": "Enabling authentication to FSLogix storage accounts using Entra Kerberos requires additional steps that cannot be completed using this automation solution. After this deployment completes, you'll need to complete the following tasks as detailed in the link:<ol><li>Grant admin consent to the new service principal</li><li>Disable multifactor authentication on the storage account</li></ol>",
 								"style": "Info",
+								"uri": "https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune"
+							}
+						},
+						{
+							"name": "entraIdPreviewInfoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"visible": "[equals(steps('identity').solution, 'EntraKerberos-CloudOnly')]",
+							"options": {
+								"text": "Enabling authentication to FSLogix storage accounts using Entra Kerberos for Cloud Only Identities is only supported in Azure Commercial. It also requires additional steps that cannot be completed using this automation solution. After this deployment completes, you'll need to complete the following tasks as detailed in the link:<ol><li>Grant admin consent to the new service principal</li><li>Disable multifactor authentication on the storage account</li></ol>",
+								"style": "Warning",
 								"uri": "https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune"
 							}
 						},
@@ -724,7 +738,7 @@
 										"name": "ObjectPickerBlade",
 										"extension": "Microsoft_AAD_IAM",
 										"parameters": {
-											"queries": "[if(or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraKerberos')), 4194304, 32)]",
+											"queries": "[if(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), 4194304, 32)]",
 											"disablers": 4,
 											"bladeSubtitle": "Pick the groups to assign",
 											"additionalQueriesOnSearch": 0,
@@ -1737,7 +1751,7 @@
 										"path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02')]",
 										"transforms": {
 											"list": "value|[*].{label:name, value:id}"
-										}										
+										}
 									}
 								},
 								{
@@ -2431,7 +2445,7 @@
 						{
 							"name": "domainName",
 							"type": "Microsoft.Common.TextBox",
-							"visible": "[equals(steps('identity').solution, 'EntraKerberos')]",
+							"visible": "[equals(steps('identity').solution, 'EntraKerberos-Hybrid')]",
 							"label": "User Active Directory Domain Name",
 							"toolTip": "Provide domain name from where users are synchronized. This is required to use file explorer to configure permissions.",
 							"placeholder": "Example: contoso.com",
@@ -2444,7 +2458,7 @@
 						{
 							"name": "domainGuid",
 							"type": "Microsoft.Common.TextBox",
-							"visible": "[equals(steps('identity').solution, 'EntraKerberos')]",
+							"visible": "[equals(steps('identity').solution, 'EntraKerberos-Hybrid')]",
 							"label": "Domain Guid",
 							"toolTip": "ObjectId from the on-premises domain. Can be determined with the following Powershell command: '(Get-ADDomain).ObjectGUID.Guid'.",
 							"placeholder": "Example: A1B2C3D4-E5F6-7890-1234-56789ABCDEF0",
@@ -2809,9 +2823,30 @@
 									"label": "Sharding Options",
 									"defaultValue": "No Sharding",
 									"constraints": {
-										"allowedValues": "[if(equals(steps('identity').solution, 'EntraKerberos'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions (Max 4 Storage Accounts)\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions (Max 4 Storage Accounts)\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
+										"allowedValues": "[if(contains(steps('identity').solution, 'EntraKerberos'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions (Max 4 Storage Accounts)\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions (Max 4 Storage Accounts)\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
 									},
 									"visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('identity').solution, 'EntraId')))]"
+								},								
+								{
+									"name": "entraKerbCloudWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-CloudOnly'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms'))]",
+									"options": {
+										"text": "Enabling authentication to FSLogix storage accounts using Entra Kerberos for Cloud Only Identities is only supported in Azure Commercial. In order to grant specific Entra groups NTFS permissions to the share the Entra application that is created when enabling the storage account for Entra Kerberos authentication must be updated. You must select a user assigned managed identity below that has assigned the Application Administrator role.",
+										"style": "Warning",
+										"uri": "https://learn.microsoft.com/en-us/entra/identity/authentication/kerberos#group-sid-limit-in-entra-kerberos-preview"
+									}
+								},								
+								{
+									"name": "managedIdentity",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Application Administrator User Assigned Identity",
+									"toolTip": "Select an existing User Assigned Identity which has been assigned the Application Administrator Entra Id role.",
+									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+									"constraints": {
+										"required": true
+									},
+									"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-CloudOnly'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms'))]"
 								},
 								{
 									"name": "groupPickerBlade",
@@ -2821,7 +2856,7 @@
 										"name": "ObjectPickerBlade",
 										"extension": "Microsoft_AAD_IAM",
 										"parameters": {
-											"queries": 4194304,
+											"queries": "[if(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), 4194304, 32)]",
 											"disablers": 4,
 											"bladeSubtitle": "Pick the groups to assign",
 											"additionalQueriesOnSearch": 0,
@@ -3071,7 +3106,7 @@
 									"multiselect": true,
 									"toolTip": "",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('basics').hostPoolApi.tags))), equals(first(skip(split(sa.id, '/'), 4)), steps('basics').hostPoolApi.tags.storageResourceGroup), equals(sa.location, steps('hosts').scope.location.name))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), if(and(not(empty(steps('basics').hostPoolApi.tags)), not(empty(steps('basics').hostPoolApi.tags.storageResourceGroup))), equals(first(skip(split(sa.id, '/'), 4)), steps('basics').hostPoolApi.tags.storageResourceGroup), equals(sa.location, steps('hosts').scope.location.name)), equals(sa.location, steps('hosts').scope.location.name))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
 										"required": true
 									},
 									"visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)))]"
@@ -3149,10 +3184,10 @@
 							"name": "shareManagement",
 							"type": "Microsoft.Common.Section",
 							"label": "Share Management",
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly', steps('userProfiles').deployStorage)]",
-							"elements": [
+							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('userProfiles').deployStorage)]",
+							"elements": [								
 								{
-									"name": "shareManagementTextBox1",
+									"name": "shareManagementTextBox2",
 									"type": "Microsoft.Common.TextBlock",
 									"options": {
 										"text": "You can optionally select groups that will be assigned admin permissions to the file share to facilitate user profile management troubleshooting."
@@ -3172,7 +3207,7 @@
 										"name": "ObjectPickerBlade",
 										"extension": "Microsoft_AAD_IAM",
 										"parameters": {
-											"queries": "[if(or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraKerberos')), 4194304, 32)]",
+											"queries": "[if(or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraKerberos-Hybrid')), 4194304, 32)]",
 											"disablers": 4,
 											"bladeSubtitle": "Pick the groups to assign",
 											"additionalQueriesOnSearch": 0,
@@ -3207,8 +3242,8 @@
 									"label": "Select Admin Groups",
 									"keyPath": "displayName",
 									"descriptionKeyPath": "id",
-									"value": "[steps('controlPlane').assignments.groupPickerBlade.transformed.groups]",
-									"visible": "[steps('userProfiles').shareManagement.configureAdminAccess]",
+									"value": "[steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups]",
+									"visible": "[equals(steps('userProfiles').shareManagement.configureAdminAccess, true)]",
 									"barColor": "[if(empty(steps('userProfiles').shareManagement.groupPickerBlade), '#FF0000', '#7fba00')]",
 									"constraints": {
 										"required": true
@@ -4349,8 +4384,8 @@
 				"index": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('basics').naming.index, '')]",
 				"nameConvResTypeAtEnd": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('basics').naming.nameConvResTypeAtEnd, false)]",
 				"identitySolution": "[steps('identity').solution]",
-				"domainName": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.domainName, if(and(equals(steps('identity').solution, 'EntraKerberos'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').domainName, ''))]",
-				"domainGuid": "[if(and(equals(steps('identity').solution, 'EntraKerberos'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').domainGuid, '')]",
+				"domainName": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.domainName, if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').domainName, ''))]",
+				"domainGuid": "[if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').domainGuid, '')]",
 				"vmOUPath": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.ouPath, '')]",
 				"domainJoinUserPassword": "[if(and(contains(steps('identity').solution, 'DomainServices'), equals(steps('identity').credentials.source, 'manual')), steps('identity').credentials.domainJoinUserPassword, '')]",
 				"domainJoinUserPrincipalName": "[if(and(contains(steps('identity').solution, 'DomainServices'), equals(steps('identity').credentials.source, 'manual')), steps('identity').credentials.domainJoinUserPrincipalName, '')]",
@@ -4409,7 +4444,7 @@
 				"hibernationEnabled": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'HibernationSupported')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported))), steps('hosts').specs.hibernationEnabled, false)]",
 				"avdAgentsDSCPackage": "[steps('hosts').registration.avdAgentsDSCPackage]",
 				"useAgentDownloadEndpoint": "[steps('hosts').registration.useAgentDownloadEndpoint]",
-				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), equals(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
+				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
 				"artifactsContainerUri": "[if(steps('hosts').customScripts.addCustomScripts, if(and(not(empty(steps('hosts').customScripts.storageAccount)), not(empty(steps('hosts').customScripts.container))), concat(steps('hosts').customScripts.storageAccount.blobEndpoint, steps('hosts').customScripts.container), ''), '')]",
 				"artifactsUserAssignedIdentityResourceId": "[if(steps('hosts').customScripts.addCustomScripts, if(not(empty(steps('hosts').customScripts.managedIdentity)), steps('hosts').customScripts.managedIdentity.id, ''), '')]",
 				"sessionHostCustomizations": "[if(steps('hosts').customScripts.addCustomScripts, steps('hosts').customScripts.customizations, parse('[]'))]",
@@ -4431,6 +4466,7 @@
 				"keyManagementStorageAccounts": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.keyManagement, 'MicrosoftManaged')]",
 				"fslogixExistingLocalStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingLocalStorageAccounts, parse('[]'))]",
 				"fslogixExistingRemoteStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
+				"fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(equals(steps('identity').solution, 'EntraKerberos-CloudOnly'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms')), steps('userProfiles').azureFiles.managedIdentity.id, '')]",
 				"fslogixAdminGroups": "[if(steps('userProfiles').shareManagement.configureAdminAccess, steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups, parse('[]'))]",
 				"avdObjectId": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('management').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('management').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('management').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
 				"deployIncreaseQuota": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('userProfiles').azureFiles.storageSku, 'Premium')), steps('management').automation.deployIncreaseQuota, false)]",

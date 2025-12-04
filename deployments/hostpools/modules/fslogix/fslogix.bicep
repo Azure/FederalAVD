@@ -21,6 +21,7 @@ param domainGuid string
 param encryptionKeyVaultResourceId string
 param encryptionKeyVaultUri string
 param fslogixAdminGroups array
+param appUpdateUserAssignedIdentityResourceId string
 param fslogixEncryptionKeyNameConv string
 param fslogixFileShares array
 param fslogixShardOptions string
@@ -123,6 +124,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   name: 'Azure-Files-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupStorage)
   params: {
+    appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
     availability: availability
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
