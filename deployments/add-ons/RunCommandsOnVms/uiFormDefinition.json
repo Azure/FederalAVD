@@ -48,7 +48,10 @@
 							"condition": "[not(empty(steps('basics').resourceGroup))]",
 							"request": {
 								"method": "GET",
-								"path": "[concat(steps('basics').scope.subscription.id, '/resourceGroups/', steps('basics').resourceGroup.value.name, '/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01')]"
+								"path": "[concat(steps('basics').scope.subscription.id, '/resourceGroups/', steps('basics').resourceGroup.value.name, '/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01')]",
+								"transforms": {
+											"list": "value|[*].{label:name, value:name}"
+										}
 							}
 						},
 						{
@@ -58,8 +61,9 @@
 							"multiselect": true,
 							"toolTip": "Select the virtual machine(s) on which to run the script.",
 							"constraints": {
-								"allowedValues": "[map(steps('basics').virtualMachinesApi.value, (vm) => parse(concat('{\"label\":\"', vm.name, '\",\"value\":\"', vm.name, '\"}')))]",
+								"allowedValues": "[steps('basics').virtualMachinesApi.transformed.list]",
 								"required": true
+								
 							}
 						}
 					]
