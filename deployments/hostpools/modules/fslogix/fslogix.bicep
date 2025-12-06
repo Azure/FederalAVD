@@ -17,7 +17,6 @@ param domainJoinUserPassword string
 @secure()
 param domainJoinUserPrincipalName string
 param domainName string
-param domainGuid string
 param encryptionKeyVaultResourceId string
 param encryptionKeyVaultUri string
 param fslogixAdminGroups array
@@ -137,8 +136,6 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     deploymentResourceGroupName: resourceGroupDeployment
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? domainJoinUserPassword : ''
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? domainJoinUserPrincipalName : ''
-    domainName: domainName
-    domainGuid: domainGuid
     encryptionKeyVaultUri: encryptionKeyVaultUri
     encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'MicrosoftManaged'
       ? ''

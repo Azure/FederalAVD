@@ -165,7 +165,7 @@ resource extension_GuestAttestation 'Microsoft.Compute/virtualMachines/extension
   }
 }
 
-resource extension_JsonADDomainExtension 'Microsoft.Compute/virtualMachines/extensions@2019-07-01' = if(contains(identitySolution, 'DomainServices')) {
+resource extension_JsonADDomainExtension 'Microsoft.Compute/virtualMachines/extensions@2019-07-01' = if(!empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName) && (contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid')) {
   parent: virtualMachine
   name: 'JsonADDomainExtension'
   location: location

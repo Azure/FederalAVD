@@ -78,9 +78,6 @@ param credentialsKeyVaultResourceId string = ''
 @description('Optional. The name of the domain that provides ADDS to the AVD session hosts and is synchronized with Azure AD')
 param domainName string = ''
 
-@description('Optional. The GUID of the Active Directory domain. Used when the "IdentitySolution" is "EntraKerberos-Hybrid".')
-param domainGuid string = ''
-
 @description('Optional. The distinguished name for the target Organization Unit in Active Directory Domain Services.')
 param vmOUPath string = ''
 
@@ -251,7 +248,6 @@ Choose Platform Managed and Customer Managed if you need double encryption. This
 - Choose Platform Managed and Customer Managed with HSM if you must incorporate double encryption and protect the customer managed key with the Hardware Security Module. This option does not apply to confidential VMs.
 ''')
 param keyManagementDisks string = 'PlatformManaged'
-
 
 @description('Optional. The resource Id of an existing Disk Encryption Set that session hosts will utilize for customer managed keys. Only used when "DeploymentType" is "SessionHostOnly".')
 param existingDiskEncryptionSetResourceId string = ''
@@ -785,8 +781,7 @@ var exclusionTag = !empty(scalingPlanExclusionTag) && deployScalingPlan
 var hostTags = !empty(exclusionTag) ? union(tags, exclusionTag) : tags
 
 var fslogixFileShareNames = resourceNames.outputs.fslogixFileShareNames[fslogixContainerType]
-var fslogixNTFSGroups = empty(fslogixUserGroups) ? appGroupSecurityGroups : fslogixUserGroups
-var fslogixStorageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixNTFSGroups)
+var fslogixStorageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
 
 //  BATCH SESSION HOSTS
 // The following variables are used to determine the batches to deploy any number of AVD session hosts.
@@ -970,9 +965,9 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     desktopFriendlyName: desktopFriendlyName
     diskSku: diskSku
     #disable-next-line BCP422
-    domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPassword) ? domainJoinUserPassword : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : '' : ''
+    domainJoinUserPassword: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid' ? !empty(domainJoinUserPassword) ? domainJoinUserPassword : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : '' : ''
     #disable-next-line BCP422
-    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPrincipalName) ? domainJoinUserPrincipalName : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : '' : ''
+    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid' ? !empty(domainJoinUserPrincipalName) ? domainJoinUserPrincipalName : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : '' : ''
     domainName: domainName
     encryptionAtHost: encryptionAtHost
     fslogix: deployFSLogixStorage
@@ -1132,14 +1127,13 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     #disable-next-line BCP422
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPrincipalName) ? domainJoinUserPrincipalName : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : '' : ''
     domainName: domainName
-    domainGuid: domainGuid
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
     encryptionKeyVaultUri: encryptionKeyVaultUri
     fslogixAdminGroups: fslogixAdminGroups
     fslogixEncryptionKeyNameConv: resourceNames.outputs.encryptionKeyNames.fslogix
     fslogixFileShares: fslogixFileShareNames
     fslogixShardOptions: fslogixShardOptions
-    fslogixUserGroups: fslogixNTFSGroups
+    fslogixUserGroups: fslogixUserGroups
     functionAppDelegatedSubnetResourceId: functionAppSubnetResourceId    
     hostPoolResourceId: deploymentType == 'SessionHostsOnly' ? existingHostPoolResourceId : controlPlane!.outputs.hostPoolResourceId
     identitySolution: identitySolution

@@ -1,57 +1,5 @@
-<#
-.SYNOPSIS
-    Sets NTFS permissions on Azure File Shares using REST API and SDDL strings.
-
-.DESCRIPTION
-    This script configures NTFS permissions on Azure File Shares by:
-    1. Converting group names/objects from JSON to Security Identifiers (SIDs)
-    2. Building SDDL (Security Descriptor Definition Language) strings
-    3. Creating Azure Storage Account computer objects in Active Directory
-    4. Setting permissions via Azure Files REST API
-
-    Supports both single and sharded storage account scenarios.
-
-.PARAMETER AdminGroups
-    JSON array of administrator groups (strings or objects with GroupName/DomainName/SID properties)
-
-.PARAMETER Shares
-    JSON array of file share names to configure
-
-.PARAMETER ShardAzureFilesStorage
-    Boolean string ("true"/"false") indicating if storage accounts are sharded per user group
-
-.PARAMETER StorageAccountPrefix
-    Prefix for storage account names (e.g., "stavd")
-
-.PARAMETER StorageCount
-    Number of storage accounts to process
-
-.PARAMETER StorageIndex
-    Starting index for storage account numbering
-
-.PARAMETER StorageSuffix
-    Storage endpoint suffix (e.g., "core.windows.net")
-
-.PARAMETER UserGroups
-    JSON array of user groups (strings or objects with groupName/domainName/sid properties)
-
-.PARAMETER UserAssignedIdentityClientId
-    Client ID of the user-assigned managed identity for Azure API authentication
-
-.EXAMPLE
-    .\Set-NtfsPermissions-sa.ps1 -Shares '["profiles","office"]' -UserGroups '["Domain Users"]'
-
-.NOTES
-    Requires:
-    - Active Directory PowerShell module
-    - User-assigned managed identity with appropriate permissions
-    - Storage accounts with Azure Files enabled
-#>
-
 param 
-(       
-    [string]$AdminGroups,
-
+(
     [String]$Shares,
 
     [string]$ShardAzureFilesStorage,    
@@ -188,8 +136,7 @@ Function Set-AzureFileSharePermissions {
         }
         
         $SetUri = $($ResourceUrl + $FileShareName + '?restype=directory&comp=properties')
-        Write-Output "[Set-AzureFileSharePermissions]: Setting properties with URI: $SetUri"
-        
+        Write-Output "[Set-AzureFileSharePermissions]: Setting properties with URI: $SetUri"        
         Invoke-WebRequest -Headers $Headers -Method 'PUT' -Uri $SetUri -UseBasicParsing | Out-Null
         Write-Output "[Set-AzureFileSharePermissions]: Successfully set NTFS permissions on file share root"
     }
@@ -208,30 +155,7 @@ try {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $DefaultDomain = Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object -ExpandProperty Domain
     Write-Output "Default Domain: $DefaultDomain"
-  
-    # Convert Admin Groups to SIDs if provided
-    [array]$AdminGroupSids = @() 
-    if ($AdminGroups -and $AdminGroups -ne '[]') {
-        Write-Output "Processing Admin Groups..."
-        [array]$AdminGroupsArray = $AdminGroups.replace('\"', '"') | ConvertFrom-Json
-        ForEach ($AdminGroup in $AdminGroupsArray) {
-            Write-Output "  Admin Group: $AdminGroup"
-            $output = [guid]::Empty
-            if ([guid]::TryParse($AdminGroup, [ref]$output)) {
-                # It's a valid GUID, convert to SID
-                $sid = Convert-EntraIdObjectIdToSid -ObjectId $AdminGroup
-                Write-Output "Converted Admin Group with ObjectId '$AdminGroup' to SID '$sid'"
-                $AdminGroupSids += $sid
-            }
-            Else {
-                # Not a GUID, treat as group name
-                $sid = Convert-DomainGroupToSID -DomainName $DefaultDomain -GroupName $AdminGroup
-                Write-Output "Converted Admin Group with GroupName '$AdminGroup' to SID '$sid'"
-                $AdminGroupSids += $sid
-            }
-        }
-    }
-    
+   
     # Convert User Groups to SIDs if provided
     [array]$UserGroupSids = @()
     if ($UserGroups -and $UserGroups -ne '[]') {
@@ -265,14 +189,6 @@ try {
     $SDDLStartString = 'O:BAG:SYD:PAI(A;OICIIO;0x1301bf;;;CO)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
     $SDDLBuiltInUsersString = '(A;;0x1301bf;;;BU)'
 
-    # Build SDDL entries for admin groups if provided
-    if ($AdminGroupSids.Count -gt 0) {
-        $SDDLAdminGroupsString = @()
-        ForEach ($GroupSid in $AdminGroupSids) {    
-            $SDDLAdminGroupsString += '(A;OICI;FA;;;' + $GroupSid + ')'
-        }
-    }
-
     # Build SDDL entries for user groups if provided
     if ($UserGroupSids.Count -gt 0) {
         $SDDLUserGroupsString = @()
@@ -300,8 +216,8 @@ try {
         # Build UNC path and HTTPS URL for the storage account
         $FileServer = '\\' + $StorageAccountName + $FilesSuffix  # UNC: \\stavd01.file.core.windows.net
         $ResourceUrl = 'https://' + $StorageAccountName + $FilesSuffix  # HTTPS: https://stavd01.file.core.windows.net
-        if ($AdminGroupSids.Count -eq 0 -and $UserGroupSids.Count -eq 0) {
-            Write-Output "No Admin or User Groups provided, Setting default permissions for $StorageAccountName"
+        if ($UserGroupSids.Count -eq 0) {
+            Write-Output "No User Groups provided, Setting default permissions for $StorageAccountName"
             $SDDLString = ($SDDLStartString + $SDDLBuiltInUsersString) -replace ' ', ''
             foreach ($Share in $Shares) {
                 Set-AzureFileSharePermissions -FileShareName $Share -StorageAccountName $StorageAccountName -StorageSuffix $StorageSuffix -SDDLString $SDDLString -ClientId $UserAssignedIdentityClientId
@@ -312,16 +228,9 @@ try {
             # Check if storage is sharded (different user groups per storage account)
             # SHARDED MODE: Each storage account gets a specific user group
             foreach ($Share in $Shares) {
-                if ($AdminGroupSids.Count -gt 0 -and $UserGroupSids.Count -gt 0) {
-                    Write-Output "Admin Groups provided, building SDDL String with Admin Groups"
-                    # Build SDDL with admin groups + specific user group for this storage account index
-                    $SDDLString = ($SDDLStartString + $SDDLAdminGroupsString + $SDDLUserGroupsString[$i]) -replace ' ', ''
-                }
-                Else {
-                    Write-Output "Admin Groups not provided, building SDDL string without Admin Groups"
-                    # Build SDDL with only the specific user group for this storage account index
-                    $SDDLString = ($SDDLStartString + $SDDLUserGroupsString[$i]) -replace ' ', ''
-                }
+                Write-Output "Building SDDL with group for this share."
+                # Build SDDL with only the specific user group for this storage account index
+                $SDDLString = ($SDDLStartString + $SDDLUserGroupsString[$i]) -replace ' ', ''
                 Set-AzureFileSharePermissions -FileShareName $Share -StorageAccountName $StorageAccountName -StorageSuffix $StorageSuffix -SDDLString $SDDLString -ClientId $UserAssignedIdentityClientId
                 Write-Output "Successfully set NTFS permissions on file share '$Share' in storage account '$StorageAccountName'"                
             }
@@ -331,16 +240,9 @@ try {
             foreach ($Share in $Shares) {
                 $FileShare = $FileServer + '\' + $Share
                 Write-Output "Processing File Share: $FileShare"
-                if ($AdminGroupSids.Count -gt 0 -and $UserGroupSids.Count -gt 0) {
-                    Write-Output "Admin Groups provided, building SDDL string with Admin Groups"
-                    # Build SDDL with admin groups + all user groups
-                    $SDDLString = ($SDDLStartString + $SDDLAdminGroupsString + $SDDLUserGroupsString) -replace ' ', ''
-                }
-                Else {
-                    Write-Output "Admin Groups not provided, building SDDL string without Admin Groups"
-                    # Build SDDL with only user groups
-                    $SDDLString = ($SDDLStartString + $SDDLUserGroupsString) -replace ' ', ''
-                }
+                Write-Output "Building SDDL with user groups."
+                # Build SDDL with only user groups
+                $SDDLString = ($SDDLStartString + $SDDLUserGroupsString) -replace ' ', ''                
                 # Apply permissions to the file share using Azure Files REST API
                 Set-AzureFileSharePermissions -FileShareName $Share -StorageAccountName $StorageAccountName -StorageSuffix $StorageSuffix -SDDLString $SDDLString -ClientId $UserAssignedIdentityClientId
                 Write-Output "Successfully set NTFS permissions on file share '$Share' in storage account '$StorageAccountName'"                

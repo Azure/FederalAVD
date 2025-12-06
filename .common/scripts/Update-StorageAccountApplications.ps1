@@ -9,17 +9,21 @@ param (
     [Parameter(Mandatory = $true)]
     [string]$GraphEndpoint,
 
+    [Parameter(Mandatory = $false)]
+    [string]$PrivateEndpoint = "false",
+
     [Parameter(Mandatory = $true)]
     [string]$TenantId,
 
     [Parameter(Mandatory = $false)]
-    [string]$PrivateEndpoint = "false"
+    [string]$EnableCloudGroupSids = "false"
 )
 
 $ErrorActionPreference = "Stop"
 
-# Convert PrivateLink to boolean
+# Convert strings to boolean
 $PrivateLink = [System.Convert]::ToBoolean($PrivateEndpoint)
+$UpdateTag = [System.Convert]::ToBoolean($EnableCloudGroupSids)
 
 # Setup Logging
 $logPath = "C:\Windows\Logs"
@@ -36,7 +40,8 @@ try {
         Write-Output "Successfully obtained response:"
         Write-Output $($Response | ConvertTo-Json -Depth 5)
         $AccessToken = $Response.access_token
-    } else {
+    }
+    else {
         throw "Failed to obtain access token from IMDS."
     }
         
@@ -54,21 +59,16 @@ try {
         # Add ConsistencyLevel header which is often required for advanced queries
         $searchHeaders = $headers.Clone()
         $searchHeaders.Add("ConsistencyLevel", "eventual")
-
-        $searchResp = Invoke-RestMethod -Method Get -Uri $searchUri -Headers $searchHeaders
-        
+        $searchResp = Invoke-RestMethod -Method Get -Uri $searchUri -Headers $searchHeaders        
         if ($searchResp.value.Count -eq 0) {
             throw "No application found starting with '$AppDisplayNamePrefix'."
         }
-        
         Write-Output "Found $($searchResp.value.Count) applications starting with '$AppDisplayNamePrefix'."
     }
     catch {
         Write-Error ("Failed to search for application: " + $_.Exception.Message)
         throw $_
     }
-
-    $tags = @("kdc_enable_cloud_group_sids")
 
     # Constants for Graph Permissions
     $GraphAppId = "00000003-0000-0000-c000-000000000000"
@@ -89,17 +89,22 @@ try {
         $appObjectId = $app.id
         $appName = $app.displayName
         Write-Output "Processing Application: $appName (ObjectId: $appObjectId)"
-
-        # 1. Update Tags
+        
         $uri = "$graphBase/applications/$appObjectId"
-        $body = @{ tags = $tags } | ConvertTo-Json -Depth 5
 
-        try {
-            Invoke-RestMethod -Method Patch -Uri $uri -Headers $headers -Body $body            
-            Write-Output "Tags updated successfully for $appName."
-        }
-        catch {
-            Write-Error ("Failed to update tags for $appName : " + $_.Exception.Message)
+        If ($UpdateTag) {
+            $tags = @("kdc_enable_cloud_group_sids")
+  
+            # 1. Update Tags
+            $body = @{ tags = $tags } | ConvertTo-Json -Depth 5
+
+            try {
+                Invoke-RestMethod -Method Patch -Uri $uri -Headers $headers -Body $body            
+                Write-Output "Tags updated successfully for $appName."
+            }
+            catch {
+                Write-Error ("Failed to update tags for $appName : " + $_.Exception.Message)
+            }
         }
 
         # 2. Update Required Resource Access (API Permissions)
@@ -113,7 +118,7 @@ try {
             
             # Add Graph Permissions
             $newRRA += @{
-                resourceAppId = $GraphAppId
+                resourceAppId  = $GraphAppId
                 resourceAccess = @(
                     @{ id = $UserReadId; type = "Scope" },
                     @{ id = $OpenIdId; type = "Scope" },
@@ -121,12 +126,24 @@ try {
                 )
             }
             
-            $rraBody = @{ requiredResourceAccess = $newRRA } | ConvertTo-Json -Depth 10
+            # Ensure newRRA is an array, otherwise ConvertTo-Json might make it a single object if only one entry exists
+            $rraBody = @{ requiredResourceAccess = @($newRRA) } | ConvertTo-Json -Depth 10
             Invoke-RestMethod -Method Patch -Uri $uri -Headers $headers -Body $rraBody
             Write-Output "Updated API permissions (requiredResourceAccess) for $appName."
         }
         catch {
-            Write-Error ("Failed to update API permissions for $appName : " + $_.Exception.Message)
+            $errorMsg = "Failed to update API permissions for $appName : " + $_.Exception.Message
+            # Try to capture detailed error response from the API
+            if ($_.ErrorDetails) {
+                $errorMsg += "`nDetails: " + $_.ErrorDetails.Message
+            } elseif ($_.Exception.Response) {
+                try {
+                    $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                    $details = $reader.ReadToEnd()
+                    $errorMsg += "`nDetails: $details"
+                } catch {}
+            }
+            Write-Error $errorMsg
         }
 
         # 3. Grant Admin Consent
@@ -142,7 +159,8 @@ try {
                 $newSP = Invoke-RestMethod -Method Post -Uri "$graphBase/servicePrincipals" -Headers $headers -Body $spBody
                 $appSPObjectId = $newSP.id
                 Write-Output "Created Service Principal: $appSPObjectId"
-            } else {
+            }
+            else {
                 $appSPObjectId = $spResp.value[0].id
                 Write-Output "Found Service Principal: $appSPObjectId"
             }
@@ -156,14 +174,15 @@ try {
             if ($grantResp.value.Count -eq 0) {
                 Write-Output "Granting admin consent..."
                 $grantBody = @{
-                    clientId = $appSPObjectId
+                    clientId    = $appSPObjectId
                     consentType = "AllPrincipals"
-                    resourceId = $GraphSPObjectId
-                    scope = ($targetScopes -join " ")
+                    resourceId  = $GraphSPObjectId
+                    scope       = ($targetScopes -join " ")
                 } | ConvertTo-Json
                 Invoke-RestMethod -Method Post -Uri "$graphBase/oauth2PermissionGrants" -Headers $headers -Body $grantBody
                 Write-Output "Admin consent granted successfully."
-            } else {
+            }
+            else {
                 Write-Output "Updating existing admin consent..."
                 $existingGrant = $grantResp.value[0]
                 $existingScopes = $existingGrant.scope.Split(' ')
@@ -175,7 +194,8 @@ try {
                     $grantId = $existingGrant.id
                     Invoke-RestMethod -Method Patch -Uri "$graphBase/oauth2PermissionGrants/$grantId" -Headers $headers -Body $grantUpdateBody
                     Write-Output "Admin consent updated successfully."
-                } else {
+                }
+                else {
                     Write-Output "Admin consent already up to date."
                 }
             }
@@ -214,7 +234,8 @@ try {
                     $uriBody = @{ identifierUris = $newUris } | ConvertTo-Json -Depth 5
                     Invoke-RestMethod -Method Patch -Uri $uri -Headers $headers -Body $uriBody
                     Write-Output "IdentifierUris updated successfully for $appName."
-                } else {
+                }
+                else {
                     Write-Output "PrivateLink IdentifierUris already present or not applicable for $appName."
                 }
             }
