@@ -6,61 +6,30 @@ param userAssignedIdentityClientId string
 param logBlobContainerUri string
 param deploymentSuffix string
 param commonScriptParams array
+param restartVMParameters array
 param batchIndex int
 param resourceManagerUri string
 param subscriptionId string
 param resourceGroupName string
-
-resource imageVm 'Microsoft.Compute/virtualMachines@2022-11-01' existing = {
-  name: imageVmName
-}
 
 resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing = {
   name: orchestrationVmName
 }
 
 @batchSize(1)
-resource applications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = [
+module applications 'applyCustomization.bicep' = [
   for customizer in customizations: {
-    name: customizer.name
-    location: location
-    parent: imageVm
-    properties: {
-      asyncExecution: false
-      errorBlobManagedIdentity: empty(logBlobContainerUri)
-        ? null
-        : {
-            clientId: userAssignedIdentityClientId
-          }
-      errorBlobUri: empty(logBlobContainerUri)
-        ? null
-        : '${logBlobContainerUri}${imageVmName}-${customizer.name}-error-${deploymentSuffix}.log'
-      outputBlobManagedIdentity: empty(logBlobContainerUri)
-        ? null
-        : {
-            clientId: userAssignedIdentityClientId
-          }
-      outputBlobUri: empty(logBlobContainerUri)
-        ? null
-        : '${logBlobContainerUri}${imageVmName}-${customizer.name}-output-${deploymentSuffix}.log'
-      parameters: union(commonScriptParams, [
-        {
-          name: 'Uri'
-          value: customizer.uri
-        }
-        {
-          name: 'Name'
-          value: customizer.name
-        }
-        {
-          name: 'Arguments'
-          value: customizer.arguments
-        }
-      ])
-      source: {
-        script: loadTextContent('../../../../.common/scripts/Invoke-Customization.ps1')
-      }
-      treatFailureAsDeploymentFailure: true
+    name: '${customizer.name}-${deploymentSuffix}'
+    params: {
+      customizer: customizer
+      location: location
+      imageVmName: imageVmName
+      orchestrationVmName: orchestrationVmName
+      userAssignedIdentityClientId: userAssignedIdentityClientId
+      logBlobContainerUri: logBlobContainerUri
+      deploymentSuffix: deploymentSuffix
+      commonScriptParams: commonScriptParams
+      restartVMParameters: restartVMParameters
     }
   }
 ]

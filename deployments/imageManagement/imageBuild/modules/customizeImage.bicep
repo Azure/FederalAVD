@@ -40,6 +40,7 @@ var customizers = [
       ? customization.blobNameOrUri
       : '${artifactsContainerUri}/${customization.blobNameOrUri}'
     arguments: customization.?arguments ?? ''
+    restart: customization.?restart ?? false
   }
 ]
 
@@ -483,6 +484,7 @@ module customizationBatches 'applyCustomizationsBatch.bicep' = [for i in range(0
       name: customizers[i * customizationBatchSize + j].name
       uri: customizers[i * customizationBatchSize + j].uri
       arguments: customizers[i * customizationBatchSize + j].arguments
+      restart: customizers[i * customizationBatchSize + j].restart
     })
     deploymentSuffix: deploymentSuffix
     imageVmName: imageVmName
@@ -493,6 +495,7 @@ module customizationBatches 'applyCustomizationsBatch.bicep' = [for i in range(0
     resourceManagerUri: environment().resourceManager
     subscriptionId: subscription().subscriptionId
     userAssignedIdentityClientId: userAssignedIdentityClientId
+    restartVMParameters: restartVMParameters
   }
   dependsOn: [
     createBuildDir

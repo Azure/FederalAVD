@@ -1171,6 +1171,27 @@
 														"required": false
 													}
 												}
+											},
+											{
+												"id": "restart",
+												"header": "Restart",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "No",
+																"value": false
+															},
+															{
+																"label": "Yes",
+																"value": true
+															}															
+														],
+														"required": true
+													}
+												}
 											}
 										]
 									}
