@@ -70,21 +70,6 @@ try {
         throw $_
     }
 
-    # Constants for Graph Permissions
-    $GraphAppId = "00000003-0000-0000-c000-000000000000"
-    $UserReadId = "e1fe6dd8-ba31-4d61-89e7-88639da4683d"
-    $OpenIdId = "37f7f235-527c-4136-accd-4a02d197296e"
-    $ProfileId = "14dad69e-099b-42c9-810b-d002981feec1"
-
-    # Get Microsoft Graph Service Principal in this tenant
-    $graphSPUri = "$graphBase/servicePrincipals?`$filter=appId eq '$GraphAppId'"
-    $graphSPResp = Invoke-RestMethod -Method Get -Uri $graphSPUri -Headers $headers
-    if ($graphSPResp.value.Count -eq 0) {
-        throw "Could not find Microsoft Graph Service Principal in tenant."
-    }
-    $GraphSPObjectId = $graphSPResp.value[0].id
-    Write-Output "Found Microsoft Graph Service Principal: $GraphSPObjectId"
-
     foreach ($app in $searchResp.value) {
         $appObjectId = $app.id
         $appName = $app.displayName
@@ -106,106 +91,7 @@ try {
                 Write-Error ("Failed to update tags for $appName : " + $_.Exception.Message)
             }
         }
-
-        # 2. Update Required Resource Access (API Permissions)
-        try {
-            # Get current app to ensure we have latest requiredResourceAccess
-            $currentApp = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $currentRRA = $currentApp.requiredResourceAccess
-            
-            # Filter out existing Graph entry to replace it, or append if not present
-            $newRRA = if ($currentRRA) { $currentRRA | Where-Object { $_.resourceAppId -ne $GraphAppId } } else { @() }
-            
-            # Add Graph Permissions
-            $newRRA += @{
-                resourceAppId  = $GraphAppId
-                resourceAccess = @(
-                    @{ id = $UserReadId; type = "Scope" },
-                    @{ id = $OpenIdId; type = "Scope" },
-                    @{ id = $ProfileId; type = "Scope" }
-                )
-            }
-            
-            # Ensure newRRA is an array, otherwise ConvertTo-Json might make it a single object if only one entry exists
-            $rraBody = @{ requiredResourceAccess = @($newRRA) } | ConvertTo-Json -Depth 10
-            Invoke-RestMethod -Method Patch -Uri $uri -Headers $headers -Body $rraBody
-            Write-Output "Updated API permissions (requiredResourceAccess) for $appName."
-        }
-        catch {
-            $errorMsg = "Failed to update API permissions for $appName : " + $_.Exception.Message
-            # Try to capture detailed error response from the API
-            if ($_.ErrorDetails) {
-                $errorMsg += "`nDetails: " + $_.ErrorDetails.Message
-            } elseif ($_.Exception.Response) {
-                try {
-                    $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-                    $details = $reader.ReadToEnd()
-                    $errorMsg += "`nDetails: $details"
-                } catch {}
-            }
-            Write-Error $errorMsg
-        }
-
-        # 3. Grant Admin Consent
-        try {
-            # Get Service Principal for the App
-            $spUri = "$graphBase/servicePrincipals?`$filter=appId eq '$($app.appId)'"
-            $spResp = Invoke-RestMethod -Method Get -Uri $spUri -Headers $headers
-            
-            $appSPObjectId = $null
-            if ($spResp.value.Count -eq 0) {
-                Write-Output "Service Principal not found for $appName. Creating it..."
-                $spBody = @{ appId = $app.appId } | ConvertTo-Json
-                $newSP = Invoke-RestMethod -Method Post -Uri "$graphBase/servicePrincipals" -Headers $headers -Body $spBody
-                $appSPObjectId = $newSP.id
-                Write-Output "Created Service Principal: $appSPObjectId"
-            }
-            else {
-                $appSPObjectId = $spResp.value[0].id
-                Write-Output "Found Service Principal: $appSPObjectId"
-            }
-
-            # Check/Create OAuth2PermissionGrant
-            $grantUri = "$graphBase/oauth2PermissionGrants?`$filter=clientId eq '$appSPObjectId' and consentType eq 'AllPrincipals' and resourceId eq '$GraphSPObjectId'"
-            $grantResp = Invoke-RestMethod -Method Get -Uri $grantUri -Headers $headers
-            
-            $targetScopes = @("openid", "profile", "User.Read")
-            
-            if ($grantResp.value.Count -eq 0) {
-                Write-Output "Granting admin consent..."
-                $grantBody = @{
-                    clientId    = $appSPObjectId
-                    consentType = "AllPrincipals"
-                    resourceId  = $GraphSPObjectId
-                    scope       = ($targetScopes -join " ")
-                } | ConvertTo-Json
-                Invoke-RestMethod -Method Post -Uri "$graphBase/oauth2PermissionGrants" -Headers $headers -Body $grantBody
-                Write-Output "Admin consent granted successfully."
-            }
-            else {
-                Write-Output "Updating existing admin consent..."
-                $existingGrant = $grantResp.value[0]
-                $existingScopes = $existingGrant.scope.Split(' ')
-                $mergedScopes = ($existingScopes + $targetScopes) | Select-Object -Unique
-                $finalScopeString = $mergedScopes -join " "
-                
-                if ($finalScopeString -ne $existingGrant.scope) {
-                    $grantUpdateBody = @{ scope = $finalScopeString } | ConvertTo-Json
-                    $grantId = $existingGrant.id
-                    Invoke-RestMethod -Method Patch -Uri "$graphBase/oauth2PermissionGrants/$grantId" -Headers $headers -Body $grantUpdateBody
-                    Write-Output "Admin consent updated successfully."
-                }
-                else {
-                    Write-Output "Admin consent already up to date."
-                }
-            }
-        }
-        catch {
-            Write-Error ("Failed to grant admin consent for $appName : " + $_.Exception.Message)
-            if ($_.Exception.Response -and $_.Exception.Response.Content) {
-                Write-Output "Server response:" $_.Exception.Response.Content
-            }
-        }
+        
         # 4. Update IdentifierUris for PrivateLink
         if ($PrivateLink) {
             try {

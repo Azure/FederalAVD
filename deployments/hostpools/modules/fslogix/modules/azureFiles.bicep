@@ -182,19 +182,6 @@ resource fileServices 'Microsoft.Storage/storageAccounts/fileServices@2022-09-01
   }
 ]
 
-// Assigns the SMB Elevated Contributor role to the Storage Account for admins so they can adjust NTFS permissions if needed.
-module roleAssignmentsAdmins '../../common/roleAssignment-storageAccount.bicep' = [
-  for i in range(0, storageCount): if (!empty(shareAdminGroups)) {
-    name: '${storageAccounts[i].name}-AdminRoleAssignments-${deploymentSuffix}'
-    params: {
-      principalIds: map(shareAdminGroups, group => group.id)
-      principalType: 'Group'
-      storageAccountResourceId: storageAccounts[i].id
-      roleDefinitionId: adminRoleDefinitionId
-    }
-  }
-]
-
 module shares 'shares.bicep' = [
   for i in range(0, storageCount): {
     name: '${storageAccounts[i].name}-fileShares-${deploymentSuffix}'
@@ -282,6 +269,19 @@ resource storageAccounts_file_diagnosticSettings 'Microsoft.Insights/diagnosticS
   }
 ]
 
+// Assigns the Storage File Data Privileged Contributor role to the Storage Account for admins so they can adjust NTFS permissions if needed.
+module roleAssignmentsAdmins '../../common/roleAssignment-storageAccount.bicep' = [
+  for i in range(0, storageCount): if (!empty(shareAdminGroups)) {
+    name: '${storageAccounts[i].name}-AdminRoleAssignments-${deploymentSuffix}'
+    params: {
+      principalIds: map(shareAdminGroups, group => group.id)
+      principalType: 'Group'
+      storageAccountResourceId: storageAccounts[i].id
+      roleDefinitionId: adminRoleDefinitionId
+    }
+  }
+]
+
 module configureADDSAuth 'domainJoin.bicep' = if (identitySolution == 'ActiveDirectoryDomainServices') {
   name: 'Join-Domain-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
@@ -305,8 +305,9 @@ module configureADDSAuth 'domainJoin.bicep' = if (identitySolution == 'ActiveDir
   ]
 }
 
-module configureEntraKerberosWithDomainInfo 'azureFilesEntraKerberosWithDomainInfo.bicep' = if (startsWith(identitySolution, 'EntraKerberos') && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
-  name: 'Configure-Entra-Kerberos-${deploymentSuffix}'
+module configureEntraKerberosWithDomainInfo 'azureFilesEntraKerberosWithDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
+  name: 'Configure-Entra-Kerberos-DomainInfo-${deploymentSuffix}'
+  scope: resourceGroup(deploymentResourceGroupName)
   params: {
     defaultSharePermission: defaultSharePermission
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
@@ -325,8 +326,8 @@ module configureEntraKerberosWithDomainInfo 'azureFilesEntraKerberosWithDomainIn
   ]
 }
 
-module configureEntraKerberosWithoutDomainInfo 'azureFilesEntraKerberosWithoutDomainInfo.bicep' = if (contains(identitySolution, 'EntraKerberos') && (empty(domainJoinUserPassword) || empty(domainJoinUserPrincipalName))) {
-  name: 'Configure-Entra-Kerberos-DomainInfo-${deploymentSuffix}'
+module configureEntraKerberosWithoutDomainInfo 'azureFilesEntraKerberosWithoutDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-CloudOnly' || (identitySolution == 'EntraKerberos-Hybrid' && (empty(domainJoinUserPassword) || empty(domainJoinUserPrincipalName)))) {
+  name: 'Configure-Entra-Kerberos-${deploymentSuffix}'
   params: {
     defaultSharePermission: defaultSharePermission
     location: location
@@ -342,7 +343,7 @@ module configureEntraKerberosWithoutDomainInfo 'azureFilesEntraKerberosWithoutDo
   ]
 }
 
-module updateStorageApplications 'updateEntraIdStorageKerbApps.bicep' = if (contains(identitySolution, 'EntraKerberos') && !empty(appUpdateUserAssignedIdentityResourceId)) {
+module updateStorageApplications 'updateEntraIdStorageKerbApps.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
   name: 'Update-Storage-Applications-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
@@ -380,6 +381,7 @@ module SetNTFSPermissions 'setNTFSPermissionsAzureFiles.bicep' = {
     configureEntraKerberosWithDomainInfo
     configureEntraKerberosWithoutDomainInfo
     configureADDSAuth
+    updateStorageApplications
   ]
 }
 

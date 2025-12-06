@@ -111,7 +111,7 @@ var roleAssignmentsManagement = union(
   roleAssignmentsManagementRBACAdmin
 )
 
-var roleAssignmentsStorage = fslogix && contains(identitySolution, 'DomainServices')
+var roleAssignmentsStorage = fslogix && (contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid')
   ? [
       {
         roleDefinitionId: roleDefinitions.StorageAccountContributor // (Purpose: domain join storage account)

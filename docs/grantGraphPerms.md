@@ -7,7 +7,8 @@ $managedIdentity = Get-MgServicePrincipal -ServicePrincipalId '0ac8e7b2-7bcd-4b5
 
 $graphSPN = Get-MgServicePrincipal -Filter "AppId eq '00000003-0000-0000-c000-000000000000'"
 
-$permission = "Application.ReadUpdate.All"
+#$permission = "Application.ReadWrite.All"
+$permission = "AppRoleAssignment.ReadWrite.All"
 
 $appRole = $graphSPN.AppRoles |
     Where-Object Value -eq $permission |
