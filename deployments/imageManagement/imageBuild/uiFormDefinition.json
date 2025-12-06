@@ -1129,7 +1129,7 @@
 										"rows": {
 											"count": {
 												"min": 1,
-												"max": 25
+												"max": 999
 											}
 										},
 										"columns": [
@@ -1210,7 +1210,7 @@
 										"rows": {
 											"count": {
 												"min": 1,
-												"max": 5
+												"max": 25
 											}
 										},
 										"columns": [
