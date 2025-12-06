@@ -1115,7 +1115,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('imageCustomizations').customSoftware.addCustomSoftware]",
 									"options": {
-										"text": "Enter customizations for your image below. The first column is a free-form text field that can only contain alphanumerics and no spaces. The second column is the blob name or full URI and is case-sensitive. The third column is for any arguments."
+										"text": "Enter customizations for your image below. The columns are explained as follows:<br><ul><li><b>Name:</b> Enter the name of the customization. Can only contain alphanumerics and no spaces.</li><li><b>Blob Name (or URI):</b> Enter the blob name or full URI. It is case-sensitive.</li><li><b>Arguments:</b> Enter any arguments</li><li><b>Restart:</b> Optionally, select Yes or No to introduce a system restart after this customizer runs.</li></ul>"
 									}
 								},
 								{
@@ -1151,7 +1151,7 @@
 											{
 												"id": "blobNameOrUri",
 												"header": "Blob Name (or URI)",
-												"width": "10fr",
+												"width": "3fr",
 												"element": {
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "Example: VSCodeSetup-x64-1.81.1.exe",
@@ -1163,7 +1163,7 @@
 											{
 												"id": "arguments",
 												"header": "Arguments",
-												"width": "1fr",
+												"width": "3fr",
 												"element": {
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "Example: /verysilent /mergetasks='!runcode'",
@@ -1189,7 +1189,7 @@
 																"value": true
 															}															
 														],
-														"required": true
+														"required": false
 													}
 												}
 											}
@@ -1213,11 +1213,11 @@
 									}
 								},
 								{
-									"name": "customizationText",
+									"name": "vdiCustomizationText",
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('imageCustomizations').customSoftware.addVDICustomSoftware]",
 									"options": {
-										"text": "Enter customizations for your image below. The first column is a free-form text field that can only contain alphanumerics and no spaces. The second column is the blob name or full URI and is case-sensitive. The third column is for any arguments."
+										"text": "Enter customizations for your image below. The columns are explained as follows:<br><ul><li><b>Name:</b> Enter the name of the customization. Can only contain alphanumerics and no spaces.</li><li><b>Blob Name (or URI):</b> Enter the blob name or full URI. It is case-sensitive.</li><li><b>Arguments:</b> Enter any arguments</li></ul>"
 									}
 								},
 								{
