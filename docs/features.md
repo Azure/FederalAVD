@@ -17,7 +17,7 @@ This optional feature enables backups to protect user profile data. When selecte
 
 ## Identity Solutions
 
-This solution supports four different identity configurations to meet various organizational requirements. The `identitySolution` parameter determines how user authentication and session host domain membership are handled.
+This solution supports five different identity configurations to meet various organizational requirements. The `identitySolution` parameter determines how user authentication, session host domain membership, and azure files authentication are handled.
 
 ### Active Directory Domain Services (ADDS)
 
@@ -26,21 +26,24 @@ This solution supports four different identity configurations to meet various or
 This is the traditional hybrid identity model where both user accounts and session hosts exist in the same Active Directory domain.
 
 **Requirements:**
+
 - On-premises Active Directory Domain Services
 - Azure AD Connect for identity synchronization
 - Network connectivity between Azure and on-premises (VPN/ExpressRoute)
 - Custom DNS configuration pointing to domain controllers
 
 **Session Host Behavior:**
+
 - Session hosts are domain-joined to the on-premises Active Directory domain
 - Users authenticate using their traditional domain credentials
 - Group Policy can be applied from on-premises domain controllers
 
 **Azure Files Integration:**
-- Storage accounts can be domain-joined to Active Directory
+
+- Storage accounts are domain-joined to Active Directory
 - Supports Kerberos authentication with AES256 or RC4 encryption
 - NTFS permissions are managed through Active Directory groups
-- Requires a management VM to facilitate domain join operations
+- Requires a deployment VM to facilitate domain join operations and configure NTFS permissions.
 
 ### Entra Domain Services
 
@@ -49,77 +52,117 @@ This is the traditional hybrid identity model where both user accounts and sessi
 This cloud-managed domain service option provides domain services without requiring on-premises domain controllers.
 
 **Requirements:**
-- Azure AD Domain Services (managed domain)
-- User accounts can exist in Azure AD or be synchronized from on-premises AD
+
+- Entra Domain Services (managed domain)
+- User accounts can be native to Entra Id or be synchronized from on-premises AD
 - Virtual network integration with Azure AD Domain Services
 
 **Session Host Behavior:**
-- Session hosts are domain-joined to the Azure AD Domain Services managed domain
+
+- Session hosts are domain-joined to the Entra Domain Services managed domain
 - Users authenticate using synchronized identities
 - Managed Group Policy through Azure AD Domain Services
 
 **Azure Files Integration:**
-- Storage accounts are domain-joined to Azure AD Domain Services
+
+- Storage accounts are domain-joined to Entra Domain Services
 - Supports Kerberos authentication
-- NTFS permissions are managed through Azure AD Domain Services groups
-- Management VM facilitates domain join to the managed domain
+- NTFS permissions are managed through Entra Domain Services groups
+- Requires a deployment VM to configure the NTFS permissions.
 
 ### Entra Kerberos (Hybrid)
 
-**Configuration:** `identitySolution = 'EntraKerberos'`
+**Configuration:** `identitySolution = 'EntraKerberos-Hybrid'`
 
-This hybrid approach allows session hosts to be Azure AD joined while still supporting traditional Active Directory user accounts for Azure Files access.
+This hybrid approach allows session hosts to be Entra joined while still supporting traditional Active Directory user accounts for Azure Files access.
 
 **Requirements:**
+
 - On-premises Active Directory Domain Services
 - Azure AD Connect with Password Hash Synchronization or Pass-through Authentication
 - Azure AD Kerberos functionality enabled
-- Domain GUID configuration
+- Domain GUID configuration for Least Privilege NTFS configuration.
 
 **Session Host Behavior:**
-- Session hosts are Azure AD joined (not domain-joined)
-- Users authenticate with Azure AD credentials
+
+- Session hosts are Entra Id joined (not domain-joined)
+- Users authenticate with Entra Id credentials that are synced from Active Directory
 - No traditional domain Group Policy (use Intune for management)
 
 **Azure Files Integration:**
+
 - Storage accounts use Azure AD Kerberos authentication
-- User accounts must exist in on-premises Active Directory (synchronized to Azure AD)
-- Kerberos tickets are obtained from Azure AD but use on-premises AD credentials for file access
-- NTFS permissions are based on on-premises Active Directory groups
+- User accounts must exist in on-premises Active Directory (synchronized to Entra Id)
+- Kerberos tickets are obtained from Entra Id but use on-premises AD credentials for file access
+- Least privilege NTFS permissions are based on on-premises Active Directory groups
 
 > [!IMPORTANT]
-> For Entra Kerberos, additional manual configuration is required:
-> 1. Grant admin consent to the storage account service principal in Azure AD
-> 2. Disable multifactor authentication for the storage account identity
-> 3. Configure the `domainGuid` parameter with your Active Directory domain GUID
+> For Entra Kerberos with Hybrid Identities, this solution can automate the required App Registration updates (Private Link URIs), domain name and domain guid configuration, and admin consent, if you provide a User Assigned Managed Identity with the correct permissions.
+>
+> See [Entra Kerberos for Azure Files with Hybrid Identities](entraKerberosHybrid.md) for details on the required permissions and manual steps if you choose not to use the automation.
 
-### Entra ID (Cloud-Only)
+### Entra Kerberos (Cloud-Only)
 
-**Configuration:** `identitySolution = 'EntraId'`
+**Configuration:** `identitySolution = 'EntraKerberos-CloudOnly'`
 
-This is a pure cloud identity solution using only Azure AD identities with no on-premises dependencies.
+This is a pure cloud identity solution using only Entra Id identities with no on-premises dependencies.
 
 **Requirements:**
-- Azure AD tenant with user accounts
+
+- Entra Id tenant with user accounts
 - No on-premises Active Directory required
 - Optional: Intune enrollment for device management
 
 **Session Host Behavior:**
-- Session hosts are Azure AD joined
-- Users authenticate with Azure AD credentials
+
+- Session hosts are Entra Id joined
+- Users authenticate with Entra Id credentials
 - Device management through Intune (if `intuneEnrollment = true`)
 
 **Azure Files Integration:**
-- Limited Azure Files integration (Azure AD authentication has restrictions)
-- Only supports single storage account configuration
-- Uses Azure AD identities for access control
-- No traditional NTFS permissions - uses Azure RBAC
+
+- Storage accounts use Entra Kerberos authentication
+- Kerberos tickets are obtained from Entra Id
+- Least privilege NTFS permissions are based on Entra Kerberos groups
+
+> [!IMPORTANT]
+> For Entra Kerberos with Cloud Only Identity, this solution can automate the required App Registration updates (Private Link URIs), group support tag, and admin consent, if you provide a User Assigned Managed Identity with the correct permissions.
+>
+> See [Entra Kerberos Cloud Only Support for Azure Files](entraKerberosCloudOnly.md) for details on the required permissions and manual steps if you choose not to use the automation.
 
 **Limitations:**
+
+- While in preview, it is only supported in Azure Commercial
+
+### Entra Id (using Storage Account Keys)
+
+**Configuration:** `identitySolution = 'EntraId'`
+
+This is a pure cloud identity solution using only Entra Id identities with no on-premises dependencies.
+
+**Requirements:**
+
+- Entra Id tenant with user accounts
+- No on-premises Active Directory required
+- Optional: Intune enrollment for device management
+
+**Session Host Behavior:**
+
+- Session hosts are Entra Id joined
+- Users authenticate with Entra Id credentials
+- Device management through Intune (if `intuneEnrollment = true`)
+
+**Azure Files Integration:**
+
+- Session Hosts connect to the storage account on behalf of the user using the storage account key.
+- Only supports single storage account configuration
+- No traditional NTFS permissions
+
+**Limitations:**
+
 - FSLogix sharding options are limited (`fslogixShardOptions = 'None'`)
 - Only one storage account can be used for FSLogix profiles
-- Storage account access is managed through Azure RBAC roles rather than NTFS permissions
-
+  
 ## FSLogix Profile Storage
 
 If selected, this solution will deploy the required resources and configurations so that FSLogix is fully configured and ready for immediate use post deployment.
@@ -144,16 +187,22 @@ FSLogix containers can be configured in multiple ways:
 When using domain-based identity solutions, you have full flexibility for FSLogix storage:
 
 **Storage Account Domain Join:**
-- A management VM is deployed to facilitate domain join of Azure Files storage accounts
+
+- A deployment VM is deployed to facilitate domain join of Azure Files storage accounts
 - Storage accounts are joined to the domain using the computer identity
 - NTFS permissions are configured automatically based on security groups
 
 **Sharding Options:**
+
 - `fslogixShardOptions = 'None'` - Single storage account for all users
 - `fslogixShardOptions = 'ShardPerms'` - Multiple storage accounts with group-based permissions
 - `fslogixShardOptions = 'ShardOSS'` - Multiple storage accounts with Object Specific Settings
 
+> [!NOTE]
+> When using **Entra Kerberos (Hybrid or CloudOnly)** with sharding (`ShardPerms` or `ShardOSS`), you must provide a User Assigned Managed Identity in the deployment parameters (or Template Spec UI) to automate the configuration of the storage accounts.
+
 **Group Configuration:**
+
 - `fslogixUserGroups` - Security groups that need access to FSLogix storage
 - `fslogixAdminGroups` - Administrative groups with full control access
 - Groups must be sourced from Active Directory and synchronized to Azure AD
@@ -171,10 +220,14 @@ Similar to domain-based solutions with some differences:
 - `domainGuid` parameter must be configured with the on-premises domain GUID
 - Storage account service principal requires admin consent in Azure AD
 - Multifactor authentication must be disabled for storage account access
+- **Sharding:** When using `fslogixShardOptions` (`ShardPerms` or `ShardOSS`), a User Assigned Managed Identity must be created and referenced in the parameters (or Template Spec UI) to automate the required App Registration updates for the multiple storage accounts.
 
 #### Entra ID (Cloud-Only)
 
-Limited FSLogix configuration due to Azure AD authentication constraints:
+This solution supports using Azure AD Kerberos for authentication to Azure Files for cloud-only identities (Preview).
+
+> [!NOTE]
+> See [Entra Kerberos for Azure Files (Cloud-Only)](entraKerberosCloudOnly.md) for details on this configuration.
 
 **Restrictions:**
 - `fslogixShardOptions` must be set to `'None'`
@@ -392,8 +445,8 @@ When using Azure NetApp Files (`fslogixStorageService = 'AzureNetAppFiles Standa
   - Facilitates storage account domain join operations
   - Configures NTFS permissions on file shares
   - Applies security group access rights
-- Network Interface for management VM
-- OS Disk for management VM
+- Network Interface for deployment VM
+- OS Disk for deployment VM
 
 **Security and Access:**
 - Private Endpoints (Optional, when Zero Trust is enabled)

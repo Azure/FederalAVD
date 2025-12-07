@@ -121,6 +121,12 @@ There are several Azure resource prerequisites that are required to run this dep
         <li>For <b>Entra ID Domain Services</b>, ensure the principal is a member of the "AAD DC Administrators" group in Azure AD.</li>
         </ul>
   </details>
+- <details><summary><b>Entra Kerberos for Azure Files</b></summary>
+  
+  If you plan to use Entra Kerberos for Azure Files (Hybrid Identity) or (Cloud Only) and use least privilege NTFS permissions, you must create a User Assigned Managed Identity and grant it specific permissions to Microsoft Graph. This identity is used by the deployment to automate the configuration of the Storage Account App Registration including adding Private Link URIs and the Kerberos tags for Cloud Only identities.
+
+  See [Entra Kerberos for Azure Files (Hybrid)](entraKerberosHybrid.md) or [Entra Kerberos for Azure Files (Cloud-Only)](entraKerberosCloudOnly.md) for detailed instructions and the required PowerShell script.
+  </details>
 - <details><summary><b>FSLogix with Azure NetApp Files</b></summary>
   
   The following steps must be completed if you plan to use this service.
