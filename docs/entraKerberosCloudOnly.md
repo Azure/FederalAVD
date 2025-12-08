@@ -38,7 +38,10 @@ The User Assigned Managed Identity requires the following **Application** permis
 You can use the following PowerShell script to create the User Assigned Managed Identity and assign the required Graph permissions.
 
 > [!IMPORTANT]
-> You must run this script as a user with **Global Administrator** or **Privileged Role Administrator** rights in the tenant to grant the Graph permissions.
+> To run this script successfully, you need permissions in two scopes:
+>
+> 1. **Entra ID**: You must be a **Privileged Role Administrator** or **Global Administrator**. The `Application Administrator` role is **insufficient** because it cannot grant `Application.ReadWrite.All` for the Microsoft Graph API.
+> 2. **Azure Subscription/Resource Group**: You must be a **Contributor** or **Managed Identity Contributor** to create the User Assigned Managed Identity resource.
 
 ```powershell
 # Parameters
@@ -115,24 +118,21 @@ If you do **not** provide the Managed Identity:
 
 1. **Default Permissions**: The storage account NTFS permissions are configured with default permissions that allow **Authenticated Users** to create their user profile folders.
 2. **Manual Configuration Required**: You must manually perform the following steps after deployment:
-    * **Grant Admin Consent**:
+    * **Grant Admin Consent**[^1]:
         1. Navigate to **App registrations** in the Azure Portal.
         2. Select **All applications** and search for the storage account name.
         3. Select **API permissions** and click **Grant admin consent for [Tenant Name]**.
-        4. See [Enable Entra Kerberos authentication for hybrid identities on Azure Files](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune#grant-admin-consent-to-the-new-service-principal) for details.
-    * **Update Manifest (Private Link)**:
+    * **Update Manifest (Private Link)**[^2]:
         1. Navigate to **App registrations** and select the storage account application.
         2. Select **Manifest**.
         3. Locate the `identifierUris` array and add the private link URIs (e.g., `api://<storageAccountName>.privatelink.file.core.windows.net`).
         4. Save the changes.
-    * **Enable Cloud Groups**:
+    * **Enable Cloud Groups**[^3]:
         1. In the **Manifest**, locate the `tags` array.
         2. Add `"kdc_enable_cloud_group_sids"` to the array.
         3. Save the changes.
-        4. See [Enable cloud-only groups support](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune#enable-cloud-only-groups-support-mandatory-for-cloud-only-identities) for details.
-    * **Configure NTFS Permissions**:
+    * **Configure NTFS Permissions**[^4]:
         1. Since the automated identity was not used, you must manually configure NTFS permissions if the default authenticated users access is insufficient.
-        2. See [Configure directory and file-level permissions over SMB](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-configure-file-level-permissions) for details.
 
 ## Post Deployment Manual Steps
 
@@ -142,4 +142,8 @@ Regardless of whether you use the Managed Identity or not, the following step is
     1. Navigate to **Entra ID > Security > Conditional Access**.
     2. Identify policies that enforce MFA for all cloud apps or specific apps.
     3. Exclude the storage account application (Service Principal) created by the deployment.
-    4. See [Configure Azure AD Kerberos authentication for hybrid identities](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune#disable-multifactor-authentication-on-the-storage-account) for details.
+
+[^1]: [Grant Admin Consent to the New Service Principal](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cregkey#grant-admin-consent-to-the-new-service-principal)
+[^2]: [Update the identifier Uris](https://learn.microsoft.com/en-us/troubleshoot/azure/azure-storage/files/security/files-troubleshoot-smb-authentication?toc=%2Fazure%2Fstorage%2Ffiles%2Ftoc.json&tabs=azure-portal#error-1326---the-username-or-password-is-incorrect-when-using-private-link)
+[^3]: [Enable Cloud Group Support](https://learn.microsoft.com/en-us/entra/identity/authentication/kerberos#group-sid-limit-in-entra-kerberos-preview)
+[^4]: [Configure File Level Permissions](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-configure-file-level-permissions)
