@@ -54,7 +54,7 @@ param mpSku string
 param encryptionAtHost bool = true
 
 @description('The size of the Image build and Orchestration VMs.')
-param vmSize string
+param vmSize string = 'Standard_D4ads_v6'
 
 // Image customizers
 @description('Optional. List of Appx Apps to Remove. Default is [].')
@@ -192,13 +192,13 @@ param imageDefinitionOffer string = ''
 param imageDefinitionSku string = ''
 
 @description('Optional. Specifies whether the image definition supports the deployment of virtual machines with accelerated networking enabled.')
-param imageDefinitionIsAcceleratedNetworkSupported bool = false
+param imageDefinitionIsAcceleratedNetworkSupported bool = true
 
 @description('Optional. Specifies whether the image definition supports creating VMs with support for hibernation.')
 param imageDefinitionIsHibernateSupported bool = false
 
 @description('Optional. Specifies whether the image definition supports capturing images of NVMe disks or Virtual Machines.')
-param imageDefinitionIsHigherStoragePerformanceSupported bool = false
+param imageDefinitionIsHigherStoragePerformanceSupported bool = true
 
 @allowed([
   'Standard'
@@ -411,6 +411,18 @@ var vmSecurityType = galleryImageDefinitionSecurityType == 'TrustedLaunch'
   : galleryImageDefinitionSecurityType == 'ConfidentialVM' ? 'ConfidentialVM' : 'Standard'
 
 var remoteLocation = !empty(remoteComputeGalleryResourceId) ? remoteComputeGallery!.location : ''
+
+var vmAcceleratedNetworking = !empty(filter(
+            imageDefinitionFeatures,
+            feature => feature.name == 'IsAcceleratedNetworkSupported'
+          ))
+          ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsAcceleratedNetworkSupported')[0]!.value)
+          : false
+var vmDiskControllerType = !empty(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes'))
+      ? contains(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0]!.value, 'NVMe')
+          ? 'NVMe'
+          : 'SCSI'
+      : 'SCSI'
 
 // * Prerequisite Resources * //
 
@@ -634,6 +646,7 @@ module orchestrationVm '../../sharedModules/resources/compute/virtual-machine/ma
     name: orchestrationVmName
     adminPassword: adminPw
     adminUsername: adminUserName
+    diskControllerType: vmDiskControllerType
     encryptionAtHost: encryptionAtHost
     imageReference: {
       publisher: 'MicrosoftWindowsServer'
@@ -644,7 +657,7 @@ module orchestrationVm '../../sharedModules/resources/compute/virtual-machine/ma
     nicConfigurations: [
       {
         deleteOption: 'Delete'
-        enableAcceleratedNetworking: false
+        enableAcceleratedNetworking: vmAcceleratedNetworking
         ipConfigurations: [
           {
             name: 'ipconfig01'
@@ -671,7 +684,7 @@ module orchestrationVm '../../sharedModules/resources/compute/virtual-machine/ma
       : {
           '${userAssignedIdentityResourceId}': {}
         }
-    vmSize: 'Standard_B2s'
+    vmSize: vmSize
   }
   dependsOn: [
     imageBuildRg
@@ -693,11 +706,7 @@ module imageVm '../../sharedModules/resources/compute/virtual-machine/main.bicep
     adminPassword: adminPw
     adminUsername: adminUserName
     bootDiagnostics: false
-    diskControllerType: !empty(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes'))
-      ? contains(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0]!.value, 'NVMe')
-          ? 'NVMe'
-          : 'SCSI'
-      : 'SCSI'
+    diskControllerType: vmDiskControllerType
     encryptionAtHost: encryptionAtHost
     imageReference: empty(customSourceImageResourceId)
       ? {
@@ -711,12 +720,7 @@ module imageVm '../../sharedModules/resources/compute/virtual-machine/main.bicep
         }
     nicConfigurations: [
       {
-        enableAcceleratedNetworking: !empty(filter(
-            imageDefinitionFeatures,
-            feature => feature.name == 'IsAcceleratedNetworkSupported'
-          ))
-          ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsAcceleratedNetworkSupported')[0]!.value)
-          : false
+        enableAcceleratedNetworking: vmAcceleratedNetworking
         deleteOption: 'Delete'
         ipConfigurations: [
           {

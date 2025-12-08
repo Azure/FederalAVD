@@ -40,6 +40,7 @@ var customizers = [
       ? customization.blobNameOrUri
       : '${artifactsContainerUri}/${customization.blobNameOrUri}'
     arguments: customization.?arguments ?? ''
+    restart: customization.?restart ?? false
   }
 ]
 
@@ -54,6 +55,10 @@ var vdiCustomizers = [
 ]
 
 var useBuildDir = !empty(customizations) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || installVirtualDesktopOptimizationTool || !empty(vdiCustomizations)
+
+var customizationBatchSize = 20
+var customizersCount = length(customizers)
+var batchCount = customizersCount / customizationBatchSize + (customizersCount % customizationBatchSize > 0 ? 1 : 0)
 
 var commonScriptParams = [
   {
@@ -470,92 +475,33 @@ resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands
 }
 
 @batchSize(1)
-resource applications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = [
-  for customizer in customizers: {
-    name: customizer.name
+module customizationBatches 'applyCustomizationsBatch.bicep' = [for i in range(0, batchCount): {
+  name: 'customization-batch-${i}-${deploymentSuffix}'
+  params: {
+    batchIndex: i
+    commonScriptParams: commonScriptParams
+    customizations: map(filter(range(0, customizationBatchSize), j => (i * customizationBatchSize + j) < customizersCount), j => {
+      name: customizers[i * customizationBatchSize + j].name
+      uri: customizers[i * customizationBatchSize + j].uri
+      arguments: customizers[i * customizationBatchSize + j].arguments
+      restart: customizers[i * customizationBatchSize + j].restart
+    })
+    deploymentSuffix: deploymentSuffix
+    imageVmName: imageVmName
     location: location
-    parent: imageVm
-    properties: {
-      asyncExecution: false
-      errorBlobManagedIdentity: empty(logBlobContainerUri)
-        ? null
-        : {
-            clientId: userAssignedIdentityClientId
-          }
-      errorBlobUri: empty(logBlobContainerUri)
-        ? null
-        : '${logBlobContainerUri}${imageVmName}-${customizer.name}-error-${deploymentSuffix}.log'
-      outputBlobManagedIdentity: empty(logBlobContainerUri)
-        ? null
-        : {
-            clientId: userAssignedIdentityClientId
-          }
-      outputBlobUri: empty(logBlobContainerUri)
-        ? null
-        : '${logBlobContainerUri}${imageVmName}-${customizer.name}-output-${deploymentSuffix}.log'
-      parameters: union(commonScriptParams, [
-        {
-          name: 'Uri'
-          value: customizer.uri
-        }
-        {
-          name: 'Name'
-          value: customizer.name
-        }
-        {
-          name: 'Arguments'
-          value: customizer.arguments
-        }
-      ])
-      source: {
-        script: loadTextContent('../../../../.common/scripts/Invoke-Customization.ps1')
-      }
-      treatFailureAsDeploymentFailure: true
-    }
-    dependsOn: [
-      createBuildDir
-      restartMicrosoftSoftware
-    ]
-  }
-]
-
-resource removeRunCommandsCustomizations 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = if (length(customizations) + length(vdiCustomizations) > 18) {
-  parent: orchestrationVm
-  name: 'remove-custom-software-runCommands'
-  location: location
-  properties: {
-    asyncExecution: true
-    parameters: [
-      {
-        name: 'ResourceManagerUri'
-        value: environment().resourceManager
-      }
-      {
-        name: 'SubscriptionId'
-        value: subscription().subscriptionId
-      }
-      {
-        name: 'UserAssignedIdentityClientId'
-        value: userAssignedIdentityClientId
-      }
-      {
-        name: 'VirtualMachineNames'
-        value: string([imageVmName])
-      }
-      {
-        name: 'virtualMachinesResourceGroup'
-        value: resourceGroup().name
-      }
-    ]
-    source: {
-      script: loadTextContent('../../../../.common/scripts/Remove-RunCommands.ps1')
-    }
-    treatFailureAsDeploymentFailure: true
+    logBlobContainerUri: logBlobContainerUri
+    orchestrationVmName: orchestrationVmName
+    resourceGroupName: resourceGroup().name
+    resourceManagerUri: environment().resourceManager
+    subscriptionId: subscription().subscriptionId
+    userAssignedIdentityClientId: userAssignedIdentityClientId
+    restartVMParameters: restartVMParameters
   }
   dependsOn: [
-    applications
+    createBuildDir
+    restartMicrosoftSoftware
   ]
-}
+}]
 
 resource restartCustomizations 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(customizations)) {
   name: 'restart-post-customizations'
@@ -570,8 +516,7 @@ resource restartCustomizations 'Microsoft.Compute/virtualMachines/runCommands@20
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
-    applications
-    removeRunCommandsCustomizations
+    customizationBatches
   ]
 }
 
