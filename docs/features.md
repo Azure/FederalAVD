@@ -28,7 +28,7 @@ This is the traditional hybrid identity model where both user accounts and sessi
 **Requirements:**
 
 - On-premises Active Directory Domain Services
-- Azure AD Connect for identity synchronization
+- Entra Id Connect for identity synchronization
 - Network connectivity between Azure and on-premises (VPN/ExpressRoute)
 - Custom DNS configuration pointing to domain controllers
 
@@ -55,13 +55,13 @@ This cloud-managed domain service option provides domain services without requir
 
 - Entra Domain Services (managed domain)
 - User accounts can be native to Entra Id or be synchronized from on-premises AD
-- Virtual network integration with Azure AD Domain Services
+- Virtual network integration with Entra Id Domain Services
 
 **Session Host Behavior:**
 
 - Session hosts are domain-joined to the Entra Domain Services managed domain
 - Users authenticate using synchronized identities
-- Managed Group Policy through Azure AD Domain Services
+- Managed Group Policy through Entra Id Domain Services
 
 **Azure Files Integration:**
 
@@ -79,8 +79,8 @@ This hybrid approach allows session hosts to be Entra joined while still support
 **Requirements:**
 
 - On-premises Active Directory Domain Services
-- Azure AD Connect with Password Hash Synchronization or Pass-through Authentication
-- Azure AD Kerberos functionality enabled
+- Entra Id Connect with Password Hash Synchronization or Pass-through Authentication
+- Entra Id Kerberos functionality enabled
 - Domain GUID configuration for Least Privilege NTFS configuration.
 
 **Session Host Behavior:**
@@ -91,7 +91,7 @@ This hybrid approach allows session hosts to be Entra joined while still support
 
 **Azure Files Integration:**
 
-- Storage accounts use Azure AD Kerberos authentication
+- Storage accounts use Entra Id Kerberos authentication
 - User accounts must exist in on-premises Active Directory (synchronized to Entra Id)
 - Kerberos tickets are obtained from Entra Id but use on-premises AD credentials for file access
 - Least privilege NTFS permissions are based on on-premises Active Directory groups
@@ -167,7 +167,7 @@ This is a pure cloud identity solution using only Entra Id identities with no on
 
 If selected, this solution will deploy the required resources and configurations so that FSLogix is fully configured and ready for immediate use post deployment.
 
-Azure Files and Azure NetApp Files are the only two SMB storage services available in this solution. The storage configuration varies significantly based on the selected identity solution:
+Azure Files and Azure NetApp Files are the only two SMB storage services available in this solution. The storage configuration varies significantly based on the selected identity solution as described above and below.
 
 ### FSLogix Container Types
 
@@ -190,7 +190,7 @@ When using domain-based identity solutions, you have full flexibility for FSLogi
 
 - A deployment VM is deployed to facilitate domain join of Azure Files storage accounts
 - Storage accounts are joined to the domain using the computer identity
-- NTFS permissions are configured automatically based on security groups
+- NTFS permissions can be assigned to authenticated users or to specific security groups
 
 **Sharding Options:**
 
@@ -205,38 +205,34 @@ When using domain-based identity solutions, you have full flexibility for FSLogi
 
 - `fslogixUserGroups` - Security groups that need access to FSLogix storage
 - `fslogixAdminGroups` - Administrative groups with full control access
-- Groups must be sourced from Active Directory and synchronized to Azure AD
+- Groups must be sourced from Active Directory and synchronized to Entra Id
 
-#### Entra Kerberos
+#### Entra Kerberos (Hybrid Users)
 
 Similar to domain-based solutions with some differences:
 
 **Authentication Method:**
-- Uses Azure AD Kerberos for storage account authentication
-- User accounts must exist in on-premises Active Directory (synchronized to Azure AD)
-- Session hosts are Azure AD joined but access storage using Kerberos tickets
+
+- Uses Entra Id Kerberos for storage account authentication
+- User accounts must exist in on-premises Active Directory (synchronized to Entra Id)
+- Session hosts are Entra Id joined but access storage using Kerberos tickets
 
 **Configuration Requirements:**
-- `domainGuid` parameter must be configured with the on-premises domain GUID
-- Storage account service principal requires admin consent in Azure AD
+
+- Storage account service principal requires admin consent in Entra Id
 - Multifactor authentication must be disabled for storage account access
 - **Sharding:** When using `fslogixShardOptions` (`ShardPerms` or `ShardOSS`), a User Assigned Managed Identity must be created and referenced in the parameters (or Template Spec UI) to automate the required App Registration updates for the multiple storage accounts.
 
-#### Entra ID (Cloud-Only)
+#### Entra Kerberos (Cloud-Only Users)
 
-This solution supports using Azure AD Kerberos for authentication to Azure Files for cloud-only identities (Preview).
+This solution supports using Entra Id Kerberos for authentication to Azure Files for cloud-only identities (Preview).
 
 > [!NOTE]
 > See [Entra Kerberos for Azure Files (Cloud-Only)](entraKerberosCloudOnly.md) for details on this configuration.
 
-**Restrictions:**
-- `fslogixShardOptions` must be set to `'None'`
-- Only one storage account can be deployed
-- No traditional NTFS permissions - uses Azure RBAC instead
-
 **Authentication:**
-- Uses Azure AD authentication for storage access
-- Storage account access controlled through Azure RBAC roles
+
+- Uses Entra Id authentication for storage accesss
 - No domain join process required
 
 ### Azure Files Premium Features
@@ -244,11 +240,13 @@ This solution supports using Azure AD Kerberos for authentication to Azure Files
 When `fslogixStorageService = 'AzureFiles Premium'` is selected:
 
 **SMB Multichannel:**
+
 - Automatically enabled for improved performance
 - Allows multiple network connections from each session host
 - Significantly improves throughput for large files
 
 **Performance Characteristics:**
+
 - Up to 100,000 IOPS per share
 - Sub-millisecond latency
 - Predictable performance scaling
@@ -376,9 +374,9 @@ fslogixAdminGroups = [
 #### Entra Kerberos Identity Solution
 
 **Hybrid Configuration:**
-- Session hosts are Azure AD joined
+- Session hosts are Entra Id joined
 - Storage uses on-premises AD groups for NTFS permissions
-- Users must exist in both Azure AD and on-premises AD (synchronized)
+- Users must exist in both Entra Id and on-premises AD (synchronized)
 
 **Required Manual Steps:**
 1. **Service Principal Consent:**
