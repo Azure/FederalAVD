@@ -13,9 +13,9 @@ The session hosts are joined to Entra ID, and user identities are synchronized f
 
 ## Prerequisites
 
-1.  **Identity Solution**: `identitySolution` must be set to `'EntraKerberos-Hybrid'`.
-2.  **Session Hosts**: Must be Entra ID joined.
-3.  **Client Devices**: Windows 10/11 Enterprise/Pro multi-session or Windows Server 2022.
+1. **Identity Solution**: `identitySolution` must be set to `'EntraKerberos-Hybrid'`.
+2. **Session Hosts**: Must be Entra ID joined.
+3. **Client Devices**: Windows 10/11 Enterprise/Pro multi-session or Windows Server 2022.
 
 ### User Assigned Managed Identity (Optional)
 
@@ -132,6 +132,9 @@ If you do **not** provide the Managed Identity:
     * **Configure NTFS Permissions**[^3]:
         1. In order to set the NTFS permissions using file explorer, set the domain guid and domain name in the entra kerberos configuration in the portal.[^4]
         1. Since the automated identity was not used, you must manually configure NTFS permissions if the default authenticated users access is insufficient.
+
+> [!Note]
+> You could leverage the PowerShell Script located at '.common\scripts\Update-StorageAccountApplications.ps1' within a pipeline to automatically perform the first two tasks in this list.
 
 ## Post Deployment Manual Steps
 

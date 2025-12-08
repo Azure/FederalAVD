@@ -134,6 +134,9 @@ If you do **not** provide the Managed Identity:
     * **Configure NTFS Permissions**[^4]:
         1. Since the automated identity was not used, you must manually configure NTFS permissions if the default authenticated users access is insufficient.
 
+> [!Note]
+> You could leverage the PowerShell Script located at '.common\scripts\Update-StorageAccountApplications.ps1' within a pipeline to automatically perform the first three tasks in this list.
+
 ## Post Deployment Manual Steps
 
 Regardless of whether you use the Managed Identity or not, the following step is required:
