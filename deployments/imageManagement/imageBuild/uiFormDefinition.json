@@ -145,6 +145,17 @@
 							}
 						},
 						{
+							"name": "resourceSkusApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(not(empty(steps('basics').scope.subscription)), not(empty(steps('basics').scope.location)))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('basics').scope.location.name, decodeUriComponent('%27'))]",
+								"transforms": {									
+								}
+							}
+						},
+						{
 							"name": "naming",
 							"type": "Microsoft.Common.Section",
 							"visible": true,
@@ -405,6 +416,9 @@
 									"label": "Virtual Machine Size",
 									"toolTip": "Select the size of the virtual machines. Multi-session hosts should have 4 - 24 vCPUs. Single session host should have 2 or more vCPUs.",
 									"recommendedSizes": [
+										"Standard_D4ads_v6",
+										"Standard_D8ads_v6",
+										"Standard_D16ads_v6",
 										"Standard_D4ads_v5",
 										"Standard_D8ads_v5",
 										"Standard_D16ads_v5"
@@ -1190,7 +1204,8 @@
 															}															
 														],
 														"required": false
-													}
+													},
+													"defaultValue": "No"
 												}
 											}
 										]
@@ -1674,8 +1689,8 @@
 								{
 									"name": "isNVMeSupported",
 									"type": "Microsoft.Common.DropDown",
-									"label": "Higher storage performance with NVMe (preview)",
-									"defaultValue": "No",
+									"label": "Higher storage performance with NVMe",
+									"defaultValue": "Yes",
 									"toolTip": "Set this to 'Yes' to enable the creation of an image that supports VMs using NVMe storage.",
 									"constraints": {
 										"required": false,
