@@ -1,11 +1,14 @@
+param defaultSharePermission string
+@secure()
+param domainJoinUserPrincipalName string
+@secure()
+param domainJoinUserPassword string
 param location string
-param shardingOptions string
-param shares array
+param resourceGroupStorage string
 param storageAccountNamePrefix string
 param storageCount int = 0
 param storageIndex int = 0
-param userGroups array
-param userAssignedIdentityClientId string
+param userAssignedIdentityClientId string = ''
 param virtualMachineName string
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' existing = {
@@ -13,23 +16,27 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' existing 
 }
 
 resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
-  name: 'Set-NTFS-Permissions'
+  name: 'Configure-StorageAccountsforEntraHybrid'
   location: location
   parent: virtualMachine
   properties: {
     asyncExecution: false
-    parameters: [    
+    parameters: [
       {
-        name: 'Shares'
-        value: string(shares)
-      }
+        name: 'DefaultSharePermission'
+        value: defaultSharePermission
+      }      
       {
-        name: 'ShardAzureFilesStorage'
-        value: shardingOptions == 'None' ? 'false' : 'true'
+        name: 'ResourceManagerUri'
+        value: environment().resourceManager
       }
       {
         name: 'StorageAccountPrefix'
         value: storageAccountNamePrefix
+      }
+      {
+        name: 'StorageAccountResourceGroupName'
+        value: resourceGroupStorage
       }
       {
         name: 'StorageCount'
@@ -44,18 +51,29 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
         value: environment().suffixes.storage
       }
       {
+        name: 'SubscriptionId'
+        value: subscription().subscriptionId
+      }
+      {
         name: 'UserAssignedIdentityClientId'
         value: userAssignedIdentityClientId
       }
+    ]
+    protectedParameters: [
       {
-        name: 'UserGroups'
-        value: string(userGroups)
+        name: 'DomainJoinUserPrincipalName'
+        value: domainJoinUserPrincipalName
+      }
+      {
+        name: 'DomainJoinUserPwd'
+        value: domainJoinUserPassword
       }
     ]
     source: {
-      script: loadTextContent('../../../../../.common/scripts/Set-NtfsPermissionsAzureFiles.ps1')
+      script: loadTextContent('../../../../../.common/scripts/Configure-StorageAccountforEntraHybrid.ps1')
     }
     timeoutInSeconds: 300
     treatFailureAsDeploymentFailure: true
   }
 }
+

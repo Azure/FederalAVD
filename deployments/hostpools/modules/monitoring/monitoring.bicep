@@ -5,8 +5,8 @@ param dataCollectionEndpointName string
 param deploymentSuffix string
 param location string
 param logAnalyticsWorkspaceName string
-param logAnalyticsWorkspaceRetention int
-param logAnalyticsWorkspaceSku string
+param logAnalyticsWorkspaceRetention int = 30
+param logAnalyticsWorkspaceSku string = 'PerGB2018'
 param resourceGroupMonitoring string
 param tags object
 

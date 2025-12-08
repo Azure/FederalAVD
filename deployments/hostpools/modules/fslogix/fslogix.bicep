@@ -17,10 +17,10 @@ param domainJoinUserPassword string
 @secure()
 param domainJoinUserPrincipalName string
 param domainName string
-param domainGuid string
 param encryptionKeyVaultResourceId string
 param encryptionKeyVaultUri string
 param fslogixAdminGroups array
+param appUpdateUserAssignedIdentityResourceId string
 param fslogixEncryptionKeyNameConv string
 param fslogixFileShares array
 param fslogixShardOptions string
@@ -123,6 +123,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   name: 'Azure-Files-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupStorage)
   params: {
+    appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
     availability: availability
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
@@ -133,10 +134,8 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     deploymentVirtualMachineName: deploymentVirtualMachineName
     deploymentResourceGroupName: resourceGroupDeployment
-    domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? domainJoinUserPassword : ''
-    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? domainJoinUserPrincipalName : ''
-    domainName: domainName
-    domainGuid: domainGuid
+    domainJoinUserPassword: domainJoinUserPassword
+    domainJoinUserPrincipalName: domainJoinUserPrincipalName
     encryptionKeyVaultUri: encryptionKeyVaultUri
     encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'MicrosoftManaged'
       ? ''

@@ -114,31 +114,6 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2021-11-01' = {
   }
 }
 
-resource extension_IaasAntimalware 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = if(!startsWith(environment().name, 'USN')) {
-  parent: virtualMachine
-  name: 'IaaSAntimalware'
-  location: location
-  tags: tagsVirtualMachines
-  properties: {
-    publisher: 'Microsoft.Azure.Security'
-    type: 'IaaSAntimalware'
-    typeHandlerVersion: '1.3'
-    autoUpgradeMinorVersion: true
-    enableAutomaticUpgrade: false
-    settings: {
-      AntimalwareEnabled: true
-      RealtimeProtectionEnabled: 'true'
-      ScheduledScanSettings: {
-        isEnabled: 'true'
-        day: '7' // Day of the week for scheduled scan (1-Sunday, 2-Monday, ..., 7-Saturday)
-        time: '120' // When to perform the scheduled scan, measured in minutes from midnight (0-1440). For example: 0 = 12AM, 60 = 1AM, 120 = 2AM.
-        scanType: 'Quick' //Indicates whether scheduled scan setting type is set to Quick or Full (default is Quick)
-      }
-      Exclusions: {}
-    }
-  }
-}
-
 resource extension_GuestAttestation 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = {
   parent: virtualMachine
   name: 'GuestAttestation'
@@ -165,7 +140,7 @@ resource extension_GuestAttestation 'Microsoft.Compute/virtualMachines/extension
   }
 }
 
-resource extension_JsonADDomainExtension 'Microsoft.Compute/virtualMachines/extensions@2019-07-01' = if(contains(identitySolution, 'DomainServices')) {
+resource extension_JsonADDomainExtension 'Microsoft.Compute/virtualMachines/extensions@2019-07-01' = if(!empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName) && (contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid')) {
   parent: virtualMachine
   name: 'JsonADDomainExtension'
   location: location

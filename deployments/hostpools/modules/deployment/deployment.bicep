@@ -11,6 +11,7 @@ param deploymentVmSize string
 param desktopFriendlyName string
 param encryptionAtHost bool
 param fslogix bool
+param fslogixAppUpdateUserAssignedIdentityResourceId string
 param hostPoolName string
 param identitySolution string
 param keyManagementDisks string
@@ -46,18 +47,20 @@ var roleDefinitions = {
   VirtualMachineContributor: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
 }
 
-var roleAssignmentsControlPlane = !empty(desktopFriendlyName) ? [
-  {
-    roleDefinitionId: roleDefinitions.DesktopVirtualizationApplicationGroupContributor // (Purpose: updates the friendly name for the desktop)
-    depName: 'ControlPlane-DVAppGroupCont'
-    resourceGroup: resourceGroupControlPlane
-  } 
-  {
-    roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the control plane role assignments for the deployment identity. This role Assignment must remain last in the list.)
-    depName: 'ControlPlane-RBACAdmin'
-    resourceGroup: resourceGroupControlPlane
-  }
-] : []
+var roleAssignmentsControlPlane = !empty(desktopFriendlyName)
+  ? [
+      {
+        roleDefinitionId: roleDefinitions.DesktopVirtualizationApplicationGroupContributor // (Purpose: updates the friendly name for the desktop)
+        depName: 'ControlPlane-DVAppGroupCont'
+        resourceGroup: resourceGroupControlPlane
+      }
+      {
+        roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the control plane role assignments for the deployment identity. This role Assignment must remain last in the list.)
+        depName: 'ControlPlane-RBACAdmin'
+        resourceGroup: resourceGroupControlPlane
+      }
+    ]
+  : []
 
 var roleAssignmentsDeployment = [
   {
@@ -90,7 +93,10 @@ var roleAssignmentsManagementConfidentialVMDiskEncryption = confidentialVMOSDisk
     ]
   : []
 
-var roleAssignmentsManagementRBACAdmin = contains(keyManagementDisks, 'CustomManaged') || contains(keyManagementStorageAccounts, 'CustomerManaged') || !empty(roleAssignmentsManagementConfidentialVMDiskEncryption)
+var roleAssignmentsManagementRBACAdmin = contains(keyManagementDisks, 'CustomManaged') || contains(
+    keyManagementStorageAccounts,
+    'CustomerManaged'
+  ) || !empty(roleAssignmentsManagementConfidentialVMDiskEncryption)
   ? [
       {
         roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the management resource group role assignments for the deployment identity. This role assignment must remain last in the list if assignments are made.)
@@ -105,7 +111,7 @@ var roleAssignmentsManagement = union(
   roleAssignmentsManagementRBACAdmin
 )
 
-var roleAssignmentsStorage = fslogix && contains(identitySolution, 'DomainServices')
+var roleAssignmentsStorage = fslogix && (contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid')
   ? [
       {
         roleDefinitionId: roleDefinitions.StorageAccountContributor // (Purpose: domain join storage account)
@@ -123,7 +129,20 @@ var roleAssignmentsStorage = fslogix && contains(identitySolution, 'DomainServic
         resourceGroup: resourceGroupStorage
       }
     ]
-  : []
+  : fslogix
+      ? [
+          {
+            roleDefinitionId: roleDefinitions.storageFileDataPrivilegedContributor // (Purpose: set NTFS permissions on the file share)
+            depName: 'Storage-StorageFileDataPrivCont'
+            resourceGroup: resourceGroupStorage
+          }
+          {
+            roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the control plane role assignments for the deployment identity. This role assignment must remain last in the list.)
+            depName: 'Storage-RBACAdmin'
+            resourceGroup: resourceGroupStorage
+          }
+        ]
+      : []
 
 var roleAssignments = union(
   roleAssignmentsControlPlane,
@@ -190,7 +209,10 @@ module virtualMachine 'modules/virtualMachine.bicep' = {
       tags[?'Microsoft.Compute/virtualMachines'] ?? {}
     )
 
-    userAssignedIdentitiesResourceIds: {
+    userAssignedIdentitiesResourceIds: !empty(fslogixAppUpdateUserAssignedIdentityResourceId) ? {
+      '${deploymentUserAssignedIdentity.outputs.resourceId}': {}
+      '${fslogixAppUpdateUserAssignedIdentityResourceId}': {}
+    } : {
       '${deploymentUserAssignedIdentity.outputs.resourceId}': {}
     }
     virtualMachineName: virtualMachineName
@@ -203,6 +225,6 @@ module virtualMachine 'modules/virtualMachine.bicep' = {
 output deploymentUserAssignedIdentityClientId string = deploymentUserAssignedIdentity.outputs.clientId
 output deploymentUserAssignedIdentityResourceId string = deploymentUserAssignedIdentity.outputs.resourceId
 output deploymentUserAssignedIdentityRoleAssignmentIds array = [
-  for i in range(0, length(roleAssignments)): roleAssignments_deployment[i].outputs.resourceId
+  for i in filter(range(0, length(roleAssignments)), i => roleAssignments[i].resourceGroup != resourceGroupDeployment): roleAssignments_deployment[i].outputs.resourceId
 ]
 output virtualMachineName string = virtualMachine.outputs.Name

@@ -44,8 +44,9 @@ param nameConvResTypeAtEnd bool = false
 @allowed([
   'ActiveDirectoryDomainServices' // User accounts are sourced from and Session Hosts are joined to same Active Directory domain.
   'EntraDomainServices' // User accounts are sourced from either Azure Active Directory or Active Directory Domain Services and Session Hosts are joined to Azure Active Directory Domain Services.
-  'EntraKerberos' // User accounts are sourced from Active Directory and Session Hosts are joined to Entra Id.
-  'EntraId' // User accounts and Session Hosts are located in Azure Active Directory Only (Cloud Only Scenario)
+  'EntraKerberos-Hybrid' // User accounts are sourced from Active Directory and Session Hosts are joined to Entra Id.
+  'EntraKerberos-CloudOnly' // Preview feature with Kerberos support. User accounts and Session Hosts are located in Azure Active Directory Only (Cloud Only Scenario)
+  'EntraId' // User accounts and Session Hosts are located in Azure Active Directory Only (Cloud Only Scenario) 
 ])
 @description('Required. The service providing domain services for Azure Virtual Desktop.  This is needed to properly configure the session hosts and if applicable, the Azure Storage Account.')
 param identitySolution string
@@ -76,9 +77,6 @@ param credentialsKeyVaultResourceId string = ''
 
 @description('Optional. The name of the domain that provides ADDS to the AVD session hosts and is synchronized with Azure AD')
 param domainName string = ''
-
-@description('Optional. The GUID of the Active Directory domain. Used when the "IdentitySolution" is "EntraKerberos".')
-param domainGuid string = ''
 
 @description('Optional. The distinguished name for the target Organization Unit in Active Directory Domain Services.')
 param vmOUPath string = ''
@@ -250,7 +248,6 @@ Choose Platform Managed and Customer Managed if you need double encryption. This
 - Choose Platform Managed and Customer Managed with HSM if you must incorporate double encryption and protect the customer managed key with the Hardware Security Module. This option does not apply to confidential VMs.
 ''')
 param keyManagementDisks string = 'PlatformManaged'
-
 
 @description('Optional. The resource Id of an existing Disk Encryption Set that session hosts will utilize for customer managed keys. Only used when "DeploymentType" is "SessionHostOnly".')
 param existingDiskEncryptionSetResourceId string = ''
@@ -424,6 +421,13 @@ Each object must contain the following properties from the Entra Id group:
 ''')
 param fslogixUserGroups array = []
 
+@description('''Optional.
+The resource Id of the User Assigned Identity that has been granted the Application Admnistrator Entra ID role in order to add tags
+to the enterprise application created when the storage account is enabled for Entra Kerberos Authentication. Required in order to
+automate the configuration of least priveledge permissions on the file share(s) in the Entra Kerberos (Cloud Only Identity) configuration.
+''')
+param fslogixAppUpdateUserAssignedIdentityResourceId string = ''
+
 @allowed([
   'AzureNetAppFiles Premium' // ANF with the Premium SKU, 450,000 IOPS
   'AzureNetAppFiles Standard' // ANF with the Standard SKU, 320,000 IOPS
@@ -432,6 +436,9 @@ param fslogixUserGroups array = []
 ])
 @description('Optional. The storage service to use for storing FSLogix containers. The service & SKU should provide sufficient IOPS for all of your users. https://docs.microsoft.com/en-us/azure/architecture/example-scenario/wvd/windows-virtual-desktop-fslogix#performance-requirements')
 param fslogixStorageService string = 'AzureFiles Standard'
+
+@description('Optional. The OU Path where the FSLogix Storage Accounts or NetApp Accounts will be joined in the ADDS.')
+param fslogixOUPath string = ''
 
 @description('Optional. The resource Id of the subnet delegated to Microsoft.Netapp/volumes to which the NetApp volume will be attached when the "fslogixStorageService" is "AzureNetAppFiles Premium" or "AzureNetAppFiles Standard".')
 param netAppVolumesSubnetResourceId string = ''
@@ -449,7 +456,7 @@ param fslogixExistingLocalNetAppVolumeResourceIds array = []
 
 @description('''Optional. Existing local (in the same region as the session host VMs) FSLogix Storage Account Resource Ids.
 Only used when fslogixConfigureSessionHosts = true and deployFSLogixStorage = false.
-If "identitySolution" is set to "EntraId" or "EntraIdIntuneEnrollment" then only the first storage account listed will be used.
+If "identitySolution" is set to "EntraId" then only the first storage account listed will be used.
 ''')
 param fslogixExistingLocalStorageAccountResourceIds array = []
 
@@ -461,7 +468,7 @@ param fslogixExistingRemoteNetAppVolumeResourceIds array = []
 @description('''Optional. Existing remote (not in the same region as the session host VMs) FSLogix Storage Account Resource Ids.
 Only used when fslogixConfigureSessionHosts = true.
 This list will be added to any storage accounts created when setting "fslogixStorageService" to any of the AzureFiles options. 
-If "identitySolution" is set to "EntraId" or "EntraIdIntuneEnrollment" then only the first storage account listed will be used.
+If "identitySolution" is set to "EntraId" then only the first storage account listed will be used.
 ''')
 param fslogixExistingRemoteStorageAccountResourceIds array = []
 
@@ -484,9 +491,6 @@ param fslogixStorageIndex int = 1
 ])
 @description('Optional. The type of key management used for the Azure Files storage account encryption.')
 param keyManagementStorageAccounts string = 'MicrosoftManaged'
-
-@description('Optional. The OU Path where the FSLogix Storage Accounts or NetApp Accounts will be joined in the ADDS.')
-param fslogixOUPath string = ''
 
 // Management
 
@@ -538,23 +542,6 @@ param existingVMInsightsDataCollectionRuleResourceId string = ''
 
 @description('Optional. The resource Id of the existing Data Collection Endpoint. Only used when "DeploymentType" is "SessionHostOnly".')
 param existingDataCollectionEndpointResourceId string = ''
-
-@maxValue(730)
-@minValue(30)
-@description('Optional. The retention for the Log Analytics Workspace to setup the AVD monitoring solution')
-param logAnalyticsWorkspaceRetention int = 30
-
-@allowed([
-  'Free'
-  'Standard'
-  'Premium'
-  'PerNode'
-  'PerGB2018'
-  'Standalone'
-  'CapacityReservation'
-])
-@description('Optional. The SKU for the Log Analytics Workspace to setup the AVD monitoring solution')
-param logAnalyticsWorkspaceSku string = 'PerGB2018'
 
 @description('Optional. The resource ID of the data collection rule used for Azure Sentinel and / or Defender for Cloud when using the Azure Monitor Agent.')
 param securityDataCollectionRulesResourceId string = ''
@@ -682,7 +669,8 @@ var globalFeedRegion = !empty(globalFeedPrivateEndpointSubnetResourceId) ? avdPr
 var virtualMachinesRegion = vmVirtualNetwork.location
 var controlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
 
-var createDeploymentVm = deploymentType != 'SessionHostsOnly' && (contains(keyManagementStorageAccounts, 'CustomerManaged') || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName) || contains(identitySolution, 'DomainServices') || contains(fslogixStorageService, 'AzureNetApp'))
+var createDeploymentVm = deploymentType != 'SessionHostsOnly' && ( deployFSLogixStorage || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName) )
+var deployManagementResources = deploymentType == 'Complete' && ( deployIncreaseQuota || deploySecretsKeyVault || contains(keyManagementStorageAccounts, 'CustomerManaged') || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption )
 
 var hostPoolVmTemplate = {
   resourceGroup: resourceNames.outputs.resourceGroupHosts
@@ -793,8 +781,7 @@ var exclusionTag = !empty(scalingPlanExclusionTag) && deployScalingPlan
 var hostTags = !empty(exclusionTag) ? union(tags, exclusionTag) : tags
 
 var fslogixFileShareNames = resourceNames.outputs.fslogixFileShareNames[fslogixContainerType]
-var fslogixNTFSGroups = empty(fslogixUserGroups) ? appGroupSecurityGroups : fslogixUserGroups
-var fslogixStorageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixNTFSGroups)
+var fslogixStorageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
 
 //  BATCH SESSION HOSTS
 // The following variables are used to determine the batches to deploy any number of AVD session hosts.
@@ -906,7 +893,7 @@ module monitoringResourceGroup 'modules/resourceGroups.bicep' = if (deploymentTy
   }
 }
 
-module managementResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType == 'Complete' && ( deployIncreaseQuota || deploySecretsKeyVault || contains(keyManagementStorageAccounts, 'CustomerManaged') || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption )) {
+module managementResourceGroup 'modules/resourceGroups.bicep' = if (deployManagementResources) {
   name: 'Resource-Group-Management-${deploymentSuffix}'
   scope: subscription(managementSubscription)
   params: {
@@ -978,12 +965,13 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     desktopFriendlyName: desktopFriendlyName
     diskSku: diskSku
     #disable-next-line BCP422
-    domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPassword) ? domainJoinUserPassword : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : '' : ''
+    domainJoinUserPassword: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid' ? !empty(domainJoinUserPassword) ? domainJoinUserPassword : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : '' : ''
     #disable-next-line BCP422
-    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPrincipalName) ? domainJoinUserPrincipalName : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : '' : ''
+    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid' ? !empty(domainJoinUserPrincipalName) ? domainJoinUserPrincipalName : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : '' : ''
     domainName: domainName
     encryptionAtHost: encryptionAtHost
     fslogix: deployFSLogixStorage
+    fslogixAppUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
     hostPoolName: resourceNames.outputs.hostPoolName
     identitySolution: identitySolution
     keyManagementDisks: keyManagementDisks
@@ -1021,8 +1009,6 @@ module monitoring 'modules/monitoring/monitoring.bicep' = if (deploymentType == 
     deploymentSuffix: deploymentSuffix
     location: virtualMachinesRegion
     logAnalyticsWorkspaceName: resourceNames.outputs.logAnalyticsWorkspaceName
-    logAnalyticsWorkspaceRetention: logAnalyticsWorkspaceRetention
-    logAnalyticsWorkspaceSku: logAnalyticsWorkspaceSku
     resourceGroupMonitoring: resourceNames.outputs.resourceGroupMonitoring
     tags: tags
   }
@@ -1032,7 +1018,7 @@ module monitoring 'modules/monitoring/monitoring.bicep' = if (deploymentType == 
 }
 
 // Management Services: Monitoring, secrets, and App Service Plan (if needed)
-module management 'modules/management/management.bicep' = if (deploymentType == 'Complete') {
+module management 'modules/management/management.bicep' = if (deployManagementResources) {
   name: 'Management-${deploymentSuffix}'
   scope: subscription(managementSubscription)
   params: {
@@ -1126,6 +1112,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
   scope: subscription(storageSubscription)
   params: {
     activeDirectoryConnection: existingSharedActiveDirectoryConnection
+    appUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
     availability: availability
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
@@ -1136,19 +1123,18 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     deploymentUserAssignedIdentityClientId: createDeploymentVm ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId : ''
     deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
     #disable-next-line BCP422
-    domainJoinUserPassword: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPassword) ? domainJoinUserPassword : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : '' : ''
+    domainJoinUserPassword: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid' ? !empty(domainJoinUserPassword) ? domainJoinUserPassword : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : '' : ''
     #disable-next-line BCP422
-    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') ? !empty(domainJoinUserPrincipalName) ? domainJoinUserPrincipalName : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : '' : ''
+    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid' ? !empty(domainJoinUserPrincipalName) ? domainJoinUserPrincipalName : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : '' : ''
     domainName: domainName
-    domainGuid: domainGuid
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
     encryptionKeyVaultUri: encryptionKeyVaultUri
     fslogixAdminGroups: fslogixAdminGroups
     fslogixEncryptionKeyNameConv: resourceNames.outputs.encryptionKeyNames.fslogix
     fslogixFileShares: fslogixFileShareNames
     fslogixShardOptions: fslogixShardOptions
-    fslogixUserGroups: fslogixNTFSGroups
-    functionAppDelegatedSubnetResourceId: functionAppSubnetResourceId
+    fslogixUserGroups: fslogixUserGroups
+    functionAppDelegatedSubnetResourceId: functionAppSubnetResourceId    
     hostPoolResourceId: deploymentType == 'SessionHostsOnly' ? existingHostPoolResourceId : controlPlane!.outputs.hostPoolResourceId
     identitySolution: identitySolution
     increaseQuota: deployIncreaseQuota

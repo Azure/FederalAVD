@@ -22,7 +22,6 @@ module removeRunCommands 'modules/removeRunCommands.bicep' = {
   }
 }
 
-
 // Remove role assignments for the user Assigned Identity for resource groups other than the deployment resource group to allow the deletion of the resource group.
 module removeRoleAssignments 'modules/removeRoleAssignments.bicep' = {
   scope: resourceGroup(resourceGroupDeployment)
@@ -30,7 +29,7 @@ module removeRoleAssignments 'modules/removeRoleAssignments.bicep' = {
   params: {
     location: location
     managementVmName: deploymentVirtualMachineName
-    roleAssignmentIds: filter(roleAssignmentIds, roleAssignmentId => split(roleAssignmentId, '/')[4] != resourceGroupDeployment)
+    roleAssignmentIds: roleAssignmentIds
     deploymentSuffix: deploymentSuffix
     userAssignedIdentityClientId: userAssignedIdentityClientId
   }
@@ -53,4 +52,3 @@ module removeDeploymentResourceGroup 'modules/removeDeploymentResourceGroup.bice
     removeRoleAssignments
   ]
 }
-

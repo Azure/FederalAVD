@@ -1,3 +1,4 @@
+param appUpdateUserAssignedIdentityResourceId string
 param availability string
 param azureBackupPrivateDnsZoneResourceId string
 param azureBlobPrivateDnsZoneResourceId string
@@ -11,8 +12,6 @@ param deploymentVirtualMachineName string
 param domainJoinUserPassword string
 @secure()
 param domainJoinUserPrincipalName string
-param domainName string
-param domainGuid string
 param fslogixEncryptionKeyNameConv string
 param encryptionKeyVaultUri string
 param encryptionUserAssignedIdentityResourceId string
@@ -52,8 +51,9 @@ param tags object
 param deploymentSuffix string
 param timeZone string
 
-var adminRoleDefinitionId = 'a7264617-510b-434b-a828-9731dc254ea7' // Storage File Data SMB Share Elevated Contributor
-var userRoleDefinitionId = '0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb' // Storage File Data SMB Share Contributor
+var adminRoleDefinitionId = '69566ab7-960f-475b-8e7c-b3118f30c6bd' // Storage File Data Privileged Contributor
+
+var defaultSharePermission = 'StorageFileDataSmbShareContributor'
 
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
@@ -84,6 +84,7 @@ var backupPrivateDNSZoneResourceIds = [
 
 var nonEmptyBackupPrivateDNSZoneResourceIds = filter(backupPrivateDNSZoneResourceIds, zone => !empty(zone))
 
+
 resource storageAccounts 'Microsoft.Storage/storageAccounts@2022-09-01' = [
   for i in range(0, storageCount): {
     name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
@@ -103,11 +104,12 @@ resource storageAccounts 'Microsoft.Storage/storageAccounts@2022-09-01' = [
       allowCrossTenantReplication: false
       allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
       allowSharedKeyAccess: identitySolution == 'EntraId' ? true : false
-      azureFilesIdentityBasedAuthentication: identitySolution != 'EntraId' && identitySolution != 'EntraKerberos'
+      azureFilesIdentityBasedAuthentication: identitySolution != 'EntraId' && !contains(
+          identitySolution,
+          'EntraKerberos'
+        )
         ? {
-            defaultSharePermission: contains(identitySolution, 'DomainServices')
-              ? 'StorageFileDataSmbShareContributor'
-              : 'None'
+            defaultSharePermission: defaultSharePermission
             directoryServiceOptions: identitySolution == 'EntraDomainServices' ? 'AADDS' : 'None'
           }
         : null
@@ -180,34 +182,6 @@ resource fileServices 'Microsoft.Storage/storageAccounts/fileServices@2022-09-01
   }
 ]
 
-// Assigns the SMB Contributor role to the Storage Account for the user groups so they can write their profile directories.
-module roleAssignmentsUsers '../../common/roleAssignment-storageAccount.bicep' = [
-  for i in range(0, storageCount): if (!contains(identitySolution, 'DomainServices')) {
-    name: '${storageAccounts[i].name}-UserRoleAssignments-${deploymentSuffix}'
-    params: {
-      principalIds: shardingOptions == 'None'
-        ? map(shareUserGroups, group => group.id)
-        : [map(shareUserGroups, group => group.id)[i]]
-      principalType: 'Group'
-      storageAccountResourceId: storageAccounts[i].id
-      roleDefinitionId: userRoleDefinitionId
-    }
-  }
-]
-
-// Assigns the SMB Elevated Contributor role to the Storage Account for admins so they can adjust NTFS permissions if needed.
-module roleAssignmentsAdmins '../../common/roleAssignment-storageAccount.bicep' = [
-  for i in range(0, storageCount): if (!empty(shareAdminGroups)) {
-    name: '${storageAccounts[i].name}-AdminRoleAssignments-${deploymentSuffix}'
-    params: {
-      principalIds: map(shareAdminGroups, group => group.id)
-      principalType: 'Group'
-      storageAccountResourceId: storageAccounts[i].id
-      roleDefinitionId: adminRoleDefinitionId
-    }
-  }
-]
-
 module shares 'shares.bicep' = [
   for i in range(0, storageCount): {
     name: '${storageAccounts[i].name}-fileShares-${deploymentSuffix}'
@@ -216,26 +190,7 @@ module shares 'shares.bicep' = [
       shareSizeInGB: shareSizeInGB
       StorageAccountName: storageAccounts[i].name
       storageSku: storageSku
-    }    
-  }
-]
-
-module entraKerberos 'azureFilesEntraKerberos.bicep' = [
-  for i in range(0, storageCount): if (identitySolution == 'EntraKerberos') {
-    name: '${storageAccounts[i].name}-entra-kerberos-${deploymentSuffix}'
-    params: {
-      domainGuid: domainGuid
-      domainName: domainName
-      storageAccountName: storageAccounts[i].name
-      kind: storageSku == 'Standard' ? 'StorageV2' : 'FileStorage'
-      sku: {
-        name: '${storageSku}${storageRedundancy}'
-      }
-      location: location
     }
-    dependsOn: [
-      shares[i]
-    ]
   }
 ]
 
@@ -314,6 +269,19 @@ resource storageAccounts_file_diagnosticSettings 'Microsoft.Insights/diagnosticS
   }
 ]
 
+// Assigns the Storage File Data Privileged Contributor role to the Storage Account for admins so they can adjust NTFS permissions if needed.
+module roleAssignmentsAdmins '../../common/roleAssignment-storageAccount.bicep' = [
+  for i in range(0, storageCount): if (!empty(shareAdminGroups)) {
+    name: '${storageAccounts[i].name}-AdminRoleAssignments-${deploymentSuffix}'
+    params: {
+      principalIds: map(shareAdminGroups, group => group.id)
+      principalType: 'Group'
+      storageAccountResourceId: storageAccounts[i].id
+      roleDefinitionId: adminRoleDefinitionId
+    }
+  }
+]
+
 module configureADDSAuth 'domainJoin.bicep' = if (identitySolution == 'ActiveDirectoryDomainServices') {
   name: 'Join-Domain-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
@@ -337,11 +305,66 @@ module configureADDSAuth 'domainJoin.bicep' = if (identitySolution == 'ActiveDir
   ]
 }
 
+module configureEntraKerberosWithDomainInfo 'azureFilesEntraKerberosWithDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
+  name: 'Configure-Entra-Kerberos-DomainInfo-${deploymentSuffix}'
+  scope: resourceGroup(deploymentResourceGroupName)
+  params: {
+    defaultSharePermission: defaultSharePermission
+    domainJoinUserPrincipalName: domainJoinUserPrincipalName
+    domainJoinUserPassword: domainJoinUserPassword
+    location: location
+    resourceGroupStorage: resourceGroupStorage
+    storageAccountNamePrefix: storageAccountNamePrefix
+    storageCount: storageCount
+    storageIndex: storageIndex
+    userAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
+    virtualMachineName: deploymentVirtualMachineName
+  }
+  dependsOn: [
+    privateEndpoints
+    shares
+  ]
+}
+
+module configureEntraKerberosWithoutDomainInfo 'azureFilesEntraKerberosWithoutDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-CloudOnly' || (identitySolution == 'EntraKerberos-Hybrid' && (empty(domainJoinUserPassword) || empty(domainJoinUserPrincipalName)))) {
+  name: 'Configure-Entra-Kerberos-${deploymentSuffix}'
+  params: {
+    defaultSharePermission: defaultSharePermission
+    location: location
+    kind: storageSku == 'Standard' ? 'StorageV2' : 'FileStorage'
+    skuName: '${storageSku}${storageRedundancy}'
+    storageAccountNamePrefix: storageAccountNamePrefix
+    storageCount: storageCount
+    storageIndex: storageIndex
+  }
+  dependsOn: [
+    privateEndpoints
+    shares
+  ]
+}
+
+module updateStorageApplications 'updateEntraIdStorageKerbApps.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+  name: 'Update-Storage-Applications-${deploymentSuffix}'
+  scope: resourceGroup(deploymentResourceGroupName)
+  params: {
+    appDisplayNamePrefix: '[Storage Account] ${storageAccountNamePrefix}'
+    location: location
+    privateEndpoint: privateEndpoint
+    userAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
+    virtualMachineName: deploymentVirtualMachineName
+  }
+  dependsOn: [
+    privateEndpoints
+    shares
+    configureEntraKerberosWithDomainInfo
+    configureEntraKerberosWithoutDomainInfo
+  ]
+}
+
 module SetNTFSPermissions 'setNTFSPermissionsAzureFiles.bicep' = {
   name: 'Set-NTFS-Permissions-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
-    adminGroups: contains(identitySolution, 'DomainServices') ? map(shareAdminGroups, group => group.name) : []
     location: location
     shardingOptions: shardingOptions
     shares: fileShares
@@ -349,13 +372,16 @@ module SetNTFSPermissions 'setNTFSPermissionsAzureFiles.bicep' = {
     storageCount: storageCount
     storageIndex: storageIndex
     userAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
-    userGroups: contains(identitySolution, 'DomainServices') ? map(shareUserGroups, group => group.name) : []
+    userGroups: identitySolution == 'EntraKerberos-CloudOnly' && !empty(appUpdateUserAssignedIdentityResourceId) ? map(shareUserGroups, group => group.id) : !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName) ? map(shareUserGroups, group => group.name) : []
     virtualMachineName: deploymentVirtualMachineName
   }
   dependsOn: [
     privateEndpoints
     shares
+    configureEntraKerberosWithDomainInfo
+    configureEntraKerberosWithoutDomainInfo
     configureADDSAuth
+    updateStorageApplications
   ]
 }
 
