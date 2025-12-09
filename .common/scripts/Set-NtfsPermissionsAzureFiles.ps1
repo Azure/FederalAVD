@@ -187,7 +187,7 @@ try {
     # (A;OICI;FA;;;SY) = Allow Object/Container Inherit, System: Full Access
     # (A;OICI;FA;;;BA) = Allow Object/Container Inherit, Built-in Administrators: Full Access
     $SDDLStartString = 'O:BAG:SYD:PAI(A;OICIIO;0x1301bf;;;CO)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
-    $SDDLBuiltInUsersString = '(A;;0x1301bf;;;BU)'
+    $SDDLAuthenticatedUsersString = '(A;;0x1301bf;;;AU)'
 
     # Build SDDL entries for user groups if provided
     if ($UserGroupSids.Count -gt 0) {
@@ -218,7 +218,7 @@ try {
         $ResourceUrl = 'https://' + $StorageAccountName + $FilesSuffix  # HTTPS: https://stavd01.file.core.windows.net
         if ($UserGroupSids.Count -eq 0) {
             Write-Output "No User Groups provided, Setting default permissions for $StorageAccountName"
-            $SDDLString = ($SDDLStartString + $SDDLBuiltInUsersString) -replace ' ', ''
+            $SDDLString = ($SDDLStartString + $SDDLAuthenticatedUsersString) -replace ' ', ''
             foreach ($Share in $Shares) {
                 Set-AzureFileSharePermissions -FileShareName $Share -StorageAccountName $StorageAccountName -StorageSuffix $StorageSuffix -SDDLString $SDDLString -ClientId $UserAssignedIdentityClientId
                 Write-Output "Successfully set default NTFS permissions on file share '$Share' in storage account '$StorageAccountName'"
