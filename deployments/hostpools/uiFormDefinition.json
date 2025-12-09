@@ -853,7 +853,7 @@
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "8:00",
 													"constraints": {
-														"required": true,
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]",
 														"validations": [
 															{
 																"regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
@@ -871,7 +871,7 @@
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "20",
 													"constraints": {
-														"required": true,
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]",
 														"validations": [
 															{
 																"regex": "^([1-9][0-9]?|100)$",
@@ -889,7 +889,7 @@
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "60",
 													"constraints": {
-														"required": true,
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]",
 														"validations": [
 															{
 																"regex": "^([1-9][0-9]?|100)$",
@@ -917,13 +917,193 @@
 															}
 														],
 														"defaultValue": "Breadth-First",
-														"required": true
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]"
 													}
 												}
 											}
 										]
 									},
-									"visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
+								},
+								{
+									"name": "rampUpTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]",
+									"options": {
+										"text": "<b>Ramp Up</b><br>Configures the time at which the scaling plan will begin to start VM's and make them available for users."
+									}
+								},
+								{
+									"name": "personalWeekdayRampUpSchedule",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Enter Schedule Information",
+									"label": "Ramp Up Schedule",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 1,
+												"max": 2
+											}
+										},
+										"columns": [
+											{
+												"id": "days",
+												"header": "Schedule Type",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "Weekdays",
+																"value": "Weekdays"
+															},
+															{
+																"label": "Weekends",
+																"value": "Weekends"
+															}
+														],
+														"defaultValue": "Weekdays",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											},
+											{
+												"id": "startTime",
+												"header": "Ramp Up Time",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "8:00",
+													"constraints": {
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
+														"validations": [
+															{
+																"regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
+																"message": "Must be a valid 24-hour time format without leading zeros."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "startVMs",
+												"header": "VMs to start",
+												"width": "2fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "Assigned VMs only",
+																"value": "Assigned"
+															},
+															{
+																"label": "Assigned and unassigned VMs",
+																"value": "All"
+															},
+															{
+																"label": "Don't turn VMs on at same time",
+																"value": "None"
+															}
+														],
+														"defaultValue": "None",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											},
+											{
+												"id": "disconnectMinutes",
+												"header": "Disconnect Delay (mins)",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "10",
+													"constraints": {
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
+														"validations": [
+															{
+																"regex": "^\\d+$",
+																"message": "Must be an integer."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "disconnectAction",
+												"header": "Disconnect Action",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "None",
+																"value": "None"
+															},
+															{
+																"label": "Shutdown",
+																"value": "Deallocate"
+															},
+															{
+																"label": "Hibernate",
+																"value": "Hibernate"
+															}
+														],
+														"defaultValue": "None",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											},
+											{
+												"id": "logoffMinutes",
+												"header": "Logoff Delay (mins)",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "10",
+													"constraints": {
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
+														"validations": [
+															{
+																"regex": "^\\d+$",
+																"message": "Must be an integer."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "logoffAction",
+												"header": "Logoff Action",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "None",
+																"value": "None"
+															},
+															{
+																"label": "Shutdown",
+																"value": "Deallocate"
+															},
+															{
+																"label": "Hibernate",
+																"value": "Hibernate"
+															}
+														],
+														"defaultValue": "None",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											}
+										]
+									},
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]"
 								},
 								{
 									"name": "weekdayPeakSchedule",
@@ -947,7 +1127,7 @@
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "9:00",
 													"constraints": {
-														"required": true,
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]",
 														"validations": [
 															{
 																"regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
@@ -975,13 +1155,167 @@
 															}
 														],
 														"defaultValue": "Depth-First",
-														"required": true
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]"
 													}
 												}
 											}
 										]
 									},
-									"visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
+								},
+								{
+									"name": "peakTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]",
+									"options": {
+										"text": "<b>Peak</b><br>Configures the time at which the scaling plan enters the peak usage phase."
+									}
+								},
+								{
+									"name": "personalWeekdayPeakSchedule",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Enter Schedule Information",
+									"label": "Peak Schedule",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 1,
+												"max": 2
+											}
+										},
+										"columns": [
+											{
+												"id": "days",
+												"header": "Schedule Type",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "Weekdays",
+																"value": "Weekdays"
+															},
+															{
+																"label": "Weekends",
+																"value": "Weekends"
+															}
+														],
+														"defaultValue": "Weekdays",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											},
+											{
+												"id": "startTime",
+												"header": "Peak Start Time",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "9:00",
+													"constraints": {
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
+														"validations": [
+															{
+																"regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
+																"message": "Must be a valid 24-hour time format without leading zeros."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "disconnectMinutes",
+												"header": "Disconnect Delay (mins)",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "10",
+													"constraints": {
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
+														"validations": [
+															{
+																"regex": "^\\d+$",
+																"message": "Must be an integer."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "disconnectAction",
+												"header": "Disconnect Action",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "None",
+																"value": "None"
+															},
+															{
+																"label": "Shutdown",
+																"value": "Deallocate"
+															},
+															{
+																"label": "Hibernate",
+																"value": "Hibernate"
+															}
+														],
+														"defaultValue": "None",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											},
+											{
+												"id": "logoffMinutes",
+												"header": "Logoff Delay (mins)",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "10",
+													"constraints": {
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
+														"validations": [
+															{
+																"regex": "^\\d+$",
+																"message": "Must be an integer."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "logoffAction",
+												"header": "Logoff Action",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "None",
+																"value": "None"
+															},
+															{
+																"label": "Shutdown",
+																"value": "Deallocate"
+															},
+															{
+																"label": "Hibernate",
+																"value": "Hibernate"
+															}
+														],
+														"defaultValue": "None",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											}
+										]
+									},
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]"
 								},
 								{
 									"name": "weekdayRampDownSchedule",
@@ -1005,7 +1339,7 @@
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "18:00",
 													"constraints": {
-														"required": true,
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]",
 														"validations": [
 															{
 																"regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
@@ -1023,7 +1357,7 @@
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "10",
 													"constraints": {
-														"required": true,
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]",
 														"validations": [
 															{
 																"regex": "^([1-9][0-9]?|100)$",
@@ -1041,7 +1375,7 @@
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "90",
 													"constraints": {
-														"required": true,
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]",
 														"validations": [
 															{
 																"regex": "^([1-9][0-9]?|100)$",
@@ -1069,13 +1403,167 @@
 															}
 														],
 														"defaultValue": "Depth-First",
-														"required": true
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]"
 													}
 												}
 											}
 										]
 									},
-									"visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
+								},
+								{
+									"name": "rampDownTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]",
+									"options": {
+										"text": "<b>Ramp Down</b><br>Configures the time at which the scaling plan begins to stop VM's and force logoff users (if configured)."
+									}
+								},
+								{
+									"name": "personalWeekdayRampDownSchedule",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Enter Schedule Information",
+									"label": "Ramp Down Schedule",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 1,
+												"max": 2
+											}
+										},
+										"columns": [
+											{
+												"id": "days",
+												"header": "Schedule Type",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "Weekdays",
+																"value": "Weekdays"
+															},
+															{
+																"label": "Weekends",
+																"value": "Weekends"
+															}
+														],
+														"defaultValue": "Weekdays",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											},
+											{
+												"id": "startTime",
+												"header": "Ramp Down Start Time",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "18:00",
+													"constraints": {
+														"required": true,
+														"validations": [
+															{
+																"regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
+																"message": "Must be a valid 24-hour time format without leading zeros."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "disconnectMinutes",
+												"header": "Disconnect Delay (mins)",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "10",
+													"constraints": {
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
+														"validations": [
+															{
+																"regex": "^\\d+$",
+																"message": "Must be an integer."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "disconnectAction",
+												"header": "Disconnect Action",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "None",
+																"value": "None"
+															},
+															{
+																"label": "Shutdown",
+																"value": "Deallocate"
+															},
+															{
+																"label": "Hibernate",
+																"value": "Hibernate"
+															}
+														],
+														"defaultValue": "None",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											},
+											{
+												"id": "logoffMinutes",
+												"header": "Logoff Delay (mins)",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "10",
+													"constraints": {
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
+														"validations": [
+															{
+																"regex": "^\\d+$",
+																"message": "Must be an integer."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "logoffAction",
+												"header": "Logoff Action",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "None",
+																"value": "None"
+															},
+															{
+																"label": "Shutdown",
+																"value": "Deallocate"
+															},
+															{
+																"label": "Hibernate",
+																"value": "Hibernate"
+															}
+														],
+														"defaultValue": "None",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											}
+										]
+									},
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]"
 								},
 								{
 									"name": "forceLogoff",
@@ -1094,9 +1582,9 @@
 												"value": false
 											}
 										],
-										"required": true
+										"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]"
 									},
-									"visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
 								},
 								{
 									"name": "minsToLogoff",
@@ -1105,11 +1593,11 @@
 									"placeholder": "30",
 									"toolTip": "Use only integers",
 									"constraints": {
-										"required": true,
+										"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]",
 										"regex": "^(?:[1-9]|[1-9][0-9]|1[01][0-9]|120)$",
 										"validationMessage": "Must be an integer from 1 - 120."
 									},
-									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff)]"
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
 								},
 								{
 									"name": "weekdayOffPeakSchedule",
@@ -1133,7 +1621,7 @@
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "22:00",
 													"constraints": {
-														"required": true,
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]",
 														"validations": [
 															{
 																"regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
@@ -1161,16 +1649,162 @@
 															}
 														],
 														"defaultValue": "Depth-First",
-														"required": true
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]"
 													}
 												}
 											}
 										]
 									},
-									"visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
+								},
+								{
+									"name": "personalWeekdayOffPeakSchedule",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Enter Weekday Off Peak Schedule Information",
+									"label": "Weekday Off Peak Schedule",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 1,
+												"max": 2
+											}
+										},
+										"columns": [
+											{
+												"id": "days",
+												"header": "Schedule Type",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "Weekdays",
+																"value": "Weekdays"
+															},
+															{
+																"label": "Weekends",
+																"value": "Weekends"
+															}
+														],
+														"defaultValue": "Weekdays",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											},
+											{
+												"id": "startTime",
+												"header": "Off Peak Start Time",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "22:00",
+													"constraints": {
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
+														"validations": [
+															{
+																"regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
+																"message": "Must be a valid 24-hour time format without leading zeros."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "disconnectMinutes",
+												"header": "Disconnect Delay (mins)",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "10",
+													"constraints": {
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
+														"validations": [
+															{
+																"regex": "^\\d+$",
+																"message": "Must be an integer."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "disconnectAction",
+												"header": "Disconnect Action",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "None",
+																"value": "None"
+															},
+															{
+																"label": "Shutdown",
+																"value": "Deallocate"
+															},
+															{
+																"label": "Hibernate",
+																"value": "Hibernate"
+															}
+														],
+														"defaultValue": "None",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											},
+											{
+												"id": "logoffMinutes",
+												"header": "Logoff Delay (mins)",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "10",
+													"constraints": {
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
+														"validations": [
+															{
+																"regex": "^\\d+$",
+																"message": "Must be an integer."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "logoffAction",
+												"header": "Logoff Action",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "None",
+																"value": "None"
+															},
+															{
+																"label": "Shutdown",
+																"value": "Deallocate"
+															},
+															{
+																"label": "Hibernate",
+																"value": "Hibernate"
+															}
+														],
+														"defaultValue": "None",
+														"required": "[equals(steps('controlPlane').hostPool.type, 'Personal')]"
+													}
+												}
+											}
+										]
+									},
+									"visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]"
 								}
 							],
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
+							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]"
 						}
 					]
 				},
@@ -4538,12 +5172,12 @@
 				"appGroupSecurityGroups": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').assignments.groupPickerBlade.transformed.groups, parse('[]'))]",
 				"deployScalingPlan": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').scalingPlan.deployScalingPlan, false)]",
 				"scalingPlanExclusionTag": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.exclusionTag, '')]",
-				"scalingPlanRampUpSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayRampUpSchedule), parse('{}'))]",
-				"scalingPlanPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayPeakSchedule), parse('{}'))]",
-				"scalingPlanRampDownSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayRampDownSchedule), parse('{}'))]",
-				"scalingPlanOffPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayOffPeakSchedule), parse('{}'))]",
-				"scalingPlanForceLogoff": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff, false)]",
-				"scalingPlanMinsBeforeLogoff": "[if(and(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff), steps('controlPlane').scalingPlan.minsToLogoff, 0)]",
+				"scalingPlanRampUpSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), coalesce(steps('controlPlane').scalingPlan.personalWeekdayRampUpSchedule, parse('[]')), coalesce(steps('controlPlane').scalingPlan.weekdayRampUpSchedule, parse('[]'))), parse('[]'))]",
+				"scalingPlanPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), coalesce(steps('controlPlane').scalingPlan.personalWeekdayPeakSchedule, parse('[]')), coalesce(steps('controlPlane').scalingPlan.weekdayPeakSchedule, parse('[]'))), parse('[]'))]",
+				"scalingPlanRampDownSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), coalesce(steps('controlPlane').scalingPlan.personalWeekdayRampDownSchedule, parse('[]')), coalesce(steps('controlPlane').scalingPlan.weekdayRampDownSchedule, parse('[]'))), parse('[]'))]",
+				"scalingPlanOffPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, if(equals(steps('controlPlane').hostPool.type, 'Personal'), coalesce(steps('controlPlane').scalingPlan.personalWeekdayOffPeakSchedule, parse('[]')), coalesce(steps('controlPlane').scalingPlan.weekdayOffPeakSchedule, parse('[]'))), parse('[]'))]",
+				"scalingPlanForceLogoff": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, coalesce(steps('controlPlane').scalingPlan.forceLogoff, false), false)]",
+				"scalingPlanMinsBeforeLogoff": "[if(and(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff), coalesce(steps('controlPlane').scalingPlan.minsToLogoff, 0), 0)]",
 				"existingHostsResourceGroupName": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('hosts').scope.resourceGroup.name, '')]",
 				"virtualMachinesTimeZone": "[steps('hosts').scope.timeZone]",
 				"virtualMachineNamePrefix": "[steps('hosts').naming.virtualMachineNamePrefix]",
