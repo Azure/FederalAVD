@@ -188,8 +188,8 @@ param virtualMachinesTimeZone string = 'Eastern Standard Time'
 @description('Conditional. The name of the existing hosts resource group. Only used used when "DeploymentType" is "SessionHostOnly".')
 param existingHostsResourceGroupName string = ''
 
-@minLength(2)
-@maxLength(13)
+@minLength(1)
+@maxLength(14)
 @description('Required. The Virtual Machine Name prefix.')
 param virtualMachineNamePrefix string
 

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "3703105170874060009"
+      "templateHash": "4293492103077686050"
     }
   },
   "parameters": {
@@ -298,8 +298,8 @@
     },
     "virtualMachineNamePrefix": {
       "type": "string",
-      "minLength": 2,
-      "maxLength": 13,
+      "minLength": 1,
+      "maxLength": 14,
       "metadata": {
         "description": "Required. The Virtual Machine Name prefix."
       }
