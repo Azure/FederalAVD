@@ -2,10 +2,19 @@
 .SYNOPSIS
     This script uses the local group policy object tool (lgpo.exe) to apply the applicable DISA STIGs GPOs either downloaded directly from CyberCom or
     the files are contained with this script in the root of a folder.
+
 .PARAMETER ApplicationsToSTIG
     This parameter defines the third party applications that should be STIGd by this script. This needs to be defined as a JSON string to support Run Commands.
+
+.PARAMETER SearchForApplications
+    This parameter defines whether or not the script verifies the applications defined in 'ApplicationsToSTIG' are installed before applying the settings.
+
 .PARAMETER CloudOnly
     This parameter defines whether or not cloud only identity is used on the system with fslogix. If selected then the system will be able to use cmdkey to save the storage account key.
+
+.PARAMETER STIGsUrl
+    This parameter defines the URL of the STIG GPOs ZIP file to be downloaded and applied.
+
 .NOTES
     To use this script offline, download the lgpo tool from 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip' and store it in the root of the folder where the script is located.'
     to the root of the folder where this script is located. Then download the latest STIG GPOs ZIP from 'https://public.cyber.mil/stigs/gpo' and and save at at STIGs.zip in the root
@@ -13,16 +22,17 @@
 
     This script not only applies the GPO objects but it also applies some registry settings and other mitigations. Ensure that these other items still apply through the
     lifecycle of the script.
-
 #>
 [CmdletBinding()]
 param (
-    [Parameter()]
     [string]$ApplicationsToSTIG = '["Adobe Acrobat Pro", "Adobe Acrobat Reader", "Google Chrome", "Mozilla Firefox"]',
     # Set to True if using Cloud only identity with fslogix so credentials can be saved to the local credential manager for storage account access.
+    
+    [string]$SearchForApplications = 'False',
+
     [string]$CloudOnly = 'True',
 
-    [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_July_2025.zip'
+    [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip'
 )
 #region Initialization
 $Script:Name = 'Apply-STIGs'
@@ -37,6 +47,8 @@ If ($ApplicationsToSTIG -ne $null) {
     [array]$ApplicationsToSTIG = $ApplicationsToSTIG.replace('\', '') | ConvertFrom-Json
 }
 [bool]$CloudOnly = $CloudOnly.ToLower() -eq 'true'
+[bool]$SearchForApplications = $SearchForApplications.ToLower() -eq 'true'
+[bool]$IsDomainJoined = (Get-WmiObject -Class Win32_ComputerSystem).PartOfDomain
 #endregion
 
 #region Functions
@@ -469,10 +481,20 @@ $STIGFolders = Get-ChildItem -Path $Script:TempDir -Directory
 If (Get-InstalledApplication -Name 'Microsoft 365', 'Office', 'Teams') {
     $ApplicableFolders += $STIGFolders | Where-Object { $_.Name -match 'M365' } 
 }
-$InstalledAppsToSTIG = (Get-InstalledApplication -Name $ApplicationsToSTIG).SearchString
-ForEach ($SearchString in $InstalledAppsToSTIG) {
-    $ApplicableFolders += $STIGFolders | Where-Object { $_.Name -match "$SearchString" }
+If ($SearchForApplications) {
+    Write-Log -Message "Searching for applications to STIG."
+    $InstalledAppsToSTIG = (Get-InstalledApplication -Name $ApplicationsToSTIG).SearchString
+    ForEach ($SearchString in $InstalledAppsToSTIG) {
+        $ApplicableFolders += $STIGFolders | Where-Object { $_.Name -match "$SearchString" }
+    }
 }
+Else {
+    Write-Log -Message "Skipping application search."
+    ForEach($AppSearchString in $ApplicationsToSTIG) {
+        $ApplicableFolders += $STIGFolders | Where-Object { $_.Name -match "$AppSearchString" }
+    }
+}
+
 Write-Log -Message "Found $($ApplicableFolders.Count) applicable GPO folders:"
 $ApplicableFolders | ForEach-Object { Write-Log -Message "  $_" } 
 [array]$GPOFolders = @()
@@ -513,11 +535,14 @@ signature="$CHICAGO$"
 Revision=1
 [Privilege Rights]
 SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544
-SeDenyBatchLogonRight = *S-1-5-32-546
-SeDenyNetworkLogonRight = *S-1-5-32-546
-SeDenyInteractiveLogonRight = *S-1-5-32-546
-SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546
 '@
+
+if (-not $IsDomainJoined) {
+    $SecFileContent += 'SeDenyBatchLogonRight = *S-1-5-32-546'
+    $SecFileContent += 'SeDenyNetworkLogonRight = *S-1-5-32-546'
+    $SecFileContent += 'SeDenyInteractiveLogonRight = *S-1-5-32-546'
+    $SecFileContent += 'SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546'
+}
 
 If ($CloudOnly) {
     $SecFileContent += "`n[Registry Values]"
@@ -530,10 +555,15 @@ $SecTemplate = Join-Path -Path $Script:LGPOTempDir -ChildPath "AVD-Exceptions.in
 $SecFileContent | Out-File -FilePath $SecTemplate -Encoding unicode
 # Remove Setting that breaks AVD
 Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002' -RegistryValue 'EccCurves' -Delete -Verbose
-# Remove Firewall Configuration that breaks stand-alone workstation Remote Desktop.
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\DomainProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -Verbose
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PrivateProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -Verbose
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PublicProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -Verbose
+
+If (-not $IsDomainJoined) {
+    # Remove Firewall Configuration that breaks non-domain joined Remote Desktop.
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Windows' -RegistryValue 'DisableCAD' -RegistryData '0' -RegistryType 'DWORD' -Verbose
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\DomainProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -Verbose
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PrivateProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -Verbose
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PublicProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -Verbose
+}
+
 # Remove Edge Proxy Configuration
 Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Edge' -RegistryValue 'ProxySettings' -Delete -Verbose
 Invoke-LGPO
