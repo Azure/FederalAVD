@@ -216,7 +216,7 @@
 							"type": "Microsoft.Common.OptionsGroup",
 							"visible": true,
 							"label": "Identity Provider",
-							"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostPoolApi.tags.vmIdentityType)), 'Active Directory Domain Services (ADDS)', if(equals(steps('basics').hostPoolApi.tags.vmIdentityType, 'EntraId'), 'Entra Id', if(contains(steps('basics').hostPoolApi.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('basics').hostPoolApi.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services'))))]",
+							"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), 'Active Directory Domain Services (ADDS)', if(equals(steps('basics').hostPoolApi.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)', if(contains(steps('basics').hostPoolApi.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('basics').hostPoolApi.tags.vmIdentityType, 'CloudOnly'), 'Entra Kerberos (Cloud Only Identities) (Preview)', if(contains(steps('basics').hostPoolApi.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services')))))]",
 							"toolTip": "Choose the identity service provider for your users and session hosts. Your choices explained:</br></br><b>Active Directory Domain Services (ADDS)</b>: The users are sourced from ADDS and session hosts will be domain joined.</br></br><b>Entra Domain Services</b>: The users are sourced from Entra ID or ADDS and the session hosts are joined to Entra Domain Services.</br></br><b>Entra ID</b>: The users are sourced from Entra ID and the session hosts will join Entra ID.</br></br><b>Entra Kerberos (hybrid identities)</b>: The Users are sourced from ADDS, but the session hosts will be joined to Entra ID.",
 							"constraints": {
 								"required": true,
@@ -230,7 +230,7 @@
 										"value": "EntraDomainServices"
 									},
 									{
-										"label": "Entra Id",
+										"label": "Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)",
 										"value": "EntraId"
 									},
 									{
