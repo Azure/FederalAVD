@@ -681,7 +681,7 @@ If ($ConfigureFSLogix) {
             }
         )
     }
-    If ($IdentitySolution -eq 'EntraKerberos') {
+    If ($IdentitySolution -match 'EntraKerberos') {
         $RegSettings.Add([PSCustomObject]@{ Name = 'CloudKerberosTicketRetrievalEnabled'; Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters'; PropertyType = 'DWord'; Value = 1})
     }
 
