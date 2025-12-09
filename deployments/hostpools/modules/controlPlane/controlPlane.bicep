@@ -195,7 +195,7 @@ module feedWorkspace 'modules/workspace.bicep' = {
   }
 }
 
-module scalingPlan 'modules/scalingPlan.bicep' = if (deployScalingPlan && contains(hostPoolType, 'Pooled')) {
+module scalingPlan 'modules/scalingPlan.bicep' = if (deployScalingPlan) {
   name: 'ScalingPlan-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
   params: {

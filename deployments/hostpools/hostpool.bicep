@@ -146,33 +146,17 @@ param avdObjectId string = ''
 @description('Optional. The tag used to exclude virtual machines from the scaling plan.')
 param scalingPlanExclusionTag string = ''
 
-@description('Optional. The scaling plan weekday ramp up schedule')
-param scalingPlanRampUpSchedule object = {
-  startTime: '8:00'
-  minimumHostsPct: 20
-  capacityThresholdPct: 60
-  loadBalancingAlgorithm: 'DepthFirst'
-}
+@description('Optional. The scaling plan ramp up schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends).')
+param scalingPlanRampUpSchedule array = []
 
-@description('Optional. The scaling plan weekday peak schedule.')
-param scalingPlanPeakSchedule object = {
-  startTime: '9:00'
-  loadBalancingAlgorithm: 'DepthFirst'
-}
+@description('Optional. The scaling plan peak schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends).')
+param scalingPlanPeakSchedule array = []
 
-@description('Optional. The scaling plan weekday rampdown schedule.')
-param scalingPlanRampDownSchedule object = {
-  startTime: '17:00'
-  minimumHostsPct: 10
-  capacityThresholdPct: 90
-  loadBalancingAlgorithm: 'DepthFirst'
-}
+@description('Optional. The scaling plan rampdown schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends).')
+param scalingPlanRampDownSchedule array = []
 
-@description('Optional. The scaling plan weakday off peak schedule.')
-param scalingPlanOffPeakSchedule object = {
-  startTime: '20:00'
-  loadBalancingAlgorithm: 'DepthFirst'
-}
+@description('Optional. The scaling plan off peak schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends).')
+param scalingPlanOffPeakSchedule array = []
 
 @description('Optional. Determines if the scaling plan will forcefully log off users when scaling down.')
 param scalingPlanForceLogoff bool = false
@@ -647,7 +631,7 @@ param tags object = {}
 // Non-Specified Values
 
 @description('Optional. The vm size of the management VM.')
-param deploymentVmSize string = 'Standard_B2s'
+param deploymentVmSize string = virtualMachineSize
 
 @description('DO NOT MODIFY THIS VALUE! The timeStamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddHHmmss')
@@ -715,59 +699,111 @@ var hostPoolVmTemplate = {
   nameConvResTypeAtEnd: nameConvResTypeAtEnd
 }
 
+// Build base schedule object with common properties for both Personal and Pooled host pools
+// Only calculate when deployScalingPlan is true
+var scalingPlanScheduleCount = deployScalingPlan ? min([
+  length(scalingPlanRampUpSchedule)
+  length(scalingPlanPeakSchedule)
+  length(scalingPlanRampDownSchedule)
+  length(scalingPlanOffPeakSchedule)
+]) : 0
+
+var scalingPlanSchedulesBase = [for i in range(0, scalingPlanScheduleCount): {
+  rampUpStartTime: {
+    hour: first(split(scalingPlanRampUpSchedule[i].startTime, ':')[0]) == '0'
+      ? int(last(split(scalingPlanRampUpSchedule[i].startTime, ':')[0]))
+      : int(split(scalingPlanRampUpSchedule[i].startTime, ':')[0])
+    minute: first(split(scalingPlanRampUpSchedule[i].startTime, ':')[1]) == '0'
+      ? int(last(split(scalingPlanRampUpSchedule[i].startTime, ':')[1]))
+      : int(split(scalingPlanRampUpSchedule[i].startTime, ':')[1])
+  }
+  peakStartTime: {
+    hour: first(split(scalingPlanPeakSchedule[i].startTime, ':')[0]) == '0'
+      ? int(last(split(scalingPlanPeakSchedule[i].startTime, ':')[0]))
+      : int(split(scalingPlanPeakSchedule[i].startTime, ':')[0])
+    minute: first(split(scalingPlanPeakSchedule[i].startTime, ':')[1]) == '0'
+      ? int(last(split(scalingPlanPeakSchedule[i].startTime, ':')[1]))
+      : int(split(scalingPlanPeakSchedule[i].startTime, ':')[1])
+  }
+  rampDownStartTime: {
+    hour: first(split(scalingPlanRampDownSchedule[i].startTime, ':')[0]) == '0'
+      ? int(last(split(scalingPlanRampDownSchedule[i].startTime, ':')[0]))
+      : int(split(scalingPlanRampDownSchedule[i].startTime, ':')[0])
+    minute: first(split(scalingPlanRampDownSchedule[i].startTime, ':')[1]) == '0'
+      ? int(last(split(scalingPlanRampDownSchedule[i].startTime, ':')[1]))
+      : int(split(scalingPlanRampDownSchedule[i].startTime, ':')[1])
+  }
+  offPeakStartTime: {
+    hour: first(split(scalingPlanOffPeakSchedule[i].startTime, ':')[0]) == '0'
+      ? int(last(split(scalingPlanOffPeakSchedule[i].startTime, ':')[0]))
+      : int(split(scalingPlanOffPeakSchedule[i].startTime, ':')[0])
+    minute: first(split(scalingPlanOffPeakSchedule[i].startTime, ':')[1]) == '0'
+      ? int(last(split(scalingPlanOffPeakSchedule[i].startTime, ':')[1]))
+      : int(split(scalingPlanOffPeakSchedule[i].startTime, ':')[1])
+  }
+  name: contains(scalingPlanRampUpSchedule[i], 'days') 
+    ? (scalingPlanRampUpSchedule[i].days == 'Weekends'
+      ? 'weekends_schedule' 
+      : 'weekdays_schedule')
+    : 'weekdays_schedule'
+  daysOfWeek: contains(scalingPlanRampUpSchedule[i], 'days') 
+    ? (scalingPlanRampUpSchedule[i].days == 'Weekends' 
+      ? ['Saturday', 'Sunday']
+      : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
+    : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+}]
+
+// Add Pooled-specific properties for capacity and percentage thresholds
+// Only calculate when deployScalingPlan is true
+var scalingPlanSchedulesPooled = [for i in range(0, scalingPlanScheduleCount): union(scalingPlanSchedulesBase[i], {
+  rampUpLoadBalancingAlgorithm: scalingPlanRampUpSchedule[i].?loadBalancingAlgorithm ?? 'DepthFirst'
+  rampUpMinimumHostsPct: scalingPlanRampUpSchedule[i].?minimumHostsPct != null ? int(scalingPlanRampUpSchedule[i].minimumHostsPct) : 20
+  rampUpCapacityThresholdPct: scalingPlanRampUpSchedule[i].?capacityThresholdPct != null ? int(scalingPlanRampUpSchedule[i].capacityThresholdPct) : 60
+  peakLoadBalancingAlgorithm: scalingPlanPeakSchedule[i].?loadBalancingAlgorithm ?? 'DepthFirst'
+  peakStartVMOnConnect: scalingPlanPeakSchedule[i].?startVMs == 'None' ? 'Disable' : (scalingPlanPeakSchedule[i].?startVMs != null ? 'Enable' : null)
+  rampDownLoadBalancingAlgorithm: scalingPlanRampDownSchedule[i].?loadBalancingAlgorithm ?? 'DepthFirst'
+  rampDownMinimumHostsPct: scalingPlanRampDownSchedule[i].?minimumHostsPct != null ? int(scalingPlanRampDownSchedule[i].minimumHostsPct) : 10
+  rampDownCapacityThresholdPct: scalingPlanRampDownSchedule[i].?capacityThresholdPct != null ? int(scalingPlanRampDownSchedule[i].capacityThresholdPct) : 90
+  rampDownForceLogoffUsers: scalingPlanForceLogoff
+  rampDownWaitTimeMinutes: scalingPlanMinsBeforeLogoff
+  rampDownNotificationMessage: scalingPlanForceLogoff
+    ? 'You will be logged off in ${scalingPlanMinsBeforeLogoff} minutes. Make sure to save your work.'
+    : 'Log off or your session will be disconnected.'
+  rampDownStopHostsWhen: 'ZeroSessions'
+  rampDownStartVMOnConnect: scalingPlanRampDownSchedule[i].?startVMs == 'None' ? 'Disable' : (scalingPlanRampDownSchedule[i].?startVMs != null ? 'Enable' : null)
+  offPeakLoadBalancingAlgorithm: scalingPlanOffPeakSchedule[i].?loadBalancingAlgorithm ?? 'DepthFirst'
+  offPeakStartVMOnConnect: scalingPlanOffPeakSchedule[i].?startVMs == 'None' ? 'Disable' : (scalingPlanOffPeakSchedule[i].?startVMs != null ? 'Enable' : null)
+})]
+
+// Add Personal-specific properties (session disconnect/logoff actions) without Pooled-specific properties
+// Only calculate when deployScalingPlan is true
+var scalingPlanSchedulesPersonal = [for i in range(0, scalingPlanScheduleCount): union(scalingPlanSchedulesBase[i], {
+  rampUpStartVMOnConnect: scalingPlanRampUpSchedule[i].?startVMs == 'None' ? 'Disable' : (scalingPlanRampUpSchedule[i].?startVMs != null ? 'Enable' : 'Enable')
+  rampUpActionOnDisconnect: scalingPlanRampUpSchedule[i].?disconnectAction ?? 'None'
+  rampUpMinutesToWaitOnDisconnect: scalingPlanRampUpSchedule[i].?disconnectMinutes != null ? int(scalingPlanRampUpSchedule[i].disconnectMinutes) : 10
+  rampUpActionOnLogoff: scalingPlanRampUpSchedule[i].?logoffAction ?? 'None'
+  rampUpMinutesToWaitOnLogoff: scalingPlanRampUpSchedule[i].?logoffMinutes != null ? int(scalingPlanRampUpSchedule[i].logoffMinutes) : 10
+  peakStartVMOnConnect: scalingPlanPeakSchedule[i].?startVMs == 'None' ? 'Disable' : (scalingPlanPeakSchedule[i].?startVMs != null ? 'Enable' : 'Enable')
+  peakActionOnDisconnect: scalingPlanPeakSchedule[i].?disconnectAction ?? 'None'
+  peakMinutesToWaitOnDisconnect: scalingPlanPeakSchedule[i].?disconnectMinutes != null ? int(scalingPlanPeakSchedule[i].disconnectMinutes) : 10
+  peakActionOnLogoff: scalingPlanPeakSchedule[i].?logoffAction ?? 'None'
+  peakMinutesToWaitOnLogoff: scalingPlanPeakSchedule[i].?logoffMinutes != null ? int(scalingPlanPeakSchedule[i].logoffMinutes) : 10
+  rampDownStartVMOnConnect: scalingPlanRampDownSchedule[i].?startVMs == 'None' ? 'Disable' : (scalingPlanRampDownSchedule[i].?startVMs != null ? 'Enable' : 'Disable')
+  rampDownActionOnDisconnect: scalingPlanRampDownSchedule[i].?disconnectAction ?? 'None'
+  rampDownMinutesToWaitOnDisconnect: scalingPlanRampDownSchedule[i].?disconnectMinutes != null ? int(scalingPlanRampDownSchedule[i].disconnectMinutes) : 10
+  rampDownActionOnLogoff: scalingPlanRampDownSchedule[i].?logoffAction ?? 'Deallocate'
+  rampDownMinutesToWaitOnLogoff: scalingPlanRampDownSchedule[i].?logoffMinutes != null ? int(scalingPlanRampDownSchedule[i].logoffMinutes) : 10
+  offPeakStartVMOnConnect: scalingPlanOffPeakSchedule[i].?startVMs == 'None' ? 'Disable' : (scalingPlanOffPeakSchedule[i].?startVMs != null ? 'Enable' : 'Disable')
+  offPeakActionOnDisconnect: scalingPlanOffPeakSchedule[i].?disconnectAction ?? 'None'
+  offPeakMinutesToWaitOnDisconnect: scalingPlanOffPeakSchedule[i].?disconnectMinutes != null ? int(scalingPlanOffPeakSchedule[i].disconnectMinutes) : 10
+  offPeakActionOnLogoff: scalingPlanOffPeakSchedule[i].?logoffAction ?? 'Deallocate'
+  offPeakMinutesToWaitOnLogoff: scalingPlanOffPeakSchedule[i].?logoffMinutes != null ? int(scalingPlanOffPeakSchedule[i].logoffMinutes) : 10
+})]
+
+// Choose the appropriate schedule array based on host pool type
+// Only calculate when deployScalingPlan is true
 var scalingPlanSchedules = deployScalingPlan
-  ? [
-      {
-        rampUpStartTime: {
-          hour: first(split(scalingPlanRampUpSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanRampUpSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanRampUpSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanRampUpSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanRampUpSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanRampUpSchedule.startTime, ':')[1])
-        }
-        peakStartTime: {
-          hour: first(split(scalingPlanPeakSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanPeakSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanPeakSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanPeakSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanPeakSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanPeakSchedule.startTime, ':')[1])
-        }
-        rampDownStartTime: {
-          hour: first(split(scalingPlanRampDownSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanRampDownSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanRampDownSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanRampDownSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanRampDownSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanRampDownSchedule.startTime, ':')[1])
-        }
-        offPeakStartTime: {
-          hour: first(split(scalingPlanOffPeakSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanOffPeakSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanOffPeakSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanOffPeakSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanOffPeakSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanOffPeakSchedule.startTime, ':')[1])
-        }
-        name: 'weekdays_schedule'
-        daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-        rampUpLoadBalancingAlgorithm: scalingPlanRampUpSchedule.loadBalancingAlgorithm
-        rampUpMinimumHostsPct: scalingPlanRampUpSchedule.minimumHostsPct
-        rampUpCapacityThresholdPct: scalingPlanRampUpSchedule.capacityThresholdPct
-        peakLoadBalancingAlgorithm: scalingPlanPeakSchedule.loadBalancingAlgorithm
-        rampDownLoadBalancingAlgorithm: scalingPlanRampDownSchedule.loadBalancingAlgorithm
-        rampDownMinimumHostsPct: scalingPlanRampDownSchedule.minimumHostsPct
-        rampDownCapacityThresholdPct: scalingPlanRampDownSchedule.capacityThresholdPct
-        rampDownForceLogoffUsers: scalingPlanForceLogoff
-        rampDownWaitTimeMinutes: scalingPlanMinsBeforeLogoff
-        rampDownNotificationMessage: scalingPlanForceLogoff
-          ? 'You will be logged off in ${scalingPlanMinsBeforeLogoff} minutes. Make sure to save your work.'
-          : null
-        rampDownStopHostsWhen: 'ZeroSessions'
-        offPeakLoadBalancingAlgorithm: scalingPlanOffPeakSchedule.loadBalancingAlgorithm
-      }
-    ]
+  ? (contains(hostPoolType, 'Pooled') ? scalingPlanSchedulesPooled : scalingPlanSchedulesPersonal)
   : []
 
 var exclusionTag = !empty(scalingPlanExclusionTag) && deployScalingPlan

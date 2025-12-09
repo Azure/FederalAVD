@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "7381140819427969385"
+      "templateHash": "9183238505257578912"
     }
   },
   "parameters": {
@@ -225,47 +225,31 @@
       }
     },
     "scalingPlanRampUpSchedule": {
-      "type": "object",
-      "defaultValue": {
-        "startTime": "8:00",
-        "minimumHostsPct": 20,
-        "capacityThresholdPct": 60,
-        "loadBalancingAlgorithm": "DepthFirst"
-      },
+      "type": "array",
+      "defaultValue": [],
       "metadata": {
-        "description": "Optional. The scaling plan weekday ramp up schedule"
+        "description": "Optional. The scaling plan ramp up schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends)."
       }
     },
     "scalingPlanPeakSchedule": {
-      "type": "object",
-      "defaultValue": {
-        "startTime": "9:00",
-        "loadBalancingAlgorithm": "DepthFirst"
-      },
+      "type": "array",
+      "defaultValue": [],
       "metadata": {
-        "description": "Optional. The scaling plan weekday peak schedule."
+        "description": "Optional. The scaling plan peak schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends)."
       }
     },
     "scalingPlanRampDownSchedule": {
-      "type": "object",
-      "defaultValue": {
-        "startTime": "17:00",
-        "minimumHostsPct": 10,
-        "capacityThresholdPct": 90,
-        "loadBalancingAlgorithm": "DepthFirst"
-      },
+      "type": "array",
+      "defaultValue": [],
       "metadata": {
-        "description": "Optional. The scaling plan weekday rampdown schedule."
+        "description": "Optional. The scaling plan rampdown schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends)."
       }
     },
     "scalingPlanOffPeakSchedule": {
-      "type": "object",
-      "defaultValue": {
-        "startTime": "20:00",
-        "loadBalancingAlgorithm": "DepthFirst"
-      },
+      "type": "array",
+      "defaultValue": [],
       "metadata": {
-        "description": "Optional. The scaling plan weakday off peak schedule."
+        "description": "Optional. The scaling plan off peak schedules. Can contain multiple schedules for different day ranges (e.g., Weekdays and Weekends)."
       }
     },
     "scalingPlanForceLogoff": {
@@ -1050,7 +1034,7 @@
     },
     "deploymentVmSize": {
       "type": "string",
-      "defaultValue": "Standard_B2s",
+      "defaultValue": "[parameters('virtualMachineSize')]",
       "metadata": {
         "description": "Optional. The vm size of the management VM."
       }
@@ -1064,6 +1048,42 @@
     }
   },
   "variables": {
+    "copy": [
+      {
+        "name": "scalingPlanSchedulesBase",
+        "count": "[length(range(0, variables('scalingPlanScheduleCount')))]",
+        "input": {
+          "rampUpStartTime": {
+            "hour": "[if(equals(first(split(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0])), int(split(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0]))]",
+            "minute": "[if(equals(first(split(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1])), int(split(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1]))]"
+          },
+          "peakStartTime": {
+            "hour": "[if(equals(first(split(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0])), int(split(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0]))]",
+            "minute": "[if(equals(first(split(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1])), int(split(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1]))]"
+          },
+          "rampDownStartTime": {
+            "hour": "[if(equals(first(split(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0])), int(split(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0]))]",
+            "minute": "[if(equals(first(split(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1])), int(split(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1]))]"
+          },
+          "offPeakStartTime": {
+            "hour": "[if(equals(first(split(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0])), int(split(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[0]))]",
+            "minute": "[if(equals(first(split(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1])), int(split(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].startTime, ':')[1]))]"
+          },
+          "name": "[if(contains(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]], 'days'), if(equals(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].days, 'Weekends'), 'weekends_schedule', 'weekdays_schedule'), 'weekdays_schedule')]",
+          "daysOfWeek": "[if(contains(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]], 'days'), if(equals(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesBase')]].days, 'Weekends'), createArray('Saturday', 'Sunday'), createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')), createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'))]"
+        }
+      },
+      {
+        "name": "scalingPlanSchedulesPooled",
+        "count": "[length(range(0, variables('scalingPlanScheduleCount')))]",
+        "input": "[union(variables('scalingPlanSchedulesBase')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], createObject('rampUpLoadBalancingAlgorithm', coalesce(tryGet(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'loadBalancingAlgorithm'), 'DepthFirst'), 'rampUpMinimumHostsPct', if(not(equals(tryGet(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'minimumHostsPct'), null())), int(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]].minimumHostsPct), 20), 'rampUpCapacityThresholdPct', if(not(equals(tryGet(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'capacityThresholdPct'), null())), int(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]].capacityThresholdPct), 60), 'peakLoadBalancingAlgorithm', coalesce(tryGet(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'loadBalancingAlgorithm'), 'DepthFirst'), 'peakStartVMOnConnect', if(equals(tryGet(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'startVMs'), 'None'), 'Disable', if(not(equals(tryGet(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'startVMs'), null())), 'Enable', null())), 'rampDownLoadBalancingAlgorithm', coalesce(tryGet(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'loadBalancingAlgorithm'), 'DepthFirst'), 'rampDownMinimumHostsPct', if(not(equals(tryGet(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'minimumHostsPct'), null())), int(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]].minimumHostsPct), 10), 'rampDownCapacityThresholdPct', if(not(equals(tryGet(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'capacityThresholdPct'), null())), int(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]].capacityThresholdPct), 90), 'rampDownForceLogoffUsers', parameters('scalingPlanForceLogoff'), 'rampDownWaitTimeMinutes', parameters('scalingPlanMinsBeforeLogoff'), 'rampDownNotificationMessage', if(parameters('scalingPlanForceLogoff'), format('You will be logged off in {0} minutes. Make sure to save your work.', parameters('scalingPlanMinsBeforeLogoff')), 'Log off or your session will be disconnected.'), 'rampDownStopHostsWhen', 'ZeroSessions', 'rampDownStartVMOnConnect', if(equals(tryGet(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'startVMs'), 'None'), 'Disable', if(not(equals(tryGet(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'startVMs'), null())), 'Enable', null())), 'offPeakLoadBalancingAlgorithm', coalesce(tryGet(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'loadBalancingAlgorithm'), 'DepthFirst'), 'offPeakStartVMOnConnect', if(equals(tryGet(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'startVMs'), 'None'), 'Disable', if(not(equals(tryGet(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPooled')]], 'startVMs'), null())), 'Enable', null()))))]"
+      },
+      {
+        "name": "scalingPlanSchedulesPersonal",
+        "count": "[length(range(0, variables('scalingPlanScheduleCount')))]",
+        "input": "[union(variables('scalingPlanSchedulesBase')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], createObject('rampUpStartVMOnConnect', if(equals(tryGet(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'startVMs'), 'None'), 'Disable', if(not(equals(tryGet(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'startVMs'), null())), 'Enable', 'Enable')), 'rampUpActionOnDisconnect', coalesce(tryGet(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'disconnectAction'), 'None'), 'rampUpMinutesToWaitOnDisconnect', if(not(equals(tryGet(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'disconnectMinutes'), null())), int(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]].disconnectMinutes), 10), 'rampUpActionOnLogoff', coalesce(tryGet(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'logoffAction'), 'None'), 'rampUpMinutesToWaitOnLogoff', if(not(equals(tryGet(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'logoffMinutes'), null())), int(parameters('scalingPlanRampUpSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]].logoffMinutes), 10), 'peakStartVMOnConnect', if(equals(tryGet(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'startVMs'), 'None'), 'Disable', if(not(equals(tryGet(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'startVMs'), null())), 'Enable', 'Enable')), 'peakActionOnDisconnect', coalesce(tryGet(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'disconnectAction'), 'None'), 'peakMinutesToWaitOnDisconnect', if(not(equals(tryGet(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'disconnectMinutes'), null())), int(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]].disconnectMinutes), 10), 'peakActionOnLogoff', coalesce(tryGet(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'logoffAction'), 'None'), 'peakMinutesToWaitOnLogoff', if(not(equals(tryGet(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'logoffMinutes'), null())), int(parameters('scalingPlanPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]].logoffMinutes), 10), 'rampDownStartVMOnConnect', if(equals(tryGet(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'startVMs'), 'None'), 'Disable', if(not(equals(tryGet(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'startVMs'), null())), 'Enable', 'Disable')), 'rampDownActionOnDisconnect', coalesce(tryGet(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'disconnectAction'), 'None'), 'rampDownMinutesToWaitOnDisconnect', if(not(equals(tryGet(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'disconnectMinutes'), null())), int(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]].disconnectMinutes), 10), 'rampDownActionOnLogoff', coalesce(tryGet(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'logoffAction'), 'Deallocate'), 'rampDownMinutesToWaitOnLogoff', if(not(equals(tryGet(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'logoffMinutes'), null())), int(parameters('scalingPlanRampDownSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]].logoffMinutes), 10), 'offPeakStartVMOnConnect', if(equals(tryGet(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'startVMs'), 'None'), 'Disable', if(not(equals(tryGet(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'startVMs'), null())), 'Enable', 'Disable')), 'offPeakActionOnDisconnect', coalesce(tryGet(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'disconnectAction'), 'None'), 'offPeakMinutesToWaitOnDisconnect', if(not(equals(tryGet(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'disconnectMinutes'), null())), int(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]].disconnectMinutes), 10), 'offPeakActionOnLogoff', coalesce(tryGet(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'logoffAction'), 'Deallocate'), 'offPeakMinutesToWaitOnLogoff', if(not(equals(tryGet(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]], 'logoffMinutes'), null())), int(parameters('scalingPlanOffPeakSchedule')[range(0, variables('scalingPlanScheduleCount'))[copyIndex('scalingPlanSchedulesPersonal')]].logoffMinutes), 10)))]"
+      }
+    ],
     "deploymentSuffix": "[if(startsWith(deployment().name, 'Microsoft.Template-'), substring(deployment().name, 19, 14), parameters('timeStamp'))]",
     "controlPlaneSubscription": "[if(empty(parameters('controlPlaneSubscriptionId')), subscription().subscriptionId, parameters('controlPlaneSubscriptionId'))]",
     "monitoringSubscription": "[if(empty(parameters('monitoringSubscriptionId')), subscription().subscriptionId, parameters('monitoringSubscriptionId'))]",
@@ -1074,7 +1094,8 @@
     "rbacSubs": "[union(createArray(variables('controlPlaneSubscription')), createArray(variables('hostsSubscription')))]",
     "createDeploymentVm": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), or(or(or(parameters('deployFSLogixStorage'), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption')), not(empty(parameters('desktopFriendlyName')))))]",
     "deployManagementResources": "[and(equals(parameters('deploymentType'), 'Complete'), or(or(or(or(parameters('deployIncreaseQuota'), parameters('deploySecretsKeyVault')), contains(parameters('keyManagementStorageAccounts'), 'CustomerManaged')), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption')))]",
-    "scalingPlanSchedules": "[if(parameters('deployScalingPlan'), createArray(createObject('rampUpStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]))), 'peakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]))), 'rampDownStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]))), 'offPeakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]))), 'name', 'weekdays_schedule', 'daysOfWeek', createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 'rampUpLoadBalancingAlgorithm', parameters('scalingPlanRampUpSchedule').loadBalancingAlgorithm, 'rampUpMinimumHostsPct', parameters('scalingPlanRampUpSchedule').minimumHostsPct, 'rampUpCapacityThresholdPct', parameters('scalingPlanRampUpSchedule').capacityThresholdPct, 'peakLoadBalancingAlgorithm', parameters('scalingPlanPeakSchedule').loadBalancingAlgorithm, 'rampDownLoadBalancingAlgorithm', parameters('scalingPlanRampDownSchedule').loadBalancingAlgorithm, 'rampDownMinimumHostsPct', parameters('scalingPlanRampDownSchedule').minimumHostsPct, 'rampDownCapacityThresholdPct', parameters('scalingPlanRampDownSchedule').capacityThresholdPct, 'rampDownForceLogoffUsers', parameters('scalingPlanForceLogoff'), 'rampDownWaitTimeMinutes', parameters('scalingPlanMinsBeforeLogoff'), 'rampDownNotificationMessage', if(parameters('scalingPlanForceLogoff'), format('You will be logged off in {0} minutes. Make sure to save your work.', parameters('scalingPlanMinsBeforeLogoff')), null()), 'rampDownStopHostsWhen', 'ZeroSessions', 'offPeakLoadBalancingAlgorithm', parameters('scalingPlanOffPeakSchedule').loadBalancingAlgorithm)), createArray())]",
+    "scalingPlanScheduleCount": "[if(parameters('deployScalingPlan'), min(createArray(length(parameters('scalingPlanRampUpSchedule')), length(parameters('scalingPlanPeakSchedule')), length(parameters('scalingPlanRampDownSchedule')), length(parameters('scalingPlanOffPeakSchedule')))), 0)]",
+    "scalingPlanSchedules": "[if(parameters('deployScalingPlan'), if(contains(parameters('hostPoolType'), 'Pooled'), variables('scalingPlanSchedulesPooled'), variables('scalingPlanSchedulesPersonal')), createArray())]",
     "exclusionTag": "[if(and(not(empty(parameters('scalingPlanExclusionTag'))), parameters('deployScalingPlan')), createObject('Microsoft.Compute/virtualMachines', createObject(format('{0}', parameters('scalingPlanExclusionTag')), '')), createObject())]",
     "hostTags": "[if(not(empty(variables('exclusionTag'))), union(parameters('tags'), variables('exclusionTag')), parameters('tags'))]",
     "fslogixStorageCount": "[if(or(equals(parameters('identitySolution'), 'EntraId'), equals(parameters('fslogixShardOptions'), 'None')), 1, length(parameters('fslogixUserGroups')))]",
@@ -5912,7 +5933,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "779465603363269184"
+              "templateHash": "13572512313479914768"
             }
           },
           "parameters": {
@@ -7384,7 +7405,7 @@
               ]
             },
             {
-              "condition": "[and(parameters('deployScalingPlan'), contains(parameters('hostPoolType'), 'Pooled'))]",
+              "condition": "[parameters('deployScalingPlan')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('ScalingPlan-{0}', parameters('deploymentSuffix'))]",
@@ -7430,7 +7451,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "14721509373479996204"
+                      "templateHash": "10734037323538472727"
                     }
                   },
                   "parameters": {
@@ -7489,48 +7510,8 @@
                     },
                     "schedules": {
                       "type": "array",
-                      "defaultValue": [
-                        {
-                          "rampUpStartTime": {
-                            "hour": 7,
-                            "minute": 0
-                          },
-                          "peakStartTime": {
-                            "hour": 8,
-                            "minute": 0
-                          },
-                          "rampDownStartTime": {
-                            "hour": 17,
-                            "minute": 0
-                          },
-                          "offPeakStartTime": {
-                            "hour": 20,
-                            "minute": 0
-                          },
-                          "name": "weekdays_schedule",
-                          "daysOfWeek": [
-                            "Monday",
-                            "Tuesday",
-                            "Wednesday",
-                            "Thursday",
-                            "Friday"
-                          ],
-                          "rampUpLoadBalancingAlgorithm": "DepthFirst",
-                          "rampUpMinimumHostsPct": 20,
-                          "rampUpCapacityThresholdPct": 60,
-                          "peakLoadBalancingAlgorithm": "DepthFirst",
-                          "rampDownLoadBalancingAlgorithm": "DepthFirst",
-                          "rampDownMinimumHostsPct": 10,
-                          "rampDownCapacityThresholdPct": 90,
-                          "rampDownForceLogoffUsers": true,
-                          "rampDownWaitTimeMinutes": 30,
-                          "rampDownNotificationMessage": "You will be logged off in 30 min. Make sure to save your work.",
-                          "rampDownStopHostsWhen": "ZeroSessions",
-                          "offPeakLoadBalancingAlgorithm": "DepthFirst"
-                        }
-                      ],
                       "metadata": {
-                        "description": "Optional. The schedules related to this scaling plan. If no value is provided a default schedule will be provided."
+                        "description": "Required. The schedules related to this scaling plan. Schedules must be pre-built for the appropriate host pool type (Personal or Pooled)."
                       }
                     },
                     "tags": {
@@ -7577,7 +7558,7 @@
                   "resources": [
                     {
                       "type": "Microsoft.DesktopVirtualization/scalingPlans",
-                      "apiVersion": "2022-09-09",
+                      "apiVersion": "2023-09-05",
                       "name": "[parameters('name')]",
                       "location": "[parameters('location')]",
                       "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/scalingPlans'), createObject())]",
@@ -7586,7 +7567,7 @@
                         "timeZone": "[parameters('timeZone')]",
                         "hostPoolType": "[parameters('hostPoolType')]",
                         "exclusionTag": "[parameters('exclusionTag')]",
-                        "schedules": "[parameters('schedules')]",
+                        "schedules": [],
                         "hostPoolReferences": [
                           {
                             "hostPoolArmPath": "[parameters('hostPoolResourceId')]",
@@ -7595,6 +7576,34 @@
                         ],
                         "description": "[parameters('description')]"
                       }
+                    },
+                    {
+                      "copy": {
+                        "name": "schedules_Pooled",
+                        "count": "[length(range(0, length(parameters('schedules'))))]"
+                      },
+                      "condition": "[equals(parameters('hostPoolType'), 'Pooled')]",
+                      "type": "Microsoft.DesktopVirtualization/scalingPlans/pooledSchedules",
+                      "apiVersion": "2023-09-05",
+                      "name": "[format('{0}/{1}', parameters('name'), if(equals(range(0, length(parameters('schedules')))[copyIndex()], 0), 'Weekdays', 'Weekends'))]",
+                      "properties": "[parameters('schedules')[range(0, length(parameters('schedules')))[copyIndex()]]]",
+                      "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/scalingPlans', parameters('name'))]"
+                      ]
+                    },
+                    {
+                      "copy": {
+                        "name": "schedule_Personal",
+                        "count": "[length(range(0, length(parameters('schedules'))))]"
+                      },
+                      "condition": "[equals(parameters('hostPoolType'), 'Personal')]",
+                      "type": "Microsoft.DesktopVirtualization/scalingPlans/personalSchedules",
+                      "apiVersion": "2023-09-05",
+                      "name": "[format('{0}/{1}', parameters('name'), if(equals(range(0, length(parameters('schedules')))[copyIndex()], 0), 'Weekdays', 'Weekends'))]",
+                      "properties": "[parameters('schedules')[range(0, length(parameters('schedules')))[copyIndex()]]]",
+                      "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/scalingPlans', parameters('name'))]"
+                      ]
                     },
                     {
                       "condition": "[not(empty(parameters('diagnosticWorkspaceId')))]",
@@ -7607,7 +7616,9 @@
                         "logs": "[variables('diagnosticsLogs')]"
                       },
                       "dependsOn": [
-                        "[resourceId('Microsoft.DesktopVirtualization/scalingPlans', parameters('name'))]"
+                        "[resourceId('Microsoft.DesktopVirtualization/scalingPlans', parameters('name'))]",
+                        "schedule_Personal",
+                        "schedules_Pooled"
                       ]
                     }
                   ],
@@ -7638,7 +7649,7 @@
                       "metadata": {
                         "description": "The location the resource was deployed into."
                       },
-                      "value": "[reference(resourceId('Microsoft.DesktopVirtualization/scalingPlans', parameters('name')), '2022-09-09', 'full').location]"
+                      "value": "[reference(resourceId('Microsoft.DesktopVirtualization/scalingPlans', parameters('name')), '2023-09-05', 'full').location]"
                     }
                   }
                 }
