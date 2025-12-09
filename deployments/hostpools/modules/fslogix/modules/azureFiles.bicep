@@ -348,6 +348,7 @@ module updateStorageApplications 'updateEntraIdStorageKerbApps.bicep' = if (((id
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     appDisplayNamePrefix: '[Storage Account] ${storageAccountNamePrefix}'
+    enableCloudGroupSids: identitySolution == 'EntraKerberos-CloudOnly' ? true : false
     location: location
     privateEndpoint: privateEndpoint
     userAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId

@@ -1,4 +1,5 @@
 param appDisplayNamePrefix string
+param enableCloudGroupSids bool
 param location string
 param privateEndpoint bool
 param userAssignedIdentityResourceId string
@@ -41,6 +42,10 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
       {
         name: 'TenantId'
         value: subscription().tenantId
+      }
+      {
+        name: 'EnableCloudGroupSids'
+        value: string(enableCloudGroupSids)
       }      
     ]
     source: {

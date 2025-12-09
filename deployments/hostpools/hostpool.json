@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "15277078671758926874"
+      "templateHash": "3703105170874060009"
     }
   },
   "parameters": {
@@ -2304,7 +2304,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "816200526671680880"
+              "templateHash": "4666189057944920852"
             }
           },
           "parameters": {
@@ -2690,7 +2690,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "10924876590826943283"
+                      "templateHash": "7395170634930877805"
                     }
                   },
                   "parameters": {
@@ -2851,35 +2851,6 @@
                       ]
                     },
                     {
-                      "condition": "[not(startsWith(environment().name, 'USN'))]",
-                      "type": "Microsoft.Compute/virtualMachines/extensions",
-                      "apiVersion": "2021-03-01",
-                      "name": "[format('{0}/{1}', parameters('virtualMachineName'), 'IaaSAntimalware')]",
-                      "location": "[parameters('location')]",
-                      "tags": "[parameters('tagsVirtualMachines')]",
-                      "properties": {
-                        "publisher": "Microsoft.Azure.Security",
-                        "type": "IaaSAntimalware",
-                        "typeHandlerVersion": "1.3",
-                        "autoUpgradeMinorVersion": true,
-                        "enableAutomaticUpgrade": false,
-                        "settings": {
-                          "AntimalwareEnabled": true,
-                          "RealtimeProtectionEnabled": "true",
-                          "ScheduledScanSettings": {
-                            "isEnabled": "true",
-                            "day": "7",
-                            "time": "120",
-                            "scanType": "Quick"
-                          },
-                          "Exclusions": {}
-                        }
-                      },
-                      "dependsOn": [
-                        "[resourceId('Microsoft.Compute/virtualMachines', parameters('virtualMachineName'))]"
-                      ]
-                    },
-                    {
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2021-03-01",
                       "name": "[format('{0}/{1}', parameters('virtualMachineName'), 'GuestAttestation')]",
@@ -2909,7 +2880,7 @@
                       ]
                     },
                     {
-                      "condition": "[contains(parameters('identitySolution'), 'DomainServices')]",
+                      "condition": "[and(and(and(not(empty(parameters('domainName'))), not(empty(parameters('domainJoinUserPassword')))), not(empty(parameters('domainJoinUserPrincipalName')))), or(contains(parameters('identitySolution'), 'DomainServices'), equals(parameters('identitySolution'), 'EntraKerberos-Hybrid')))]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2019-07-01",
                       "name": "[format('{0}/{1}', parameters('virtualMachineName'), 'JsonADDomainExtension')]",
@@ -8334,7 +8305,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "10624036652143377247"
+              "templateHash": "16704674103928354644"
             }
           },
           "parameters": {
@@ -9847,7 +9818,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "12794017218759686986"
+                      "templateHash": "2169523766133599293"
                     }
                   },
                   "parameters": {
@@ -11052,6 +11023,7 @@
                           "appDisplayNamePrefix": {
                             "value": "[format('[Storage Account] {0}', parameters('storageAccountNamePrefix'))]"
                           },
+                          "enableCloudGroupSids": "[if(equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly'), createObject('value', true()), createObject('value', false()))]",
                           "location": {
                             "value": "[parameters('location')]"
                           },
@@ -11072,12 +11044,15 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.39.26.7824",
-                              "templateHash": "17645282223711603452"
+                              "templateHash": "4832251652536100621"
                             }
                           },
                           "parameters": {
                             "appDisplayNamePrefix": {
                               "type": "string"
+                            },
+                            "enableCloudGroupSids": {
+                              "type": "bool"
                             },
                             "location": {
                               "type": "string"
@@ -11124,6 +11099,10 @@
                                   {
                                     "name": "TenantId",
                                     "value": "[subscription().tenantId]"
+                                  },
+                                  {
+                                    "name": "EnableCloudGroupSids",
+                                    "value": "[string(parameters('enableCloudGroupSids'))]"
                                   }
                                 ],
                                 "source": {
