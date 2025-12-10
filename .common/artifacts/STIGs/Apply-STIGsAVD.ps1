@@ -595,6 +595,17 @@ If ($Serviceobject) {
     }
 }
 
+# Win11-00-000395 Disable PortProxy
+$output = cmd /c netsh interface portproxy show all '2>&1'
+If ($output) {
+    Write-Log -Message "WN11-00-000395/V-229888: Disabling PortProxy rules."
+    Start-Process -FilePatch 'netsh.exe' -ArgumentList 'interface portproxy delete' -Wait -NoNewWindow
+}
+
+# WN11-00-000125 Remove Copilot if Found
+Write-Log -Message "WN11-00-000125/V-229373: Removing Microsoft Copilot if installed."
+Get-AppxPackage -AllUsers *CoPilot* | Remove-AppxPackage -AllUsers
+
 Write-Log -Message "Configuring Registry Keys that aren't policy objects."
 # WN10-CC-000039
 Set-RegistryValue -Name SuppressionPolicy -Path 'HKLM:\SOFTWARE\Classes\batfile\shell\runasuser' -PropertyType DWORD -Value 4096
