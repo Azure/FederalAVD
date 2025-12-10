@@ -490,7 +490,7 @@ If ($SearchForApplications) {
 }
 Else {
     Write-Log -Message "Skipping application search."
-    ForEach($AppSearchString in $ApplicationsToSTIG) {
+    ForEach ($AppSearchString in $ApplicationsToSTIG) {
         $ApplicableFolders += $STIGFolders | Where-Object { $_.Name -match "$AppSearchString" }
     }
 }
@@ -537,7 +537,13 @@ Revision=1
 SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544
 '@
 
-if (-not $IsDomainJoined) {
+if ($IsDomainJoined) {
+    $SecFileContent += 'SeDenyBatchLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
+    $SecFileContent += 'SeDenyNetworkLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
+    $SecFileContent += 'SeDenyInteractiveLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
+    $SecFileContent += 'SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
+}
+Else {
     $SecFileContent += 'SeDenyBatchLogonRight = *S-1-5-32-546'
     $SecFileContent += 'SeDenyNetworkLogonRight = *S-1-5-32-546'
     $SecFileContent += 'SeDenyInteractiveLogonRight = *S-1-5-32-546'
