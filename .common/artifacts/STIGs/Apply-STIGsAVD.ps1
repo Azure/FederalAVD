@@ -15,9 +15,15 @@
 .PARAMETER STIGsUrl
     This parameter defines the URL of the STIG GPOs ZIP file to be downloaded and applied.
 
+.PARAMETER Upgrade
+    This parameter indicates that the script will check the STIG version and reset the local group policy before applying the STIGs if the version has changed.
+
+.PARAMETER Version
+    This parameter defines the STIG version to be stamped to the registry (format: YYYY.MM, e.g., 2025.10). Used for version tracking and upgrade detection.
+
 .NOTES
     To use this script offline, download the lgpo tool from 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip' and store it in the root of the folder where the script is located.'
-    to the root of the folder where this script is located. Then download the latest STIG GPOs ZIP from 'https://public.cyber.mil/stigs/gpo' and and save at at STIGs.zip in the root
+    to the root of the folder where this script is located. Then download the latest STIG GPOs ZIP from 'https://public.cyber.mil/stigs/gpo' and it to the root
     of the folder where this script is located.
 
     This script not only applies the GPO objects but it also applies some registry settings and other mitigations. Ensure that these other items still apply through the
@@ -26,13 +32,16 @@
 [CmdletBinding()]
 param (
     [string]$ApplicationsToSTIG = '["Adobe Acrobat Pro", "Adobe Acrobat Reader", "Google Chrome", "Mozilla Firefox"]',
-    # Set to True if using Cloud only identity with fslogix so credentials can be saved to the local credential manager for storage account access.
     
     [string]$SearchForApplications = 'False',
 
     [string]$CloudOnly = 'True',
 
-    [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip'
+    [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip',
+
+    [string]$Upgrade = 'False',
+
+    [string]$Version = '2025.10'
 )
 #region Initialization
 $Script:Name = 'Apply-STIGs'
@@ -48,6 +57,7 @@ If ($ApplicationsToSTIG -ne $null) {
 }
 [bool]$CloudOnly = $CloudOnly.ToLower() -eq 'true'
 [bool]$SearchForApplications = $SearchForApplications.ToLower() -eq 'true'
+[bool]$Upgrade = $Upgrade.ToLower() -eq 'true'
 [bool]$IsDomainJoined = (Get-WmiObject -Class Win32_ComputerSystem).PartOfDomain
 #endregion
 
@@ -289,27 +299,62 @@ Function New-Log {
     Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
 }
 
-Function Write-Log {
-    Param (
-        [Parameter(Mandatory = $false, Position = 0)]
-        [ValidateSet("Info", "Warning", "Error")]
-        $Category = 'Info',
-        [Parameter(Mandatory = $true, Position = 1)]
-        $Message
+Function Reset-LocalPolicy {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [switch] $ResetSecurity,         # Also reset Local Security Policy via secedit
+        [switch] $SkipGpUpdate,          # Skip gpupdate /force if you plan to reboot
+        [switch] $Verbose                # Verbose output
     )
 
-    $Date = get-date
-    $Content = "[$Date]`t$Category`t`t$Message`n" 
-    Add-Content $Script:Log $content -ErrorAction Stop
-    If ($Verbose) {
-        Write-Verbose $Content
+    begin {
+        $ErrorActionPreference = 'Stop'
+        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
+        $gpPath = Join-Path $env:windir 'System32\GroupPolicy' # LGPO (Computer/User Administrative Templates)
     }
-    Else {
-        Switch ($Category) {
-            'Info' { Write-Host $content }
-            'Error' { Write-Error $Content }
-            'Warning' { Write-Warning $Content }
+
+    process {
+        Write-Log -message "${CmdletName}: Resetting Local Group Policy..."
+
+        if (Test-Path -LiteralPath $gpPath) {
+            Write-Log -message "${CmdletName}: Removing: $gpPath"
+            Remove-Item -LiteralPath $gpPath -Recurse -Force -ErrorAction Stop
         }
+        else {
+            Write-Log -message "${CmdletName}: Path not found (already clean): $gpPath"
+        }
+        
+        if ($ResetSecurity) {
+            Write-Log -message "${CmdletName}: Resetting Local Security Policy..."
+            # Use defltbase.inf to restore default security baseline (Vista+)
+            $cfg = Join-Path $env:windir 'inf\defltwk.inf'
+            if (-not (Test-Path -LiteralPath $cfg)) {
+                throw "Default security template not found: $cfg"
+            }
+            Write-Log -message "${CmdletName}: Running secedit to reset Local Security Policy to defaults..."
+            $cmd = "secedit /configure /cfg `"$cfg`" /db defltbase.sdb /verbose"
+            $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c $cmd" -Wait -PassThru
+            if ($proc.ExitCode -ne 0) {
+                throw "secedit returned non-zero exit code: $($proc.ExitCode)"
+            }
+        }
+        else {
+            Write-Log -message "${CmdletName}: Skipping Local Security Policy reset. (Use -ResetSecurity to include.)"
+        }
+
+        if (-not $SkipGpUpdate) {
+            Write-Log -message "${CmdletName}: Forcing policy refresh (gpupdate /force)..."
+            $gp = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c gpupdate /force' -Wait -PassThru
+            if ($gp.ExitCode -ne 0) {
+                Write-Log -Category Warning -Message "${CmdletName}: gpupdate returned non-zero exit code: $($gp.ExitCode)"
+            }
+        }
+        else {
+            Write-Log -Messagee "${CmdletName}: Skipping gpupdate. (A reboot will also reapply policies.)"
+        }
+    }
+    end {
+        Write-Log -message "Completed ${CmdletName}."
     }
 }
 
@@ -435,13 +480,94 @@ Function Update-LocalGPOTextFile {
     }
 }
 
+Function Write-Log {
+    Param (
+        [Parameter(Mandatory = $false, Position = 0)]
+        [ValidateSet("Info", "Warning", "Error")]
+        $Category = 'Info',
+        [Parameter(Mandatory = $true, Position = 1)]
+        $Message
+    )
+
+    $Date = get-date
+    $Content = "[$Date]`t$Category`t`t$Message`n" 
+    Add-Content $Script:Log $content -ErrorAction Stop
+    If ($Verbose) {
+        Write-Verbose $Content
+    }
+    Else {
+        Switch ($Category) {
+            'Info' { Write-Host $content }
+            'Error' { Write-Error $Content }
+            'Warning' { Write-Warning $Content }
+        }
+    }
+}
 #endregion
 
 #region Main
 
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 Write-Log -Message "Starting '$PSCommandPath'."
-Write-Log -Category Info -Message "Parameters: ApplicationsToSTIG: $($ApplicatonsToSTIG -join ','), CloudOnly: $CloudOnly"
+Write-Log -Category Info -Message "Parameters: ApplicationsToSTIG: $($ApplicatonsToSTIG -join ','), CloudOnly: $CloudOnly, Upgrade: $Upgrade, Version: $Version"
+
+# Use provided version parameter
+[version]$stigVersion = $Version
+If ($stigVersion) {
+    Write-Log -Message "STIG Version: $stigVersion"
+}
+Else {
+    Write-Log -Category Warning -Message "No STIG version provided. Version tracking will be skipped."
+}
+
+# Check registry for existing version and determine if reset is needed
+$registryPath = 'HKLM:\Software\DoD\STIG'
+$registryValueName = 'Version'
+$needsReset = $false
+
+If ($Upgrade) {
+    Write-Log -Message "Upgrade mode enabled. Checking for version mismatch."
+    If (Test-Path -Path $registryPath) {
+        Try {
+            $existingVersion = Get-ItemPropertyValue -Path $registryPath -Name $registryValueName -ErrorAction SilentlyContinue
+            If ($existingVersion) {
+                [version]$appliedVersion = $existingVersion
+                Write-Log -Message "Existing STIG version in registry: $existingVersion"
+                If ($stigVersion -and $appliedVersion -ne $stigVersion) {
+                    Write-Log -Message "Version mismatch detected. Applied: $appliedVersion, New: $stigVersion. Policy reset will be performed."
+                    $needsReset = $true
+                }
+                Else {
+                    Write-Log -Message "Version matches. No policy reset needed."
+                }
+            }
+            Else {
+                Write-Log -Message "No existing version found in registry. Policy reset will be performed."
+                $needsReset = $true
+            }
+        }
+        Catch {
+            Write-Log -Message "Error reading registry version: $_. Policy reset will be performed."
+            $needsReset = $true
+        }
+    }
+    Else {
+        Write-Log -Message "Registry path does not exist. Policy reset will be performed."
+        $needsReset = $true
+    }
+
+    # Perform policy reset if needed
+    If ($needsReset) {
+        Write-Log -Message "Resetting Local Group Policy before applying new STIGs."
+        Try {
+            Reset-LocalPolicy -ResetSecurity -Verbose
+            Write-Log -Message "Local Group Policy reset completed successfully."
+        }
+        Catch {
+            Write-Log -Category Error -Message "Error resetting Local Group Policy: $_"
+        }
+    }
+}
 
 Write-Log -message "Checking for 'lgpo.exe' in '$env:SystemRoot\system32'."
 
@@ -458,10 +584,12 @@ If (-not(Test-Path -Path "$env:SystemRoot\System32\lgpo.exe")) {
     Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
     Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
 }
-
-$stigZip = Join-Path -Path $PSScriptRoot -ChildPath 'STIGs.zip'
-If (-not (Test-Path -Path $stigZip)) {
-    $stigZip = $null
+$stigZip = Get-ChildItem -Path $PSScriptRoot -Filter '*.zip' | Where-Object { $_.Name -notmatch 'LGPO.zip' } | Select-Object -First 1
+If ($stigZip) {
+    $stigZip = $stigZip.FullName
+    Write-Log -Message "Using existing STIG GPOs ZIP file found at '$stigZip'."
+}
+If (-not ($stigZip)) {
     #Download the STIG GPOs
     Write-Log -Message "Downloading STIG GPOs from '$STIGsUrl'."
     $stigZip = Get-InternetFile -url $STIGsUrl -OutputDirectory $Script:TempDir -Verbose
@@ -490,7 +618,7 @@ If ($SearchForApplications) {
 }
 Else {
     Write-Log -Message "Skipping application search."
-    ForEach($AppSearchString in $ApplicationsToSTIG) {
+    ForEach ($AppSearchString in $ApplicationsToSTIG) {
         $ApplicableFolders += $STIGFolders | Where-Object { $_.Name -match "$AppSearchString" }
     }
 }
@@ -537,7 +665,13 @@ Revision=1
 SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544
 '@
 
-if (-not $IsDomainJoined) {
+if ($IsDomainJoined) {
+    $SecFileContent += 'SeDenyBatchLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
+    $SecFileContent += 'SeDenyNetworkLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
+    $SecFileContent += 'SeDenyInteractiveLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
+    $SecFileContent += 'SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
+}
+Else {
     $SecFileContent += 'SeDenyBatchLogonRight = *S-1-5-32-546'
     $SecFileContent += 'SeDenyNetworkLogonRight = *S-1-5-32-546'
     $SecFileContent += 'SeDenyInteractiveLogonRight = *S-1-5-32-546'
@@ -572,7 +706,7 @@ Write-Log -Message "'gpupdate.exe' exited with code [$($GPUpdate.ExitCode)])."
 
 #Disable Secondary Logon Service
 #WN10-00-000175
-Write-Log -Message "WN10-00-000175/V-220732: Disabling the Secondary Logon Service."
+Write-Log -Message "SRG-OS-000095-GPOS-00049: Disabling the Secondary Logon Service."
 $Service = 'SecLogon'
 $Serviceobject = Get-Service | Where-Object { $_.Name -eq $Service }
 If ($Serviceobject) {
@@ -589,8 +723,19 @@ If ($Serviceobject) {
     }
 }
 
-Write-Log -Message "Configuring Registry Keys that aren't policy objects."
-# WN10-CC-000039
+# SRG-OS-000480-GPOS-00227 Disable PortProxy
+$output = cmd /c netsh interface portproxy show all '2>&1'
+If ($output) {
+    Write-Log -Message "SRG-OS-000480-GPOS-00227: Disabling PortProxy rules."
+    Start-Process -FilePatch 'netsh.exe' -ArgumentList 'interface portproxy delete' -Wait -NoNewWindow
+}
+
+# WN11-00-000125 Remove Copilot if Found
+Write-Log -Message "SRG-OS-000096-GPOS-00050: Removing Microsoft Copilot if installed."
+Get-AppxPackage -AllUsers *CoPilot* | Remove-AppxPackage -AllUsers
+
+Write-Log -Message "SRG-OS-000095-GPOS-00049: Removing Run As User from context menus."
+# SRG-OS-000095-GPOS-00049
 Set-RegistryValue -Name SuppressionPolicy -Path 'HKLM:\SOFTWARE\Classes\batfile\shell\runasuser' -PropertyType DWORD -Value 4096
 Set-RegistryValue -Name SuppressionPolicy -Path 'HKLM:\SOFTWARE\Classes\cmdfile\shell\runasuser' -PropertyType DWORD -Value 4096
 Set-RegistryValue -Name SuppressionPolicy -Path 'HKLM:\SOFTWARE\Classes\exefile\shell\runasuser' -PropertyType DWORD -Value 4096
@@ -602,4 +747,19 @@ Set-RegistryValue -Name EnableCertPaddingCheck -Path 'HKLM:\SOFTWARE\WOW6432Node
 Set-RegistryValue -Name EnableCertPaddingCheck -Path 'HKLM:\SOFTWARE\Microsoft\Cryptography\WinTrust\Config' -PropertyType DWORD -Value 1
 
 Remove-Item -Path $Script:TempDir -Recurse -Force -ErrorAction SilentlyContinue
+
+# Stamp STIG version to registry
+If ($stigVersion) {
+    Write-Log -Message "Stamping STIG version to registry: $stigVersion"
+    If (-not (Test-Path -Path $registryPath)) {
+        New-Item -Path $registryPath -Force | Out-Null
+        Write-Log -Message "Created registry path: $registryPath"
+    }
+    Set-ItemProperty -Path $registryPath -Name $registryValueName -Value $stigVersion -Force
+    Write-Log -Message "STIG version stamped successfully."
+}
+Else {
+    Write-Log -Category Warning -Message "Unable to determine STIG version. Version not stamped to registry."
+}
+
 Write-Log -Message "Ending '$PSCommandPath'."
