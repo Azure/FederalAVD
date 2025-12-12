@@ -266,19 +266,7 @@ Function Invoke-LGPO {
 }
 
 Function New-Log {
-    <#
-    .SYNOPSIS
-    Sets default log file and stores in a script accessible variable $script:Log
-    Log File name "packageExecution_$date.log"
-
-    .PARAMETER Path
-    Path to the log file
-
-    .EXAMPLE
-    New-Log c:\Windows\Logs
-    Create a new log file in c:\Windows\Logs
-    #>
-
+    [CmdletBinding()]
     Param (
         [Parameter(Position = 0)]
         [string] $Path = (Join-Path -Path $env:SystemRoot -ChildPath 'Logs')
