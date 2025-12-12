@@ -1141,9 +1141,9 @@
                                                                 "value": true
                                                             }
                                                         ],
-                                                        "required": false
-                                                    },
-                                                    "defaultValue": "No"
+                                                        "required": false,
+                                                        "defaultValue": "No"
+                                                    }                                                    
                                                 }
                                             }
                                         ]

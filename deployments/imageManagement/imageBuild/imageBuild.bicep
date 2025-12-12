@@ -320,8 +320,7 @@ var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
       : customBuildResourceGroupName)
   : last(split(imageBuildResourceGroupId, '/'))
 
-var adminPw = '1qaz@WSX1qaz@WSX'
-//var adminPw = '1qaz@WSX${uniqueString(subscription().id, imageBuildResourceGroupName)}'
+var adminPw = '1qaz@WSX${uniqueString(subscription().id, imageBuildResourceGroupName)}'
 var adminUserName = 'vmadmin'
 
 var logContainerName = 'image-customization-logs'

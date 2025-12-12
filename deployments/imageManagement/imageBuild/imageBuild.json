@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "5875652461598151776"
+      "templateHash": "15043547270556255486"
     },
     "name": "Zero Trust Architecture Custom Windows Image Builder",
     "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
@@ -1501,7 +1501,7 @@
     "privateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logStorageAccountName'))]",
     "customNetworkInterfaceName": "[if(parameters('nameConvResTypeAtEnd'), format('{0}-{1}', variables('privateEndpointName'), variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}', variables('resourceAbbreviations').networkInterfaces, variables('privateEndpointName')))]",
     "imageBuildResourceGroupName": "[if(empty(parameters('imageBuildResourceGroupId')), if(empty(parameters('customBuildResourceGroupName')), if(parameters('nameConvResTypeAtEnd'), format('avd-image-builds-{0}-{1}', variables('locations')[variables('varLocation')].abbreviation, variables('resourceAbbreviations').resourceGroups), format('{0}-avd-image-builds-{1}', variables('resourceAbbreviations').resourceGroups, variables('locations')[variables('varLocation')].abbreviation)), parameters('customBuildResourceGroupName')), last(split(parameters('imageBuildResourceGroupId'), '/')))]",
-    "adminPw": "1qaz@WSX1qaz@WSX",
+    "adminPw": "[format('1qaz@WSX{0}', uniqueString(subscription().id, variables('imageBuildResourceGroupName')))]",
     "adminUserName": "vmadmin",
     "logContainerName": "image-customization-logs",
     "galleryImageDefinitionHyperVGeneration": "[if(or(endsWith(parameters('mpSku'), 'g2'), startsWith(parameters('mpSku'), 'win11')), 'V2', 'V1')]",
