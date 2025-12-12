@@ -1267,7 +1267,6 @@ This project is licensed under the MIT License. See [LICENSE](../../../LICENSE) 
 
 ## Authors
 
-- **Shawn Meyer** - shawn.meyer@microsoft.com
 - FederalAVD Contributors
 
 ## Version History
