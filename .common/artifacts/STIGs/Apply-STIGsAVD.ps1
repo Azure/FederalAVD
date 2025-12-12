@@ -303,8 +303,7 @@ Function Reset-LocalPolicy {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [switch] $ResetSecurity,         # Also reset Local Security Policy via secedit
-        [switch] $SkipGpUpdate,          # Skip gpupdate /force if you plan to reboot
-        [switch] $Verbose                # Verbose output
+        [switch] $SkipGpUpdate          # Skip gpupdate /force if you plan to reboot
     )
 
     begin {
@@ -312,7 +311,6 @@ Function Reset-LocalPolicy {
         [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
         $gpPath = Join-Path $env:windir 'System32\GroupPolicy' # LGPO (Computer/User Administrative Templates)
     }
-
     process {
         Write-Log -message "${CmdletName}: Resetting Local Group Policy..."
 
