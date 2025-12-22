@@ -387,17 +387,16 @@ The [deployments/Deploy-ImageManagement.ps1](../deployments/Deploy-ImageManageme
    **Artifact Package Requirements:**
    - Create a dedicated folder for each application/customization (e.g., `.common/artifacts/Chrome/`)
    - Each folder must contain exactly one PowerShell script (.ps1) that performs the installation or configuration
-   - The script must accept a `$DynParameters` hashtable parameter for flexibility
    - Include any supporting files (installers, configs) in the same folder
    - Follow the naming convention: `Install-[AppName].ps1` or `Configure-[Setting].ps1`
-   
+
    **Examples to Reference:**
    - [.common/artifacts/VSCode](../.common/artifacts/VSCode) - Application installation with bundled installer
    - [.common/artifacts/Configure-Office365Policy](../.common/artifacts/Configure-Office365Policy) - Configuration-only artifact
    - [.common/artifacts/Install-FSLogix](../.common/artifacts/Install-FSLogix) - Application download and install
-   
+
    **For complete step-by-step instructions on creating custom artifacts, including script templates and best practices, see the [Artifacts and Image Management Guide](artifacts-guide.md#creating-custom-artifact-packages).**
-   
+
    These customizations can be applied to the custom image via the `customizations` deployment parameter or to session hosts via the `sessionHostCustomizations` parameter.
 
 1. **[Optional]** The `SkipDownloadingNewSources` switch parameter will disable the downloading of the latest installers (or other files) from the Internet (or other network). Do not use this switch if you want to enable an "evergreen" capability that helps you keep your images and session hosts up to date. In addition, update the Urls specified in the \<customprefix>.downloads.parameters.json`[^2] file in the [deployments/imageManagement/parameters](../deployments/imageManagement/parameters) folder to match your network environment. You can also not depend on this automated capability and add source files directly to the appropriate location in the [.common/artifacts](../.common/artifacts/) folder. This directory is processed by zipping the contents of each child directory into a zip file and then all existing files in the root plus the zip files are added to the blob storage container in the Storage Account.
