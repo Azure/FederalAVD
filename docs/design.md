@@ -17,7 +17,6 @@ The diagram below highlights how the resource groups are created based on the pa
 ```mermaid
 graph TB
     subgraph Tenant["Azure Tenant"]
-        GF[Global Feed<br/>rg-avd-global-feed]
         
         subgraph Region1["USGovVirginia<br/>"]
             direction TB
@@ -63,9 +62,6 @@ graph TB
             HOSTS3 -.logs and performance data.-> MON2
             MGT2 -.manages.-> HP3
         end
-        
-        GF -.connects to.-> CP1
-        GF -.connects to.-> CP2
     end
     
     %% Define styles for different resource group types
