@@ -66,7 +66,7 @@ graph TB
             HOSTS3 -.logs and performance data.-> MON2
             HOSTS3 -.customer managed keys.-> MGT2
             STORAGE3 -.customer managed keys.-> MGT2
-            STORAGE3 -.diagnostics-> MON2
+            STORAGE3 -.diagnostics.-> MON2
         end
     end
     
