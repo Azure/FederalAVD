@@ -65,15 +65,15 @@ graph TB
     end
     
     %% Define styles for different resource group types
-    classDef globalFeed fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
-    classDef monitoring fill:#fff4e1,stroke:#f57c00,stroke-width:2px
-    classDef management fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef controlPlane fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
-    classDef hosts fill:#ffebee,stroke:#c62828,stroke-width:2px
-    classDef storage fill:#f1f8e9,stroke:#689f38,stroke-width:2px
-    classDef hostPool fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
-    classDef region fill:#f5f5f5,stroke:#616161,stroke-width:3px
-    classDef tenant fill:#fafafa,stroke:#424242,stroke-width:4px
+    classDef globalFeed fill:#4fc3f7,stroke:#0288d1,stroke-width:3px,color:#000
+    classDef monitoring fill:#ffb74d,stroke:#f57c00,stroke-width:3px,color:#000
+    classDef management fill:#ba68c8,stroke:#7b1fa2,stroke-width:3px,color:#fff
+    classDef controlPlane fill:#81c784,stroke:#388e3c,stroke-width:3px,color:#000
+    classDef hosts fill:#e57373,stroke:#c62828,stroke-width:3px,color:#000
+    classDef storage fill:#aed581,stroke:#689f38,stroke-width:3px,color:#000
+    classDef hostPool fill:#64b5f6,stroke:#1976d2,stroke-width:3px,color:#000
+    classDef region fill:#e0e0e0,stroke:#616161,stroke-width:3px,color:#000
+    classDef tenant fill:#f5f5f5,stroke:#424242,stroke-width:4px,color:#000
     
     %% Apply styles to nodes
     class GF globalFeed
