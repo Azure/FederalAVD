@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Design**](design.md) | [**Features**](features.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md) | [**Zero Trust Framework**](zeroTrustFramework.md)
+[**Home**](../README.md) | [**Design**](design.md) | [**Features**](features.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md)
 
 # Quickstart Guide
 

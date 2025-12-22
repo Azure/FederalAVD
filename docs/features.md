@@ -1,19 +1,63 @@
-[**Home**](../README.md) | [**Design**](design.md) | [**Get Started**](quickStart.md) | [**Artifacts Guide**](artifacts-guide.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md) | [**Zero Trust Framework**](zeroTrustFramework.md)
+[**Home**](../README.md) | [**Design**](design.md) | [**Get Started**](quickStart.md) | [**Artifacts Guide**](artifacts-guide.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md)
 
 # Features
 
-## Backups
+## Zero Trust Architecture
 
-This optional feature enables backups to protect user profile data. When selected, if the host pool is "pooled" and the storage solution is Azure Files, the solution will protect the file share. If the host pool is "personal", the solution will protect the virtual machines.
+This solution is designed to align with Microsoft's Zero Trust security principles for Azure Virtual Desktop. Zero Trust is a security framework that assumes breach and verifies each request as though it originates from an uncontrolled network. The implementation includes multiple layers of security controls that work together to protect your AVD environment.
 
-**Reference:** [Azure Backup - Microsoft Docs](https://docs.microsoft.com/en-us/azure/backup/backup-overview)
+**Reference:** [Apply Zero Trust principles to Azure Virtual Desktop](https://learn.microsoft.com/en-us/security/zero-trust/azure-infrastructure-avd)
 
-**Deployed Resources:**
+### Key Zero Trust Capabilities
 
-- Recovery Services Vault
-- Backup Policy
-- Protection Container (File Share Only)
-- Protected Item
+**Network Security:**
+
+- Private endpoints for Azure Storage Accounts, Key Vaults, Recovery Services Vaults, and other PaaS solutions eliminate public internet exposure
+- Optional integration with Azure Firewall or Network Virtual Appliances for inspection
+
+**Identity and Access:**
+
+- Supports multiple identity solutions including Microsoft Entra ID (cloud-only and hybrid)
+- Managed identities for Azure resource authentication (no stored credentials)
+
+**Data Protection:**
+
+- Customer-managed encryption keys stored in Azure Key Vault Premium with HSM protection
+- Encryption at rest for all managed disks and storage accounts
+- TLS 1.2 encryption for data in transit
+- Private connectivity for FSLogix profile containers
+
+**Least Privilege Access:**
+
+- Role-based access control (RBAC) with minimal permissions assigned
+- Separation of duties between control plane and data plane resources
+- Azure Policy enforcement for compliance and governance
+- User assignment restrictions on application groups
+
+**Monitoring and Threat Detection:**
+
+- Azure Monitor integration for comprehensive logging
+- Log Analytics workspace for centralized log collection
+- Data Collection Rules for performance and diagnostic data
+- Microsoft Defender for Cloud integration capabilities
+
+**Configuration Management:**
+
+- Immutable infrastructure through automated image builds
+- Artifact-based software deployment with integrity verification
+
+### Zero Trust Deployment Considerations
+
+When deploying with Zero Trust principles:
+
+1. **Disable Public Access**: Set `enablePrivateEndpoint = true` for storage accounts and ensure session hosts have no public IP addresses
+2. **Use Managed Identities**: Configure `artifactsUserAssignedIdentityResourceId` for artifact downloads instead of storage account keys
+3. **Implement Network Segmentation**: Deploy session hosts to dedicated subnets with restrictive NSG rules
+4. **Enable Monitoring**: Configure Log Analytics workspace for all diagnostic logs and performance data
+5. **Apply Encryption**: Enable customer-managed keys for disks and storage accounts using Key Vault
+6. **Secure Bastion Access**: Use Azure Bastion for administrative access instead of RDP over public internet
+
+For detailed guidance on implementing Zero Trust for AVD, refer to Microsoft's comprehensive documentation linked above.
 
 ## Identity Solutions
 
@@ -551,3 +595,16 @@ You must have already deployed at least one dedicated host into a dedicated host
   - Customer Managed Key protected by HSM (Auto Rotate enabled)
 
 For an example of the required parameter values, see: [IL5 Isolation Requirements on IL4](parameters.md#il5-isolation-requirements-on-il4)
+
+## Backups
+
+This optional feature enables backups to protect user profile data. When selected, if the host pool is "pooled" and the storage solution is Azure Files, the solution will protect the file share. If the host pool is "personal", the solution will protect the virtual machines.
+
+**Reference:** [Azure Backup - Microsoft Docs](https://docs.microsoft.com/en-us/azure/backup/backup-overview)
+
+**Deployed Resources:**
+
+- Recovery Services Vault
+- Backup Policy
+- Protection Container (File Share Only)
+- Protected Item

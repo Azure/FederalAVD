@@ -1,4 +1,4 @@
-[**Design**](docs/design.md) | [**Features**](docs/features.md) | [**Get Started**](docs/quickStart.md) | [**Artifacts Guide**](docs/artifacts-guide.md) | [**Limitations**](docs/limitations.md) | [**Troubleshooting**](docs/troubleshooting.md) | [**Parameters**](docs/parameters.md) | [**Zero Trust Framework**](docs/zeroTrustFramework.md)
+[**Design**](docs/design.md) | [**Features**](docs/features.md) | [**Get Started**](docs/quickStart.md) | [**Limitations**](docs/limitations.md) | [**Troubleshooting**](docs/troubleshooting.md) | [**Parameters**](docs/parameters.md)
 
 # Federal Azure Virtual Desktop Automation
 
