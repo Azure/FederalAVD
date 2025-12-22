@@ -26,13 +26,13 @@ graph TB
             CP1[Control Plane<br/>rg-avd-control-plane-va<br/>Workspace, App Groups, Host Pools]
             
             subgraph HP1["Host Pool 1 (Identifier: hr, Index: 01)"]
-                direction TB
+                direction LR
                 HOSTS1[Hosts<br/>rg-hr-01-hosts-va<br/>VMs, Backup, Encryption]
                 STORAGE1[Storage<br/>rg-hr-01-storage-va<br/>Storage Accounts, NetApp, Functions]
             end
             
             subgraph HP2["Host Pool 2 (Identifier: hr, Index: 02)"]
-                direction TB
+                direction LR
                 HOSTS2[Hosts<br/>rg-hr-02-hosts-va<br/>VMs, Backup, Encryption]
                 STORAGE2[Storage<br/>rg-hr-02-storage-va<br/>Storage Accounts, NetApp, Functions]
             end
@@ -51,16 +51,19 @@ graph TB
             MGT2[Management<br/>rg-avd-management-tx<br/>Key Vault, App Service Plan]
             CP2[Control Plane<br/>rg-avd-control-plane-tx<br/>Workspace, App Groups, Host Pools]
             
-            subgraph HP3["Host Pool 3 (Identifier: finance)"]
-                direction TB
-                HOSTS3[Hosts<br/>rg-finance-hosts-tx<br/>VMs, Backup, Encryption]
-                STORAGE3[Storage<br/>rg-finance-storage-tx<br/>Storage Accounts, NetApp, Functions]
+            subgraph HP3["Host Pool 3 (Identifier: finance, Index: 01)"]
+                direction LR
+                HOSTS3[Hosts<br/>rg-finance-01-hosts-tx<br/>VMs, Backup, Encryption]
+                STORAGE3[Storage<br/>rg-finance-01-storage-tx<br/>Storage Accounts, NetApp, Functions]
             end
             
             CP2 --> HP3
             MON2 -.monitors.-> HOSTS3
             MGT2 -.manages.-> HP3
         end
+        
+        GF -.connects to.-> CP1
+        GF -.connects to.-> CP2
     end
     
     %% Define styles for different resource group types
