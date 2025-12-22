@@ -61,19 +61,25 @@ graph TB
         GF -.connects to.-> CP2
     end
     
-    style GF fill:#e1f5ff
-    style MON1 fill:#fff4e1
-    style MON2 fill:#fff4e1
-    style MGT1 fill:#f3e5f5
-    style MGT2 fill:#f3e5f5
-    style CP1 fill:#e8f5e9
-    style CP2 fill:#e8f5e9
-    style HOSTS1 fill:#ffebee
-    style HOSTS2 fill:#ffebee
-    style HOSTS3 fill:#ffebee
-    style STORAGE1 fill:#f1f8e9
-    style STORAGE2 fill:#f1f8e9
-    style STORAGE3 fill:#f1f8e9
+    %% Define styles for different resource group types
+    classDef globalFeed fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+    classDef monitoring fill:#fff4e1,stroke:#f57c00,stroke-width:2px
+    classDef management fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef controlPlane fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    classDef hosts fill:#ffebee,stroke:#c62828,stroke-width:2px
+    classDef storage fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+    classDef region fill:#f5f5f5,stroke:#616161,stroke-width:3px
+    classDef tenant fill:#fafafa,stroke:#424242,stroke-width:4px
+    
+    %% Apply styles to nodes
+    class GF globalFeed
+    class MON1,MON2 monitoring
+    class MGT1,MGT2 management
+    class CP1,CP2 controlPlane
+    class HOSTS1,HOSTS2,HOSTS3 hosts
+    class STORAGE1,STORAGE2,STORAGE3 storage
+    class Region1,Region2 region
+    class Tenant tenant
 ```
 
 The diagram illustrates the following resource group distribution. In the table below, the example names are utilizing the following parameter values:
