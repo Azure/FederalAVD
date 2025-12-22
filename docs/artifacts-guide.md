@@ -201,17 +201,38 @@ All artifacts are stored in the repository at:
 
 **Note:** The orchestration script `Invoke-Customization.ps1` is located at `.common/scripts/Invoke-Customization.ps1` (not in the artifacts directory). It is embedded into ARM/Bicep deployments using the `loadTextContent()` function.
 
-### File Type Rules
+### Packaging Rules (Deploy-ImageManagement.ps1)
 
-| File Type | Treatment | Notes |
-|-----------|-----------|-------|
-| **Folders** | Compressed to ZIP | Each subfolder becomes a separate .zip file |
-| **Root files** | Copied as-is | Files in the root are uploaded individually |
-| **.ps1 scripts** | Executed directly | Can be referenced as artifact or inside ZIP |
-| **.exe/.msi files** | Executed directly | Can be referenced as artifact or inside ZIP with PS1 |
-| **.zip files** | Extracted and executed | `Invoke-Customization.ps1` finds and runs first .ps1 inside |
+When `Deploy-ImageManagement.ps1` processes the `.common/artifacts/` directory for upload to blob storage:
 
-**Important:** Individual artifact scripts do NOT need to accept `DynParameters`. The `Arguments` parameter from `Invoke-Customization.ps1` is parsed and passed as named parameters to PowerShell scripts.
+| Source | Processing | Result |
+|--------|------------|--------|
+| **Subfolders** | Compressed to ZIP | Each subfolder becomes a separate .zip file (e.g., `Chrome/` → `Chrome.zip`) |
+| **Root files** | Copied as-is | Files in the root are uploaded individually without modification |
+
+**Example:**
+
+```
+.common/artifacts/
+├── Chrome/              → Uploaded as Chrome.zip
+│   ├── Install-Chrome.ps1
+│   └── installer.msi
+├── FSLogix/             → Uploaded as FSLogix.zip
+│   └── Install-FSLogix.ps1
+└── teamsbootstrapper.exe → Uploaded as teamsbootstrapper.exe
+```
+
+### Execution Rules (Invoke-Customization.ps1)
+
+When `Invoke-Customization.ps1` downloads and executes an artifact during deployment:
+
+| File Extension | Execution Behavior | Arguments Handling |
+|----------------|-------------------|-------------------|
+| **.ps1** | Executed directly with PowerShell | Arguments string parsed into named parameters and splatted |
+| **.exe** | Executed with `Start-Process` | Arguments string passed directly to executable |
+| **.msi** | Executed with `msiexec.exe /i` | Arguments string passed directly to msiexec |
+| **.bat** | Executed with `cmd.exe` | Arguments string passed directly to batch file |
+| **.zip** | Extracted, then finds first .ps1 in root and executes it | Arguments string parsed into named parameters and splatted to the PS1 |
 
 ### Special Files
 
