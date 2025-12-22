@@ -20,6 +20,7 @@ graph TB
         GF[Global Feed<br/>rg-avd-global-feed]
         
         subgraph Region1["Region 1 (e.g., USGovVirginia)"]
+            direction TB
             MON1[Monitoring<br/>rg-avd-monitoring-va<br/>Log Analytics, DCR, DCE]
             MGT1[Management<br/>rg-avd-management-va<br/>Key Vault, App Service Plan]
             CP1[Control Plane<br/>rg-avd-control-plane-va<br/>Workspace, App Groups, Host Pools]
@@ -45,6 +46,7 @@ graph TB
         end
         
         subgraph Region2["Region 2 (e.g., USGovTexas)"]
+            direction TB
             MON2[Monitoring<br/>rg-avd-monitoring-tx<br/>Log Analytics, DCR, DCE]
             MGT2[Management<br/>rg-avd-management-tx<br/>Key Vault, App Service Plan]
             CP2[Control Plane<br/>rg-avd-control-plane-tx<br/>Workspace, App Groups, Host Pools]
@@ -85,6 +87,9 @@ graph TB
     class HP1,HP2,HP3 hostPool
     class Region1,Region2 region
     class Tenant tenant
+    
+    %% Style connectors - make them darker and more visible
+    linkStyle default stroke:#333,stroke-width:2px,color:#000
 ```
 
 The diagram illustrates the following resource group distribution. In the table below, the example names are utilizing the following parameter values:
