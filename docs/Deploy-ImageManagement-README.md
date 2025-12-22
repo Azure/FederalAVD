@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Design**](design.md) | [**Features**](features.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md) | [**Zero Trust Framework**](zeroTrustFramework.md)
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Design**](design.md) | [**Features**](features.md) | [**Artifacts Guide**](artifacts-guide.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md) | [**Zero Trust Framework**](zeroTrustFramework.md)
 
 # Deploy-ImageManagement.ps1 Script Guide
 
@@ -197,14 +197,16 @@ The script processes the `.common/artifacts` directory:
 │   ├── install.ps1
 │   └── supporting-files.exe
 ├── VSCode/
-│   ├── VSCodeInstall.ps1
-│   └── VSCodeUserSetup.exe
-└── Microsoft365Apps/
-    ├── M365AppsInstall.ps1
-    └── officedeploymenttool.exe
+│   ├── Install_VSCode.ps1
+│   └── VSCodeSetup.exe
+└── Configure-Office365Policy/
+    ├── Configure-Office365.ps1
+    └── office365.admx
 ```
 
 Each subdirectory becomes a compressed zip file uploaded to blob storage.
+
+**For comprehensive documentation on creating custom artifacts, script requirements, and best practices, see the [Artifacts and Image Management Guide](artifacts-guide.md).**
 
 ## File Version Tracking
 

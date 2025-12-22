@@ -45,7 +45,21 @@ There are several Azure resource prerequisites that are required to run this dep
   </details>
 - <details><summary><b>Image Management Resources</b></summary>
   
-  The deployment of the custom image build option depends on many artifacts that must be hosted in Azure Blob storage to satisfy Zero Trust principals or to build the custom image on Air-Gapped clouds. See [Air-Gapped Cloud Image Management Details](imageAir-GappedCloud.md) for more information. This repo contains the deploy-imagemanagement.ps1 helper script that should be used to deploy the image management resources and upload the artifacts to the created storage account.
+  The deployment of the custom image build option and session host customizations depends on software packages and scripts (called **artifacts**) that must be hosted in Azure Blob storage. This approach satisfies Zero Trust principles by eliminating the need for session hosts to have direct internet access for software downloads.
+  
+  **Artifacts** are PowerShell scripts and installers packaged into folders that can be executed during:
+  - Custom image builds (via Azure Image Builder)
+  - Session host post-deployment configuration (via Custom Script Extension)
+  
+  This repo contains the `Deploy-ImageManagement.ps1` helper script that:
+  - Deploys the required Azure resources (storage account, compute gallery, managed identity)
+  - Downloads latest software versions from the internet (optional)
+  - Packages artifacts into zip files
+  - Uploads everything to Azure Blob Storage
+  
+  **For detailed information about creating custom artifacts and the complete artifact system, see the [Artifacts and Image Management Guide](artifacts-guide.md).**
+  
+  For Air-Gapped cloud considerations, see [Air-Gapped Cloud Image Management Details](imageAir-GappedCloud.md).
 
   **Important:** Before running this script, see the Azure Permissions section below.
 
@@ -368,7 +382,23 @@ The [deployments/Deploy-ImageManagement.ps1](../deployments/Deploy-ImageManageme
    - deployments/imageManagement/parameters/\<customprefix>.imageManagement.parameters.json
    - deployments/imageManagement/parameters/\<customprefix>.downloads.parameters.json
   
-1. **[Optional]** If you wish to add any custom scripts or installers beyond what is already included in the artifacts directory [.common/artifacts](../.common/artifacts), then gather your installers and create a new folder inside the artifacts directory for each customizer or application. In the folder create or place one and only one PowerShell script (.ps1) that installs the application or performs the desired customization. For an example of the installation script and supporting files, see the [.common/artifacts/VSCode](../.common/artifacts/VSCode) folder. These customizations can be applied to the custom image via the `customizations` deployment parameter.
+1. **[Optional]** If you wish to add any custom scripts or installers beyond what is already included in the artifacts directory [.common/artifacts](../.common/artifacts), then gather your installers and create a new folder inside the artifacts directory for each customizer or application.
+
+   **Artifact Package Requirements:**
+   - Create a dedicated folder for each application/customization (e.g., `.common/artifacts/Chrome/`)
+   - Each folder must contain exactly one PowerShell script (.ps1) that performs the installation or configuration
+   - The script must accept a `$DynParameters` hashtable parameter for flexibility
+   - Include any supporting files (installers, configs) in the same folder
+   - Follow the naming convention: `Install-[AppName].ps1` or `Configure-[Setting].ps1`
+   
+   **Examples to Reference:**
+   - [.common/artifacts/VSCode](../.common/artifacts/VSCode) - Application installation with bundled installer
+   - [.common/artifacts/Configure-Office365Policy](../.common/artifacts/Configure-Office365Policy) - Configuration-only artifact
+   - [.common/artifacts/Install-FSLogix](../.common/artifacts/Install-FSLogix) - Application download and install
+   
+   **For complete step-by-step instructions on creating custom artifacts, including script templates and best practices, see the [Artifacts and Image Management Guide](artifacts-guide.md#creating-custom-artifact-packages).**
+   
+   These customizations can be applied to the custom image via the `customizations` deployment parameter or to session hosts via the `sessionHostCustomizations` parameter.
 
 1. **[Optional]** The `SkipDownloadingNewSources` switch parameter will disable the downloading of the latest installers (or other files) from the Internet (or other network). Do not use this switch if you want to enable an "evergreen" capability that helps you keep your images and session hosts up to date. In addition, update the Urls specified in the \<customprefix>.downloads.parameters.json`[^2] file in the [deployments/imageManagement/parameters](../deployments/imageManagement/parameters) folder to match your network environment. You can also not depend on this automated capability and add source files directly to the appropriate location in the [.common/artifacts](../.common/artifacts/) folder. This directory is processed by zipping the contents of each child directory into a zip file and then all existing files in the root plus the zip files are added to the blob storage container in the Storage Account.
 

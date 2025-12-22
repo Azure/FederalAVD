@@ -1,11 +1,11 @@
-[**Design**](docs/design.md) | [**Features**](docs/features.md) | [**Get Started**](docs/quickStart.md) | [**Limitations**](docs/limitations.md) | [**Troubleshooting**](docs/troubleshooting.md) | [**Parameters**](docs/parameters.md) | [**Zero Trust Framework**](docs/zeroTrustFramework.md)
+[**Design**](docs/design.md) | [**Features**](docs/features.md) | [**Get Started**](docs/quickStart.md) | [**Artifacts Guide**](docs/artifacts-guide.md) | [**Limitations**](docs/limitations.md) | [**Troubleshooting**](docs/troubleshooting.md) | [**Parameters**](docs/parameters.md) | [**Zero Trust Framework**](docs/zeroTrustFramework.md)
 
 # Federal Azure Virtual Desktop Automation
 
 With this solution, you can deploy:
 
 1. One (1) or more fully operational Azure Virtual Desktop hostpools - either pooled or personal.
-2. Image management capability.
+2. Image management capability with artifact-based software deployment.
 3. Custom Image build automation solution.
 
 The code and automation capabilities of this repo can be used to deploy these capabilities in Azure Commercial, Azure US Government, **Azure Government Secret**, and **Azure Government Top Secret** environments. The code is designed to allow you to deploy in compliance with Microsoft's [Zero Trust principles](https://learn.microsoft.com/security/zero-trust/azure-infrastructure-avd) and [IL5 Isolation Guidance](https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5).
