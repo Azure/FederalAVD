@@ -41,8 +41,10 @@ graph TB
             CP1 -.diagnostics.-> MON1
             HOSTS1 -.logs and performance data.-> MON1
             HOSTS2 -.logs and performance data.-> MON1
-            MGT1 -.manages.-> HP1
-            MGT1 -.manages.-> HP2
+            HOSTS1 -.customer managed keys.-> MGT1
+            HOSTS2 -.customer managed keys.-> MGT1
+            STORAGE1 -.customer managed keys.-> MGT1
+            STORAGE2 -.customer managed keys.-> MGT1
         end
         
         subgraph Region2["USGovTexas<br/>"]
@@ -60,7 +62,8 @@ graph TB
             HP3 --> CP2
             CP2 -.diagnostics.-> MON2
             HOSTS3 -.logs and performance data.-> MON2
-            MGT2 -.manages.-> HP3
+            HOSTS3 -.customer managed keys.-> MGT2
+            STORAGE3 -.customer managed keys.-> MGT2
         end
     end
     
