@@ -36,8 +36,8 @@ graph TB
                 STORAGE2[Storage<br/>rg-hr-02-storage-va<br/>Storage Accounts, NetApp, Functions]
             end
             
-            HP1 --> CP1
-            HP2 --> CP1
+            HP1 -.located in.-> CP1
+            HP2 -.located in.-> CP1
             CP1 -.diagnostics.-> MON1
             HOSTS1 -.logs and performance data.-> MON1
             HOSTS2 -.logs and performance data.-> MON1
@@ -61,7 +61,7 @@ graph TB
                 STORAGE3[Storage<br/>rg-finance-01-storage-tx<br/>Storage Accounts, NetApp, Functions]
             end
             
-            HP3 --> CP2
+            HP3 -.located in.-> CP2
             CP2 -.diagnostics.-> MON2
             HOSTS3 -.logs and performance data.-> MON2
             HOSTS3 -.customer managed keys.-> MGT2
