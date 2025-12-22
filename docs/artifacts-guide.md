@@ -80,59 +80,59 @@ graph TD
 ### Workflow Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
+┌────────────────────────────────────────────────────────────────┐
 │ 1. Preparation Phase (Deploy-ImageManagement.ps1)              │
-├─────────────────────────────────────────────────────────────────┤
-│ • Download software from internet (optional)                     │
-│ • Compress each artifact folder → ZIP files                      │
-│ • Upload to Azure Blob Storage                                   │
-└──────────────────┬──────────────────────────────────────────────┘
+├────────────────────────────────────────────────────────────────┤
+│ • Download software from internet (optional)                   │
+│ • Compress each artifact folder → ZIP files                    │
+│ • Upload to Azure Blob Storage                                 │
+└──────────────────┬─────────────────────────────────────────────┘
                    │
                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 2. Bicep/ARM Deployment (Looping Logic)                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│ Image Build:                    Session Host Deployment:        │
-│ ┌──────────────────────────┐    ┌──────────────────────────┐   │
-│ │ imageBuild.bicep         │    │ invokeCustomizations.bicep│  │
-│ ├──────────────────────────┤    ├──────────────────────────┤   │
-│ │ for each customization:  │    │ for each customization:  │   │
-│ │   Create Run Command     │    │   Create Run Command     │   │
-│ │   @batchSize(1)          │    │   @batchSize(1)          │   │
-│ └──────────┬───────────────┘    └──────────┬───────────────┘   │
-│            │                                │                   │
-│            ▼                                ▼                   │
-│ ┌──────────────────────────┐    ┌──────────────────────────┐   │
-│ │ VM Run Command #1        │    │ VM Run Command #1        │   │
-│ │ Invoke-Customization.ps1 │    │ Invoke-Customization.ps1 │   │
-│ │ -Name "FSLogix"          │    │ -Name "Configure-Office" │   │
-│ │ -Uri "https://..."       │    │ -Uri "https://..."       │   │
-│ │ -Arguments ""            │    │ -Arguments "-param value" │   │
-│ └──────────┬───────────────┘    └──────────┬───────────────┘   │
-│            │                                │                   │
-│            ▼                                ▼                   │
-│ ┌──────────────────────────┐    ┌──────────────────────────┐   │
-│ │ VM Run Command #2        │    │ VM Run Command #2        │   │
-│ │ Invoke-Customization.ps1 │    │ Invoke-Customization.ps1 │   │
-│ └──────────┬───────────────┘    └──────────┬───────────────┘   │
-│            │                                │                   │
-│            ▼                                ▼                   │
+┌────────────────────────────────────────────────────────────────┐
+│ 2. Bicep/ARM Deployment (Looping Logic)                        │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│ Image Build:                    Session Host Deployment:       │
+│ ┌──────────────────────────┐    ┌────────────────────────────┐ │
+│ │ imageBuild.bicep         │    │ invokeCustomizations.bicep │ │
+│ ├──────────────────────────┤    ├────────────────────────────┤ │
+│ │ for each customization:  │    │ for each customization:    │ │
+│ │   Create Run Command     │    │   Create Run Command       │ │
+│ │   @batchSize(1)          │    │   @batchSize(1)            │ │
+│ └──────────┬───────────────┘    └──────────┬─────────────────┘ │
+│            │                                │                  │
+│            ▼                                ▼                  │
+│ ┌──────────────────────────┐    ┌────────────────────────────┐ │
+│ │ VM Run Command #1        │    │ VM Run Command #1          │ │
+│ │ Invoke-Customization.ps1 │    │ Invoke-Customization.ps1   │ │
+│ │ -Name "FSLogix"          │    │ -Name "Configure-Office"   │ │
+│ │ -Uri "https://..."       │    │ -Uri "https://..."         │ │
+│ │ -Arguments ""            │    │ -Arguments "-param value"  │ │
+│ └──────────┬───────────────┘    └──────────┬─────────────────┘ │
+│            │                                │                  │
+│            ▼                                ▼                  │
+│ ┌──────────────────────────┐    ┌────────────────────────────┐ │
+│ │ VM Run Command #2        │    │ VM Run Command #2          │ │
+│ │ Invoke-Customization.ps1 │    │ Invoke-Customization.ps1   │ │
+│ └──────────┬───────────────┘    └──────────┬─────────────────┘ │
+│            │                                │                  │
+│            ▼                                ▼                  │
 │        (continues...)                  (continues...)          │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
                    │
                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 3. Execution Phase (Invoke-Customization.ps1)                   │
-├─────────────────────────────────────────────────────────────────┤
-│ • Download artifact from blob storage (with managed identity)   │
+┌────────────────────────────────────────────────────────────────┐
+│ 3. Execution Phase (Invoke-Customization.ps1)                  │
+├────────────────────────────────────────────────────────────────┤
+│ • Download artifact from blob storage (with managed identity)  │
 │ • Determine file type (.zip, .ps1, .exe, .msi, .bat)           │
-│ • Extract if ZIP, find PS1 script inside                        │
-│ • Execute with optional Arguments parameter                      │
+│ • Extract if ZIP, find PS1 script inside                       │
+│ • Execute with optional Arguments parameter                    │
 │ • Log all activity to C:\Windows\Logs\[Name].log               │
-│ • Return exit code to Run Command                               │
-└─────────────────────────────────────────────────────────────────┘
+│ • Return exit code to Run Command                              │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Implementation Details
@@ -1013,6 +1013,7 @@ New-AzDeployment `
 #### Issue: Artifact Script Not Executing
 
 **Symptoms:**
+
 - Run Command completes but artifact script doesn't execute
 - No errors in Invoke-Customization.ps1 log
 
