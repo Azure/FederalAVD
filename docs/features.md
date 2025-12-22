@@ -59,6 +59,67 @@ When deploying with Zero Trust principles:
 
 For detailed guidance on implementing Zero Trust for AVD, refer to Microsoft's comprehensive documentation linked above.
 
+## Multi-Subscription Support
+
+This solution supports deploying Azure Virtual Desktop resources across multiple Azure subscriptions, enabling flexible resource organization, cost management, and adherence to organizational governance policies. You can separate the control plane, monitoring infrastructure, and compute resources into different subscriptions based on your requirements.
+
+### Supported Deployment Patterns
+
+**Control Plane and Monitoring in One Subscription, Hosts in Another:**
+
+- AVD workspace, host pools, and application groups deployed to a central management subscription
+- Log Analytics workspace and monitoring resources in the same management subscription
+- Session hosts, storage accounts, and associated compute resources deployed to a separate workload subscription
+- Ideal for organizations with centralized AVD management and distributed cost allocation
+
+**All Resources in Separate Subscriptions:**
+
+- Control plane resources in one subscription
+- Monitoring and logging resources in another subscription
+- Compute resources (session hosts and storage) in a third subscription
+- Maximum flexibility for chargeback models and governance boundaries
+
+### Configuration Parameters
+
+Use the following subscription ID parameters in your parameter files or through the deployment UI:
+
+| Parameter | Purpose | Default Behavior |
+|-----------|---------|------------------|
+| `subscriptionId` | Primary subscription for control plane resources | Current subscription context |
+| `monitoringSubscriptionId` | Subscription for Log Analytics and monitoring resources | Same as `subscriptionId` if not specified |
+| `virtualMachineSubscriptionId` | Subscription for session hosts and associated resources | Same as `subscriptionId` if not specified |
+| `storageSubscriptionId` | Subscription for FSLogix storage accounts | Same as `virtualMachineSubscriptionId` if not specified |
+
+### Prerequisites for Multi-Subscription Deployments
+
+1. **Service Principal or User Permissions**: The identity deploying the solution must have appropriate permissions (Contributor or equivalent) in all target subscriptions
+2. **Network Connectivity**: If resources are in different subscriptions, ensure proper virtual network connectivity (peering, hub-spoke, or vWAN)
+3. **Resource Provider Registration**: Required Azure resource providers must be registered in each subscription
+4. **Azure Policy Compliance**: Ensure any subscription-level policies allow the required resource deployments
+
+### Example Configuration
+
+**Bicep Parameter File:**
+```bicep
+subscriptionId = '11111111-1111-1111-1111-111111111111'                // Control plane subscription
+monitoringSubscriptionId = '22222222-2222-2222-2222-222222222222'      // Monitoring subscription
+virtualMachineSubscriptionId = '33333333-3333-3333-3333-333333333333'  // Compute subscription
+storageSubscriptionId = '33333333-3333-3333-3333-333333333333'         // Storage in same subscription as VMs
+```
+
+**Benefits:**
+- **Cost Management**: Separate billing and cost tracking per workload or department
+- **Governance**: Apply different Azure Policies and compliance requirements per subscription
+- **Quota Management**: Distribute resources across subscriptions to avoid quota limitations
+- **Security Boundaries**: Implement subscription-level isolation for sensitive workloads
+- **Scale**: Overcome subscription-level resource limits by distributing components
+
+**Considerations:**
+- Cross-subscription resource references require proper RBAC assignments
+- Networking between subscriptions requires virtual network peering or connectivity through a hub
+- Private endpoints work across subscriptions but require proper network line-of-sight
+- Managed identity assignments may need to span subscription boundaries
+
 ## Identity Solutions
 
 This solution supports five different identity configurations to meet various organizational requirements. The `identitySolution` parameter determines how user authentication, session host domain membership, and azure files authentication are handled.
