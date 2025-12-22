@@ -162,13 +162,13 @@ graph TD
 
 All artifacts are stored in the repository at:
 
-```
+```text
 .common/artifacts/
 ```
 
 ### Directory Layout
 
-```
+```text
 .common/artifacts/
 │
 ├── uploadedFileVersionInfo.txt              # Auto-generated version info
