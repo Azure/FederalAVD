@@ -25,11 +25,13 @@ graph TB
             CP1[Control Plane<br/>rg-avd-control-plane-va<br/>Workspace, App Groups, Host Pools]
             
             subgraph HP1["Host Pool 1 (Identifier: hr, Index: 01)"]
+                direction LR
                 HOSTS1[Hosts<br/>rg-hr-01-hosts-va<br/>VMs, Backup, Encryption]
                 STORAGE1[Storage<br/>rg-hr-01-storage-va<br/>Storage Accounts, NetApp, Functions]
             end
             
             subgraph HP2["Host Pool 2 (Identifier: hr, Index: 02)"]
+                direction LR
                 HOSTS2[Hosts<br/>rg-hr-02-hosts-va<br/>VMs, Backup, Encryption]
                 STORAGE2[Storage<br/>rg-hr-02-storage-va<br/>Storage Accounts, NetApp, Functions]
             end
@@ -48,6 +50,7 @@ graph TB
             CP2[Control Plane<br/>rg-avd-control-plane-tx<br/>Workspace, App Groups, Host Pools]
             
             subgraph HP3["Host Pool 3 (Identifier: finance, Index: 01)"]
+                direction LR
                 HOSTS3[Hosts<br/>rg-finance-01-hosts-tx<br/>VMs, Backup, Encryption]
                 STORAGE3[Storage<br/>rg-finance-01-storage-tx<br/>Storage Accounts, NetApp, Functions]
             end
@@ -68,6 +71,7 @@ graph TB
     classDef controlPlane fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
     classDef hosts fill:#ffebee,stroke:#c62828,stroke-width:2px
     classDef storage fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+    classDef hostPool fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
     classDef region fill:#f5f5f5,stroke:#616161,stroke-width:3px
     classDef tenant fill:#fafafa,stroke:#424242,stroke-width:4px
     
@@ -78,6 +82,7 @@ graph TB
     class CP1,CP2 controlPlane
     class HOSTS1,HOSTS2,HOSTS3 hosts
     class STORAGE1,STORAGE2,STORAGE3 storage
+    class HP1,HP2,HP3 hostPool
     class Region1,Region2 region
     class Tenant tenant
 ```
