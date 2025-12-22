@@ -41,10 +41,10 @@ graph TB
             CP1 -.diagnostics.-> MON1
             HOSTS1 -.logs and performance data.-> MON1
             HOSTS2 -.logs and performance data.-> MON1
-            HOSTS1 -.customer managed keys.-> MGT1
-            HOSTS2 -.customer managed keys.-> MGT1
-            STORAGE1 -.customer managed keys.-> MGT1
-            STORAGE2 -.customer managed keys.-> MGT1
+            MGT1 -.customer managed keys.-> HOSTS1
+            MGT1 -.customer managed keys.-> HOSTS2
+            MGT1 -.customer managed keys.-> STORAGE1
+            MGT1 -.customer managed keys.-> STORAGE2
             STORAGE1 -.diagnostics.-> MON1
             STORAGE2 -.diagnostics.-> MON1
         end
@@ -64,8 +64,8 @@ graph TB
             HP3 -.located in.-> CP2
             CP2 -.diagnostics.-> MON2
             HOSTS3 -.logs and performance data.-> MON2
-            HOSTS3 -.customer managed keys.-> MGT2
-            STORAGE3 -.customer managed keys.-> MGT2
+            MGT2 -.customer managed keys.-> HOSTS3
+            MGT2 -.customer managed keys.-> STORAGE3
             STORAGE3 -.diagnostics.-> MON2
         end
     end
