@@ -2,6 +2,7 @@ targetScope = 'resourceGroup'
 
 @secure()
 param adminPw string
+param applyWindowsDesktopOptimizations bool
 param appsToRemove array
 param cloud string
 param downloads object
@@ -17,7 +18,6 @@ param installFsLogix bool
 param installOneDrive bool
 param installTeams bool
 param installUpdates bool
-param installVirtualDesktopOptimizationTool bool
 param office365AppsToInstall array
 param teamsCloudType string
 param deploymentSuffix string = utcNow('yyMMddhhmm')
@@ -54,7 +54,7 @@ var vdiCustomizers = [
   }
 ]
 
-var useBuildDir = !empty(customizations) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || installVirtualDesktopOptimizationTool || !empty(vdiCustomizations)
+var useBuildDir = !empty(customizations) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || applyWindowsDesktopOptimizations || !empty(vdiCustomizations)
 
 var customizationBatchSize = 20
 var customizersCount = length(customizers)
@@ -587,8 +587,8 @@ resource restartUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
   ]
 }
 
-resource vdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (installVirtualDesktopOptimizationTool) {
-  name: 'vdot'
+resource wdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (applyWindowsDesktopOptimizations) {
+  name: 'wdot'
   location: location
   parent: imageVm
   properties: {
@@ -598,7 +598,7 @@ resource vdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (i
       : {
           clientId: userAssignedIdentityClientId
         }
-    errorBlobUri: empty(logBlobContainerUri) ? null : '${logBlobContainerUri}${imageVmName}-vdot-error-${deploymentSuffix}.log'
+    errorBlobUri: empty(logBlobContainerUri) ? null : '${logBlobContainerUri}${imageVmName}-wdot-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -606,21 +606,21 @@ resource vdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (i
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-vdot-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-wdot-output-${deploymentSuffix}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Name'
-        value: 'VDOT'
+        value: 'WDOT'
       }
       {
         name: 'Uri'
         value: !startsWith(cloud, 'us') && (downloadLatestMicrosoftContent || empty(artifactsContainerUri))
-          ? downloads.VirtualDesktopOptimizationTool.DownloadUrl
-          : '${artifactsContainerUri}/${downloads.VirtualDesktopOptimizationTool.DestinationFileName}'
+          ? downloads.WindowsDesktopOptimizationTool.DownloadUrl
+          : '${artifactsContainerUri}/${downloads.WindowsDesktopOptimizationTool.DestinationFileName}'
       }
     ])
     source: {
-      script: loadTextContent('../../../../.common/scripts/Invoke-VDOT.ps1')
+      script: loadTextContent('../../../../.common/scripts/Invoke-WDOT.ps1')
     }
     timeoutInSeconds: 600
     treatFailureAsDeploymentFailure: true
@@ -633,8 +633,8 @@ resource vdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (i
   ]
 }
 
-resource restartVDOT 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (installVirtualDesktopOptimizationTool) {
-  name: 'restart-post-vdot'
+resource restartWDOT 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (applyWindowsDesktopOptimizations) {
+  name: 'restart-post-wdot'
   location: location
   parent: orchestrationVm
   properties: {
@@ -646,7 +646,7 @@ resource restartVDOT 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
-    vdot
+    wdot
   ]
 }
 
@@ -698,7 +698,7 @@ resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-
       restartMicrosoftSoftware
       restartCustomizations
       restartUpdates
-      restartVDOT
+      restartWDOT
     ]
   }
 ]
@@ -721,7 +721,7 @@ resource cleanupPublicDesktop 'Microsoft.Compute/virtualMachines/runCommands@202
     restartMicrosoftSoftware
     restartCustomizations
     restartUpdates
-    restartVDOT
+    restartWDOT
     vdiApplications
   ]
 }
@@ -753,7 +753,7 @@ resource removeBuildDir 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
     restartMicrosoftSoftware
     restartCustomizations
     restartUpdates
-    restartVDOT
+    restartWDOT
     vdiApplications
   ]
 }
@@ -811,7 +811,7 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
     restartMicrosoftSoftware
     restartCustomizations
     restartUpdates
-    restartVDOT
+    restartWDOT
     vdiApplications
     cleanupPublicDesktop
     removeBuildDir

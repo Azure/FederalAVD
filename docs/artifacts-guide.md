@@ -174,7 +174,7 @@ All artifacts are stored in the repository at:
 ├── uploadedFileVersionInfo.txt              # Auto-generated version info
 │
 ├── FSLogix.zip                              # Pre-packaged artifact (optional)
-├── VDOT.zip                                 # Pre-packaged artifact (optional)
+├── WDOT.zip                                 # Pre-packaged artifact (optional)
 │
 ├── Install-FSLogix/                         # Artifact Package Example
 │   ├── Install-FSLogix.ps1                  # Main script (required)

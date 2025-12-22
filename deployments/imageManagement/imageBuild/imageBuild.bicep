@@ -87,8 +87,8 @@ param installTeams bool = false
 @description('Optional. The Teams Governmant Cloud type.')
 param teamsCloudType string = 'Commercial'
 
-@description('Optional. Apply the Virtual Desktop Optimization Tool customizations.')
-param installVirtualDesktopOptimizationTool bool = false
+@description('Optional. Apply the Windows Desktop Optimization Tool customizations.')
+param applyWindowsDesktopOptimizations bool = false
 
 @description('''An array of image customization objects that are executed first before any restarts or updates.
 Each object contains the following properties:
@@ -772,7 +772,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     installFsLogix: installFsLogix
     installOneDrive: installOneDrive
     installTeams: installTeams
-    installVirtualDesktopOptimizationTool: installVirtualDesktopOptimizationTool
+    applyWindowsDesktopOptimizations: applyWindowsDesktopOptimizations
     userAssignedIdentityClientId: empty(userAssignedIdentityResourceId)
       ? userAssignedIdentity!.outputs.clientId
       : existingUserAssignedIdentity!.properties.clientId

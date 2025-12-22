@@ -657,7 +657,7 @@ This template deploys a Storage Account with a blob container (optionally with a
 | `installOneDrive` | Install OneDrive (Per Machine) | bool | true<br/>false | false |
 | `installTeams` | Install Microsoft Teams. | bool | true<br/>false | false |
 | `installUpdates` | Determines if the latest updates from the specified update service will be installed. | bool | true<br/>false | true |
-| `installVirtualDesktopOptimizationTool` | Apply the Virtual Desktop Optimization Tool customizations. | bool | true<br/>false | false |
+| `applyWindowsDesktopOptimizations` | Apply the Windows Desktop Optimization Tool customizations. | bool | true<br/>false | false |
 | `tags` | The tags to apply to all resources deployed by this template. | object | | {} |
 | `updateService` | The update service. | string | 'WU'<br/>'MU'<br/>'WSUS'<br/>'DCAT'<br/>'STORE'<br/>'OTHER' | 'MU' |
 

@@ -16,9 +16,9 @@ function Write-OutputWithTimeStamp {
     Write-Output $Entry
 }
 
-$SoftwareName = 'VDOT'
+$SoftwareName = 'WDOT'
 If ($null -eq $Uri -or $Uri -eq '') {
-    $Uri = 'https://github.com/The-Virtual-Desktop-Team/Virtual-Desktop-Optimization-Tool/archive/refs/heads/main.zip'
+    $Uri = 'https://codeload.github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool/zip/refs/heads/main'
 }
 If ($BuildDir -ne '') {
     $TempDir = Join-Path $BuildDir -ChildPath $SoftwareName
@@ -48,12 +48,15 @@ Start-Sleep -seconds 5
 If (!(Test-Path -Path $DestFile)) { Write-Error "Failed to download $Uri"; Exit 1 }
 Unblock-File -Path $DestFile
 Expand-Archive -LiteralPath $DestFile -DestinationPath $TempDir -Force
-$ScriptPath = (Get-ChildItem -Path $TempDir -Recurse | Where-Object { $_.Name -eq "Windows_VDOT.ps1" }).FullName
+$NewConfigScriptPath = (Get-ChildItem -Path $TempDir -Recurse | Where-Object { $_.Name -eq "New-WVDConfigurationFiles.ps1" }).FullName
+& $NewConfigScriptPath -FolderName 'AVD'
+Write-OutputWithTimeStamp "Created new WDOT configuration files for AVD"
+$ScriptPath = (Get-ChildItem -Path $TempDir -Recurse | Where-Object { $_.Name -eq "Windows_Optimization.ps1" }).FullName
 If ($null -eq $ScriptPath) { Write-Error "Failed to find the script in the downloaded archive"; Exit 1 }
 $ScriptContents = Get-Content -Path $ScriptPath
 $ScriptUpdate = $ScriptContents.Replace("Set-NetAdapterAdvancedProperty", "#Set-NetAdapterAdvancedProperty")
 $ScriptUpdate | Set-Content -Path $ScriptPath
-& $ScriptPath -Optimizations @("Autologgers", "DefaultUserSettings", "LocalPolicy", "NetworkOptimizations", "ScheduledTasks", "Services", "WindowsMediaPlayer") -AdvancedOptimizations @("Edge", "RemoveLegacyIE") -AcceptEULA
-Write-OutputWithTimeStamp "Optimized the operating system using the Virtual Desktop Optimization Tool"
+& $ScriptPath -ConfigProfile 'AVD' -Optimizations @("Autologgers", "DefaultUserSettings", "LocalPolicy", "NetworkOptimizations", "ScheduledTasks", "Services", "WindowsMediaPlayer") -AdvancedOptimizations @("Edge", "RemoveLegacyIE") -AcceptEULA
+Write-OutputWithTimeStamp "Optimized the operating system using the Windows Desktop Optimization Tool"
 If ((Split-Path $TempDir -Parent) -eq $Env:Temp) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }
 Stop-Transcript

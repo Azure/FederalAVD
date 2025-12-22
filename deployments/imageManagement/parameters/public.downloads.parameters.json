@@ -229,15 +229,15 @@
             "STIGs"
         ]
     },
-    "VirtualDesktopOptimizationTool": {
-        "Description": "Optional: Virtual Desktop Optimization Tool (VDOT) used by the image build solution when selected.",
-        "DownloadUrl": "https://github.com/The-Virtual-Desktop-Team/Virtual-Desktop-Optimization-Tool/archive/refs/heads/main.zip",
+    "WindowsDesktopOptimizationTool": {
+        "Description": "Optional: Windows Desktop Optimization Tool (WDOT) used by the image build solution when selected.",
+        "DownloadUrl": "https://codeload.github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool/zip/refs/heads/main",
         "WebsiteUrl": "",
         "SearchString": "",
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
-        "DestinationFileName": "VDOT.zip",
+        "DestinationFileName": "WDOT.zip",
         "DestinationFolders": [
             ""
         ]

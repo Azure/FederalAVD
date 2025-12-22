@@ -10,7 +10,7 @@ Create customized Windows images with:
 
 - Automated software installation (FSLogix, Microsoft 365 Apps, OneDrive, Teams)
 - Windows AppX package removal
-- Virtual Desktop Optimization Tool (VDOT) customizations
+- Windows Desktop Optimization Tool (WDOT) customizations
 - Windows Update installation from multiple sources
 - Custom scripts and applications
 - STIG compliance support
@@ -35,7 +35,7 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
 
 ### Comprehensive Customization
 
-- **Built-in Installers:** FSLogix, M365 Apps, OneDrive, Teams, VDOT
+- **Built-in Installers:** FSLogix, M365 Apps, OneDrive, Teams, WDOT
 - **AppX Removal:** Remove unwanted built-in Windows applications
 - **Custom Software:** Deploy your own installers and scripts
 - **VDI Customizations:** Install software that generates unique identifiers after restart
@@ -68,7 +68,7 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
    - Execute pre-restart customizations
    - Install Microsoft content (FSLogix, Office, OneDrive, Teams)
    - Remove AppX packages
-   - Apply VDOT optimizations
+   - Apply WDOT optimizations
    - Run custom scripts and installers
    - Install Windows Updates
    - Execute VDI customizations (no restart)
@@ -272,11 +272,11 @@ See [Deploy-ImageManagement-README.md](../../docs/Deploy-ImageManagement-README.
 - **Default:** `Commercial`
 - **Allowed Values:** `Commercial`, `GCC`, `GCCH`, `DoD`, `GovSecret`, `GovTopSecret`, `Gallatin`
 
-#### `installVirtualDesktopOptimizationTool`
+#### `applyWindowsDesktopOptimizations`
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Apply Virtual Desktop Optimization Tool customizations
+- **Description:** Apply Windows Desktop Optimization Tool customizations
 
 ### Image Customizations - AppX Removal
 
@@ -632,7 +632,7 @@ module imageBuild './imageBuild.bicep' = {
     // Microsoft content from storage
     downloadLatestMicrosoftContent: false
     installFsLogix: true
-    installVirtualDesktopOptimizationTool: true
+    applyWindowsDesktopOptimizations: true
     
     // Custom software
     customizations: [
@@ -816,8 +816,6 @@ artifacts/                          (container)
 │   └── Configure-OneDrive.zip
 ├── LGPO/
 │   └── LGPO.zip
-├── VDOT/
-│   └── VDOT.zip
 └── Custom/
     ├── CompanyApp.msi
     ├── CompanyApp.zip
@@ -1236,7 +1234,7 @@ This sets the `endOfLifeDate` property, visible in Azure Portal and queryable vi
 - [Azure Compute Gallery Overview](https://learn.microsoft.com/azure/virtual-machines/azure-compute-gallery)
 - [Azure Virtual Desktop Image Management](https://learn.microsoft.com/azure/virtual-desktop/set-up-customize-master-image)
 - [FSLogix Documentation](https://learn.microsoft.com/fslogix/)
-- [Virtual Desktop Optimization Tool](https://github.com/The-Virtual-Desktop-Team/Virtual-Desktop-Optimization-Tool)
+- [Windows Desktop Optimization Tool](https://github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool)
 
 ### Related Templates
 
