@@ -19,7 +19,7 @@ graph TB
     subgraph Tenant["Azure Tenant"]
         GF[Global Feed<br/>rg-avd-global-feed]
         
-        subgraph Region1["USGovVirginia"]
+        subgraph Region1["USGovVirginia<br/>"]
             direction TB
             MON1[Monitoring<br/>rg-avd-monitoring-va<br/>Log Analytics, DCR, DCE]
             MGT1[Management<br/>rg-avd-management-va<br/>Key Vault, App Service Plan]
@@ -37,15 +37,16 @@ graph TB
                 STORAGE2[Storage<br/>rg-hr-02-storage-va<br/>Storage Accounts, NetApp, Functions]
             end
             
-            CP1 --> HP1
-            CP1 --> HP2
-            MON1 -.monitors.-> HOSTS1
-            MON1 -.monitors.-> HOSTS2
+            HP1 --> CP1
+            HP2 --> CP1
+            CP1 -.diagnostics.-> MON1
+            HOSTS1 -.logs and performance data.-> MON1
+            HOSTS2 -.logs and performance data.-> MON1
             MGT1 -.manages.-> HP1
             MGT1 -.manages.-> HP2
         end
         
-        subgraph Region2["USGovTexas"]
+        subgraph Region2["USGovTexas<br/>"]
             direction TB
             MON2[Monitoring<br/>rg-avd-monitoring-tx<br/>Log Analytics, DCR, DCE]
             MGT2[Management<br/>rg-avd-management-tx<br/>Key Vault, App Service Plan]
@@ -57,8 +58,9 @@ graph TB
                 STORAGE3[Storage<br/>rg-finance-01-storage-tx<br/>Storage Accounts, NetApp, Functions]
             end
             
-            CP2 --> HP3
-            MON2 -.monitors.-> HOSTS3
+            HP3 --> CP2
+            CP2 -.diagnostics.-> MON2
+            HOSTS3 -.logs and performance data.-> MON2
             MGT2 -.manages.-> HP3
         end
         
