@@ -4,11 +4,12 @@ param azureFilePrivateDnsZoneResourceId string
 param azureFunctionAppPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
 param azureTablePrivateDnsZoneResourceId string
-param functionAppDelegatedSubnetResourceId string
+param deploymentSuffix string
 param enableApplicationInsights bool
 param encryptionKeyName string
 param encryptionKeyVaultUri string
 param encryptionUserAssignedIdentityResourceId string
+param functionAppDelegatedSubnetResourceId string
 param functionAppName string
 param functionAppAppSettings array
 param hostPoolResourceId string
@@ -24,7 +25,7 @@ param resourceGroupRoleAssignments array = []
 param serverFarmId string
 param storageAccountName string
 param tags object
-param deploymentSuffix string
+
 
 var cloudSuffix = replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')
 // ensure that private endpoint name and nic name are not longer than 80
