@@ -2937,7 +2937,7 @@
 									"visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), contains(steps('identity').solution, 'DomainServices'))]",
 									"options": {
 										"style": "Info",
-										"text": "If you choose to Shard the user profile storage, you must provide a group to assign to each storage account. In order to minimize login times, to provide more than four (4) storage accounts, you must select the 'Sharding via Object Specific Settings' option below and, for ease of configuration, select 'Configure FSLogix registry settings on session hosts' above. You can find instructions on how to configure the regisry at the link provided.",
+										"text": "If you choose to Shard the user profile storage, you must provide a group to assign to each storage account. You can choose 'Sharding via Permissions' for simpler configuration at the possible price of longer logon times, or 'Sharding via Object Specific Settings' for more advanced scenarios. You can find instructions on how to configure Object Specific Settings at the link provided.",
 										"uri": "https://learn.microsoft.com/en-us/fslogix/how-to-configure-object-specific-settings"
 									}
 								},
@@ -2947,7 +2947,7 @@
 									"label": "Sharding Options",
 									"defaultValue": "No Sharding",
 									"constraints": {
-										"allowedValues": "[if(contains(steps('identity').solution, 'EntraKerberos'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions (Max 4 Storage Accounts)\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions (Max 4 Storage Accounts)\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
+										"allowedValues": "[if(contains(steps('identity').solution, 'EntraKerberos'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
 									},
 									"visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('identity').solution, 'EntraId')), if(contains(steps('identity').solution, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true))]"
 								},
@@ -3009,16 +3009,6 @@
 									},
 									"transforms": {
 										"groups": "selectedObjects|[*].{id:id, name:displayName}"
-									}
-								},
-								{
-									"name": "shardingTooManyGroupsErrorBox",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms'), greater(length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups), 4))]",
-									"options": {
-										"style": "Error",
-										"text": "You selected (or provided) over 4 groups. You can select/provide a maximum of 4 groups when choosing 'Sharding with Permissions' in order to minimize login time and maintain compatibility with Cloud Cache (if used). Either reduce the number of groups, or select 'Sharding with Object Specific Settings' and follow the instructions provided in the link to configure the registry on the session hosts.",
-										"uri": "https://learn.microsoft.com/en-us/fslogix/how-to-configure-object-specific-settings"
 									}
 								},
 								{
