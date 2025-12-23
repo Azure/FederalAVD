@@ -92,27 +92,6 @@ var hostPoolPrivateEndpointNICName = replace(
   hostPoolVnetId
 )
 
-module hostPoolPrivateEndpointVnet '../common/vnetLocation.bicep' = if (avdPrivateLinkPrivateRoutes != 'None' && !empty(hostPoolPrivateEndpointSubnetResourceId)) {
-  name: 'HostPoolPrivateEndpointVnet-${deploymentSuffix}'
-  params: {
-    privateEndpointSubnetResourceId: hostPoolPrivateEndpointSubnetResourceId
-  }
-}
-
-module workspaceFeedPrivateEndpointVnet '../common/vnetLocation.bicep' = if ((avdPrivateLinkPrivateRoutes == 'All' || avdPrivateLinkPrivateRoutes == 'FeedAndHostPool') && !empty(workspaceFeedPrivateEndpointSubnetResourceId)) {
-  name: 'WorkspaceFeedPrivateEndpointVnet-${deploymentSuffix}'
-  params: {
-    privateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
-  }
-}
-
-module globalFeedPrivateEndpointVnet '../common/vnetLocation.bicep' = if (avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId)) {
-  name: 'GlobalFeedPrivateEndpointVnet-${deploymentSuffix}'
-  params: {
-    privateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
-  }
-}
-
 module hostPool 'modules/hostPool.bicep' = {
   name: 'HostPool-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
