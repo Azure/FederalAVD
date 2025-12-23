@@ -317,7 +317,7 @@ This solution deploys and fully configures FSLogix profile storage, making it re
 FSLogix storage authentication and configuration depends on your identity solution:
 
 | Identity Solution | Azure Files | Azure NetApp Files | Authentication Method | Sharding Support | NTFS Permissions |
-|!------------------|!-----------!|!-------------------!|!---------------------|!-----------------|!-----------------|
+|-------------------|:-----------:|:-------------------:|----------------------|------------------|------------------|
 | Active Directory Domain Services | ✅ | ✅ | Kerberos (domain-joined storage) | All options | AD groups |
 | Entra Domain Services | ✅ | ❌ | Kerberos (domain-joined storage) | All options | Entra DS groups |
 | Entra Kerberos - Hybrid | ✅ | ❌ | Entra Kerberos | All options | AD groups (synced) |
