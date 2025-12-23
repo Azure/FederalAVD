@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "7381140819427969385"
+      "templateHash": "12721776845178849106"
     }
   },
   "parameters": {
@@ -5912,7 +5912,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "779465603363269184"
+              "templateHash": "16996379760522710150"
             }
           },
           "parameters": {
@@ -6061,129 +6061,6 @@
             "hostPoolPrivateEndpointNICName": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'connection'), 'RESOURCE', parameters('hostPoolName')), 'VNETID', variables('hostPoolVnetId'))]"
           },
           "resources": [
-            {
-              "condition": "[and(not(equals(parameters('avdPrivateLinkPrivateRoutes'), 'None')), not(empty(parameters('hostPoolPrivateEndpointSubnetResourceId'))))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('HostPoolPrivateEndpointVnet-{0}', parameters('deploymentSuffix'))]",
-              "location": "[deployment().location]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "privateEndpointSubnetResourceId": {
-                    "value": "[parameters('hostPoolPrivateEndpointSubnetResourceId')]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "4761141135863976394"
-                    }
-                  },
-                  "parameters": {
-                    "privateEndpointSubnetResourceId": {
-                      "type": "string"
-                    }
-                  },
-                  "resources": [],
-                  "outputs": {
-                    "location": {
-                      "type": "string",
-                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('privateEndpointSubnetResourceId'), '/')[2], split(parameters('privateEndpointSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('privateEndpointSubnetResourceId'), '/')[8]), '2023-11-01', 'full').location]"
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "condition": "[and(or(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), equals(parameters('avdPrivateLinkPrivateRoutes'), 'FeedAndHostPool')), not(empty(parameters('workspaceFeedPrivateEndpointSubnetResourceId'))))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('WorkspaceFeedPrivateEndpointVnet-{0}', parameters('deploymentSuffix'))]",
-              "location": "[deployment().location]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "privateEndpointSubnetResourceId": {
-                    "value": "[parameters('workspaceFeedPrivateEndpointSubnetResourceId')]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "4761141135863976394"
-                    }
-                  },
-                  "parameters": {
-                    "privateEndpointSubnetResourceId": {
-                      "type": "string"
-                    }
-                  },
-                  "resources": [],
-                  "outputs": {
-                    "location": {
-                      "type": "string",
-                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('privateEndpointSubnetResourceId'), '/')[2], split(parameters('privateEndpointSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('privateEndpointSubnetResourceId'), '/')[8]), '2023-11-01', 'full').location]"
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "condition": "[and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('GlobalFeedPrivateEndpointVnet-{0}', parameters('deploymentSuffix'))]",
-              "location": "[deployment().location]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "privateEndpointSubnetResourceId": {
-                    "value": "[parameters('globalFeedPrivateEndpointSubnetResourceId')]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "4761141135863976394"
-                    }
-                  },
-                  "parameters": {
-                    "privateEndpointSubnetResourceId": {
-                      "type": "string"
-                    }
-                  },
-                  "resources": [],
-                  "outputs": {
-                    "location": {
-                      "type": "string",
-                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('privateEndpointSubnetResourceId'), '/')[2], split(parameters('privateEndpointSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('privateEndpointSubnetResourceId'), '/')[8]), '2023-11-01', 'full').location]"
-                    }
-                  }
-                }
-              }
-            },
             {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
