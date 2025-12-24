@@ -6,9 +6,7 @@ param availability string
 param azureBackupPrivateDnsZoneResourceId string
 param azureBlobPrivateDnsZoneResourceId string
 param azureFilePrivateDnsZoneResourceId string
-param azureFunctionAppPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
-param azureTablePrivateDnsZoneResourceId string
 param deploymentSuffix string
 param deploymentUserAssignedIdentityClientId string
 param deploymentVirtualMachineName string
@@ -25,13 +23,7 @@ param fslogixEncryptionKeyNameConv string
 param fslogixFileShares array
 param fslogixShardOptions string
 param fslogixUserGroups array
-param functionAppDelegatedSubnetResourceId string
 param hostPoolResourceId string
-param increaseQuota bool
-param increaseQuotaAppInsightsName string
-param increaseQuotaEncryptionKeyName string
-param increaseQuotaFunctionAppName string
-param increaseQuotaStorageAccountName string
 param kerberosEncryptionType string
 param keyExpirationInDays int
 param keyManagementStorageAccounts string
@@ -45,12 +37,10 @@ param privateEndpoint bool
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
-param privateLinkScopeResourceId string
 param recoveryServices bool
 param recoveryServicesVaultName string
 param resourceGroupDeployment string
 param resourceGroupStorage string
-param serverFarmId string
 param shareSizeInGB int
 param smbServerLocation string
 param storageAccountNamePrefix string
@@ -80,8 +70,6 @@ module customerManagedKeys 'modules/customerManagedKeys.bicep' = if (storageSolu
     deploymentSuffix: deploymentSuffix
     userAssignedIdentityNameConv: userAssignedIdentityNameConv
     fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
-    increaseQuotaEncryptionKeyName: increaseQuotaEncryptionKeyName
-    increaseQuota: increaseQuota
   }
 }
 
@@ -126,11 +114,9 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
     availability: availability
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
-    azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
-    azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     deploymentVirtualMachineName: deploymentVirtualMachineName
     deploymentResourceGroupName: resourceGroupDeployment
@@ -142,14 +128,8 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
       : customerManagedKeys!.outputs.userAssignedIdentityResourceId
     fileShares: fslogixFileShares
     fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
-    functionAppDelegatedSubnetResourceId: functionAppDelegatedSubnetResourceId
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
-    increaseQuota: increaseQuota
-    increaseQuotaApplicationInsightsName: increaseQuotaAppInsightsName
-    increaseQuotaEncryptionKeyName: increaseQuotaEncryptionKeyName
-    increaseQuotaFunctionAppName: increaseQuotaFunctionAppName
-    increaseQuotaStorageAccountName: increaseQuotaStorageAccountName
     kerberosEncryptionType: kerberosEncryptionType
     keyManagementStorageAccounts: keyManagementStorageAccounts
     location: location
@@ -159,11 +139,9 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
-    privateLinkScopeResourceId: privateLinkScopeResourceId
     recoveryServices: recoveryServices
     recoveryServicesVaultName: recoveryServicesVaultName
     resourceGroupStorage: resourceGroupStorage
-    serverFarmId: serverFarmId
     shardingOptions: fslogixShardOptions
     shareAdminGroups: fslogixAdminGroups
     shareSizeInGB: shareSizeInGB
@@ -178,6 +156,9 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   }
 }
 
+output encryptionUserAssignedIdentityResourceId string = keyManagementStorageAccounts != 'MicrosoftManaged'
+  ? customerManagedKeys!.outputs.userAssignedIdentityResourceId
+  : ''
 output netAppVolumeResourceIds array = storageSolution == 'AzureNetAppFiles'
   ? azureNetAppFiles!.outputs.volumeResourceIds
   : []

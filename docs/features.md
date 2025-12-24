@@ -530,10 +530,10 @@ Deploy session hosts across Availability Zones or Availability Sets to provide i
 **Parameter Configuration:**
 
 ```bicep
-availability = 'availabilityZones'         // Deploy across availability zones
+availability = 'AvailabilityZones'         // Deploy across availability zones
 availabilityZones = ['1', '2', '3']        // Use zones 1, 2, and 3
 // OR
-availability = 'availabilitySets'          // Deploy to availability sets
+availability = 'AvailabilitySets'          // Deploy to availability sets
 // OR  
 availability = 'None'                      // No infrastructure redundancy
 ```

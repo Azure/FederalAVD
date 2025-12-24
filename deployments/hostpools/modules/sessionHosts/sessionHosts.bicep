@@ -64,7 +64,7 @@ param keyExpirationInDays int
 param keyManagementDisks string
 param location string
 param logAnalyticsWorkspaceResourceId string
-param maxResourcesPerTemplateDeployment int
+param maxVMsPerDeployment int
 param privateEndpoint bool
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
@@ -282,9 +282,9 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames
     fslogixOSSGroups: fslogixOSSGroups
-    fslogixLocalNetAppServerFqdns: [for i in range(0, length(sortedLocalNetAppResourceIds)) : localNetAppVolumes[i]!.outputs.smbServerFqdn]
+    fslogixLocalNetAppServerFqdns: [for j in range(0, length(sortedLocalNetAppResourceIds)) : localNetAppVolumes[j]!.outputs.smbServerFqdn]
     fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
-    fslogixRemoteNetAppServerFqdns: [for i in range(0, length(sortedRemoteNetAppResourceIds)) : remoteNetAppVolumes[i]!.outputs.smbServerFqdn]
+    fslogixRemoteNetAppServerFqdns: [for j in range(0, length(sortedRemoteNetAppResourceIds)) : remoteNetAppVolumes[j]!.outputs.smbServerFqdn]
     fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs    
     fslogixStorageService: fslogixStorageService
@@ -304,8 +304,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     securityDataCollectionRulesResourceId: securityDataCollectionRulesResourceId
     secureBootEnabled: secureBootEnabled
     securityType: securityType
-    sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxResourcesPerTemplateDeployment
-    sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxResourcesPerTemplateDeployment) + sessionHostIndex
+    sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment
+    sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxVMsPerDeployment) + sessionHostIndex
     vmNameIndexLength: vmNameIndexLength
     sessionHostRegistrationDSCUrl: sessionHostRegistrationDSCUrl
     storageSuffix: storageSuffix
@@ -399,8 +399,8 @@ module protectedItems_Vm 'modules/protectedItems.bicep' = [for i in range(1, ses
   params: {
     policyName: backupPolicyName
     recoveryServicesVaultName: deploymentType == 'Complete' ? recoveryServicesVault!.outputs.name : last(split(existingRecoveryServicesVaultResourceId, '/'))
-    sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxResourcesPerTemplateDeployment
-    sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxResourcesPerTemplateDeployment) + sessionHostIndex
+    sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment
+    sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxVMsPerDeployment) + sessionHostIndex
     virtualMachineNamePrefix: virtualMachineNamePrefix
   }
   dependsOn: [

@@ -22,7 +22,7 @@
             - DeviceManagementManagedDevices.ReadWrite.All
 
 .LINK
-    https://github.com/Azure/AVDSessionHostReplacer
+    https://github.com/Azure/FederalAVD
 
 .EXAMPLE
     # This file is loaded automatically by Azure Function App
@@ -33,12 +33,12 @@
 
 # Global token cache to reduce token acquisition calls
 $Script:AccessTokenCache = @{
-    Token = $null
+    Token     = $null
     ExpiresOn = [DateTime]::MinValue
 }
 
 $Script:GraphTokenCache = @{
-    Token = $null
+    Token     = $null
     ExpiresOn = [DateTime]::MinValue
 }
 
@@ -55,43 +55,87 @@ function Get-AccessToken {
         the function app's managed identity for authenticating ARM API calls.
     .PARAMETER ResourceManagerUrl
         The Azure Resource Manager endpoint URL (e.g., https://management.azure.com/).
+    .PARAMETER ClientId
+        Optional. The client ID of the user-assigned managed identity. If not specified, uses system-assigned identity.
     .EXAMPLE
         $token = Get-AccessToken -ResourceManagerUrl 'https://management.azure.com/'
+    .EXAMPLE
+        $token = Get-AccessToken -ResourceManagerUrl 'https://management.azure.com/' -ClientId 'abc123...'
     #>
     [CmdletBinding()]
     param (
         [parameter(Mandatory = $true)]
-        [string]$ResourceManagerUrl
+        [string]$ResourceManagerUrl,
+        
+        [parameter(Mandatory = $false)]
+        [string]$ClientId
     )
+    
     $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUrl + '&api-version=2019-08-01'
-	$TokenResponse = Invoke-RestMethod -Method Get -Headers @{"X-IDENTITY-HEADER"="$env:IDENTITY_HEADER"} -Uri $TokenAuthURI
-	$AccessToken = $TokenResponse.access_token
-    Return $AccessToken
-}
-
-function Get-GraphToken {
-    param(
-        [parameter(Mandatory = $false)]
-        [string]$GraphEndpoint = $env:GRAPH_ENDPOINT,
-        [parameter(Mandatory = $false)]
-        [string]$ClientId,
-        [parameter(Mandatory = $false)]
-        [string]$TenantId,
-        [parameter(Mandatory = $false)]
-        [string]$LoginUrl
-
-    )
-    $Body = @{
-        client_id     = $ClientId
-        scope         = $GraphEndpoint + '/.default'
-        grant_type    = 'client_credentials'
+    
+    # Add client_id parameter if using user-assigned identity
+    if ($ClientId) {
+        $TokenAuthURI += "&client_id=$ClientId"
     }
-    $TokenResponse = Invoke-RestMethod -Method Post -Uri ($LoginUrl + '/' + $TenantId + '/oauth2/v2.0/token') -Body $Body -ContentType 'application/x-www-form-urlencoded'
+    
+    $TokenResponse = Invoke-RestMethod -Method Get -Headers @{"X-IDENTITY-HEADER" = "$env:IDENTITY_HEADER" } -Uri $TokenAuthURI
     $AccessToken = $TokenResponse.access_token
     Return $AccessToken
 }
 
 #EndRegion Authentication Functions
+
+#Region Configuration Functions
+
+function Read-FunctionAppSetting {
+    <#
+    .SYNOPSIS
+        Retrieves configuration values from Azure Function App Settings (environment variables).
+    .DESCRIPTION
+        Reads configuration values from environment variables set in the Azure Function App Settings.
+        This is the local implementation matching the AzureFunctionConfiguration module behavior.
+    .PARAMETER ConfigKey
+        The name of the configuration key to retrieve from environment variables.
+    .EXAMPLE
+        $hostPoolName = Read-FunctionAppSetting HostPoolName
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string] $ConfigKey
+    )
+    
+    # Get the value from environment variable
+    $value = [System.Environment]::GetEnvironmentVariable($ConfigKey)
+    
+    # Convert JSON strings to hashtables for complex configurations
+    if ($value -and $value.StartsWith('{')) {
+        try {
+            $value = $value | ConvertFrom-Json -AsHashtable -Depth 99
+        }
+        catch {
+            # If JSON conversion fails, return the raw string
+            Write-HostDetailed -Message "Warning: Could not convert $ConfigKey to JSON object" -Level Warning
+        }
+    }
+    
+    # Convert boolean strings to actual boolean values
+    if ($value -eq 'true' -or $value -eq 'True') {
+        $value = $true
+    }
+    elseif ($value -eq 'false' -or $value -eq 'False') {
+        $value = $false
+    }
+    
+    # Convert numeric strings to integers where appropriate
+    if ($value -match '^\d+$') {
+        $value = [int]$value
+    }
+    
+    return $value
+}
+
+#EndRegion Configuration Functions
 
 #Region Logging and Error Handling
 
@@ -213,8 +257,8 @@ function Invoke-AzureRestMethodWithRetry {
         try {
             $params = @{
                 AccessToken = $AccessToken
-                Method = $Method
-                Uri = $Uri
+                Method      = $Method
+                Uri         = $Uri
             }
             
             if ($Body) {
@@ -352,59 +396,51 @@ function Invoke-AzureRestMethod {
 
 #Region Session Host Lifecycle Functions
 
-function Deploy-SHRSessionHost {
+function Deploy-SessionHosts {
     [CmdletBinding()]
     param (
         [Parameter()]
-        [string[]] $ExistingSessionHostVMNames = @(),
+        [string[]] $ExistingSessionHostNames = @(),
 
         [Parameter(Mandatory = $true)]
         [int] $NewSessionHostsCount,
 
         [Parameter(Mandatory = $false)]
-        [string] $HostPoolResourceGroupName = (Get-FunctionConfig _HostPoolResourceGroupName),
+        [string] $HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
 
         [Parameter(Mandatory = $true)]
-        [string] $SessionHostResourceGroupName,
+        [string] $VirtualMachinesResourceGroupName,
 
         [Parameter()]
-        [string] $HostPoolName = (Get-FunctionConfig _HostPoolName),
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
 
         [Parameter()]
-        [string] $SessionHostNamePrefix = (Get-FunctionConfig _SessionHostNamePrefix),
+        [string] $SessionHostNamePrefix = (Read-FunctionAppSetting SessionHostNamePrefix),
 
         [Parameter()]
-        [string] $SessionHostNameSeparator = (Get-FunctionConfig _SessionHostNameSeparator),
+        [int] $SessionHostInstanceNumberPadding = (Read-FunctionAppSetting SessionHostInstanceNumberPadding),
 
         [Parameter()]
-        [int] $SessionHostInstanceNumberPadding = (Get-FunctionConfig _SessionHostInstanceNumberPadding),
+        [string] $DeploymentPrefix = (Read-FunctionAppSetting SHRDeploymentPrefix),
 
         [Parameter()]
-        [string] $DeploymentPrefix = (Get-FunctionConfig _SHRDeploymentPrefix),
+        [hashtable] $SessionHostParameters = (Read-FunctionAppSetting SessionHostParameters | ConvertTo-CaseInsensitiveHashtable)
 
         [Parameter()]
-        [string] $SessionHostTemplate = (Get-FunctionConfig _SessionHostTemplate),
+        [string] $SessionHostTemplate = (Read-FunctionAppSetting SessionHostTemplate),
 
         [Parameter()]
-        [string] $SessionHostTemplateParametersPS1Uri = (Get-FunctionConfig _SessionHostTemplateParametersPS1Uri),
+        [string] $TagIncludeInAutomation = (Read-FunctionAppSetting Tag_IncludeInAutomation),
 
         [Parameter()]
-        [string] $TagIncludeInAutomation = (Get-FunctionConfig _Tag_IncludeInAutomation),
-        [Parameter()]
-        [string] $TagDeployTimestamp = (Get-FunctionConfig _Tag_DeployTimestamp),
-
-        [Parameter()]
-        [hashtable] $SessionHostParameters = (Get-FunctionConfig _SessionHostParameters | ConvertTo-CaseInsensitiveHashtable), #TODO: Port this into AzureFunctionConfiguration module and make it ciHashtable type.
-
-        [Parameter()]
-        [string] $VMNamesTemplateParameterName = (Get-FunctionConfig _VMNamesTemplateParameterName)
+        [string] $TagDeployTimestamp = (Read-FunctionAppSetting Tag_DeployTimestamp)
     )
 
     Write-HostDetailed -Message "Generating new token for the host pool $HostPoolName in Resource Group $HostPoolResourceGroupName"
     $Body = @{
         properties = @{
             registrationInfo = @{
-                expirationTime = (Get-Date).AddHours(8)
+                expirationTime             = (Get-Date).AddHours(8)
                 registrationTokenOperation = 'Update'
             }
         }
@@ -416,45 +452,45 @@ function Deploy-SHRSessionHost {
         -Uri ($ResourceManagerUrl + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $HostPoolResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '?api-version=2024-04-03') | Out-Null
     
     # Calculate Session Host Names
-    Write-HostDetailed -Level Host -Message "Existing session host VM names: {0}" -StringValues ($ExistingSessionHostVMNames -join ',')
+    Write-HostDetailed -Level Host -Message "Existing session host VM names: {0}" -StringValues ($ExistingSessionHostNames -join ',')
     [array] $sessionHostNames = for ($i = 0; $i -lt $NewSessionHostsCount; $i++) {
-        $vmNumber = 1
-        While (("$SessionHostNamePrefix$SessionHostNameSeparator{0:d$SessionHostInstanceNumberPadding}" -f $vmNumber) -in $ExistingSessionHostVMNames) {
-            $vmNumber++
+        $shNumber = 1
+        While (("$SessionHostNamePrefix{0:d$SessionHostInstanceNumberPadding}" -f $shNumber) -in $ExistingSessionHostNames) {
+            $shNumber++
         }
-        $vmName = "$SessionHostNamePrefix$SessionHostNameSeparator{0:d$SessionHostInstanceNumberPadding}" -f $vmNumber
-        $ExistingSessionHostVMNames += $vmName
-        $vmName
+        $shName = "$SessionHostNamePrefix{0:d$SessionHostInstanceNumberPadding}" -f $shNumber
+        $ExistingSessionHostNames += $shName
+        $shName
     }
     Write-HostDetailed -Message "Creating session host(s) " + ($sessionHostNames -join ', ')
 
     # Update Session Host Parameters
-    $sessionHostParameters[$VMNamesTemplateParameterName]   = $sessionHostNames
+    $sessionHostParameters['sessionHostNames'] = $sessionHostNames
     $sessionHostParameters['Tags'][$TagIncludeInAutomation] = $true
-    $sessionHostParameters['Tags'][$TagDeployTimestamp]     = (Get-Date -AsUTC -Format 'o')
+    $sessionHostParameters['Tags'][$TagDeployTimestamp] = (Get-Date -AsUTC -Format 'o')
     $deploymentTimestamp = Get-Date -AsUTC -Format 'FileDateTime'
     $deploymentName = "{0}_{1}_Count_{2}_VMs" -f $DeploymentPrefix, $deploymentTimestamp, $sessionHostNames.count
     
     Write-HostDetailed -Message "Deployment name: $deploymentName"
     Write-HostDetailed -Message "Deploying using Template Spec: $sessionHostTemplate"
-    $templateSpecVersionResourceId = Get-SHRTemplateSpecVersionResourceId -ResourceId $SessionHostTemplate
+    $templateSpecVersionResourceId = Get-TemplateSpecVersionResourceId -ResourceId $SessionHostTemplate
 
-    Write-HostDetailed -Message "Deploying $NewSessionHostCount session host(s) to resource group $sessionHostResourceGroupName" 
+    Write-HostDetailed -Message "Deploying $NewSessionHostCount session host(s) to resource group $VirtualMachinesResourceGroupName" 
     
     $Body = @{
         properties = @{
-            parameters = $sessionHostParameters
+            parameters   = $sessionHostParameters
             templateLink = @{
                 id = $templateSpecVersionResourceId
             }
         }
     }
-    $Uri = $ResourceManagerUrl + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $SessionHostResourceGroupName + '/providers/Microsoft.Resources/deployments/' + $deploymentName + '?api-version=2021-04-01'
+    $Uri = $ResourceManagerUrl + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $VirtualMachinesResourceGroupName + '/providers/Microsoft.Resources/deployments/' + $deploymentName + '?api-version=2021-04-01'
     $DeploymentJob = Invoke-AzureRestMethod `
-                        -AccessToken $AccessToken `
-                        -Body ($Body | ConvertTo-Json -depth 10) `
-                        -Method Put `
-                        -Uri $Uri
+        -AccessToken $AccessToken `
+        -Body ($Body | ConvertTo-Json -depth 20) `
+        -Method Put `
+        -Uri $Uri
     #TODO: Add logic to test if deployment is running (aka template is accepted) then finish running the function and let the deployment run in the background.
     Write-HostDetailed -Message 'Pausing for 30 seconds to allow deployment to start'
     Start-Sleep -Seconds 30
@@ -465,7 +501,7 @@ function Deploy-SHRSessionHost {
     }
 }
 
-function Get-SHRLatestImageVersion {
+function Get-LatestImageVersion {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
@@ -497,13 +533,14 @@ function Get-SHRLatestImageVersion {
             
             $Versions = Invoke-AzureRestMethod -AccessToken $AccessToken -Uri $Uri -Method Get
 
-            $azImageVersion = ($Versions | Sort-Object -Property {[version] $_.Name} -Descending | Select-Object -First 1).Name
+            $azImageVersion = ($Versions | Sort-Object -Property { [version] $_.Name } -Descending | Select-Object -First 1).Name
             Write-HostDetailed  "Latest version of image is $azImageVersion"
 
             if ($azImageVersion -match "\d+\.\d+\.(?<Year>\d{2})(?<Month>\d{2})(?<Day>\d{2})") {
                 $azImageDate = Get-Date -Date ("20{0}-{1}-{2}" -f $Matches.Year, $Matches.Month, $Matches.Day)
                 Write-HostDetailed  "Image date is $azImageDate"
-            } else {
+            }
+            else {
                 throw "Image version does not match expected format. Could not extract image date."
             }
         }
@@ -523,9 +560,9 @@ function Get-SHRLatestImageVersion {
             # Get the latest version of the image
             $Uri = $ResourceManagerUri + "/subscriptions/$imageSubscriptionId/resourceGroups/$imageResourceGroup/providers/Microsoft.Compute/galleries/$imageGalleryName/images/$imageDefinitionName/versions?api-version=2023-07-03"
             $latestImageVersion = Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $Uri |
-                                         Where-Object { $_.PublishingProfile.ExcludeFromLatest -eq $false } |
-                                         Sort-Object -Property {$_.PublishingProfile.PublishedDate} -Descending |
-                                         Select-Object -First 1
+            Where-Object { $_.PublishingProfile.ExcludeFromLatest -eq $false } |
+            Sort-Object -Property { $_.PublishingProfile.PublishedDate } -Descending |
+            Select-Object -First 1
             if (-not $latestImageVersion) {
                 throw "No available image versions found."
             }
@@ -556,7 +593,7 @@ function Get-SHRLatestImageVersion {
     }
 }
 
-function Get-SHRHostPoolDecision {
+function Get-HostPoolDecisions {
     <#
     .SYNOPSIS
         This function will decide how many session hosts to deploy and if we should decommission any session hosts.
@@ -573,14 +610,14 @@ function Get-SHRHostPoolDecision {
 
         # Target age of session hosts in days - after this many days we consider a session host for replacement.
         [Parameter()]
-        [int] $TargetVMAgeDays = (Get-FunctionConfig _TargetVMAgeDays),
+        [int] $TargetVMAgeDays = (Read-FunctionAppSetting TargetVMAgeDays),
 
         # Target number of session hosts in the host pool. If we have more than or equal to this number of session hosts we will decommission some.
         [Parameter()]
-        [int] $TargetSessionHostCount = (Get-FunctionConfig _TargetSessionHostCount),
+        [int] $TargetSessionHostCount = (Read-FunctionAppSetting TargetSessionHostCount),
 
         [Parameter()]
-        [int] $TargetSessionHostBuffer = (Get-FunctionConfig _TargetSessionHostBuffer),
+        [int] $TargetSessionHostBuffer = (Read-FunctionAppSetting TargetSessionHostBuffer),
 
         # Latest image version
         [Parameter()]
@@ -588,15 +625,15 @@ function Get-SHRHostPoolDecision {
 
         # Should we replace session hosts on new image version
         [Parameter()]
-        [bool] $ReplaceSessionHostOnNewImageVersion = (Get-FunctionConfig _ReplaceSessionHostOnNewImageVersion),
+        [bool] $ReplaceSessionHostOnNewImageVersion = (Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersion),
 
         # Delay days before replacing session hosts on new image version
         [Parameter()]
-        [int] $ReplaceSessionHostOnNewImageVersionDelayDays = (Get-FunctionConfig _ReplaceSessionHostOnNewImageVersionDelayDays),
+        [int] $ReplaceSessionHostOnNewImageVersionDelayDays = (Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersionDelayDays),
 
         # Maximum number of session hosts to replace in a single execution (safety throttle)
         [Parameter()]
-        [int] $MaxSessionHostsToReplace = (Get-FunctionConfig MaxSessionHostsToReplace)
+        [int] $MaxSessionHostsToReplace = (Read-FunctionAppSetting MaxSessionHostsToReplace)
     )
     # Basic Info
     Write-HostDetailed "We have $($SessionHosts.Count) session hosts (included in Automation)"
@@ -604,7 +641,7 @@ function Get-SHRHostPoolDecision {
     if ($TargetVMAgeDays -gt 0) {
         $targetReplacementDate = (Get-Date).AddDays(-$TargetVMAgeDays)
         [array] $sessionHostsOldAge = $SessionHosts | Where-Object { $_.DeployTimestamp -lt $targetReplacementDate }
-        Write-HostDetailed "Found $($sessionHostsOldAge.Count) hosts to replace due to old age. $($($sessionHostsOldAge.VMName) -join ',')"
+        Write-HostDetailed "Found $($sessionHostsOldAge.Count) hosts to replace due to old age. $($($sessionHostsOldAge.SessionHostName) -join ',')"
 
     }
 
@@ -614,16 +651,16 @@ function Get-SHRHostPoolDecision {
         if ($latestImageAge -ge $ReplaceSessionHostOnNewImageVersionDelayDays) {
             Write-HostDetailed "Latest Image age is older than (or equal) New Image Delay value $ReplaceSessionHostOnNewImageVersionDelayDays"
             [array] $sessionHostsOldVersion = $sessionHosts | Where-Object { $_.ImageVersion -ne $LatestImageVersion.Version }
-            Write-HostDetailed "Found $($sessionHostsOldVersion.Count) session hosts to replace due to new image version. $($($sessionHostsOldVersion.VMName) -Join ',')"
+            Write-HostDetailed "Found $($sessionHostsOldVersion.Count) session hosts to replace due to new image version. $($($sessionHostsOldVersion.SessionHostName) -Join ',')"
         }
     }
 
     [array] $sessionHostsToReplace = ($sessionHostsOldAge + $sessionHostsOldVersion) | Select-Object -Property * -Unique
-    Write-HostDetailed "Found $($sessionHostsToReplace.Count) session hosts to replace in total. $($($sessionHostsToReplace.VMName) -join ',')"
+    Write-HostDetailed "Found $($sessionHostsToReplace.Count) session hosts to replace in total. $($($sessionHostsToReplace.SessionHostName) -join ',')"
 
     # Good Session Hosts
-    $goodSessionHosts = $SessionHosts | Where-Object { $_.VMName -notin $sessionHostsToReplace.VMName }
-    $sessionHostsCurrentTotal = ([array]$goodSessionHosts.VMName + [array]$runningDeployments.SessionHostNames ) | Select-Object -Unique
+    $goodSessionHosts = $SessionHosts | Where-Object { $_.SessionHostName -notin $sessionHostsToReplace.SessionHostName }
+    $sessionHostsCurrentTotal = ([array]$goodSessionHosts.SessionHostName + [array]$runningDeployments.SessionHostNames ) | Select-Object -Unique
     Write-HostDetailed "We have $($sessionHostsCurrentTotal.Count) good session hosts including $($runningDeployments.SessionHostName.Count) session hosts being deployed"
     Write-HostDetailed "We target having $TargetSessionHostCount session hosts in good shape"
     Write-HostDetailed "We have a buffer of $TargetSessionHostBuffer session hosts more than the target."
@@ -670,7 +707,7 @@ function Get-SHRHostPoolDecision {
             $sessionHostsPendingDelete = $sessionHostsPendingDelete | Select-Object -First $MaxSessionHostsToReplace
         }
         
-        Write-HostDetailed "The following Session Hosts are now pending delete: $($($SessionHostsPendingDelete.VMName) -join ',')"
+        Write-HostDetailed "The following Session Hosts are now pending delete: $($($SessionHostsPendingDelete.SessionHostName) -join ',')"
     }
     elseif ($sessionHostsToReplace.Count -gt 0) {
         Write-HostDetailed "We need to delete $($sessionHostsToReplace.Count) session hosts but we don't have enough session hosts in the host pool."
@@ -681,11 +718,11 @@ function Get-SHRHostPoolDecision {
         PossibleDeploymentsCount       = $weCanDeploy
         PossibleSessionHostDeleteCount = $weCanDelete
         SessionHostsPendingDelete      = $sessionHostsPendingDelete
-        ExistingSessionHostVMNames     = ([array]$SessionHosts.VMName + [array]$runningDeployments.SessionHostNames) | Select-Object -Unique
+        ExistingSessionHostNames       = ([array]$SessionHosts.SessionHostName + [array]$runningDeployments.SessionHostNames) | Select-Object -Unique
     }
 }
 
-function Get-SHRRunningDeployment {
+function Get-RunningDeployments {
     <#
     .SYNOPSIS
         This function gets status of all AVD Session Host Replacer deployments in the target resource group.
@@ -700,10 +737,7 @@ function Get-SHRRunningDeployment {
         [string] $ResourceGroupName,
 
         [Parameter()]
-        [string] $DeploymentPrefix = (Get-FunctionConfig _SHRDeploymentPrefix),
-
-        [Parameter()]
-        [string] $VMNamesTemplateParameterName = (Get-FunctionConfig _VMNamesTemplateParameterName)
+        [string] $DeploymentPrefix = (Read-FunctionAppSetting SHRDeploymentPrefix)
     )
 
     Write-HostDetailed -Message "Getting deployments for resource group '$ResourceGroupName'"
@@ -730,38 +764,44 @@ function Get-SHRRunningDeployment {
     }
 
     # Parse deployment names to get VM name
-    $output = foreach ($item in $runningDeployments) {
-        $parameters = $item.Parameters | ConvertTo-CaseInsensitiveHashtable
-        Write-HostDetailed -Message "Deployment $($item.DeploymentName) is running and deploying: $(($parameters[$VMNamesTemplateParameterName].Value -join ','))"
+    $output = foreach ($deployment in $runningDeployments) {
+        $parameters = $deployment.Parameters | ConvertTo-CaseInsensitiveHashtable
+        Write-HostDetailed -Message "Deployment $($deployment.DeploymentName) is running and deploying: $(($parameters['sessionHostNames'].Value -join ','))"
         [PSCustomObject]@{
-            DeploymentName   = $item.DeploymentName
-            SessionHostNames = $parameters[$VMNamesTemplateParameterName].Value
-            Timestamp        = $item.Timestamp
-            Status           = $item.ProvisioningState
+            DeploymentName   = $deployment.DeploymentName
+            SessionHostNames = $parameters['sessionHostNames'].Value
+            Timestamp        = $deployment.Timestamp
+            Status           = $deployment.ProvisioningState
         }
     }
     $output
 }
 
-function Get-SHRSessionHost {
+function Get-SessionHosts {
     [CmdletBinding()]
     param (
         [Parameter()]
-        [string] $ResourceGroupName = (Get-FunctionConfig _HostPoolResourceGroupName),
+        [string] $ResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
+
         [Parameter()]
-        [string] $HostPoolName = (Get-FunctionConfig _HostPoolName),
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
+
         [Parameter()]
-        [string] $TagIncludeInAutomation = (Get-FunctionConfig _Tag_IncludeInAutomation),
+        [string] $TagIncludeInAutomation = (Read-FunctionAppSetting Tag_IncludeInAutomation),
+
         [Parameter()]
-        [string] $TagDeployTimestamp = (Get-FunctionConfig _Tag_DeployTimestamp),
+        [string] $TagDeployTimestamp = (Read-FunctionAppSetting Tag_DeployTimestamp),
+        
         [Parameter()]
-        [string] $TagPendingDrainTimeStamp = (Get-FunctionConfig _Tag_PendingDrainTimestamp),
+        [string] $TagPendingDrainTimeStamp = (Read-FunctionAppSetting Tag_PendingDrainTimestamp),
+        
         [Parameter()]
         [switch] $FixSessionHostTags,
+        
         [Parameter()]
-        [bool] $IncludePreExistingSessionHosts = (Get-FunctionConfig _IncludePreExistingSessionHosts)
-
+        [bool] $IncludePreExistingSessionHosts = (Read-FunctionAppSetting IncludePreExistingSessionHosts)
     )
+    
     # Get current session hosts
     Write-HostDetailed -Message "Getting current session hosts in host pool $HostPoolName"
     $Uri = $ResourceManagerUri + '/subscriptions/' + $subscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts?api-version=2024-04-03'
@@ -771,7 +811,7 @@ function Get-SHRSessionHost {
     $result = foreach ($sh in $sessionHosts) {
         Write-HostDetailed -Message "Getting VM details for $($sh.Name)"
         $Uri = $ResourceManagerUri + $sh.ResourceId + '?api-version=2024-03-01'
-        $vm = Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $Uri | Select-Object Name, TimeCreated,StorageProfile
+        $vm = Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $Uri | Select-Object Name, TimeCreated, StorageProfile
         Write-HostDetailed -Message "VM was created on $($vm.TimeCreated)"
         Write-HostDetailed -Message "VM exact version is $($vm.StorageProfile.ImageReference.ExactVersion)"
         Write-HostDetailed -Message 'Getting VM tags'
@@ -788,7 +828,7 @@ function Get-SHRSessionHost {
             if ($FixSessionHostTags) {
                 Write-HostDetailed -Message "Copying VM CreateTime to tag $TagDeployTimestamp with value $($vm.TimeCreated.ToString('o'))"
                 $Body = @{
-                    operation = 'Merge'
+                    operation  = 'Merge'
                     properties = @{
                         $TagDeployTimestamp = $vm.TimeCreated.ToString('o')
                     }
@@ -812,7 +852,7 @@ function Get-SHRSessionHost {
             if ($FixSessionHostTags) {
                 Write-HostDetailed -Message "Setting tag $TagIncludeInAutomation to $IncludePreExistingSessionHosts"
                 $Body = @{
-                    operation = 'Merge'
+                    operation  = 'Merge'
                     properties = @{
                         $TagIncludeInAutomation = $IncludePreExistingSessionHosts
                     }
@@ -831,16 +871,21 @@ function Get-SHRSessionHost {
             $vmPendingDrainTimeStamp = $null
         }
 
-        $vmOutput = @{ # We are combining the VM details and SessionHost objects into a single PS Custom Object
+        # Extract FQDN and session host name (hostname without domain)
+        $fqdn = $sh.Name -replace ".+\/(.+)", '$1'
+        $sessionHostName = $fqdn -replace '\..*$', ''  # Remove domain, keep only hostname
+        
+        $hostOutput = @{ # We are combining the VM details and SessionHost objects into a single PS Custom Object
             VMName                = $vm.Name
-            FQDN                  = $item.Name -replace ".+\/(.+)", '$1'
+            SessionHostName       = $sessionHostName
+            FQDN                  = $fqdn
             DeployTimestamp       = $vmDeployTimeStamp
             IncludeInAutomation   = $vmIncludeInAutomation
             PendingDrainTimeStamp = $vmPendingDrainTimeStamp
             ImageVersion          = $vm.StorageProfile.ImageReference.ExactVersion
         }
-        $item.PSObject.Properties.ForEach{ $vmOutput[$_.Name] = $_.Value }
-        [PSCustomObject]$vmOutput
+        $sh.PSObject.Properties.ForEach{ $hostOutput[$_.Name] = $_.Value }
+        [PSCustomObject]$hostOutput
     }
     $result
 }
@@ -849,18 +894,18 @@ function Get-SHRSessionHost {
 
 #Region Session Host Helper Functions
 
-function Get-SHRSessionHostParameters {
+function Get-SessionHostParameters {
     [CmdletBinding()]
     param (
         [Parameter()]
-        [string] $SessionHostParameters = (Get-FunctionConfig _SessionHostParameters)
+        [string] $SessionHostParameters = (Read-FunctionAppSetting SessionHostParameters)
     )
     $paramsHash = ConvertFrom-Json $SessionHostParameters -Depth 99 -AsHashtable
     Write-HostDetailed -Message "Session host parameters: $($paramsHash | Out-String)"
     $paramsHash
 }
 
-function Get-SHRTemplateSpecVersionResourceId {
+function Get-TemplateSpecVersionResourceId {
     param(
         [Parameter(Mandatory = $true)]
         [string]$ResourceId
@@ -892,26 +937,26 @@ function Get-SHRTemplateSpecVersionResourceId {
 
 #Region Session Host Removal Functions
 
-function Remove-SHRSessionHost {
+function Remove-SessionHosts {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
         $SessionHostsPendingDelete,
 
         [Parameter()]
-        [string] $ResourceGroupName = (Get-FunctionConfig _HostPoolResourceGroupName),
+        [string] $ResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
 
         [Parameter()]
-        [string] $HostPoolName = (Get-FunctionConfig _HostPoolName),
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
 
         [Parameter()]
-        [int] $DrainGracePeriodHours = (Get-FunctionConfig _DrainGracePeriodHours),
+        [int] $DrainGracePeriodHours = (Read-FunctionAppSetting DrainGracePeriodHours),
 
         [Parameter()]
-        [string] $TagPendingDrainTimeStamp = (Get-FunctionConfig _Tag_PendingDrainTimestamp),
+        [string] $TagPendingDrainTimeStamp = (Read-FunctionAppSetting Tag_PendingDrainTimestamp),
 
         [Parameter()]
-        [string] $TagScalingPlanExclusionTag = (Get-FunctionConfig _Tag_ScalingPlanExclusionTag),
+        [string] $TagScalingPlanExclusionTag = (Read-FunctionAppSetting Tag_ScalingPlanExclusionTag),
 
         [Parameter()]
         [bool] $RemoveEntraDevice,
@@ -970,14 +1015,14 @@ function Remove-SHRSessionHost {
             $Uri = $ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts/' + $sessionHost.FQDN + '?api-version=2024-04-03'
             Invoke-AzureRestMethod `
                 -AccessToken $AccessToken `
-                -Body (@{properties = @{allowNewSession = $false}} | ConvertTo-Json) `
+                -Body (@{properties = @{allowNewSession = $false } } | ConvertTo-Json) `
                 -Method 'PATCH' `
                 -Uri $Uri
             $drainTimestamp = (Get-Date).ToUniversalTime().ToString('o')
             Write-HostDetailed -Message "Setting drain timestamp on tag $TagPendingDrainTimeStamp to $drainTimestamp."
             $Uri = $ResourceManagerUri + $sessionHost.ResourceId + '/providers/Microsoft.Resources/tags/default?api-version=2021-04-01'
             $Body = @{
-                operation = 'Merge'
+                operation  = 'Merge'
                 properties = @{
                     $TagPendingDrainTimeStamp = $drainTimestamp
                 }
@@ -988,7 +1033,7 @@ function Remove-SHRSessionHost {
                 # This is string with a single space.
                 Write-HostDetailed -Message "Setting scaling plan exclusion tag $TagScalingPlanExclusionTag to $true."
                 $Body = @{
-                    operation = 'Merge'
+                    operation  = 'Merge'
                     properties = @{
                         $TagScalingPlanExclusionTag = $true
                     }
@@ -997,18 +1042,18 @@ function Remove-SHRSessionHost {
             }
 
             Write-HostDetailed -Message 'Notifying Users'
-            Send-SHRDrainNotification -SessionHostName ($sessionHost.FQDN)
+            Send-DrainNotification -SessionHostName ($sessionHost.FQDN)
         }
 
         if ($deleteSessionHost) {
-            Write-HostDetailed -Message "Deleting session host $($SessionHost.Name)..."
+            Write-HostDetailed -Message "Deleting session host $($SessionHost.SessionHostName)..."
             if ($RemoveEntraDevice) {
                 Write-HostDetailed -Message 'Deleting device from Entra ID'
-                Remove-SHRSessionHostEntraDevice -VMName $sessionHost.VMName
+                Remove-EntraDevice -Name $sessionHost.SessionHostName
             }
             if ($RemoveIntuneDevice) {
                 Write-HostDetailed -Message 'Deleting device from Intune'
-                Remove-SHRSessionHostIntuneDevice -VMName $sessionHost.VMName
+                Remove-IntuneDevice -Name $sessionHost.SessionHostName
             }
             Write-HostDetailed -Message "Removing Session Host from Host Pool $HostPoolName"
             $Uri = $ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts/' + $sessionHost.FQDN + '?api-version=2024-04-03'
@@ -1021,7 +1066,7 @@ function Remove-SHRSessionHost {
     }
 }
 
-function Remove-SHRSessionHostEntraDevice {
+function Remove-EntraDevice {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $false)]
@@ -1029,20 +1074,20 @@ function Remove-SHRSessionHostEntraDevice {
         [Parameter(Mandatory = $true)]
         $GraphToken,
         [Parameter(Mandatory = $true)]
-        [string] $VMName
+        [string] $Name
     )
     $Headers = @{
         'Authorization' = "Bearer $GraphToken"
     }
-    $Device = Invoke-RestMethod -Method Get -Uri ($GraphEndpoint + "/v1.0/devices?`$filter=displayName eq '$VMName'") -Headers $Headers
+    $Device = Invoke-RestMethod -Method Get -Uri ($GraphEndpoint + "/v1.0/devices?`$filter=displayName eq '$Name'") -Headers $Headers
     If ($Device) {
         $Id = $Device.id
-        Write-HostDetailed -Message "Removing device from Entra ID for VM $VMName"
+        Write-HostDetailed -Message "Removing session host $Name from Entra ID"
         Invoke-RestMethod -Method Delete -Uri $GraphEndpoint + '/v1.0/devices/' + $Id -Headers $Headers
     }    
 }
 
-function Remove-SHRSessionHostIntuneDevice {
+function Remove-IntuneDevice {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $false)]
@@ -1050,76 +1095,20 @@ function Remove-SHRSessionHostIntuneDevice {
         [Parameter(Mandatory = $true)]
         $GraphToken,
         [Parameter(Mandatory = $true)]
-        [string] $VMName
+        [string] $Name
     )
     $Headers = @{
         'Authorization' = "Bearer $GraphToken"
     }
-    $Device = Invoke-RestMethod -Method Get -Uri ($GraphEndpoint + "/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$VMName'") -Headers $Headers
+    $Device = Invoke-RestMethod -Method Get -Uri ($GraphEndpoint + "/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$Name'") -Headers $Headers
     If ($Device) {
         $Id = $Device.id
-        Write-HostDetailed -Message "Removing device from Intune for VM $VMName"
+        Write-HostDetailed -Message "Removing session host '$Name' device from Intune"
         Invoke-RestMethod -Method Delete -Uri $GraphEndpoint + '/v1.0/deviceManagement/managedDevices/' + $Id -Headers $Headers
     }
 }
 
 #EndRegion Session Host Removal Functions
-
-#Region Notification Functions
-
-function Send-SHRDrainNotification {
-    <#
-    .SYNOPSIS
-        Retrieves configuration values from environment variables for Azure Function App.
-    .DESCRIPTION
-        This function retrieves configuration values from environment variables with automatic type conversion.
-        Supports boolean, integer, and JSON/hashtable values.
-    .PARAMETER Key
-        The name of the configuration key (environment variable name).
-    .EXAMPLE
-        Get-FunctionConfig -Key '_HostPoolName'
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string] $Key
-    )
-    
-    # Try environment variable first (for Azure Function App settings)
-    $value = [System.Environment]::GetEnvironmentVariable($Key)
-    
-    if ($null -ne $value) {
-        # Type conversion based on expected types
-        # Boolean values
-        if ($value -in @('true', 'True', 'TRUE', '$true', '1')) {
-            return $true
-        }
-        elseif ($value -in @('false', 'False', 'FALSE', '$false', '0')) {
-            return $false
-        }
-        # Integer values
-        elseif ($value -match '^\d+$') {
-            return [int]$value
-        }
-        # Hashtable/JSON values (for complex parameters)
-        elseif ($value.StartsWith('{') -or $value.StartsWith('[')) {
-            try {
-                return ($value | ConvertFrom-Json -AsHashtable)
-            }
-            catch {
-                Write-Warning "Failed to parse JSON for key '$Key': $_"
-                return $value
-            }
-        }
-        # String values
-        else {
-            return $value
-        }
-    }
-    
-    # If not found, throw error
-    throw "Configuration key '$Key' not found in environment variables. Please add it to your Function App Application Settings."
-}
 
 function ConvertTo-CaseInsensitiveHashtable {
     <#
@@ -1195,7 +1184,7 @@ function ConvertTo-CaseInsensitiveHashtable {
 
 #Region Notification Functions
 
-function Send-SHRDrainNotification {
+function Send-DrainNotification {
     <#
     .SYNOPSIS
         Sends drain notifications to users on a session host pending deletion.
@@ -1215,7 +1204,7 @@ function Send-SHRDrainNotification {
     .PARAMETER MessageBody
         Body of the notification message. Use {0} for session host name and {1} for hours.
     .EXAMPLE
-        Send-SHRDrainNotification -SessionHostName 'hostpool/vm001.contoso.com'
+        Send-DrainNotification -SessionHostName 'hostpool/vm001.contoso.com'
     #>
     [CmdletBinding()]
     param (
@@ -1223,13 +1212,13 @@ function Send-SHRDrainNotification {
         [string] $SessionHostName,
 
         [Parameter()]
-        [string] $HostPoolName = (Get-FunctionConfig _HostPoolName),
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
 
         [Parameter()]
-        [string] $ResourceGroupName = (Get-FunctionConfig _HostPoolResourceGroupName),
+        [string] $ResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
 
         [Parameter()]
-        [int] $DrainGracePeriodHours = (Get-FunctionConfig _DrainGracePeriodHours),
+        [int] $DrainGracePeriodHours = (Read-FunctionAppSetting DrainGracePeriodHours),
 
         [Parameter()]
         [string] $MessageTitle = "Automatic Session Host Maintenance",
@@ -1272,7 +1261,7 @@ function Send-SHRDrainNotification {
             
             $MessagePayload = @{
                 messageTitle = $MessageTitle
-                messageBody = $formattedMessageBody
+                messageBody  = $formattedMessageBody
             } | ConvertTo-Json -Depth 10
             
             try {
@@ -1285,78 +1274,13 @@ function Send-SHRDrainNotification {
         }
     }
     catch {
-        Write-HostDetailed -Message "Error in Send-SHRDrainNotification: $_" -Level Error
+        Write-HostDetailed -Message "Error in Send-DrainNotification: $_" -Level Error
     }
 }
 
 #EndRegion Session Host Removal Functions
 
 #Region Optional Enhanced Functions (Token Caching)
-
-function Get-AccessTokenCached {
-    <#
-    .SYNOPSIS
-        Gets ARM access token with caching to reduce token acquisition calls.
-    .DESCRIPTION
-        Retrieves access token from cache if valid, otherwise acquires new token.
-    .PARAMETER Resource
-        The resource URI (default: https://management.azure.com/).
-    .PARAMETER ForceRefresh
-        Forces token refresh even if cached token is valid.
-    .EXAMPLE
-        $token = Get-AccessTokenCached
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter()]
-        [string] $Resource = 'https://management.azure.com/',
-        
-        [Parameter()]
-        [switch] $ForceRefresh
-    )
-    
-    # Check if cached token is still valid (with 5 minute buffer)
-    if (-not $ForceRefresh -and 
-        $Script:AccessTokenCache.Token -and 
-        $Script:AccessTokenCache.ExpiresOn -gt (Get-Date).AddMinutes(5)) {
-        Write-Verbose "Using cached access token (expires: $($Script:AccessTokenCache.ExpiresOn))"
-        return $Script:AccessTokenCache.Token
-    }
-    
-    # Acquire new token
-    $endpoint = $env:IDENTITY_ENDPOINT
-    $identityHeader = $env:IDENTITY_HEADER
-    
-    if ($endpoint -and $identityHeader) {
-        $headers = @{
-            'X-IDENTITY-HEADER' = $identityHeader
-            'Metadata' = 'true'
-        }
-        
-        $body = @{
-            resource = $Resource
-        }
-        
-        try {
-            $response = Invoke-RestMethod -Uri $endpoint -Method Get -Headers $headers -Body $body
-            
-            # Cache the token with expiration
-            $Script:AccessTokenCache.Token = $response.access_token
-            $Script:AccessTokenCache.ExpiresOn = [DateTimeOffset]::FromUnixTimeSeconds($response.expires_on).DateTime
-            
-            Write-Verbose "Retrieved new access token (expires: $($Script:AccessTokenCache.ExpiresOn))"
-            return $response.access_token
-        }
-        catch {
-            Write-Error "Failed to acquire access token: $_"
-            throw
-        }
-    }
-    else {
-        Write-Error "No Access Token - IDENTITY_ENDPOINT or IDENTITY_HEADER not found in environment"
-        throw
-    }
-}
 
 function Get-GraphTokenCached {
     <#
@@ -1395,22 +1319,31 @@ function Get-GraphTokenCached {
     
     # Get configuration if not provided
     if ([string]::IsNullOrEmpty($TenantId)) {
-        $TenantId = Get-FunctionConfig _TenantId
+        $TenantId = Read-FunctionAppSetting TenantId
     }
     if ([string]::IsNullOrEmpty($ClientId)) {
-        $ClientId = Get-FunctionConfig _ClientId
+        $ClientId = Read-FunctionAppSetting UserAssignedIdentityClientId
     }
     
-    # Use existing Get-GraphToken logic
-    $accessToken = Get-AccessToken -Resource 'https://management.azure.com/'
+    # Get environment-specific Graph URL from configuration
+    $graphUrl = Read-FunctionAppSetting GraphEndpoint
+    if ([string]::IsNullOrEmpty($graphUrl)) {
+        throw "GraphEndpoint configuration is required but not set in Function App Settings"
+    }
+    
+    Write-Verbose "Using Graph URL: $graphUrl"
+    
+    # Get access token for Resource Manager to exchange for Graph token
+    $resourceManagerUrl = Read-FunctionAppSetting ResourceManagerUrl
+    $accessToken = Get-AccessToken -Resource $resourceManagerUrl -ClientId $ClientId
     
     $headers = @{
         'Authorization' = "Bearer $accessToken"
-        'Content-Type' = 'application/json'
+        'Content-Type'  = 'application/json'
     }
     
     $body = @{
-        resource = 'https://graph.microsoft.com'
+        resource  = $graphUrl
         client_id = $ClientId
     } | ConvertTo-Json
     
@@ -1448,3 +1381,4 @@ function Get-GraphTokenCached {
     https://learn.microsoft.com/en-us/graph/api/intune-devices-manageddevice-list?view=graph-rest-1.0
     DELETE https://graph.microsoft.com/v1.0/devices/{id}
 #>
+

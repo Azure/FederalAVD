@@ -1,15 +1,15 @@
 targetScope = 'subscription'
 
 param existingHostPoolResourceId string
-param existingFeedWorkspaceResourceId string
-param fslogixStorageCustomPrefix string
-param identifier string
-param index string
+param existingFeedWorkspaceResourceId string = ''
+param fslogixStorageCustomPrefix string = ''
+param identifier string = ''
+param index string = ''
 param controlPlaneRegion string
-param globalFeedRegion string
+param globalFeedRegion string = ''
 param virtualMachinesRegion string
-param nameConvResTypeAtEnd bool
-param virtualMachineNamePrefix string
+param nameConvResTypeAtEnd bool = false
+param virtualMachineNamePrefix string = ''
 
 var cloud = toLower(environment().name)
 var locationsObject = loadJsonContent('../../../.common/data/locations.json')
@@ -27,8 +27,15 @@ var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbre
 
 var existingHostPoolName = empty(existingHostPoolResourceId) ? '' : split(existingHostPoolResourceId, '/')[8]
 
+// Dynamically determine naming convention from existing host pool name
+// nameConvReversed = true means resource type at end (e.g., "avd-01-hp")
+// nameConvReversed = false means resource type at beginning (e.g., "hp-avd-01")
 var nameConvReversed = !empty(existingHostPoolName)
-  ? !startsWith(existingHostPoolName, resourceAbbreviations.hostPools)
+  ? startsWith(existingHostPoolName, resourceAbbreviations.hostPools)
+      ? false // Resource type is at the beginning
+      : endsWith(existingHostPoolName, resourceAbbreviations.hostPools)
+          ? true // Resource type is at the end
+          : nameConvResTypeAtEnd // Fallback to parameter if unclear
   : nameConvResTypeAtEnd
 
 var arrHostPoolName = split(existingHostPoolName, '-')
@@ -105,6 +112,16 @@ var appServicePlanName = replace(
   ),
   'TOKEN-',
   ''
+)
+
+var sessionHostTemplateSpecName = replace(
+  replace(
+    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.templateSpecs),
+    'LOCATION',
+    virtualMachinesRegionAbbreviation
+  ),
+  'TOKEN-',
+  'session-host-'
 )
 
 // key vaults must be named with a length of 3 - 24 characters and must be globally unique.
@@ -388,6 +405,7 @@ output resourceGroupManagement string = resourceGroupManagement
 output resourceGroupMonitoring string = resourceGroupMonitoring
 output resourceGroupStorage string = resourceGroupStorage
 output scalingPlanName string = scalingPlanName
+output sessionHostTemplateSpecName string = sessionHostTemplateSpecName
 output storageAccountNames object = {
   appAttach: appAttachStorageAccountName
   fslogix: fslogixStorageAccountNamePrefix

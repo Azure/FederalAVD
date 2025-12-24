@@ -27,6 +27,7 @@
     "routeTables": "rt",
     "scalingPlans": "vdscaling",
     "storageAccounts": "sa",
+    "templateSpecs": "ts",
     "userAssignedIdentities": "uai",
     "virtualMachines": "vm",
     "workspaces": "vdws",

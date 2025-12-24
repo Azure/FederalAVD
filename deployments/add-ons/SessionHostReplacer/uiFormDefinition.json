@@ -1,0 +1,507 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+	"view": {
+		"kind": "Form",
+		"properties": {
+			"title": "AVD Session Host Replacer Add-On",
+			"steps": [
+				{
+					"name": "basics",
+					"label": "Basics",
+					"elements": [
+						{
+							"name": "introBox",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": true,
+							"options": {
+								"text": "Automated lifecycle management for Azure Virtual Desktop session hosts. This add-on deploys a PowerShell function app that monitors session host age and image versions, automatically replacing outdated VMs.",
+								"link": {
+									"label": "Documentation",
+									"uri": "https://github.com/Azure/FederalAVD/tree/main/deployments/add-ons/SessionHostReplacer"
+								}
+							}
+						},
+						{
+							"name": "scope",
+							"type": "Microsoft.Common.ResourceScope",
+							"instanceDetailsLabel": "Deployment Details",
+							"location": {
+								"label": "Deployment Location",
+								"resourceTypes": [
+									"Microsoft.Web/sites"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "hostPoolConfig",
+					"label": "Host Pool Configuration",
+					"elements": [
+						{
+							"name": "hostPoolResourceId",
+							"type": "Microsoft.Solutions.ResourceSelector",
+							"label": "Host Pool",
+							"toolTip": "Select the AVD Host Pool to manage",
+							"resourceType": "Microsoft.DesktopVirtualization/hostPools",
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "sessionHostResourceGroup",
+							"type": "Microsoft.Common.ResourceGroupSelector",
+							"label": "Session Host Resource Group",
+							"toolTip": "The resource group containing the session host VMs. Used to derive naming convention and region.",
+							"allowedMode": "UseExisting",
+							"constraints": {
+								"required": true
+							},
+							"scope": {
+								"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
+							}
+						},
+						{
+							"name": "templateSpecResourceId",
+							"type": "Microsoft.Solutions.ResourceSelector",
+							"label": "Template Spec",
+							"toolTip": "Select the Template Spec version for session host deployments",
+							"resourceType": "Microsoft.Resources/templateSpecs/versions",
+							"constraints": {
+								"required": true
+							}
+						}
+					]
+				},
+				{
+					"name": "identityConfig",
+					"label": "Identity & Encryption",
+					"elements": [
+						{
+							"name": "prerequisiteWarning",
+							"type": "Microsoft.Common.InfoBox",
+							"visible": true,
+							"options": {
+								"icon": "Warning",
+								"text": "The User-Assigned Identity must have Microsoft Graph API permissions pre-configured: Device.ReadWrite.All and DeviceManagementManagedDevices.ReadWrite.All. See documentation for setup instructions."
+							}
+						},
+						{
+							"name": "sessionHostReplacerIdentity",
+							"type": "Microsoft.Solutions.ResourceSelector",
+							"label": "Session Host Replacer User-Assigned Identity",
+							"toolTip": "Select the UAI with pre-configured Graph API permissions",
+							"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "credentialsSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Session Host Credentials",
+							"elements": [
+								{
+									"name": "credentialsInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": true,
+									"options": {
+										"icon": "Info",
+										"text": "The Key Vault must contain secrets for session host credentials: VirtualMachineAdminPassword, VirtualMachineAdminUserName, DomainJoinUserPassword (if domain-joined), and DomainJoinUserPrincipalName (if domain-joined)."
+									}
+								},
+								{
+									"name": "credentialsKeyVault",
+									"type": "Microsoft.KeyVault.KeyVaultSelector",
+									"label": "Credentials Key Vault",
+									"toolTip": "Select the Key Vault containing session host credential secrets",
+									"constraints": {
+										"required": true
+									}
+								}
+							]
+						},
+						{
+							"name": "encryptionSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Encryption Configuration",
+							"elements": [
+								{
+									"name": "encryptionIdentity",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Encryption User-Assigned Identity",
+									"toolTip": "Select the UAI for customer-managed encryption keys",
+									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "keyVault",
+									"type": "Microsoft.KeyVault.KeyVaultSelector",
+									"label": "Key Vault",
+									"toolTip": "Select the Key Vault containing encryption keys",
+									"constraints": {
+										"required": true
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "functionConfig",
+					"label": "Function App Configuration",
+					"elements": [
+						{
+							"name": "resourceGroupManagement",
+							"type": "Microsoft.Common.ResourceGroupSelector",
+							"label": "Management Resource Group (Optional)",
+							"toolTip": "The resource group where the function app and storage will be deployed. If not specified, uses the same resource group as the App Service Plan.",
+							"allowedMode": "UseExisting",
+							"constraints": {
+								"required": false
+							},
+							"scope": {
+								"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
+							}
+						},
+						{
+							"name": "appServicePlan",
+							"type": "Microsoft.Solutions.ResourceSelector",
+							"label": "App Service Plan",
+							"toolTip": "Select an existing Premium V3 App Service Plan (can be shared)",
+							"resourceType": "Microsoft.Web/serverfarms",
+							"constraints": {
+								"required": true
+							},
+							"options": {
+								"filter": {
+									"sku": {
+										"tier": "PremiumV3"
+									}
+								}
+							}
+						},
+						{
+							"name": "namingInfo",
+							"type": "Microsoft.Common.InfoBox",
+							"visible": true,
+							"options": {
+								"icon": "Info",
+								"text": "Resource names are automatically generated using the same naming convention as your Host Pool deployment. Names are derived from the Host Pool and Session Host Resource Group."
+							}
+						},
+						{
+							"name": "functionAppName",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Function App Name (Optional)",
+							"toolTip": "Leave empty to auto-generate using consistent naming convention",
+							"constraints": {
+								"regex": "^[a-z0-9-]{0,60}$",
+								"validationMessage": "Only lowercase letters, numbers, and hyphens allowed. Maximum 60 characters."
+							}
+						},
+						{
+							"name": "storageAccountName",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Storage Account Name (Optional)",
+							"toolTip": "Leave empty to auto-generate using consistent naming convention",
+							"constraints": {
+								"regex": "^[a-z0-9]{0,24}$",
+								"validationMessage": "Only lowercase letters and numbers allowed. Maximum 24 characters."
+							}
+						}
+					]
+				},
+				{
+					"name": "automationSettings",
+					"label": "Automation Settings",
+					"elements": [
+						{
+							"name": "maxSessionHostsToReplace",
+							"type": "Microsoft.Common.Slider",
+							"min": 1,
+							"max": 20,
+							"label": "Max Session Hosts to Replace",
+							"subLabel": "per execution",
+							"defaultValue": 1,
+							"showStepMarkers": false,
+							"toolTip": "Maximum number of session hosts to replace during each function execution (safety throttle)"
+						},
+						{
+							"name": "targetVMAgeDays",
+							"type": "Microsoft.Common.Slider",
+							"min": 1,
+							"max": 365,
+							"label": "Target VM Age",
+							"subLabel": "days",
+							"defaultValue": 45,
+							"showStepMarkers": false,
+							"toolTip": "Age threshold for session hosts before automatic replacement"
+						},
+						{
+							"name": "drainGracePeriodHours",
+							"type": "Microsoft.Common.Slider",
+							"min": 1,
+							"max": 168,
+							"label": "Drain Grace Period",
+							"subLabel": "hours",
+							"defaultValue": 24,
+							"showStepMarkers": false,
+							"toolTip": "How long to wait after draining before deleting session hosts"
+						},
+						{
+							"name": "timerSchedule",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Timer Schedule (Cron)",
+							"defaultValue": "0 0 */6 * * *",
+							"toolTip": "Cron expression for execution schedule. Default: every 6 hours",
+							"constraints": {
+								"required": true,
+								"regex": "^[0-9\\*\\-\\,\\/\\s]+$",
+								"validationMessage": "Must be a valid cron expression"
+							}
+						},
+						{
+							"name": "advancedSettings",
+							"type": "Microsoft.Common.Section",
+							"label": "Advanced Settings",
+							"elements": [
+								{
+									"name": "fixSessionHostTags",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Auto-fix session host tags",
+									"defaultValue": true,
+									"toolTip": "Automatically fix missing or invalid tags on session hosts"
+								},
+								{
+									"name": "includePreExistingSessionHosts",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Include pre-existing session hosts",
+									"defaultValue": false,
+									"toolTip": "Include session hosts without deployment timestamp tags in automation"
+								},
+								{
+									"name": "removeEntraDevice",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Remove Entra ID device records",
+									"defaultValue": false,
+									"toolTip": "Remove Entra ID device objects when deleting session hosts (requires Graph API permissions)"
+								},
+								{
+									"name": "removeIntuneDevice",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Remove Intune device records",
+									"defaultValue": false,
+									"toolTip": "Remove Intune managed device records when deleting session hosts (requires Graph API permissions)"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "networkConfig",
+					"label": "Network Configuration",
+					"elements": [
+						{
+							"name": "privateEndpoint",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Enable private endpoints",
+							"defaultValue": false,
+							"toolTip": "Enable private endpoints for function app and storage account (requires VNet integration)"
+						},
+						{
+							"name": "privateEndpointSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Private Endpoint Configuration",
+							"visible": "[steps('networkConfig').privateEndpoint]",
+							"elements": [
+								{
+									"name": "privateEndpointSubnet",
+									"type": "Microsoft.Network.VirtualNetworkCombo",
+									"label": {
+										"virtualNetwork": "Virtual network",
+										"subnets": "Private Endpoint Subnet"
+									},
+									"toolTip": {
+										"virtualNetwork": "Select the virtual network for private endpoints",
+										"subnets": "Select the subnet for private endpoints"
+									},
+									"defaultValue": {
+										"name": "",
+										"addressPrefixSize": "/24"
+									},
+									"constraints": {
+										"minAddressPrefixSize": "/29"
+									},
+									"options": {
+										"hideExisting": false
+									},
+									"subnets": {
+										"subnet1": {
+											"label": "Private Endpoint Subnet",
+											"defaultValue": {
+												"name": "snet-private-endpoints",
+												"addressPrefixSize": "/24"
+											},
+											"constraints": {
+												"minAddressPrefixSize": "/29",
+												"minAddressCount": 12,
+												"requireContiguousAddresses": false
+											}
+										}
+									}
+								},
+								{
+									"name": "functionAppSubnet",
+									"type": "Microsoft.Network.VirtualNetworkCombo",
+									"label": {
+										"virtualNetwork": "Virtual network",
+										"subnets": "Function App Subnet"
+									},
+									"toolTip": {
+										"virtualNetwork": "Select the virtual network for function app VNet integration",
+										"subnets": "Select the subnet for function app delegation (must be dedicated)"
+									},
+									"defaultValue": {
+										"name": "[steps('networkConfig').privateEndpointSection.privateEndpointSubnet.name]",
+										"addressPrefixSize": "/24"
+									},
+									"constraints": {
+										"minAddressPrefixSize": "/28"
+									},
+									"options": {
+										"hideExisting": false
+									},
+									"subnets": {
+										"subnet1": {
+											"label": "Function App Subnet",
+											"defaultValue": {
+												"name": "snet-function-app",
+												"addressPrefixSize": "/24"
+											},
+											"constraints": {
+												"minAddressPrefixSize": "/28",
+												"minAddressCount": 16,
+												"requireContiguousAddresses": true,
+												"delegations": [
+													{
+														"name": "Microsoft.Web/serverFarms",
+														"serviceName": "Microsoft.Web/serverFarms"
+													}
+												]
+											}
+										}
+									}
+								},
+								{
+									"name": "privateDnsZones",
+									"type": "Microsoft.Common.Section",
+									"label": "Private DNS Zones",
+									"elements": [
+										{
+											"name": "blobDnsZone",
+											"type": "Microsoft.Solutions.ResourceSelector",
+											"label": "Blob Private DNS Zone",
+											"resourceType": "Microsoft.Network/privateDnsZones",
+											"constraints": {
+												"required": true
+											}
+										},
+										{
+											"name": "fileDnsZone",
+											"type": "Microsoft.Solutions.ResourceSelector",
+											"label": "File Private DNS Zone",
+											"resourceType": "Microsoft.Network/privateDnsZones",
+											"constraints": {
+												"required": true
+											}
+										},
+										{
+											"name": "queueDnsZone",
+											"type": "Microsoft.Solutions.ResourceSelector",
+											"label": "Queue Private DNS Zone",
+											"resourceType": "Microsoft.Network/privateDnsZones",
+											"constraints": {
+												"required": true
+											}
+										},
+										{
+											"name": "tableDnsZone",
+											"type": "Microsoft.Solutions.ResourceSelector",
+											"label": "Table Private DNS Zone",
+											"resourceType": "Microsoft.Network/privateDnsZones",
+											"constraints": {
+												"required": true
+											}
+										},
+										{
+											"name": "functionAppDnsZone",
+											"type": "Microsoft.Solutions.ResourceSelector",
+											"label": "Function App Private DNS Zone",
+											"resourceType": "Microsoft.Network/privateDnsZones",
+											"constraints": {
+												"required": true
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "tags",
+					"label": "Tags",
+					"elements": [
+						{
+							"name": "resourceTags",
+							"type": "Microsoft.Common.TagsByResource",
+							"resources": [
+								"Microsoft.Web/sites",
+								"Microsoft.Storage/storageAccounts",
+								"Microsoft.Insights/components"
+							]
+						}
+					]
+				}
+			]
+		},
+		"outputs": {
+			"kind": "Subscription",
+			"location": "[steps('basics').scope.location.name]",
+			"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
+			"parameters": {
+				"resourceGroupManagement": "[coalesce(steps('functionConfig').resourceGroupManagement.name, split(steps('functionConfig').appServicePlan.id, '/')[4])]",
+				"hostPoolResourceId": "[steps('hostPoolConfig').hostPoolResourceId.id]",
+				"sessionHostResourceGroupName": "[steps('hostPoolConfig').sessionHostResourceGroup.name]",
+				"sessionHostTemplateSpecVersionResourceId": "[steps('hostPoolConfig').templateSpecResourceId.id]",
+				"sessionHostReplacerUserAssignedIdentityResourceId": "[steps('identityConfig').sessionHostReplacerIdentity.id]",
+				"credentialsKeyVaultResourceId": "[steps('identityConfig').credentialsSection.credentialsKeyVault.id]",
+				"appServicePlanResourceId": "[steps('functionConfig').appServicePlan.id]",
+				"functionAppName": "[steps('functionConfig').functionAppName]",
+				"storageAccountName": "[steps('functionConfig').storageAccountName]",
+				"encryptionUserAssignedIdentityResourceId": "[steps('identityConfig').encryptionSection.encryptionIdentity.id]",
+				"encryptionKeyVaultUri": "[steps('identityConfig').encryptionSection.keyVault.vaultUri]",
+				"maxSessionHostsToReplace": "[steps('automationSettings').maxSessionHostsToReplace]",
+				"targetVMAgeDays": "[steps('automationSettings').targetVMAgeDays]",
+				"drainGracePeriodHours": "[steps('automationSettings').drainGracePeriodHours]",
+				"timerSchedule": "[steps('automationSettings').timerSchedule]",
+				"fixSessionHostTags": "[steps('automationSettings').advancedSettings.fixSessionHostTags]",
+				"includePreExistingSessionHosts": "[steps('automationSettings').advancedSettings.includePreExistingSessionHosts]",
+				"removeEntraDevice": "[steps('automationSettings').advancedSettings.removeEntraDevice]",
+				"removeIntuneDevice": "[steps('automationSettings').advancedSettings.removeIntuneDevice]",
+				"privateEndpoint": "[steps('networkConfig').privateEndpoint]",
+				"privateEndpointSubnetResourceId": "[if(steps('networkConfig').privateEndpoint, steps('networkConfig').privateEndpointSection.privateEndpointSubnet.subnets.subnet1.id, '')]",
+				"functionAppDelegatedSubnetResourceId": "[if(steps('networkConfig').privateEndpoint, steps('networkConfig').privateEndpointSection.functionAppSubnet.subnets.subnet1.id, '')]",
+				"azureBlobPrivateDnsZoneResourceId": "[if(steps('networkConfig').privateEndpoint, steps('networkConfig').privateEndpointSection.privateDnsZones.blobDnsZone.id, '')]",
+				"azureFilePrivateDnsZoneResourceId": "[if(steps('networkConfig').privateEndpoint, steps('networkConfig').privateEndpointSection.privateDnsZones.fileDnsZone.id, '')]",
+				"azureQueuePrivateDnsZoneResourceId": "[if(steps('networkConfig').privateEndpoint, steps('networkConfig').privateEndpointSection.privateDnsZones.queueDnsZone.id, '')]",
+				"azureTablePrivateDnsZoneResourceId": "[if(steps('networkConfig').privateEndpoint, steps('networkConfig').privateEndpointSection.privateDnsZones.tableDnsZone.id, '')]",
+				"azureFunctionAppPrivateDnsZoneResourceId": "[if(steps('networkConfig').privateEndpoint, steps('networkConfig').privateEndpointSection.privateDnsZones.functionAppDnsZone.id, '')]",
+				"tags": "[steps('tags').resourceTags]"
+			}
+		}
+	}
+}

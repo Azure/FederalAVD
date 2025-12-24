@@ -9,8 +9,6 @@ param keyVaultResourceId string
 param location string
 param storageCount int
 param storageIndex int
-param increaseQuota bool
-param increaseQuotaEncryptionKeyName string
 param tags object
 param deploymentSuffix string
 param userAssignedIdentityNameConv string
@@ -55,42 +53,6 @@ module fslogixStorageAccountEncryptionKeys '../../../../sharedModules/resources/
   }
 }]
 
-module increaseQuotaStorageAccountEncryptionKey '../../../../sharedModules/resources/key-vault/vault/key/main.bicep' = if (increaseQuota) {
-  name: 'IncreaseQuotaEncryptionKey-${deploymentSuffix}'
-  scope: resourceGroup(keyVaultResourceGroup)
-  params: {
-    attributesExportable: false
-    keySize: 4096
-    keyVaultName: keyVaultName
-    kty: contains(keyManagementStorageAccounts, 'HSM') ? 'RSA-HSM' : 'RSA'
-    name: increaseQuotaEncryptionKeyName
-    rotationPolicy: {
-      attributes: {
-        expiryTime: 'P${string(keyExpirationInDays)}D'
-      }
-      lifetimeActions: [
-        {
-          action: {
-            type: 'Notify'
-          }
-          trigger: {
-            timeBeforeExpiry: 'P10D'
-          }
-        }
-        {
-          action: {
-            type: 'Rotate'
-          }
-          trigger: {
-            timeAfterCreate: 'P${string(keyExpirationInDays - 7)}D'
-          }
-        }
-      ]
-    }
-    tags: { 'cm-resource-parent': hostPoolResourceId }
-  }
-}
-
 module userAssignedIdentity '../../../../sharedModules/resources/managed-identity/user-assigned-identity/main.bicep' = {
   name: 'UAI-Encryption-${deploymentSuffix}'
   params: {
@@ -103,7 +65,7 @@ module userAssignedIdentity '../../../../sharedModules/resources/managed-identit
   }
 }
 
-module roleAssignment_UAI_EncryptionUser_FSLogix '../../management/modules/key_RBAC.bicep' = [for i in range(0, storageCount): {
+module roleAssignment_UAI_EncryptionUser_FSLogix '../../../../sharedModules/resources/key-vault/vault/key/rbac.bicep' = [for i in range(0, storageCount): {
   name: 'RA-Encryption-User-FSLogix-${padLeft(i + storageIndex, 2, '0')}-${deploymentSuffix}'
   scope: resourceGroup(keyVaultResourceGroup)
   params: {
@@ -115,19 +77,7 @@ module roleAssignment_UAI_EncryptionUser_FSLogix '../../management/modules/key_R
   }  
 }]
 
-module roleAssignment_UAI_EncryptionUser_increaseQuota '../../management/modules/key_RBAC.bicep' = if (increaseQuota) {
-  name: 'RA-Encryption-User-IncreaseQuota-${deploymentSuffix}'
-  scope: resourceGroup(keyVaultResourceGroup)
-  params: {
-    keyName: increaseQuotaStorageAccountEncryptionKey!.outputs.name
-    keyVaultName: keyVaultName
-    principalId: userAssignedIdentity.outputs.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: roleKeyVaultCryptoUser
-  }  
-}
-
-module getRoleAssignments '../../common/get-RoleAssignments.bicep' = {
+module getRoleAssignments '../../../../sharedModules/custom/roleAssignments/get-RoleAssignments.bicep' = {
   name: 'Get-UAI-KeyVault-Key-RoleAssignments-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {

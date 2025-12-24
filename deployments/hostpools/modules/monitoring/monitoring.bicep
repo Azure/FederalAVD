@@ -59,7 +59,7 @@ module dataCollectionEndpoint 'modules/dataCollectionEndpoint.bicep' = {
   }
 }
 
-module updatePrivateLinkScope '../common/privateLinkScopes/get-PrivateLinkScope.bicep' = if (!empty(azureMonitorPrivateLinkScopeResourceId)) {
+module updatePrivateLinkScope '../../../sharedModules/custom/privateLinkScopes/get-PrivateLinkScope.bicep' = if (!empty(azureMonitorPrivateLinkScopeResourceId)) {
   name: 'PrivateLlinkScope-${deploymentSuffix}'
   params: {
     deploymentSuffix: deploymentSuffix

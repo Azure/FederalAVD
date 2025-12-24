@@ -308,12 +308,12 @@ param enableAcceleratedNetworking bool = true
 param hibernationEnabled bool = false
 
 @allowed([
-  'availabilitySets'
-  'availabilityZones'
+  'AvailabilitySets'
+  'AvailabilityZones'
   'None'
 ])
 @description('Optional. Set the desired availability / SLA with a pooled host pool.  The best practice is to deploy to availability Zones for resilency. Not used when either "dedicatedHostResourceId" or "dedicatedHostGroupResourceId" is specified.')
-param availability string = 'availabilityZones'
+param availability string = 'AvailabilityZones'
 
 @description('Conditional. The availability zones allowed for the AVD session hosts deployment location. Used when "availability" is set to "availabilityZones".')
 param availabilityZones array = []
@@ -500,9 +500,6 @@ param recoveryServices bool = false
 @description('Optional. The resource Id of an existing Recovery Services Vault that will be used to store Virtual Machine Backups. Only used when "DeploymentType" is "SessionHostOnly".')
 param existingRecoveryServicesVaultResourceId string = ''
 
-@description('Optional. Determines whether or not to deploy a function app to automatically increase the quota on Azure Files Premium.')
-param deployIncreaseQuota bool = false
-
 @description('Optional. The resource Id of an existing Server Farm used to host the increase quota function app.')
 param existingHostingPlanResourceId string = ''
 
@@ -669,6 +666,7 @@ var globalFeedRegion = !empty(globalFeedPrivateEndpointSubnetResourceId) ? avdPr
 var virtualMachinesRegion = vmVirtualNetwork.location
 var controlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
 
+var deployIncreaseQuota = deployFSLogixStorage && (split(fslogixStorageService, ' ')[1] == 'Premium')
 var createDeploymentVm = deploymentType != 'SessionHostsOnly' && ( deployFSLogixStorage || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName) )
 var deployManagementResources = deploymentType == 'Complete' && ( deployIncreaseQuota || deploySecretsKeyVault || contains(keyManagementStorageAccounts, 'CustomerManaged') || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption )
 
@@ -708,9 +706,9 @@ var hostPoolVmTemplate = {
   secureBoot: secureBootEnabled
   vTPM: vTpmEnabled
   subnetId: virtualMachineSubnetResourceId
-  availability: availability == 'availabilityZones'
+  availability: availability == 'AvailabilityZones'
     ? 'Availability Zones'
-    : availability == 'availabilitySets' ? 'Availability Sets' : 'No infrastructure redundancy required'
+    : availability == 'AvailabilitySets' ? 'Availability Sets' : 'No infrastructure redundancy required'
   vmInfrastructureType: 'Cloud'
   nameConvResTypeAtEnd: nameConvResTypeAtEnd
 }
@@ -785,10 +783,10 @@ var fslogixStorageCount = identitySolution == 'EntraId' || fslogixShardOptions =
 
 //  BATCH SESSION HOSTS
 // The following variables are used to determine the batches to deploy any number of AVD session hosts.
-var maxResourcesPerTemplateDeployment = 40 // This is the max number of session hosts that can be deployed from the sessionHosts.bicep file in each batch / for loop. Math: (800 - <Number of Static Resources>) / <Number of Looped Resources> 
-var divisionValue = sessionHostCount / maxResourcesPerTemplateDeployment // This determines if any full batches are required.
-var divisionRemainderValue = sessionHostCount % maxResourcesPerTemplateDeployment // This determines if any partial batches are required.
-var sessionHostBatchCount = divisionRemainderValue > 0 ? divisionValue + 1 : divisionValue // This determines the total number of batches needed, whether full and / or partial.
+var maxVMsPerDeployment = 40 // The maximum number of VMs deployed per batch to stay within ARM template resource limits. Math: (800 - <Number of Static Resources>) / <Number of Resources per VM> 
+var divisionValue = sessionHostCount / maxVMsPerDeployment // The number of full batches (integer division).
+var divisionRemainderValue = sessionHostCount % maxVMsPerDeployment // The number of VMs in the final partial batch (0 if all batches are full).
+var sessionHostBatchCount = divisionRemainderValue > 0 ? divisionValue + 1 : divisionValue // The total number of batches needed (full batches + 1 partial batch if remainder exists).
 
 //  BATCH AVAILABILITY SETS
 // The following variables are used to determine the number of availability sets.
@@ -1024,13 +1022,17 @@ module management 'modules/management/management.bicep' = if (deployManagementRe
   params: {
     appServicePlanName: resourceNames.outputs.appServicePlanName
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
+    deployIncreaseQuota: deployIncreaseQuota
     deploymentSuffix: deploymentSuffix
-    enableQuotaManagement: deployIncreaseQuota
     encryptionKeysKeyVaultName: resourceNames.outputs.keyVaultNames.encryptionKeys
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     deployEncryptionKeysKeyVault: deploymentType == 'Complete' && (contains(keyManagementDisks, 'Customer') || contains(keyManagementStorageAccounts, 'Customer'))
     deploySecretsKeyVault: deploySecretsKeyVault
+    hostPoolResourceId: deploymentType == 'SessionHostsOnly' ? existingHostPoolResourceId : controlPlane!.outputs.hostPoolResourceId
+    increaseQuotaFunctionAppName: resourceNames.outputs.functionAppNames.increaseStorageQuota
+    keyManagementStorageAccounts: keyManagementStorageAccounts
+    userAssignedIdentityNameConv: resourceNames.outputs.userAssignedIdentityNameConv
     keyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
     keyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
     secretsKeyVaultName: resourceNames.outputs.keyVaultNames.secrets
@@ -1045,7 +1047,7 @@ module management 'modules/management/management.bicep' = if (deployManagementRe
     tags: tags
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
-    zoneRedundant: availability == 'availabilityZones'
+    zoneRedundant: availability == 'AvailabilityZones'
   }
   dependsOn: [
     managementResourceGroup
@@ -1117,9 +1119,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFilePrivateDnsZoneResourceId: azureFilesPrivateDnsZoneResourceId
-    azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
-    azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: createDeploymentVm ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId : ''
     deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
     #disable-next-line BCP422
@@ -1134,14 +1134,8 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     fslogixFileShares: fslogixFileShareNames
     fslogixShardOptions: fslogixShardOptions
     fslogixUserGroups: fslogixUserGroups
-    functionAppDelegatedSubnetResourceId: functionAppSubnetResourceId    
     hostPoolResourceId: deploymentType == 'SessionHostsOnly' ? existingHostPoolResourceId : controlPlane!.outputs.hostPoolResourceId
     identitySolution: identitySolution
-    increaseQuota: deployIncreaseQuota
-    increaseQuotaAppInsightsName: resourceNames.outputs.appInsightsNames.increaseStorageQuota
-    increaseQuotaEncryptionKeyName: resourceNames.outputs.encryptionKeyNames.increaseStorageQuota
-    increaseQuotaFunctionAppName: resourceNames.outputs.functionAppNames.increaseStorageQuota
-    increaseQuotaStorageAccountName: resourceNames.outputs.storageAccountNames.increaseStorageQuota
     kerberosEncryptionType: fslogixStorageKerberosEncryptionType
     keyExpirationInDays: keyExpirationInDays
     keyManagementStorageAccounts: keyManagementStorageAccounts
@@ -1155,12 +1149,10 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
-    privateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
     recoveryServices: recoveryServices
     recoveryServicesVaultName: resourceNames.outputs.recoveryServicesVaultNames.fslogixStorage
     resourceGroupDeployment: resourceNames.outputs.resourceGroupDeployment
     resourceGroupStorage: resourceNames.outputs.resourceGroupStorage
-    serverFarmId: deployIncreaseQuota ? (deploymentType == 'Complete' ? management!.outputs.appServicePlanId : existingHostingPlanResourceId) : ''
     shareSizeInGB: fslogixShareSizeInGB
     smbServerLocation: resourceNames.outputs.smbServerLocation
     storageAccountNamePrefix: resourceNames.outputs.storageAccountNames.fslogix
@@ -1176,6 +1168,40 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
   dependsOn: [
     storageResourceGroup
   ]
+}
+
+// Increase Quota Function App
+module increaseQuotaFunctionApp 'modules/increaseQuota/increaseQuota.bicep' = if (deploymentType != 'SessionHostsOnly' && deployIncreaseQuota && deployFSLogixStorage && split(fslogixStorageService, ' ')[1] == 'Premium') {
+  name: 'IncreaseQuota-${deploymentSuffix}'
+  scope: resourceGroup(deploymentType == 'Complete' ? managementResourceGroup.name : split(existingHostingPlanResourceId, '/')[4])
+  params: {
+    appInsightsName: resourceNames.outputs.appInsightsNames.increaseStorageQuota
+    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
+    azureFilePrivateDnsZoneResourceId: azureFilesPrivateDnsZoneResourceId
+    azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
+    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
+    azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
+    deploymentSuffix: deploymentSuffix
+    encryptionKeyName: resourceNames.outputs.encryptionKeyNames.increaseStorageQuota
+    encryptionKeyVaultUri: encryptionKeyVaultUri
+    encryptionUserAssignedIdentityResourceId: deploymentType == 'Complete' && contains(keyManagementStorageAccounts, 'Customer') ? management!.outputs.increaseQuotaEncryptionIdentityResourceId : ''
+    fslogixFileShareNames: fslogixFileShareNames
+    functionAppDelegatedSubnetResourceId: functionAppSubnetResourceId
+    functionAppName: resourceNames.outputs.functionAppNames.increaseStorageQuota
+    hostPoolResourceId: deploymentType == 'SessionHostsOnly' ? existingHostPoolResourceId : controlPlane!.outputs.hostPoolResourceId
+    keyManagementStorageAccounts: keyManagementStorageAccounts
+    location: virtualMachinesRegion
+    logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete' ? monitoring!.outputs.logAnalyticsWorkspaceResourceId : existingLogAnalyticsWorkspaceResourceId) : ''
+    privateEndpoint: deployPrivateEndpoints
+    privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
+    privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
+    privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
+    privateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
+    resourceGroupStorage: resourceNames.outputs.resourceGroupStorage
+    serverFarmId: deploymentType == 'Complete' ? management!.outputs.appServicePlanId : existingHostingPlanResourceId
+    storageAccountName: resourceNames.outputs.storageAccountNames.increaseStorageQuota
+    tags: tags
+  }
 }
 
 // Session Hosts
@@ -1254,7 +1280,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     keyManagementDisks: keyManagementDisks    
     logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete' ? monitoring!.outputs.logAnalyticsWorkspaceResourceId : existingLogAnalyticsWorkspaceResourceId) : ''
     location: virtualMachinesRegion
-    maxResourcesPerTemplateDeployment: maxResourcesPerTemplateDeployment
+    maxVMsPerDeployment: maxVMsPerDeployment
     osDiskNameConv: resourceNames.outputs.virtualMachineDiskNameConv
     ouPath: vmOUPath
     pooledHostPool: split(hostPoolType, ' ')[0] == 'Pooled' ? true : false
@@ -1295,6 +1321,14 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     hostsResourceGroup
   ]
 }
+
+// Session Host Replacer has been moved to a separate add-on deployment.
+// See deployments/add-ons/SessionHostReplacer/ for deployment instructions.
+// To deploy the session host replacer, use the add-on template with the following parameters:
+// - hostPoolResourceId: The resource ID of the host pool
+// - sessionHostResourceGroupName: The name of the resource group containing session hosts
+// - sessionHostTemplateSpecVersionResourceId: The Template Spec version resource ID
+// - sessionHostReplacerUserAssignedIdentityResourceId: UAI with Graph API permissions
 
 // Clean Up Deployment VM and Role Assignments
 module cleanUp 'modules/cleanUp/cleanUp.bicep' = if (createDeploymentVm) {

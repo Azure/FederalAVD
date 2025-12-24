@@ -33,7 +33,6 @@ param fslogixRemoteNetAppServerFqdns array
 param fslogixRemoteStorageAccountResourceIds array
 param fslogixSizeInMBs int
 param fslogixStorageService string
-param hibernationEnabled bool
 param hostPoolResourceId string
 param identitySolution string
 param imageOffer string
@@ -46,14 +45,12 @@ param networkInterfaceNameConv string
 param osDiskNameConv string
 param ouPath string
 param sessionHostCustomizations array
-param sessionHostCount int
-param sessionHostIndex int
+param sessionHostNames array
 param vmNameIndexLength int
 param sessionHostRegistrationDSCUrl string
 param securityDataCollectionRulesResourceId string
 param securityType string
 param secureBootEnabled bool
-param storageSuffix string
 param subnetResourceId string
 param tags object
 param deploymentSuffix string
@@ -69,8 +66,23 @@ param virtualMachineSize string
 param vmInsightsDataCollectionRulesResourceId string
 param vTpmEnabled bool
 
+var storageSuffix = environment().suffixes.storage
 var amdVmSize = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(virtualMachineSize, '_V710_v5'))
 var nvidiaVmSize = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, '_v3') || endsWith(virtualMachineSize, '_A10_v5'))
+
+// Calculate session host count from the array length
+var sessionHostCount = length(sessionHostNames)
+
+// Determine the position of the numeric index in the VM name based on naming convention
+// virtualMachineNameConv uses '###' as placeholder for the padded index
+var indexPosition = indexOf(virtualMachineNameConv, '###')
+
+// Extract VM numbers from names for zone distribution
+// If '###' is at position 0, extract from beginning; otherwise from the calculated position
+var vmNumbers = [for name in sessionHostNames: int(substring(name, indexPosition, vmNameIndexLength))]
+
+// Extract padded index strings from VM names for use in naming conventions (e.g., 'avdhost001' -> '001')
+var vmIndexStrings = [for name in sessionHostNames: substring(name, indexPosition, vmNameIndexLength)]
 
 var profileShareName = fslogixFileShareNames[0]
 var officeShareName = length(fslogixFileShareNames) > 1 ? fslogixFileShareNames[1] : ''
@@ -169,7 +181,7 @@ resource remoteStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' ex
 }]
 
 resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [for i in range(0, sessionHostCount): {
-  name: replace(networkInterfaceNameConv, '###', padLeft((i + sessionHostIndex), vmNameIndexLength, '0'))
+  name: replace(replace(networkInterfaceNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', virtualMachineNamePrefix)
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Network/networkInterfaces'] ?? {})
   properties: {
@@ -192,19 +204,16 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [fo
 }]
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i in range(0, sessionHostCount): {
-  name: replace(virtualMachineNameConv, '###', padLeft((i + sessionHostIndex), vmNameIndexLength, '0'))
+  name: replace(replace(virtualMachineNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', virtualMachineNamePrefix)
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
   zones: !empty(dedicatedHostResourceId) || !empty(dedicatedHostGroupResourceId) ? dedicatedHostGroupZones : availability == 'AvailabilityZones' && !empty(availabilityZones) ? [
-    availabilityZones[(i + sessionHostIndex) % length(availabilityZones)]
+    availabilityZones[(vmNumbers[i] - 1) % length(availabilityZones)]
   ] : null
   identity: identity
   properties: {
-    additionalCapabilities: {
-      hibernationEnabled: hibernationEnabled
-    }
     availabilitySet: availability == 'AvailabilitySets' ? {
-      id: resourceId('Microsoft.Compute/availabilitySets', '${availabilitySetNamePrefix}-${(i + sessionHostIndex) / 200}')
+      id: resourceId('Microsoft.Compute/availabilitySets', '${availabilitySetNamePrefix}${padLeft(vmNumbers[i] / 200, 2, '0')}')
     } : null
     hardwareProfile: {
       vmSize: virtualMachineSize
@@ -219,7 +228,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
       imageReference: ImageReference
       osDisk: {
         diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
-        name: replace(osDiskNameConv, '###', padLeft((i + sessionHostIndex), vmNameIndexLength, '0'))
+        name: replace(replace(osDiskNameConv, '###', vmIndexStrings[i]), 'VMNAME', sessionHostNames[i])
         osType: 'Windows'
         createOption: 'FromImage'
         caching: 'ReadWrite'
@@ -240,7 +249,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
       dataDisks: []
     }
     osProfile: {
-      computerName: '${virtualMachineNamePrefix}${padLeft((i + sessionHostIndex), vmNameIndexLength, '0')}'
+      computerName: sessionHostNames[i]
       adminUsername: virtualMachineAdminUserName
       adminPassword: virtualMachineAdminPassword
       windowsConfiguration: {
@@ -564,7 +573,7 @@ resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runC
       }
     ] : null
     source: {
-      script: loadTextContent('../../../../../.common/scripts/Set-SessionHostConfiguration.ps1')
+      script: loadTextContent('../../../../../../.common/scripts/Set-SessionHostConfiguration.ps1')
     }
     treatFailureAsDeploymentFailure: true
     timeoutInSeconds: 600
@@ -639,9 +648,3 @@ module updateOSDiskNetworkAccess 'getOSDisk.bicep' = [for i in range(0, sessionH
     vmName: virtualMachine[i].name
   }
 }]
-
-// debugging outputs
-output virtualMachineNames array = [for i in range(0, sessionHostCount): virtualMachine[i].name]
-output fslogixPathExclusions string = fslogixPathExclusions
-output fslogixStorageAccounts array = union(fslogixLocalStorageAccountNames, fslogixRemoteStorageAccountNames)
-output fslogixNetAppServers array = union(fslogixLocalNetAppServerFqdns, fslogixRemoteNetAppServerFqdns)

@@ -2,10 +2,14 @@ targetScope = 'subscription'
 
 param appServicePlanName string
 param azureKeyVaultPrivateDnsZoneResourceId string
+param deployIncreaseQuota bool
 param deploySecretsKeyVault bool
-param enableQuotaManagement bool
 param encryptionKeysKeyVaultName string
 param deployEncryptionKeysKeyVault bool
+param hostPoolResourceId string
+param increaseQuotaFunctionAppName string
+param keyManagementStorageAccounts string
+param userAssignedIdentityNameConv string
 @secure()
 param domainJoinUserPassword string
 @secure()
@@ -142,7 +146,7 @@ module encryptionKeyVault '../../../sharedModules/resources/key-vault/vault/main
   }
 }
 
-module hostingPlan 'modules/functionAppHostingPlan.bicep' = if (enableQuotaManagement) {
+module hostingPlan '../../../sharedModules/custom/functionApp/functionAppHostingPlan.bicep' = if (deployIncreaseQuota) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupManagement)
   params: {
@@ -157,6 +161,21 @@ module hostingPlan 'modules/functionAppHostingPlan.bicep' = if (enableQuotaManag
   }
 }
 
-output appServicePlanId string = enableQuotaManagement ? hostingPlan!.outputs.hostingPlanId : ''
+// Encryption Identity for Increase Quota Function App
+module increaseQuotaEncryptionIdentity '../../../sharedModules/resources/managed-identity/user-assigned-identity/main.bicep' = if (deployIncreaseQuota && contains(keyManagementStorageAccounts, 'Customer')) {
+  name: 'UAI-IncreaseQuota-Encryption-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupManagement)
+  params: {
+    location: location
+    name: replace(replace(userAssignedIdentityNameConv, 'TOKEN', increaseQuotaFunctionAppName), '##', '')
+    tags: union(
+      { 'cm-resource-parent': hostPoolResourceId },
+      tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
+    )
+  }
+}
+
+output appServicePlanId string = deployIncreaseQuota ? hostingPlan!.outputs.hostingPlanId : ''
 output encryptionKeyVaultResourceId string = deployEncryptionKeysKeyVault ? encryptionKeyVault!.outputs.resourceId : ''
 output encryptionKeyVaultUri string = deployEncryptionKeysKeyVault ? encryptionKeyVault!.outputs.uri : ''
+output increaseQuotaEncryptionIdentityResourceId string = deployIncreaseQuota && contains(keyManagementStorageAccounts, 'Customer') ? increaseQuotaEncryptionIdentity!.outputs.resourceId : ''
