@@ -64,7 +64,7 @@
 									}
 								},
 								{
-									"name": "hostPoolProps",
+									"name": "hostsRGProps",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"condition": "[not(empty(steps('functionApp').executionSettings.hostPool))]",
 									"request": {
@@ -72,7 +72,15 @@
 										"path": "[concat(steps('functionApp').executionSettings.hostPool.id, '?api-version=2024-04-03')]"
 									}
 								},
-
+								{
+									"name": "hostsRGProps",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(not(empty(steps('functionApp').executionSettings.hostPool)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.hostsResourceGroupId)))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('functionApp').executionSettings.hostsRGProps.tags.hostsResourceGroupId, '?api-version=2021-04-01')]"
+									}
+								},
 								{
 									"name": "templateSpecOptionsGroup",
 									"type": "Microsoft.Common.OptionsGroup",
@@ -327,14 +335,14 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Remove Entra ID Device Records",
 									"toolTip": "Remove Entra ID device records when deleting session hosts.",
-									"defaultValue": "[not(contains(coalesce(steps('functionApp').executionSettings.hostPoolProps.tags.vmIdentityType, ''), 'DomainServices'))]"
+									"defaultValue": "[not(contains(coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmIdentityType, ''), 'DomainServices'))]"
 								},
 								{
 									"name": "removeIntuneDevice",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Remove Intune Device Records",
 									"toolTip": "Remove Intune device records when deleting session hosts.",
-									"defaultValue": "[equals(coalesce(steps('functionApp').executionSettings.hostPoolProps.tags.vmIntuneEnrollment, 'false'), 'true')]"
+									"defaultValue": "[equals(coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntuneEnrollment, 'false'), 'true')]"
 								},
 								{
 									"name": "progressiveScaleUpHeader",
@@ -715,7 +723,7 @@
 							"type": "Microsoft.Common.OptionsGroup",
 							"visible": true,
 							"label": "Identity Provider",
-							"defaultValue": "[if(equals(steps('functionApp').executionSettings.hostPoolProps.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)', if(contains(steps('functionApp').executionSettings.hostPoolProps.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('functionApp').executionSettings.hostPoolProps.tags.vmIdentityType, 'CloudOnly'), 'Entra Kerberos (Cloud Only Identities) (Preview)', if(contains(steps('functionApp').executionSettings.hostPoolProps.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services'))))]",
+							"defaultValue": "[if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)', if(contains(steps('functionApp').executionSettings.hostsRGProps.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('functionApp').executionSettings.hostsRGProps.tags.vmIdentityType, 'CloudOnly'), 'Entra Kerberos (Cloud Only Identities) (Preview)', if(contains(steps('functionApp').executionSettings.hostsRGProps.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services'))))]",
 							"toolTip": "Choose the identity service provider for your users and session hosts. Your choices explained:</br></br><b>Active Directory Domain Services (ADDS)</b>: The users are sourced from ADDS and session hosts will be domain joined.</br></br><b>Entra Domain Services</b>: The users are sourced from Entra ID or ADDS and the session hosts are joined to Entra Domain Services.</br></br><b>Entra ID</b>: The users are sourced from Entra ID and the session hosts will join Entra ID.</br></br><b>Entra Kerberos (hybrid identities)</b>: The Users are sourced from ADDS, but the session hosts will be joined to Entra ID.",
 							"constraints": {
 								"required": true,
@@ -752,7 +760,7 @@
 									"name": "domainName",
 									"type": "Microsoft.Common.TextBox",
 									"visible": "[contains(steps('identity').solution, 'DomainServices')]",
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostPoolProps.tags.vmDomain, '')]",
+									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmDomain, '')]",
 									"label": "Domain Name",
 									"toolTip": "Provide domain name for the selected Virtual Machine Identity solution.",
 									"placeholder": "Example: contoso.com",
@@ -765,7 +773,7 @@
 								{
 									"name": "ouPath",
 									"type": "Microsoft.Common.TextBox",
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostPoolProps.tags.vmOUPath , '')]",
+									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmOUPath , '')]",
 									"visible": "[or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraDomainServices'))]",
 									"label": "OU Path",
 									"toolTip": "Input the distinguished name of the desired organization unit for the AVD session hosts.",
@@ -848,7 +856,7 @@
 									"name": "resourceGroup",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Machine Resource Group",
-									"defaultValue": "[steps('functionApp').executionSettings.hostPoolProps.tags.vmResourceGroup]",
+									"defaultValue": "[steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId]",
 									"multiLine": true,
 									"constraints": {
 										"allowedValues": "[map(filter(filter(steps('hosts').scope.resourceGroupsApi.value, (rg) => and(contains(rg.name, 'hosts'), not(empty(rg.tags)))), (rg) => not(empty(rg.tags.cm-resource-parent))), (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"hostPool: ', last(split(rg.tags.cm-resource-parent, '/')), '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
@@ -998,7 +1006,7 @@
 									"name": "virtualMachineNamePrefix",
 									"type": "Microsoft.Common.TextBox",
 									"label": "Virtual Machine Name Prefix",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmNamePrefix), '', steps('functionApp').executionSettings.hostPoolProps.tags.vmNamePrefix)]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmNamePrefix), '', steps('functionApp').executionSettings.hostsRGProps.tags.vmNamePrefix)]",
 									"toolTip": "Provide a Virtual Machine name prefix consisting of alphanumeric and dashes up to 12 characters long. A three character numeric suffix will be appended to the name padded with zeros (0).",
 									"constraints": {
 										"required": true,
@@ -1019,7 +1027,7 @@
 									"name": "indexPadding",
 									"type": "Microsoft.Common.Slider",
 									"label": "Index Padding (number of digits)",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmIndexPadding), 2, int(steps('functionApp').executionSettings.hostPoolProps.tags.vmIndexPadding))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmIndexPadding), 2, int(steps('functionApp').executionSettings.hostsRGProps.tags.vmIndexPadding))]",
 									"toolTip": "Select the number of digits used by the index. This value determines the max length of the prefix and also the max number of hosts",
 									"min": 1,
 									"max": 3,
@@ -1051,7 +1059,7 @@
 									"name": "virtualNetwork",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Network",
-									"defaultValue": "[coalesce(first(skip(split(steps('functionApp').executionSettings.hostPoolProps.tags.vmSubnetId, '/'), 8)), '')]",
+									"defaultValue": "[coalesce(first(skip(split(steps('functionApp').executionSettings.hostsRGProps.tags.vmSubnetId, '/'), 8)), '')]",
 									"multiLine": true,
 									"toolTip": "Select the virtual network to which the session hosts will be attached. The list of virtual networks is filtered to those in the same region and subscription selected in the 'Subscription and Region Details' section above.",
 									"constraints": {
@@ -1073,7 +1081,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"visible": true,
 									"label": "Subnet",
-									"defaultValue": "[coalesce(last(split(steps('functionApp').executionSettings.hostPoolProps.tags.vmSubnetId, '/')), '')]",
+									"defaultValue": "[coalesce(last(split(steps('functionApp').executionSettings.hostsRGProps.tags.vmSubnetId, '/')), '')]",
 									"toolTip": "Select an existing subnet for the AVD session hosts.",
 									"constraints": {
 										"required": true,
@@ -1093,7 +1101,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Image Source",
 									"filter": true,
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmImageType), 'Marketplace', if(equals(steps('functionApp').executionSettings.hostPoolProps.tags.vmImageType, 'CustomImage'), 'Compute Gallery', 'Marketplace'))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmImageType), 'Marketplace', if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.vmImageType, 'CustomImage'), 'Compute Gallery', 'Marketplace'))]",
 									"toolTip": "Select the type of image to deploy on the session hosts.",
 									"constraints": {
 										"required": true,
@@ -1113,7 +1121,7 @@
 									"name": "offer",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Offer",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmImageOffer), 'Office-365', steps('functionApp').executionSettings.hostPoolProps.tags.vmImageOffer)]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmImageOffer), 'Office-365', steps('functionApp').executionSettings.hostsRGProps.tags.vmImageOffer)]",
 									"toolTip": "Select the desired marketplace image offer.",
 									"constraints": {
 										"allowedValues": [
@@ -1147,7 +1155,7 @@
 									"name": "sku",
 									"type": "Microsoft.Common.DropDown",
 									"label": "SKU",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmImageSku), 'win11-25h2-avd-m365', steps('functionApp').executionSettings.hostPoolProps.tags.vmImageSku)]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmImageSku), 'win11-25h2-avd-m365', steps('functionApp').executionSettings.hostsRGProps.tags.vmImageSku)]",
 									"toolTip": "Select the desired marketplace image SKU.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('hosts').image.skuApi, (sku) => and(startsWith(sku.name, 'win'), or(contains(sku.name, 'ent'), contains(sku.name, 'avd')))), (sku) => parse(concat('{\"label\":\"', sku.name, '\",\"value\":\"', sku.name, '\"}')))]",
@@ -1178,7 +1186,7 @@
 								{
 									"name": "computeGallery",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmCustomImageId), '', first(skip(split(steps('functionApp').executionSettings.hostPoolProps.tags.vmCustomImageId, '/'), 8)))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmCustomImageId), '', first(skip(split(steps('functionApp').executionSettings.hostsRGProps.tags.vmCustomImageId, '/'), 8)))]",
 									"label": "Compute Gallery",
 									"multiLine": true,
 									"constraints": {
@@ -1202,7 +1210,7 @@
 								{
 									"name": "imageDefinition",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmCustomImageId), '', last(split(steps('functionApp').executionSettings.hostPoolProps.tags.vmCustomImageId, '/')))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmCustomImageId), '', last(split(steps('functionApp').executionSettings.hostsRGProps.tags.vmCustomImageId, '/')))]",
 									"label": "Image Definition",
 									"constraints": {
 										"allowedValues": "[steps('hosts').image.imageDefinitionsApi.transformed.list]",
@@ -1236,7 +1244,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Security Type",
 									"placeholder": "",
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostPoolProps.tags.vmSecurityType, 'TrustedLaunch')]",
+									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmSecurityType, 'TrustedLaunch')]",
 									"toolTip": "Select the appropriate Security Type configuration for the Virtual Machine. Note that 'ConfidentialVMs' are not available in all regions and the option may not appear.",
 									"constraints": {
 										"allowedValues": "[if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), or(equals(steps('hosts').image.source, 'marketplace'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunchAndConfidentialVmSupported'))), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVM')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch')), parse('[{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'Supported'))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), or(equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported'), empty(steps('hosts').image.imageDefinitionApi.transformed.SecurityType))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"}]'), parse('[]')))))))]",
@@ -1249,7 +1257,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Secure Boot",
 									"toolTip": "Secure boot helps protect your VMs against boot kits, rootkits, and kernel-level malware.",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmSecureBoot), true, bool(steps('functionApp').executionSettings.hostPoolProps.tags.vmSecureBoot))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmSecureBoot), true, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmSecureBoot))]",
 									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
 								},
 								{
@@ -1257,7 +1265,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable vTPM",
 									"toolTip": "Virtual Trusted Platform Module (vTPM) is TPM2.0 compliant and validates your VM boot integrity apart from securely storing keys and secrets.",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmVirtualTPM), true, bool(steps('functionApp').executionSettings.hostPoolProps.tags.vmVirtualTPM))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmVirtualTPM), true, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmVirtualTPM))]",
 									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
 								},
 								{
@@ -1308,7 +1316,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Encryption At Host",
 									"toolTip": "Check to enable Encryption At Host",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmEncryptionAtHost), true, bool(steps('functionApp').executionSettings.hostPoolProps.tags.vmEncryptionAtHost))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmEncryptionAtHost), true, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmEncryptionAtHost))]",
 									"visible": "[not(equals(steps('hosts').security.securityType, 'ConfidentialVM'))]"
 								},
 								{
@@ -1352,7 +1360,7 @@
 									"name": "selectDiskEncryptionSet",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Customer-Managed Keys on OS Disk",
-									"defaultValue": "[not(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmDiskEncryptionSetName))]",
+									"defaultValue": "[not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName))]",
 									"toolTip": "Enables a zero trust configuration on the session host disks."
 								},
 								{
@@ -1370,7 +1378,7 @@
 								{
 									"name": "existingDiskEncryptionSet",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[steps('functionApp').executionSettings.hostPoolProps.tags.vmDiskEncryptionSetName]",
+									"defaultValue": "[steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName]",
 									"label": "Disk Encryption Set",
 									"constraints": {
 										"allowedValues": "[steps('hosts').diskEncryption.diskEncryptionSetsApi.transformed.list]",
@@ -1459,7 +1467,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "OS Disk SKU",
 									"filter": true,
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostPoolProps.tags.vmOSDiskType, 'Premium_LRS')]",
+									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmOSDiskType, 'Premium_LRS')]",
 									"toolTip": "Select the disk SKU for the operating system disk.",
 									"constraints": {
 										"required": true,
@@ -1484,7 +1492,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "OS Disk Size (GB)",
 									"placeholder": "",
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostPoolProps.tags.vmDiskSizeGB, '128')]",
+									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskSizeGB, '128')]",
 									"toolTip": "",
 									"constraints": {
 										"allowedValues": [
@@ -1519,7 +1527,7 @@
 									"label": "Size",
 									"toolTip": "Select the size of the virtual machines. Multi-session hosts should have 4 - 24 vCPUs. Single session host should have 2 or more vCPUs.",
 									"recommendedSizes": [
-										"[coalesce(steps('functionApp').executionSettings.hostPoolProps.tags.vmSize, 'Standard_D4ads_v6')]",
+										"[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmSize, 'Standard_D4ads_v6')]",
 										"Standard_D8ads_v6",
 										"Standard_D16ads_v6",
 										"Standard_D32ads_v6",
@@ -1564,7 +1572,7 @@
 									"name": "enableAcceleratedNetworking",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable accelerated networking",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmAcceleratedNetworking), true, bool(steps('functionApp').executionSettings.hostPoolProps.tags.vmAcceleratedNetworking))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmAcceleratedNetworking), true, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmAcceleratedNetworking))]",
 									"toolTip": "Enables low latency and high throughput on the network interface.",
 									"visible": "[and(bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported)))]"
 								},
@@ -1572,9 +1580,9 @@
 									"name": "hibernationEnabled",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Hibernation",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.vmHibernate), false, bool(steps('functionApp').executionSettings.hostPoolProps.tags.vmHibernate))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmHibernate), false, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmHibernate))]",
 									"toolTip": "Hibernation allows you to pause VMs that aren't being used and save on compute costs where the VMs don't need to run 24/7.",
-									"visible": "[and(equals(steps('functionApp').executionSettings.hostPoolProps.type, 'Personal'), bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'HibernationSupported')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)))]"
+									"visible": "[and(equals(steps('functionApp').executionSettings.hostsRGProps.type, 'Personal'), bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'HibernationSupported')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)))]"
 								}
 							]
 						},
@@ -1586,7 +1594,7 @@
 								{
 									"name": "availability",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostPoolProps.tags.vmAvailability, 'No infrastructure redundancy required')]",
+									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmAvailability, 'No infrastructure redundancy required')]",
 									"label": "Availability Options",
 									"toolTip": "Select the redundancy / resiliency for the virtual machines.",
 									"constraints": {
@@ -1645,7 +1653,7 @@
 									"name": "intune",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Intune Enrollment",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.intuneEnrollment), 'No', if(steps('functionApp').executionSettings.hostPoolProps.tags.intuneEnrollment, 'Yes', 'No'))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.intuneEnrollment), 'No', if(steps('functionApp').executionSettings.hostsRGProps.tags.intuneEnrollment, 'Yes', 'No'))]",
 									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting Yes.",
 									"constraints": {
 										"required": true,
@@ -2276,7 +2284,7 @@
 									"multiselect": true,
 									"toolTip": "",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => and(equals(sa.location, steps('hosts').scope.location.name), or(and(not(empty(coalesce(steps('functionApp').executionSettings.hostPoolProps.tags.storageResourceGroup, ''))), equals(first(skip(split(sa.id, '/'), 4)), steps('functionApp').executionSettings.hostPoolProps.tags.storageResourceGroup)), empty(coalesce(steps('functionApp').executionSettings.hostPoolProps.tags.storageResourceGroup, ''))))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => and(equals(sa.location, steps('hosts').scope.location.name), or(and(not(empty(coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.storageResourceGroup, ''))), equals(first(skip(split(sa.id, '/'), 4)), steps('functionApp').executionSettings.hostsRGProps.tags.storageResourceGroup)), empty(coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.storageResourceGroup, ''))))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
 										"required": true
 									},
 									"visible": "[steps('userProfiles').configureSessionHosts]"

@@ -38,6 +38,15 @@
 							}
 						},
 						{
+							"name": "hostsRGProps",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(not(empty(steps('basics').hostPoolSelector)), not(empty(steps('basics').hostPoolApi.tags.hostsResourceGroupId)))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').hostPoolApi.tags.hostsResourceGroupId, '?api-version=2021-04-01')]"
+							}
+						},
+						{
 							"name": "apiCheck",
 							"type": "Microsoft.Common.TextBlock",
 							"visible": true,
@@ -68,6 +77,54 @@
 							"options": {
 								"text": "[concat('String contains \"EntraKerberos-Hybrid\": ', string(contains(steps('basics').hostPoolApi.properties.vmTemplate, 'EntraKerberos-Hybrid')))]"
 							}
+						},
+						{
+							"name": "separator1",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[not(empty(steps('basics').hostsRGProps))]",
+							"options": {
+								"text": "\n=== JSON ARRAY PARSING TESTS ==="
+							}
+						},
+						{
+							"name": "storageAccountNamesTag",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[not(empty(steps('basics').hostsRGProps))]",
+							"options": {
+								"text": "[concat('Raw fslLocalStorageAccountNames tag: ', coalesce(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames, 'TAG NOT FOUND'))]"
+							}
+						},
+						{
+							"name": "parsedArrayTest",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[and(not(empty(steps('basics').hostsRGProps)), not(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames)))]",
+							"options": {
+								"text": "[concat('Parsed array as string: ', string(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames)))]"
+							}
+						},
+						{
+							"name": "arrayContainsTest",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[and(not(empty(steps('basics').hostsRGProps)), not(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames)))]",
+							"options": {
+								"text": "[concat('Array contains test (first element): ', if(greater(length(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames)), 0), string(contains(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames), first(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames)))), 'ARRAY EMPTY'))]"
+							}
+						},
+						{
+							"name": "arrayLengthTest",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[and(not(empty(steps('basics').hostsRGProps)), not(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames)))]",
+							"options": {
+								"text": "[concat('Array length: ', string(length(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames))))]"
+							}
+						},
+						{
+							"name": "arrayFirstElementTest",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[and(not(empty(steps('basics').hostsRGProps)), not(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames)))]",
+							"options": {
+								"text": "[concat('First element: ', if(greater(length(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames)), 0), first(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames)), 'ARRAY EMPTY'))]"
+							}
 						}
 					]
 				}
@@ -78,7 +135,11 @@
 				"hostPoolId": "[steps('basics').hostPoolSelector.id]",
 				"vmTemplateRaw": "[steps('basics').hostPoolApi.properties.vmTemplate]",
 				"containsCloudOnly": "[contains(steps('basics').hostPoolApi.properties.vmTemplate, 'EntraKerberos-CloudOnly')]",
-				"containsHybrid": "[contains(steps('basics').hostPoolApi.properties.vmTemplate, 'EntraKerberos-Hybrid')]"
+				"containsHybrid": "[contains(steps('basics').hostPoolApi.properties.vmTemplate, 'EntraKerberos-Hybrid')]",
+				"hostsRGId": "[steps('basics').hostPoolApi.tags.hostsResourceGroupId]",
+				"storageAccountNamesTag": "[coalesce(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames, 'NOT_FOUND')]",
+				"parsedArray": "[if(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames), parse('[]'), parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames))]",
+				"arrayLength": "[if(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames), 0, length(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames)))]"
 			},
 			"kind": "Subscription",
 			"location": "[steps('basics').scope.location.name]",

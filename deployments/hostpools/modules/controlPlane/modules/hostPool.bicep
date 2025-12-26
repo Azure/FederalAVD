@@ -17,14 +17,14 @@ param deploymentSuffix string
 param time string = utcNow('u')
 param hostPoolValidationEnvironment bool
 param virtualMachineTemplate object
-param vmConfigurationTags object
+param hostPoolCustomTags object
 
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' = {
   name: hostPoolName
   location: location
   tags: union(
     tags[?'Microsoft.DesktopVirtualization/hostPools'] ?? {},
-    vmConfigurationTags
+    hostPoolCustomTags
   )
   properties: {
     hostPoolType: split(hostPoolType, ' ')[0]

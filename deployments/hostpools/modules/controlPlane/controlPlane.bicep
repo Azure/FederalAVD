@@ -15,6 +15,7 @@ param existingFeedWorkspaceResourceId string
 param globalFeedPrivateDnsZoneResourceId string
 param globalFeedPrivateEndpointSubnetResourceId string
 param globalWorkspaceName string
+param hostPoolCustomTags object
 param hostPoolMaxSessionLimit int
 param hostPoolName string
 param hostPoolPrivateEndpointSubnetResourceId string
@@ -23,7 +24,6 @@ param hostPoolRDPProperties string
 param hostPoolType string
 param hostPoolValidationEnvironment bool
 param hostPoolVmTemplate object
-param vmConfigurationTags object
 param controlPlaneRegion string
 param globalFeedRegion string
 param virtualMachinesRegion string
@@ -97,6 +97,7 @@ module hostPool 'modules/hostPool.bicep' = {
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
     deploymentSuffix: deploymentSuffix
+    hostPoolCustomTags: hostPoolCustomTags
     hostPoolRDPProperties: hostPoolRDPProperties
     hostPoolName: hostPoolName
     hostPoolPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
@@ -114,7 +115,6 @@ module hostPool 'modules/hostPool.bicep' = {
     startVmOnConnect: startVmOnConnect
     tags: tags
     virtualMachineTemplate: hostPoolVmTemplate
-    vmConfigurationTags: vmConfigurationTags
   }
 }
 
