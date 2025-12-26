@@ -22,7 +22,7 @@ param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
 param privateLinkScopeResourceId string
-param resourceGroupRoleAssignments array = []
+param roleAssignments array = []
 param serverFarmId string
 param storageAccountName string
 param tags object
@@ -371,7 +371,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
             value: !empty(functionAppUserAssignedIdentityResourceId) 
               ? reference(functionAppUserAssignedIdentityResourceId, '2023-01-31').clientId 
               : ''
-          }
+          }          
         ],
         enableApplicationInsights
           ? [
@@ -392,6 +392,8 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         ]
       }
       ftpsState: 'Disabled'
+      functionAppScaleLimit: 200
+      minimumElasticInstanceCount: 0
       netFrameworkVersion: 'v6.0'
       powerShellVersion: '7.4'
       publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
@@ -460,13 +462,28 @@ var functionAppPrincipalId = !empty(functionAppUserAssignedIdentityResourceId)
   : functionApp.identity.principalId
 
 module roleAssignments_resourceGroups '../../resources/authorization/role-assignment/resource-group/main.bicep' = [
-  for i in range(0, length(resourceGroupRoleAssignments)): {
-    name: 'set-role-assignment-${i}-${deploymentSuffix}'
-    scope: resourceGroup(resourceGroupRoleAssignments[i].scope)
+  for i in range(0, length(roleAssignments)): if (length(split(roleAssignments[i].scope, '/')) > 3) {
+    name: 'set-role-assignment-rg-${i}-${deploymentSuffix}'
+    scope: resourceGroup(
+      split(roleAssignments[i].scope, '/')[2], // Extract subscription ID from resource ID
+      last(split(roleAssignments[i].scope, '/')) // Extract resource group name from resource ID
+    )
     params: {
       principalId: functionAppPrincipalId
       principalType: 'ServicePrincipal'
-      roleDefinitionId: resourceGroupRoleAssignments[i].roleDefinitionId
+      roleDefinitionId: roleAssignments[i].roleDefinitionId
+    }
+  }
+]
+
+module roleAssignments_subscriptions '../../resources/authorization/role-assignment/subscription/main.bicep' = [
+  for i in range(0, length(roleAssignments)): if (length(split(roleAssignments[i].scope, '/')) == 3) {
+    name: 'set-role-assignment-sub-${i}-${deploymentSuffix}'
+    scope: subscription(split(roleAssignments[i].scope, '/')[2])
+    params: {
+      principalId: functionAppPrincipalId
+      principalType: 'ServicePrincipal'
+      roleDefinitionId: roleAssignments[i].roleDefinitionId
     }
   }
 ]
@@ -482,3 +499,4 @@ module roleAssignment_storageAccount '../../resources/storage/storage-account/rb
 }
 
 output functionAppName string = functionApp.name
+output functionAppPrincipalId string = functionApp.identity.principalId

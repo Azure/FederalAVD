@@ -6,7 +6,6 @@ param availabilitySetNamePrefix string
 param availabilityZones array
 param avdInsightsDataCollectionRulesResourceId string
 param confidentialVMOSDiskEncryptionType string
-param customImageResourceId string
 param dataCollectionEndpointResourceId string
 param dedicatedHostGroupResourceId string
 param dedicatedHostGroupZones array
@@ -35,9 +34,7 @@ param fslogixSizeInMBs int
 param fslogixStorageService string
 param hostPoolResourceId string
 param identitySolution string
-param imageOffer string
-param imagePublisher string
-param imageSku string
+param imageReference object
 param integrityMonitoring bool
 param intuneEnrollment bool
 param location string
@@ -55,7 +52,6 @@ param subnetResourceId string
 param tags object
 param deploymentSuffix string
 param timeZone string
-param useAgentDownloadEndpoint bool
 @secure()
 param virtualMachineAdminPassword string
 @secure()
@@ -153,15 +149,6 @@ var identity = identityType != 'None' ? {
   userAssignedIdentities: !empty(userAssignedIdentities) ? userAssignedIdentities : null
 } : null
 
-var ImageReference = empty(customImageResourceId) ? {
-  publisher: imagePublisher
-  offer: imageOffer
-  sku: imageSku
-  version: 'latest'
-} : {
-  id: customImageResourceId
-}
-
 // call on the host pool to get the registration token
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
   name: last(split(hostPoolResourceId, '/'))
@@ -225,7 +212,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
       id: dedicatedHostGroupResourceId
     } : null
     storageProfile: {
-      imageReference: ImageReference
+      imageReference: imageReference
       osDisk: {
         diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
         name: replace(replace(osDiskNameConv, '###', vmIndexStrings[i]), 'VMNAME', sessionHostNames[i])
@@ -282,7 +269,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
         enabled: false
       }
     }
-    licenseType: ((imagePublisher == 'MicrosoftWindowsDesktop' || !empty(customImageResourceId)) ? 'Windows_Client' : 'Windows_Server')
+    licenseType: (!empty(imageReference.?id) || imageReference.?publisher == 'MicrosoftWindowsDesktop') ? 'Windows_Client' : 'Windows_Server'
   }
   dependsOn: [
     networkInterface
@@ -621,7 +608,7 @@ resource extension_DSC_installAvdAgents 'Microsoft.Compute/virtualMachines/exten
             Password: 'PrivateSettingsRef:RegistrationInfoToken'
           }
           aadJoin: !contains(identitySolution, 'DomainServices')
-          UseAgentDownloadEndpoint: useAgentDownloadEndpoint
+          UseAgentDownloadEndpoint: false
           mdmId: intuneEnrollment ? '0000000a-0000-0000-c000-000000000000' : ''
         }
       }

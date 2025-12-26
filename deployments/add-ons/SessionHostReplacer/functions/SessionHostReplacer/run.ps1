@@ -10,21 +10,32 @@ if ($Timer.IsPastDue) {
 }
 
 # Initialize environment-agnostic variables from Function App Configuration
-$Script:SubscriptionId = $env:SubscriptionId
-$Script:AccessToken = Get-AccessToken -ResourceManagerUrl $env:ResourceManagerUrl -ClientId $env:UserAssignedIdentityClientId
-
+$SubscriptionId = $env:SubscriptionId
+$HostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
+$VirtualMachinesSubscriptionId = Read-FunctionAppSetting VirtualMachinesSubscriptionId
+$ARMToken = Get-AccessToken -ResourceUrl $env:ResourceManagerUrl -ClientId $env:UserAssignedIdentityClientId
 Write-HostDetailed -Message "ResourceManagerUrl: {0}" -StringValues $env:ResourceManagerUrl -Level Host
-Write-HostDetailed -Message "SubscriptionId: {0}" -StringValues $Script:SubscriptionId -Level Host
+Write-HostDetailed -Message "Acquired ARM access token: {0}" -StringValues ($ARMToken.Substring(0, 20) + '...') -Level Verbose
+
+# Acquire Graph token if device cleanup is enabled
+if ([bool]::Parse((Read-FunctionAppSetting 'RemoveEntraDevice')) -or [bool]::Parse((Read-FunctionAppSetting 'RemoveIntuneDevice'))) {
+    $GraphToken = Get-AccessToken -ResourceUrl $env:GraphEndpoint -ClientId $env:UserAssignedIdentityClientId
+    Write-HostDetailed -Message "GraphEndpoint: {0}" -StringValues $env:GraphEndpoint -Level Host
+    Write-HostDetailed -Message "Acquired Graph access token: {0}" -StringValues ($GraphToken.Substring(0, 20) + '...') -Level Verbose
+}
+Write-HostDetailed -Message "Function App SubscriptionId: {0}" -StringValues $SubscriptionId -Level Host
+Write-HostDetailed -Message "Host Pool SubscriptionId: {0}" -StringValues $HostPoolSubscriptionId -Level Host
+Write-HostDetailed -Message "Virtual Machines SubscriptionId: {0}" -StringValues $VirtualMachinesSubscriptionId -Level Host
 
 # Decide which Resource group to use for Session Hosts
-$Script:HostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
+$HostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
 if ([string]::IsNullOrEmpty((Read-FunctionAppSetting VirtualMachinesResourceGroupName))) {
-    $Script:VirtualMachinesResourceGroupName = $hostPoolResourceGroupName
+    $VirtualMachinesResourceGroupName = $HostPoolResourceGroupName
 }
 else {
-    $Script:VirtualMachinesResourceGroupName = Read-FunctionAppSetting VirtualMachinesResourceGroupName
+    $VirtualMachinesResourceGroupName = Read-FunctionAppSetting VirtualMachinesResourceGroupName
 }
-Write-HostDetailed -Message "Using resource group {0} for session hosts" -StringValues $Script:VirtualMachinesResourceGroupName -Level Host
+Write-HostDetailed -Message "Using resource group {0} for session hosts" -StringValues $VirtualMachinesResourceGroupName -Level Host
 
 # Get session hosts and update tags if needed.
 $sessionHosts = Get-SessionHosts -FixSessionHostTags (Read-FunctionAppSetting FixSessionHostTags)
@@ -35,7 +46,7 @@ $sessionHostsFiltered = $sessionHosts | Where-Object { $_.IncludeInAutomation }
 Write-HostDetailed -Message "Filtered to {0} session hosts enabled for automatic replacement: {1}" -StringValues $sessionHostsFiltered.Count, ($sessionHostsFiltered.SessionHostName -join ',') -Level Host
 
 # Get running deployments, if any
-$runningDeployments = Get-RunningDeployments -ResourceGroupName $Script:VirtualMachinesResourceGroupName
+$runningDeployments = Get-RunningDeployments -SubscriptionId $VirtualMachinesSubscriptionId -ResourceGroupName $VirtualMachinesResourceGroupName
 Write-HostDetailed -Message "Found {0} running deployments" -StringValues $runningDeployments.Count -Level Host
 
 # Load session host parameters
@@ -44,17 +55,79 @@ $sessionHostParameters += (Read-FunctionAppSetting SessionHostParameters)
 
 # Get latest version of session host image
 Write-HostDetailed -Message "Getting latest image version using Image Reference: {0}" -StringValues ($sessionHostParameters.ImageReference | Out-String) -Level Host
-$latestImageVersion = Get-LatestImageVersion -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location
+$latestImageVersion = Get-LatestImageVersion -ResourceManagerUrl $env:ResourceManagerUrl -SubscriptionId $VirtualMachinesSubscriptionId -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location
 
 # Get number session hosts to deploy
 $hostPoolDecisions = Get-HostPoolDecisions -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion
 
 # Deploy new session hosts
+$deploymentResult = $null
 if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
     Write-HostDetailed -Message "We will deploy {0} session hosts" -StringValues $hostPoolDecisions.PossibleDeploymentsCount -Level Host
     # Deploy session hosts - use SessionHostName (hostname from FQDN) not VMName (Azure VM resource name)
     $existingSessionHostNames = (@($sessionHosts.SessionHostName) + @($hostPoolDecisions.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
-    Deploy-SessionHosts -VirtualMachinesResourceGroupName $Script:VirtualMachinesResourceGroupName -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames
+    
+    try {
+        $deploymentResult = Deploy-SessionHosts -VirtualMachinesSubscriptionId $VirtualMachinesSubscriptionId -VirtualMachinesResourceGroupName $VirtualMachinesResourceGroupName -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames
+        
+        # Update deployment state for progressive scale-up tracking
+        if ([bool]::Parse((Read-FunctionAppSetting EnableProgressiveScaleUp))) {
+            $deploymentState = Get-DeploymentState
+            
+            if ($deploymentResult.Succeeded) {
+                # Increment consecutive successes
+                $deploymentState.ConsecutiveSuccesses++
+                $deploymentState.LastStatus = 'Success'
+                
+                # Calculate next percentage
+                $successfulRunsBeforeScaleUp = [int]::Parse((Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp))
+                $scaleUpIncrementPercentage = [int]::Parse((Read-FunctionAppSetting ScaleUpIncrementPercentage))
+                $initialDeploymentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+                
+                $scaleUpMultiplier = [Math]::Floor($deploymentState.ConsecutiveSuccesses / $successfulRunsBeforeScaleUp)
+                $deploymentState.CurrentPercentage = [Math]::Min(
+                    $initialDeploymentPercentage + ($scaleUpMultiplier * $scaleUpIncrementPercentage),
+                    100
+                )
+                
+                Write-HostDetailed "Deployment succeeded. ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), NextPercentage: $($deploymentState.CurrentPercentage)%"
+            }
+            else {
+                # Reset on failure
+                $deploymentState.ConsecutiveSuccesses = 0
+                $deploymentState.CurrentPercentage = $initialDeploymentPercentage
+                $deploymentState.LastStatus = 'Failed'
+                
+                Write-HostDetailed "Deployment failed. Resetting consecutive successes to 0"
+            }
+            
+            # Update deployment tracking info
+            $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
+            $deploymentState.LastDeploymentNeeded = $hostPoolDecisions.PossibleDeploymentsCount
+            $deploymentState.LastDeploymentPercentage = if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
+                [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolDecisions.PossibleDeploymentsCount) * 100)
+            } else { 0 }
+            $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
+            
+            # Save state
+            Save-DeploymentState -DeploymentState $deploymentState
+        }
+    }
+    catch {
+        Write-HostDetailed -Err "Deployment failed with error: $_"
+        
+        # Update state to reflect failure if progressive scale-up is enabled
+        if ([bool]::Parse((Read-FunctionAppSetting EnableProgressiveScaleUp))) {
+            $deploymentState = Get-DeploymentState
+            $deploymentState.ConsecutiveSuccesses = 0
+            $deploymentState.CurrentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+            $deploymentState.LastStatus = 'Failed'
+            $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
+            Save-DeploymentState -DeploymentState $deploymentState
+        }
+        
+        throw
+    }
 }
 
 # Delete session hosts

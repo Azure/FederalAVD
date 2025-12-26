@@ -670,7 +670,7 @@ var deployIncreaseQuota = deployFSLogixStorage && (split(fslogixStorageService, 
 var createDeploymentVm = deploymentType != 'SessionHostsOnly' && ( deployFSLogixStorage || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName) )
 var deployManagementResources = deploymentType == 'Complete' && ( deployIncreaseQuota || deploySecretsKeyVault || contains(keyManagementStorageAccounts, 'CustomerManaged') || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption )
 
-var hostPoolVmTemplate = {
+var hostPoolVmTemplate = deploymentType != 'SessionHostsOnly' ? {
   resourceGroup: resourceNames.outputs.resourceGroupHosts
   identityType: identitySolution
   intuneEnrollment: intuneEnrollment
@@ -710,8 +710,99 @@ var hostPoolVmTemplate = {
     ? 'Availability Zones'
     : availability == 'AvailabilitySets' ? 'Availability Sets' : 'No infrastructure redundancy required'
   vmInfrastructureType: 'Cloud'
-  nameConvResTypeAtEnd: nameConvResTypeAtEnd
-}
+} : {}
+
+// Conditional Host Resource Group Tags
+var vmIntuneEnrollment = contains(identitySolution, 'DomainServices')
+  ? {}
+  : { vmIntuneEnrollment: intuneEnrollment }
+var vmDomain = empty(domainName)
+  ? {}
+  : { vmDomain: domainName }
+var vmOU = empty(vmOUPath)
+  ? {}
+  : { vmOUPath: vmOUPath }
+var vmCustomImageId = empty(customImageResourceId)
+  ? {}
+  : { vmCustomImageId: customImageResourceId }
+var vmImageOffer = !empty(customImageResourceId) || empty(imageOffer)
+  ? {}
+  : { vmImageOffer: imageOffer }
+var vmImagePublisher = !empty(customImageResourceId) || empty(imagePublisher)
+  ? {}
+  : { vmImagePublisher: imagePublisher }
+var vmImageSku = !empty(customImageResourceId) || empty(imageSku)
+  ? {}
+  : { vmImageSku: imageSku }
+var vmDiskEncryptionSetName = empty(hostPoolVmTemplate.diskEncryptionSetName)
+  ? {}
+  : { vmDiskEncryptionSetName: hostPoolVmTemplate.diskEncryptionSetName }
+
+var fslContainerType = { fslContainerType: fslogixContainerType }
+var fslContainerSizeInMBs = { fslContainerSizeInMBs: fslogixSizeInMBs }
+var fslStorageService = { fslStorageService: split(fslogixStorageService, '')[0] }
+var fslFileShareNames = { fslFileShareNames: resourceNames.outputs.fslogixFileShareNames[fslogixContainerType] }
+var fslLocalStorageAccountResourceIds = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
+    ? {fslLocalStorageAccountResourceIds: fslogix!.outputs.storageAccountResourceIds}
+    : empty(fslogixExistingLocalStorageAccountResourceIds) ? {}
+    : {fslLocalStorageAccountResourceIds: fslogixExistingLocalStorageAccountResourceIds}
+var fslRemoteStorageAccountResourceIds = !empty(fslogixExistingRemoteStorageAccountResourceIds)
+    ? {fslRemoteStorageAccountResourceIds: fslogixExistingRemoteStorageAccountResourceIds}
+    : {}
+var fslLocalNetAppVolumeResourceIds = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureNetAppFiles')
+    ? {fslLocalNetAppVolumeResourceIds: fslogix!.outputs.netAppVolumeResourceIds}
+    : empty(fslogixExistingLocalNetAppVolumeResourceIds) ? {}
+    : {fslLocalNetAppVolumeResourceIds: fslogixExistingLocalNetAppVolumeResourceIds}
+var fslRemoteNetAppVolumeResourceIds = !empty(fslogixExistingRemoteNetAppVolumeResourceIds)
+    ? {fslRemoteNetAppVolumeResourceIds: fslogixExistingRemoteNetAppVolumeResourceIds}
+    : {}
+var fslStorageResourceGroup = deployFSLogixStorage
+    ? { fslStorageResourceGroup: resourceNames.outputs.resourceGroupStorage }
+    : {}    
+
+// FSLogix tags for hosts resource group (includes all FSLogix configuration)
+var fslogixConfigurationTags = fslogixConfigureSessionHosts
+  ? union(
+      fslContainerType,
+      fslContainerSizeInMBs,
+      fslStorageService,
+      fslFileShareNames,
+      fslLocalStorageAccountResourceIds,
+      fslRemoteStorageAccountResourceIds,
+      fslLocalNetAppVolumeResourceIds,
+      fslRemoteNetAppVolumeResourceIds,
+      fslStorageResourceGroup
+    )
+  : {}
+
+var vmConfigurationTags = union(
+  {
+    vmResourceGroup: hostPoolVmTemplate.resourceGroup
+    vmIdentityType: hostPoolVmTemplate.identityType
+    vmNamePrefix: hostPoolVmTemplate.namePrefix
+    vmIndexPadding: hostPoolVmTemplate.indexPadding
+    vmImageType: hostPoolVmTemplate.imageType
+    vmOSDiskType: hostPoolVmTemplate.osDiskType
+    vmDiskSizeGB: hostPoolVmTemplate.diskSizeGB
+    vmSize: hostPoolVmTemplate.vmSize.id
+    vmAvailability: hostPoolVmTemplate.availability
+    vmEncryptionAtHost: hostPoolVmTemplate.?encryptionAtHost ?? false
+    vmAcceleratedNetworking: hostPoolVmTemplate.?acceleratedNetworking ?? false
+    vmHibernate: hostPoolVmTemplate.?hibernate ?? false
+    vmSecurityType: hostPoolVmTemplate.?securityType ?? 'Standard'
+    vmSecureBoot: hostPoolVmTemplate.?secureBoot ?? false
+    vmVirtualTPM: hostPoolVmTemplate.?vTPM ?? false
+    vmSubnetId: hostPoolVmTemplate.subnetId
+  },
+  vmDomain,
+  vmOU,
+  vmCustomImageId,
+  vmImageOffer,
+  vmImagePublisher,
+  vmImageSku,
+  vmIntuneEnrollment,
+  vmDiskEncryptionSetName
+)
 
 var scalingPlanSchedules = deployScalingPlan
   ? [
@@ -927,7 +1018,7 @@ module hostsResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType !=
   params: {
     location: virtualMachinesRegion
     resourceGroupName: resourceNames.outputs.resourceGroupHosts
-    tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, {'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'})
+    tags: union(vmConfigurationTags, fslogixConfigurationTags, tags[?'Microsoft.Resources/resourceGroups'] ?? {}, {'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'})
   }
 }
 
@@ -1064,6 +1155,7 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
     avdPrivateLinkPrivateRoutes: avdPrivateLinkPrivateRoutes
     controlPlaneRegion: controlPlaneRegion
     deployScalingPlan: deployScalingPlan
+    deploymentSuffix: deploymentSuffix
     deploymentUserAssignedIdentityClientId: createDeploymentVm ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId : ''
     deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
     desktopApplicationGroupName: resourceNames.outputs.desktopApplicationGroupName
@@ -1083,6 +1175,7 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
     hostPoolType: hostPoolType
     hostPoolValidationEnvironment: hostPoolValidationEnvironment
     hostPoolVmTemplate: hostPoolVmTemplate
+    vmConfigurationTags: vmConfigurationTags
     virtualMachinesRegion: virtualMachinesRegion
     logAnalyticsWorkspaceResourceId: enableMonitoring ? (deploymentType == 'Complete' ? monitoring!.outputs.logAnalyticsWorkspaceResourceId : existingLogAnalyticsWorkspaceResourceId) : ''
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
@@ -1094,9 +1187,7 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
     scalingPlanSchedules: scalingPlanSchedules
     scalingPlanExclusionTag: scalingPlanExclusionTag
     startVmOnConnect: startVmOnConnect
-    storageResourceGroup: deployFSLogixStorage ? resourceNames.outputs.resourceGroupStorage : ''
     tags: tags
-    deploymentSuffix: deploymentSuffix
     virtualMachinesTimeZone: virtualMachinesTimeZone
     workspaceFeedPrivateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
     workspaceFriendlyName: workspaceFriendlyName

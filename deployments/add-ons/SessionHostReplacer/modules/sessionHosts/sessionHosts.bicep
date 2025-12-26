@@ -6,7 +6,7 @@ param availabilityZones array
 param avdAgentsDSCPackage string
 param avdInsightsDataCollectionRulesResourceId string
 param confidentialVMOSDiskEncryption bool
-param customImageResourceId string
+param credentialsKeyVaultResourceId string
 param dataCollectionEndpointResourceId string
 param dedicatedHostGroupResourceId string
 param dedicatedHostGroupZones array
@@ -14,7 +14,6 @@ param dedicatedHostResourceId string
 param diskSizeGB int
 param diskSku string
 param domainName string
-param credentialsKeyVaultResourceId string
 param enableAcceleratedNetworking bool
 param encryptionAtHost bool
 param existingDiskAccessResourceId string
@@ -31,9 +30,7 @@ param fslogixSizeInMBs int
 param fslogixStorageService string
 param hostPoolResourceId string
 param identitySolution string
-param imageOffer string
-param imagePublisher string
-param imageSku string
+param imageReference object
 param integrityMonitoring bool
 param intuneEnrollment bool
 param location string
@@ -52,7 +49,6 @@ param tags object
 @description('DO NOT MODIFY THIS VALUE! The timeStamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddHHmmss')
 param timeZone string
-param useAgentDownloadEndpoint bool
 param virtualMachineNameConv string
 param virtualMachineNamePrefix string
 param virtualMachineSize string
@@ -179,7 +175,6 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       availabilitySetNamePrefix: availabilitySetNamePrefix
       avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
       confidentialVMOSDiskEncryptionType: confidentialVMOSDiskEncryptionType
-      customImageResourceId: customImageResourceId
       dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
       dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
       dedicatedHostGroupZones: dedicatedHostGroupZones
@@ -210,9 +205,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       fslogixStorageService: fslogixStorageService
       hostPoolResourceId: hostPoolResourceId
       identitySolution: identitySolution
-      imageOffer: imageOffer
-      imagePublisher: imagePublisher
-      imageSku: imageSku
+      imageReference: imageReference
       integrityMonitoring: integrityMonitoring
       intuneEnrollment: intuneEnrollment
       location: location
@@ -232,7 +225,6 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       tags: tags
       deploymentSuffix: deploymentSuffix
       timeZone: timeZone
-      useAgentDownloadEndpoint: useAgentDownloadEndpoint
       virtualMachineAdminPassword: kvCredentials.getSecret('VirtualMachineAdminPassword')
       virtualMachineAdminUserName: kvCredentials.getSecret('VirtualMachineAdminUserName')
       virtualMachineNameConv: virtualMachineNameConv

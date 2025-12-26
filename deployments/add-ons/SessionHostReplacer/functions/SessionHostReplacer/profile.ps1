@@ -53,7 +53,7 @@ function Get-AccessToken {
     .DESCRIPTION
         Acquires an access token from the Azure Instance Metadata Service (IMDS) using
         the function app's managed identity for authenticating ARM API calls.
-    .PARAMETER ResourceManagerUrl
+    .PARAMETER ResourceUrl
         The Azure Resource Manager endpoint URL (e.g., https://management.azure.com/).
     .PARAMETER ClientId
         Optional. The client ID of the user-assigned managed identity. If not specified, uses system-assigned identity.
@@ -65,13 +65,13 @@ function Get-AccessToken {
     [CmdletBinding()]
     param (
         [parameter(Mandatory = $true)]
-        [string]$ResourceManagerUrl,
+        [string]$ResourceUrl,
         
         [parameter(Mandatory = $false)]
         [string]$ClientId
     )
     
-    $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUrl + '&api-version=2019-08-01'
+    $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceUrl + '&api-version=2019-08-01'
     
     # Add client_id parameter if using user-assigned identity
     if ($ClientId) {
@@ -79,8 +79,8 @@ function Get-AccessToken {
     }
     
     $TokenResponse = Invoke-RestMethod -Method Get -Headers @{"X-IDENTITY-HEADER" = "$env:IDENTITY_HEADER" } -Uri $TokenAuthURI
-    $AccessToken = $TokenResponse.access_token
-    Return $AccessToken
+    $ARMToken = $TokenResponse.access_token
+    Return $ARMToken
 }
 
 #EndRegion Authentication Functions
@@ -224,12 +224,12 @@ function Invoke-AzureRestMethodWithRetry {
     .PARAMETER RetryDelaySeconds
         Initial retry delay in seconds (default: 5).
     .EXAMPLE
-        Invoke-AzureRestMethodWithRetry -AccessToken $token -Method Get -Uri $uri -MaxRetries 5
+        Invoke-AzureRestMethodWithRetry -ARMToken $token -Method Get -Uri $uri -MaxRetries 5
     #>
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
-        [string] $AccessToken,
+        [string] $ARMToken,
         
         [Parameter(Mandatory = $true)]
         [ValidateSet('Get', 'Post', 'Put', 'Patch', 'Delete')]
@@ -256,7 +256,7 @@ function Invoke-AzureRestMethodWithRetry {
         $attempt++
         try {
             $params = @{
-                AccessToken = $AccessToken
+                ARMToken = $ARMToken
                 Method      = $Method
                 Uri         = $Uri
             }
@@ -305,6 +305,130 @@ function Invoke-AzureRestMethodWithRetry {
 
 #Region Core Helper Functions
 
+function Invoke-GraphApiWithRetry {
+    <#
+    .SYNOPSIS
+        Invokes Microsoft Graph API with automatic retry for DoD endpoint if GCCH fails.
+    .DESCRIPTION
+        Attempts to call the Graph API with the provided endpoint. If the call fails with
+        authentication/forbidden errors, automatically retries with the DoD Graph endpoint.
+    .PARAMETER GraphEndpoint
+        The initial Graph endpoint to try (e.g., https://graph.microsoft.us).
+    .PARAMETER AccessToken
+        Bearer token for authentication.
+    .PARAMETER Method
+        HTTP method (GET, POST, PATCH, DELETE).
+    .PARAMETER Uri
+        The relative URI path (e.g., /v1.0/devices). Will be appended to GraphEndpoint.
+    .PARAMETER Body
+        Optional request body for POST/PATCH operations.
+    .PARAMETER Headers
+        Optional custom headers. Authorization header will be added automatically.
+    .EXAMPLE
+        Invoke-GraphApiWithRetry -GraphEndpoint $env:GraphEndpoint -ARMToken $token -Method Get -Uri "/v1.0/devices?`$filter=displayName eq 'VM01'"
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $GraphEndpoint,
+        
+        [Parameter(Mandatory = $true)]
+        [string] $ARMToken,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Get', 'Post', 'Patch', 'Delete', 'Put')]
+        [string] $Method,
+        
+        [Parameter(Mandatory = $true)]
+        [string] $Uri,
+        
+        [Parameter()]
+        [string] $Body,
+        
+        [Parameter()]
+        [hashtable] $Headers = @{}
+    )
+    
+    # Ensure GraphEndpoint doesn't have trailing slash
+    $graphBase = if ($GraphEndpoint[-1] -eq '/') { 
+        $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) 
+    } else { 
+        $GraphEndpoint 
+    }
+    
+    # Ensure Uri has leading slash
+    $uriPath = if ($Uri[0] -ne '/') { "/$Uri" } else { $Uri }
+    
+    # Build full URI
+    $fullUri = "$graphBase$uriPath"
+    
+    # Setup headers
+    $requestHeaders = $Headers.Clone()
+    $requestHeaders['Authorization'] = "Bearer $ARMToken"
+    if (-not $requestHeaders.ContainsKey('Content-Type')) {
+        $requestHeaders['Content-Type'] = 'application/json'
+    }
+    
+    # List of endpoints to try
+    $endpointsToTry = @($graphBase)
+    
+    # If we're using GCCH endpoint, also try DoD
+    if ($graphBase -eq 'https://graph.microsoft.us') {
+        $endpointsToTry += 'https://dod-graph.microsoft.us'
+    }
+    
+    $lastError = $null
+    foreach ($endpoint in $endpointsToTry) {
+        try {
+            $attemptUri = "$endpoint$uriPath"
+            Write-HostDetailed -Message "Attempting Graph API call to: $attemptUri" -Level Verbose
+            
+            $params = @{
+                Uri     = $attemptUri
+                Method  = $Method
+                Headers = $requestHeaders
+            }
+            
+            if ($Body -and $Method -in @('Post', 'Patch', 'Put')) {
+                $params['Body'] = $Body
+            }
+            
+            $result = Invoke-RestMethod @params
+            
+            # If we succeeded with a different endpoint than the one provided, log it
+            if ($endpoint -ne $graphBase) {
+                Write-HostDetailed -Message "Graph API call succeeded with alternate endpoint: $endpoint" -Level Warning
+                Write-HostDetailed -Message "Consider updating GraphEndpoint configuration to: $endpoint" -Level Warning
+            }
+            
+            return $result
+        }
+        catch {
+            $lastError = $_
+            $statusCode = $null
+            
+            if ($_.Exception.Response) {
+                $statusCode = [int]$_.Exception.Response.StatusCode
+            }
+            
+            # Retry on authentication/authorization errors (401, 403) or if endpoint not found (404 on base endpoint)
+            if ($statusCode -in @(401, 403, 404) -and $endpoint -ne $endpointsToTry[-1]) {
+                Write-HostDetailed -Message "Graph API call to $endpoint failed with status $statusCode. Trying alternate endpoint..." -Level Warning
+                continue
+            }
+            else {
+                # Don't retry - either not an auth error or we've tried all endpoints
+                Write-HostDetailed -Message "Graph API call failed with status $statusCode : $($_.Exception.Message)" -Level Error
+                throw
+            }
+        }
+    }
+    
+    # If we get here, all endpoints failed
+    Write-HostDetailed -Message "All Graph API endpoints failed. Last error: $($lastError.Exception.Message)" -Level Error
+    throw $lastError
+}
+
 function Invoke-AzureRestMethod {
     <#
         .SYNOPSIS
@@ -318,12 +442,12 @@ function Invoke-AzureRestMethod {
         .PARAMETER Body
             The request body of the Graph call. This is often used with methids like POST, PUT and PATCH. It is not used with GET.
         .EXAMPLE
-            Invoke-AzureRestMethod -AccessToken $AccessToken -Method 'GET' -Uri 'https://graph.microsoft.com/v1.0/users/'
+            Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'GET' -Uri 'https://graph.microsoft.com/v1.0/users/'
     #>
 
     param (
         [parameter(Mandatory = $true)]
-        [string]$AccessToken,
+        [string]$ARMToken,
 
         [parameter(Mandatory = $false)]
         [string]$Method = 'GET',
@@ -339,11 +463,11 @@ function Invoke-AzureRestMethod {
     )
 
     # Check if authentication was successfull.
-    if ($AccessToken) {
+    if ($ARMToken) {
         # Format headers.
         $HeaderParams = @{
             'Content-Type'  = "application\json"
-            'Authorization' = "Bearer $AccessToken"
+            'Authorization' = "Bearer $ARMToken"
         }
         If ($AdditionalHeaders) {
             $HeaderParams += $AdditionalHeaders
@@ -394,6 +518,170 @@ function Invoke-AzureRestMethod {
 
 #EndRegion Configuration and Utility Functions
 
+#Region Progressive Scale-Up State Management
+
+function Get-DeploymentState {
+    <#
+    .SYNOPSIS
+        Retrieves the deployment state from Azure Table Storage for progressive scale-up tracking.
+    .DESCRIPTION
+        Reads deployment history from the function app's storage account table to track
+        consecutive successful deployments and current scale-up percentage.
+    .PARAMETER HostPoolName
+        Name of the host pool to retrieve state for.
+    .PARAMETER StorageAccountName
+        Name of the storage account containing the state table.
+    .EXAMPLE
+        $state = Get-DeploymentState -HostPoolName 'hp-prod-001'
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
+        
+        [Parameter()]
+        [string] $StorageAccountName = $env:AzureWebJobsStorage.Split(';')[1].Split('=')[1]
+    )
+    
+    try {
+        $tableName = 'sessionHostDeploymentState'
+        $partitionKey = $HostPoolName
+        $rowKey = 'DeploymentState'
+        
+        # Get storage account context
+        $storageContext = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount -ErrorAction Stop
+        
+        # Get or create table
+        $table = Get-AzStorageTable -Name $tableName -Context $storageContext -ErrorAction SilentlyContinue
+        if (-not $table) {
+            Write-HostDetailed "Creating deployment state table '$tableName'"
+            $table = New-AzStorageTable -Name $tableName -Context $storageContext
+        }
+        
+        # Get entity
+        $cloudTable = $table.CloudTable
+        $entity = Get-AzTableRow -Table $cloudTable -PartitionKey $partitionKey -RowKey $rowKey -ErrorAction SilentlyContinue
+        
+        if ($entity) {
+            Write-HostDetailed "Retrieved deployment state: ConsecutiveSuccesses=$($entity.ConsecutiveSuccesses), CurrentPercentage=$($entity.CurrentPercentage)%"
+            return [PSCustomObject]@{
+                LastDeploymentCount     = [int]$entity.LastDeploymentCount
+                LastDeploymentNeeded    = [int]$entity.LastDeploymentNeeded
+                LastDeploymentPercentage = [int]$entity.LastDeploymentPercentage
+                LastStatus              = $entity.LastStatus
+                LastTimestamp           = $entity.LastTimestamp
+                ConsecutiveSuccesses    = [int]$entity.ConsecutiveSuccesses
+                CurrentPercentage       = [int]$entity.CurrentPercentage
+            }
+        }
+        else {
+            Write-HostDetailed "No deployment state found, initializing new state"
+            return [PSCustomObject]@{
+                LastDeploymentCount     = 0
+                LastDeploymentNeeded    = 0
+                LastDeploymentPercentage = 0
+                LastStatus              = 'None'
+                LastTimestamp           = (Get-Date -AsUTC -Format 'o')
+                ConsecutiveSuccesses    = 0
+                CurrentPercentage       = (Read-FunctionAppSetting InitialDeploymentPercentage)
+            }
+        }
+    }
+    catch {
+        Write-HostDetailed -Err "Failed to retrieve deployment state: $_"
+        # Return default state on error
+        return [PSCustomObject]@{
+            LastDeploymentCount     = 0
+            LastDeploymentNeeded    = 0
+            LastDeploymentPercentage = 0
+            LastStatus              = 'Error'
+            LastTimestamp           = (Get-Date -AsUTC -Format 'o')
+            ConsecutiveSuccesses    = 0
+            CurrentPercentage       = (Read-FunctionAppSetting InitialDeploymentPercentage)
+        }
+    }
+}
+
+function Save-DeploymentState {
+    <#
+    .SYNOPSIS
+        Saves the deployment state to Azure Table Storage for progressive scale-up tracking.
+    .DESCRIPTION
+        Writes deployment history to the function app's storage account table to track
+        consecutive successful deployments and update scale-up percentage.
+    .PARAMETER DeploymentState
+        The deployment state object to save.
+    .PARAMETER HostPoolName
+        Name of the host pool.
+    .PARAMETER StorageAccountName
+        Name of the storage account.
+    .EXAMPLE
+        Save-DeploymentState -DeploymentState $state -HostPoolName 'hp-prod-001'
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [PSCustomObject] $DeploymentState,
+        
+        [Parameter()]
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
+        
+        [Parameter()]
+        [string] $StorageAccountName = $env:AzureWebJobsStorage.Split(';')[1].Split('=')[1]
+    )
+    
+    try {
+        $tableName = 'sessionHostDeploymentState'
+        $partitionKey = $HostPoolName
+        $rowKey = 'DeploymentState'
+        
+        # Get storage account context
+        $storageContext = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount -ErrorAction Stop
+        
+        # Get or create table
+        $table = Get-AzStorageTable -Name $tableName -Context $storageContext -ErrorAction SilentlyContinue
+        if (-not $table) {
+            Write-HostDetailed "Creating deployment state table '$tableName'"
+            $table = New-AzStorageTable -Name $tableName -Context $storageContext
+        }
+        
+        # Prepare entity
+        $cloudTable = $table.CloudTable
+        $entity = Get-AzTableRow -Table $cloudTable -PartitionKey $partitionKey -RowKey $rowKey -ErrorAction SilentlyContinue
+        
+        if ($entity) {
+            # Update existing entity
+            $entity.LastDeploymentCount = $DeploymentState.LastDeploymentCount
+            $entity.LastDeploymentNeeded = $DeploymentState.LastDeploymentNeeded
+            $entity.LastDeploymentPercentage = $DeploymentState.LastDeploymentPercentage
+            $entity.LastStatus = $DeploymentState.LastStatus
+            $entity.LastTimestamp = $DeploymentState.LastTimestamp
+            $entity.ConsecutiveSuccesses = $DeploymentState.ConsecutiveSuccesses
+            $entity.CurrentPercentage = $DeploymentState.CurrentPercentage
+            $entity | Update-AzTableRow -Table $cloudTable | Out-Null
+        }
+        else {
+            # Create new entity
+            Add-AzTableRow -Table $cloudTable -PartitionKey $partitionKey -RowKey $rowKey -Property @{
+                LastDeploymentCount     = $DeploymentState.LastDeploymentCount
+                LastDeploymentNeeded    = $DeploymentState.LastDeploymentNeeded
+                LastDeploymentPercentage = $DeploymentState.LastDeploymentPercentage
+                LastStatus              = $DeploymentState.LastStatus
+                LastTimestamp           = $DeploymentState.LastTimestamp
+                ConsecutiveSuccesses    = $DeploymentState.ConsecutiveSuccesses
+                CurrentPercentage       = $DeploymentState.CurrentPercentage
+            } | Out-Null
+        }
+        
+        Write-HostDetailed "Saved deployment state: Status=$($DeploymentState.LastStatus), ConsecutiveSuccesses=$($DeploymentState.ConsecutiveSuccesses), NextPercentage=$($DeploymentState.CurrentPercentage)%"
+    }
+    catch {
+        Write-HostDetailed -Err "Failed to save deployment state: $_"
+    }
+}
+
+#EndRegion Progressive Scale-Up State Management
+
 #Region Session Host Lifecycle Functions
 
 function Deploy-SessionHosts {
@@ -407,6 +695,9 @@ function Deploy-SessionHosts {
 
         [Parameter(Mandatory = $false)]
         [string] $HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
+
+        [Parameter(Mandatory = $true)]
+        [string] $VirtualMachinesSubscriptionId,
 
         [Parameter(Mandatory = $true)]
         [string] $VirtualMachinesResourceGroupName,
@@ -424,7 +715,7 @@ function Deploy-SessionHosts {
         [string] $DeploymentPrefix = (Read-FunctionAppSetting SHRDeploymentPrefix),
 
         [Parameter()]
-        [hashtable] $SessionHostParameters = (Read-FunctionAppSetting SessionHostParameters | ConvertTo-CaseInsensitiveHashtable)
+        [hashtable] $SessionHostParameters = (Read-FunctionAppSetting SessionHostParameters | ConvertTo-CaseInsensitiveHashtable),
 
         [Parameter()]
         [string] $SessionHostTemplate = (Read-FunctionAppSetting SessionHostTemplate),
@@ -446,7 +737,7 @@ function Deploy-SessionHosts {
         }
     }
     Invoke-AzureRestMethod `
-        -AccessToken $AccessToken `
+        -ARMToken $ARMToken `
         -Body ($Body | ConvertTo-Json -depth 10) `
         -Method Patch `
         -Uri ($ResourceManagerUrl + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $HostPoolResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '?api-version=2024-04-03') | Out-Null
@@ -485,19 +776,30 @@ function Deploy-SessionHosts {
             }
         }
     }
-    $Uri = $ResourceManagerUrl + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $VirtualMachinesResourceGroupName + '/providers/Microsoft.Resources/deployments/' + $deploymentName + '?api-version=2021-04-01'
+    $Uri = $ResourceManagerUrl + '/subscriptions/' + $VirtualMachinesSubscriptionId + '/resourceGroups/' + $VirtualMachinesResourceGroupName + '/providers/Microsoft.Resources/deployments/' + $deploymentName + '?api-version=2021-04-01'
     $DeploymentJob = Invoke-AzureRestMethod `
-        -AccessToken $AccessToken `
+        -ARMToken $ARMToken `
         -Body ($Body | ConvertTo-Json -depth 20) `
         -Method Put `
         -Uri $Uri
     #TODO: Add logic to test if deployment is running (aka template is accepted) then finish running the function and let the deployment run in the background.
     Write-HostDetailed -Message 'Pausing for 30 seconds to allow deployment to start'
     Start-Sleep -Seconds 30
-    # Check deployment status, if any has failed we report an error
+    
+    # Check deployment status
+    $deploymentSucceeded = $true
     if ($deploymentJob.Error) {
-        Write-HostDetailed "DeploymentFailed"
+        Write-HostDetailed "DeploymentFailed: $($deploymentJob.Error)"
+        $deploymentSucceeded = $false
         throw $deploymentJob.Error
+    }
+    
+    # Return deployment information for state tracking
+    return [PSCustomObject]@{
+        DeploymentName  = $deploymentName
+        SessionHostCount = $NewSessionHostsCount
+        Succeeded       = $deploymentSucceeded
+        Timestamp       = $deploymentTimestamp
     }
 }
 
@@ -531,7 +833,7 @@ function Get-LatestImageVersion {
                       
             $Uri = $ResourceManagerUrl + "/subscriptions/$SubscriptionId/providers/Microsoft.Compute/locations/$Location/publishers/$($ImageReference.publisher)/artifacttypes/vmimage/offers/$($ImageReference.offer)/skus/$($ImageReference.sku)/versions?api-version=2024-07-01"
             
-            $Versions = Invoke-AzureRestMethod -AccessToken $AccessToken -Uri $Uri -Method Get
+            $Versions = Invoke-AzureRestMethod -ARMToken $ARMToken -Uri $Uri -Method Get
 
             $azImageVersion = ($Versions | Sort-Object -Property { [version] $_.Name } -Descending | Select-Object -First 1).Name
             Write-HostDetailed  "Latest version of image is $azImageVersion"
@@ -559,7 +861,7 @@ function Get-LatestImageVersion {
 
             # Get the latest version of the image
             $Uri = $ResourceManagerUri + "/subscriptions/$imageSubscriptionId/resourceGroups/$imageResourceGroup/providers/Microsoft.Compute/galleries/$imageGalleryName/images/$imageDefinitionName/versions?api-version=2023-07-03"
-            $latestImageVersion = Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $Uri |
+            $latestImageVersion = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri |
             Where-Object { $_.PublishingProfile.ExcludeFromLatest -eq $false } |
             Sort-Object -Property { $_.PublishingProfile.PublishedDate } -Descending |
             Select-Object -First 1
@@ -574,7 +876,7 @@ function Get-LatestImageVersion {
         elseif ($ImageReference.Id -match $imageVersionResourceIdPattern ) {
             Write-HostDetailed 'Image reference is an Image Version resource.'
             $Uri = $ResourceManagerUri + "$($ImageReference.Id)?api-version=2023-07-03"
-            $azImageVersion = Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $Uri
+            $azImageVersion = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
             $azImageVersion = $imageVersion.Name
             $azImageDate = $imageVersion.PublishingProfile.PublishedDate
             Write-HostDetailed "Image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
@@ -630,10 +932,22 @@ function Get-HostPoolDecisions {
         # Delay days before replacing session hosts on new image version
         [Parameter()]
         [int] $ReplaceSessionHostOnNewImageVersionDelayDays = (Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersionDelayDays),
-
-        # Maximum number of session hosts to replace in a single execution (safety throttle)
+        
+        # Progressive scale-up parameters
         [Parameter()]
-        [int] $MaxSessionHostsToReplace = (Read-FunctionAppSetting MaxSessionHostsToReplace)
+        [bool] $EnableProgressiveScaleUp = [bool]::Parse((Read-FunctionAppSetting EnableProgressiveScaleUp)),
+        
+        [Parameter()]
+        [int] $InitialDeploymentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage)),
+        
+        [Parameter()]
+        [int] $ScaleUpIncrementPercentage = [int]::Parse((Read-FunctionAppSetting ScaleUpIncrementPercentage)),
+        
+        [Parameter()]
+        [int] $MaxDeploymentBatchSize = [int]::Parse((Read-FunctionAppSetting MaxDeploymentBatchSize)),
+        
+        [Parameter()]
+        [int] $SuccessfulRunsBeforeScaleUp = [int]::Parse((Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp))
     )
     # Basic Info
     Write-HostDetailed "We have $($SessionHosts.Count) session hosts (included in Automation)"
@@ -673,6 +987,35 @@ function Get-HostPoolDecisions {
             Write-HostDetailed "We need to deploy $weNeedToDeploy new session hosts"
             $weCanDeploy = if ($weNeedToDeploy -gt $weCanDeployUpTo) { $weCanDeployUpTo } else { $weNeedToDeploy } # If we need to deploy 10 machines, and we can deploy 5, we should only deploy 5.
             Write-HostDetailed "Buffer allows deploying $weCanDeploy session hosts"
+            
+            # Apply progressive scale-up if enabled
+            if ($EnableProgressiveScaleUp -and $weCanDeploy -gt 0) {
+                Write-HostDetailed "Progressive scale-up is enabled"
+                
+                # Get deployment state
+                $deploymentState = Get-DeploymentState
+                
+                # Calculate current deployment percentage based on consecutive successes
+                $currentPercentage = $InitialDeploymentPercentage
+                if ($deploymentState.ConsecutiveSuccesses -ge $SuccessfulRunsBeforeScaleUp) {
+                    $scaleUpMultiplier = [Math]::Floor($deploymentState.ConsecutiveSuccesses / $SuccessfulRunsBeforeScaleUp)
+                    $currentPercentage = $InitialDeploymentPercentage + ($scaleUpMultiplier * $ScaleUpIncrementPercentage)
+                }
+                
+                # Cap at 100%
+                $currentPercentage = [Math]::Min($currentPercentage, 100)
+                
+                # Calculate percentage-based deployment size
+                $percentageBasedCount = [Math]::Ceiling($weCanDeploy * ($currentPercentage / 100.0))
+                
+                # Apply ceiling constraint and ensure we don't exceed what we can deploy
+                $actualDeployCount = [Math]::Min($percentageBasedCount, $MaxDeploymentBatchSize)
+                $actualDeployCount = [Math]::Min($actualDeployCount, $weCanDeploy)
+                
+                Write-HostDetailed "Progressive scale-up: Using $currentPercentage% of $weCanDeploy needed = $actualDeployCount hosts (ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), Max: $MaxDeploymentBatchSize)"
+                
+                $weCanDeploy = $actualDeployCount
+            }
         }
         else {
             $weCanDeploy = 0
@@ -701,10 +1044,33 @@ function Get-HostPoolDecisions {
         }
         $sessionHostsPendingDelete = ($sessionHostsToReplace + $selectedGoodHostsTotDelete) | Select-Object -First $weCanDelete
         
-        # Apply MaxSessionHostsToReplace safety limit
-        if ($MaxSessionHostsToReplace -gt 0 -and $sessionHostsPendingDelete.Count -gt $MaxSessionHostsToReplace) {
-            Write-HostDetailed "Applying MaxSessionHostsToReplace limit: capping $($sessionHostsPendingDelete.Count) pending deletions to $MaxSessionHostsToReplace"
-            $sessionHostsPendingDelete = $sessionHostsPendingDelete | Select-Object -First $MaxSessionHostsToReplace
+        # Apply progressive scale-up to deletions if enabled
+        if ($EnableProgressiveScaleUp -and $sessionHostsPendingDelete.Count -gt 0) {
+            Write-HostDetailed "Progressive scale-up is enabled for deletions"
+            
+            # Get deployment state (reuse same state as deployments for consistent batching)
+            $deploymentState = Get-DeploymentState
+            
+            # Calculate current deletion percentage based on consecutive successes
+            $currentPercentage = $InitialDeploymentPercentage
+            if ($deploymentState.ConsecutiveSuccesses -ge $SuccessfulRunsBeforeScaleUp) {
+                $scaleUpMultiplier = [Math]::Floor($deploymentState.ConsecutiveSuccesses / $SuccessfulRunsBeforeScaleUp)
+                $currentPercentage = $InitialDeploymentPercentage + ($scaleUpMultiplier * $ScaleUpIncrementPercentage)
+            }
+            
+            # Cap at 100%
+            $currentPercentage = [Math]::Min($currentPercentage, 100)
+            
+            # Calculate percentage-based deletion size
+            $percentageBasedCount = [Math]::Ceiling($sessionHostsPendingDelete.Count * ($currentPercentage / 100.0))
+            
+            # Apply ceiling constraint and ensure we don't exceed pending deletions
+            $actualDeleteCount = [Math]::Min($percentageBasedCount, $MaxDeploymentBatchSize)
+            $actualDeleteCount = [Math]::Min($actualDeleteCount, $sessionHostsPendingDelete.Count)
+            
+            Write-HostDetailed "Progressive scale-up for deletions: Using $currentPercentage% of $($sessionHostsPendingDelete.Count) pending = $actualDeleteCount hosts (ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), Max: $MaxDeploymentBatchSize)"
+            
+            $sessionHostsPendingDelete = $sessionHostsPendingDelete | Select-Object -First $actualDeleteCount
         }
         
         Write-HostDetailed "The following Session Hosts are now pending delete: $($($SessionHostsPendingDelete.SessionHostName) -join ',')"
@@ -734,6 +1100,9 @@ function Get-RunningDeployments {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
+        [string] $SubscriptionId,
+
+        [Parameter(Mandatory = $true)]
         [string] $ResourceGroupName,
 
         [Parameter()]
@@ -742,7 +1111,7 @@ function Get-RunningDeployments {
 
     Write-HostDetailed -Message "Getting deployments for resource group '$ResourceGroupName'"
     $Uri = $ResourceManagerUri + "/subscriptions/" + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Resources/deployments/?api-version=2021-04-01'
-    $deployments = Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $Uri
+    $deployments = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
     $deployments = Get-AzResourceGroupDeployment -ResourceGroupName $ResourceGroupName -ErrorAction Stop
     $deployments = $deployments | Where-Object { $_.DeploymentName -like "$DeploymentPrefix*" }
     Write-HostDetailed -Message "Found $($deployments.Count) deployments marked with $DeploymentPrefix."
@@ -781,6 +1150,9 @@ function Get-SessionHosts {
     [CmdletBinding()]
     param (
         [Parameter()]
+        [string] $HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
+
+        [Parameter()]
         [string] $ResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
 
         [Parameter()]
@@ -804,19 +1176,19 @@ function Get-SessionHosts {
     
     # Get current session hosts
     Write-HostDetailed -Message "Getting current session hosts in host pool $HostPoolName"
-    $Uri = $ResourceManagerUri + '/subscriptions/' + $subscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts?api-version=2024-04-03'
-    $sessionHosts = Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $Uri | Select-Object Name, ResourceId, Session, AllowNewSession, Status
+    $Uri = $ResourceManagerUri + '/subscriptions/' + $HostPoolSubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts?api-version=2024-04-03'
+    $sessionHosts = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri | Select-Object Name, ResourceId, Session, AllowNewSession, Status
     Write-HostDetailed -Message "Found $($sessionHosts.Count) session hosts"
     # For each session host, get the VM details
     $result = foreach ($sh in $sessionHosts) {
         Write-HostDetailed -Message "Getting VM details for $($sh.Name)"
         $Uri = $ResourceManagerUri + $sh.ResourceId + '?api-version=2024-03-01'
-        $vm = Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $Uri | Select-Object Name, TimeCreated, StorageProfile
+        $vm = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri | Select-Object Name, TimeCreated, StorageProfile
         Write-HostDetailed -Message "VM was created on $($vm.TimeCreated)"
         Write-HostDetailed -Message "VM exact version is $($vm.StorageProfile.ImageReference.ExactVersion)"
         Write-HostDetailed -Message 'Getting VM tags'
         $Uri = $ResourceManagerUri + $sh.ResourceId + '/providers/Microsoft.Resources/tags/default?api-version=2021-04-01'
-        $vmTags = Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $Uri
+        $vmTags = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
         $vmDeployTimeStamp = $vmTags.Properties.TagsProperty[$TagDeployTimestamp]
         try {
             $vmDeployTimeStamp = [DateTime]::Parse($vmDeployTimeStamp)
@@ -833,7 +1205,7 @@ function Get-SessionHosts {
                         $TagDeployTimestamp = $vm.TimeCreated.ToString('o')
                     }
                 }
-                Invoke-AzureRestMethod -AccessToken $AccessToken -Body ($Body | ConvertTo-Json -Depth 10) -Method PATCH -Uri $Uri
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 10) -Method PATCH -Uri $Uri
             }
             $vmDeployTimeStamp = $vm.TimeCreated
         }
@@ -857,7 +1229,7 @@ function Get-SessionHosts {
                         $TagIncludeInAutomation = $IncludePreExistingSessionHosts
                     }
                 }
-                Invoke-AzureRestMethod -AccessToken $AccessToken -Body ($Body | ConvertTo-Json -Depth 10) -Method PATCH -Uri $Uri
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 10) -Method PATCH -Uri $Uri
             }
             $vmIncludeInAutomation = $IncludePreExistingSessionHosts
         }
@@ -911,13 +1283,13 @@ function Get-TemplateSpecVersionResourceId {
         [string]$ResourceId
     )
     $Uri = $ResourceManagerUri + $ResourceId + '?api-version=2021-04-01'    
-    $azResourceType = (Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $Uri).ResourceType
+    $azResourceType = (Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri).ResourceType
     Write-HostDetailed -Message "Resource type: $azResourceType"
     switch ($azResourceType) {
         'Microsoft.Resources/templateSpecs' {
             # Get resource Id of the latest version of the template spec
             $Uri = $ResourceManagerUri + $ResourceId + '?$expand=versions&api-version=2021-05-01'
-            $templateSpecVersions = (Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $Uri).Versions
+            $templateSpecVersions = (Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri).Versions
             Write-HostDetailed -Message "Template Spec has $($templateSpecVersions.count) versions"
             $latestVersion = $templateSpecVersions | Sort-Object -Property CreationTime -Descending -Top 1
             Write-HostDetailed -Message "Latest version: $($latestVersion.Name) Created at $($latestVersion.CreationTime.ToString('o')) - Returning Resource Id $($latestVersion.Id)"
@@ -942,6 +1314,9 @@ function Remove-SessionHosts {
     param (
         [Parameter(Mandatory = $true)]
         $SessionHostsPendingDelete,
+
+        [Parameter()]
+        [string] $HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
 
         [Parameter()]
         [string] $ResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
@@ -1012,9 +1387,9 @@ function Remove-SessionHosts {
 
         if ($drainSessionHost) {
             Write-HostDetailed -Message 'Turning on drain mode.'
-            $Uri = $ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts/' + $sessionHost.FQDN + '?api-version=2024-04-03'
+            $Uri = $ResourceManagerUri + '/subscriptions/' + $HostPoolSubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts/' + $sessionHost.FQDN + '?api-version=2024-04-03'
             Invoke-AzureRestMethod `
-                -AccessToken $AccessToken `
+                -ARMToken $ARMToken `
                 -Body (@{properties = @{allowNewSession = $false } } | ConvertTo-Json) `
                 -Method 'PATCH' `
                 -Uri $Uri
@@ -1027,7 +1402,7 @@ function Remove-SessionHosts {
                     $TagPendingDrainTimeStamp = $drainTimestamp
                 }
             }
-            Invoke-AzureRestMethod -AccessToken $AccessToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri
+            Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri
             
             if ($TagScalingPlanExclusionTag -ne ' ') {
                 # This is string with a single space.
@@ -1038,7 +1413,7 @@ function Remove-SessionHosts {
                         $TagScalingPlanExclusionTag = $true
                     }
                 }
-                Invoke-AzureRestMethod -AccessToken $AccessToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri
             }
 
             Write-HostDetailed -Message 'Notifying Users'
@@ -1049,18 +1424,18 @@ function Remove-SessionHosts {
             Write-HostDetailed -Message "Deleting session host $($SessionHost.SessionHostName)..."
             if ($RemoveEntraDevice) {
                 Write-HostDetailed -Message 'Deleting device from Entra ID'
-                Remove-EntraDevice -Name $sessionHost.SessionHostName
+                Remove-EntraDevice -GraphToken $Script:GraphToken -Name $sessionHost.SessionHostName
             }
             if ($RemoveIntuneDevice) {
                 Write-HostDetailed -Message 'Deleting device from Intune'
-                Remove-IntuneDevice -Name $sessionHost.SessionHostName
+                Remove-IntuneDevice -GraphToken $Script:GraphToken -Name $sessionHost.SessionHostName
             }
             Write-HostDetailed -Message "Removing Session Host from Host Pool $HostPoolName"
-            $Uri = $ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts/' + $sessionHost.FQDN + '?api-version=2024-04-03'
-            Invoke-AzureRestMethod -AccessToken $AccessToken -Method DELETE -Uri $Uri            
+            $Uri = $ResourceManagerUri + '/subscriptions/' + $HostPoolSubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts/' + $sessionHost.FQDN + '?api-version=2024-04-03'
+            Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri            
             Write-HostDetailed -Message "Deleting VM: $($sessionHost.ResourceId)..."
             $Uri = $ResourceManagerUri + $sessionHost.ResourceId + '?forceDeletion=true&api-version=2024-07-01'
-            Invoke-AzureRestMethod -AccessToken $AccessToken -Method 'DELETE' -Uri $Uri
+            Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'DELETE' -Uri $Uri
             # We are not deleting Disk and NIC as the template should mark the delete option for these resources.
         }
     }
@@ -1076,15 +1451,34 @@ function Remove-EntraDevice {
         [Parameter(Mandatory = $true)]
         [string] $Name
     )
-    $Headers = @{
-        'Authorization' = "Bearer $GraphToken"
+    
+    try {
+        $Device = Invoke-GraphApiWithRetry `
+            -GraphEndpoint $GraphEndpoint `
+            -ARMToken $GraphToken `
+            -Method Get `
+            -Uri "/v1.0/devices?`$filter=displayName eq '$Name'"
+        
+        If ($Device.value -and $Device.value.Count -gt 0) {
+            $Id = $Device.value[0].id
+            Write-HostDetailed -Message "Removing session host $Name from Entra ID (Device ID: $Id)"
+            
+            Invoke-GraphApiWithRetry `
+                -GraphEndpoint $GraphEndpoint `
+                -ARMToken $GraphToken `
+                -Method Delete `
+                -Uri "/v1.0/devices/$Id"
+            
+            Write-HostDetailed -Message "Successfully removed device $Name from Entra ID"
+        }
+        else {
+            Write-HostDetailed -Message "Device $Name not found in Entra ID" -Level Warning
+        }
     }
-    $Device = Invoke-RestMethod -Method Get -Uri ($GraphEndpoint + "/v1.0/devices?`$filter=displayName eq '$Name'") -Headers $Headers
-    If ($Device) {
-        $Id = $Device.id
-        Write-HostDetailed -Message "Removing session host $Name from Entra ID"
-        Invoke-RestMethod -Method Delete -Uri $GraphEndpoint + '/v1.0/devices/' + $Id -Headers $Headers
-    }    
+    catch {
+        Write-HostDetailed -Message "Failed to remove Entra device $Name : $($_.Exception.Message)" -Level Error
+        throw
+    }
 }
 
 function Remove-IntuneDevice {
@@ -1097,14 +1491,33 @@ function Remove-IntuneDevice {
         [Parameter(Mandatory = $true)]
         [string] $Name
     )
-    $Headers = @{
-        'Authorization' = "Bearer $GraphToken"
+    
+    try {
+        $Device = Invoke-GraphApiWithRetry `
+            -GraphEndpoint $GraphEndpoint `
+            -ARMToken $GraphToken `
+            -Method Get `
+            -Uri "/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$Name'"
+        
+        If ($Device.value -and $Device.value.Count -gt 0) {
+            $Id = $Device.value[0].id
+            Write-HostDetailed -Message "Removing session host '$Name' device from Intune (Device ID: $Id)"
+            
+            Invoke-GraphApiWithRetry `
+                -GraphEndpoint $GraphEndpoint `
+                -ARMToken $GraphToken `
+                -Method Delete `
+                -Uri "/v1.0/deviceManagement/managedDevices/$Id"
+            
+            Write-HostDetailed -Message "Successfully removed device $Name from Intune"
+        }
+        else {
+            Write-HostDetailed -Message "Device $Name not found in Intune" -Level Warning
+        }
     }
-    $Device = Invoke-RestMethod -Method Get -Uri ($GraphEndpoint + "/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$Name'") -Headers $Headers
-    If ($Device) {
-        $Id = $Device.id
-        Write-HostDetailed -Message "Removing session host '$Name' device from Intune"
-        Invoke-RestMethod -Method Delete -Uri $GraphEndpoint + '/v1.0/deviceManagement/managedDevices/' + $Id -Headers $Headers
+    catch {
+        Write-HostDetailed -Message "Failed to remove Intune device $Name : $($_.Exception.Message)" -Level Error
+        throw
     }
 }
 
@@ -1212,6 +1625,9 @@ function Send-DrainNotification {
         [string] $SessionHostName,
 
         [Parameter()]
+        [string] $HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
+
+        [Parameter()]
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
 
         [Parameter()]
@@ -1228,15 +1644,14 @@ function Send-DrainNotification {
     )
     
     try {
-        $AccessToken = Get-AccessToken
+        $ARMToken = Get-AccessToken
         $ResourceManagerUri = (Get-AzContext).Environment.ResourceManagerUrl
-        $SubscriptionId = (Get-AzContext).Subscription.Id
         
         # Get all user sessions on the session host
         Write-HostDetailed -Message "Getting user sessions for session host $SessionHostName"
-        $SessionsUri = $ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts/' + $SessionHostName + '/userSessions?api-version=2024-04-03'
+        $SessionsUri = $ResourceManagerUri + '/subscriptions/' + $HostPoolSubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts/' + $SessionHostName + '/userSessions?api-version=2024-04-03'
         
-        $sessions = Invoke-AzureRestMethod -AccessToken $AccessToken -Method Get -Uri $SessionsUri
+        $sessions = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $SessionsUri
         
         if ($null -eq $sessions -or $sessions.Count -eq 0) {
             Write-HostDetailed -Message "No active sessions found on session host $SessionHostName"
@@ -1257,7 +1672,7 @@ function Send-DrainNotification {
             
             Write-HostDetailed -Message "Sending drain notification to user $userPrincipalName on session $sessionId"
             
-            $MessageUri = $ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts/' + $SessionHostName + '/userSessions/' + $sessionId + '/sendMessage?api-version=2024-04-03'
+            $MessageUri = $ResourceManagerUri + '/subscriptions/' + $HostPoolSubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.DesktopVirtualization/hostPools/' + $HostPoolName + '/sessionHosts/' + $SessionHostName + '/userSessions/' + $sessionId + '/sendMessage?api-version=2024-04-03'
             
             $MessagePayload = @{
                 messageTitle = $MessageTitle
@@ -1265,7 +1680,7 @@ function Send-DrainNotification {
             } | ConvertTo-Json -Depth 10
             
             try {
-                Invoke-AzureRestMethod -AccessToken $AccessToken -Method Post -Uri $MessageUri -Body $MessagePayload | Out-Null
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Method Post -Uri $MessageUri -Body $MessagePayload | Out-Null
                 Write-HostDetailed -Message "Successfully sent message to user $userPrincipalName"
             }
             catch {
@@ -1335,10 +1750,10 @@ function Get-GraphTokenCached {
     
     # Get access token for Resource Manager to exchange for Graph token
     $resourceManagerUrl = Read-FunctionAppSetting ResourceManagerUrl
-    $accessToken = Get-AccessToken -Resource $resourceManagerUrl -ClientId $ClientId
+    $ARMToken = Get-AccessToken -Resource $resourceManagerUrl -ClientId $ClientId
     
     $headers = @{
-        'Authorization' = "Bearer $accessToken"
+        'Authorization' = "Bearer $ARMToken"
         'Content-Type'  = 'application/json'
     }
     

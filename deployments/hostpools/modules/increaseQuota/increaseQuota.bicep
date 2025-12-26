@@ -57,10 +57,10 @@ module increaseQuotaFunctionApp '../../../sharedModules/custom/functionApp/funct
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
-    resourceGroupRoleAssignments: [
+    roleAssignments: [
       {
         roleDefinitionId: '17d1049b-9a84-46fb-8f53-869881c3d3ab' // Storage Account Contributor
-        scope: resourceGroupStorage
+        scope: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupStorage}'
       }
     ]
     serverFarmId: serverFarmId

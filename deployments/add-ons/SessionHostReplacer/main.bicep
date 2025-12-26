@@ -6,14 +6,22 @@ metadata owner = 'FederalAVD'
 // Parameters //
 // ========== //
 
-@description('Required. The resource ID of the AVD Host Pool to manage.')
-param hostPoolResourceId string
+// ================================================================================================
+// Common Parameters
+// These parameters apply to the overall deployment and are shared across multiple resources.
+// ================================================================================================
 
-@description('Required. The resource ID of the resource group where virtual machines are deployed.')
-param virtualMachinesResourceGroupId string
+@description('Optional. The location for all resources. Defaults to deployment location.')
+param location string = resourceGroup().location
 
-@description('Optional. The resource ID of the Template Spec version for session host deployments.')
-param sessionHostTemplateSpecVersionResourceId string
+@description('Optional. Tags for all resources.')
+param tags object = {}
+
+// ================================================================================================
+// Function App Infrastructure Parameters
+// These parameters configure the Azure Function App infrastructure including networking, 
+// security, encryption, and monitoring capabilities.
+// ================================================================================================
 
 @description('Required. The resource ID of the User-Assigned Managed Identity with Microsoft Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All).')
 param sessionHostReplacerUserAssignedIdentityResourceId string
@@ -23,48 +31,6 @@ param appServicePlanResourceId string = ''
 
 @description('Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if appServicePlanResourceId is not provided. Default is false.')
 param zoneRedundant bool = false
-
-@description('Optional. The maximum number of session hosts to replace per execution. Default is 1 for safety.')
-@minValue(1)
-@maxValue(20)
-param maxSessionHostsToReplace int = 1
-
-@description('Optional. The target age in days for session hosts before replacement. Default is 45 days.')
-@minValue(1)
-@maxValue(365)
-param targetVMAgeDays int = 45
-
-@description('Optional. The grace period in hours after draining before deleting session hosts. Default is 24 hours.')
-@minValue(1)
-@maxValue(168)
-param drainGracePeriodHours int = 24
-
-@description('Optional. Whether to fix session host tags during execution. Default is true.')
-param fixSessionHostTags bool = true
-
-@description('Optional. Whether to include pre-existing session hosts in automation. Default is false.')
-param includePreExistingSessionHosts bool = false
-
-@description('Optional. Tag name to identify session hosts included in automation. Default is IncludeInAutoReplace.')
-param tagIncludeInAutomation string = 'IncludeInAutoReplace'
-
-@description('Optional. Tag name for deploy timestamp. Default is AutoReplaceDeployTimestamp.')
-param tagDeployTimestamp string = 'AutoReplaceDeployTimestamp'
-
-@description('Optional. Tag name for pending drain timestamp. Default is AutoReplacePendingDrainTimestamp.')
-param tagPendingDrainTimestamp string = 'AutoReplacePendingDrainTimestamp'
-
-@description('Optional. Tag name for scaling plan exclusion. Default is ScalingPlanExclusion.')
-param tagScalingPlanExclusionTag string = 'ScalingPlanExclusion'
-
-@description('Optional. Whether to remove Entra ID device records when deleting session hosts. Default is false.')
-param removeEntraDevice bool = false
-
-@description('Optional. Whether to remove Intune device records when deleting session hosts. Default is false.')
-param removeIntuneDevice bool = false
-
-@description('Optional. Timer schedule for the function app (cron expression). Default is every 6 hours.')
-param timerSchedule string = '0 0 */6 * * *'
 
 @description('Optional. Enable private endpoints for function app and storage. Default is false.')
 param privateEndpoint bool = false
@@ -85,8 +51,8 @@ param azureTablePrivateDnsZoneResourceId string = ''
 @description('Optional. The resource ID of the User-Assigned Managed Identity for encryption.')
 param encryptionUserAssignedIdentityResourceId string
 
-@description('Required. The URI of the Key Vault for encryption.')
-param encryptionKeyVaultUri string
+@description('Optional. The resource ID of the Key Vault for encryption. Required if keyManagementStorageAccounts is set to Customer.')
+param encryptionKeyVaultResourceId string = ''
 
 @description('Optional. Key management solution for storage accounts. Options: Platform, Customer.')
 @allowed([
@@ -101,21 +67,272 @@ param logAnalyticsWorkspaceResourceId string = ''
 @description('Optional. Private Link Scope resource ID for Application Insights.')
 param privateLinkScopeResourceId string = ''
 
-@description('Optional. The location for all resources. Defaults to deployment location.')
-param location string = resourceGroup().location
-
-@description('Optional. Tags for all resources.')
-param tags object = {}
+// ================================================================================================
+// Function App Runtime/Execution Parameters
+// These parameters control the behavior and execution logic of the session host replacer function,
+// including lifecycle policies, tagging strategies, device cleanup, and execution schedule.
+// ================================================================================================
 
 @description('Required. The resource ID of the Key Vault containing session host credential secrets (VirtualMachineAdminPassword, VirtualMachineAdminUserName, DomainJoinUserPassword, DomainJoinUserPrincipalName).')
 param credentialsKeyVaultResourceId string
 
-// Session Host Parameters - passed from Template Spec deployment
-@description('Optional. Session host deployment parameters. These are passed to the Template Spec during deployment.')
-param sessionHostParameters object = {}
+@description('Optional. The resource ID of the Template Spec version for session host deployments. If not provided, a new template spec will be created.')
+param sessionHostTemplateSpecVersionResourceId string = ''
+
+@description('Optional. The name of the Template Spec to create. Defaults to hostpool-based naming.')
+param templateSpecName string = ''
+
+@description('Optional. The version of the Template Spec. Default is 1.0.0.')
+param templateSpecVersion string = '1.0.0'
+
+@description('Optional. Timer schedule for the function app (cron expression). Default is every hour.')
+param timerSchedule string = '0 0 * * * *'
+
+@description('Optional. The target age in days for session hosts before replacement. Default is 45 days.')
+@minValue(1)
+@maxValue(365)
+param targetVMAgeDays int = 45
+
+@description('Optional. The grace period in hours after draining before deleting session hosts. Default is 24 hours.')
+@minValue(1)
+@maxValue(168)
+param drainGracePeriodHours int = 24
+
+@description('Optional. Whether to fix session host tags during execution. Default is true.')
+param fixSessionHostTags bool = true
+
+@description('Optional. Whether to include pre-existing session hosts in automation. Default is true.')
+param includePreExistingSessionHosts bool = true
+
+@description('Optional. Tag name to identify session hosts included in automation. Default is IncludeInAutoReplace.')
+param tagIncludeInAutomation string = 'IncludeInAutoReplace'
+
+@description('Optional. Tag name for deploy timestamp. Default is AutoReplaceDeployTimestamp.')
+param tagDeployTimestamp string = 'AutoReplaceDeployTimestamp'
+
+@description('Optional. Tag name for pending drain timestamp. Default is AutoReplacePendingDrainTimestamp.')
+param tagPendingDrainTimestamp string = 'AutoReplacePendingDrainTimestamp'
+
+@description('Optional. Tag name for scaling plan exclusion. Default is ScalingPlanExclusion.')
+param tagScalingPlanExclusionTag string = 'ScalingPlanExclusion'
+
+@description('Optional. Whether to remove Entra ID device records when deleting session hosts. Default is true.')
+param removeEntraDevice bool = true
+
+@description('Optional. Whether to remove Intune device records when deleting session hosts. Default is true.')
+param removeIntuneDevice bool = true
+
+@description('Optional. Enable progressive scale-up with percentage-based batching for deployments. When enabled, the function will start with a small percentage of needed hosts and gradually increase. Default is false.')
+param enableProgressiveScaleUp bool = false
+
+@description('Optional. Initial deployment size as percentage of total needed hosts. Used when progressive scale-up is enabled. Default is 10%.')
+@minValue(1)
+@maxValue(100)
+param initialDeploymentPercentage int = 10
+
+@description('Optional. Percentage increment added after each successful deployment run. Used when progressive scale-up is enabled. Default is 20%.')
+@minValue(5)
+@maxValue(50)
+param scaleUpIncrementPercentage int = 20
+
+@description('Optional. Maximum number of hosts to deploy per run (ceiling constraint). Prevents deploying more than this number even if percentage calculation is higher. Default is 10.')
+@minValue(1)
+@maxValue(50)
+param maxDeploymentBatchSize int = 10
+
+@description('Optional. Number of consecutive successful deployment runs required before increasing the deployment percentage. Default is 1.')
+@minValue(1)
+@maxValue(5)
+param successfulRunsBeforeScaleUp int = 1
+
+// ================================================================================================
+// Session Host Configuration Parameters
+// These parameters define the configuration for session hosts that will be deployed as replacements.
+// They are passed to the Template Spec deployment when creating new session hosts.
+// ================================================================================================
+@description('Required. The resource ID of the resource group where virtual machines are deployed.')
+param virtualMachinesResourceGroupId string
+
+@description('Required. The resource ID of the AVD Host Pool where session hosts will be registered.')
+param hostPoolResourceId string
 
 @description('Required. The VM name prefix used for session hosts.')
 param virtualMachineNamePrefix string
+
+@description('Optional. VM name index length for padding.')
+param vmNameIndexLength int = 3
+
+@description('Optional. Publisher of the marketplace image. Default is MicrosoftWindowsDesktop.')
+param imagePublisher string = 'MicrosoftWindowsDesktop'
+
+@description('Optional. Offer of the marketplace image. Default is windows-11.')
+param imageOffer string = 'windows-11'
+
+@description('Optional. SKU of the marketplace image. Default is win11-25h2-avd.')
+param imageSku string = 'win11-25h2-avd'
+
+@description('Optional. The resource ID of a custom image to use for session hosts. If provided, imagePublisher, imageOffer, and imageSku are ignored.')
+param customImageResourceId string = ''
+
+@description('Optional. The VM size for session hosts.')
+param virtualMachineSize string = 'Standard_D4ads_v5'
+
+@description('Required. The subnet resource ID for session host NICs.')
+param virtualMachineSubnetResourceId string
+
+@description('Optional. The identity solution for session hosts.')
+@allowed([
+  'ActiveDirectoryDomainServices'
+  'EntraDomainServices'
+  'EntraKerberos-Hybrid'
+  'EntraKerberos-CloudOnly'
+  'EntraId'
+])
+param identitySolution string = 'ActiveDirectoryDomainServices'
+
+@description('Optional. The domain name for domain join.')
+param domainName string = ''
+
+@description('Optional. The OU path for domain join.')
+param ouPath string = ''
+
+@description('Optional. Enable Intune enrollment for Entra joined VMs.')
+param intuneEnrollment bool = false
+
+@description('Optional. The time zone for session hosts.')
+param timeZone string = 'Eastern Standard Time'
+
+@description('Optional. Availability configuration.')
+@allowed([
+  'AvailabilityZones'
+  'AvailabilitySets'
+  'None'
+])
+param availability string = 'AvailabilityZones'
+
+@description('Optional. Availability zones for session hosts.')
+param availabilityZones array = []
+
+@description('Optional. Security type for session hosts.')
+@allowed([
+  'Standard'
+  'TrustedLaunch'
+  'ConfidentialVM'
+])
+param securityType string = 'TrustedLaunch'
+
+@description('Optional. Enable secure boot.')
+param secureBootEnabled bool = true
+
+@description('Optional. Enable vTPM.')
+param vTpmEnabled bool = true
+
+@description('Optional. Enable integrity monitoring.')
+param integrityMonitoring bool = true
+
+@description('Optional. Enable encryption at host.')
+param encryptionAtHost bool = true
+
+@description('Optional. Enable confidential VM OS disk encryption.')
+param confidentialVMOSDiskEncryption bool = false
+
+@description('Optional. OS disk size in GB. 0 uses image default.')
+param diskSizeGB int = 0
+
+@description('Optional. OS disk SKU.')
+@allowed([
+  'Premium_LRS'
+  'StandardSSD_LRS'
+  'Standard_LRS'
+])
+param diskSku string = 'Premium_LRS'
+
+@description('Optional. Enable accelerated networking.')
+param enableAcceleratedNetworking bool = true
+
+@description('Optional. Enable monitoring with Azure Monitor Agent.')
+param enableMonitoring bool = false
+
+@description('Optional. Dedicated host resource ID.')
+param dedicatedHostResourceId string = ''
+
+@description('Optional. Dedicated host group resource ID.')
+param dedicatedHostGroupResourceId string = ''
+
+@description('Optional. Dedicated host group zones.')
+param dedicatedHostGroupZones array = []
+
+@description('Optional. Existing disk encryption set resource ID.')
+param existingDiskEncryptionSetResourceId string = ''
+
+@description('Optional. Existing disk access resource ID.')
+param existingDiskAccessResourceId string = ''
+
+@description('Optional. AVD Insights data collection rules resource ID.')
+param avdInsightsDataCollectionRulesResourceId string = ''
+
+@description('Optional. VM Insights data collection rules resource ID.')
+param vmInsightsDataCollectionRulesResourceId string = ''
+
+@description('Optional. Security data collection rules resource ID.')
+param securityDataCollectionRulesResourceId string = ''
+
+@description('Optional. Data collection endpoint resource ID.')
+param dataCollectionEndpointResourceId string = ''
+
+@description('Optional. FSLogix configuration - enable session host configuration.')
+param fslogixConfigureSessionHosts bool = false
+
+@description('Optional. FSLogix container type.')
+@allowed([
+  'ProfileContainer'
+  'OfficeContainer'
+  'ProfileContainer OfficeContainer'
+  'ProfileContainer CloudCache'
+  'OfficeContainer CloudCache'
+  'ProfileContainer OfficeContainer CloudCache'
+])
+param fslogixContainerType string = 'ProfileContainer'
+
+@description('Optional. FSLogix file share names.')
+param fslogixFileShareNames array = ['profile-containers']
+
+@description('Optional. FSLogix container size in MBs.')
+param fslogixSizeInMBs int = 30000
+
+@description('Optional. FSLogix storage service.')
+@allowed([
+  'AzureFiles'
+  'AzureNetAppFiles'
+])
+param fslogixStorageService string = 'AzureFiles'
+
+@description('Optional. FSLogix local storage account resource IDs.')
+param fslogixLocalStorageAccountResourceIds array = []
+
+@description('Optional. FSLogix remote storage account resource IDs.')
+param fslogixRemoteStorageAccountResourceIds array = []
+
+@description('Optional. FSLogix local NetApp volume resource IDs.')
+param fslogixLocalNetAppVolumeResourceIds array = []
+
+@description('Optional. FSLogix remote NetApp volume resource IDs.')
+param fslogixRemoteNetAppVolumeResourceIds array = []
+
+@description('Optional. FSLogix OSS groups for sharding.')
+param fslogixOSSGroups array = []
+
+@description('Optional. AVD Agents DSC package name or URL.')
+param avdAgentsDSCPackage string = 'Configuration_1.0.03211.1002.zip'
+
+@description('Optional. Artifacts container URI for custom scripts.')
+param artifactsContainerUri string = ''
+
+@description('Optional. Artifacts user assigned identity resource ID.')
+param artifactsUserAssignedIdentityResourceId string = ''
+
+@description('Optional. Session host customizations array.')
+param sessionHostCustomizations array = []
 
 // ========== //
 // Variables  //
@@ -124,23 +341,26 @@ param virtualMachineNamePrefix string
 var deploymentSuffix = uniqueString(resourceGroup().id, deployment().name)
 var hostPoolName = split(hostPoolResourceId, '/')[8]
 var hostPoolResourceGroupName = split(hostPoolResourceId, '/')[4]
+var hostPoolSubscriptionId = split(hostPoolResourceId, '/')[2]
 var virtualMachineResourceGroupLocation = reference(virtualMachinesResourceGroupId, '2021-04-01', 'Full').location
 var virtualMachinesResourceGroupName = last(split(virtualMachinesResourceGroupId, '/'))
+var virtualMachinesSubscriptionId = split(virtualMachinesResourceGroupId, '/')[2]
+
+// Template Spec resource group - either from provided resource ID or current resource group
+var templateSpecResourceGroupId = !empty(sessionHostTemplateSpecVersionResourceId)
+  ? '/subscriptions/${split(sessionHostTemplateSpecVersionResourceId, '/')[2]}/resourceGroups/${split(sessionHostTemplateSpecVersionResourceId, '/')[4]}'
+  : resourceGroup().id
 
 // Naming Convention Logic (derived from resourceNames.bicep)
 var cloud = toLower(environment().name)
 var locationsObject = loadJsonContent('../../../.common/data/locations.json')
 var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : cloud
 var locations = locationsObject[locationsEnvProperty]
-
-var graphEndpoint = environment().name == 'AzureCloud' ? 'https://graph.microsoft.com' : environment().name == 'AzureUSGovernment' ? 'https://graph.microsoft.us' : startsWith(environment().name, 'us') ? 'https://graph.${environment().suffixes.storage}' : 'https//dod-graph.microsoft.us'
+// the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.
+var graphEndpoint = environment().name == 'AzureUSGovernment' ? 'https://graph.microsoft.us' : startsWith(environment().name, 'us') ? 'https://graph.${environment().suffixes.storage}' : 'https://graph.microsoft.com'
 
 #disable-next-line BCP329
-var varLocationVirtualMachines = startsWith(cloud, 'us')
-  ? substring(virtualMachineResourceGroupLocation, 5, length(virtualMachineResourceGroupLocation) - 5)
-  : virtualMachineResourceGroupLocation
-var virtualMachinesRegionAbbreviation = locations[varLocationVirtualMachines].abbreviation
-
+var functionAppRegionAbbreviation = locations[location].abbreviation
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
 // Dynamically determine naming convention from existing host pool name
@@ -180,7 +400,7 @@ var appServicePlanName = replace(
   replace(
     replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
     'LOCATION',
-    virtualMachinesRegionAbbreviation
+    functionAppRegionAbbreviation
   ),
   'TOKEN-',
   ''
@@ -190,12 +410,12 @@ var appServicePlanName = replace(
 var appInsightsNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
   'LOCATION',
-  virtualMachinesRegionAbbreviation
+  functionAppRegionAbbreviation
 )
 var functionAppNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
   'LOCATION',
-  virtualMachinesRegionAbbreviation
+  functionAppRegionAbbreviation
 )
 
 // Private endpoint naming conventions
@@ -221,6 +441,7 @@ var functionAppName = replace(functionAppNameConv, 'TOKEN-', 'shreplacer-${uniqu
 var storageAccountName = sessionHostReplacerFAStorageAccountName
 var appInsightsName = replace(appInsightsNameConv, 'TOKEN-', 'shreplacer-${uniqueStringHosts}-')
 var encryptionKeyName = '${hpBaseName}-encryption-key-${sessionHostReplacerFAStorageAccountName}'
+var templateSpecNameFinal = !empty(templateSpecName) ? templateSpecName : replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.templateSpecs), 'TOKEN', 'sessionhost'), 'LOCATION', functionAppRegionAbbreviation)
 
 // Virtual Machine naming conventions
 var vmNamePrefixWithoutDash = toLower(last(virtualMachineNamePrefix) == '-'
@@ -239,9 +460,83 @@ var networkInterfaceNameConv = nameConvReversed
   ? 'VMNAMEPREFIX###-${resourceAbbreviations.networkInterfaces}'
   : '${resourceAbbreviations.networkInterfaces}-VMNAMEPREFIX###'
 
-// ========== //
-// Deployments //
-// ========== //
+// Session Host Parameters - Passed to Template Spec Deployment
+// These parameters are passed to the function app which will use them when deploying new session hosts
+var sessionHostParameters = {
+  artifactsContainerUri: artifactsContainerUri
+  artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
+  availability: availability
+  availabilitySetNamePrefix: availabilitySetNamePrefix
+  availabilityZones: availabilityZones
+  avdAgentsDSCPackage: avdAgentsDSCPackage
+  avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
+  confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
+  credentialsKeyVaultResourceId: credentialsKeyVaultResourceId
+  dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
+  dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
+  dedicatedHostGroupZones: dedicatedHostGroupZones
+  dedicatedHostResourceId: dedicatedHostResourceId
+  diskSizeGB: diskSizeGB
+  diskSku: diskSku
+  domainName: domainName
+  enableAcceleratedNetworking: enableAcceleratedNetworking
+  encryptionAtHost: encryptionAtHost
+  existingDiskAccessResourceId: existingDiskAccessResourceId
+  existingDiskEncryptionSetResourceId: existingDiskEncryptionSetResourceId
+  fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
+  fslogixContainerType: fslogixContainerType
+  fslogixFileShareNames: fslogixFileShareNames
+  fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
+  fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
+  fslogixOSSGroups: fslogixOSSGroups
+  fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
+  fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
+  fslogixSizeInMBs: fslogixSizeInMBs
+  fslogixStorageService: fslogixStorageService
+  hostPoolResourceId: hostPoolResourceId
+  identitySolution: identitySolution
+  imageReference: empty(customImageResourceId) ? {
+    publisher: imagePublisher
+    offer: imageOffer
+    sku: imageSku
+  } : {
+    id: customImageResourceId
+  }
+  integrityMonitoring: integrityMonitoring
+  intuneEnrollment: intuneEnrollment
+  location: virtualMachineResourceGroupLocation
+  enableMonitoring: enableMonitoring
+  networkInterfaceNameConv: networkInterfaceNameConv
+  osDiskNameConv: diskNameConv
+  ouPath: ouPath
+  secureBootEnabled: secureBootEnabled
+  securityDataCollectionRulesResourceId: securityDataCollectionRulesResourceId
+  securityType: securityType
+  sessionHostCustomizations: sessionHostCustomizations
+  vmNameIndexLength: vmNameIndexLength
+  subnetResourceId: virtualMachineSubnetResourceId
+  tags: tags
+  timeZone: timeZone
+  virtualMachineNameConv: virtualMachineNameConv
+  virtualMachineNamePrefix: virtualMachineNamePrefix
+  virtualMachineSize: virtualMachineSize
+  vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId
+  vTpmEnabled: vTpmEnabled
+}
+
+// Conditional Template Spec for Session Host Deployment
+module templateSpec 'modules/sessionHostTemplateSpec.bicep' = if (empty(sessionHostTemplateSpecVersionResourceId)) {
+  name: 'SessionHostTemplateSpec-${deploymentSuffix}'
+  params: {
+    location: location
+    templateSpecName: templateSpecNameFinal
+    templateSpecVersion: templateSpecVersion
+    tags: union(
+      { 'cm-resource-parent': hostPoolResourceId },
+      tags[?'Microsoft.Resources/templateSpecs'] ?? {}
+    )
+  }
+}
 
 // Conditional App Service Plan deployment
 module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
@@ -271,12 +566,16 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     deploymentSuffix: deploymentSuffix
     enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)    
     encryptionKeyName: encryptionKeyName
-    encryptionKeyVaultUri: encryptionKeyVaultUri
+    encryptionKeyVaultUri: !empty(encryptionKeyVaultResourceId) ? reference(encryptionKeyVaultResourceId, '2023-07-01').vaultUri : ''
     encryptionUserAssignedIdentityResourceId: encryptionUserAssignedIdentityResourceId
     functionAppAppSettings: [      
       {
         name: 'GraphEndpoint'
         value: graphEndpoint
+      }
+      {
+        name: 'HostPoolSubscriptionId'
+        value: hostPoolSubscriptionId
       }
       {
         name: 'HostPoolResourceGroupName'
@@ -285,6 +584,10 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
       {
         name: 'HostPoolName'
         value: hostPoolName
+      }
+      {
+        name: 'VirtualMachinesSubscriptionId'
+        value: virtualMachinesSubscriptionId
       }
       {
         name: 'VirtualMachinesResourceGroupName'
@@ -324,15 +627,15 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
       }
       {
         name: 'SessionHostTemplate'
-        value: sessionHostTemplateSpecVersionResourceId
+        value: !empty(sessionHostTemplateSpecVersionResourceId) ? sessionHostTemplateSpecVersionResourceId : templateSpec!.outputs.templateSpecVersionResourceId
       }
       {
         name: 'SessionHostParameters'
         value: string(sessionHostParameters)
       }
       {
-        name: 'MaxSessionHostsToReplace'
-        value: string(maxSessionHostsToReplace)
+        name: 'WEBSITE_TIME_ZONE'
+        value: timeZone
       }
       {
         name: 'RemoveEntraDevice'
@@ -341,6 +644,26 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
       {
         name: 'RemoveIntuneDevice'
         value: string(removeIntuneDevice)
+      }
+      {
+        name: 'EnableProgressiveScaleUp'
+        value: string(enableProgressiveScaleUp)
+      }
+      {
+        name: 'InitialDeploymentPercentage'
+        value: string(initialDeploymentPercentage)
+      }
+      {
+        name: 'ScaleUpIncrementPercentage'
+        value: string(scaleUpIncrementPercentage)
+      }
+      {
+        name: 'MaxDeploymentBatchSize'
+        value: string(maxDeploymentBatchSize)
+      }
+      {
+        name: 'SuccessfulRunsBeforeScaleUp'
+        value: string(successfulRunsBeforeScaleUp)
       }
     ]
     functionAppDelegatedSubnetResourceId: functionAppDelegatedSubnetResourceId
@@ -354,18 +677,18 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
-    resourceGroupRoleAssignments: [
+    roleAssignments: [
       {
-        roleDefinitionId: '21090545-7ca7-4776-b22c-e363652d74d2' // Desktop Virtualization Virtual Machine Contributor
-        scope: virtualMachinesResourceGroupName
+        roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
+        scope: '/subscriptions/${virtualMachinesSubscriptionId}'
       }
       {
-        roleDefinitionId: '4a9ae827-6dc8-4573-8ac7-8239d42aa03f' // Tag Contributor
-        scope: virtualMachinesResourceGroupName
+        roleDefinitionId: 'e307426c-f9b6-4e81-87de-d99efb3c32bc' // Desktop Virtualization Host Pool Contributor
+        scope: '/subscriptions/${hostPoolSubscriptionId}/resourceGroups/${hostPoolResourceGroupName}'
       }
       {
-        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
-        scope: hostPoolResourceGroupName
+        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader to be able to read the Template Spec
+        scope: templateSpecResourceGroupId
       }
     ]
     serverFarmId: !empty(appServicePlanResourceId) ? appServicePlanResourceId : hostingPlan!.outputs.hostingPlanId
