@@ -545,7 +545,7 @@ module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPla
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     location: location
     name: appServicePlanName
-    planPricing: 'PremiumV3_P1v3'
+    planPricing: 'PremiumV3_P0v3'
     tags: tags
     zoneRedundant: zoneRedundant
   }

@@ -47,7 +47,7 @@ The AVD Session Host Replacer is an automated Azure Function that manages the li
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  SessionHostReplacer Function App (Timer: Configurable, default hourly) │
+│  SessionHostReplacer Function App (Timer: Configurable, default hourly)  │
 │  ┌────────────────────────────────────────────────────────────────────┐  │
 │  │ 1. Enumerate Session Hosts (AVD REST API)                          │  │
 │  │ 2. Validate & Fix Tags (IncludeInAutoReplace, DeployTimestamp)     │  │
@@ -156,6 +156,7 @@ You can either provide an existing Template Spec or let the add-on create one au
 **Option A: Use Existing Template Spec**
 
 If you already have a Template Spec for session host deployments:
+
 ```powershell
 $templateSpecVersionResourceId = "/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Resources/templateSpecs/{name}/versions/{version}"
 ```
@@ -163,6 +164,7 @@ $templateSpecVersionResourceId = "/subscriptions/{sub-id}/resourceGroups/{rg}/pr
 **Option B: Auto-Create Template Spec (Recommended)**
 
 Leave `sessionHostTemplateSpecVersionResourceId` empty, and the add-on will:
+
 1. Create a Template Spec in the same resource group as the function app
 2. Use the naming convention derived from your hostpool name
 3. Default to version `1.0.0` (configurable via `templateSpecVersion` parameter)
@@ -201,6 +203,7 @@ Session hosts must be tagged to participate in automated replacement. The add-on
 | `AutoReplacePendingDrainTimestamp` | (configurable) | ISO 8601 timestamp when drain started | Yes (set during drain) |
 
 **Manual Tagging Example:**
+
 ```powershell
 # Tag existing session hosts for automated replacement
 $sessionHostRG = "rg-avd-session-hosts"
@@ -216,6 +219,7 @@ Update-AzTag -ResourceId $vm.Id -Tag $tags -Operation Merge
 ```
 
 **Tag Auto-Fix Feature:**
+
 - When `fixSessionHostTags: true` (default), the function automatically creates missing `AutoReplaceDeployTimestamp` tags using the VM's creation time
 - Set `includePreExistingSessionHosts: true` to include session hosts deployed before this add-on was installed
 
@@ -224,6 +228,7 @@ Update-AzTag -ResourceId $vm.Id -Tag $tags -Operation Merge
 The function app requires a **Premium V3 App Service Plan** for VNet integration support. You can either:
 
 **Option A: Use Existing Plan (Recommended for Cost Savings)**
+
 ```powershell
 $appServicePlanResourceId = "/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Web/serverfarms/{plan-name}"
 ```
@@ -283,6 +288,7 @@ New-AzRoleAssignment `
     -RoleDefinitionName "Key Vault Crypto Service Encryption User" `
     -Scope $keyVaultResourceId
 ```
+
 ## Deployment
 
 ### Azure Portal
@@ -554,6 +560,7 @@ The add-on automatically determines resource naming conventions by analyzing the
 - **Resource Type at End**: `avd-01-hp` → Function app: `avd-01-fa-shreplacer-abc123-eus`
 
 Naming includes:
+
 - Hostpool identifier and index (e.g., "avd-01")
 - Unique string from virtual machines resource group ID
 - Region abbreviation
@@ -580,6 +587,7 @@ timerSchedule: '0 */30 * * * *'  // Every 30 minutes
 When `enableProgressiveScaleUp: true`, the function gradually increases deployment batch sizes based on success:
 
 **Example Scenario:**
+
 - Initial: 10% of needed hosts (e.g., 50 needed → deploy 5)
 - After 1 success: 30% (10% + 20% increment → deploy 15)
 - After 2 successes: 50% (30% + 20% increment → deploy 25)
@@ -591,6 +599,7 @@ When `enableProgressiveScaleUp: true`, the function gradually increases deployme
 **Max Ceiling:** `maxDeploymentBatchSize` (default: 10) prevents deploying more than this number even if percentage is higher
 
 **Use Cases:**
+
 - **Large Hostpools**: Safely roll out image updates to 100+ session hosts
 - **Risk Mitigation**: Catch image or configuration issues early with small batches
 - **Production Environments**: Gradual rollouts minimize user impact
@@ -600,18 +609,21 @@ When `enableProgressiveScaleUp: true`, the function gradually increases deployme
 The function uses three tags for lifecycle management:
 
 **1. IncludeInAutoReplace** (default name, configurable)
+
 - **Purpose**: Opt-in flag for automation
 - **Value**: `"true"` or `"false"`
 - **Set by**: Manual tagging or deployment templates
 - **Example**: `"IncludeInAutoReplace": "true"`
 
 **2. AutoReplaceDeployTimestamp** (default name, configurable)
+
 - **Purpose**: Records when VM was deployed (ISO 8601 format)
 - **Value**: `"2025-12-27T14:30:00.000Z"`
 - **Set by**: Auto-created if `fixSessionHostTags: true`, or deployment templates
 - **Used for**: Age calculation
 
 **3. AutoReplacePendingDrainTimestamp** (default name, configurable)
+
 - **Purpose**: Records when session host was drained
 - **Value**: `"2025-12-27T14:30:00.000Z"`
 - **Set by**: Function app when draining begins
@@ -620,6 +632,7 @@ The function uses three tags for lifecycle management:
 ### Tag Auto-Fix Feature
 
 When `fixSessionHostTags: true` (default), the function automatically:
+
 - Creates missing `AutoReplaceDeployTimestamp` tags using VM creation time from Azure Resource Manager
 - Fixes invalid date formats
 - Applies to session hosts with `IncludeInAutoReplace: true`
@@ -646,6 +659,7 @@ Enable Application Insights by providing `logAnalyticsWorkspaceResourceId`. All 
 ### Sample Log Queries
 
 **View all function executions:**
+
 ```kusto
 traces
 | where cloud_RoleName == "session-host-replacer"
@@ -655,6 +669,7 @@ traces
 ```
 
 **Track deployment decisions:**
+
 ```kusto
 traces
 | where message contains "We will deploy" or message contains "Filtered to"
@@ -663,6 +678,7 @@ traces
 ```
 
 **Monitor draining and deletions:**
+
 ```kusto
 traces
 | where message contains "Draining" or message contains "Deleting" or message contains "Device cleanup"
@@ -671,6 +687,7 @@ traces
 ```
 
 **Progressive scale-up tracking:**
+
 ```kusto
 traces
 | where message contains "ConsecutiveSuccesses" or message contains "CurrentPercentage"
@@ -679,6 +696,7 @@ traces
 ```
 
 **Errors and warnings:**
+
 ```kusto
 traces
 | where severityLevel >= 2  // Warning or Error
@@ -690,6 +708,7 @@ traces
 ### Deployment State Tracking
 
 When progressive scale-up is enabled, the function stores deployment state in table storage:
+
 - **ConsecutiveSuccesses**: Number of successful deployments in a row
 - **CurrentPercentage**: Current deployment size percentage
 - **LastStatus**: 'Success' or 'Failed'
@@ -702,12 +721,14 @@ When progressive scale-up is enabled, the function stores deployment state in ta
 **Symptoms**: No logs in Application Insights, no activity
 
 **Checks**:
+
 1. Verify function app is running: `az functionapp show --name <name> --resource-group <rg> --query state`
 2. Check timer trigger: Navigate to Function App → Functions → `session-host-replacer` → Integration
 3. Verify App Service Plan is not stopped
 4. Check Application Insights connection string configuration
 
 **Resolution**:
+
 ```powershell
 # Restart function app
 Restart-AzFunctionApp -ResourceGroupName <rg> -Name <functionAppName>
@@ -721,11 +742,13 @@ Get-AzFunctionAppSetting -ResourceGroupName <rg> -Name <functionAppName> | Where
 **Symptoms**: Logs show "403 Forbidden" or "Insufficient permissions"
 
 **Checks**:
+
 1. Verify User-Assigned Identity is attached to function app
 2. Check role assignments on virtual machines subscription, hostpool resource group, and template spec resource group
 3. Confirm Graph API permissions (if device cleanup enabled)
 
 **Resolution**:
+
 ```powershell
 # Get function app identity
 $functionApp = Get-AzWebApp -ResourceGroupName <rg> -Name <functionAppName>
@@ -754,11 +777,13 @@ New-AzRoleAssignment `
 **Symptoms**: Logs show "Insufficient privileges to complete the operation" when cleaning up devices
 
 **Checks**:
+
 1. Verify UAI has Graph API application permissions
 2. Confirm permissions were granted by tenant admin (not just assigned)
 3. Check environment variables: `GraphEndpoint`, `UserAssignedIdentityClientId`
 
 **Resolution**:
+
 ```powershell
 Connect-MgGraph -Scopes "Application.Read.All", "AppRoleAssignment.ReadWrite.All"
 
@@ -777,6 +802,7 @@ Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id | Format-Tabl
 **Symptoms**: Function executes but no session hosts are drained or deployed
 
 **Checks**:
+
 1. Verify session hosts have `IncludeInAutoReplace: true` tag
 2. Check session host age meets `targetVMAgeDays` threshold
 3. Confirm image version check (marketplace: latest version, custom: image resource exists)
@@ -784,6 +810,7 @@ Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id | Format-Tabl
 5. Review Application Insights logs for decision logic
 
 **Resolution**:
+
 ```powershell
 # Check session host tags
 $vmRG = "rg-avd-session-hosts"
@@ -807,6 +834,7 @@ Update-AzTag -ResourceId $vm.Id -Tag $tags -Operation Merge
 **Symptoms**: Function logs show deployment errors, new session hosts not created
 
 **Checks**:
+
 1. Verify Template Spec exists and version is correct
 2. Check all session host parameters are valid
 3. Confirm Key Vault secrets exist and function has access
@@ -815,6 +843,7 @@ Update-AzTag -ResourceId $vm.Id -Tag $tags -Operation Merge
 6. Check for resource locks
 
 **Resolution**:
+
 ```powershell
 # Verify Template Spec
 Get-AzTemplateSpec -ResourceGroupName <template-spec-rg> -Name <template-spec-name> -Version <version>
@@ -832,6 +861,7 @@ $deployment.Properties.Error
 **Symptoms**: Session hosts without `AutoReplaceDeployTimestamp` not getting auto-fixed
 
 **Checks**:
+
 1. Verify `fixSessionHostTags: true` in configuration
 2. Confirm session hosts have `IncludeInAutoReplace: true`
 3. Check VM resource metadata is accessible
@@ -839,6 +869,7 @@ $deployment.Properties.Error
 
 **Resolution**:
 Ensure environment variables are correct:
+
 ```powershell
 Get-AzFunctionAppSetting -ResourceGroupName <rg> -Name <functionAppName> | Where-Object { $_.Name -like "*Tag*" -or $_.Name -like "*Fix*" }
 
@@ -854,13 +885,16 @@ Get-AzFunctionAppSetting -ResourceGroupName <rg> -Name <functionAppName> | Where
 **Symptoms**: Session hosts deleted but Entra/Intune device records remain
 
 **Checks**:
+
 1. Verify `removeEntraDevice` or `removeIntuneDevice` is `true`
 2. Check Graph API permissions (see Graph API Permission Errors section)
 3. Confirm session hosts are Entra-joined or Hybrid-joined
 4. Review function logs for Graph API errors
 
 **Resolution**:
+
 Manual device cleanup:
+
 ```powershell
 # Connect to Microsoft Graph
 Connect-MgGraph -Scopes "Device.ReadWrite.All", "DeviceManagementManagedDevices.ReadWrite.All"
@@ -880,12 +914,14 @@ Remove-MgDeviceManagementManagedDevice -ManagedDeviceId $intuneDevice.Id
 **Symptoms**: Deployment percentage stays at initial value despite successful deployments
 
 **Checks**:
+
 1. Verify `enableProgressiveScaleUp: true`
 2. Check `successfulRunsBeforeScaleUp` threshold (default: 1)
 3. Review consecutive successes counter in function logs
 4. Confirm deployments are actually succeeding (check Azure deployments)
 
 **Resolution**:
+
 ```powershell
 # Check function app settings
 Get-AzFunctionAppSetting -ResourceGroupName <rg> -Name <functionAppName> | Where-Object { $_.Name -like "*Progress*" -or $_.Name -like "*ScaleUp*" }
@@ -906,6 +942,7 @@ Get-AzFunctionAppSetting -ResourceGroupName <rg> -Name <functionAppName> | Where
 **Symptoms**: Function cannot reach Azure APIs, timeout errors
 
 **Checks**:
+
 1. Verify VNet integration is configured on function app
 2. Check private DNS zones are linked to VNets
 3. Confirm NSG rules allow outbound to Azure services
@@ -913,6 +950,7 @@ Get-AzFunctionAppSetting -ResourceGroupName <rg> -Name <functionAppName> | Where
 5. Check route tables
 
 **Resolution**:
+
 ```powershell
 # Test DNS resolution from function app (using Kudu console)
 # Navigate to: https://<function-app-name>.scm.azurewebsites.net/DebugConsole
@@ -971,6 +1009,7 @@ Get-AzPrivateEndpoint -ResourceGroupName <rg> | Where-Object { $_.Name -like "*s
 ### Best Practices
 
 #### Deployment
+
 - **Use Existing App Service Plan**: Share with other functions to reduce costs (~$75/month savings)
 - **Enable Application Insights**: Essential for monitoring and troubleshooting
 - **Start with Conservative Settings**:
@@ -982,6 +1021,7 @@ Get-AzPrivateEndpoint -ResourceGroupName <rg> | Where-Object { $_.Name -like "*s
 - **Test in Non-Production**: Deploy to dev/test hostpool first
 
 #### Tagging Strategy
+
 ```powershell
 # Include tags in session host deployment template
 $tags = @{
@@ -993,25 +1033,30 @@ $tags = @{
 ```
 
 #### Monitoring
+
 - Set up Azure Monitor alerts for function failures
 - Monitor deployment success rate
 - Track average session host age to validate lifecycle policy
 - Alert on Graph API authentication failures (if device cleanup enabled)
 
 #### Operational
+
 - Review Application Insights logs weekly for trends
 - Adjust `targetVMAgeDays` based on your patch/update cadence
 - Coordinate timer schedule with maintenance windows if needed
 - Document custom tag names if using non-default values
 
 #### Image Management
+
 - **Marketplace Images**: Function automatically detects latest version
 - **Custom Images**: Update image resource ID parameter when new version is ready
 - **Shared Image Gallery**: Use versioned image references for rollback capability
 - **Testing**: Validate new images in dev environment before production
 
 #### Progressive Scale-Up Strategy
+
 For large hostpools (50+ session hosts):
+
 ```bicep
 enableProgressiveScaleUp: true
 initialDeploymentPercentage: 5    // Start with 5% (2-3 VMs if 50 total)
@@ -1026,12 +1071,12 @@ successfulRunsBeforeScaleUp: 2    // Require 2 consecutive successes before scal
 
 | Component | Configuration | Estimated Cost |
 |-----------|---------------|----------------|
-| **App Service Plan** | Premium V3 P1v3 (new, 1 instance) | ~$210/month |
+| **App Service Plan** | Premium V3 P0v3 (new, 1 instance) | ~$120/month |
 | **App Service Plan** | Shared with existing functions | ~$0/month (shared cost) |
 | **Function App Storage** | Standard_LRS, minimal usage | ~$2/month |
 | **Application Insights** | 5GB ingestion, 90-day retention | ~$10/month |
 | **Private Endpoints** | 5 endpoints (if enabled) | ~$20/month |
-| **Total (New Plan)** | - | ~$242/month |
+| **Total (New Plan)** | - | ~$152/month |
 | **Total (Shared Plan)** | - | ~$32/month |
 
 ### Cost Optimization Tips
@@ -1059,38 +1104,50 @@ successfulRunsBeforeScaleUp: 2    // Require 2 consecutive successes before scal
 ## Frequently Asked Questions
 
 ### Can I exclude specific session hosts from replacement?
+
 Yes, set the `IncludeInAutoReplace` tag to `false` or remove the tag entirely. Only session hosts with `IncludeInAutoReplace: true` are managed.
 
 ### What happens if a user is logged in when grace period expires?
+
 The function checks for active sessions before deletion. If sessions remain after grace period, deletion is skipped until all sessions are logged off.
 
 ### Can I use this with session hosts in multiple resource groups?
+
 No, each function instance manages session hosts in one resource group. Deploy multiple function instances for multiple resource groups.
 
 ### How do I update the session host image?
+
 - **Marketplace images**: Function automatically detects the latest version; no action needed
 - **Custom images**: Update the `customImageResourceId` parameter (or imagePublisher/Offer/SKU) and redeploy the function app
 
 ### Does this work with Azure Virtual Desktop Classic?
+
 No, this add-on is designed for Azure Virtual Desktop (ARM-based) only, not AVD Classic.
 
 ### Can I customize the drain notification message to users?
+
 Currently, user notifications are not implemented in the base function. You can extend the `run.ps1` script to add custom notification logic using PowerShell.
 
 ### What happens if Template Spec deployment fails?
+
 The function logs the error to Application Insights and continues monitoring. Progressive scale-up (if enabled) resets to initial percentage. Existing session hosts remain operational.
 
 ### Can I run this on-premises or in other clouds?
+
 No, the function requires Azure Function App infrastructure and Azure-specific APIs (ARM, Graph). It supports Azure Commercial, Government, and China clouds.
 
 ### How do I roll back to an older image version?
+
 Update the session host parameters (imagePublisher/Offer/SKU or customImageResourceId) to reference the older image version and redeploy the function app configuration. Existing session hosts won't automatically roll back; you'll need to manually trigger replacement by adjusting `targetVMAgeDays` or deleting young session hosts.
 
 ### Does this work with FSLogix Cloud Cache?
+
 Yes, all FSLogix configurations are supported including Cloud Cache. Configure FSLogix parameters in the session host configuration section.
 
 ### Can I pause automation temporarily?
+
 Yes, either:
+
 1. Stop the function app: `Stop-AzFunctionApp -ResourceGroupName <rg> -Name <functionAppName>`
 2. Set all session host tags `IncludeInAutoReplace: false`
 3. Delete the timer trigger
@@ -1107,6 +1164,7 @@ Yes, either:
 ## Support
 
 For issues, questions, or feature requests:
+
 1. Review this documentation thoroughly
 2. Check Application Insights logs for detailed error messages
 3. Consult the [Troubleshooting](#troubleshooting) section
@@ -1120,6 +1178,7 @@ For issues, questions, or feature requests:
 ## Change Log
 
 ### Version 1.0
+
 - Initial release
 - PowerShell 7.4 function app
 - Age-based and image version-based replacement logic

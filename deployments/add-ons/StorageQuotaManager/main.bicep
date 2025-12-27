@@ -171,20 +171,19 @@ var encryptionKeyName = '${hpBaseName}-encryption-key-${quotaManagementFAStorage
 // Resources  //
 // ========== //
 
-// App Service Plan (if not using existing)
-resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = if (empty(appServicePlanResourceId)) {
-  name: appServicePlanName
-  location: location
-  tags: tags
-  sku: {
-    name: 'S1'
-    tier: 'Standard'
-    capacity: zoneRedundant ? 3 : 1
-  }
-  properties: {
+// Conditional App Service Plan deployment
+module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
+  name: 'FunctionAppHostingPlan-${deploymentSuffix}'
+  params: {
+    functionAppKind: 'functionApp'
+    hostingPlanType: 'FunctionsPremium'
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
+    location: location
+    name: appServicePlanName
+    planPricing: 'PremiumV3_P0v3'
+    tags: tags
     zoneRedundant: zoneRedundant
   }
-  kind: 'functionapp'
 }
 
 // Storage Quota Manager Function App
@@ -228,7 +227,7 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
         scope: storageResourceGroupId
       }
     ]
-    serverFarmId: empty(appServicePlanResourceId) ? appServicePlan.id : appServicePlanResourceId
+    serverFarmId: empty(appServicePlanResourceId) ? hostingPlan!.outputs.hostingPlanId : appServicePlanResourceId
     storageAccountName: storageAccountName
     tags: tags
   }

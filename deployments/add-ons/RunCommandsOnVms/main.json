@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.38.33.27573",
-      "templateHash": "3051626703645004045"
+      "version": "0.39.26.7824",
+      "templateHash": "5483842683969039359"
     }
   },
   "parameters": {
@@ -194,8 +194,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "1673446544829906815"
+              "version": "0.39.26.7824",
+              "templateHash": "16965621387823645782"
             }
           },
           "parameters": {
@@ -292,8 +292,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "15457854966733382587"
+              "version": "0.39.26.7824",
+              "templateHash": "4042916111366723965"
             }
           },
           "parameters": {
@@ -435,8 +435,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "4753061174854474979"
+              "version": "0.39.26.7824",
+              "templateHash": "1294445455569883190"
             }
           },
           "parameters": {
@@ -481,9 +481,7 @@
             }
           },
           "variables": {
-            "$fxv#0": "param(\r\n    [securestring]\r\n    [Parameter(Mandatory = $true)]\r\n    [string] $ScriptB64\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n# Decode the base64-encoded script\r\n$bytes = [Convert]::FromBase64String($ScriptB64)\r\n$script = [Text.Encoding]::UTF8.GetString($bytes)\r\n\r\n# Normalize line endings (optional but safe)\r\n$script = $script -replace \"`r`n\", \"`n\" -replace \"`r\", \"`n\"\r\n\r\n# Execute\r\n$sb = [ScriptBlock]::Create($script)\r\ntry {\r\n    Write-Host \"----- Begin user script output -----\"\r\n    & $sb\r\n    $exitCode = if ($LASTEXITCODE) { $LASTEXITCODE } else { 0 }\r\n    Write-Host \"----- End user script output -----\"\r\n    exit $exitCode\r\n}\r\ncatch {\r\n    Write-Error (\"User script threw: \" + $_.Exception.Message)\r\n    Write-Error $_.Exception | Format-List * -Force\r\n    exit 1\r\n}",
-            "scriptContentAsParameter": "[if(empty(parameters('base64ScriptContent')), createObject(), createObject('name', 'ScriptB64', 'value', parameters('base64ScriptContent')))]",
-            "protectedParametersForScriptContent": "[if(empty(parameters('protectedParameter')), createArray(variables('scriptContentAsParameter')), union(createArray(variables('scriptContentAsParameter')), createArray(createObject('name', 'SecureParameter', 'value', parameters('protectedParameter')))))]"
+            "$fxv#0": "param(\r\n    [securestring]\r\n    [Parameter(Mandatory = $true)]\r\n    [string] $ScriptB64\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n# Decode the base64-encoded script\r\n$bytes = [Convert]::FromBase64String($ScriptB64)\r\n$script = [Text.Encoding]::UTF8.GetString($bytes)\r\n\r\n# Normalize line endings (optional but safe)\r\n$script = $script -replace \"`r`n\", \"`n\" -replace \"`r\", \"`n\"\r\n\r\n# Execute\r\n$sb = [ScriptBlock]::Create($script)\r\ntry {\r\n    Write-Host \"----- Begin user script output -----\"\r\n    & $sb\r\n    $exitCode = if ($LASTEXITCODE) { $LASTEXITCODE } else { 0 }\r\n    Write-Host \"----- End user script output -----\"\r\n    exit $exitCode\r\n}\r\ncatch {\r\n    Write-Error (\"User script threw: \" + $_.Exception.Message)\r\n    Write-Error $_.Exception | Format-List * -Force\r\n    exit 1\r\n}"
           },
           "resources": [
             {
@@ -496,8 +494,8 @@
                 "errorBlobUri": "[if(or(empty(parameters('logsContainerUri')), empty(parameters('logsUserAssignedIdentityClientId'))), null(), format('{0}/{1}-{2}-error-{3}.log', parameters('logsContainerUri'), reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmName')), '2023-03-01', 'full'), parameters('runCommandName'), parameters('timeStamp')))]",
                 "outputBlobManagedIdentity": "[if(empty(parameters('logsUserAssignedIdentityClientId')), null(), createObject('clientId', parameters('logsUserAssignedIdentityClientId')))]",
                 "outputBlobUri": "[if(or(empty(parameters('logsContainerUri')), empty(parameters('logsUserAssignedIdentityClientId'))), null(), format('{0}/{1}-{2}-output-{3}.log', parameters('logsContainerUri'), reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmName')), '2023-03-01', 'full'), parameters('runCommandName'), parameters('timeStamp')))]",
-                "parameters": "[if(or(not(empty(parameters('base64ScriptContent'))), empty(parameters('parameters'))), null(), parameters('parameters'))]",
-                "protectedParameters": "[if(or(not(empty(parameters('base64ScriptContent'))), empty(parameters('protectedParameter'))), null(), createArray(parameters('protectedParameter')))]",
+                "parameters": "[if(empty(parameters('parameters')), null(), parameters('parameters'))]",
+                "protectedParameters": "[if(empty(parameters('base64ScriptContent')), if(empty(parameters('protectedParameter')), null(), createArray(parameters('protectedParameter'))), createArray(createObject('name', 'ScriptB64', 'value', parameters('base64ScriptContent'))))]",
                 "source": {
                   "scriptUri": "[if(empty(parameters('scriptUri')), null(), parameters('scriptUri'))]",
                   "script": "[if(empty(parameters('base64ScriptContent')), null(), variables('$fxv#0'))]",

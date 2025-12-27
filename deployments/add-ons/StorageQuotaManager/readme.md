@@ -425,12 +425,12 @@ New-AzRoleAssignment -ObjectId $identity -RoleDefinitionName "Storage Account Co
 
 | Component | Configuration | Estimated Cost |
 |-----------|---------------|----------------|
-| **App Service Plan** | S1 (1 instance, new) | ~$75/month |
-| **App Service Plan** | S1 (1 instance, shared) | ~$0/month (shared with existing) |
+| **App Service Plan** | PremiumV3_P0v3 (1 instance, new) | ~$120/month |
+| **App Service Plan** | Shared with existing functions | ~$0/month (shared cost) |
 | **Function App Storage** | Standard_LRS, minimal usage | ~$2/month |
 | **Application Insights** | 5GB ingestion, 90-day retention | ~$10/month |
 | **Private Endpoints** | 5 endpoints (if enabled) | ~$20/month |
-| **Total (New Plan)** | - | ~$107/month |
+| **Total (New Plan)** | - | ~$152/month |
 | **Total (Shared Plan)** | - | ~$32/month |
 
 ### Cost Optimization Tips

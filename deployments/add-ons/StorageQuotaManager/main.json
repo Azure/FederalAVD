@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "3659627208524134854"
+      "templateHash": "1312820175997666850"
     },
     "name": "FSLogix Storage Quota Manager Add-On",
     "description": "Automated quota management for FSLogix Azure Files Premium file shares",
@@ -464,20 +464,125 @@
   "resources": [
     {
       "condition": "[empty(parameters('appServicePlanResourceId'))]",
-      "type": "Microsoft.Web/serverfarms",
-      "apiVersion": "2023-12-01",
-      "name": "[variables('appServicePlanName')]",
-      "location": "[parameters('location')]",
-      "tags": "[parameters('tags')]",
-      "sku": {
-        "name": "S1",
-        "tier": "Standard",
-        "capacity": "[if(parameters('zoneRedundant'), 3, 1)]"
-      },
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))]",
       "properties": {
-        "zoneRedundant": "[parameters('zoneRedundant')]"
-      },
-      "kind": "functionapp"
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "functionAppKind": {
+            "value": "functionApp"
+          },
+          "hostingPlanType": {
+            "value": "FunctionsPremium"
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "name": {
+            "value": "[variables('appServicePlanName')]"
+          },
+          "planPricing": {
+            "value": "PremiumV3_P0v3"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "zoneRedundant": {
+            "value": "[parameters('zoneRedundant')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "9030062954926391490"
+            }
+          },
+          "parameters": {
+            "hostingPlanType": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string"
+            },
+            "functionAppKind": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "planPricing": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            },
+            "zoneRedundant": {
+              "type": "bool"
+            }
+          },
+          "variables": {
+            "sku": {
+              "name": "[split(parameters('planPricing'), '_')[1]]",
+              "tier": "[split(parameters('planPricing'), '_')[0]]",
+              "capacity": "[if(parameters('zoneRedundant'), 3, 1)]"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2023-12-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "sku": "[variables('sku')]",
+              "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Web/serverfarms'), createObject())]",
+              "properties": {
+                "maximumElasticWorkerCount": "[if(contains(parameters('hostingPlanType'), 'Consumption'), null(), if(equals(parameters('hostingPlanType'), 'FunctionsPremium'), 20, 1))]",
+                "reserved": "[if(contains(parameters('functionAppKind'), 'linux'), true(), false())]",
+                "zoneRedundant": "[parameters('zoneRedundant')]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('logAnalyticsWorkspaceId')))]",
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[format('Microsoft.Web/serverfarms/{0}', parameters('name'))]",
+              "name": "[format('{0}-diagnosticSettings', parameters('name'))]",
+              "properties": {
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": true
+                  }
+                ],
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', parameters('name'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "hostingPlanId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Web/serverfarms', parameters('name'))]"
+            }
+          }
+        }
+      }
     },
     {
       "type": "Microsoft.Resources/deployments",
@@ -572,7 +677,7 @@
               }
             ]
           },
-          "serverFarmId": "[if(empty(parameters('appServicePlanResourceId')), createObject('value', resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))), createObject('value', parameters('appServicePlanResourceId')))]",
+          "serverFarmId": "[if(empty(parameters('appServicePlanResourceId')), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostingPlanId.value), createObject('value', parameters('appServicePlanResourceId')))]",
           "storageAccountName": {
             "value": "[variables('storageAccountName')]"
           },
@@ -1748,7 +1853,7 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+        "[resourceId('Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix')))]"
       ]
     },
     {

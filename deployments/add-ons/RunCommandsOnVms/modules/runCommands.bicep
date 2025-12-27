@@ -63,7 +63,7 @@ resource runCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
       }
     ]
     source: {
-      script: loadTextContent('Execute-Script.ps1')
+      script: loadTextContent('../functions/Execute-Script.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
