@@ -357,7 +357,7 @@ While utilizing private endpoints is optional, it must be deployed in order to f
 
 - Image Management - Blob Storage Account
 - Image Build - Blob Storage Account for logging customizations
-- AVD Deployment - Azure Files for FSLogix profiles, Azure Key Vault for storing secrets and Customer Managed Keys, AVD Private Link, Azure Recovery Services, and the Function App deployed to increase premium storage account quotas.
+- AVD Deployment - Azure Files for FSLogix profiles, Azure Key Vault for storing secrets and Customer Managed Keys, AVD Private Link, Azure Recovery Services, and optional add-ons like the Storage Quota Manager function app (see [Add-Ons](../deployments/add-ons/)).
 
 ## Deployment
 

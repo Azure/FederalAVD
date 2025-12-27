@@ -500,9 +500,6 @@ param recoveryServices bool = false
 @description('Optional. The resource Id of an existing Recovery Services Vault that will be used to store Virtual Machine Backups. Only used when "DeploymentType" is "SessionHostOnly".')
 param existingRecoveryServicesVaultResourceId string = ''
 
-@description('Optional. The resource Id of an existing Server Farm used to host the increase quota function app.')
-param existingHostingPlanResourceId string = ''
-
 @description('Optional. The resource Id of an existing Key Vault that contains the customer managed keys for disk encryption and/or FSLogix storage account encryption. Only used when "DeploymentType" is "HostpoolOnly".')
 param existingEncryptionKeyVaultResourceId string = ''
 
@@ -672,12 +669,11 @@ var globalFeedRegion = !empty(globalFeedPrivateEndpointSubnetResourceId)
 var virtualMachinesRegion = vmVirtualNetwork.location
 var controlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
 
-var deployIncreaseQuota = deployFSLogixStorage && (split(fslogixStorageService, ' ')[1] == 'Premium')
 var createDeploymentVm = deploymentType != 'SessionHostsOnly' && (deployFSLogixStorage || contains(
   keyManagementDisks,
   'CustomerManaged'
 ) || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName))
-var deployManagementResources = deploymentType == 'Complete' && (deployIncreaseQuota || deploySecretsKeyVault || contains(
+var deployManagementResources = deploymentType == 'Complete' && (deploySecretsKeyVault || contains(
   keyManagementStorageAccounts,
   'CustomerManaged'
 ) || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption)
@@ -740,10 +736,6 @@ var vmDiskEncryptionSetName = empty(hostPoolVmTemplate.diskEncryptionSetName)
   ? {}
   : { vmDiskEncryptionSetName: hostPoolVmTemplate.diskEncryptionSetName }
 
-var fslContainerType = { fslContainerType: fslogixContainerType }
-var fslContainerSizeInMBs = { fslContainerSizeInMBs: fslogixSizeInMBs }
-var fslStorageService = { fslStorageService: split(fslogixStorageService, '')[0] }
-var fslFileShareNames = { fslFileShareNames: string(resourceNames.outputs.fslogixFileShareNames[fslogixContainerType]) }
 var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
   ? { fslLocalStorageAccountNames: string(map(fslogix!.outputs.storageAccountResourceIds, id => last(split(id, '/')))) }
   : !empty(fslogixExistingLocalStorageAccountResourceIds)
@@ -764,10 +756,11 @@ var fslRemoteNetAppVolumeResourceIds = !empty(fslogixExistingRemoteNetAppVolumeR
 // FSLogix tags for hosts resource group
 var fslogixConfigurationTags = fslogixConfigureSessionHosts
   ? union(
-      fslContainerType,
-      fslContainerSizeInMBs,
-      fslStorageService,
-      fslFileShareNames,
+      { fslContainerType: fslogixContainerType },
+      { fslContainerSizeInMBs: fslogixSizeInMBs },
+      { fslStorageService: split(fslogixStorageService, '')[0] },
+      { fslFileShareNames: string(resourceNames.outputs.fslogixFileShareNames[fslogixContainerType]) },
+      { fslSharding: fslogixShardOptions },
       fslLocalStorageAccountNames,
       fslRemoteStorageAccountNames,
       fslLocalNetAppVolumeResourceIds,
@@ -1183,9 +1176,7 @@ module management 'modules/management/management.bicep' = if (deployManagementRe
   name: 'Management-${deploymentSuffix}'
   scope: subscription(managementSubscription)
   params: {
-    appServicePlanName: resourceNames.outputs.appServicePlanName
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
-    deployIncreaseQuota: deployIncreaseQuota
     deploymentSuffix: deploymentSuffix
     encryptionKeysKeyVaultName: resourceNames.outputs.keyVaultNames.encryptionKeys
     domainJoinUserPassword: domainJoinUserPassword
@@ -1195,17 +1186,10 @@ module management 'modules/management/management.bicep' = if (deployManagementRe
       'Customer'
     ))
     deploySecretsKeyVault: deploySecretsKeyVault
-    hostPoolResourceId: deploymentType == 'SessionHostsOnly'
-      ? existingHostPoolResourceId
-      : controlPlane!.outputs.hostPoolResourceId
-    increaseQuotaFunctionAppName: resourceNames.outputs.functionAppNames.increaseStorageQuota
-    keyManagementStorageAccounts: keyManagementStorageAccounts
-    userAssignedIdentityNameConv: resourceNames.outputs.userAssignedIdentityNameConv
     keyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
     keyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
     secretsKeyVaultName: resourceNames.outputs.keyVaultNames.secrets
     keyVaultRetentionInDays: keyVaultRetentionInDays
-    location: virtualMachinesRegion
     logAnalyticsWorkspaceResourceId: enableMonitoring
       ? (deploymentType == 'Complete'
           ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
@@ -1219,7 +1203,6 @@ module management 'modules/management/management.bicep' = if (deployManagementRe
     tags: tags
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
-    zoneRedundant: availability == 'AvailabilityZones'
   }
   dependsOn: [
     managementResourceGroup
@@ -1362,56 +1345,6 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
   dependsOn: [
     storageResourceGroup
   ]
-}
-
-// Increase Quota Function App
-module increaseQuotaFunctionApp 'modules/increaseQuota/increaseQuota.bicep' = if (deploymentType != 'SessionHostsOnly' && deployIncreaseQuota && deployFSLogixStorage && split(
-  fslogixStorageService,
-  ' '
-)[1] == 'Premium') {
-  name: 'IncreaseQuota-${deploymentSuffix}'
-  scope: resourceGroup(deploymentType == 'Complete'
-    ? managementResourceGroup.name
-    : split(existingHostingPlanResourceId, '/')[4])
-  params: {
-    appInsightsName: resourceNames.outputs.appInsightsNames.increaseStorageQuota
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureFilePrivateDnsZoneResourceId: azureFilesPrivateDnsZoneResourceId
-    azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
-    azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
-    deploymentSuffix: deploymentSuffix
-    encryptionKeyName: resourceNames.outputs.encryptionKeyNames.increaseStorageQuota
-    encryptionKeyVaultUri: encryptionKeyVaultUri
-    encryptionUserAssignedIdentityResourceId: deploymentType == 'Complete' && contains(
-        keyManagementStorageAccounts,
-        'Customer'
-      )
-      ? management!.outputs.increaseQuotaEncryptionIdentityResourceId
-      : ''
-    fslogixFileShareNames: fslogixFileShareNames
-    functionAppDelegatedSubnetResourceId: functionAppSubnetResourceId
-    functionAppName: resourceNames.outputs.functionAppNames.increaseStorageQuota
-    hostPoolResourceId: deploymentType == 'SessionHostsOnly'
-      ? existingHostPoolResourceId
-      : controlPlane!.outputs.hostPoolResourceId
-    keyManagementStorageAccounts: keyManagementStorageAccounts
-    location: virtualMachinesRegion
-    logAnalyticsWorkspaceResourceId: enableMonitoring
-      ? (deploymentType == 'Complete'
-          ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
-          : existingLogAnalyticsWorkspaceResourceId)
-      : ''
-    privateEndpoint: deployPrivateEndpoints
-    privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
-    privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
-    privateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
-    resourceGroupStorage: resourceNames.outputs.resourceGroupStorage
-    serverFarmId: deploymentType == 'Complete' ? management!.outputs.appServicePlanId : existingHostingPlanResourceId
-    storageAccountName: resourceNames.outputs.storageAccountNames.increaseStorageQuota
-    tags: tags
-  }
 }
 
 // Session Hosts

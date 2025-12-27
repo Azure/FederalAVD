@@ -1,15 +1,9 @@
 targetScope = 'subscription'
 
-param appServicePlanName string
 param azureKeyVaultPrivateDnsZoneResourceId string
-param deployIncreaseQuota bool
 param deploySecretsKeyVault bool
 param encryptionKeysKeyVaultName string
 param deployEncryptionKeysKeyVault bool
-param hostPoolResourceId string
-param increaseQuotaFunctionAppName string
-param keyManagementStorageAccounts string
-param userAssignedIdentityNameConv string
 @secure()
 param domainJoinUserPassword string
 @secure()
@@ -19,7 +13,6 @@ param secretsKeyVaultName string
 param keyVaultEnableSoftDelete bool
 param keyVaultEnablePurgeProtection bool
 param keyVaultRetentionInDays int
-param location string
 param logAnalyticsWorkspaceResourceId string
 param privateEndpointSubnetResourceId string
 param privateEndpoint bool
@@ -32,7 +25,6 @@ param deploymentSuffix string
 param virtualMachineAdminPassword string
 @secure()
 param virtualMachineAdminUserName string
-param zoneRedundant bool
 
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
@@ -146,36 +138,5 @@ module encryptionKeyVault '../../../sharedModules/resources/key-vault/vault/main
   }
 }
 
-module hostingPlan '../../../sharedModules/custom/functionApp/functionAppHostingPlan.bicep' = if (deployIncreaseQuota) {
-  name: 'FunctionAppHostingPlan-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupManagement)
-  params: {
-    functionAppKind: 'functionApp'
-    hostingPlanType: 'FunctionsPremium'
-    logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
-    location: location
-    name: appServicePlanName
-    planPricing: 'PremiumV3_P1v3'
-    tags: tags[?'Microsoft.Web/serverfarms'] ?? {}
-    zoneRedundant: zoneRedundant
-  }
-}
-
-// Encryption Identity for Increase Quota Function App
-module increaseQuotaEncryptionIdentity '../../../sharedModules/resources/managed-identity/user-assigned-identity/main.bicep' = if (deployIncreaseQuota && contains(keyManagementStorageAccounts, 'Customer')) {
-  name: 'UAI-IncreaseQuota-Encryption-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupManagement)
-  params: {
-    location: location
-    name: replace(replace(userAssignedIdentityNameConv, 'TOKEN', increaseQuotaFunctionAppName), '##', '')
-    tags: union(
-      { 'cm-resource-parent': hostPoolResourceId },
-      tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
-    )
-  }
-}
-
-output appServicePlanId string = deployIncreaseQuota ? hostingPlan!.outputs.hostingPlanId : ''
 output encryptionKeyVaultResourceId string = deployEncryptionKeysKeyVault ? encryptionKeyVault!.outputs.resourceId : ''
 output encryptionKeyVaultUri string = deployEncryptionKeysKeyVault ? encryptionKeyVault!.outputs.uri : ''
-output increaseQuotaEncryptionIdentityResourceId string = deployIncreaseQuota && contains(keyManagementStorageAccounts, 'Customer') ? increaseQuotaEncryptionIdentity!.outputs.resourceId : ''

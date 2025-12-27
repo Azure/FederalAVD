@@ -1,0 +1,754 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+	"view": {
+		"kind": "Form",
+		"properties": {
+			"title": "Azure Virtual Desktop Session Host Replacer",
+			"steps": [
+				{
+					"name": "basics",
+					"label": "Deployment Basics",
+					"elements": [
+						{
+							"name": "infoBox1",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Configure the basic settings for deploying the Storage Quota management function app and supporting resources."
+							}
+						},
+						{
+							"name": "subscriptionsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "GET",
+								"path": "/subscriptions?api-version=2022-12-01"
+							}
+						},
+						{
+							"name": "scope",
+							"type": "Microsoft.Common.Section",
+							"label": "Subscription and Location Details",
+							"elements": [
+								{
+									"name": "subscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Subscription",
+									"constraints": {
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "resourceGroupsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('basics').scope.subscription.id))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/resourcegroups?api-version=2021-04-01')]"
+									}
+								},
+								{
+									"name": "resourceGroup",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Management Resource Group",
+									"multiLine": true,
+									"constraints": {
+										"allowedValues": "[map(steps('basics').scope.resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "locationsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('basics').scope.subscription.id))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/locations?api-version=2022-12-01')]",
+										"transforms": {
+											"list": "sort_by(value, &displayName)[?name!='global' && !contains(displayName, '(Stage)')] | [*].{label: displayName, value: { displayName: displayName, name: name }}"
+										}
+									}
+								},
+								{
+									"name": "location",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Region",
+									"toolTip": "Select the region where you want to deploy the function app.",
+									"defaultValue": "[first(map(filter(steps('basics').scope.locationsApi.value, (loc) => equals(loc.name, steps('basics').scope.resourceGroup.location)), (loc) => loc.displayName))]",
+									"constraints": {
+										"allowedValues": "[steps('basics').scope.locationsApi.transformed.list]"
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "functionApp",
+					"label": "Function App Configuration",
+					"elements": [
+						{
+							"name": "infoBox1",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Configure the Storage Quota Management Azure Function App execution settings."
+							}
+						},
+						{
+							"name": "executionSettings",
+							"type": "Microsoft.Common.Section",
+							"label": "Function App Settings",
+							"elements": [
+								{
+									"name": "existingHostPoolTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Select the hostpool that you wish to automate below."
+									}
+								},
+								{
+									"name": "hostPool",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Hostpool",
+									"resourceType": "Microsoft.DesktopVirtualization/hostPools",
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "hostPoolProps",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('functionApp').executionSettings.hostPool))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('functionApp').executionSettings.hostPool.id, '?api-version=2024-04-03')]"
+									}
+								},
+								{
+									"name": "subscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Storage Subscription",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.storageResourceGroupId), steps('basics').scope.subscription.displayName, first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, first(skip(split(steps('functionApp').executionSettings.hostPoolProps.tags.storageResourceGroupId, '/'), 2))))).displayName)]",
+									"constraints": {
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "resourceGroupsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('functionApp').executionSettings.subscription.id))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('functionApp').executionSettings.subscription.id, '/resourcegroups?api-version=2021-04-01')]"
+									}
+								},
+								{
+									"name": "storageResourceGroup",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Storage Resource Group",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.storageResourceGroupId), '', last(split(steps('functionApp').executionSettings.hostPoolProps.tags.storageResourceGroupId, '/')))]",
+									"multiLine": true,
+									"constraints": {
+										"allowedValues": "[map(filter(filter(steps('functionApp').executionSettings.resourceGroupsApi.value, (rg) => and(contains(rg.name, 'storage'), not(empty(rg.tags)))), (rg) => not(empty(rg.tags.cm-resource-parent))), (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"hostPool: ', last(split(rg.tags.cm-resource-parent, '/')), '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "scheduleTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Configure the execution schedule and session host lifecycle management settings."
+									}
+								},
+								{
+									"name": "scheduleInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"text": "The function will run every hour during the selected hours on the selected days of the week. For example, selecting 8 AM to 5 PM and Monday-Friday will run the function every hour from 8 AM to 5 PM on weekdays only. The schedule uses the timezone selected in the 'Session Hosts' blade.",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "scheduleStartHour",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Start Hour (24-hour format)",
+									"toolTip": "The hour of day to start running (0-23). Function runs every hour starting from this hour.",
+									"defaultValue": "0 (12 AM)",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "0 (12 AM)",
+												"value": 0
+											},
+											{
+												"label": "1 (1 AM)",
+												"value": 1
+											},
+											{
+												"label": "2 (2 AM)",
+												"value": 2
+											},
+											{
+												"label": "3 (3 AM)",
+												"value": 3
+											},
+											{
+												"label": "4 (4 AM)",
+												"value": 4
+											},
+											{
+												"label": "5 (5 AM)",
+												"value": 5
+											},
+											{
+												"label": "6 (6 AM)",
+												"value": 6
+											},
+											{
+												"label": "7 (7 AM)",
+												"value": 7
+											},
+											{
+												"label": "8 (8 AM)",
+												"value": 8
+											},
+											{
+												"label": "9 (9 AM)",
+												"value": 9
+											},
+											{
+												"label": "10 (10 AM)",
+												"value": 10
+											},
+											{
+												"label": "11 (11 AM)",
+												"value": 11
+											},
+											{
+												"label": "12 (12 PM)",
+												"value": 12
+											},
+											{
+												"label": "13 (1 PM)",
+												"value": 13
+											},
+											{
+												"label": "14 (2 PM)",
+												"value": 14
+											},
+											{
+												"label": "15 (3 PM)",
+												"value": 15
+											},
+											{
+												"label": "16 (4 PM)",
+												"value": 16
+											},
+											{
+												"label": "17 (5 PM)",
+												"value": 17
+											},
+											{
+												"label": "18 (6 PM)",
+												"value": 18
+											},
+											{
+												"label": "19 (7 PM)",
+												"value": 19
+											},
+											{
+												"label": "20 (8 PM)",
+												"value": 20
+											},
+											{
+												"label": "21 (9 PM)",
+												"value": 21
+											},
+											{
+												"label": "22 (10 PM)",
+												"value": 22
+											},
+											{
+												"label": "23 (11 PM)",
+												"value": 23
+											}
+										]
+									}
+								},
+								{
+									"name": "scheduleEndHour",
+									"type": "Microsoft.Common.DropDown",
+									"label": "End Hour (24-hour format)",
+									"toolTip": "The hour of day to stop running (0-23). Must be greater than start hour.",
+									"defaultValue": "23 (11 PM)",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(parse('[{\"label\":\"0 (12 AM)\",\"value\":0},{\"label\":\"1 (1 AM)\",\"value\":1},{\"label\":\"2 (2 AM)\",\"value\":2},{\"label\":\"3 (3 AM)\",\"value\":3},{\"label\":\"4 (4 AM)\",\"value\":4},{\"label\":\"5 (5 AM)\",\"value\":5},{\"label\":\"6 (6 AM)\",\"value\":6},{\"label\":\"7 (7 AM)\",\"value\":7},{\"label\":\"8 (8 AM)\",\"value\":8},{\"label\":\"9 (9 AM)\",\"value\":9},{\"label\":\"10 (10 AM)\",\"value\":10},{\"label\":\"11 (11 AM)\",\"value\":11},{\"label\":\"12 (12 PM)\",\"value\":12},{\"label\":\"13 (1 PM)\",\"value\":13},{\"label\":\"14 (2 PM)\",\"value\":14},{\"label\":\"15 (3 PM)\",\"value\":15},{\"label\":\"16 (4 PM)\",\"value\":16},{\"label\":\"17 (5 PM)\",\"value\":17},{\"label\":\"18 (6 PM)\",\"value\":18},{\"label\":\"19 (7 PM)\",\"value\":19},{\"label\":\"20 (8 PM)\",\"value\":20},{\"label\":\"21 (9 PM)\",\"value\":21},{\"label\":\"22 (10 PM)\",\"value\":22},{\"label\":\"23 (11 PM)\",\"value\":23}]'), (item) => greaterOrEquals(item.value, steps('functionApp').executionSettings.scheduleStartHour)), (item) => item)]"
+									}
+								},
+								{
+									"name": "scheduleDaysOfWeek",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Days of Week",
+									"toolTip": "Select which days of the week the function should run.",
+									"defaultValue": [
+										"Sunday",
+										"Monday",
+										"Tuesday",
+										"Wednesday",
+										"Thursday",
+										"Friday",
+										"Saturday"
+									],
+									"multiselect": true,
+									"selectAll": true,
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "Sunday",
+												"value": "0"
+											},
+											{
+												"label": "Monday",
+												"value": "1"
+											},
+											{
+												"label": "Tuesday",
+												"value": "2"
+											},
+											{
+												"label": "Wednesday",
+												"value": "3"
+											},
+											{
+												"label": "Thursday",
+												"value": "4"
+											},
+											{
+												"label": "Friday",
+												"value": "5"
+											},
+											{
+												"label": "Saturday",
+												"value": "6"
+											}
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "infrastructure",
+							"type": "Microsoft.Common.Section",
+							"label": "Infrastructure",
+							"elements": [
+								{
+									"name": "useExistingHostingPlan",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Use Existing App Service Plan",
+									"toolTip": "Select an existing App Service Plan instead of creating a new one."
+								},
+								{
+									"name": "serverFarmsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[steps('functionApp').infrastructure.useExistingHostingPlan]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2023-12-01')]"
+									}
+								},
+								{
+									"name": "appServicePlan",
+									"type": "Microsoft.Common.DropDown",
+									"visible": "[steps('functionApp').infrastructure.useExistingHostingPlan]",
+									"label": "App Service Plan",
+									"multiLine": true,
+									"toolTip": "Select the existing App Service Plan. Only plans in the selected subscription and location are shown.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.serverFarmsApi.value, (sf) => equals(sf.location, steps('basics').scope.location.name)), (sf) => parse(concat('{\"label\":\"', sf.name, '\",\"description\":\"Location: ', sf.location, ' | Resource Group: ', first(skip(split(sf.id, '/'), 4)), '\",\"value\":\"', sf.id, '\"}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "zoneRedundant",
+									"type": "Microsoft.Common.CheckBox",
+									"visible": "[not(steps('functionApp').infrastructure.useExistingHostingPlan)]",
+									"label": "Enable Zone Redundancy",
+									"toolTip": "Deploy the App Service Plan with zone redundancy. Only applies when creating a new plan."
+								},
+								{
+									"name": "encryptionTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Configure encryption for the function app storage account."
+									}
+								},
+								{
+									"name": "keyManagementStorageAccounts",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Storage Account Key Management",
+									"defaultValue": "Platform",
+									"toolTip": "Choose between platform-managed or customer-managed keys for storage encryption.",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Microsoft-Managed Keys",
+												"value": "MicrosoftManaged"
+											},
+											{
+												"label": "Customer-Managed Keys",
+												"value": "CustomerManaged"
+											},
+											{
+												"label": "Customer-Managed Keys backed by HSM",
+												"value": "CustomerManagedHSM"
+											}
+										]
+									}
+								},
+								{
+									"name": "encryptionKeyVault",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"visible": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
+									"label": "Encryption Key Vault",
+									"toolTip": "Select the Key Vault containing the customer-managed encryption key.",
+									"resourceType": "Microsoft.KeyVault/vaults",
+									"constraints": {
+										"required": "[equals(contains('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]"
+									},
+									"options": {
+										"filter": {
+											"subscription": "onBasics",
+											"location": "onBasics"
+										}
+									}
+								},
+								{
+									"name": "zeroTrustNetworkingInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"text": "<b>Zero Trust Networking for Function Apps and Azure Resources</b><br/><br/>This section configures network-level security controls to enforce Zero Trust Architecture principles for the Session Host Replacer function app and its dependencies (storage accounts, key vaults).<br/><br/><b>Private Endpoints:</b> Enable private connectivity to Platform as a Service (PaaS) resources (Blob Storage, File Storage, and Key Vaults) by assigning private IP addresses from your virtual network. This removes public internet exposure and routes traffic over the Microsoft backbone network.<br/><br/><b>Virtual Network Integration:</b> The function app requires outbound virtual network integration to communicate privately with resources protected by private endpoints. This requires a dedicated subnet with Microsoft.Web/serverFarms delegation.<br/><br/>Both features require Private DNS Zones for proper name resolution. For centralized DNS management in hub-and-spoke topologies, refer to the Private Link hub-and-spoke deployment guidance linked below.",
+										"style": "Info",
+										"uri": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options?tabs=azure-portal"
+									}
+								},
+								{
+									"name": "configureZeroTrustNetworking",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Configure Zero Trust Networking",
+									"defaultValue": true
+								},
+								{
+									"name": "zeroTrustNetworkingTextBlock2",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
+									"options": {
+										"link": {
+											"label": "Microsoft Learn | Private Link Deployment in a Hub and Spoke Network",
+											"uri": "https://learn.microsoft.com/en-us/azure/architecture/networking/guide/private-link-hub-spoke-network"
+										},
+										"text": "When deploying function app zero trust networking, you must select the subnet and Private DNS Zones required for DNS resolution. The available virtual networks are dynamically filtered according to the regions specified for the resource types in earlier configuration screens. The drop-down menus will present only the virtual networks, subnets, and Private DNS Zones that match your prior selections, ensuring that you can choose the appropriate resources for your Zero Trust implementation."
+									}
+								},
+								{
+									"name": "subnetsHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
+									"options": {
+										"text": "<u>Subnets</u>"
+									}
+								},
+								{
+									"name": "virtualNetwork",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Virtual Network",
+									"toolTip": "Select the virtual network for the function app private endpoints and virtual network integration. Only virtual networks in the selected subscription and region are shown.",
+									"resourceType": "Microsoft.Network/virtualNetworks",
+									"constraints": {
+										"required": true
+									},
+									"options": {
+										"filter": {
+											"subscription": "onBasics",
+											"location": "onBasics"
+										}
+									},
+									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]"
+								},
+								{
+									"name": "subnetsApi",
+									"condition": "[not(empty(steps('functionApp').infrastructure.virtualNetwork))]",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('functionApp').infrastructure.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+									}
+								},
+								{
+									"name": "functionAppOutboundSubnet",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Function App Outbound subnet",
+									"toolTip": "Select an existing subnet for function App Outbound access. This subnet must have a delegation for Microsoft.Web/serverFarms.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.subnetsApi.value, (snet) => equals(first(map(snet.properties.delegations, (del) => del.properties.serviceName)), 'Microsoft.Web/serverFarms')), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+									},
+									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]"
+								},
+								{
+									"name": "functionAppPrivateEndpointSubnet",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Function App Private Endpoint Subnet",
+									"toolTip": "Select the subnet for function app private endpoints (inbound access and storage account). This subnet must NOT have any delegations and must be different from the outbound subnet.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.subnetsApi.value, (snet) => and(empty(snet.properties.delegations), not(equals(snet.id, steps('functionApp').infrastructure.functionAppOutboundSubnet)))), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+									},
+									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]"
+								},
+								{
+									"name": "privateDNSZonesHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
+									"options": {
+										"text": "<u>Private DNS Zones</u>"
+									}
+								},
+								{
+									"name": "privateDNSZoneIntegrationTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
+									"options": {
+										"text": "To connect privately with your function app and private endpoints, you need DNS records. We recommend that you integrate your function app private endpoints with private DNS zones. If you select the checkbox below, you'll be asked to select the appropriate Private DNS Zone for each resource type deployed by this solution and the deployment will automatically create the Private DNS integration when creating the private endpoints. Alternatively, you can assign policies to private endpoints to automatically register the endpoints with the appropriate private DNS zones. Uncheck the box below if that is the method you are using.",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview#dns-configuration"
+										}
+									}
+								},
+								{
+									"name": "enablePrivateDNSIntegration",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Private DNS Zone Integration",
+									"toolTip": "To connect privately with your private endpoint, you need a DNS record. Check this box to select the appropriate private DNS zones so that the deployment automatically integrates each private endpoint with Azure private DNS.",
+									"defaultValue": true,
+									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]"
+								},
+								{
+									"name": "privateDNSZonesSubscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Private DNS Zone Subscription",
+									"placeholder": "",
+									"defaultValue": "[steps('basics').scope.subscription.displayName]",
+									"toolTip": "Select the subscription that contains your Private DNS Zones.",
+									"constraints": {
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+										"required": true
+									},
+									"visible": "[and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration)]"
+								},
+								{
+									"name": "privateDNSZonesApi",
+									"condition": "[and(steps('functionApp').infrastructure.enablePrivateDNSIntegration, not(empty(steps('functionApp').infrastructure.privateDNSZonesSubscription)))]",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('functionApp').infrastructure.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+									}
+								},
+								{
+									"name": "azureFunctionAppPrivateDnsZone",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => zone.name))]",
+									"visible": "[and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration)]",
+									"label": "Azure Function App",
+									"multiLine": true,
+									"toolTip": "Select the existing Private DNS Zone for Azure Function Apps",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "azureBlobPrivateDnsZone",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
+									"visible": "[and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration)]",
+									"label": "Azure Blob Storage",
+									"multiLine": true,
+									"toolTip": "Select the existing Private DNS Zone for Azure Blob Storage.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "azureFilesPrivateDnsZone",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => zone.name))]",
+									"visible": "[and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration)]",
+									"label": "Azure Files",
+									"multiLine": true,
+									"toolTip": "Select the existing Private DNS Zone for Azure Files.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "azureQueuePrivateDnsZone",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
+									"visible": "[and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration)]",
+									"label": "Azure Queue Storage",
+									"multiLine": true,
+									"toolTip": "Select the existing Private DNS Zone for Azure Queue Storage.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "azureTablePrivateDnsZone",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => zone.name))]",
+									"visible": "[and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration)]",
+									"label": "Azure Table Storage",
+									"multiLine": true,
+									"toolTip": "Select the existing Private DNS Zone for Azure Table Storage.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+										"required": true
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "monitoring",
+					"label": "Monitoring",
+					"elements": [
+						{
+							"name": "enableMonitoring",
+							"type": "Microsoft.Common.CheckBox",
+							"visible": true,
+							"label": "Enable monitoring for the function app",
+							"defaultValue": true,
+							"toolTip": "Send diagnostics data to a log analytics workspace."
+						},
+						{
+							"name": "subscription",
+							"type": "Microsoft.Common.DropDown",
+							"label": "AVD Monitoring Subscription",
+							"defaultValue": "[steps('basics').scope.subscription.displayName]",
+							"toolTip": "Select the subscription where existing AVD monitoring resources are located",
+							"constraints": {
+								"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+								"required": true
+							},
+							"visible": "[steps('monitoring').enableMonitoring]"
+						},
+						{
+							"name": "logAnalyticsWorkspacesApi",
+							"condition": "[and(steps('monitoring').enableMonitoring, not(empty(steps('monitoring').subscription)))]",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('monitoring').subscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
+							}
+						},
+						{
+							"name": "logAnalyticsWorkspace",
+							"type": "Microsoft.Common.DropDown",
+							"defaultValue": "[first(map(filter(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => and(contains(la.name, '-avd-'), equals(la.location, steps('hosts').scope.location.name))), (la) => la.name))]",
+							"visible": "[steps('monitoring').enableMonitoring]",
+							"label": "Existing Log Analytics Workspace",
+							"multiLine": true,
+							"toolTip": "Select the existing Log Analytics Workspace to which function app diagnostic logs will be sent.",
+							"constraints": {
+								"allowedValues": "[map(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ', Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]",
+								"required": true
+							}
+						},
+						{
+							"name": "privateLinkTextBlock",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": true,
+							"options": {
+								"text": "Azure Monitor is a constellation of different interconnected services that work together to monitor your workloads. An Azure Monitor private link connects a private endpoint to a set of Azure Monitor resources to define the boundaries of your monitoring network. That set is called an Azure Monitor Private Link Scope (AMPLS).",
+								"link": {
+									"label": "Use Azure Private Link to connect networks to Azure Monitor - Azure Monitor | Microsoft Learn",
+									"uri": "https://learn.microsoft.com/en-us/azure/azure-monitor/logs/private-link-security"
+								}
+							}
+						},
+						{
+							"name": "enableAMPLS",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Attach function app Application Insights to an existing Azure Monitor Private Link Scope"
+						},
+						{
+							"name": "privateLinkScope",
+							"type": "Microsoft.Solutions.ResourceSelector",
+							"label": "Azure Monitor Private Link Scope",
+							"resourceType": "Microsoft.Insights/privateLinkScopes",
+							"constraints": {
+								"required": true
+							},
+							"visible": "[steps('monitoring').enableAMPLS]"
+						}
+					]
+				},
+				{
+					"name": "tags",
+					"label": "Tags",
+					"elements": [
+						{
+							"name": "tags",
+							"type": "Microsoft.Common.TagsByResource",
+							"resources": [
+								"Microsoft.ManagedIdentity/userAssignedIdentities",
+								"Microsoft.Network/networkInterfaces",
+								"Microsoft.Network/privateEndpoints",
+								"Microsoft.Storage/storageAccounts",
+								"Microsoft.Web/serverFarms",
+								"Microsoft.Web/sites"
+							]
+						}
+					]
+				}
+			]
+		},
+		"outputs": {
+			"parameters": {
+				"location": "[steps('basics').scope.location.name]",
+				"hostPoolResourceId": "[steps('functionApp').executionSettings.hostPool.id]",
+				"storageResourceGroupId": "[steps('functionApp').executionSettings.storageResourceGroup.id]",
+				"timerSchedule": "[concat('0 0 ', if(and(equals(steps('functionApp').executionSettings.scheduleStartHour, 0), equals(steps('functionApp').executionSettings.scheduleEndHour, 23)), '*', concat(string(steps('functionApp').executionSettings.scheduleStartHour), if(equals(steps('functionApp').executionSettings.scheduleStartHour, steps('functionApp').executionSettings.scheduleEndHour), '', concat('-', string(steps('functionApp').executionSettings.scheduleEndHour))))), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', '')))]",
+				"appServicePlanResourceId": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, steps('functionApp').infrastructure.appServicePlan, '')]",
+				"zoneRedundant": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.zoneRedundant, false)]",
+				"keyManagementStorageAccounts": "[steps('functionApp').infrastructure.keyManagementStorageAccounts]",
+				"encryptionKeyVaultResourceId": "[if(contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'), steps('functionApp').infrastructure.encryptionKeyVault.id, '')]",
+				"privateEndpoint": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
+				"functionAppDelegatedSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppOutboundSubnet, '')]",
+				"privateEndpointSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppPrivateEndpointSubnet, '')]",
+				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureBlobPrivateDnsZone, '')]",
+				"azureFilePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureFilesPrivateDnsZone, '')]",
+				"azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureFunctionAppPrivateDnsZone, '')]",
+				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureQueuePrivateDnsZone, '')]",
+				"azureTablePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureTablePrivateDnsZone, '')]",
+				"enableMonitoring": "[steps('monitoring').enableMonitoring]",
+				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace.id, '')]",
+				"privateLinkScopeResourceId": "[if(steps('monitoring').enableAMPLS, steps('monitoring').privateLinkScope.id, '')]",
+				"tags": "[steps('tags')]"
+			},
+			"kind": "ResourceGroup",
+			"location": "[steps('basics').scope.location.name]",
+			"resourceGroupId": "[steps('basics').scope.resourceGroup.id]"
+		}
+	}
+}

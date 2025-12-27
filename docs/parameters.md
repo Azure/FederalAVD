@@ -58,7 +58,7 @@
 | `dedicatedHostResourceId` | The resource Id of a specific Dedicated Host on which to deploy the Virtual Machines. This parameter takes precedence over the `dedicatedHostGroupResourceId` parameter. | string | resource id | '' |
 | `deployDiskAccessPolicy` | Determines if the disk access policy is deployed. | bool | true<br/>false | false |
 | `deployFSLogixStorage` | Determines whether resources to support FSLogix profile storage are deployed. | bool | true<br/>false | false |
-| `deployIncreaseQuota` | Determines if the quota increase request is deployed. | bool | true<br/>false | false |
+| `deployIncreaseQuota` | **Deprecated.** Use the [Storage Quota Manager Add-On](../deployments/add-ons/StorageQuotaManager/readme.md) instead for automatic quota management. | bool | true<br/>false | false |
 | `deployPrivateEndpoints` | Determines if private endpoints are created for all resources. | bool | true<br/>false | false |
 | `deployScalingPlan` | Determines if the scaling plan is deployed to the host pool. | bool | true<br/>false | false |
 | `deploySecretsKeyVault` | Determine if the solution deploys the shared credentals key vault. | bool | true<br/>false | false |

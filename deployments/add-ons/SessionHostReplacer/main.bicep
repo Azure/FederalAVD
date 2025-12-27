@@ -48,18 +48,16 @@ param azureFunctionAppPrivateDnsZoneResourceId string = ''
 param azureQueuePrivateDnsZoneResourceId string = ''
 param azureTablePrivateDnsZoneResourceId string = ''
 
-@description('Optional. The resource ID of the User-Assigned Managed Identity for encryption.')
-param encryptionUserAssignedIdentityResourceId string
-
 @description('Optional. The resource ID of the Key Vault for encryption. Required if keyManagementStorageAccounts is set to Customer.')
 param encryptionKeyVaultResourceId string = ''
 
 @description('Optional. Key management solution for storage accounts. Options: Platform, Customer.')
 @allowed([
-  'Platform'
-  'Customer'
+  'MicrosoftManaged'
+  'CustomerManaged'
+  'CustomerManagedHSM'
 ])
-param keyManagementStorageAccounts string = 'Platform'
+param keyManagementStorageAccounts string = 'MicrosoftManaged'
 
 @description('Optional. Log Analytics Workspace resource ID for Application Insights.')
 param logAnalyticsWorkspaceResourceId string = ''
@@ -359,7 +357,7 @@ var locations = locationsObject[locationsEnvProperty]
 // the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.
 var graphEndpoint = environment().name == 'AzureUSGovernment' ? 'https://graph.microsoft.us' : startsWith(environment().name, 'us') ? 'https://graph.${environment().suffixes.storage}' : 'https://graph.microsoft.com'
 
-#disable-next-line BCP329
+
 var functionAppRegionAbbreviation = locations[location].abbreviation
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
@@ -390,7 +388,7 @@ var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
 var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
 
 // Generate unique identifiers for resource naming
-var uniqueStringHosts = take(uniqueString(subscription().subscriptionId, virtualMachinesResourceGroupName), 6)
+var uniqueStringHosts = take(uniqueString(virtualMachinesSubscriptionId, virtualMachinesResourceGroupName), 6)
 
 // App Service Plan naming convention
 var nameConv_Shared_Resources = nameConvReversed
@@ -566,8 +564,7 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     deploymentSuffix: deploymentSuffix
     enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)    
     encryptionKeyName: encryptionKeyName
-    encryptionKeyVaultUri: !empty(encryptionKeyVaultResourceId) ? reference(encryptionKeyVaultResourceId, '2023-07-01').vaultUri : ''
-    encryptionUserAssignedIdentityResourceId: encryptionUserAssignedIdentityResourceId
+    encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
     functionAppAppSettings: [      
       {
         name: 'GraphEndpoint'
@@ -662,6 +659,10 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
         value: string(maxDeploymentBatchSize)
       }
       {
+        name: 'SubscriptionId'
+        value: subscription().subscriptionId
+      }
+      {
         name: 'SuccessfulRunsBeforeScaleUp'
         value: string(successfulRunsBeforeScaleUp)
       }
@@ -701,9 +702,9 @@ module functionCode '../../sharedModules/custom/functionApp/function.bicep' = {
   name: 'SessionHostReplacerFunction-${deploymentSuffix}'
   params: {
     files: {
-      'requirements.psd1': loadTextContent('functions/SessionHostReplacer/requirements.psd1')
-      'run.ps1': loadTextContent('functions/SessionHostReplacer/run.ps1')
-      '../profile.ps1': loadTextContent('functions/SessionHostReplacer/profile.ps1')
+      'requirements.psd1': loadTextContent('functions/requirements.psd1')
+      'run.ps1': loadTextContent('functions/run.ps1')
+      '../profile.ps1': loadTextContent('functions/profile.ps1')
     }
     functionAppName: functionApp.outputs.functionAppName
     functionName: 'session-host-replacer'

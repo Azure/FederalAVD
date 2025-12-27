@@ -10,24 +10,76 @@
 					"label": "Deployment Basics",
 					"elements": [
 						{
-							"name": "resourceScope",
-							"type": "Microsoft.Common.ResourceScope",
-							"instanceDetailsLabel": "Session Host Replacer Deployment Details",
-							"location": {
-								"label": "Region",
-								"toolTip": "Select the region where the Session Host Replacer function app and supporting resources will be deployed.",
-								"resourceTypes": [
-									"Microsoft.Web/sites"
-								]
+							"name": "infoBox1",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Configure the basic settings for deploying the Session Host Replacer function app and supporting resources."
 							}
 						},
-						{
+												{
 							"name": "subscriptionsApi",
 							"type": "Microsoft.Solutions.ArmApiControl",
 							"request": {
 								"method": "GET",
 								"path": "/subscriptions?api-version=2022-12-01"
 							}
+						},
+						{
+							"name": "scope",
+							"type": "Microsoft.Common.Section",
+							"label": "Subscription and Location Details",
+							"elements": [
+								{
+									"name": "subscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Subscription",
+									"constraints": {
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "resourceGroupsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('basics').scope.subscription.id))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/resourcegroups?api-version=2021-04-01')]"
+									}
+								},
+								{
+									"name": "resourceGroup",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Management Resource Group",
+									"multiLine": true,
+									"constraints": {
+										"allowedValues": "[map(steps('basics').scope.resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "locationsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('basics').scope.subscription.id))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/locations?api-version=2022-12-01')]",
+										"transforms": {
+											"list": "sort_by(value, &displayName)[?name!='global' && !contains(displayName, '(Stage)')] | [*].{label: displayName, value: { displayName: displayName, name: name }}"
+										}
+									}
+								},
+								{
+									"name": "location",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Region",
+									"toolTip": "Select the region where you want to deploy the function app.",
+									"defaultValue": "[first(map(filter(steps('basics').scope.locationsApi.value, (loc) => equals(loc.name, steps('basics').scope.resourceGroup.location)), (loc) => loc.displayName))]",
+									"constraints": {
+										"allowedValues": "[steps('basics').scope.locationsApi.transformed.list]"
+									}
+								}
+							]
 						}
 					]
 				},
@@ -64,7 +116,7 @@
 									}
 								},
 								{
-									"name": "hostsRGProps",
+									"name": "hostPoolProps",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"condition": "[not(empty(steps('functionApp').executionSettings.hostPool))]",
 									"request": {
@@ -75,10 +127,10 @@
 								{
 									"name": "hostsRGProps",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(not(empty(steps('functionApp').executionSettings.hostPool)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.hostsResourceGroupId)))]",
+									"condition": "[and(not(empty(steps('functionApp').executionSettings.hostPool)), not(empty(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId)))]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('functionApp').executionSettings.hostsRGProps.tags.hostsResourceGroupId, '?api-version=2021-04-01')]"
+										"path": "[concat(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId, '?api-version=2021-04-01')]"
 									}
 								},
 								{
@@ -446,7 +498,7 @@
 									"condition": "[steps('functionApp').infrastructure.useExistingHostingPlan]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2023-12-01')]"
+										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2023-12-01')]"
 									}
 								},
 								{
@@ -457,7 +509,7 @@
 									"multiLine": true,
 									"toolTip": "Select the existing App Service Plan. Only plans in the selected subscription and location are shown.",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('functionApp').infrastructure.serverFarmsApi.value, (sf) => equals(sf.location, steps('basics').resourceScope.location.name)), (sf) => parse(concat('{\"label\":\"', sf.name, '\",\"description\":\"Location: ', sf.location, ' | Resource Group: ', first(skip(split(sf.id, '/'), 4)), '\",\"value\":\"', sf.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.serverFarmsApi.value, (sf) => equals(sf.location, steps('basics').scope.location.name)), (sf) => parse(concat('{\"label\":\"', sf.name, '\",\"description\":\"Location: ', sf.location, ' | Resource Group: ', first(skip(split(sf.id, '/'), 4)), '\",\"value\":\"', sf.id, '\"}')))]",
 										"required": true
 									}
 								},
@@ -484,12 +536,16 @@
 									"constraints": {
 										"allowedValues": [
 											{
-												"label": "Platform-Managed Keys",
-												"value": "Platform"
+												"label": "Microsoft-Managed Keys",
+												"value": "MicrosoftManaged"
 											},
 											{
 												"label": "Customer-Managed Keys",
-												"value": "Customer"
+												"value": "CustomerManaged"
+											},
+											{
+												"label": "Customer-Managed Keys backed by HSM",
+												"value": "CustomerManagedHSM"
 											}
 										]
 									}
@@ -497,12 +553,12 @@
 								{
 									"name": "encryptionKeyVault",
 									"type": "Microsoft.Solutions.ResourceSelector",
-									"visible": "[equals(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
+									"visible": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
 									"label": "Encryption Key Vault",
 									"toolTip": "Select the Key Vault containing the customer-managed encryption key.",
 									"resourceType": "Microsoft.KeyVault/vaults",
 									"constraints": {
-										"required": "[equals(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]"
+										"required": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]"
 									},
 									"options": {
 										"filter": {
@@ -627,7 +683,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Private DNS Zone Subscription",
 									"placeholder": "",
-									"defaultValue": "[steps('basics').resourceScope.subscription.displayName]",
+									"defaultValue": "[steps('basics').scope.subscription.displayName]",
 									"toolTip": "Select the subscription that contains your Private DNS Zones.",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
@@ -837,7 +893,7 @@
 									"name": "subscription",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Subscription",
-									"defaultValue": "[steps('controlPlane').scope.subscription.displayName]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId), steps('basics').scope.subscription.displayName, first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, first(skip(split(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId, '/'), 2))))).displayName)]",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
 										"required": true
@@ -856,7 +912,7 @@
 									"name": "resourceGroup",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Machine Resource Group",
-									"defaultValue": "[steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId), '', last(split(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId, '/')))]",
 									"multiLine": true,
 									"constraints": {
 										"allowedValues": "[map(filter(filter(steps('hosts').scope.resourceGroupsApi.value, (rg) => and(contains(rg.name, 'hosts'), not(empty(rg.tags)))), (rg) => not(empty(rg.tags.cm-resource-parent))), (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"hostPool: ', last(split(rg.tags.cm-resource-parent, '/')), '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
@@ -1890,7 +1946,7 @@
 							"type": "Microsoft.Common.DropDown",
 							"visible": "[steps('userProfiles').configureSessionHosts]",
 							"label": "FSLogix Container Type(s)",
-							"defaultValue": "Profile Container",
+							"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.fslContainerType, 'Profile Container')]",
 							"toolTip": "Select the container type(s) for the FSLogix profiles.",
 							"constraints": {
 								"required": true,
@@ -1918,7 +1974,7 @@
 							"name": "sizeInMBs",
 							"type": "Microsoft.Common.Slider",
 							"label": "FSLogix VHD Size (MB)",
-							"defaultValue": 30720,
+							"defaultValue": "[coalesce(int(steps('functionApp').executionSettings.hostsRGProps.tags.fslContainerSizeInMBs), 30720)]",
 							"toolTip": "Input the max size of the users fslogix containers.",
 							"min": 10240,
 							"max": 1048576,
@@ -1933,7 +1989,7 @@
 							"type": "Microsoft.Common.DropDown",
 							"visible": "[steps('userProfiles').configureSessionHosts]",
 							"label": "Storage Service",
-							"defaultValue": "Azure Files",
+							"defaultValue": "[if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.fslStorageService, 'AzureNetAppFiles'), 'Azure NetApp Files', if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.fslStorageService, 'AzureFiles'), 'Azure Files', 'Azure Files'))]",
 							"toolTip": "Select the storage service that provides the SMB file share to support the use of FSLogix.",
 							"constraints": {
 								"allowedValues": "[if(not(equals(steps('identity').solution, 'ActiveDirectoryDomainServices')), parse('[{\"label\":\"Azure Files\",\"value\":\"AzureFiles\"}]'), parse('[{\"label\":\"Azure Files\",\"value\":\"AzureFiles\"},{\"label\":\"Azure NetApp Files\",\"value\":\"AzureNetAppFiles\"}]'))]"
@@ -1950,7 +2006,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "NetApp Files Subscription",
 									"placeholder": "",
-									"defaultValue": "[steps('hosts').scope.subscription.displayName]",
+									"defaultValue": "[if(and(not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, split(first(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[2]))).displayName, steps('hosts').scope.subscription.displayName)]",
 									"toolTip": "",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
@@ -1995,6 +2051,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Existing Local NetApp Account",
 									"toolTip": "Select the existing local NetApp account to use for the FSLogix profile storage.",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.netAppAccountsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), split(first(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[8], '')]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => equals(account.location, steps('hosts').scope.location.name)), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Resource Group: ', first(skip(split(account.id, '/'), 4)), '\", \"value\":\"', account.id, '\"}')))]",
 										"required": true
@@ -2016,6 +2073,7 @@
 									"label": "Local Capacity Pool",
 									"multiLine": false,
 									"toolTip": "Select an existing capacity pool from the selected NetApp Account.",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.localCapacityPoolsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), split(first(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[10], '')]",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.localCapacityPoolsApi.value, (pool) => parse(concat('{\"label\":\"', last(split(pool.name, '/')), '\",\"value\":\"', pool.id, '\"}')))]",
 										"required": true
@@ -2037,6 +2095,7 @@
 									"label": "Local Volume(s)",
 									"multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
 									"toolTip": "Select the existing volume from the selected NetApp capacity pool.",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.localVolumesApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), map(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.localVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
 										"required": true
@@ -2065,6 +2124,7 @@
 									"label": "Remote NetApp Account",
 									"toolTip": "Select the existing remote NetApp account to use for the FSLogix profile storage.",
 									"multiLine": true,
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.netAppAccountsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), split(first(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds)), '/')[8], '')]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => not(equals(account.location, steps('hosts').scope.location.name))), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Location: ', account.location, ', Resource Group: ', first(skip(split(account.id, '/'), 4)), '\", \"value\":\"', account.id, '\"}')))]",
 										"required": false
@@ -2085,6 +2145,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Remote Capacity Pool",
 									"toolTip": "Select an existing capacity pool from the selected NetApp Account.",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.remoteCapacityPoolsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), split(first(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds)), '/')[10], '')]",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.remoteCapacityPoolsApi.value, (pool) => parse(concat('{\"label\":\"', last(split(pool.name, '/')), '\",\"value\":\"', pool.id, '\"}')))]",
 										"required": false
@@ -2105,6 +2166,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Remote Volume(s)",
 									"multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumesApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), map(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
 									"toolTip": "Select the office-containers and profile-containers volumes from the selected NetApp capacity pool.",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.remoteVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
@@ -2142,7 +2204,7 @@
 									"name": "shardingOption",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Sharding Options",
-									"defaultValue": "No Sharding",
+									"defaultValue": "[if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.fslSharding, 'ShardPerms'), 'Sharding via Permissions', if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.fslSharding, 'ShardOSS'), 'Sharding via Object Specific Settings', 'No Sharding'))]",
 									"constraints": {
 										"allowedValues": "[if(contains(steps('identity').solution, 'EntraKerberos'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
 									},
@@ -2235,7 +2297,7 @@
 								{
 									"name": "configureSessionHostsHeader",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(steps('userProfiles').configureSessionHosts, or(not(equals(steps('userProfiles').deployStorage, true)), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')))]",
+									"visible": "[steps('userProfiles').configureSessionHosts]",
 									"options": {
 										"text": "<b>Session Host Configuration</b>"
 									}
@@ -2283,6 +2345,7 @@
 									"multiLine": true,
 									"multiselect": true,
 									"toolTip": "",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => and(equals(sa.location, steps('hosts').scope.location.name), or(and(not(empty(coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.storageResourceGroup, ''))), equals(first(skip(split(sa.id, '/'), 4)), steps('functionApp').executionSettings.hostsRGProps.tags.storageResourceGroup)), empty(coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.storageResourceGroup, ''))))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
 										"required": true
@@ -2341,6 +2404,7 @@
 									"multiLine": true,
 									"multiselect": true,
 									"toolTip": "",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.location, steps('userProfiles').azureFiles.remoteLocation)), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\", \"value\":\"', sa.id, '\"}')))]",
 										"required": false
@@ -2532,31 +2596,15 @@
 		},
 		"outputs": {
 			"parameters": {
-				"location": "[steps('basics').resourceScope.location.name]",
-				"tags": "[steps('tags')]",
-				"sessionHostReplacerUserAssignedIdentityResourceId": "[if(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), steps('functionApp').infrastructure.sessionHostReplacerUserAssignedIdentity.id, '')]",
-				"appServicePlanResourceId": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, steps('functionApp').infrastructure.appServicePlan, '')]",
-				"zoneRedundant": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.zoneRedundant, false)]",
-				"privateEndpoint": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
-				"privateEndpointSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppPrivateEndpointSubnet, '')]",
-				"functionAppDelegatedSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppOutboundSubnet, '')]",
-				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureBlobPrivateDnsZone, '')]",
-				"azureFilePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureFilesPrivateDnsZone, '')]",
-				"azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureFunctionAppPrivateDnsZone, '')]",
-				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureQueuePrivateDnsZone, '')]",
-				"azureTablePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureTablePrivateDnsZone, '')]",
-				"encryptionUserAssignedIdentityResourceId": "[if(equals(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'), steps('functionApp').infrastructure.sessionHostReplacerUserAssignedIdentity.id, '')]",
-				"encryptionKeyVaultResourceId": "[if(equals(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'), steps('functionApp').infrastructure.encryptionKeyVault.id, '')]",
-				"keyManagementStorageAccounts": "[steps('functionApp').infrastructure.keyManagementStorageAccounts]",
-				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace.id, '')]",
-				"privateLinkScopeResourceId": "[if(steps('monitoring').enableAMPLS, steps('monitoring').privateLinkScope.id, '')]",
-				"credentialsKeyVaultResourceId": "[steps('identity').credentials.keyVault.id]",
+				"location": "[steps('basics').scope.location.name]",
+				"hostPoolResourceId": "[steps('functionApp').executionSettings.hostPool.id]",
 				"sessionHostTemplateSpecVersionResourceId": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing'), steps('functionApp').executionSettings.templateSpecResourceSelector.id, '')]",
 				"templateSpecName": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecName, '')]",
 				"templateSpecVersion": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecVersion, '1.0.0')]",
 				"timerSchedule": "[concat('0 0 ', if(and(equals(steps('functionApp').executionSettings.scheduleStartHour, 0), equals(steps('functionApp').executionSettings.scheduleEndHour, 23)), '*', concat(string(steps('functionApp').executionSettings.scheduleStartHour), if(equals(steps('functionApp').executionSettings.scheduleStartHour, steps('functionApp').executionSettings.scheduleEndHour), '', concat('-', string(steps('functionApp').executionSettings.scheduleEndHour))))), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', '')))]",
 				"targetVMAgeDays": "[steps('functionApp').executionSettings.targetVMAgeDays]",
 				"drainGracePeriodHours": "[steps('functionApp').executionSettings.drainGracePeriodHours]",
+				"maxDeploymentBatchSize": "[steps('functionApp').executionSettings.maxDeploymentBatchSize]",
 				"fixSessionHostTags": "[steps('functionApp').executionSettings.fixSessionHostTags]",
 				"includePreExistingSessionHosts": "[steps('functionApp').executionSettings.includePreExistingSessionHosts]",
 				"tagIncludeInAutomation": "[steps('functionApp').executionSettings.tagIncludeInAutomation]",
@@ -2568,39 +2616,54 @@
 				"enableProgressiveScaleUp": "[steps('functionApp').executionSettings.enableProgressiveScaleUp]",
 				"initialDeploymentPercentage": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.initialDeploymentPercentage, 10)]",
 				"scaleUpIncrementPercentage": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.scaleUpIncrementPercentage, 20)]",
-				"maxDeploymentBatchSize": "[steps('functionApp').executionSettings.maxDeploymentBatchSize]",
 				"successfulRunsBeforeScaleUp": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.successfulRunsBeforeScaleUp, 1)]",
+				"sessionHostReplacerUserAssignedIdentityResourceId": "[if(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), steps('functionApp').infrastructure.sessionHostReplacerUserAssignedIdentity.id, '')]",
+				"appServicePlanResourceId": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, steps('functionApp').infrastructure.appServicePlan, '')]",
+				"zoneRedundant": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.zoneRedundant, false)]",
+				"keyManagementStorageAccounts": "[steps('functionApp').infrastructure.keyManagementStorageAccounts]",
+				"encryptionKeyVaultResourceId": "[if(contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'), steps('functionApp').infrastructure.encryptionKeyVault.id, '')]",
+				"privateEndpoint": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
+				"functionAppDelegatedSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppOutboundSubnet, '')]",
+				"privateEndpointSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppPrivateEndpointSubnet, '')]",
+				"azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureFunctionAppPrivateDnsZone, '')]",
+				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureBlobPrivateDnsZone, '')]",
+				"azureFilePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureFilesPrivateDnsZone, '')]",
+				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureQueuePrivateDnsZone, '')]",
+				"azureTablePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureTablePrivateDnsZone, '')]",
+				"identitySolution": "[steps('identity').solution]",
+				"domainName": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.domainName, '')]",
+				"ouPath": "[if(or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraDomainServices')), steps('identity').virtualMachines.ouPath, '')]",
+				"credentialsKeyVaultResourceId": "[steps('identity').credentials.keyVault.id]",
 				"virtualMachinesResourceGroupId": "[steps('hosts').scope.resourceGroup.id]",
-				"hostPoolResourceId": "[steps('functionApp').executionSettings.hostPool.id]",
+				"timeZone": "[steps('hosts').scope.timeZone]",
 				"virtualMachineNamePrefix": "[steps('hosts').naming.virtualMachineNamePrefix]",
 				"vmNameIndexLength": "[steps('hosts').naming.indexPadding]",
+				"virtualMachineSubnetResourceId": "[steps('hosts').network.subnet.id]",
 				"imagePublisher": "[if(equals(steps('hosts').image.source, 'marketplace'), 'MicrosoftWindowsDesktop', '')]",
 				"imageOffer": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.offer, '')]",
 				"imageSku": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.sku, '')]",
 				"customImageResourceId": "[if(equals(steps('hosts').image.source, 'gallery'), steps('hosts').image.imageDefinition, '')]",
-				"virtualMachineSize": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric)]",
-				"virtualMachineSubnetResourceId": "[steps('hosts').network.subnet.id]",
-				"identitySolution": "[steps('identity').solution]",
-				"domainName": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.domainName, '')]",
-				"ouPath": "[if(or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraDomainServices')), steps('identity').virtualMachines.ouPath, '')]",
-				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
-				"timeZone": "[steps('hosts').scope.timeZone]",
-				"availability": "[if(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), steps('hosts').availability.availability, 'none')]",
-				"availabilityZones": "[if(and(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), equals(steps('hosts').availability.availability, 'AvailabilityZones')), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"securityType": "[steps('hosts').security.securityType]",
 				"secureBootEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.secureBootEnabled)]",
 				"vTpmEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
 				"integrityMonitoring": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.integrityMonitoring)]",
 				"encryptionAtHost": "[steps('hosts').diskEncryption.encryptionAtHost]",
 				"confidentialVMOSDiskEncryption": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, false)]",
+				"virtualMachineSize": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric)]",
 				"diskSizeGB": "[steps('hosts').specs.diskSizeGB]",
 				"diskSku": "[steps('hosts').specs.diskSku]",
 				"enableAcceleratedNetworking": "[steps('hosts').specs.enableAcceleratedNetworking]",
-				"enableMonitoring": "[steps('monitoring').enableMonitoring]"
+				"availability": "[if(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), steps('hosts').availability.availability, 'none')]",
+				"availabilityZones": "[if(and(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), equals(steps('hosts').availability.availability, 'AvailabilityZones')), steps('hosts').availability.availabilityZones, parse('[]'))]",
+				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
+				"enableMonitoring": "[steps('monitoring').enableMonitoring]",
+				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace.id, '')]",
+				"privateLinkScopeResourceId": "[if(steps('monitoring').enableAMPLS, steps('monitoring').privateLinkScope.id, '')]",
+				"tags": "[steps('tags').tags]"
 			},
 			"kind": "ResourceGroup",
-			"location": "[steps('basics').resourceScope.location.name]",
-			"resourceGroupId": "[steps('basics').resourceScope.resourceGroup.id]"
+			"location": "[steps('basics').scope.location.name]",
+			"resourceGroupId": "[steps('basics').scope.resourceGroup.id]"
 		}
 	}
 }

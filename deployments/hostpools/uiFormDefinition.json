@@ -2468,7 +2468,7 @@
 							"name": "sizeInMBs",
 							"type": "Microsoft.Common.Slider",
 							"label": "FSLogix VHD Size (MB)",
-							"defaultValue": 30720,
+							"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), coalesce(int(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs), 30720), 30720)]",
 							"toolTip": "Input the max size of the users fslogix containers.",
 							"min": 10240,
 							"max": 1048576,
@@ -2497,7 +2497,7 @@
 							"type": "Microsoft.Common.DropDown",
 							"visible": "[or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true))]",
 							"label": "Storage Service",
-							"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), 'Azure Files', if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'N'), 'Azure NetApp Files', 'Azure Files'))]",
+							"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), 'Azure Files', if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureNetAppFiles'), 'Azure NetApp Files', if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureFiles'), 'Azure Files', 'Azure Files')))]",
 							"toolTip": "Select the storage service that provides the SMB file share to support the use of FSLogix.",
 							"constraints": {
 								"allowedValues": "[if(not(equals(steps('identity').solution, 'ActiveDirectoryDomainServices')), parse('[{\"label\":\"Azure Files\",\"value\":\"AzureFiles\"}]'), parse('[{\"label\":\"Azure Files\",\"value\":\"AzureFiles\"},{\"label\":\"Azure NetApp Files\",\"value\":\"AzureNetAppFiles\"}]'))]"
@@ -2514,7 +2514,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "NetApp Files Subscription",
 									"placeholder": "",
-									"defaultValue": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), parse(concat('{\"displayName\":\"\",\"id\":\"/subscriptions/', split(first(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[2], '\",\"subscriptionId\":\"', split(first(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[2], '\"}')), steps('hosts').scope.subscription.displayName)]",
+									"defaultValue": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, split(first(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[2]))).displayName, steps('hosts').scope.subscription.displayName)]",
 									"toolTip": "",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
@@ -2959,7 +2959,7 @@
 									"name": "shardingOption",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Sharding Options",
-									"defaultValue": "No Sharding",
+									"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), if(equals(steps('basics').hostsRGProps.tags.fslSharding, 'ShardPerms'), 'Sharding via Permissions', if(equals(steps('basics').hostsRGProps.tags.fslSharding, 'ShardOSS'), 'Sharding via Object Specific Settings', 'No Sharding')), 'No Sharding')]",
 									"constraints": {
 										"allowedValues": "[if(contains(steps('identity').solution, 'EntraKerberos'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
 									},
@@ -3485,42 +3485,7 @@
 									"visible": "[and(steps('management').servicePrincipals.enableAVDSPRBAC, empty(first(steps('management').servicePrincipals.avdServicePrincipalApi.value)), or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan))]"
 								}
 							]
-						},
-						{
-							"name": "automation",
-							"type": "Microsoft.Common.Section",
-							"label": "Automation",
-							"elements": [
-								{
-									"name": "deployIncreaseQuota",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable File Share Automatic Quota Increase",
-									"toolTip": "Choose to deploy a function app that will automatically increase your Azure Premium File Share quota when the remaining space is at a critical level."
-								},
-								{
-									"name": "serverFarmsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('basics').subscription))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('hosts').scope.subscription.id, '/providers/'Microsoft.Web/serverfarms?api-version=2023-12-01')]"
-									}
-								},
-								{
-									"name": "serverFarm",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Function App Hosting Plan (Server Farm)",
-									"multiLine": true,
-									"toolTip": "Select the existing Hosting Plan which the Function App will use. Note that only Hosting Plans located in the same region as the storage accounts are shown.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('management').automation.serverFarmsApi.value, (sf) => equals(sf.location, steps('hosts').scope.location.name)), (sf) => parse(concat('{\"label\":\"', sf.name, '\",\"description\":\"Location: ', sf.location, ' Resource Group: ', first(skip(split(sf.id, '/'), 4)), '\",\"value\":\"', sf.id, '\"}')))]",
-										"required": true
-									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').automation.deployIncreaseQuota)]"
-								}
-							],
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('userProfiles').azureFiles.storageSku, 'Premium'))]"
-						},
+						},						
 						{
 							"name": "backup",
 							"type": "Microsoft.Common.Section",
@@ -3856,7 +3821,7 @@
 								{
 									"name": "managementHeader",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(or(steps('management').keyVaults.deploySecretsKeyVault, steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
+									"visible": "[and(steps('management').keyVaults.deploySecretsKeyVault, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
 									"options": {
 										"text": "<i>Shared Management Resources (i.e., Key Vaults, Function Apps, etc.)</i>"
 									}
@@ -3872,7 +3837,7 @@
 										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(or(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault)), steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault)), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "managementSubnetsApi",
@@ -3893,18 +3858,7 @@
 										"required": true
 									},
 									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
-								},
-								{
-									"name": "functionAppOutboundSubnet",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Function App Outbound subnet",
-									"toolTip": "Select an existing subnet for function App Outbound access. This subnet must have a delegation for Microsoft.Web/serverFarms.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.managementSubnetsApi.value, (snet) => equals(first(map(snet.properties.delegations, (del) => del.properties.serviceName)), 'Microsoft.Web/serverFarms')), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
-									},
-									"visible": "[and(steps('management').automation.deployIncreaseQuota, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
-								},
+								},								
 								{
 									"name": "hostpoolHeader",
 									"type": "Microsoft.Common.TextBlock",
@@ -4013,7 +3967,7 @@
 									"name": "azureBlobPrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
 									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
-									"visible": "[and(or(steps('management').backup.recoveryServices, steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"visible": "[and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
 									"label": "Azure Blob Storage",
 									"multiLine": true,
 									"toolTip": "Select the existing Private DNS Zone for Azure Blob Storage.",
@@ -4026,7 +3980,7 @@
 									"name": "azureFilesPrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
 									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => zone.name))]",
-									"visible": "[and(or(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
 									"label": "Azure Files",
 									"multiLine": true,
 									"toolTip": "Select the existing Private DNS Zone for Azure Files.",
@@ -4052,7 +4006,7 @@
 									"name": "azureQueuePrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
 									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
-									"visible": "[and(or(steps('management').backup.recoveryServices, steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"visible": "[and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
 									"label": "Azure Queue Storage",
 									"multiLine": true,
 									"toolTip": "Select the existing Private DNS Zone for Azure Queue Storage.",
@@ -4060,33 +4014,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": false
 									}
-								},
-								{
-									"name": "azureTablePrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => zone.name))]",
-									"visible": "[and(steps('management').automation.deployIncreaseQuota, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
-									"label": "Azure Table Storage",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Table Storage.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": false
-									}
-								},
-								{
-									"name": "azureFunctionAppPrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => zone.name))]",
-									"visible": "[and(steps('management').automation.deployIncreaseQuota, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
-									"label": "Azure Web App",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Function Apps",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": false
-									}
-								}
+								}								
 							]
 						},
 						{
@@ -4614,8 +4542,6 @@
 				"fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('identity').solution, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true)), steps('userProfiles').managedIdentity.id, '')]",
 				"fslogixAdminGroups": "[if(steps('userProfiles').shareManagement.configureAdminAccess, steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups, parse('[]'))]",
 				"avdObjectId": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('management').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('management').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('management').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
-				"deployIncreaseQuota": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('userProfiles').azureFiles.storageSku, 'Premium')), steps('management').automation.deployIncreaseQuota, false)]",
-				"existingHostingPlanResourceId": "[if(and(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').automation.deployIncreaseQuota), steps('management').automation.serverFarm, '')]",
 				"recoveryServices": "[steps('management').backup.recoveryServices]",
 				"existingRecoveryServicesVaultResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices), steps('management').backup.recoveryServicesVault, '')]",
 				"existingDiskAccessResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices, steps('management').backup.associateDiskAccessResource), steps('management').backup.diskAccess, '')]",
@@ -4634,15 +4560,12 @@
 				"securityDataCollectionRulesResourceId": "[if(steps('management').monitoring.enableCentralMonitoring, steps('management').monitoring.securityDataCollectionRule.id, '')]",
 				"deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
 				"keyVaultPrivateEndpointSubnetResourceId": "[if(and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.keyVaultsSubnet.id, '')]",
-				"functionAppSubnetResourceId": "[if(and(steps('management').automation.deployIncreaseQuota, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.functionAppOutboundSubnet.id, '')]",
 				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",
 				"azureBackupPrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
-				"azureBlobPrivateDnsZoneResourceId": "[if(and(or(steps('management').backup.recoveryServices, steps('management').monitoring.enableMonitoring), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
-				"azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('management').automation.deployIncreaseQuota, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFunctionAppPrivateDnsZone, '')]",
+				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
 				"azureFilesPrivateDnsZoneResourceId": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilesPrivateDnsZone, '')]",
 				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, or(steps('management').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
-				"azureQueuePrivateDnsZoneResourceId": "[if(and(or(steps('management').backup.recoveryServices, steps('management').automation.deployIncreaseQuota), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
-				"azureTablePrivateDnsZoneResourceId": "[if(and(steps('management').automation.deployIncreaseQuota, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureTablePrivateDnsZone, '')]",
+				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
 				"azureMonitorPrivateLinkScopeResourceId": "[if(steps('zeroTrust').azureMonitor.privateLink, steps('zeroTrust').azureMonitor.azureMonitorPrivateLinkScope.id, '')]",
 				"deployDiskAccessPolicy": "[steps('zeroTrust').policy.deployDiskAccessPolicy]",
 				"avdPrivateLinkPrivateRoutes": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'None')]",

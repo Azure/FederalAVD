@@ -1,9 +1,43 @@
-# Session Host Replacer Integration
+# Session Host Replacer Add-On
+
+> **Note:** The Session Host Replacer is now available as a standalone add-on. For complete documentation, deployment instructions, and configuration details, see the **[Session Host Replacer Add-On Documentation](../deployments/add-ons/SessionHostReplacer/readme.md)**.
 
 ## Overview
-The Session Host Replacer capability has been integrated into the hostpool deployment as an optional feature. It automatically replaces aging or outdated session hosts with new ones based on configurable policies.
 
-## Architecture
+The Session Host Replacer is an automated Azure Function that manages the lifecycle of Azure Virtual Desktop session hosts. It monitors session host age and image versions, automatically draining and replacing outdated VMs to maintain fleet health, security compliance, and image currency.
+
+**Key Features:**
+- Automated age-based replacement (configurable threshold, default: 45 days)
+- Image version tracking with automatic updates
+- Graceful session draining with configurable grace period (default: 24 hours)
+- Progressive scale-up for gradual rollouts
+- Tag-based opt-in model
+- Optional Entra ID and Intune device cleanup
+- Template Spec integration
+
+## Quick Start
+
+For detailed deployment instructions, prerequisites, and configuration options, refer to the complete add-on documentation:
+
+**[Session Host Replacer Add-On - Complete Documentation](../deployments/add-ons/SessionHostReplacer/readme.md)**
+
+## Migration from Integrated Feature
+
+If you were previously using the Session Host Replacer as an integrated hostpool feature, it is now deployed as a separate add-on. The add-on architecture provides:
+- Independent lifecycle management
+- Easier updates and maintenance
+- Support for multiple hostpools
+- Enhanced configuration flexibility
+
+---
+
+## Legacy Documentation (For Reference Only)
+
+The information below documents the previous integration approach and is retained for reference purposes only. **For current deployments, use the standalone add-on documented above.**
+
+---
+
+## Architecture (Legacy)
 
 ### Components Created
 1. **Azure Function App** - Hosts the PowerShell-based session host replacement logic
@@ -11,7 +45,7 @@ The Session Host Replacer capability has been integrated into the hostpool deplo
 3. **Application Insights** - Monitors function app performance and execution
 4. **App Service Plan** - Shared hosting plan in the management resource group
 
-### Module Structure
+### Module Structure (Legacy)
 ```
 deployments/hostpools/
 ├── hostpool.bicep (main deployment - updated)

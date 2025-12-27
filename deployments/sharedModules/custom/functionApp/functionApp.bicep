@@ -7,13 +7,17 @@ param azureTablePrivateDnsZoneResourceId string
 param deploymentSuffix string
 param enableApplicationInsights bool
 param encryptionKeyName string
-param encryptionKeyVaultUri string
-param encryptionUserAssignedIdentityResourceId string
+param encryptionKeyVaultResourceId string
 param functionAppDelegatedSubnetResourceId string
 param functionAppName string
 param functionAppAppSettings array
 param functionAppUserAssignedIdentityResourceId string = ''
 param hostPoolResourceId string
+@allowed([
+  'MicrosoftManaged'
+  'CustomerManaged'
+  'CustomerManagedHSM'
+])
 param keyManagementStorageAccounts string
 param location string
 param logAnalyticsWorkspaceResourceId string
@@ -29,9 +33,6 @@ param tags object
 
 
 var cloudSuffix = replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')
-var keyVaultName = !empty(encryptionKeyVaultUri) && keyManagementStorageAccounts != 'MicrosoftManaged' ? last(split(split(encryptionKeyVaultUri, '.')[0], '/')) : ''
-var keyVaultResourceGroup = !empty(encryptionKeyVaultUri) && keyManagementStorageAccounts != 'MicrosoftManaged' ? split(split(encryptionKeyVaultUri, '/')[2], '.')[0] : ''
-var roleKeyVaultCryptoUser = 'e147488a-f6f5-4113-8e2d-b22465e65bf6' //Key Vault Crypto Service Encryption User
 // ensure that private endpoint name and nic name are not longer than 80
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
@@ -55,57 +56,8 @@ var storageSubResources = [
   'table'
 ]
 
-// Create encryption key for function app storage account
-module storageAccountEncryptionKey '../../resources/key-vault/vault/key/main.bicep' = if (keyManagementStorageAccounts != 'MicrosoftManaged' && !empty(encryptionKeyVaultUri)) {
-  name: 'StorageEncryptionKey-${functionAppName}-${deploymentSuffix}'
-  scope: resourceGroup(keyVaultResourceGroup)
-  params: {
-    attributesExportable: false
-    keySize: 4096
-    keyVaultName: keyVaultName
-    kty: contains(keyManagementStorageAccounts, 'HSM') ? 'RSA-HSM' : 'RSA'
-    name: encryptionKeyName
-    rotationPolicy: {
-      attributes: {
-        expiryTime: 'P90D'
-      }
-      lifetimeActions: [
-        {
-          action: {
-            type: 'Notify'
-          }
-          trigger: {
-            timeBeforeExpiry: 'P10D'
-          }
-        }
-        {
-          action: {
-            type: 'Rotate'
-          }
-          trigger: {
-            timeAfterCreate: 'P83D'
-          }
-        }
-      ]
-    }
-    tags: { 'cm-resource-parent': hostPoolResourceId }
-  }
-}
-
-// Assign Key Vault Crypto Service Encryption User role to the encryption identity
-module roleAssignment_EncryptionKey '../../resources/key-vault/vault/key/rbac.bicep' = if (keyManagementStorageAccounts != 'MicrosoftManaged' && !empty(encryptionUserAssignedIdentityResourceId)) {
-  name: 'RA-Encryption-Key-${functionAppName}-${deploymentSuffix}'
-  scope: resourceGroup(keyVaultResourceGroup)
-  params: {
-    keyName: storageAccountEncryptionKey!.outputs.name
-    keyVaultName: keyVaultName
-    principalId: !empty(encryptionUserAssignedIdentityResourceId) ? reference(encryptionUserAssignedIdentityResourceId, '2023-01-31', 'Full').properties.principalId : ''
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: roleKeyVaultCryptoUser
-  }  
-}
-
-resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+// Create the Function App Storage Account with Microsoft Managed Keys first
+resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   name: storageAccountName
   location: location
   tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
@@ -115,10 +67,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
   kind: 'StorageV2'
   identity: keyManagementStorageAccounts != 'MicrosoftManaged'
     ? {
-        type: 'UserAssigned'
-        userAssignedIdentities: {
-          '${encryptionUserAssignedIdentityResourceId}': {}
-        }
+        type: 'SystemAssigned'
       }
     : null
   properties: {
@@ -133,18 +82,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
     defaultToOAuthAuthentication: false
     dnsEndpointType: 'Standard'
     encryption: {
-      identity: keyManagementStorageAccounts != 'MicrosoftManaged'
-        ? {
-            userAssignedIdentity: encryptionUserAssignedIdentityResourceId
-          }
-        : null
-      keySource: keyManagementStorageAccounts != 'MicrosoftManaged' ? 'Microsoft.KeyVault' : 'Microsoft.Storage'
-      keyvaultproperties: keyManagementStorageAccounts != 'MicrosoftManaged'
-        ? {
-            keyvaulturi: encryptionKeyVaultUri
-            keyname: encryptionKeyName
-          }
-        : null
+      keySource: 'Microsoft.Storage'      
       requireInfrastructureEncryption: true
       services: {
         file: {
@@ -180,9 +118,6 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
     }
     supportsHttpsTrafficOnly: true
   }
-  dependsOn: [
-    roleAssignment_EncryptionKey
-  ]
 }
 
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2021-09-01' = {
@@ -264,6 +199,24 @@ resource diagnosticSetting_storage_blob 'Microsoft.Insights/diagnosticsettings@2
     ]
     workspaceId: logAnalyticsWorkspaceResourceId
   }
+}
+
+module customerManagedKeys_StorageAccount 'customManagedKeys.bicep' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
+  name: 'cmk-storageAccount-${deploymentSuffix}'
+  params: {
+    storageAccountName: storageAccount.name
+    encryptionKeyName: encryptionKeyName    
+    hostPoolResourceId: hostPoolResourceId
+    deploymentSuffix: deploymentSuffix
+    keyManagementStorageAccounts: keyManagementStorageAccounts
+    keyVaultResourceId: encryptionKeyVaultResourceId
+  }
+  dependsOn: [
+    blobService
+    privateEndpoints_storage
+    privateDnsZoneGroups_storage
+    diagnosticSetting_storage_blob
+  ]
 }
 
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (enableApplicationInsights) {
@@ -357,11 +310,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
           {
             name: 'StorageSuffix'
             value: environment().suffixes.storage
-          }
-          {
-            name: 'SubscriptionId'
-            value: subscription().subscriptionId
-          }
+          }          
           {
             name: 'TenantId'
             value: subscription().tenantId
