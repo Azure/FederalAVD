@@ -77,9 +77,9 @@ The function app requires a **User-Assigned Managed Identity** with Microsoft Gr
 **PowerShell Setup:**
 ```powershell
 # Create the User-Assigned Managed Identity
-$resourceGroup = "rg-avd-management"
-$identityName = "uami-avd-session-host-replacer"
-$location = "eastus"
+$resourceGroup = "rg-avd-management-use2"
+$identityName = "uai-avd-session-host-replacer-use2"
+$location = "eastus2"
 
 $identity = New-AzUserAssignedIdentity `
     -ResourceGroupName $resourceGroup `

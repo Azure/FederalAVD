@@ -554,9 +554,6 @@ param keyVaultPrivateEndpointSubnetResourceId string = ''
 @description('Conditional. The Resource Id of the subnet on which to create the storage account and other resources private link. Required when "deployPrivateEndpoints" = true.')
 param hostPoolResourcesPrivateEndpointSubnetResourceId string = ''
 
-@description('Optional. The resource id of the subnet delegated to "Microsoft.Web/serverFarms" to which the function app will be linked.')
-param functionAppSubnetResourceId string = ''
-
 @description('Conditional. If using private endpoints with Azure files, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
 param azureBackupPrivateDnsZoneResourceId string = ''
 
@@ -566,17 +563,11 @@ param azureBlobPrivateDnsZoneResourceId string = ''
 @description('Conditional. If using private endpoints with Azure files, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
 param azureFilesPrivateDnsZoneResourceId string = ''
 
-@description('Conditional. If using private endpoints with Azure function apps, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
-param azureFunctionAppPrivateDnsZoneResourceId string = ''
-
 @description('Conditional. If using private endpoints with Key Vaults, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
 param azureKeyVaultPrivateDnsZoneResourceId string = ''
 
 @description('Conditional. If using private endpoints with Azure files, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
 param azureQueuePrivateDnsZoneResourceId string = ''
-
-@description('Conditional. If using private endpoints with Azure function Apps, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
-param azureTablePrivateDnsZoneResourceId string = ''
 
 @description('Optional. Deploy the Zero Trust Compliant Disk Access Policy to deny Public Access to the Virtual Machine Managed Disks.')
 param deployDiskAccessPolicy bool = false
@@ -739,16 +730,26 @@ var vmDiskEncryptionSetName = empty(hostPoolVmTemplate.diskEncryptionSetName)
 var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
   ? { fslLocalStorageAccountNames: string(map(fslogix!.outputs.storageAccountResourceIds, id => last(split(id, '/')))) }
   : !empty(fslogixExistingLocalStorageAccountResourceIds)
-    ? { fslLocalStorageAccountNames: string(map(fslogixExistingLocalStorageAccountResourceIds, id => last(split(id, '/')))) }
-    : {}
+      ? {
+          fslLocalStorageAccountNames: string(map(
+            fslogixExistingLocalStorageAccountResourceIds,
+            id => last(split(id, '/'))
+          ))
+        }
+      : {}
 var fslRemoteStorageAccountNames = !empty(fslogixExistingRemoteStorageAccountResourceIds)
-  ? { fslRemoteStorageAccountNames: string(map(fslogixExistingRemoteStorageAccountResourceIds, id => last(split(id, '/')))) }
+  ? {
+      fslRemoteStorageAccountNames: string(map(
+        fslogixExistingRemoteStorageAccountResourceIds,
+        id => last(split(id, '/'))
+      ))
+    }
   : {}
 var fslLocalNetAppVolumeResourceIds = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureNetAppFiles')
   ? { fslLocalNetAppVolumeResourceIds: string(fslogix!.outputs.netAppVolumeResourceIds) }
   : !empty(fslogixExistingLocalNetAppVolumeResourceIds)
-    ? { fslLocalNetAppVolumeResourceIds: string(fslogixExistingLocalNetAppVolumeResourceIds) }
-    : {}
+      ? { fslLocalNetAppVolumeResourceIds: string(fslogixExistingLocalNetAppVolumeResourceIds) }
+      : {}
 var fslRemoteNetAppVolumeResourceIds = !empty(fslogixExistingRemoteNetAppVolumeResourceIds)
   ? { fslRemoteNetAppVolumeResourceIds: string(fslogixExistingRemoteNetAppVolumeResourceIds) }
   : {}
@@ -998,12 +999,9 @@ module deploymentResourceGroup 'modules/resourceGroups.bicep' = if (createDeploy
   params: {
     location: virtualMachinesRegion
     resourceGroupName: resourceNames.outputs.resourceGroupDeployment
-    tags: union(
-      tags[?'Microsoft.Resources/resourceGroups'] ?? {},
-      {
-        'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'
-      }
-    )
+    tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, {
+      'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'
+    })
   }
 }
 
@@ -1047,16 +1045,28 @@ module globalFeedResourceGroup 'modules/resourceGroups.bicep' = if (avdPrivateLi
   }
 }
 
-module hostsResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType != 'SessionHostsOnly') {
+// Host Resource Group with No Tags to prevent circular dependency between deployment prerequisites and outputs from fslogix.
+
+module hostsResourceGroupNoTags 'modules/resourceGroups.bicep' = if (deploymentType != 'SessionHostsOnly') {
   name: 'Resource-Group-Hosts-${deploymentSuffix}'
   scope: subscription(hostsSubscription)
   params: {
     location: virtualMachinesRegion
     resourceGroupName: resourceNames.outputs.resourceGroupHosts
+    tags: {}
+  }
+}
+
+module hostsResourceGroupWithTags 'modules/resourceGroups.bicep' = if (deploymentType != 'SessionHostsOnly') {
+  name: 'Resource-Group-Hosts-Tags-${deploymentSuffix}'
+  scope: subscription(hostsSubscription)
+  params: {
+    location: virtualMachinesRegion
+    resourceGroupName: resourceNames.outputs.resourceGroupHosts
     tags: union(
+      tags[?'Microsoft.Resources/resourceGroups'] ?? {},
       vmConfigurationTags,
       fslogixConfigurationTags,
-      tags[?'Microsoft.Resources/resourceGroups'] ?? {},
       {
         'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'
       }
@@ -1070,12 +1080,9 @@ module storageResourceGroup 'modules/resourceGroups.bicep' = if (deployFSLogixSt
   params: {
     location: virtualMachinesRegion
     resourceGroupName: resourceNames.outputs.resourceGroupStorage
-    tags: union(
-      tags[?'Microsoft.Resources/resourceGroups'] ?? {},
-      {
-        'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'
-      }
-    )
+    tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, {
+      'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'
+    })
   }
 }
 
@@ -1497,7 +1504,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     vTpmEnabled: vTpmEnabled
   }
   dependsOn: [
-    hostsResourceGroup
+    hostsResourceGroupWithTags
   ]
 }
 

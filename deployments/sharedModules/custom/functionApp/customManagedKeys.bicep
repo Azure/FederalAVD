@@ -2,7 +2,11 @@ param hostPoolResourceId string
 param keyManagementStorageAccounts string
 param keyVaultResourceId string
 param keyExpirationInDays int = 180
+param location string
+param storageAccountKind string
 param storageAccountName string
+param storageAccountPrincipalId string
+param storageAccountSku object
 param encryptionKeyName string
 param deploymentSuffix string
 
@@ -15,11 +19,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   name: keyVaultName
 }
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
-  name: storageAccountName
-}
-
-// Create encryption key for function app storage account
+// Create or update encryption key for function app storage account
 module storageAccountEncryptionKey '../../resources/key-vault/vault/key/main.bicep' = {
   name: 'StorageEncryptionKey-${deploymentSuffix}'
   scope: resourceGroup(keyVaultResourceGroup)
@@ -63,39 +63,29 @@ module roleAssignment_EncryptionKey '../../resources/key-vault/vault/key/rbac.bi
   params: {
     keyName: encryptionKeyName
     keyVaultName: keyVaultName
-    principalId: storageAccount.identity.principalId
+    principalId: storageAccountPrincipalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6' //Key Vault Crypto Service Encryption User
   }
 }
 
+// Update storage account with customer managed key encryption
+// This resource updates the existing storage account created in the parent module
 resource StorageAccountUpdate 'Microsoft.Storage/storageAccounts@2024-01-01' = {
-  name: storageAccount.name
+  name: storageAccountName
+  location: location
+  sku: storageAccountSku
+  kind: storageAccountKind
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     encryption: {
       keySource: 'Microsoft.KeyVault'
       keyvaultproperties: {
         keyname: storageAccountEncryptionKey.outputs.name
         keyvaulturi: keyVault.properties.vaultUri
-      }
-      services: {
-        file: {
-          keyType: 'Account'
-          enabled: true
-        }
-        table: {
-          keyType: 'Account'
-          enabled: true
-        }
-        queue: {
-          keyType: 'Account'
-          enabled: true
-        }
-        blob: {
-          keyType: 'Account'
-          enabled: true
-        }
-      }
+      }     
     }
   }
   dependsOn: [

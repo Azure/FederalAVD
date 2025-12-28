@@ -80,7 +80,7 @@
 									}
 								}
 							]
-						}
+						}						
 					]
 				},
 				{
@@ -200,55 +200,46 @@
 									"name": "scheduleInfoBox",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
-										"text": "The function will run every hour during the selected hours on the selected days of the week. For example, selecting 8 AM to 5 PM and Monday-Friday will run the function every hour from 8 AM to 5 PM on weekdays only. The schedule uses the timezone selected in the 'Session Hosts' blade.",
+										"text": "The function will run at the selected hours on the selected days of the week. For example, selecting hours 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 and Monday-Friday will run the function every hour from 8 AM to 5 PM on weekdays only. The schedule uses the timezone selected in the 'Session Hosts' blade.",
 										"style": "Info"
 									}
 								},
 								{
-									"name": "scheduleStartHour",
+									"name": "scheduleHours",
 									"type": "Microsoft.Common.DropDown",
-									"label": "Start Hour (24-hour format)",
-									"toolTip": "The hour of day to start running (0-23). Function runs every hour starting from this hour.",
-									"defaultValue": "0 (12 AM)",
+									"label": "Schedule Hours (24-hour format)",
+									"toolTip": "Select the hours when the function should run. You can select multiple hours.",
+									"defaultValue": ["0 (12 AM)", "1 (1 AM)", "2 (2 AM)", "3 (3 AM)", "4 (4 AM)", "5 (5 AM)", "6 (6 AM)", "7 (7 AM)", "8 (8 AM)", "9 (9 AM)", "10 (10 AM)", "11 (11 AM)", "12 (12 PM)", "13 (1 PM)", "14 (2 PM)", "15 (3 PM)", "16 (4 PM)", "17 (5 PM)", "18 (6 PM)", "19 (7 PM)", "20 (8 PM)", "21 (9 PM)", "22 (10 PM)", "23 (11 PM)"],
+									"multiselect": true,
+									"selectAll": true,
 									"constraints": {
 										"required": true,
 										"allowedValues": [
-											{ "label": "0 (12 AM)", "value": 0 },
-											{ "label": "1 (1 AM)", "value": 1 },
-											{ "label": "2 (2 AM)", "value": 2 },
-											{ "label": "3 (3 AM)", "value": 3 },
-											{ "label": "4 (4 AM)", "value": 4 },
-											{ "label": "5 (5 AM)", "value": 5 },
-											{ "label": "6 (6 AM)", "value": 6 },
-											{ "label": "7 (7 AM)", "value": 7 },
-											{ "label": "8 (8 AM)", "value": 8 },
-											{ "label": "9 (9 AM)", "value": 9 },
-											{ "label": "10 (10 AM)", "value": 10 },
-											{ "label": "11 (11 AM)", "value": 11 },
-											{ "label": "12 (12 PM)", "value": 12 },
-											{ "label": "13 (1 PM)", "value": 13 },
-											{ "label": "14 (2 PM)", "value": 14 },
-											{ "label": "15 (3 PM)", "value": 15 },
-											{ "label": "16 (4 PM)", "value": 16 },
-											{ "label": "17 (5 PM)", "value": 17 },
-											{ "label": "18 (6 PM)", "value": 18 },
-											{ "label": "19 (7 PM)", "value": 19 },
-											{ "label": "20 (8 PM)", "value": 20 },
-											{ "label": "21 (9 PM)", "value": 21 },
-											{ "label": "22 (10 PM)", "value": 22 },
-											{ "label": "23 (11 PM)", "value": 23 }
+											{ "label": "0 (12 AM)", "value": "0" },
+											{ "label": "1 (1 AM)", "value": "1" },
+											{ "label": "2 (2 AM)", "value": "2" },
+											{ "label": "3 (3 AM)", "value": "3" },
+											{ "label": "4 (4 AM)", "value": "4" },
+											{ "label": "5 (5 AM)", "value": "5" },
+											{ "label": "6 (6 AM)", "value": "6" },
+											{ "label": "7 (7 AM)", "value": "7" },
+											{ "label": "8 (8 AM)", "value": "8" },
+											{ "label": "9 (9 AM)", "value": "9" },
+											{ "label": "10 (10 AM)", "value": "10" },
+											{ "label": "11 (11 AM)", "value": "11" },
+											{ "label": "12 (12 PM)", "value": "12" },
+											{ "label": "13 (1 PM)", "value": "13" },
+											{ "label": "14 (2 PM)", "value": "14" },
+											{ "label": "15 (3 PM)", "value": "15" },
+											{ "label": "16 (4 PM)", "value": "16" },
+											{ "label": "17 (5 PM)", "value": "17" },
+											{ "label": "18 (6 PM)", "value": "18" },
+											{ "label": "19 (7 PM)", "value": "19" },
+											{ "label": "20 (8 PM)", "value": "20" },
+											{ "label": "21 (9 PM)", "value": "21" },
+											{ "label": "22 (10 PM)", "value": "22" },
+											{ "label": "23 (11 PM)", "value": "23" }
 										]
-									}
-								},
-								{
-									"name": "scheduleEndHour",
-									"type": "Microsoft.Common.DropDown",
-									"label": "End Hour (24-hour format)",
-									"toolTip": "The hour of day to stop running (0-23). Must be greater than start hour.",
-									"defaultValue": "23 (11 PM)",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(parse('[{\"label\":\"0 (12 AM)\",\"value\":0},{\"label\":\"1 (1 AM)\",\"value\":1},{\"label\":\"2 (2 AM)\",\"value\":2},{\"label\":\"3 (3 AM)\",\"value\":3},{\"label\":\"4 (4 AM)\",\"value\":4},{\"label\":\"5 (5 AM)\",\"value\":5},{\"label\":\"6 (6 AM)\",\"value\":6},{\"label\":\"7 (7 AM)\",\"value\":7},{\"label\":\"8 (8 AM)\",\"value\":8},{\"label\":\"9 (9 AM)\",\"value\":9},{\"label\":\"10 (10 AM)\",\"value\":10},{\"label\":\"11 (11 AM)\",\"value\":11},{\"label\":\"12 (12 PM)\",\"value\":12},{\"label\":\"13 (1 PM)\",\"value\":13},{\"label\":\"14 (2 PM)\",\"value\":14},{\"label\":\"15 (3 PM)\",\"value\":15},{\"label\":\"16 (4 PM)\",\"value\":16},{\"label\":\"17 (5 PM)\",\"value\":17},{\"label\":\"18 (6 PM)\",\"value\":18},{\"label\":\"19 (7 PM)\",\"value\":19},{\"label\":\"20 (8 PM)\",\"value\":20},{\"label\":\"21 (9 PM)\",\"value\":21},{\"label\":\"22 (10 PM)\",\"value\":22},{\"label\":\"23 (11 PM)\",\"value\":23}]'), (item) => greaterOrEquals(item.value, steps('functionApp').executionSettings.scheduleStartHour)), (item) => item)]"
 									}
 								},
 								{
@@ -495,12 +486,12 @@
 								{
 									"name": "serverFarmsApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[steps('functionApp').infrastructure.useExistingHostingPlan]",
+									"condition": "[and(not(empty(steps('basics').scope.subscription)), steps('functionApp').infrastructure.useExistingHostingPlan)]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2023-12-01')]"
+										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2024-11-01')]"
 									}
-								},
+								},								
 								{
 									"name": "appServicePlan",
 									"type": "Microsoft.Common.DropDown",
@@ -509,7 +500,7 @@
 									"multiLine": true,
 									"toolTip": "Select the existing App Service Plan. Only plans in the selected subscription and location are shown.",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('functionApp').infrastructure.serverFarmsApi.value, (sf) => equals(sf.location, steps('basics').scope.location.name)), (sf) => parse(concat('{\"label\":\"', sf.name, '\",\"description\":\"Location: ', sf.location, ' | Resource Group: ', first(skip(split(sf.id, '/'), 4)), '\",\"value\":\"', sf.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.serverFarmsApi.value, (sf) => equals(sf.location, steps('basics').scope.location.displayName)), (sf) => parse(concat('{\"label\":\"', sf.name, '\",\"description\":\"Location: ', sf.location, ' | Resource Group: ', first(skip(split(sf.id, '/'), 4)), '\",\"value\":\"', sf.id, '\"}')))]",
 										"required": true
 									}
 								},
@@ -603,22 +594,25 @@
 									}
 								},
 								{
+									"name": "virtualNetworksApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('basics').scope.subscription))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+									}
+								},
+								{
 									"name": "virtualNetwork",
-									"type": "Microsoft.Solutions.ResourceSelector",
+									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Network",
-									"toolTip": "Select the virtual network for the function app private endpoints and virtual network integration. Only virtual networks in the selected subscription and region are shown.",
-									"resourceType": "Microsoft.Network/virtualNetworks",
+									"multiLine": true,
+									"toolTip": "Select the virtual network to which the function app will be integrated. The list is filtered based on the subscription and location selected on the 'Deployment Basics' page.",
 									"constraints": {
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
-									},
-									"options": {
-										"filter": {
-											"subscription": "onBasics",
-											"location": "onBasics"
-										}
-									},
-									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]"
-								},															
+									}
+								},												
 								{
 									"name": "subnetsApi",
 									"condition": "[not(empty(steps('functionApp').infrastructure.virtualNetwork))]",
@@ -725,20 +719,7 @@
 										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": true
 									}
-								},
-								{
-									"name": "azureFilesPrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => zone.name))]",
-									"visible": "[and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration)]",
-									"label": "Azure Files",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Files.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": true
-									}
-								},								
+								},																
 								{
 									"name": "azureQueuePrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
@@ -2289,8 +2270,8 @@
 									"type": "Microsoft.Common.Slider",
 									"label": "Number of Existing Storage Accounts Required (Read Only)",
 									"defaultValue": 1,
-									"min": "[if(or(equals(steps('identity').solution, 'EntraId'), if(contains(steps('identity').solution, 'EntraKerberos'), empty(steps('userProfiles').managedIdentity), false), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
-									"max": "[if(or(equals(steps('identity').solution, 'EntraId'), if(contains(steps('identity').solution, 'EntraKerberos'), empty(steps('userProfiles').managedIdentity), false), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
+									"min": "[if(or(equals(steps('identity').solution, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
+									"max": "[if(or(equals(steps('identity').solution, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
 									"showStepMarkers": false,
 									"visible": "[steps('userProfiles').configureSessionHosts]"
 								},
@@ -2432,7 +2413,7 @@
 							"name": "enableMonitoring",
 							"type": "Microsoft.Common.CheckBox",
 							"visible": true,
-							"label": "Enable Monitoring for AVD and VM Insights",
+							"label": "Enable Monitoring for the Function App and AVD and VM Insights",
 							"defaultValue": true,
 							"toolTip": "Deploy the required resources to enable AVD and VM Insights."
 						},
@@ -2601,7 +2582,7 @@
 				"sessionHostTemplateSpecVersionResourceId": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing'), steps('functionApp').executionSettings.templateSpecResourceSelector.id, '')]",
 				"templateSpecName": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecName, '')]",
 				"templateSpecVersion": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecVersion, '1.0.0')]",
-				"timerSchedule": "[concat('0 0 ', if(and(equals(steps('functionApp').executionSettings.scheduleStartHour, 0), equals(steps('functionApp').executionSettings.scheduleEndHour, 23)), '*', concat(string(steps('functionApp').executionSettings.scheduleStartHour), if(equals(steps('functionApp').executionSettings.scheduleStartHour, steps('functionApp').executionSettings.scheduleEndHour), '', concat('-', string(steps('functionApp').executionSettings.scheduleEndHour))))), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', '')))]",
+				"timerSchedule": "[concat('0 0 ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]",
 				"targetVMAgeDays": "[steps('functionApp').executionSettings.targetVMAgeDays]",
 				"drainGracePeriodHours": "[steps('functionApp').executionSettings.drainGracePeriodHours]",
 				"maxDeploymentBatchSize": "[steps('functionApp').executionSettings.maxDeploymentBatchSize]",
@@ -2627,7 +2608,6 @@
 				"privateEndpointSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppPrivateEndpointSubnet, '')]",
 				"azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureFunctionAppPrivateDnsZone, '')]",
 				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureBlobPrivateDnsZone, '')]",
-				"azureFilePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureFilesPrivateDnsZone, '')]",
 				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureQueuePrivateDnsZone, '')]",
 				"azureTablePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureTablePrivateDnsZone, '')]",
 				"identitySolution": "[steps('identity').solution]",
@@ -2657,7 +2637,7 @@
 				"availabilityZones": "[if(and(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), equals(steps('hosts').availability.availability, 'AvailabilityZones')), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
 				"enableMonitoring": "[steps('monitoring').enableMonitoring]",
-				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace.id, '')]",
+				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
 				"privateLinkScopeResourceId": "[if(steps('monitoring').enableAMPLS, steps('monitoring').privateLinkScope.id, '')]",
 				"tags": "[steps('tags').tags]"
 			},

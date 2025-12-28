@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "1312820175997666850"
+      "templateHash": "1118351816737067972"
     },
     "name": "FSLogix Storage Quota Manager Add-On",
     "description": "Automated quota management for FSLogix Azure Files Premium file shares",
@@ -67,10 +67,6 @@
       "metadata": {
         "description": "Optional. Private DNS Zone resource IDs. Required if privateEndpoint is true."
       }
-    },
-    "azureFilePrivateDnsZoneResourceId": {
-      "type": "string",
-      "defaultValue": ""
     },
     "azureFunctionAppPrivateDnsZoneResourceId": {
       "type": "string",
@@ -450,16 +446,13 @@
     "nameConv_Shared_Resources": "[if(variables('nameConvReversed'), format('avd-TOKEN-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-TOKEN-{0}', variables('nameConvSuffix')))]",
     "appServicePlanName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').appServicePlans), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', '')]",
     "uniqueStringStorage": "[take(uniqueString(parameters('storageResourceGroupId'), variables('storageResourceGroupName')), 6)]",
-    "appInsightsNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').applicationInsights), 'LOCATION', variables('functionAppRegionAbbreviation'))]",
-    "functionAppNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').functionApps), 'LOCATION', variables('functionAppRegionAbbreviation'))]",
     "privateEndpointNameConv": "[replace(if(variables('nameConvReversed'), 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE', 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID'), 'RESOURCETYPE', variables('resourceAbbreviations').privateEndpoints)]",
     "privateEndpointNICNameConvTemp": "[if(variables('nameConvReversed'), format('{0}-RESOURCETYPE', variables('privateEndpointNameConv')), format('RESOURCETYPE-{0}', variables('privateEndpointNameConv')))]",
     "privateEndpointNICNameConv": "[replace(variables('privateEndpointNICNameConvTemp'), 'RESOURCETYPE', variables('resourceAbbreviations').networkInterfaces)]",
-    "quotaManagementFAStorageAccountName": "[format('quotamanagement{0}', variables('uniqueStringStorage'))]",
-    "functionAppName": "[replace(variables('functionAppNameConv'), 'TOKEN-', format('quotamanagement-{0}-', variables('uniqueStringStorage')))]",
-    "storageAccountName": "[variables('quotaManagementFAStorageAccountName')]",
-    "appInsightsName": "[replace(variables('appInsightsNameConv'), 'TOKEN-', format('quotamanagement-{0}-', variables('uniqueStringStorage')))]",
-    "encryptionKeyName": "[format('{0}-encryption-key-{1}', variables('hpBaseName'), variables('quotaManagementFAStorageAccountName'))]"
+    "appInsightsName": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').applicationInsights), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', format('sqm-{0}-', variables('uniqueStringStorage')))]",
+    "functionAppName": "[replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').functionApps), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', format('sqm-{0}-', variables('uniqueStringStorage'))), 'LOCATION', variables('functionAppRegionAbbreviation'))]",
+    "storageAccountName": "[toLower(replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', ''), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', format('sqm-{0}', variables('uniqueStringStorage'))), '-', ''))]",
+    "encryptionKeyName": "[format('{0}-encryption-key-{1}', variables('hpBaseName'), variables('storageAccountName'))]"
   },
   "resources": [
     {
@@ -600,9 +593,6 @@
           "azureBlobPrivateDnsZoneResourceId": {
             "value": "[parameters('azureBlobPrivateDnsZoneResourceId')]"
           },
-          "azureFilePrivateDnsZoneResourceId": {
-            "value": "[parameters('azureFilePrivateDnsZoneResourceId')]"
-          },
           "azureFunctionAppPrivateDnsZoneResourceId": {
             "value": "[parameters('azureFunctionAppPrivateDnsZoneResourceId')]"
           },
@@ -692,7 +682,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "7468054776090440961"
+              "templateHash": "11938874505241407788"
             }
           },
           "parameters": {
@@ -700,9 +690,6 @@
               "type": "string"
             },
             "azureBlobPrivateDnsZoneResourceId": {
-              "type": "string"
-            },
-            "azureFilePrivateDnsZoneResourceId": {
               "type": "string"
             },
             "azureFunctionAppPrivateDnsZoneResourceId": {
@@ -791,18 +778,24 @@
             "peVnetId": "[if(less(length(variables('privateEndpointVnetName')), 37), variables('privateEndpointVnetName'), uniqueString(variables('privateEndpointVnetName')))]",
             "azureStoragePrivateDnsZoneResourceIds": [
               "[parameters('azureBlobPrivateDnsZoneResourceId')]",
-              "[parameters('azureFilePrivateDnsZoneResourceId')]",
               "[parameters('azureQueuePrivateDnsZoneResourceId')]",
               "[parameters('azureTablePrivateDnsZoneResourceId')]"
             ],
             "storageSubResources": [
               "blob",
-              "file",
               "queue",
               "table"
             ]
           },
           "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices",
+              "apiVersion": "2024-01-01",
+              "name": "[format('{0}/{1}', parameters('storageAccountName'), 'default')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+              ]
+            },
             {
               "type": "Microsoft.Storage/storageAccounts",
               "apiVersion": "2024-01-01",
@@ -823,29 +816,10 @@
                 "azureFilesIdentityBasedAuthentication": {
                   "directoryServiceOptions": "None"
                 },
-                "defaultToOAuthAuthentication": false,
+                "defaultToOAuthAuthentication": true,
                 "dnsEndpointType": "Standard",
                 "encryption": {
-                  "keySource": "Microsoft.Storage",
-                  "requireInfrastructureEncryption": true,
-                  "services": {
-                    "file": {
-                      "keyType": "Account",
-                      "enabled": true
-                    },
-                    "table": {
-                      "keyType": "Account",
-                      "enabled": true
-                    },
-                    "queue": {
-                      "keyType": "Account",
-                      "enabled": true
-                    },
-                    "blob": {
-                      "keyType": "Account",
-                      "enabled": true
-                    }
-                  }
+                  "requireInfrastructureEncryption": true
                 },
                 "largeFileSharesState": "Disabled",
                 "minimumTlsVersion": "TLS1_2",
@@ -862,14 +836,6 @@
                 },
                 "supportsHttpsTrafficOnly": true
               }
-            },
-            {
-              "type": "Microsoft.Storage/storageAccounts/blobServices",
-              "apiVersion": "2021-09-01",
-              "name": "[format('{0}/{1}', parameters('storageAccountName'), 'default')]",
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
-              ]
             },
             {
               "copy": {
@@ -1069,6 +1035,9 @@
                   "storageAccountName": {
                     "value": "[parameters('storageAccountName')]"
                   },
+                  "storageAccountSku": {
+                    "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').sku]"
+                  },
                   "encryptionKeyName": {
                     "value": "[parameters('encryptionKeyName')]"
                   },
@@ -1083,6 +1052,15 @@
                   },
                   "keyVaultResourceId": {
                     "value": "[parameters('encryptionKeyVaultResourceId')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "storageAccountKind": {
+                    "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').kind]"
+                  },
+                  "storageAccountPrincipalId": {
+                    "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').identity.principalId]"
                   }
                 },
                 "template": {
@@ -1092,7 +1070,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "17935676370415003581"
+                      "templateHash": "17422580412540968380"
                     }
                   },
                   "parameters": {
@@ -1109,8 +1087,20 @@
                       "type": "int",
                       "defaultValue": 180
                     },
+                    "location": {
+                      "type": "string"
+                    },
+                    "storageAccountKind": {
+                      "type": "string"
+                    },
                     "storageAccountName": {
                       "type": "string"
+                    },
+                    "storageAccountPrincipalId": {
+                      "type": "string"
+                    },
+                    "storageAccountSku": {
+                      "type": "object"
                     },
                     "encryptionKeyName": {
                       "type": "string"
@@ -1129,30 +1119,18 @@
                       "type": "Microsoft.Storage/storageAccounts",
                       "apiVersion": "2024-01-01",
                       "name": "[parameters('storageAccountName')]",
+                      "location": "[parameters('location')]",
+                      "sku": "[parameters('storageAccountSku')]",
+                      "kind": "[parameters('storageAccountKind')]",
+                      "identity": {
+                        "type": "SystemAssigned"
+                      },
                       "properties": {
                         "encryption": {
                           "keySource": "Microsoft.KeyVault",
                           "keyvaultproperties": {
                             "keyname": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.name.value]",
                             "keyvaulturi": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSubscriptionId'), variables('keyVaultResourceGroup')), 'Microsoft.KeyVault/vaults', variables('keyVaultName')), '2024-11-01').vaultUri]"
-                          },
-                          "services": {
-                            "file": {
-                              "keyType": "Account",
-                              "enabled": true
-                            },
-                            "table": {
-                              "keyType": "Account",
-                              "enabled": true
-                            },
-                            "queue": {
-                              "keyType": "Account",
-                              "enabled": true
-                            },
-                            "blob": {
-                              "keyType": "Account",
-                              "enabled": true
-                            }
                           }
                         }
                       },
@@ -1331,7 +1309,7 @@
                             "value": "[variables('keyVaultName')]"
                           },
                           "principalId": {
-                            "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').identity.principalId]"
+                            "value": "[parameters('storageAccountPrincipalId')]"
                           },
                           "principalType": {
                             "value": "ServicePrincipal"
@@ -1393,7 +1371,6 @@
                 }
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]",
                 "[extensionResourceId(resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default'), 'microsoft.insights/diagnosticSettings', format('{0}-blob-diagnosticSettings', parameters('storageAccountName')))]",
                 "privateDnsZoneGroups_storage",
                 "privateEndpoints_storage",

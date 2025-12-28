@@ -8,7 +8,8 @@ param (
     [bool]$createCustomImage = $true,
     [bool]$createHostPool = $true,
     [bool]$CreateAddOns = $true,
-    [bool]$nameConvResTypeAtEnd = $false
+    [bool]$nameConvResTypeAtEnd = $false,
+    [bool]$incrementVersion = $true
 )
 
 $ErrorActionPreference = 'Stop'
@@ -64,45 +65,106 @@ if ($createResourceGroup) {
     }
 }
 
+# Build collection of template specs to create
+$templateSpecs = @()
+
 if ($createNetwork) {
-    Write-Output 'Creating AVD Networking Template Spec'
-    $templateFile = Join-Path $PSScriptRoot -ChildPath 'networking\networking.json'
-    $uiFormDefinition = Join-Path $PSScriptRoot -ChildPath 'networking\uiFormDefinition.json'
-    New-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name 'avd-Networking' -DisplayName 'Azure Virtual Desktop Networking' -Description 'Deploys the networking components to support Azure Virtual Desktop' -TemplateFile $templateFile -UiFormDefinitionFile $uiFormDefinition -Location $Location -Version '1.0.0' -Force
+    $templateSpecs += @{
+        Name = 'avd-networking'
+        DisplayName = 'Azure Virtual Desktop Networking'
+        Description = 'Deploys the networking components to support Azure Virtual Desktop'
+        TemplateFile = Join-Path $PSScriptRoot -ChildPath 'networking\networking.json'
+        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath 'networking\uiFormDefinition.json'
+    }
 }
 
 if ($createCustomImage) {
-    Write-Output 'Creating AVD Custom Image Template Spec'
-    $templateFile = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageBuild\imageBuild.json'
-    $uiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageBuild\uiFormDefinition.json'
-    New-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name 'avd-custom-image' -DisplayName 'Azure Virtual Desktop Custom Image' -Description 'Generates a custom image for Azure Virtual Desktop' -TemplateFile $templateFile -UiFormDefinitionFile $uiFormDefinition -Location $Location -Version '1.0.0' -Force
+    $templateSpecs += @{
+        Name = 'avd-custom-image'
+        DisplayName = 'Azure Virtual Desktop Custom Image'
+        Description = 'Generates a custom image for Azure Virtual Desktop'
+        TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageBuild\imageBuild.json'
+        UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageBuild\uiFormDefinition.json'
+    }
 }
 
 if ($createHostPool) {
-    $templateFile = Join-Path -Path $PSScriptRoot -ChildPath 'hostpools\hostpool.json'
-    $uiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath 'hostpools\uiFormDefinition.json'
-    Write-Output 'Creating AVD Host Pool Template Spec'
-    New-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name 'avd-hostpool' -DisplayName 'Azure Virtual Desktop Host Pool' -Description 'Deploys an Azure Virtual Desktop Host Pool' -TemplateFile $templateFile -UiFormDefinitionFile $uiFormDefinition -Location $Location -Version '1.0.0' -Force
+    $templateSpecs += @{
+        Name = 'avd-hostpool'
+        DisplayName = 'Azure Virtual Desktop Host Pool'
+        Description = 'Deploys an Azure Virtual Desktop Host Pool'
+        TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath 'hostpools\hostpool.json'
+        UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath 'hostpools\uiFormDefinition.json'
+    }
 }
 
 if ($CreateAddOns) {
     $addOns = @(
-        @{ FolderName = 'RunCommandsOnVms'; Name = 'run-commands-on-vms'; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines' },
-        @{ FolderName = 'UpdateStorageAccountKeyOnSessionHosts'; Name = 'update-storage-account-key-on-session-hosts'; DisplayName = 'Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts' },
-        @{ FolderName = 'StorageQuotaManager'; Name = 'avd-storage-quota-manager'; DisplayName = 'Storage Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage' },
-        @{ FolderName = 'SessionHostReplacer'; Name = 'avd-session-host-replacer'; DisplayName = 'Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies' }
+        @{ Name = 'run-commands-on-vms'; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines'; FolderName = 'RunCommandsOnVms' },
+        @{ Name = 'update-storage-account-key-on-session-hosts'; DisplayName = 'Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'UpdateStorageAccountKeyOnSessionHosts' },
+        @{ Name = 'avd-storage-quota-manager'; DisplayName = 'Storage Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'StorageQuotaManager' },
+        @{ Name = 'avd-session-host-replacer'; DisplayName = 'Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'SessionHostReplacer' }
     )
 
     foreach ($addOn in $addOns) {
-        if ($nameConvResTypeAtEnd) {
-            $templateSpecName = "$($addOn.Name)-$locationAbbr-$($resourceAbbreviations.templateSpecs)"
-        } else {
-            $templateSpecName = "$($resourceAbbreviations.templateSpecs)-$($addOn.Name)-$locationAbbr"
+        $templateSpecs += @{
+            Name = $addOn.Name
+            DisplayName = $addOn.DisplayName
+            Description = $addOn.Description
+            TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath "add-ons\$($addOn.FolderName)\main.json"
+            UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath "add-ons\$($addOn.FolderName)\uiFormDefinition.json"
         }
-        $templateFile = Join-Path -Path $PSScriptRoot -ChildPath "add-ons\$($addOn.FolderName)\main.json"
-        $uiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath "add-ons\$($addOn.FolderName)\uiFormDefinition.json"
-        Write-Output "Creating $($addOn.DisplayName) Template Spec: $templateSpecName"
-        New-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name $templateSpecName -DisplayName $addOn.DisplayName -Description $addOn.Description -TemplateFile $templateFile -UiFormDefinitionFile $uiFormDefinition -Location $Location -Version '1.0.0' -Force
     }
 }
+
+# Create all template specs using consistent naming convention
+foreach ($templateSpec in $templateSpecs) {
+    if ($nameConvResTypeAtEnd) {
+        $templateSpecName = "$($templateSpec.Name)-$locationAbbr-$($resourceAbbreviations.templateSpecs)"
+    } else {
+        $templateSpecName = "$($resourceAbbreviations.templateSpecs)-$($templateSpec.Name)-$locationAbbr"
+    }
+    
+    # Determine version number
+    $version = '1.0.0'
+    if ($incrementVersion) {
+        # Check if template spec already exists and increment version
+        try {
+            $existingTemplateSpec = Get-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name $templateSpecName -ErrorAction SilentlyContinue
+            if ($existingTemplateSpec) {
+                # Get all versions and find the latest
+                $versions = Get-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name $templateSpecName -Version * -ErrorAction SilentlyContinue
+                if ($versions) {
+                    $latestVersion = $versions | ForEach-Object { 
+                        [version]$_.Version 
+                    } | Sort-Object -Descending | Select-Object -First 1
+                    
+                    # Increment major version
+                    $newMajorVersion = $latestVersion.Major + 1
+                    $version = "$newMajorVersion.0.0"
+                    Write-Output "Existing template spec found. Incrementing version from $($latestVersion.ToString()) to $version"
+                }
+            }
+        }
+        catch {
+            Write-Verbose "No existing template spec found. Using version 1.0.0"
+        }
+    }
+    else {
+        Write-Output "Version incrementing disabled. Using version 1.0.0 (will overwrite existing version)"
+    }
+    
+    Write-Output "Creating $($templateSpec.DisplayName) Template Spec: $templateSpecName (v$version)"
+    New-AzTemplateSpec `
+        -ResourceGroupName $ResourceGroupName `
+        -Name $templateSpecName `
+        -DisplayName $templateSpec.DisplayName `
+        -Description $templateSpec.Description `
+        -TemplateFile $templateSpec.TemplateFile `
+        -UiFormDefinitionFile $templateSpec.UiFormDefinition `
+        -Location $Location `
+        -Version $version `
+        -Force
+}
+
 Write-Output "Template Specs Created. You can now find them in the Azure Portal in the '$ResourceGroupName' resource group"

@@ -40,7 +40,6 @@ param functionAppDelegatedSubnetResourceId string = ''
 
 @description('Optional. Private DNS Zone resource IDs. Required if privateEndpoint is true.')
 param azureBlobPrivateDnsZoneResourceId string = ''
-param azureFilePrivateDnsZoneResourceId string = ''
 param azureFunctionAppPrivateDnsZoneResourceId string = ''
 param azureQueuePrivateDnsZoneResourceId string = ''
 param azureTablePrivateDnsZoneResourceId string = ''
@@ -133,18 +132,6 @@ var appServicePlanName = replace(
 // Generate unique identifiers for resource naming
 var uniqueStringStorage = take(uniqueString(storageResourceGroupId, storageResourceGroupName), 6)
 
-// Resource naming conventions for quota management
-var appInsightsNameConv = replace(
-  replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
-  'LOCATION',
-  functionAppRegionAbbreviation
-)
-var functionAppNameConv = replace(
-  replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
-  'LOCATION',
-  functionAppRegionAbbreviation
-)
-
 // Private endpoint naming conventions
 var privateEndpointNameConv = replace(
   nameConvReversed ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
@@ -161,11 +148,38 @@ var privateEndpointNICNameConv = replace(
 )
 
 // quota management resource names
-var quotaManagementFAStorageAccountName = 'quotamanagement${uniqueStringStorage}'
-var functionAppName = replace(functionAppNameConv, 'TOKEN-', 'quotamanagement-${uniqueStringStorage}-')
-var storageAccountName = quotaManagementFAStorageAccountName
-var appInsightsName = replace(appInsightsNameConv, 'TOKEN-', 'quotamanagement-${uniqueStringStorage}-')
-var encryptionKeyName = '${hpBaseName}-encryption-key-${quotaManagementFAStorageAccountName}'
+var appInsightsName = replace(
+  replace(
+    replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
+    'LOCATION',
+    functionAppRegionAbbreviation
+  ),
+  'TOKEN-',
+  'sqm-${uniqueStringStorage}-'
+)
+var functionAppName = replace(
+  replace(
+    replace(
+      replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
+      'LOCATION',
+      functionAppRegionAbbreviation
+    ),
+    'TOKEN-',
+    'sqm-${uniqueStringStorage}-'
+  ),
+  'LOCATION',
+  functionAppRegionAbbreviation
+)
+var storageAccountName = toLower(replace(
+  replace(
+    replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', functionAppRegionAbbreviation),
+    'TOKEN-',
+    'sqm-${uniqueStringStorage}'
+  ),
+  '-',
+  ''
+))
+var encryptionKeyName = '${hpBaseName}-encryption-key-${storageAccountName}'
 
 // ========== //
 // Resources  //
@@ -192,7 +206,6 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
   params: {
     applicationInsightsName: appInsightsName
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId

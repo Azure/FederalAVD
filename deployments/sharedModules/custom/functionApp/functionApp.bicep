@@ -1,6 +1,5 @@
 param applicationInsightsName string
 param azureBlobPrivateDnsZoneResourceId string
-param azureFilePrivateDnsZoneResourceId string
 param azureFunctionAppPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
 param azureTablePrivateDnsZoneResourceId string
@@ -31,27 +30,22 @@ param serverFarmId string
 param storageAccountName string
 param tags object
 
-
 var cloudSuffix = replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')
 // ensure that private endpoint name and nic name are not longer than 80
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
 
-var peVnetId = length(privateEndpointVnetName) < 37
-  ? privateEndpointVnetName
-  : uniqueString(privateEndpointVnetName)
+var peVnetId = length(privateEndpointVnetName) < 37 ? privateEndpointVnetName : uniqueString(privateEndpointVnetName)
 
 var azureStoragePrivateDnsZoneResourceIds = [
   azureBlobPrivateDnsZoneResourceId
-  azureFilePrivateDnsZoneResourceId
   azureQueuePrivateDnsZoneResourceId
   azureTablePrivateDnsZoneResourceId
 ]
 
 var storageSubResources = [
   'blob'
-  'file'
   'queue'
   'table'
 ]
@@ -79,29 +73,10 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     azureFilesIdentityBasedAuthentication: {
       directoryServiceOptions: 'None'
     }
-    defaultToOAuthAuthentication: false
+    defaultToOAuthAuthentication: true
     dnsEndpointType: 'Standard'
     encryption: {
-      keySource: 'Microsoft.Storage'      
       requireInfrastructureEncryption: true
-      services: {
-        file: {
-          keyType: 'Account'
-          enabled: true
-        }
-        table: {
-          keyType: 'Account'
-          enabled: true
-        }
-        queue: {
-          keyType: 'Account'
-          enabled: true
-        }
-        blob: {
-          keyType: 'Account'
-          enabled: true
-        }
-      }
     }
     largeFileSharesState: 'Disabled'
     minimumTlsVersion: 'TLS1_2'
@@ -118,11 +93,9 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     }
     supportsHttpsTrafficOnly: true
   }
-}
-
-resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2021-09-01' = {
-  parent: storageAccount
-  name: 'default'
+  resource blobService 'blobServices' = {
+    name: 'default'
+  }
 }
 
 resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01' = [
@@ -163,7 +136,7 @@ resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01
 ]
 
 resource privateDnsZoneGroups_storage 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-08-01' = [
-  for i in range(0, length(azureStoragePrivateDnsZoneResourceIds) - 1): if(privateEndpoint && !empty(azureStoragePrivateDnsZoneResourceIds[i])) {
+  for i in range(0, length(azureStoragePrivateDnsZoneResourceIds) - 1): if (privateEndpoint && !empty(azureStoragePrivateDnsZoneResourceIds[i])) {
     parent: privateEndpoints_storage[i]
     name: storageAccount.name
     properties: {
@@ -181,7 +154,7 @@ resource privateDnsZoneGroups_storage 'Microsoft.Network/privateEndpoints/privat
 ]
 
 resource diagnosticSetting_storage_blob 'Microsoft.Insights/diagnosticsettings@2017-05-01-preview' = if (enableApplicationInsights) {
-  scope: blobService
+  scope: storageAccount::blobService
   name: '${storageAccountName}-blob-diagnosticSettings'
   properties: {
     logs: [
@@ -205,14 +178,17 @@ module customerManagedKeys_StorageAccount 'customManagedKeys.bicep' = if (keyMan
   name: 'cmk-storageAccount-${deploymentSuffix}'
   params: {
     storageAccountName: storageAccount.name
-    encryptionKeyName: encryptionKeyName    
+    storageAccountSku: storageAccount.sku
+    encryptionKeyName: encryptionKeyName
     hostPoolResourceId: hostPoolResourceId
     deploymentSuffix: deploymentSuffix
     keyManagementStorageAccounts: keyManagementStorageAccounts
     keyVaultResourceId: encryptionKeyVaultResourceId
+    location: location
+    storageAccountKind: storageAccount.kind
+    storageAccountPrincipalId: storageAccount.identity.principalId
   }
   dependsOn: [
-    blobService
     privateEndpoints_storage
     privateDnsZoneGroups_storage
     diagnosticSetting_storage_blob
@@ -310,17 +286,17 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
           {
             name: 'StorageSuffix'
             value: environment().suffixes.storage
-          }          
+          }
           {
             name: 'TenantId'
             value: subscription().tenantId
           }
           {
             name: 'UserAssignedIdentityClientId'
-            value: !empty(functionAppUserAssignedIdentityResourceId) 
-              ? reference(functionAppUserAssignedIdentityResourceId, '2023-01-31').clientId 
+            value: !empty(functionAppUserAssignedIdentityResourceId)
+              ? reference(functionAppUserAssignedIdentityResourceId, '2023-01-31').clientId
               : ''
-          }          
+          }
         ],
         enableApplicationInsights
           ? [
@@ -414,7 +390,8 @@ module roleAssignments_resourceGroups '../../resources/authorization/role-assign
   for i in range(0, length(roleAssignments)): if (length(split(roleAssignments[i].scope, '/')) > 3) {
     name: 'set-role-assignment-rg-${i}-${deploymentSuffix}'
     scope: resourceGroup(
-      split(roleAssignments[i].scope, '/')[2], // Extract subscription ID from resource ID
+      split(roleAssignments[i].scope, '/')[2],
+      // Extract subscription ID from resource ID
       last(split(roleAssignments[i].scope, '/')) // Extract resource group name from resource ID
     )
     params: {

@@ -43,7 +43,6 @@ param functionAppDelegatedSubnetResourceId string = ''
 
 @description('Optional. Private DNS Zone resource IDs. Required if privateEndpoint is true.')
 param azureBlobPrivateDnsZoneResourceId string = ''
-param azureFilePrivateDnsZoneResourceId string = ''
 param azureFunctionAppPrivateDnsZoneResourceId string = ''
 param azureQueuePrivateDnsZoneResourceId string = ''
 param azureTablePrivateDnsZoneResourceId string = ''
@@ -86,10 +85,10 @@ param templateSpecVersion string = '1.0.0'
 @description('Optional. Timer schedule for the function app (cron expression). Default is every hour.')
 param timerSchedule string = '0 0 * * * *'
 
-@description('Optional. The target age in days for session hosts before replacement. Default is 45 days.')
-@minValue(1)
+@description('Optional. The target age in days for session hosts before replacement. Default is disabled (0 days).')
+@minValue(0)
 @maxValue(365)
-param targetVMAgeDays int = 45
+param targetVMAgeDays int = 0
 
 @description('Optional. The grace period in hours after draining before deleting session hosts. Default is 24 hours.')
 @minValue(1)
@@ -135,7 +134,7 @@ param scaleUpIncrementPercentage int = 20
 
 @description('Optional. Maximum number of hosts to deploy per run (ceiling constraint). Prevents deploying more than this number even if percentage calculation is higher. Default is 10.')
 @minValue(1)
-@maxValue(50)
+@maxValue(1000)
 param maxDeploymentBatchSize int = 10
 
 @description('Optional. Number of consecutive successful deployment runs required before increasing the deployment percentage. Default is 1.')
@@ -296,7 +295,7 @@ param fslogixContainerType string = 'ProfileContainer'
 param fslogixFileShareNames array = ['profile-containers']
 
 @description('Optional. FSLogix container size in MBs.')
-param fslogixSizeInMBs int = 30000
+param fslogixSizeInMBs int = 30720
 
 @description('Optional. FSLogix storage service.')
 @allowed([
@@ -355,8 +354,11 @@ var locationsObject = loadJsonContent('../../../.common/data/locations.json')
 var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : cloud
 var locations = locationsObject[locationsEnvProperty]
 // the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.
-var graphEndpoint = environment().name == 'AzureUSGovernment' ? 'https://graph.microsoft.us' : startsWith(environment().name, 'us') ? 'https://graph.${environment().suffixes.storage}' : 'https://graph.microsoft.com'
-
+var graphEndpoint = environment().name == 'AzureUSGovernment'
+  ? 'https://graph.microsoft.us'
+  : startsWith(environment().name, 'us')
+      ? 'https://graph.${environment().suffixes.storage}'
+      : 'https://graph.microsoft.com'
 
 var functionAppRegionAbbreviation = locations[location].abbreviation
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
@@ -404,23 +406,9 @@ var appServicePlanName = replace(
   ''
 )
 
-// Resource naming conventions for session host replacer
-var appInsightsNameConv = replace(
-  replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
-  'LOCATION',
-  functionAppRegionAbbreviation
-)
-var functionAppNameConv = replace(
-  replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
-  'LOCATION',
-  functionAppRegionAbbreviation
-)
-
 // Private endpoint naming conventions
 var privateEndpointNameConv = replace(
-  nameConvReversed
-    ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE'
-    : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
+  nameConvReversed ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
   'RESOURCETYPE',
   resourceAbbreviations.privateEndpoints
 )
@@ -434,12 +422,51 @@ var privateEndpointNICNameConv = replace(
 )
 
 // Session host replacer resource names
-var sessionHostReplacerFAStorageAccountName = 'shreplacer${uniqueStringHosts}'
-var functionAppName = replace(functionAppNameConv, 'TOKEN-', 'shreplacer-${uniqueStringHosts}-')
-var storageAccountName = sessionHostReplacerFAStorageAccountName
-var appInsightsName = replace(appInsightsNameConv, 'TOKEN-', 'shreplacer-${uniqueStringHosts}-')
-var encryptionKeyName = '${hpBaseName}-encryption-key-${sessionHostReplacerFAStorageAccountName}'
-var templateSpecNameFinal = !empty(templateSpecName) ? templateSpecName : replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.templateSpecs), 'TOKEN', 'sessionhost'), 'LOCATION', functionAppRegionAbbreviation)
+
+// Resource naming conventions for session host replacer
+var appInsightsName = replace(
+  replace(
+    replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
+    'LOCATION',
+    functionAppRegionAbbreviation
+  ),
+  'TOKEN-',
+  'shr-${uniqueStringHosts}-'
+)
+var functionAppName = replace(
+  replace(
+    replace(
+      replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
+      'LOCATION',
+      functionAppRegionAbbreviation
+    ),
+    'TOKEN-',
+    'shr-${uniqueStringHosts}-'
+  ),
+  'LOCATION',
+  functionAppRegionAbbreviation
+)
+var storageAccountName = toLower(replace(
+  replace(
+    replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', functionAppRegionAbbreviation),
+    'TOKEN-',
+    'shr-${uniqueStringHosts}'
+  ),
+  '-',
+  ''
+))
+var encryptionKeyName = '${hpBaseName}-encryption-key-${storageAccountName}'
+var templateSpecNameFinal = !empty(templateSpecName)
+  ? templateSpecName
+  : replace(
+      replace(
+        replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.templateSpecs),
+        'TOKEN',
+        'sessionhost'
+      ),
+      'LOCATION',
+      functionAppRegionAbbreviation
+    )
 
 // Virtual Machine naming conventions
 var vmNamePrefixWithoutDash = toLower(last(virtualMachineNamePrefix) == '-'
@@ -493,13 +520,15 @@ var sessionHostParameters = {
   fslogixStorageService: fslogixStorageService
   hostPoolResourceId: hostPoolResourceId
   identitySolution: identitySolution
-  imageReference: empty(customImageResourceId) ? {
-    publisher: imagePublisher
-    offer: imageOffer
-    sku: imageSku
-  } : {
-    id: customImageResourceId
-  }
+  imageReference: empty(customImageResourceId)
+    ? {
+        publisher: imagePublisher
+        offer: imageOffer
+        sku: imageSku
+      }
+    : {
+        id: customImageResourceId
+      }
   integrityMonitoring: integrityMonitoring
   intuneEnrollment: intuneEnrollment
   location: virtualMachineResourceGroupLocation
@@ -529,10 +558,7 @@ module templateSpec 'modules/sessionHostTemplateSpec.bicep' = if (empty(sessionH
     location: location
     templateSpecName: templateSpecNameFinal
     templateSpecVersion: templateSpecVersion
-    tags: union(
-      { 'cm-resource-parent': hostPoolResourceId },
-      tags[?'Microsoft.Resources/templateSpecs'] ?? {}
-    )
+    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Resources/templateSpecs'] ?? {})
   }
 }
 
@@ -557,15 +583,14 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     location: location
     applicationInsightsName: appInsightsName
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
     deploymentSuffix: deploymentSuffix
-    enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)    
+    enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)
     encryptionKeyName: encryptionKeyName
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
-    functionAppAppSettings: [      
+    functionAppAppSettings: [
       {
         name: 'GraphEndpoint'
         value: graphEndpoint
@@ -624,7 +649,9 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
       }
       {
         name: 'SessionHostTemplate'
-        value: !empty(sessionHostTemplateSpecVersionResourceId) ? sessionHostTemplateSpecVersionResourceId : templateSpec!.outputs.templateSpecVersionResourceId
+        value: !empty(sessionHostTemplateSpecVersionResourceId)
+          ? sessionHostTemplateSpecVersionResourceId
+          : templateSpec!.outputs.templateSpecVersionResourceId
       }
       {
         name: 'SessionHostParameters'
