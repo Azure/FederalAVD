@@ -207,38 +207,38 @@
 								{
 									"name": "scheduleHours",
 									"type": "Microsoft.Common.DropDown",
-									"label": "Schedule Hours (24-hour format)",
+									"label": "Schedule Hours",
 									"toolTip": "Select the hours when the function should run. You can select multiple hours.",
-									"defaultValue": ["0 (12 AM)", "1 (1 AM)", "2 (2 AM)", "3 (3 AM)", "4 (4 AM)", "5 (5 AM)", "6 (6 AM)", "7 (7 AM)", "8 (8 AM)", "9 (9 AM)", "10 (10 AM)", "11 (11 AM)", "12 (12 PM)", "13 (1 PM)", "14 (2 PM)", "15 (3 PM)", "16 (4 PM)", "17 (5 PM)", "18 (6 PM)", "19 (7 PM)", "20 (8 PM)", "21 (9 PM)", "22 (10 PM)", "23 (11 PM)"],
+									"defaultValue": ["12 AM", "1 AM", "2 AM", "3 AM", "4 AM", "5 AM", "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"],
 									"multiselect": true,
 									"selectAll": true,
 									"constraints": {
 										"required": true,
 										"allowedValues": [
-											{ "label": "0 (12 AM)", "value": "0" },
-											{ "label": "1 (1 AM)", "value": "1" },
-											{ "label": "2 (2 AM)", "value": "2" },
-											{ "label": "3 (3 AM)", "value": "3" },
-											{ "label": "4 (4 AM)", "value": "4" },
-											{ "label": "5 (5 AM)", "value": "5" },
-											{ "label": "6 (6 AM)", "value": "6" },
-											{ "label": "7 (7 AM)", "value": "7" },
-											{ "label": "8 (8 AM)", "value": "8" },
-											{ "label": "9 (9 AM)", "value": "9" },
-											{ "label": "10 (10 AM)", "value": "10" },
-											{ "label": "11 (11 AM)", "value": "11" },
-											{ "label": "12 (12 PM)", "value": "12" },
-											{ "label": "13 (1 PM)", "value": "13" },
-											{ "label": "14 (2 PM)", "value": "14" },
-											{ "label": "15 (3 PM)", "value": "15" },
-											{ "label": "16 (4 PM)", "value": "16" },
-											{ "label": "17 (5 PM)", "value": "17" },
-											{ "label": "18 (6 PM)", "value": "18" },
-											{ "label": "19 (7 PM)", "value": "19" },
-											{ "label": "20 (8 PM)", "value": "20" },
-											{ "label": "21 (9 PM)", "value": "21" },
-											{ "label": "22 (10 PM)", "value": "22" },
-											{ "label": "23 (11 PM)", "value": "23" }
+											{ "label": "12 AM", "value": "0" },
+											{ "label": "1 AM", "value": "1" },
+											{ "label": "2 AM", "value": "2" },
+											{ "label": "3 AM", "value": "3" },
+											{ "label": "4 AM", "value": "4" },
+											{ "label": "5 AM", "value": "5" },
+											{ "label": "6 AM", "value": "6" },
+											{ "label": "7 AM", "value": "7" },
+											{ "label": "8 AM", "value": "8" },
+											{ "label": "9 AM", "value": "9" },
+											{ "label": "10 AM", "value": "10" },
+											{ "label": "11 AM", "value": "11" },
+											{ "label": "12 PM", "value": "12" },
+											{ "label": "1 PM", "value": "13" },
+											{ "label": "2 PM", "value": "14" },
+											{ "label": "3 PM", "value": "15" },
+											{ "label": "4 PM", "value": "16" },
+											{ "label": "5 PM", "value": "17" },
+											{ "label": "6 PM", "value": "18" },
+											{ "label": "7 PM", "value": "19" },
+											{ "label": "8 PM", "value": "20" },
+											{ "label": "9 PM", "value": "21" },
+											{ "label": "10 PM", "value": "22" },
+											{ "label": "11 PM", "value": "23" }
 										]
 									}
 								},
@@ -522,7 +522,7 @@
 									"name": "keyManagementStorageAccounts",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Storage Account Key Management",
-									"defaultValue": "Platform",
+									"defaultValue": "Microsoft-Managed Keys",
 									"toolTip": "Choose between platform-managed or customer-managed keys for storage encryption.",
 									"constraints": {
 										"allowedValues": [
@@ -542,22 +542,26 @@
 									}
 								},
 								{
+									"name": "keyVaultsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(not(empty(steps('basics').scope.subscription)), contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
+									}
+								},
+								{
 									"name": "encryptionKeyVault",
-									"type": "Microsoft.Solutions.ResourceSelector",
+									"type": "Microsoft.Common.DropDown",
 									"visible": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
 									"label": "Encryption Key Vault",
-									"toolTip": "Select the Key Vault containing the customer-managed encryption key.",
-									"resourceType": "Microsoft.KeyVault/vaults",
+									"multiLine": true,
+									"toolTip": "Select the Key Vault containing the customer-managed encryption key. Only Key Vaults in the selected location are shown.",
 									"constraints": {
-										"required": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]"
-									},
-									"options": {
-										"filter": {
-											"subscription": "onBasics",
-											"location": "onBasics"
-										}
+										"required": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.keyVaultsApi.value, (kv) => equals(kv.location, steps('basics').scope.location.name)), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Location: ', kv.location, ' | Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
 									}
-								},								
+								},							
 								{
 									"name": "zeroTrustNetworkingInfoBox",
 									"type": "Microsoft.Common.InfoBox",
@@ -606,6 +610,7 @@
 									"name": "virtualNetwork",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Network",
+									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
 									"multiLine": true,
 									"toolTip": "Select the virtual network to which the function app will be integrated. The list is filtered based on the subscription and location selected on the 'Deployment Basics' page.",
 									"constraints": {
@@ -706,7 +711,7 @@
 										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": true
 									}
-								},								
+								},				
 								{
 									"name": "azureBlobPrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
@@ -930,82 +935,25 @@
 									"defaultValue": "(UTC-05:00) Eastern Time (US & Canada)",
 									"constraints": {
 										"allowedValues": [
-											{
-												"label": "(UTC-10:00) Hawaii",
-												"value": "Hawaiian Standard Time"
-											},
-											{
-												"label": "(UTC-09:00) Alaska",
-												"value": "Alaskan Standard Time"
-											},
-											{
-												"label": "(UTC-08:00) Pacific Time (US & Canada)",
-												"value": "Pacific Standard Time"
-											},
-											{
-												"label": "(UTC-07:00) Arizona",
-												"value": "US Mountain Standard Time"
-											},
-											{
-												"label": "(UTC-07:00) Mountain Time (US & Canada)",
-												"value": "Mountain Standard Time"
-											},
-											{
-												"label": "(UTC-06:00) Central Time (US & Canada)",
-												"value": "Central Standard Time"
-											},
-											{
-												"label": "(UTC-05:00) Eastern Time (US & Canada)",
-												"value": "Eastern Standard Time"
-											},
-											{
-												"label": "(UTC+00:00) Dublin, Edinburgh, Lisbon, London",
-												"value": "GMT Standard Time"
-											},
-											{
-												"label": "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris",
-												"value": "Romance Standard Time"
-											},
-											{
-												"label": "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb",
-												"value": "Central European Standard Time"
-											},
-											{
-												"label": "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague",
-												"value": "Central Europe Standard Time"
-											},
-											{
-												"label": "(UTC+01:00) West Central Africa",
-												"value": "W. Central Africa Standard Time"
-											},
-											{
-												"label": "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna",
-												"value": "W. Europe Standard Time"
-											},
-											{
-												"label": "(UTC+02:00) Jerusalem",
-												"value": "Israel Standard Time"
-											},
-											{
-												"label": "(UTC+03:00) Kuwait, Riyadh",
-												"value": "Arab Standard Time"
-											},
-											{
-												"label": "(UTC+03:00) Nairobi",
-												"value": "E. Africa Standard Time"
-											},
-											{
-												"label": "(UTC+09:00) Osaka, Sapporo, Tokyo",
-												"value": "Tokyo Standard Time"
-											},
-											{
-												"label": "(UTC+09:00) Seoul",
-												"value": "Korea Standard Time"
-											},
-											{
-												"label": "(UTC+10:00) Guam, Port Moresby",
-												"value": "West Pacific Standard Time"
-											}
+											{ "label": "(UTC-10:00) Hawaii", "value": "Hawaiian Standard Time" },
+											{ "label": "(UTC-09:00) Alaska", "value": "Alaskan Standard Time" },
+											{ "label": "(UTC-08:00) Pacific Time (US & Canada)", "value": "Pacific Standard Time" },
+											{ "label": "(UTC-07:00) Arizona", "value": "US Mountain Standard Time" },
+											{ "label": "(UTC-07:00) Mountain Time (US & Canada)", "value": "Mountain Standard Time" },
+											{ "label": "(UTC-06:00) Central Time (US & Canada)", "value": "Central Standard Time" },
+											{ "label": "(UTC-05:00) Eastern Time (US & Canada)", "value": "Eastern Standard Time" },
+											{ "label": "(UTC+00:00) Dublin, Edinburgh, Lisbon, London", "value": "GMT Standard Time" },
+											{ "label": "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris", "value": "Romance Standard Time" },
+											{ "label": "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb", "value": "Central European Standard Time" },
+											{ "label": "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague", "value": "Central Europe Standard Time" },
+											{ "label": "(UTC+01:00) West Central Africa", "value": "W. Central Africa Standard Time" },
+											{ "label": "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna", "value": "W. Europe Standard Time" },
+											{ "label": "(UTC+02:00) Jerusalem", "value": "Israel Standard Time" },
+											{ "label": "(UTC+03:00) Kuwait, Riyadh", "value": "Arab Standard Time" },
+											{ "label": "(UTC+03:00) Nairobi", "value": "E. Africa Standard Time" },
+											{ "label": "(UTC+09:00) Osaka, Sapporo, Tokyo", "value": "Tokyo Standard Time" },
+											{ "label": "(UTC+09:00) Seoul", "value": "Korea Standard Time" },
+											{ "label": "(UTC+10:00) Guam, Port Moresby", "value": "West Pacific Standard Time" }
 										],
 										"required": true
 									},
@@ -2421,7 +2369,7 @@
 							"name": "subscription",
 							"type": "Microsoft.Common.DropDown",
 							"label": "AVD Monitoring Subscription",
-							"defaultValue": "[steps('hosts').scope.subscription.displayName]",
+							"defaultValue": "[steps('basics').scope.subscription.displayName]",
 							"toolTip": "Select the subscription where existing AVD monitoring resources are located",
 							"constraints": {
 								"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
@@ -2602,7 +2550,7 @@
 				"appServicePlanResourceId": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, steps('functionApp').infrastructure.appServicePlan, '')]",
 				"zoneRedundant": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.zoneRedundant, false)]",
 				"keyManagementStorageAccounts": "[steps('functionApp').infrastructure.keyManagementStorageAccounts]",
-				"encryptionKeyVaultResourceId": "[if(contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'), steps('functionApp').infrastructure.encryptionKeyVault.id, '')]",
+				"encryptionKeyVaultResourceId": "[if(contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'), steps('functionApp').infrastructure.encryptionKeyVault, '')]",
 				"privateEndpoint": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
 				"functionAppDelegatedSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppOutboundSubnet, '')]",
 				"privateEndpointSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppPrivateEndpointSubnet, '')]",

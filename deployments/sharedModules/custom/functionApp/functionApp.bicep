@@ -26,6 +26,7 @@ param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
 param privateLinkScopeResourceId string
 param roleAssignments array = []
+param storageAccountRoleDefinitionIds array = []
 param serverFarmId string
 param storageAccountName string
 param tags object
@@ -69,16 +70,26 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     allowBlobPublicAccess: false
     allowCrossTenantReplication: false
     allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
-    allowSharedKeyAccess: false
-    azureFilesIdentityBasedAuthentication: {
-      directoryServiceOptions: 'None'
-    }
+    allowSharedKeyAccess: true
     defaultToOAuthAuthentication: true
     dnsEndpointType: 'Standard'
     encryption: {
       requireInfrastructureEncryption: true
+      services: {
+        table: {
+          keyType: 'Account'
+          enabled: true
+        }
+        queue: {
+          keyType: 'Account'
+          enabled: true
+        }
+        blob: {
+          keyType: 'Account'
+          enabled: true
+        }
+      }
     }
-    largeFileSharesState: 'Disabled'
     minimumTlsVersion: 'TLS1_2'
     networkAcls: {
       bypass: 'AzureServices'
@@ -174,25 +185,16 @@ resource diagnosticSetting_storage_blob 'Microsoft.Insights/diagnosticsettings@2
   }
 }
 
-module customerManagedKeys_StorageAccount 'customManagedKeys.bicep' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
-  name: 'cmk-storageAccount-${deploymentSuffix}'
+module encryptionKey 'encryptionKey.bicep' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
+  name: 'encryptionKey-storageAccount-${deploymentSuffix}'
   params: {
-    storageAccountName: storageAccount.name
-    storageAccountSku: storageAccount.sku
     encryptionKeyName: encryptionKeyName
     hostPoolResourceId: hostPoolResourceId
     deploymentSuffix: deploymentSuffix
     keyManagementStorageAccounts: keyManagementStorageAccounts
     keyVaultResourceId: encryptionKeyVaultResourceId
-    location: location
-    storageAccountKind: storageAccount.kind
     storageAccountPrincipalId: storageAccount.identity.principalId
   }
-  dependsOn: [
-    privateEndpoints_storage
-    privateDnsZoneGroups_storage
-    diagnosticSetting_storage_blob
-  ]
 }
 
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (enableApplicationInsights) {
@@ -201,8 +203,8 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (en
   tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Insights/components'] ?? {})
   properties: {
     Application_Type: 'web'
-    publicNetworkAccessForIngestion: privateEndpoint ? 'Disabled' : null
-    publicNetworkAccessForQuery: privateEndpoint ? 'Disabled' : null
+    publicNetworkAccessForIngestion: empty(privateLinkScopeResourceId) ? null : 'Disabled'
+    publicNetworkAccessForQuery: empty(privateLinkScopeResourceId) ? null : 'Disabled'
     WorkspaceResourceId: logAnalyticsWorkspaceResourceId
   }
   kind: 'web'
@@ -227,7 +229,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
   kind: 'functionapp'
   identity: !empty(functionAppUserAssignedIdentityResourceId)
     ? {
-        type: 'SystemAssigned, UserAssigned'
+        type: 'UserAssigned'
         userAssignedIdentities: {
           '${functionAppUserAssignedIdentityResourceId}': {}
         }
@@ -248,10 +250,20 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
             name: 'AzureWebJobsStorage__blobServiceUri'
             value: 'https://${storageAccount.name}.blob.${environment().suffixes.storage}'
           }
-          {
-            name: 'AzureWebJobsStorage__credential'
-            value: 'managedidentity'
-          }
+        ],
+        empty(functionAppUserAssignedIdentityResourceId)
+        ? []
+        : [
+            {
+              name: 'AzureWebJobsStorage__credential'
+              value: 'managedidentity'
+            }
+            {
+              name: 'AzureWebJobsStorage__clientId'
+              value: reference(functionAppUserAssignedIdentityResourceId, '2023-01-31').clientId
+            }
+        ],
+        [
           {
             name: 'AzureWebJobsStorage__queueServiceUri'
             value: 'https://${storageAccount.name}.queue.${environment().suffixes.storage}'
@@ -315,6 +327,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
           'https://functions-staging.${cloudSuffix}'
           'https://functions.${cloudSuffix}'
         ]
+        supportCredentials: false
       }
       ftpsState: 'Disabled'
       functionAppScaleLimit: 200
@@ -382,6 +395,7 @@ resource privateDnsZoneGroup_functionApp 'Microsoft.Network/privateEndpoints/pri
 }
 
 // Get principal ID from User-Assigned Identity if provided, otherwise use System-Assigned
+// Get the principal ID of the identity being used (user-assigned if provided, otherwise system-assigned)
 var functionAppPrincipalId = !empty(functionAppUserAssignedIdentityResourceId)
   ? reference(functionAppUserAssignedIdentityResourceId, '2023-01-31', 'Full').properties.principalId
   : functionApp.identity.principalId
@@ -414,15 +428,41 @@ module roleAssignments_subscriptions '../../resources/authorization/role-assignm
   }
 ]
 
-module roleAssignment_storageAccount '../../resources/storage/storage-account/rbac.bicep' = {
-  name: 'set-role-assignment-storage-${deploymentSuffix}'
-  params: {
-    principalIds: [functionAppPrincipalId]
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b' // Storage Blob Data Owner
-    storageAccountResourceId: storageAccount.id
+// Storage account role assignments - always include Blob Data Owner, optionally add others
+var storageAccountRoleDefinitions = union(
+  [
+    'b7e6dc6d-f1e8-4753-8033-0f276bb0955b' // Storage Blob Data Owner (always required)
+  ],
+  storageAccountRoleDefinitionIds
+)
+
+module roleAssignment_storageAccount '../../resources/storage/storage-account/rbac.bicep' = [
+  for roleDefinitionId in storageAccountRoleDefinitions: {
+    name: 'set-role-assignment-storage-${uniqueString(roleDefinitionId)}-${deploymentSuffix}'
+    params: {
+      principalIds: [functionAppPrincipalId]
+      principalType: 'ServicePrincipal'
+      roleDefinitionId: roleDefinitionId
+      storageAccountResourceId: storageAccount.id
+    }
   }
+]
+
+// Update storage account with customer managed key encryption. Force this to end to allow time for RBAC to propagate.
+module updateStorageAccount 'updateStorageAccountKey.bicep' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
+  name: 'update-encryptionKey-storageAccount-${deploymentSuffix}'
+  params: {
+    storageAccountName: storageAccount.name
+    storageAccountSku: storageAccount.sku
+    encryptionKeyName: encryptionKey!.outputs.encryptionKeyName
+    keyVaultResourceId: encryptionKeyVaultResourceId
+    location: location
+    storageAccountKind: storageAccount.kind
+  }
+  dependsOn: [
+    functionApp
+  ]
 }
 
 output functionAppName string = functionApp.name
-output functionAppPrincipalId string = functionApp.identity.principalId
+output functionAppPrincipalId string = empty(functionAppUserAssignedIdentityResourceId) ? functionApp.identity.principalId : reference(functionAppUserAssignedIdentityResourceId, '2023-01-31').principalId

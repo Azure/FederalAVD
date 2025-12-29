@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "1118351816737067972"
+      "templateHash": "7457116586248308749"
     },
     "name": "FSLogix Storage Quota Manager Add-On",
     "description": "Automated quota management for FSLogix Azure Files Premium file shares",
@@ -128,9 +128,9 @@
     },
     "timerSchedule": {
       "type": "string",
-      "defaultValue": "0 */60 * * * *",
+      "defaultValue": "0 */15 * * * *",
       "metadata": {
-        "description": "Optional. Timer schedule for the function app (cron expression). Default is every 60 minutes."
+        "description": "Optional. Timer schedule for the function app (cron expression). Default is every 15 minutes."
       }
     }
   },
@@ -421,9 +421,8 @@
       "workspaces": "vdws",
       "imageDefinitions": "vmid"
     },
-    "$fxv#2": "# This file enables modules to be automatically managed by the Functions service.\r\n# See https://aka.ms/functionsmanageddependency for additional information.\r\n#\r\n@{\r\n    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. \r\n    # To use the Az module in your function app, please uncomment the line below.\r\n    # 'Az' = '7.*'\r\n}",
-    "$fxv#3": "param($Timer)\r\n\r\ntry\r\n{\r\n\t[string]$ResourceGroupName = $env:ResourceGroupName\r\n\t[string]$ResourceManagerUrl = $env:ResourceManagerUrl\r\n\t[string]$StorageSuffix = $env:StorageSuffix\r\n\t[string]$SubscriptionId = $env:SubscriptionId\r\n\r\n\t$ErrorActionPreference = 'Stop'\r\n\t$WarningPreference = 'SilentlyContinue'\r\n\r\n\t#region Functions\r\n\tfunction Write-Log \r\n    {\r\n\t\t[CmdletBinding()]\r\n\t\tparam (\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Err,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$Message,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$ResourceName,\r\n\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Warn\r\n\t\t)\r\n\r\n\t\t[string]$MessageTimeStamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\r\n\t\t$Message = \"[$($MyInvocation.ScriptLineNumber)] [$($ResourceName)] $Message\"\r\n\t\t[string]$WriteMessage = \"[$($MessageTimeStamp)] $Message\"\r\n\r\n\t\tif ($Err)\r\n        {\r\n\t\t\tWrite-Error $WriteMessage\r\n\t\t\t$Message = \"ERROR: $Message\"\r\n\t\t}\r\n\t\telseif ($Warn)\r\n        {\r\n\t\t\tWrite-Warning $WriteMessage\r\n\t\t\t$Message = \"WARN: $Message\"\r\n\t\t}\r\n\t\telse \r\n        {\r\n\t\t\tWrite-Output $WriteMessage\r\n\t\t}\r\n\t}\r\n\t#endregion Functions\r\n\r\n\t# Note: https://stackoverflow.com/questions/41674518/powershell-setting-security-protocol-to-tls-1-2\r\n\t[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n\r\n\t#region Azure Authentication\r\n    $AccessToken = $null\r\n    try\r\n    {\r\n\t\t$TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUrl + '&api-version=2019-08-01'\r\n\t\t$TokenResponse = Invoke-RestMethod -Method Get -Headers @{\"X-IDENTITY-HEADER\"=\"$env:IDENTITY_HEADER\"} -Uri $TokenAuthURI\r\n\t\t$AccessToken = $TokenResponse.access_token\r\n\t\t$Header = @{\r\n\t\t\t'Content-Type'='application/json'\r\n\t\t\t'Authorization'='Bearer ' + $AccessToken\r\n\t\t}\r\n    }\r\n    catch\r\n    {\r\n        throw [System.Exception]::new('Failed to authenticate Azure with application ID, tenant ID, subscription ID', $PSItem.Exception)\r\n    }\r\n    Write-Log -ResourceName \"$SubscriptionId\" -Message \"Successfully authenticated with Azure using a managed identity\"\r\n\t#endregion Azure Authentication\r\n\r\n\t# Get storage accounts\r\n\t$Uri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01'\r\n\t$StorageAccountNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Uri).value.name\r\n\r\n\tforeach($StorageAccountName in $StorageAccountNames)\r\n\t{\r\n\t\t$Shares = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares?api-version=2023-05-01'\r\n\t\t$ExistingShareNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Shares).value.name\r\n\t\tForEach($ShareName in $ExistingShareNames)\r\n\t\t{\r\n\t\t\t$ShareUpdateUri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01'\r\n\r\n\t\t\t# Get file share info\r\n\t\t\t$ShareGetUri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01&$expand=stats'\r\n\t\t\t$PFS = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $ShareGetUri).properties\r\n\t\r\n\t\t\t# Set variables for provisioned capacity and used capacity\r\n\t\t\t$ProvisionedCapacity = $PFS.shareQuota\r\n\t\t\t$UsedCapacity = $PFS.ShareUsageBytes\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Capacity: $($ProvisionedCapacity)GB\"\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage: $([math]::Round($UsedCapacity/1GB, 0))GB\"\r\n\t\r\n\t\t\t# GB Based Scaling\r\n\t\t\t# No scaling if no usage\r\n\t\t\tif($UsedCapacity -eq 0)\r\n\t\t\t{\r\n\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is 0GB. No Changes.\"\r\n\t\t\t}\r\n\t\t\t# Slow scaling up to 500GB\r\n\t\t\t# Increases share quota by 100GB if less than 50GB remains on the share\r\n\t\t\t# This allows time for an AVD Stamp to be rolled out \r\n\t\t\telseif ($ProvisionedCapacity -lt 500)\r\n\t\t\t{\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2,30)))) -lt 50) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 50GB. Increasing the file share quota by 100GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 100\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota}} | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 50GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t\t# Aggressive scaling\r\n\t\t\t# Increases share quota by 500GB if less than 500GB remains on the share\r\n\t\t\t# This ensures plenty of space is available during mass onboarding\r\n\t\t\telse \r\n\t\t\t{\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2,30)))) -lt 500) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 500GB. Increasing the file share quota by 500GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 500\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota}} | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 500GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t}\r\n\t}\r\n}\r\ncatch \r\n{\r\n\t$ErrContainer = $PSItem\r\n\t# $ErrContainer = $_\r\n\r\n\t[string]$ErrMsg = $ErrContainer | Format-List -Force | Out-String\r\n\t$ErrMsg += \"Version: $Version`n\"\r\n\r\n\tif (Get-Command 'Write-Log' -ErrorAction:SilentlyContinue)\r\n    {\r\n\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Err -Message $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\telse\r\n    {\r\n\t\tWrite-Error $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\r\n\tthrow [System.Exception]::new($ErrMsg, $ErrContainer.Exception)\r\n}",
-    "$fxv#4": "# Authentication is provided in the script",
+    "$fxv#2": "param($Timer)\r\n\r\ntry\r\n{\r\n\t[string]$ResourceGroupName = $env:ResourceGroupName\r\n\t[string]$ResourceManagerUrl = $env:ResourceManagerUrl\r\n\t[string]$StorageSuffix = $env:StorageSuffix\r\n\t[string]$SubscriptionId = $env:SubscriptionId\r\n\r\n\t$ErrorActionPreference = 'Stop'\r\n\t$WarningPreference = 'SilentlyContinue'\r\n\r\n\t#region Functions\r\n\tfunction Write-Log \r\n    {\r\n\t\t[CmdletBinding()]\r\n\t\tparam (\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Err,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$Message,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$ResourceName,\r\n\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Warn\r\n\t\t)\r\n\r\n\t\t[string]$MessageTimeStamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\r\n\t\t$Message = \"[$($MyInvocation.ScriptLineNumber)] [$($ResourceName)] $Message\"\r\n\t\t[string]$WriteMessage = \"[$($MessageTimeStamp)] $Message\"\r\n\r\n\t\tif ($Err)\r\n        {\r\n\t\t\tWrite-Error $WriteMessage\r\n\t\t\t$Message = \"ERROR: $Message\"\r\n\t\t}\r\n\t\telseif ($Warn)\r\n        {\r\n\t\t\tWrite-Warning $WriteMessage\r\n\t\t\t$Message = \"WARN: $Message\"\r\n\t\t}\r\n\t\telse \r\n        {\r\n\t\t\tWrite-Output $WriteMessage\r\n\t\t}\r\n\t}\r\n\t#endregion Functions\r\n\r\n\t# Note: https://stackoverflow.com/questions/41674518/powershell-setting-security-protocol-to-tls-1-2\r\n\t[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n\t#region Azure Authentication\r\n    $AccessToken = $null\r\n    try\r\n    {\r\n\t\t$TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUrl + '&api-version=2019-08-01'\r\n\t\t$TokenResponse = Invoke-RestMethod -Method Get -Headers @{\"X-IDENTITY-HEADER\"=\"$env:IDENTITY_HEADER\"} -Uri $TokenAuthURI\r\n\t\t$AccessToken = $TokenResponse.access_token\r\n\t\t$Header = @{\r\n\t\t\t'Content-Type'='application/json'\r\n\t\t\t'Authorization'='Bearer ' + $AccessToken\r\n\t\t}\r\n    }\r\n    catch\r\n    {\r\n        throw [System.Exception]::new('Failed to authenticate Azure with application ID, tenant ID, subscription ID', $PSItem.Exception)\r\n    }\r\n    Write-Log -ResourceName \"$SubscriptionId\" -Message \"Successfully authenticated with Azure using a managed identity\"\r\n\t#endregion Azure Authentication\r\n\r\n\t# Get storage accounts\r\n\t$Uri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01'\r\n\t$StorageAccountNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Uri).value.name\r\n\r\n\tforeach($StorageAccountName in $StorageAccountNames)\r\n\t{\r\n\t\t$Shares = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares?api-version=2023-05-01'\r\n\t\t$ExistingShareNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Shares).value.name\r\n\t\tForEach($ShareName in $ExistingShareNames)\r\n\t\t{\r\n\t\t\t$ShareUpdateUri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01'\r\n\r\n\t\t\t# Get file share info\r\n\t\t\t$ShareGetUri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01&$expand=stats'\r\n\t\t\t$PFS = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $ShareGetUri).properties\r\n\t\r\n\t\t\t# Set variables for provisioned capacity and used capacity\r\n\t\t\t$ProvisionedCapacity = $PFS.shareQuota\r\n\t\t\t$UsedCapacity = $PFS.ShareUsageBytes\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Capacity: $($ProvisionedCapacity)GB\"\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage: $([math]::Round($UsedCapacity/1GB, 0))GB\"\r\n\t\r\n\t\t\t# GB Based Scaling\r\n\t\t\t# No scaling if no usage\r\n\t\t\tif($UsedCapacity -eq 0)\r\n\t\t\t{\r\n\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is 0GB. No Changes.\"\r\n\t\t\t}\r\n\t\t\t# Slow scaling up to 500GB\r\n\t\t\t# Increases share quota by 100GB if less than 50GB remains on the share\r\n\t\t\t# This allows time for an AVD Stamp to be rolled out \r\n\t\t\telseif ($ProvisionedCapacity -lt 500)\r\n\t\t\t{\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2,30)))) -lt 50) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 50GB. Increasing the file share quota by 100GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 100\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota}} | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 50GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t\t# Aggressive scaling\r\n\t\t\t# Increases share quota by 500GB if less than 500GB remains on the share\r\n\t\t\t# This ensures plenty of space is available during mass onboarding\r\n\t\t\telse \r\n\t\t\t{\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2,30)))) -lt 500) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 500GB. Increasing the file share quota by 500GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 500\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota}} | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 500GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t}\r\n\t}\r\n}\r\ncatch \r\n{\r\n\t$ErrContainer = $PSItem\r\n\t# $ErrContainer = $_\r\n\r\n\t[string]$ErrMsg = $ErrContainer | Format-List -Force | Out-String\r\n\t$ErrMsg += \"Version: $Version`n\"\r\n\r\n\tif (Get-Command 'Write-Log' -ErrorAction:SilentlyContinue)\r\n    {\r\n\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Err -Message $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\telse\r\n    {\r\n\t\tWrite-Error $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\r\n\tthrow [System.Exception]::new($ErrMsg, $ErrContainer.Exception)\r\n}",
+    "$fxv#3": "# This file enables modules to be automatically managed by the Functions service.\r\n# See https://aka.ms/functionsmanageddependency for additional information.\r\n#\r\n@{\r\n    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. \r\n    # To use the Az module in your function app, uncomment the line below.\r\n    # 'Az' = '17.*'\r\n}\r\n",
     "deploymentSuffix": "[uniqueString(resourceGroup().id, deployment().name)]",
     "storageSubscriptionId": "[split(parameters('storageResourceGroupId'), '/')[2]]",
     "storageResourceGroupName": "[split(parameters('storageResourceGroupId'), '/')[4]]",
@@ -482,7 +481,7 @@
             "value": "[variables('appServicePlanName')]"
           },
           "planPricing": {
-            "value": "PremiumV3_P0v3"
+            "value": "PremiumV3_P1v3"
           },
           "tags": {
             "value": "[parameters('tags')]"
@@ -682,7 +681,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "11938874505241407788"
+              "templateHash": "7798609522584444460"
             }
           },
           "parameters": {
@@ -762,6 +761,10 @@
               "type": "array",
               "defaultValue": []
             },
+            "storageAccountRoleDefinitionIds": {
+              "type": "array",
+              "defaultValue": []
+            },
             "serverFarmId": {
               "type": "string"
             },
@@ -785,7 +788,8 @@
               "blob",
               "queue",
               "table"
-            ]
+            ],
+            "storageAccountRoleDefinitions": "[union(createArray('b7e6dc6d-f1e8-4753-8033-0f276bb0955b'), parameters('storageAccountRoleDefinitionIds'))]"
           },
           "resources": [
             {
@@ -812,16 +816,26 @@
                 "allowBlobPublicAccess": false,
                 "allowCrossTenantReplication": false,
                 "allowedCopyScope": "[if(parameters('privateEndpoint'), 'PrivateLink', 'AAD')]",
-                "allowSharedKeyAccess": false,
-                "azureFilesIdentityBasedAuthentication": {
-                  "directoryServiceOptions": "None"
-                },
+                "allowSharedKeyAccess": true,
                 "defaultToOAuthAuthentication": true,
                 "dnsEndpointType": "Standard",
                 "encryption": {
-                  "requireInfrastructureEncryption": true
+                  "requireInfrastructureEncryption": true,
+                  "services": {
+                    "table": {
+                      "keyType": "Account",
+                      "enabled": true
+                    },
+                    "queue": {
+                      "keyType": "Account",
+                      "enabled": true
+                    },
+                    "blob": {
+                      "keyType": "Account",
+                      "enabled": true
+                    }
+                  }
                 },
-                "largeFileSharesState": "Disabled",
                 "minimumTlsVersion": "TLS1_2",
                 "networkAcls": {
                   "bypass": "AzureServices",
@@ -927,8 +941,8 @@
               "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/components'), createObject()))]",
               "properties": {
                 "Application_Type": "web",
-                "publicNetworkAccessForIngestion": "[if(parameters('privateEndpoint'), 'Disabled', null())]",
-                "publicNetworkAccessForQuery": "[if(parameters('privateEndpoint'), 'Disabled', null())]",
+                "publicNetworkAccessForIngestion": "[if(empty(parameters('privateLinkScopeResourceId')), null(), 'Disabled')]",
+                "publicNetworkAccessForQuery": "[if(empty(parameters('privateLinkScopeResourceId')), null(), 'Disabled')]",
                 "WorkspaceResourceId": "[parameters('logAnalyticsWorkspaceResourceId')]"
               },
               "kind": "web"
@@ -940,7 +954,7 @@
               "location": "[parameters('location')]",
               "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Web/sites'), createObject()))]",
               "kind": "functionapp",
-              "identity": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), createObject('type', 'SystemAssigned, UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('functionAppUserAssignedIdentityResourceId')), createObject())), createObject('type', 'SystemAssigned'))]",
+              "identity": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('functionAppUserAssignedIdentityResourceId')), createObject())), createObject('type', 'SystemAssigned'))]",
               "properties": {
                 "clientAffinityEnabled": false,
                 "httpsOnly": true,
@@ -948,14 +962,15 @@
                 "serverFarmId": "[parameters('serverFarmId')]",
                 "siteConfig": {
                   "alwaysOn": true,
-                  "appSettings": "[union(createArray(createObject('name', 'AzureWebJobsStorage__blobServiceUri', 'value', format('https://{0}.blob.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'AzureWebJobsStorage__credential', 'value', 'managedidentity'), createObject('name', 'AzureWebJobsStorage__queueServiceUri', 'value', format('https://{0}.queue.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'AzureWebJobsStorage__tableServiceUri', 'value', format('https://{0}.table.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_LOAD_USER_PROFILE', 'value', '1'), createObject('name', 'EnvironmentName', 'value', environment().name), createObject('name', 'ResourceManagerUrl', 'value', if(endsWith(environment().resourceManager, '/'), environment().resourceManager, format('{0}/', environment().resourceManager))), createObject('name', 'StorageSuffix', 'value', environment().suffixes.storage), createObject('name', 'TenantId', 'value', subscription().tenantId), createObject('name', 'UserAssignedIdentityClientId', 'value', if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(parameters('functionAppUserAssignedIdentityResourceId'), '2023-01-31').clientId, ''))), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString)), createArray()), parameters('functionAppAppSettings'))]",
+                  "appSettings": "[union(createArray(createObject('name', 'AzureWebJobsStorage__blobServiceUri', 'value', format('https://{0}.blob.{1}', parameters('storageAccountName'), environment().suffixes.storage))), if(empty(parameters('functionAppUserAssignedIdentityResourceId')), createArray(), createArray(createObject('name', 'AzureWebJobsStorage__credential', 'value', 'managedidentity'), createObject('name', 'AzureWebJobsStorage__clientId', 'value', reference(parameters('functionAppUserAssignedIdentityResourceId'), '2023-01-31').clientId))), createArray(createObject('name', 'AzureWebJobsStorage__queueServiceUri', 'value', format('https://{0}.queue.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'AzureWebJobsStorage__tableServiceUri', 'value', format('https://{0}.table.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_LOAD_USER_PROFILE', 'value', '1'), createObject('name', 'EnvironmentName', 'value', environment().name), createObject('name', 'ResourceManagerUrl', 'value', if(endsWith(environment().resourceManager, '/'), environment().resourceManager, format('{0}/', environment().resourceManager))), createObject('name', 'StorageSuffix', 'value', environment().suffixes.storage), createObject('name', 'TenantId', 'value', subscription().tenantId), createObject('name', 'UserAssignedIdentityClientId', 'value', if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(parameters('functionAppUserAssignedIdentityResourceId'), '2023-01-31').clientId, ''))), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString)), createArray()), parameters('functionAppAppSettings'))]",
                   "cors": {
                     "allowedOrigins": [
                       "[format('{0}', environment().portal)]",
                       "[format('https://functions-next.{0}', variables('cloudSuffix'))]",
                       "[format('https://functions-staging.{0}', variables('cloudSuffix'))]",
                       "[format('https://functions.{0}', variables('cloudSuffix'))]"
-                    ]
+                    ],
+                    "supportCredentials": false
                   },
                   "ftpsState": "Disabled",
                   "functionAppScaleLimit": 200,
@@ -1025,19 +1040,13 @@
               "condition": "[not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('cmk-storageAccount-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
                 },
                 "mode": "Incremental",
                 "parameters": {
-                  "storageAccountName": {
-                    "value": "[parameters('storageAccountName')]"
-                  },
-                  "storageAccountSku": {
-                    "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').sku]"
-                  },
                   "encryptionKeyName": {
                     "value": "[parameters('encryptionKeyName')]"
                   },
@@ -1053,12 +1062,6 @@
                   "keyVaultResourceId": {
                     "value": "[parameters('encryptionKeyVaultResourceId')]"
                   },
-                  "location": {
-                    "value": "[parameters('location')]"
-                  },
-                  "storageAccountKind": {
-                    "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').kind]"
-                  },
                   "storageAccountPrincipalId": {
                     "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').identity.principalId]"
                   }
@@ -1070,7 +1073,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "17422580412540968380"
+                      "templateHash": "10336362930989115154"
                     }
                   },
                   "parameters": {
@@ -1087,20 +1090,8 @@
                       "type": "int",
                       "defaultValue": 180
                     },
-                    "location": {
-                      "type": "string"
-                    },
-                    "storageAccountKind": {
-                      "type": "string"
-                    },
-                    "storageAccountName": {
-                      "type": "string"
-                    },
                     "storageAccountPrincipalId": {
                       "type": "string"
-                    },
-                    "storageAccountSku": {
-                      "type": "object"
                     },
                     "encryptionKeyName": {
                       "type": "string"
@@ -1116,33 +1107,10 @@
                   },
                   "resources": [
                     {
-                      "type": "Microsoft.Storage/storageAccounts",
-                      "apiVersion": "2024-01-01",
-                      "name": "[parameters('storageAccountName')]",
-                      "location": "[parameters('location')]",
-                      "sku": "[parameters('storageAccountSku')]",
-                      "kind": "[parameters('storageAccountKind')]",
-                      "identity": {
-                        "type": "SystemAssigned"
-                      },
-                      "properties": {
-                        "encryption": {
-                          "keySource": "Microsoft.KeyVault",
-                          "keyvaultproperties": {
-                            "keyname": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.name.value]",
-                            "keyvaulturi": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSubscriptionId'), variables('keyVaultResourceGroup')), 'Microsoft.KeyVault/vaults', variables('keyVaultName')), '2024-11-01').vaultUri]"
-                          }
-                        }
-                      },
-                      "dependsOn": [
-                        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('RA-Encryption-Key-{0}', parameters('deploymentSuffix')))]",
-                        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix')))]"
-                      ]
-                    },
-                    {
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
                       "name": "[format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))]",
+                      "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -1295,6 +1263,7 @@
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
                       "name": "[format('RA-Encryption-Key-{0}', parameters('deploymentSuffix'))]",
+                      "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -1367,13 +1336,16 @@
                         }
                       }
                     }
-                  ]
+                  ],
+                  "outputs": {
+                    "encryptionKeyName": {
+                      "type": "string",
+                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSubscriptionId'), variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.name.value]"
+                    }
+                  }
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default'), 'microsoft.insights/diagnosticSettings', format('{0}-blob-diagnosticSettings', parameters('storageAccountName')))]",
-                "privateDnsZoneGroups_storage",
-                "privateEndpoints_storage",
                 "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
               ]
             },
@@ -1744,9 +1716,13 @@
               ]
             },
             {
+              "copy": {
+                "name": "roleAssignment_storageAccount",
+                "count": "[length(variables('storageAccountRoleDefinitions'))]"
+              },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('set-role-assignment-storage-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('set-role-assignment-storage-{0}-{1}', uniqueString(variables('storageAccountRoleDefinitions')[copyIndex()]), parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -1762,7 +1738,7 @@
                     "value": "ServicePrincipal"
                   },
                   "roleDefinitionId": {
-                    "value": "b7e6dc6d-f1e8-4753-8033-0f276bb0955b"
+                    "value": "[variables('storageAccountRoleDefinitions')[copyIndex()]]"
                   },
                   "storageAccountResourceId": {
                     "value": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
@@ -1815,6 +1791,101 @@
                 "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
               ]
+            },
+            {
+              "condition": "[not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('update-encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "storageAccountName": {
+                    "value": "[parameters('storageAccountName')]"
+                  },
+                  "storageAccountSku": {
+                    "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').sku]"
+                  },
+                  "encryptionKeyName": {
+                    "value": "[reference(resourceId('Microsoft.Resources/deployments', format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyName.value]"
+                  },
+                  "keyVaultResourceId": {
+                    "value": "[parameters('encryptionKeyVaultResourceId')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "storageAccountKind": {
+                    "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').kind]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.39.26.7824",
+                      "templateHash": "12429090756099729016"
+                    }
+                  },
+                  "parameters": {
+                    "keyVaultResourceId": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "storageAccountKind": {
+                      "type": "string"
+                    },
+                    "storageAccountName": {
+                      "type": "string"
+                    },
+                    "storageAccountSku": {
+                      "type": "object"
+                    },
+                    "encryptionKeyName": {
+                      "type": "string"
+                    }
+                  },
+                  "variables": {
+                    "keyVaultName": "[last(split(parameters('keyVaultResourceId'), '/'))]",
+                    "keyVaultSubscriptionId": "[split(parameters('keyVaultResourceId'), '/')[2]]",
+                    "keyVaultResourceGroup": "[split(parameters('keyVaultResourceId'), '/')[4]]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Storage/storageAccounts",
+                      "apiVersion": "2024-01-01",
+                      "name": "[parameters('storageAccountName')]",
+                      "location": "[parameters('location')]",
+                      "sku": "[parameters('storageAccountSku')]",
+                      "kind": "[parameters('storageAccountKind')]",
+                      "identity": {
+                        "type": "SystemAssigned"
+                      },
+                      "properties": {
+                        "encryption": {
+                          "keySource": "Microsoft.KeyVault",
+                          "keyvaultproperties": {
+                            "keyname": "[parameters('encryptionKeyName')]",
+                            "keyvaulturi": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSubscriptionId'), variables('keyVaultResourceGroup')), 'Microsoft.KeyVault/vaults', variables('keyVaultName')), '2024-11-01').vaultUri]"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix')))]",
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+              ]
             }
           ],
           "outputs": {
@@ -1824,7 +1895,7 @@
             },
             "functionAppPrincipalId": {
               "type": "string",
-              "value": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId]"
+              "value": "[if(empty(parameters('functionAppUserAssignedIdentityResourceId')), reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId, reference(parameters('functionAppUserAssignedIdentityResourceId'), '2023-01-31').principalId)]"
             }
           }
         }
@@ -1845,9 +1916,9 @@
         "parameters": {
           "files": {
             "value": {
-              "requirements.psd1": "[variables('$fxv#2')]",
-              "run.ps1": "[variables('$fxv#3')]",
-              "../profile.ps1": "[variables('$fxv#4')]"
+              "run.ps1": "[variables('$fxv#2')]",
+              "../profile.ps1": "# Authentication is provided in the script",
+              "../requirements.psd1": "[variables('$fxv#3')]"
             }
           },
           "functionAppName": {
@@ -1867,7 +1938,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "9941449007602364002"
+              "templateHash": "14546807957848619661"
             }
           },
           "parameters": {
@@ -1884,24 +1955,19 @@
               "type": "string"
             }
           },
+          "variables": {
+            "functionJson": "      {\r\n        \"bindings\": [\r\n          {\r\n            \"type\": \"timerTrigger\",\r\n            \"direction\": \"in\",\r\n            \"name\": \"Timer\",\r\n            \"schedule\": \"<schedule>\"\r\n          }\r\n        ]\r\n      }\r\n      ",
+            "filesWithFunctionJson": "[union(parameters('files'), createObject('function.json', replace(variables('functionJson'), '<schedule>', parameters('schedule'))))]"
+          },
           "resources": [
             {
               "type": "Microsoft.Web/sites/functions",
               "apiVersion": "2020-12-01",
               "name": "[format('{0}/{1}', parameters('functionAppName'), parameters('functionName'))]",
               "properties": {
-                "config": {
-                  "disabled": false,
-                  "bindings": [
-                    {
-                      "name": "Timer",
-                      "type": "timerTrigger",
-                      "direction": "in",
-                      "schedule": "[parameters('schedule')]"
-                    }
-                  ]
-                },
-                "files": "[parameters('files')]"
+                "language": "PowerShell",
+                "files": "[variables('filesWithFunctionJson')]",
+                "script_root_path_href": ""
               }
             }
           ]

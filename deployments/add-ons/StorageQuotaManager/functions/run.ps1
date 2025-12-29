@@ -52,7 +52,6 @@ try
 	# Note: https://stackoverflow.com/questions/41674518/powershell-setting-security-protocol-to-tls-1-2
 	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-
 	#region Azure Authentication
     $AccessToken = $null
     try

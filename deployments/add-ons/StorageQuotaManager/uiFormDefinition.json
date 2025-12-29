@@ -3,7 +3,7 @@
 	"view": {
 		"kind": "Form",
 		"properties": {
-			"title": "Azure Virtual Desktop Session Host Replacer",
+			"title": "Premium Azure Files Storage Account Quota Management",
 			"steps": [
 				{
 					"name": "basics",
@@ -153,182 +153,7 @@
 										"allowedValues": "[map(filter(filter(steps('functionApp').executionSettings.resourceGroupsApi.value, (rg) => and(contains(rg.name, 'storage'), not(empty(rg.tags)))), (rg) => not(empty(rg.tags.cm-resource-parent))), (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"hostPool: ', last(split(rg.tags.cm-resource-parent, '/')), '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
 										"required": true
 									}
-								},
-								{
-									"name": "scheduleTextBlock",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Configure the execution schedule and session host lifecycle management settings."
-									}
-								},
-								{
-									"name": "scheduleInfoBox",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"text": "The function will run at the selected hours on the selected days of the week. For example, selecting hours 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 and Monday-Friday will run the function every hour from 8 AM to 5 PM on weekdays only. The schedule uses the timezone selected in the 'Session Hosts' blade.",
-										"style": "Info"
-									}
-								},
-								{
-									"name": "scheduleHours",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Schedule Hours (24-hour format)",
-									"toolTip": "Select the hours when the function should run. You can select multiple hours.",
-									"defaultValue": ["0 (12 AM)", "1 (1 AM)", "2 (2 AM)", "3 (3 AM)", "4 (4 AM)", "5 (5 AM)", "6 (6 AM)", "7 (7 AM)", "8 (8 AM)", "9 (9 AM)", "10 (10 AM)", "11 (11 AM)", "12 (12 PM)", "13 (1 PM)", "14 (2 PM)", "15 (3 PM)", "16 (4 PM)", "17 (5 PM)", "18 (6 PM)", "19 (7 PM)", "20 (8 PM)", "21 (9 PM)", "22 (10 PM)", "23 (11 PM)"],
-									"multiselect": true,
-									"selectAll": true,
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "0 (12 AM)",
-												"value": "0"
-											},
-											{
-												"label": "1 (1 AM)",
-												"value": "1"
-											},
-											{
-												"label": "2 (2 AM)",
-												"value": "2"
-											},
-											{
-												"label": "3 (3 AM)",
-												"value": "3"
-											},
-											{
-												"label": "4 (4 AM)",
-												"value": "4"
-											},
-											{
-												"label": "5 (5 AM)",
-												"value": "5"
-											},
-											{
-												"label": "6 (6 AM)",
-												"value": "6"
-											},
-											{
-												"label": "7 (7 AM)",
-												"value": "7"
-											},
-											{
-												"label": "8 (8 AM)",
-												"value": "8"
-											},
-											{
-												"label": "9 (9 AM)",
-												"value": "9"
-											},
-											{
-												"label": "10 (10 AM)",
-												"value": "10"
-											},
-											{
-												"label": "11 (11 AM)",
-												"value": "11"
-											},
-											{
-												"label": "12 (12 PM)",
-												"value": "12"
-											},
-											{
-												"label": "13 (1 PM)",
-												"value": "13"
-											},
-											{
-												"label": "14 (2 PM)",
-												"value": "14"
-											},
-											{
-												"label": "15 (3 PM)",
-												"value": "15"
-											},
-											{
-												"label": "16 (4 PM)",
-												"value": "16"
-											},
-											{
-												"label": "17 (5 PM)",
-												"value": "17"
-											},
-											{
-												"label": "18 (6 PM)",
-												"value": "18"
-											},
-											{
-												"label": "19 (7 PM)",
-												"value": "19"
-											},
-											{
-												"label": "20 (8 PM)",
-												"value": "20"
-											},
-											{
-												"label": "21 (9 PM)",
-												"value": "21"
-											},
-											{
-												"label": "22 (10 PM)",
-												"value": "22"
-											},
-											{
-												"label": "23 (11 PM)",
-												"value": "23"
-											}
-										]
-									}
-								},
-								{
-									"name": "scheduleDaysOfWeek",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Days of Week",
-									"toolTip": "Select which days of the week the function should run.",
-									"defaultValue": [
-										"Sunday",
-										"Monday",
-										"Tuesday",
-										"Wednesday",
-										"Thursday",
-										"Friday",
-										"Saturday"
-									],
-									"multiselect": true,
-									"selectAll": true,
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Sunday",
-												"value": "0"
-											},
-											{
-												"label": "Monday",
-												"value": "1"
-											},
-											{
-												"label": "Tuesday",
-												"value": "2"
-											},
-											{
-												"label": "Wednesday",
-												"value": "3"
-											},
-											{
-												"label": "Thursday",
-												"value": "4"
-											},
-											{
-												"label": "Friday",
-												"value": "5"
-											},
-											{
-												"label": "Saturday",
-												"value": "6"
-											}
-										]
-									}
-								}
+								}								
 							]
 						},
 						{
@@ -381,7 +206,7 @@
 									"name": "keyManagementStorageAccounts",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Storage Account Key Management",
-									"defaultValue": "Platform",
+									"defaultValue": "Microsoft-Managed Keys",
 									"toolTip": "Choose between platform-managed or customer-managed keys for storage encryption.",
 									"constraints": {
 										"allowedValues": [
@@ -401,20 +226,24 @@
 									}
 								},
 								{
+									"name": "keyVaultsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(not(empty(steps('basics').scope.subscription)), contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
+									}
+								},
+								{
 									"name": "encryptionKeyVault",
-									"type": "Microsoft.Solutions.ResourceSelector",
+									"type": "Microsoft.Common.DropDown",
 									"visible": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
 									"label": "Encryption Key Vault",
-									"toolTip": "Select the Key Vault containing the customer-managed encryption key.",
-									"resourceType": "Microsoft.KeyVault/vaults",
+									"multiLine": true,
+									"toolTip": "Select the Key Vault containing the customer-managed encryption key. Only Key Vaults in the selected location are shown.",
 									"constraints": {
-										"required": "[equals(contains('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]"
-									},
-									"options": {
-										"filter": {
-											"subscription": "[steps('basics').scope.subscription.id]",
-											"location": "[steps('basics').scope.location.name]"
-										}
+										"required": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
+										"allowedValues": "[map(filter(steps('functionApp').infrastructure.keyVaultsApi.value, (kv) => equals(kv.location, steps('basics').scope.location.name)), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Location: ', kv.location, ' | Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
 									}
 								},
 								{
@@ -463,6 +292,7 @@
 								},
 								{
 									"name": "virtualNetwork",
+									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Network",
 									"multiLine": true,
@@ -565,7 +395,7 @@
 										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": true
 									}
-								},
+								},									
 								{
 									"name": "azureBlobPrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
@@ -617,9 +447,9 @@
 							"name": "enableMonitoring",
 							"type": "Microsoft.Common.CheckBox",
 							"visible": true,
-							"label": "Enable monitoring for the function app",
+							"label": "Enable Monitoring for the Function App and AVD and VM Insights",
 							"defaultValue": true,
-							"toolTip": "Send diagnostics data to a log analytics workspace."
+							"toolTip": "Deploy the required resources to enable AVD and VM Insights."
 						},
 						{
 							"name": "subscription",
@@ -645,7 +475,7 @@
 						{
 							"name": "logAnalyticsWorkspace",
 							"type": "Microsoft.Common.DropDown",
-							"defaultValue": "[first(map(filter(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => and(contains(la.name, '-avd-'), equals(la.location, steps('hosts').scope.location.name))), (la) => la.name))]",
+							"defaultValue": "[first(map(filter(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => and(contains(la.name, '-avd-'), equals(la.location, steps('basics').scope.location.name))), (la) => la.name))]",
 							"visible": "[steps('monitoring').enableMonitoring]",
 							"label": "Existing Log Analytics Workspace",
 							"multiLine": true,
@@ -709,11 +539,10 @@
 				"location": "[steps('basics').scope.location.name]",
 				"hostPoolResourceId": "[steps('functionApp').executionSettings.hostPool.id]",
 				"storageResourceGroupId": "[steps('functionApp').executionSettings.storageResourceGroup.id]",
-				"timerSchedule": "[concat('0 0 ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]",
 				"appServicePlanResourceId": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, steps('functionApp').infrastructure.appServicePlan, '')]",
 				"zoneRedundant": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.zoneRedundant, false)]",
 				"keyManagementStorageAccounts": "[steps('functionApp').infrastructure.keyManagementStorageAccounts]",
-				"encryptionKeyVaultResourceId": "[if(contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'), steps('functionApp').infrastructure.encryptionKeyVault.id, '')]",
+				"encryptionKeyVaultResourceId": "[if(contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'), steps('functionApp').infrastructure.encryptionKeyVault, '')]",
 				"privateEndpoint": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
 				"functionAppDelegatedSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppOutboundSubnet, '')]",
 				"privateEndpointSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppPrivateEndpointSubnet, '')]",

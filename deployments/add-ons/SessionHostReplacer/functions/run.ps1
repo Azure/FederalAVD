@@ -10,18 +10,19 @@ if ($Timer.IsPastDue) {
 }
 
 # Initialize environment-agnostic variables from Function App Configuration
-$SubscriptionId = $env:SubscriptionId
+$SubscriptionId = Read-FunctionAppSetting SubscriptionId
 $HostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
 $VirtualMachinesSubscriptionId = Read-FunctionAppSetting VirtualMachinesSubscriptionId
-$ARMToken = Get-AccessToken -ResourceUrl $env:ResourceManagerUrl -ClientId $env:UserAssignedIdentityClientId
-Write-HostDetailed -Message "ResourceManagerUrl: {0}" -StringValues $env:ResourceManagerUrl -Level Host
-Write-HostDetailed -Message "Acquired ARM access token: {0}" -StringValues ($ARMToken.Substring(0, 20) + '...') -Level Verbose
+$ResourceManagerUrl = Read-FunctionAppSetting ResourceManagerUrl
+$UserAssignedIdentityClientId = Read-FunctionAppSetting UserAssignedIdentityClientId
+$ARMToken = Get-AccessToken -ResourceUrl $ResourceManagerUrl -ClientId $UserAssignedIdentityClientId
+Write-HostDetailed -Message "ResourceManagerUrl: {0}" -StringValues $ResourceManagerUrl -Level Host
 
 # Acquire Graph token if device cleanup is enabled
-if ([bool]::Parse((Read-FunctionAppSetting 'RemoveEntraDevice')) -or [bool]::Parse((Read-FunctionAppSetting 'RemoveIntuneDevice'))) {
-    $GraphToken = Get-AccessToken -ResourceUrl $env:GraphEndpoint -ClientId $env:UserAssignedIdentityClientId
-    Write-HostDetailed -Message "GraphEndpoint: {0}" -StringValues $env:GraphEndpoint -Level Host
-    Write-HostDetailed -Message "Acquired Graph access token: {0}" -StringValues ($GraphToken.Substring(0, 20) + '...') -Level Verbose
+if (Read-FunctionAppSetting 'RemoveEntraDevice' -or Read-FunctionAppSetting 'RemoveIntuneDevice') {
+    $GraphEndpoint = Read-FunctionAppSetting 'GraphEndpoint'
+    $GraphToken = Get-AccessToken -ResourceUrl $GraphEndpoint -ClientId $UserAssignedIdentityClientId
+    Write-HostDetailed -Message "GraphEndpoint: {0}" -StringValues $GraphEndpoint -Level Host
 }
 Write-HostDetailed -Message "Function App SubscriptionId: {0}" -StringValues $SubscriptionId -Level Host
 Write-HostDetailed -Message "Host Pool SubscriptionId: {0}" -StringValues $HostPoolSubscriptionId -Level Host
@@ -55,7 +56,7 @@ $sessionHostParameters += (Read-FunctionAppSetting SessionHostParameters)
 
 # Get latest version of session host image
 Write-HostDetailed -Message "Getting latest image version using Image Reference: {0}" -StringValues ($sessionHostParameters.ImageReference | Out-String) -Level Host
-$latestImageVersion = Get-LatestImageVersion -ResourceManagerUrl $env:ResourceManagerUrl -SubscriptionId $VirtualMachinesSubscriptionId -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location
+$latestImageVersion = Get-LatestImageVersion -ResourceManagerUrl $ResourceManagerUrl -SubscriptionId $VirtualMachinesSubscriptionId -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location
 
 # Get number session hosts to deploy
 $hostPoolDecisions = Get-HostPoolDecisions -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion
@@ -71,7 +72,7 @@ if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
         $deploymentResult = Deploy-SessionHosts -VirtualMachinesSubscriptionId $VirtualMachinesSubscriptionId -VirtualMachinesResourceGroupName $VirtualMachinesResourceGroupName -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames
         
         # Update deployment state for progressive scale-up tracking
-        if ([bool]::Parse((Read-FunctionAppSetting EnableProgressiveScaleUp))) {
+        if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
             $deploymentState = Get-DeploymentState
             
             if ($deploymentResult.Succeeded) {

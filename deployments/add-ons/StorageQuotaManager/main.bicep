@@ -71,8 +71,8 @@ param hostPoolResourceId string
 @description('Required. The resource id of the resource group containing the FSLogix storage accounts.')
 param storageResourceGroupId string = ''
 
-@description('Optional. Timer schedule for the function app (cron expression). Default is every 60 minutes.')
-param timerSchedule string = '0 */60 * * * *'
+@description('Optional. Timer schedule for the function app (cron expression). Default is every 15 minutes.')
+param timerSchedule string = '0 */15 * * * *'
 
 // ========== //
 // Variables  //
@@ -194,7 +194,7 @@ module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPla
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     location: location
     name: appServicePlanName
-    planPricing: 'PremiumV3_P0v3'
+    planPricing: 'PremiumV3_P1v3'
     tags: tags
     zoneRedundant: zoneRedundant
   }
@@ -251,9 +251,9 @@ module storageQuotaFunction '../../sharedModules/custom/functionApp/function.bic
   name: 'StorageQuotaFunction-${deploymentSuffix}'
   params: {
     files: {
-      'requirements.psd1': loadTextContent('functions/requirements.psd1')
       'run.ps1': loadTextContent('functions/run.ps1')
-      '../profile.ps1': loadTextContent('functions/profile.ps1')
+      '../profile.ps1': '# Authentication is provided in the script'
+      '../requirements.psd1': loadTextContent('functions/requirements.psd1')
     }
     functionAppName: functionApp.outputs.functionAppName
     functionName: 'auto-increase-file-share-quota'

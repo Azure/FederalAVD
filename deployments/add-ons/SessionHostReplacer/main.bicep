@@ -571,7 +571,7 @@ module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPla
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     location: location
     name: appServicePlanName
-    planPricing: 'PremiumV3_P0v3'
+    planPricing: 'PremiumV3_P1v3'
     tags: tags
     zoneRedundant: zoneRedundant
   }
@@ -721,6 +721,10 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     ]
     serverFarmId: !empty(appServicePlanResourceId) ? appServicePlanResourceId : hostingPlan!.outputs.hostingPlanId
     storageAccountName: storageAccountName
+    storageAccountRoleDefinitionIds: [
+      '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor (for deployment state management)
+      '974c5e8b-45b9-4653-ba55-5f855dd0fb88' // Storage Queue Data Contributor (for function triggers)
+    ]
     tags: tags
   }
 }
@@ -729,9 +733,11 @@ module functionCode '../../sharedModules/custom/functionApp/function.bicep' = {
   name: 'SessionHostReplacerFunction-${deploymentSuffix}'
   params: {
     files: {
-      'requirements.psd1': loadTextContent('functions/requirements.psd1')
       'run.ps1': loadTextContent('functions/run.ps1')
       '../profile.ps1': loadTextContent('functions/profile.ps1')
+      '../requirements.psd1': loadTextContent('functions/requirements.psd1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.psd1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psd1')
     }
     functionAppName: functionApp.outputs.functionAppName
     functionName: 'session-host-replacer'
