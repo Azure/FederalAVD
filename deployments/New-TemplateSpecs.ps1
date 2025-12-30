@@ -71,7 +71,7 @@ $templateSpecs = @()
 if ($createNetwork) {
     $templateSpecs += @{
         Name = 'avd-networking'
-        DisplayName = 'Azure Virtual Desktop Networking'
+        DisplayName = 'AVD Network Spoke'
         Description = 'Deploys the networking components to support Azure Virtual Desktop'
         TemplateFile = Join-Path $PSScriptRoot -ChildPath 'networking\networking.json'
         UiFormDefinition = Join-Path $PSScriptRoot -ChildPath 'networking\uiFormDefinition.json'
@@ -81,7 +81,7 @@ if ($createNetwork) {
 if ($createCustomImage) {
     $templateSpecs += @{
         Name = 'avd-custom-image'
-        DisplayName = 'Azure Virtual Desktop Custom Image'
+        DisplayName = 'AVD Custom Image'
         Description = 'Generates a custom image for Azure Virtual Desktop'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageBuild\imageBuild.json'
         UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageBuild\uiFormDefinition.json'
@@ -91,7 +91,7 @@ if ($createCustomImage) {
 if ($createHostPool) {
     $templateSpecs += @{
         Name = 'avd-hostpool'
-        DisplayName = 'Azure Virtual Desktop Host Pool'
+        DisplayName = 'AVD Host Pool'
         Description = 'Deploys an Azure Virtual Desktop Host Pool'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath 'hostpools\hostpool.json'
         UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath 'hostpools\uiFormDefinition.json'
@@ -101,9 +101,9 @@ if ($createHostPool) {
 if ($CreateAddOns) {
     $addOns = @(
         @{ Name = 'run-commands-on-vms'; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines'; FolderName = 'RunCommandsOnVms' },
-        @{ Name = 'update-storage-account-key-on-session-hosts'; DisplayName = 'Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'UpdateStorageAccountKeyOnSessionHosts' },
-        @{ Name = 'avd-storage-quota-manager'; DisplayName = 'Storage Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'StorageQuotaManager' },
-        @{ Name = 'avd-session-host-replacer'; DisplayName = 'Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'SessionHostReplacer' }
+        @{ Name = 'update-storage-account-key-on-session-hosts'; DisplayName = 'AVD Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'UpdateStorageAccountKeyOnSessionHosts' },
+        @{ Name = 'avd-storage-quota-manager'; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'StorageQuotaManager' },
+        @{ Name = 'avd-session-host-replacer'; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'SessionHostReplacer' }
     )
 
     foreach ($addOn in $addOns) {

@@ -1,9 +1,8 @@
 ﻿param($Timer)
 
-try
-{
+try {
 	[string]$ResourceGroupName = $env:ResourceGroupName
-	[string]$ResourceManagerUrl = $env:ResourceManagerUrl
+	[string]$ResourceManagerUri = $env:ResourceManagerUri
 	[string]$StorageSuffix = $env:StorageSuffix
 	[string]$SubscriptionId = $env:SubscriptionId
 
@@ -11,8 +10,7 @@ try
 	$WarningPreference = 'SilentlyContinue'
 
 	#region Functions
-	function Write-Log 
-    {
+	function Write-Log {
 		[CmdletBinding()]
 		param (
 			[Parameter(Mandatory = $false)]
@@ -32,18 +30,15 @@ try
 		$Message = "[$($MyInvocation.ScriptLineNumber)] [$($ResourceName)] $Message"
 		[string]$WriteMessage = "[$($MessageTimeStamp)] $Message"
 
-		if ($Err)
-        {
+		if ($Err) {
 			Write-Error $WriteMessage
 			$Message = "ERROR: $Message"
 		}
-		elseif ($Warn)
-        {
+		elseif ($Warn) {
 			Write-Warning $WriteMessage
 			$Message = "WARN: $Message"
 		}
-		else 
-        {
+		else {
 			Write-Output $WriteMessage
 		}
 	}
@@ -52,39 +47,40 @@ try
 	# Note: https://stackoverflow.com/questions/41674518/powershell-setting-security-protocol-to-tls-1-2
 	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+	#fix resourcemanageruri if it ends with a slash
+	if (-not $ResourceManagerUri.EndsWith('/')) {
+		$ResourceManagerUri = $ResourceManagerUri + '/'
+	}
+
 	#region Azure Authentication
-    $AccessToken = $null
-    try
-    {
-		$TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUrl + '&api-version=2019-08-01'
-		$TokenResponse = Invoke-RestMethod -Method Get -Headers @{"X-IDENTITY-HEADER"="$env:IDENTITY_HEADER"} -Uri $TokenAuthURI
+	$AccessToken = $null
+	try {
+		$TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUri + '&api-version=2019-08-01'
+		$TokenResponse = Invoke-RestMethod -Method Get -Headers @{"X-IDENTITY-HEADER" = "$env:IDENTITY_HEADER" } -Uri $TokenAuthURI
 		$AccessToken = $TokenResponse.access_token
 		$Header = @{
-			'Content-Type'='application/json'
-			'Authorization'='Bearer ' + $AccessToken
+			'Content-Type'  = 'application/json'
+			'Authorization' = 'Bearer ' + $AccessToken
 		}
-    }
-    catch
-    {
-        throw [System.Exception]::new('Failed to authenticate Azure with application ID, tenant ID, subscription ID', $PSItem.Exception)
-    }
-    Write-Log -ResourceName "$SubscriptionId" -Message "Successfully authenticated with Azure using a managed identity"
+	}
+	catch {
+		throw [System.Exception]::new('Failed to authenticate Azure with application ID, tenant ID, subscription ID', $PSItem.Exception)
+	}
+	Write-Log -ResourceName "$SubscriptionId" -Message "Successfully authenticated with Azure using a managed identity"
 	#endregion Azure Authentication
 
 	# Get storage accounts
-	$Uri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01'
+	$Uri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01'
 	$StorageAccountNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Uri).value.name
 
-	foreach($StorageAccountName in $StorageAccountNames)
-	{
-		$Shares = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares?api-version=2023-05-01'
+	foreach ($StorageAccountName in $StorageAccountNames) {
+		$Shares = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares?api-version=2023-05-01'
 		$ExistingShareNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Shares).value.name
-		ForEach($ShareName in $ExistingShareNames)
-		{
-			$ShareUpdateUri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01'
+		ForEach ($ShareName in $ExistingShareNames) {
+			$ShareUpdateUri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01'
 
 			# Get file share info
-			$ShareGetUri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01&$expand=stats'
+			$ShareGetUri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01&$expand=stats'
 			$PFS = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $ShareGetUri).properties
 	
 			# Set variables for provisioned capacity and used capacity
@@ -95,20 +91,18 @@ try
 	
 			# GB Based Scaling
 			# No scaling if no usage
-			if($UsedCapacity -eq 0)
-			{
+			if ($UsedCapacity -eq 0) {
 				Write-Log -ResourceName "$StorageAccountName/$ShareName" -Message "Share Usage is 0GB. No Changes."
 			}
 			# Slow scaling up to 500GB
 			# Increases share quota by 100GB if less than 50GB remains on the share
 			# This allows time for an AVD Stamp to be rolled out 
-			elseif ($ProvisionedCapacity -lt 500)
-			{
-				if (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2,30)))) -lt 50) {
+			elseif ($ProvisionedCapacity -lt 500) {
+				if (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2, 30)))) -lt 50) {
 					Write-Log -ResourceName "$StorageAccountName/$ShareName" -Message "Share Usage has surpassed the Share Quota remaining threshold of 50GB. Increasing the file share quota by 100GB." 
 					$Quota = $ProvisionedCapacity + 100
 					Invoke-RestMethod `
-						-Body (@{properties = @{shareQuota = $Quota}} | ConvertTo-Json) `
+						-Body (@{properties = @{shareQuota = $Quota } } | ConvertTo-Json) `
 						-Headers $Header `
 						-Method 'PATCH' `
 						-Uri $ShareUpdateUri | Out-Null
@@ -121,13 +115,12 @@ try
 			# Aggressive scaling
 			# Increases share quota by 500GB if less than 500GB remains on the share
 			# This ensures plenty of space is available during mass onboarding
-			else 
-			{
-				if (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2,30)))) -lt 500) {
+			else {
+				if (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2, 30)))) -lt 500) {
 					Write-Log -ResourceName "$StorageAccountName/$ShareName" -Message "Share Usage has surpassed the Share Quota remaining threshold of 500GB. Increasing the file share quota by 500GB." 
 					$Quota = $ProvisionedCapacity + 500
 					Invoke-RestMethod `
-						-Body (@{properties = @{shareQuota = $Quota}} | ConvertTo-Json) `
+						-Body (@{properties = @{shareQuota = $Quota } } | ConvertTo-Json) `
 						-Headers $Header `
 						-Method 'PATCH' `
 						-Uri $ShareUpdateUri | Out-Null
@@ -140,20 +133,17 @@ try
 		}
 	}
 }
-catch 
-{
+catch {
 	$ErrContainer = $PSItem
 	# $ErrContainer = $_
 
 	[string]$ErrMsg = $ErrContainer | Format-List -Force | Out-String
 	$ErrMsg += "Version: $Version`n"
 
-	if (Get-Command 'Write-Log' -ErrorAction:SilentlyContinue)
-    {
+	if (Get-Command 'Write-Log' -ErrorAction:SilentlyContinue) {
 		Write-Log -ResourceName "$StorageAccountName/$ShareName" -Err -Message $ErrMsg -ErrorAction:Continue
 	}
-	else
-    {
+	else {
 		Write-Error $ErrMsg -ErrorAction:Continue
 	}
 

@@ -29,6 +29,15 @@ param sessionHostReplacerUserAssignedIdentityResourceId string
 @description('Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed.')
 param appServicePlanResourceId string = ''
 
+@description('Optional. The SKU for the App Service Plan. Only applies if appServicePlanResourceId is not provided. Default is P0v3 for cost optimization.')
+@allowed([
+  'PremiumV3_P0v3'
+  'PremiumV3_P1v3'
+  'PremiumV3_P2v3'
+  'PremiumV3_P3v3'
+])
+param appServicePlanSku string = 'PremiumV3_P0v3'
+
 @description('Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if appServicePlanResourceId is not provided. Default is false.')
 param zoneRedundant bool = false
 
@@ -74,7 +83,7 @@ param privateLinkScopeResourceId string = ''
 param credentialsKeyVaultResourceId string
 
 @description('Optional. The resource ID of the Template Spec version for session host deployments. If not provided, a new template spec will be created.')
-param sessionHostTemplateSpecVersionResourceId string = ''
+param sessionHostTemplateSpecResourceId string = ''
 
 @description('Optional. The name of the Template Spec to create. Defaults to hostpool-based naming.')
 param templateSpecName string = ''
@@ -85,15 +94,32 @@ param templateSpecVersion string = '1.0.0'
 @description('Optional. Timer schedule for the function app (cron expression). Default is every hour.')
 param timerSchedule string = '0 0 * * * *'
 
-@description('Optional. The target age in days for session hosts before replacement. Default is disabled (0 days).')
+@description('Required. The replacement mode for session hosts. Valid values: Age-based (replace based on VM age) or ImageVersion (replace when new image version is available).')
+@allowed([
+  'Age-based'
+  'ImageVersion'
+])
+param replacementMode string = 'Age-based'
+
+@description('Optional. The target age in days for session hosts before replacement. Only used when replacementMode is Age-based. Default is 45 days.')
 @minValue(0)
-@maxValue(365)
-param targetVMAgeDays int = 0
+@maxValue(180)
+param targetVMAgeDays int = 45
 
 @description('Optional. The grace period in hours after draining before deleting session hosts. Default is 24 hours.')
 @minValue(1)
 @maxValue(168)
 param drainGracePeriodHours int = 24
+
+@description('Required. The target number of session hosts to maintain in the host pool. Set to 0 for auto-detect mode: the function will automatically maintain whatever count exists when a replacement cycle begins, allowing you to manually scale between image updates.')
+@minValue(0)
+@maxValue(1000)
+param targetSessionHostCount int
+
+@description('Optional. Additional buffer of session hosts above the target count during replacements. Provides headroom for rolling updates without reducing capacity. Default is 0.')
+@minValue(0)
+@maxValue(100)
+param targetSessionHostBuffer int = 0
 
 @description('Optional. Whether to fix session host tags during execution. Default is true.')
 param fixSessionHostTags bool = true
@@ -142,6 +168,11 @@ param maxDeploymentBatchSize int = 10
 @maxValue(5)
 param successfulRunsBeforeScaleUp int = 1
 
+@description('Optional. Delay in days before replacing session hosts after a new image version is detected. Only used when replacementMode is ImageVersion. Default is 0 days.')
+@minValue(0)
+@maxValue(30)
+param replaceSessionHostOnNewImageVersionDelayDays int = 0
+
 // ================================================================================================
 // Session Host Configuration Parameters
 // These parameters define the configuration for session hosts that will be deployed as replacements.
@@ -154,10 +185,10 @@ param virtualMachinesResourceGroupId string
 param hostPoolResourceId string
 
 @description('Required. The VM name prefix used for session hosts.')
-param virtualMachineNamePrefix string
+param sessionHostNamePrefix string
 
 @description('Optional. VM name index length for padding.')
-param vmNameIndexLength int = 3
+param sessionHostNameIndexLength int = 3
 
 @description('Optional. Publisher of the marketplace image. Default is MicrosoftWindowsDesktop.')
 param imagePublisher string = 'MicrosoftWindowsDesktop'
@@ -260,10 +291,7 @@ param dedicatedHostGroupResourceId string = ''
 param dedicatedHostGroupZones array = []
 
 @description('Optional. Existing disk encryption set resource ID.')
-param existingDiskEncryptionSetResourceId string = ''
-
-@description('Optional. Existing disk access resource ID.')
-param existingDiskAccessResourceId string = ''
+param diskEncryptionSetResourceId string = ''
 
 @description('Optional. AVD Insights data collection rules resource ID.')
 param avdInsightsDataCollectionRulesResourceId string = ''
@@ -342,11 +370,6 @@ var hostPoolSubscriptionId = split(hostPoolResourceId, '/')[2]
 var virtualMachineResourceGroupLocation = reference(virtualMachinesResourceGroupId, '2021-04-01', 'Full').location
 var virtualMachinesResourceGroupName = last(split(virtualMachinesResourceGroupId, '/'))
 var virtualMachinesSubscriptionId = split(virtualMachinesResourceGroupId, '/')[2]
-
-// Template Spec resource group - either from provided resource ID or current resource group
-var templateSpecResourceGroupId = !empty(sessionHostTemplateSpecVersionResourceId)
-  ? '/subscriptions/${split(sessionHostTemplateSpecVersionResourceId, '/')[2]}/resourceGroups/${split(sessionHostTemplateSpecVersionResourceId, '/')[4]}'
-  : resourceGroup().id
 
 // Naming Convention Logic (derived from resourceNames.bicep)
 var cloud = toLower(environment().name)
@@ -469,12 +492,12 @@ var templateSpecNameFinal = !empty(templateSpecName)
     )
 
 // Virtual Machine naming conventions
-var vmNamePrefixWithoutDash = toLower(last(virtualMachineNamePrefix) == '-'
-  ? take(virtualMachineNamePrefix, length(virtualMachineNamePrefix) - 1)
-  : virtualMachineNamePrefix)
+var sessionHostNamePrefixWithoutDash = toLower(last(sessionHostNamePrefix) == '-'
+  ? take(sessionHostNamePrefix, length(sessionHostNamePrefix) - 1)
+  : sessionHostNamePrefix)
 var availabilitySetNamePrefix = nameConvReversed
-  ? '${vmNamePrefixWithoutDash}-${resourceAbbreviations.availabilitySets}-'
-  : '${resourceAbbreviations.availabilitySets}-${vmNamePrefixWithoutDash}-'
+  ? '${sessionHostNamePrefixWithoutDash}-${resourceAbbreviations.availabilitySets}-'
+  : '${resourceAbbreviations.availabilitySets}-${sessionHostNamePrefixWithoutDash}-'
 var virtualMachineNameConv = nameConvReversed
   ? 'VMNAMEPREFIX###-${resourceAbbreviations.virtualMachines}'
   : '${resourceAbbreviations.virtualMachines}-VMNAMEPREFIX###'
@@ -484,6 +507,12 @@ var diskNameConv = nameConvReversed
 var networkInterfaceNameConv = nameConvReversed
   ? 'VMNAMEPREFIX###-${resourceAbbreviations.networkInterfaces}'
   : '${resourceAbbreviations.networkInterfaces}-VMNAMEPREFIX###'
+
+// Extract compute gallery resource ID from custom image resource ID
+// Image definition format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}
+// Image version format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}/versions/{version}
+// Gallery format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}
+var computeGalleryResourceId = !empty(customImageResourceId) ? join(take(split(customImageResourceId, '/'), 9), '/') : ''
 
 // Session Host Parameters - Passed to Template Spec Deployment
 // These parameters are passed to the function app which will use them when deploying new session hosts
@@ -501,13 +530,12 @@ var sessionHostParameters = {
   dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
   dedicatedHostGroupZones: dedicatedHostGroupZones
   dedicatedHostResourceId: dedicatedHostResourceId
+  diskEncryptionSetResourceId: diskEncryptionSetResourceId
   diskSizeGB: diskSizeGB
   diskSku: diskSku
   domainName: domainName
   enableAcceleratedNetworking: enableAcceleratedNetworking
   encryptionAtHost: encryptionAtHost
-  existingDiskAccessResourceId: existingDiskAccessResourceId
-  existingDiskEncryptionSetResourceId: existingDiskEncryptionSetResourceId
   fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
   fslogixContainerType: fslogixContainerType
   fslogixFileShareNames: fslogixFileShareNames
@@ -540,25 +568,32 @@ var sessionHostParameters = {
   securityDataCollectionRulesResourceId: securityDataCollectionRulesResourceId
   securityType: securityType
   sessionHostCustomizations: sessionHostCustomizations
-  vmNameIndexLength: vmNameIndexLength
+  sessionHostNameIndexLength: sessionHostNameIndexLength
   subnetResourceId: virtualMachineSubnetResourceId
   tags: tags
   timeZone: timeZone
   virtualMachineNameConv: virtualMachineNameConv
-  virtualMachineNamePrefix: virtualMachineNamePrefix
   virtualMachineSize: virtualMachineSize
   vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId
   vTpmEnabled: vTpmEnabled
 }
 
+resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+  name: last(split(sessionHostReplacerUserAssignedIdentityResourceId, '/'))
+  scope: resourceGroup(
+    split(sessionHostReplacerUserAssignedIdentityResourceId, '/')[2],
+    split(sessionHostReplacerUserAssignedIdentityResourceId, '/')[4]
+  )
+}
+
 // Conditional Template Spec for Session Host Deployment
-module templateSpec 'modules/sessionHostTemplateSpec.bicep' = if (empty(sessionHostTemplateSpecVersionResourceId)) {
+module templateSpec 'modules/sessionHostTemplateSpec.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
   name: 'SessionHostTemplateSpec-${deploymentSuffix}'
   params: {
     location: location
     templateSpecName: templateSpecNameFinal
     templateSpecVersion: templateSpecVersion
-    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Resources/templateSpecs'] ?? {})
+    tags: tags[?'Microsoft.Resources/templateSpecs'] ?? {}
   }
 }
 
@@ -571,9 +606,78 @@ module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPla
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     location: location
     name: appServicePlanName
-    planPricing: 'PremiumV3_P1v3'
+    planPricing: appServicePlanSku
     tags: tags
     zoneRedundant: zoneRedundant
+  }
+}
+
+module roleAssignmentsKeyVault '../../sharedModules/resources/key-vault/vault/rbac.bicep' = {
+  name: 'KeyVaultRoleAssignment-${deploymentSuffix}'
+  scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
+  params: {
+    principalId: userAssignedIdentity.properties.principalId
+    roleDefinitionId: 'f25e0fa2-a7c8-4377-a976-54943a77a395' // Key Vault Contributor
+    keyVaultName: last(split(credentialsKeyVaultResourceId, '/'))
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module roleAssignmentVirtualMachinesSubscription '../../sharedModules/resources/authorization/role-assignment/subscription/main.bicep' = {
+  name: 'VirtualMachinesSubscriptionRoleAssignment-${deploymentSuffix}'
+  scope: subscription(virtualMachinesSubscriptionId)
+  params: {
+    principalId: userAssignedIdentity.properties.principalId
+    roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
+    subscriptionId: virtualMachinesSubscriptionId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module roleAssignmentVirtualMachinesResourceGroup '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = {
+  name: 'VirtualMachinesResourceGroupRoleAssignment-${deploymentSuffix}'
+  scope: resourceGroup(virtualMachinesSubscriptionId, virtualMachinesResourceGroupName)
+  params: {
+    principalId: userAssignedIdentity.properties.principalId
+    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
+    resourceGroupName: virtualMachinesResourceGroupName
+    subscriptionId: virtualMachinesSubscriptionId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module roleAssignmentHostPoolResourceGroup '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = {
+  name: 'HostPoolResourceGroupRoleAssignment-${deploymentSuffix}'
+  scope: resourceGroup(hostPoolSubscriptionId, hostPoolResourceGroupName)
+  params: {
+    principalId: userAssignedIdentity.properties.principalId
+    roleDefinitionId: 'e307426c-f9b6-4e81-87de-d99efb3c32bc' // Desktop Virtualization Host Pool Contributor
+    resourceGroupName: hostPoolResourceGroupName
+    subscriptionId: hostPoolSubscriptionId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module roleAssignmentTemplateSpec '../../sharedModules/resources/resources/templateSpecs/rbac.bicep' = {
+  name: 'TemplateSpecRoleAssignment-${deploymentSuffix}'
+  params: {
+    principalId: userAssignedIdentity.properties.principalId
+    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
+    principalType: 'ServicePrincipal'
+    templateSpecResourceId: !empty(sessionHostTemplateSpecResourceId)
+      ? sessionHostTemplateSpecResourceId
+      : templateSpec!.outputs.templateSpecResourceId
+  }
+}
+
+module roleAssignmentComputeGallery '../../sharedModules/resources/compute/gallery/rbac.bicep' = if (!empty(customImageResourceId)) {
+  name: 'ComputeGalleryRoleAssignment-${deploymentSuffix}'
+  scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
+  params: {
+    principalId: userAssignedIdentity.properties.principalId
+    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
+    galleryName: empty(computeGalleryResourceId) ? '' : last(split(computeGalleryResourceId, '/'))
+    principalType: 'ServicePrincipal'
   }
 }
 
@@ -592,74 +696,48 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
     functionAppAppSettings: [
       {
-        name: 'GraphEndpoint'
-        value: graphEndpoint
-      }
-      {
-        name: 'HostPoolSubscriptionId'
-        value: hostPoolSubscriptionId
-      }
-      {
-        name: 'HostPoolResourceGroupName'
-        value: hostPoolResourceGroupName
-      }
-      {
-        name: 'HostPoolName'
-        value: hostPoolName
-      }
-      {
-        name: 'VirtualMachinesSubscriptionId'
-        value: virtualMachinesSubscriptionId
-      }
-      {
-        name: 'VirtualMachinesResourceGroupName'
-        value: virtualMachinesResourceGroupName
-      }
-      {
-        name: 'TargetVMAgeDays'
-        value: string(targetVMAgeDays)
+        name: 'DeploymentPrefix'
+        value: 'shr-${uniqueStringHosts}'
       }
       {
         name: 'DrainGracePeriodHours'
         value: string(drainGracePeriodHours)
       }
       {
+        name: 'EnableProgressiveScaleUp'
+        value: string(enableProgressiveScaleUp)
+      }
+      {
         name: 'FixSessionHostTags'
         value: string(fixSessionHostTags)
+      }
+      {
+        name: 'GraphEndpoint'
+        value: graphEndpoint
+      }
+      {
+        name: 'HostPoolName'
+        value: hostPoolName
+      }
+      {
+        name: 'HostPoolResourceGroupName'
+        value: hostPoolResourceGroupName
+      }
+      {
+        name: 'HostPoolSubscriptionId'
+        value: hostPoolSubscriptionId
       }
       {
         name: 'IncludePreExistingSessionHosts'
         value: string(includePreExistingSessionHosts)
       }
       {
-        name: 'Tag_IncludeInAutomation'
-        value: tagIncludeInAutomation
+        name: 'InitialDeploymentPercentage'
+        value: string(initialDeploymentPercentage)
       }
       {
-        name: 'Tag_DeployTimestamp'
-        value: tagDeployTimestamp
-      }
-      {
-        name: 'Tag_PendingDrainTimestamp'
-        value: tagPendingDrainTimestamp
-      }
-      {
-        name: 'Tag_ScalingPlanExclusionTag'
-        value: tagScalingPlanExclusionTag
-      }
-      {
-        name: 'SessionHostTemplate'
-        value: !empty(sessionHostTemplateSpecVersionResourceId)
-          ? sessionHostTemplateSpecVersionResourceId
-          : templateSpec!.outputs.templateSpecVersionResourceId
-      }
-      {
-        name: 'SessionHostParameters'
-        value: string(sessionHostParameters)
-      }
-      {
-        name: 'WEBSITE_TIME_ZONE'
-        value: timeZone
+        name: 'MaxDeploymentBatchSize'
+        value: string(maxDeploymentBatchSize)
       }
       {
         name: 'RemoveEntraDevice'
@@ -670,20 +748,34 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
         value: string(removeIntuneDevice)
       }
       {
-        name: 'EnableProgressiveScaleUp'
-        value: string(enableProgressiveScaleUp)
+        name: 'ReplacementMode'
+        value: replacementMode
       }
       {
-        name: 'InitialDeploymentPercentage'
-        value: string(initialDeploymentPercentage)
+        name: 'ReplaceSessionHostOnNewImageVersionDelayDays'
+        value: replacementMode == 'ImageVersion' ? string(replaceSessionHostOnNewImageVersionDelayDays) : '0'
       }
       {
         name: 'ScaleUpIncrementPercentage'
         value: string(scaleUpIncrementPercentage)
       }
       {
-        name: 'MaxDeploymentBatchSize'
-        value: string(maxDeploymentBatchSize)
+        name: 'SessionHostNameIndexLength'
+        value: string(sessionHostNameIndexLength)
+      }
+      {
+        name: 'SessionHostNamePrefix'
+        value: sessionHostNamePrefix
+      }
+      {
+        name: 'SessionHostParameters'
+        value: string(sessionHostParameters)
+      }
+      {
+        name: 'SessionHostTemplate'
+        value: !empty(sessionHostTemplateSpecResourceId)
+          ? sessionHostTemplateSpecResourceId
+          : templateSpec!.outputs.templateSpecResourceId
       }
       {
         name: 'SubscriptionId'
@@ -692,6 +784,46 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
       {
         name: 'SuccessfulRunsBeforeScaleUp'
         value: string(successfulRunsBeforeScaleUp)
+      }
+      {
+        name: 'Tag_DeployTimestamp'
+        value: tagDeployTimestamp
+      }
+      {
+        name: 'Tag_IncludeInAutomation'
+        value: tagIncludeInAutomation
+      }
+      {
+        name: 'Tag_PendingDrainTimestamp'
+        value: tagPendingDrainTimestamp
+      }
+      {
+        name: 'Tag_ScalingPlanExclusionTag'
+        value: tagScalingPlanExclusionTag
+      }
+      {
+        name: 'TargetSessionHostBuffer'
+        value: string(targetSessionHostBuffer)
+      }
+      {
+        name: 'TargetSessionHostCount'
+        value: string(targetSessionHostCount)
+      }
+      {
+        name: 'TargetVMAgeDays'
+        value: replacementMode == 'Age-based' ? string(targetVMAgeDays) : '0'
+      }
+      {
+        name: 'VirtualMachinesResourceGroupName'
+        value: virtualMachinesResourceGroupName
+      }
+      {
+        name: 'VirtualMachinesSubscriptionId'
+        value: virtualMachinesSubscriptionId
+      }
+      {
+        name: 'WEBSITE_TIME_ZONE'
+        value: timeZone
       }
     ]
     functionAppDelegatedSubnetResourceId: functionAppDelegatedSubnetResourceId
@@ -705,25 +837,10 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
-    roleAssignments: [
-      {
-        roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
-        scope: '/subscriptions/${virtualMachinesSubscriptionId}'
-      }
-      {
-        roleDefinitionId: 'e307426c-f9b6-4e81-87de-d99efb3c32bc' // Desktop Virtualization Host Pool Contributor
-        scope: '/subscriptions/${hostPoolSubscriptionId}/resourceGroups/${hostPoolResourceGroupName}'
-      }
-      {
-        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader to be able to read the Template Spec
-        scope: templateSpecResourceGroupId
-      }
-    ]
     serverFarmId: !empty(appServicePlanResourceId) ? appServicePlanResourceId : hostingPlan!.outputs.hostingPlanId
     storageAccountName: storageAccountName
     storageAccountRoleDefinitionIds: [
       '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor (for deployment state management)
-      '974c5e8b-45b9-4653-ba55-5f855dd0fb88' // Storage Queue Data Contributor (for function triggers)
     ]
     tags: tags
   }

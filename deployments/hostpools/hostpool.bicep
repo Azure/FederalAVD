@@ -903,7 +903,7 @@ var dedicatedHostRG = !empty(dedicatedHostResourceId)
 
 // Custom Tags for Host Pool
 var hostsResourceGroupIdTag = {
-  hostResourceGroupId: '/subscriptions/${hostsSubscription}/resourceGroups/${resourceNames.outputs.resourceGroupHosts}'
+  hostsResourceGroupId: '/subscriptions/${hostsSubscription}/resourceGroups/${resourceNames.outputs.resourceGroupHosts}'
 }
 var storageResourceGroupIdTag = deployFSLogixStorage
   ? {

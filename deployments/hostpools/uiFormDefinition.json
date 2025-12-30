@@ -812,7 +812,7 @@
 									"type": "Microsoft.Common.TextBox",
 									"label": "Tag to exclude hosts from Scaling",
 									"placeholder": "",
-									"defaultValue": "DoNotScale",
+									"defaultValue": "ExcludeFromScaling",
 									"toolTip": "Use only allowed characters",
 									"constraints": {
 										"required": true,
@@ -2963,7 +2963,7 @@
 									"constraints": {
 										"allowedValues": "[if(contains(steps('identity').solution, 'EntraKerberos'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
 									},
-									"visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('identity').solution, 'EntraId')), if(contains(steps('identity').solution, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true))]"
+									"visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('identity').solution, 'EntraId')), if(and(contains(steps('identity').solution, 'EntraKerberos'), steps('userProfiles').deployStorage), not(empty(steps('userProfiles').managedIdentity)), true))]"
 								},
 								{
 									"name": "domainJoinWarningBox",
@@ -2982,7 +2982,7 @@
 									"keyPath": "displayName",
 									"descriptionKeyPath": "id",
 									"value": "[steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups]",
-									"visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('identity').solution, 'EntraId')), if(contains(steps('identity').solution, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
+									"visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('identity').solution, 'EntraId')), if(and(contains(steps('identity').solution, 'EntraKerberos'), steps('userProfiles').deployStorage), not(empty(steps('userProfiles').managedIdentity)), true), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
 									"barColor": "[if(empty(steps('userProfiles').azureFiles.userGroupPickerBlade), '#FF0000', '#7fba00')]",
 									"constraints": {
 										"required": true
@@ -3062,8 +3062,8 @@
 									"type": "Microsoft.Common.Slider",
 									"label": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), 'Number of Existing Storage Accounts Required (Read Only)', 'Number of Storage Accounts to Deploy (Read Only)')]",
 									"defaultValue": 1,
-									"min": "[if(or(equals(steps('identity').solution, 'EntraId'), if(contains(steps('identity').solution, 'EntraKerberos'), empty(steps('userProfiles').managedIdentity), false), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
-									"max": "[if(or(equals(steps('identity').solution, 'EntraId'), if(contains(steps('identity').solution, 'EntraKerberos'), empty(steps('userProfiles').managedIdentity), false), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
+									"min": "[if(or(equals(steps('identity').solution, 'EntraId'), and(contains(steps('identity').solution, 'EntraKerberos'), steps('userProfiles').deployStorage, empty(steps('userProfiles').managedIdentity)), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
+									"max": "[if(or(equals(steps('identity').solution, 'EntraId'), and(contains(steps('identity').solution, 'EntraKerberos'), steps('userProfiles').deployStorage, empty(steps('userProfiles').managedIdentity)), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
 									"showStepMarkers": false,
 									"visible": "[or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true))]"
 								},

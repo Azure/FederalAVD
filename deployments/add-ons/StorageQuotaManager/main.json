@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "7457116586248308749"
+      "templateHash": "13323176410788367735"
     },
     "name": "FSLogix Storage Quota Manager Add-On",
     "description": "Automated quota management for FSLogix Azure Files Premium file shares",
@@ -121,7 +121,6 @@
     },
     "storageResourceGroupId": {
       "type": "string",
-      "defaultValue": "",
       "metadata": {
         "description": "Required. The resource id of the resource group containing the FSLogix storage accounts."
       }
@@ -421,7 +420,7 @@
       "workspaces": "vdws",
       "imageDefinitions": "vmid"
     },
-    "$fxv#2": "param($Timer)\r\n\r\ntry\r\n{\r\n\t[string]$ResourceGroupName = $env:ResourceGroupName\r\n\t[string]$ResourceManagerUrl = $env:ResourceManagerUrl\r\n\t[string]$StorageSuffix = $env:StorageSuffix\r\n\t[string]$SubscriptionId = $env:SubscriptionId\r\n\r\n\t$ErrorActionPreference = 'Stop'\r\n\t$WarningPreference = 'SilentlyContinue'\r\n\r\n\t#region Functions\r\n\tfunction Write-Log \r\n    {\r\n\t\t[CmdletBinding()]\r\n\t\tparam (\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Err,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$Message,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$ResourceName,\r\n\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Warn\r\n\t\t)\r\n\r\n\t\t[string]$MessageTimeStamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\r\n\t\t$Message = \"[$($MyInvocation.ScriptLineNumber)] [$($ResourceName)] $Message\"\r\n\t\t[string]$WriteMessage = \"[$($MessageTimeStamp)] $Message\"\r\n\r\n\t\tif ($Err)\r\n        {\r\n\t\t\tWrite-Error $WriteMessage\r\n\t\t\t$Message = \"ERROR: $Message\"\r\n\t\t}\r\n\t\telseif ($Warn)\r\n        {\r\n\t\t\tWrite-Warning $WriteMessage\r\n\t\t\t$Message = \"WARN: $Message\"\r\n\t\t}\r\n\t\telse \r\n        {\r\n\t\t\tWrite-Output $WriteMessage\r\n\t\t}\r\n\t}\r\n\t#endregion Functions\r\n\r\n\t# Note: https://stackoverflow.com/questions/41674518/powershell-setting-security-protocol-to-tls-1-2\r\n\t[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n\t#region Azure Authentication\r\n    $AccessToken = $null\r\n    try\r\n    {\r\n\t\t$TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUrl + '&api-version=2019-08-01'\r\n\t\t$TokenResponse = Invoke-RestMethod -Method Get -Headers @{\"X-IDENTITY-HEADER\"=\"$env:IDENTITY_HEADER\"} -Uri $TokenAuthURI\r\n\t\t$AccessToken = $TokenResponse.access_token\r\n\t\t$Header = @{\r\n\t\t\t'Content-Type'='application/json'\r\n\t\t\t'Authorization'='Bearer ' + $AccessToken\r\n\t\t}\r\n    }\r\n    catch\r\n    {\r\n        throw [System.Exception]::new('Failed to authenticate Azure with application ID, tenant ID, subscription ID', $PSItem.Exception)\r\n    }\r\n    Write-Log -ResourceName \"$SubscriptionId\" -Message \"Successfully authenticated with Azure using a managed identity\"\r\n\t#endregion Azure Authentication\r\n\r\n\t# Get storage accounts\r\n\t$Uri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01'\r\n\t$StorageAccountNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Uri).value.name\r\n\r\n\tforeach($StorageAccountName in $StorageAccountNames)\r\n\t{\r\n\t\t$Shares = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares?api-version=2023-05-01'\r\n\t\t$ExistingShareNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Shares).value.name\r\n\t\tForEach($ShareName in $ExistingShareNames)\r\n\t\t{\r\n\t\t\t$ShareUpdateUri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01'\r\n\r\n\t\t\t# Get file share info\r\n\t\t\t$ShareGetUri = $ResourceManagerUrl + 'subscriptions/' + $SubscriptionId  + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01&$expand=stats'\r\n\t\t\t$PFS = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $ShareGetUri).properties\r\n\t\r\n\t\t\t# Set variables for provisioned capacity and used capacity\r\n\t\t\t$ProvisionedCapacity = $PFS.shareQuota\r\n\t\t\t$UsedCapacity = $PFS.ShareUsageBytes\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Capacity: $($ProvisionedCapacity)GB\"\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage: $([math]::Round($UsedCapacity/1GB, 0))GB\"\r\n\t\r\n\t\t\t# GB Based Scaling\r\n\t\t\t# No scaling if no usage\r\n\t\t\tif($UsedCapacity -eq 0)\r\n\t\t\t{\r\n\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is 0GB. No Changes.\"\r\n\t\t\t}\r\n\t\t\t# Slow scaling up to 500GB\r\n\t\t\t# Increases share quota by 100GB if less than 50GB remains on the share\r\n\t\t\t# This allows time for an AVD Stamp to be rolled out \r\n\t\t\telseif ($ProvisionedCapacity -lt 500)\r\n\t\t\t{\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2,30)))) -lt 50) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 50GB. Increasing the file share quota by 100GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 100\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota}} | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 50GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t\t# Aggressive scaling\r\n\t\t\t# Increases share quota by 500GB if less than 500GB remains on the share\r\n\t\t\t# This ensures plenty of space is available during mass onboarding\r\n\t\t\telse \r\n\t\t\t{\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2,30)))) -lt 500) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 500GB. Increasing the file share quota by 500GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 500\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota}} | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 500GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t}\r\n\t}\r\n}\r\ncatch \r\n{\r\n\t$ErrContainer = $PSItem\r\n\t# $ErrContainer = $_\r\n\r\n\t[string]$ErrMsg = $ErrContainer | Format-List -Force | Out-String\r\n\t$ErrMsg += \"Version: $Version`n\"\r\n\r\n\tif (Get-Command 'Write-Log' -ErrorAction:SilentlyContinue)\r\n    {\r\n\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Err -Message $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\telse\r\n    {\r\n\t\tWrite-Error $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\r\n\tthrow [System.Exception]::new($ErrMsg, $ErrContainer.Exception)\r\n}",
+    "$fxv#2": "param($Timer)\r\n\r\ntry {\r\n\t[string]$ResourceGroupName = $env:ResourceGroupName\r\n\t[string]$ResourceManagerUri = $env:ResourceManagerUri\r\n\t[string]$StorageSuffix = $env:StorageSuffix\r\n\t[string]$SubscriptionId = $env:SubscriptionId\r\n\r\n\t$ErrorActionPreference = 'Stop'\r\n\t$WarningPreference = 'SilentlyContinue'\r\n\r\n\t#region Functions\r\n\tfunction Write-Log {\r\n\t\t[CmdletBinding()]\r\n\t\tparam (\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Err,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$Message,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$ResourceName,\r\n\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Warn\r\n\t\t)\r\n\r\n\t\t[string]$MessageTimeStamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\r\n\t\t$Message = \"[$($MyInvocation.ScriptLineNumber)] [$($ResourceName)] $Message\"\r\n\t\t[string]$WriteMessage = \"[$($MessageTimeStamp)] $Message\"\r\n\r\n\t\tif ($Err) {\r\n\t\t\tWrite-Error $WriteMessage\r\n\t\t\t$Message = \"ERROR: $Message\"\r\n\t\t}\r\n\t\telseif ($Warn) {\r\n\t\t\tWrite-Warning $WriteMessage\r\n\t\t\t$Message = \"WARN: $Message\"\r\n\t\t}\r\n\t\telse {\r\n\t\t\tWrite-Output $WriteMessage\r\n\t\t}\r\n\t}\r\n\t#endregion Functions\r\n\r\n\t# Note: https://stackoverflow.com/questions/41674518/powershell-setting-security-protocol-to-tls-1-2\r\n\t[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n\t#fix resourcemanageruri if it ends with a slash\r\n\tif (-not $ResourceManagerUri.EndsWith('/')) {\r\n\t\t$ResourceManagerUri = $ResourceManagerUri + '/'\r\n\t}\r\n\r\n\t#region Azure Authentication\r\n\t$AccessToken = $null\r\n\ttry {\r\n\t\t$TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUri + '&api-version=2019-08-01'\r\n\t\t$TokenResponse = Invoke-RestMethod -Method Get -Headers @{\"X-IDENTITY-HEADER\" = \"$env:IDENTITY_HEADER\" } -Uri $TokenAuthURI\r\n\t\t$AccessToken = $TokenResponse.access_token\r\n\t\t$Header = @{\r\n\t\t\t'Content-Type'  = 'application/json'\r\n\t\t\t'Authorization' = 'Bearer ' + $AccessToken\r\n\t\t}\r\n\t}\r\n\tcatch {\r\n\t\tthrow [System.Exception]::new('Failed to authenticate Azure with application ID, tenant ID, subscription ID', $PSItem.Exception)\r\n\t}\r\n\tWrite-Log -ResourceName \"$SubscriptionId\" -Message \"Successfully authenticated with Azure using a managed identity\"\r\n\t#endregion Azure Authentication\r\n\r\n\t# Get storage accounts\r\n\t$Uri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01'\r\n\t$StorageAccountNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Uri).value.name\r\n\r\n\tforeach ($StorageAccountName in $StorageAccountNames) {\r\n\t\t$Shares = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares?api-version=2023-05-01'\r\n\t\t$ExistingShareNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Shares).value.name\r\n\t\tForEach ($ShareName in $ExistingShareNames) {\r\n\t\t\t$ShareUpdateUri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01'\r\n\r\n\t\t\t# Get file share info\r\n\t\t\t$ShareGetUri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01&$expand=stats'\r\n\t\t\t$PFS = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $ShareGetUri).properties\r\n\t\r\n\t\t\t# Set variables for provisioned capacity and used capacity\r\n\t\t\t$ProvisionedCapacity = $PFS.shareQuota\r\n\t\t\t$UsedCapacity = $PFS.ShareUsageBytes\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Capacity: $($ProvisionedCapacity)GB\"\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage: $([math]::Round($UsedCapacity/1GB, 0))GB\"\r\n\t\r\n\t\t\t# GB Based Scaling\r\n\t\t\t# No scaling if no usage\r\n\t\t\tif ($UsedCapacity -eq 0) {\r\n\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is 0GB. No Changes.\"\r\n\t\t\t}\r\n\t\t\t# Slow scaling up to 500GB\r\n\t\t\t# Increases share quota by 100GB if less than 50GB remains on the share\r\n\t\t\t# This allows time for an AVD Stamp to be rolled out \r\n\t\t\telseif ($ProvisionedCapacity -lt 500) {\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2, 30)))) -lt 50) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 50GB. Increasing the file share quota by 100GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 100\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota } } | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 50GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t\t# Aggressive scaling\r\n\t\t\t# Increases share quota by 500GB if less than 500GB remains on the share\r\n\t\t\t# This ensures plenty of space is available during mass onboarding\r\n\t\t\telse {\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2, 30)))) -lt 500) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 500GB. Increasing the file share quota by 500GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 500\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota } } | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 500GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t}\r\n\t}\r\n}\r\ncatch {\r\n\t$ErrContainer = $PSItem\r\n\t# $ErrContainer = $_\r\n\r\n\t[string]$ErrMsg = $ErrContainer | Format-List -Force | Out-String\r\n\t$ErrMsg += \"Version: $Version`n\"\r\n\r\n\tif (Get-Command 'Write-Log' -ErrorAction:SilentlyContinue) {\r\n\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Err -Message $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\telse {\r\n\t\tWrite-Error $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\r\n\tthrow [System.Exception]::new($ErrMsg, $ErrContainer.Exception)\r\n}",
     "$fxv#3": "# This file enables modules to be automatically managed by the Functions service.\r\n# See https://aka.ms/functionsmanageddependency for additional information.\r\n#\r\n@{\r\n    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. \r\n    # To use the Az module in your function app, uncomment the line below.\r\n    # 'Az' = '17.*'\r\n}\r\n",
     "deploymentSuffix": "[uniqueString(resourceGroup().id, deployment().name)]",
     "storageSubscriptionId": "[split(parameters('storageResourceGroupId'), '/')[2]]",
@@ -658,14 +657,6 @@
           "privateLinkScopeResourceId": {
             "value": "[parameters('privateLinkScopeResourceId')]"
           },
-          "roleAssignments": {
-            "value": [
-              {
-                "roleDefinitionId": "17d1049b-9a84-46fb-8f53-869881c3d3ab",
-                "scope": "[parameters('storageResourceGroupId')]"
-              }
-            ]
-          },
           "serverFarmId": "[if(empty(parameters('appServicePlanResourceId')), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostingPlanId.value), createObject('value', parameters('appServicePlanResourceId')))]",
           "storageAccountName": {
             "value": "[variables('storageAccountName')]"
@@ -681,7 +672,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "7798609522584444460"
+              "templateHash": "4427339056392458847"
             }
           },
           "parameters": {
@@ -757,10 +748,6 @@
             "privateLinkScopeResourceId": {
               "type": "string"
             },
-            "roleAssignments": {
-              "type": "array",
-              "defaultValue": []
-            },
             "storageAccountRoleDefinitionIds": {
               "type": "array",
               "defaultValue": []
@@ -789,7 +776,7 @@
               "queue",
               "table"
             ],
-            "storageAccountRoleDefinitions": "[union(createArray('b7e6dc6d-f1e8-4753-8033-0f276bb0955b'), parameters('storageAccountRoleDefinitionIds'))]"
+            "storageAccountRoleDefinitions": "[union(createArray('ba92f5b4-2d11-453d-a403-e96b0029c9fe', '974c5e8b-45b9-4653-ba55-5f855dd0fb88'), parameters('storageAccountRoleDefinitionIds'))]"
           },
           "resources": [
             {
@@ -962,7 +949,7 @@
                 "serverFarmId": "[parameters('serverFarmId')]",
                 "siteConfig": {
                   "alwaysOn": true,
-                  "appSettings": "[union(createArray(createObject('name', 'AzureWebJobsStorage__blobServiceUri', 'value', format('https://{0}.blob.{1}', parameters('storageAccountName'), environment().suffixes.storage))), if(empty(parameters('functionAppUserAssignedIdentityResourceId')), createArray(), createArray(createObject('name', 'AzureWebJobsStorage__credential', 'value', 'managedidentity'), createObject('name', 'AzureWebJobsStorage__clientId', 'value', reference(parameters('functionAppUserAssignedIdentityResourceId'), '2023-01-31').clientId))), createArray(createObject('name', 'AzureWebJobsStorage__queueServiceUri', 'value', format('https://{0}.queue.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'AzureWebJobsStorage__tableServiceUri', 'value', format('https://{0}.table.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_LOAD_USER_PROFILE', 'value', '1'), createObject('name', 'EnvironmentName', 'value', environment().name), createObject('name', 'ResourceManagerUrl', 'value', if(endsWith(environment().resourceManager, '/'), environment().resourceManager, format('{0}/', environment().resourceManager))), createObject('name', 'StorageSuffix', 'value', environment().suffixes.storage), createObject('name', 'TenantId', 'value', subscription().tenantId), createObject('name', 'UserAssignedIdentityClientId', 'value', if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(parameters('functionAppUserAssignedIdentityResourceId'), '2023-01-31').clientId, ''))), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString)), createArray()), parameters('functionAppAppSettings'))]",
+                  "appSettings": "[union(if(empty(parameters('functionAppUserAssignedIdentityResourceId')), createArray(), createArray(createObject('name', 'AzureWebJobsStorage__clientId', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').clientId), createObject('name', 'UserAssignedIdentityClientId', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').clientId))), createArray(createObject('name', 'AzureWebJobsStorage__credential', 'value', 'managedidentity'), createObject('name', 'AzureWebJobsStorage__blobServiceUri', 'value', format('https://{0}.blob.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'AzureWebJobsStorage__queueServiceUri', 'value', format('https://{0}.queue.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'AzureWebJobsStorage__tableServiceUri', 'value', format('https://{0}.table.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_LOAD_USER_PROFILE', 'value', '1'), createObject('name', 'EnvironmentName', 'value', environment().name), createObject('name', 'ResourceManagerUri', 'value', environment().resourceManager), createObject('name', 'StorageSuffix', 'value', environment().suffixes.storage), createObject('name', 'TenantId', 'value', subscription().tenantId)), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString)), createArray()), parameters('functionAppAppSettings'))]",
                   "cors": {
                     "allowedOrigins": [
                       "[format('{0}', environment().portal)]",
@@ -1459,264 +1446,6 @@
             },
             {
               "copy": {
-                "name": "roleAssignments_resourceGroups",
-                "count": "[length(range(0, length(parameters('roleAssignments'))))]"
-              },
-              "condition": "[greater(length(split(parameters('roleAssignments')[range(0, length(parameters('roleAssignments')))[copyIndex()]].scope, '/')), 3)]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('set-role-assignment-rg-{0}-{1}', range(0, length(parameters('roleAssignments')))[copyIndex()], parameters('deploymentSuffix'))]",
-              "subscriptionId": "[split(parameters('roleAssignments')[range(0, length(parameters('roleAssignments')))[copyIndex()]].scope, '/')[2]]",
-              "resourceGroup": "[last(split(parameters('roleAssignments')[range(0, length(parameters('roleAssignments')))[copyIndex()]].scope, '/'))]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "principalId": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), createObject('value', reference(parameters('functionAppUserAssignedIdentityResourceId'), '2023-01-31', 'Full').properties.principalId), createObject('value', reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId))]",
-                  "principalType": {
-                    "value": "ServicePrincipal"
-                  },
-                  "roleDefinitionId": {
-                    "value": "[parameters('roleAssignments')[range(0, length(parameters('roleAssignments')))[copyIndex()]].roleDefinitionId]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "17889000177953870600"
-                    }
-                  },
-                  "parameters": {
-                    "roleDefinitionId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. You can provide either the role definition GUID or its fully qualified ID in the following format: \\'/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11\\'.\nYou can find the GUIDs in the ID column on the table at https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles.\n"
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. The Principal or Object ID of the Security Principal (User, Group, Service Principal, Managed Identity)."
-                      }
-                    },
-                    "resourceGroupName": {
-                      "type": "string",
-                      "defaultValue": "[resourceGroup().name]",
-                      "metadata": {
-                        "description": "Optional. Name of the Resource Group to assign the RBAC role to. If not provided, will use the current scope for deployment."
-                      }
-                    },
-                    "subscriptionId": {
-                      "type": "string",
-                      "defaultValue": "[subscription().subscriptionId]",
-                      "metadata": {
-                        "description": "Optional. Subscription ID of the subscription to assign the RBAC role to. If not provided, will use the current scope for deployment."
-                      }
-                    },
-                    "principalType": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "allowedValues": [
-                        "ServicePrincipal",
-                        "Group",
-                        "User",
-                        "ForeignGroup",
-                        "Device",
-                        ""
-                      ],
-                      "metadata": {
-                        "description": "Optional. The principal type of the assigned principal ID."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "name": "[guid(parameters('subscriptionId'), parameters('resourceGroupName'), variables('roleDefinitionIdVar'), parameters('principalId'))]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(parameters('subscriptionId'), parameters('resourceGroupName'), variables('roleDefinitionIdVar'), parameters('principalId')))]"
-                    }
-                  }
-                }
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
-              ]
-            },
-            {
-              "copy": {
-                "name": "roleAssignments_subscriptions",
-                "count": "[length(range(0, length(parameters('roleAssignments'))))]"
-              },
-              "condition": "[equals(length(split(parameters('roleAssignments')[range(0, length(parameters('roleAssignments')))[copyIndex()]].scope, '/')), 3)]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('set-role-assignment-sub-{0}-{1}', range(0, length(parameters('roleAssignments')))[copyIndex()], parameters('deploymentSuffix'))]",
-              "subscriptionId": "[split(parameters('roleAssignments')[range(0, length(parameters('roleAssignments')))[copyIndex()]].scope, '/')[2]]",
-              "location": "[resourceGroup().location]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "principalId": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), createObject('value', reference(parameters('functionAppUserAssignedIdentityResourceId'), '2023-01-31', 'Full').properties.principalId), createObject('value', reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId))]",
-                  "principalType": {
-                    "value": "ServicePrincipal"
-                  },
-                  "roleDefinitionId": {
-                    "value": "[parameters('roleAssignments')[range(0, length(parameters('roleAssignments')))[copyIndex()]].roleDefinitionId]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "7334988505119235113"
-                    },
-                    "name": "Role Assignments (Subscription scope)",
-                    "description": "This module deploys a Role Assignment at a Subscription scope.",
-                    "owner": "Azure/module-maintainers"
-                  },
-                  "parameters": {
-                    "roleDefinitionId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. You can provide either the role definition GUID or its fully qualified ID in the following format: \\'/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11\\'.\nYou can find the GUIDs in the ID column on the table at https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles.\n"
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. The Principal or Object ID of the Security Principal (User, Group, Service Principal, Managed Identity)."
-                      }
-                    },
-                    "subscriptionId": {
-                      "type": "string",
-                      "defaultValue": "[subscription().subscriptionId]",
-                      "metadata": {
-                        "description": "Optional. Subscription ID of the subscription to assign the RBAC role to. If not provided, will use the current scope for deployment."
-                      }
-                    },
-                    "description": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. The description of the role assignment."
-                      }
-                    },
-                    "delegatedManagedIdentityResourceId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. ID of the delegated managed identity resource."
-                      }
-                    },
-                    "condition": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. The conditions on the role assignment. This limits the resources it can be assigned to."
-                      }
-                    },
-                    "conditionVersion": {
-                      "type": "string",
-                      "defaultValue": "2.0",
-                      "allowedValues": [
-                        "2.0"
-                      ],
-                      "metadata": {
-                        "description": "Optional. Version of the condition. Currently accepted value is \"2.0\"."
-                      }
-                    },
-                    "principalType": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "allowedValues": [
-                        "ServicePrincipal",
-                        "Group",
-                        "User",
-                        "ForeignGroup",
-                        "Device",
-                        ""
-                      ],
-                      "metadata": {
-                        "description": "Optional. The principal type of the assigned principal ID."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "name": "[guid(parameters('subscriptionId'), variables('roleDefinitionIdVar'), parameters('principalId'))]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                        "principalId": "[parameters('principalId')]",
-                        "description": "[if(not(empty(parameters('description'))), parameters('description'), null())]",
-                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
-                        "delegatedManagedIdentityResourceId": "[if(not(empty(parameters('delegatedManagedIdentityResourceId'))), parameters('delegatedManagedIdentityResourceId'), null())]",
-                        "conditionVersion": "[if(and(not(empty(parameters('conditionVersion'))), not(empty(parameters('condition')))), parameters('conditionVersion'), null())]",
-                        "condition": "[if(not(empty(parameters('condition'))), parameters('condition'), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "name": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "The GUID of the Role Assignment."
-                      },
-                      "value": "[guid(parameters('subscriptionId'), variables('roleDefinitionIdVar'), parameters('principalId'))]"
-                    },
-                    "resourceId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "The resource ID of the Role Assignment."
-                      },
-                      "value": "[subscriptionResourceId('Microsoft.Authorization/roleAssignments', guid(parameters('subscriptionId'), variables('roleDefinitionIdVar'), parameters('principalId')))]"
-                    },
-                    "scope": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "The scope this Role Assignment applies to."
-                      },
-                      "value": "[subscription().id]"
-                    }
-                  }
-                }
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
-              ]
-            },
-            {
-              "copy": {
                 "name": "roleAssignment_storageAccount",
                 "count": "[length(variables('storageAccountRoleDefinitions'))]"
               },
@@ -1731,7 +1460,7 @@
                 "parameters": {
                   "principalIds": {
                     "value": [
-                      "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(parameters('functionAppUserAssignedIdentityResourceId'), '2023-01-31', 'Full').properties.principalId, reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId)]"
+                      "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').principalId, reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId)]"
                     ]
                   },
                   "principalType": {
@@ -1895,13 +1624,118 @@
             },
             "functionAppPrincipalId": {
               "type": "string",
-              "value": "[if(empty(parameters('functionAppUserAssignedIdentityResourceId')), reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId, reference(parameters('functionAppUserAssignedIdentityResourceId'), '2023-01-31').principalId)]"
+              "value": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').principalId, reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId)]"
             }
           }
         }
       },
       "dependsOn": [
         "[resourceId('Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('RA-StorageAccounts-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('storageSubscriptionId')]",
+      "resourceGroup": "[variables('storageResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "principalId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.functionAppPrincipalId.value]"
+          },
+          "principalType": {
+            "value": "ServicePrincipal"
+          },
+          "roleDefinitionId": {
+            "value": "17d1049b-9a84-46fb-8f53-869881c3d3ab"
+          },
+          "resourceGroupName": {
+            "value": "[variables('storageResourceGroupName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "17889000177953870600"
+            }
+          },
+          "parameters": {
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. You can provide either the role definition GUID or its fully qualified ID in the following format: \\'/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11\\'.\nYou can find the GUIDs in the ID column on the table at https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles.\n"
+              }
+            },
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. The Principal or Object ID of the Security Principal (User, Group, Service Principal, Managed Identity)."
+              }
+            },
+            "resourceGroupName": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().name]",
+              "metadata": {
+                "description": "Optional. Name of the Resource Group to assign the RBAC role to. If not provided, will use the current scope for deployment."
+              }
+            },
+            "subscriptionId": {
+              "type": "string",
+              "defaultValue": "[subscription().subscriptionId]",
+              "metadata": {
+                "description": "Optional. Subscription ID of the subscription to assign the RBAC role to. If not provided, will use the current scope for deployment."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "",
+              "allowedValues": [
+                "ServicePrincipal",
+                "Group",
+                "User",
+                "ForeignGroup",
+                "Device",
+                ""
+              ],
+              "metadata": {
+                "description": "Optional. The principal type of the assigned principal ID."
+              }
+            }
+          },
+          "variables": {
+            "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(parameters('subscriptionId'), parameters('resourceGroupName'), variables('roleDefinitionIdVar'), parameters('principalId'))]",
+              "properties": {
+                "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]"
+              }
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(parameters('subscriptionId'), parameters('resourceGroupName'), variables('roleDefinitionIdVar'), parameters('principalId')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix')))]"
       ]
     },
     {
@@ -1938,7 +1772,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "14546807957848619661"
+              "templateHash": "17588884351474844819"
             }
           },
           "parameters": {
@@ -1955,19 +1789,24 @@
               "type": "string"
             }
           },
-          "variables": {
-            "functionJson": "      {\r\n        \"bindings\": [\r\n          {\r\n            \"type\": \"timerTrigger\",\r\n            \"direction\": \"in\",\r\n            \"name\": \"Timer\",\r\n            \"schedule\": \"<schedule>\"\r\n          }\r\n        ]\r\n      }\r\n      ",
-            "filesWithFunctionJson": "[union(parameters('files'), createObject('function.json', replace(variables('functionJson'), '<schedule>', parameters('schedule'))))]"
-          },
           "resources": [
             {
               "type": "Microsoft.Web/sites/functions",
               "apiVersion": "2020-12-01",
               "name": "[format('{0}/{1}', parameters('functionAppName'), parameters('functionName'))]",
               "properties": {
-                "language": "PowerShell",
-                "files": "[variables('filesWithFunctionJson')]",
-                "script_root_path_href": ""
+                "config": {
+                  "disabled": false,
+                  "bindings": [
+                    {
+                      "type": "timerTrigger",
+                      "direction": "in",
+                      "name": "Timer",
+                      "schedule": "[parameters('schedule')]"
+                    }
+                  ]
+                },
+                "files": "[parameters('files')]"
               }
             }
           ]

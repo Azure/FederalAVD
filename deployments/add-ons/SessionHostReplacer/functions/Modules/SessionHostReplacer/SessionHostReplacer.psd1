@@ -25,6 +25,8 @@
 
     # Functions to export from this module
     FunctionsToExport = @(
+        'Get-ResourceManagerUri'
+        'Get-GraphEndpoint'
         'Get-AccessToken'
         'Read-FunctionAppSetting'
         'Write-HostDetailed'
@@ -32,6 +34,7 @@
         'Invoke-GraphApiWithRetry'
         'Invoke-AzureRestMethod'
         'Get-DeploymentState'
+        'Get-LastDeploymentStatus'
         'Save-DeploymentState'
         'ConvertTo-CaseInsensitiveHashtable'
         'Deploy-SessionHosts'
@@ -39,7 +42,6 @@
         'Get-HostPoolDecisions'
         'Get-RunningDeployments'
         'Get-SessionHosts'
-        'Get-SessionHostParameters'
         'Get-TemplateSpecVersionResourceId'
         'Remove-SessionHosts'
         'Remove-EntraDevice'

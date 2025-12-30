@@ -10,7 +10,6 @@ param dataCollectionEndpointResourceId string
 param dedicatedHostGroupResourceId string
 param dedicatedHostGroupZones array
 param dedicatedHostResourceId string
-param diskAccessId string
 param diskEncryptionSetResourceId string
 param diskSizeGB int
 param diskSku string
@@ -42,8 +41,8 @@ param networkInterfaceNameConv string
 param osDiskNameConv string
 param ouPath string
 param sessionHostCustomizations array
+param sessionHostNameIndexLength int
 param sessionHostNames array
-param vmNameIndexLength int
 param sessionHostRegistrationDSCUrl string
 param securityDataCollectionRulesResourceId string
 param securityType string
@@ -57,7 +56,6 @@ param virtualMachineAdminPassword string
 @secure()
 param virtualMachineAdminUserName string
 param virtualMachineNameConv string
-param virtualMachineNamePrefix string
 param virtualMachineSize string
 param vmInsightsDataCollectionRulesResourceId string
 param vTpmEnabled bool
@@ -69,17 +67,12 @@ var nvidiaVmSize = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virt
 // Calculate session host count from the array length
 var sessionHostCount = length(sessionHostNames)
 
-// Determine the position of the numeric index in the VM name based on naming convention
-// virtualMachineNameConv uses '###' as placeholder for the padded index
-var indexPosition = indexOf(virtualMachineNameConv, '###')
-
 // Extract VM numbers from names for zone distribution
-// If '###' is at position 0, extract from beginning; otherwise from the calculated position
-var vmNumbers = [for name in sessionHostNames: int(substring(name, indexPosition, vmNameIndexLength))]
+var vmNumbers = [for name in sessionHostNames: int(substring(name, length(name) - sessionHostNameIndexLength, sessionHostNameIndexLength))]
 
 // Extract padded index strings from VM names for use in naming conventions (e.g., 'avdhost001' -> '001')
-var vmIndexStrings = [for name in sessionHostNames: substring(name, indexPosition, vmNameIndexLength)]
-
+var vmIndexStrings = [for name in sessionHostNames: substring(name, length(name) - sessionHostNameIndexLength, sessionHostNameIndexLength)]
+var vmPrefixStrings = [for name in sessionHostNames: substring(name, 0, length(name) - sessionHostNameIndexLength)]
 var profileShareName = fslogixFileShareNames[0]
 var officeShareName = length(fslogixFileShareNames) > 1 ? fslogixFileShareNames[1] : ''
 
@@ -168,7 +161,7 @@ resource remoteStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' ex
 }]
 
 resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [for i in range(0, sessionHostCount): {
-  name: replace(replace(networkInterfaceNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', virtualMachineNamePrefix)
+  name: replace(replace(networkInterfaceNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Network/networkInterfaces'] ?? {})
   properties: {
@@ -191,7 +184,7 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [fo
 }]
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i in range(0, sessionHostCount): {
-  name: replace(replace(virtualMachineNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', virtualMachineNamePrefix)
+  name: replace(replace(virtualMachineNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
   zones: !empty(dedicatedHostResourceId) || !empty(dedicatedHostGroupResourceId) ? dedicatedHostGroupZones : availability == 'AvailabilityZones' && !empty(availabilityZones) ? [
@@ -215,7 +208,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
       imageReference: imageReference
       osDisk: {
         diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
-        name: replace(replace(osDiskNameConv, '###', vmIndexStrings[i]), 'VMNAME', sessionHostNames[i])
+        name: replace(replace(osDiskNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
         osType: 'Windows'
         createOption: 'FromImage'
         caching: 'ReadWrite'
@@ -628,7 +621,7 @@ resource extension_DSC_installAvdAgents 'Microsoft.Compute/virtualMachines/exten
 module updateOSDiskNetworkAccess 'getOSDisk.bicep' = [for i in range(0, sessionHostCount): {
   name: '${virtualMachine[i].name}-disable-osDisk-PublicAccess-${deploymentSuffix}'
   params: {
-    diskAccessId: diskAccessId
+    diskAccessId: ''
     diskName: virtualMachine[i].properties.storageProfile.osDisk.name
     location: location
     deploymentSuffix: deploymentSuffix

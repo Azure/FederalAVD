@@ -158,7 +158,7 @@
 									"type": "Microsoft.Solutions.ResourceSelector",
 									"label": "Existing Template Spec",
 									"toolTip": "Select the existing template spec for session host deployments.",
-									"resourceType": "Microsoft.Resources/templateSpecs/versions",
+									"resourceType": "Microsoft.Resources/templateSpecs",
 									"visible": "[equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing')]",
 									"constraints": {
 										"required": "[equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing')]"
@@ -200,7 +200,7 @@
 									"name": "scheduleInfoBox",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
-										"text": "The function will run at the selected hours on the selected days of the week. For example, selecting hours 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 and Monday-Friday will run the function every hour from 8 AM to 5 PM on weekdays only. The schedule uses the timezone selected in the 'Session Hosts' blade.",
+										"text": "The function will run at the selected hours on the selected days of the week. For example, selecting the times 8 AM, 9 AM, 10 AM, 11 AM, 12 PM, 1 PM, 2 PM, 3 PM, 4 PM, and 5 PM along with Monday-Friday will run the function every hour from 8 AM to 5 PM on weekdays only. The schedule uses the timezone selected in the 'Session Hosts' blade.",
 										"style": "Info"
 									}
 								},
@@ -264,16 +264,58 @@
 									}
 								},
 								{
+									"name": "replacementModeTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Choose how you want to manage session host replacements. You can replace session hosts automatically when a new image version is available, or replace them based on their age in days. If you choose age-based replacement, session hosts older than the specified number of days will be marked for replacement. If you choose image version-based replacement, you can optionally specify a delay period before triggering replacements after a new image is published."
+									}
+								},
+								{
+									"name": "replacementMode",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Replacement Mode",
+									"toolTip": "Select how session hosts should be replaced.",
+									"defaultValue": "Replace Session Hosts on New Image Version",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "Replace Session Hosts on New Image Version",
+												"value": "ImageVersion"
+											},
+											{
+												"label": "Replace Session Hosts based on age (days)",
+												"value": "Age-based"
+											}
+										]
+									}
+								},
+								{
 									"name": "targetVMAgeDays",
 									"type": "Microsoft.Common.Slider",
 									"label": "Target VM Age (days)",
 									"toolTip": "Session hosts older than this will be marked for replacement.",
-									"min": 0,
-									"max": 365,
-									"defaultValue": 0,
+									"min": 1,
+									"max": 180,
+									"defaultValue": 45,
 									"showStepMarkers": false,
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'Age-based')]",
 									"constraints": {
 										"required": true
+									}
+								},								
+								{
+									"name": "replaceSessionHostOnNewImageVersionDelayDays",
+									"type": "Microsoft.Common.Slider",
+									"label": "New Image Version Delay (days)",
+									"toolTip": "Number of days to wait after a new image is published before triggering replacements.",
+									"min": 0,
+									"max": 30,
+									"defaultValue": 0,
+									"showStepMarkers": false,
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'ImageVersion')]",
+									"constraints": {
+										"required": false
 									}
 								},
 								{
@@ -284,6 +326,32 @@
 									"min": 1,
 									"max": 168,
 									"defaultValue": 24,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "targetSessionHostCount",
+									"type": "Microsoft.Common.Slider",
+									"label": "Target Session Host Count",
+									"toolTip": "The target number of session hosts to maintain. Set to 0 for auto-detect mode: automatically maintains current count during each replacement cycle, allowing manual scaling between image updates.",
+									"min": 0,
+									"max": 1000,
+									"defaultValue": 0,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "targetSessionHostBuffer",
+									"type": "Microsoft.Common.Slider",
+									"label": "Target Session Host Buffer",
+									"toolTip": "Additional temporary capacity above target during replacements. Enables rolling updates without reducing user capacity (e.g., target=3, buffer=2 allows up to 5 hosts during replacement).",
+									"min": 0,
+									"max": 100,
+									"defaultValue": 0,
 									"showStepMarkers": false,
 									"constraints": {
 										"required": true
@@ -368,7 +436,7 @@
 									"name": "deviceCleanupInfoBox",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
-										"text": "<b>Device Cleanup Automation Overview</b><br/><br/>Device cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. <b>This is especially important when session hosts are Entra ID-joined</b> (i.e., not joined to Active Directory Domain Services or Entra Domain Services) to prevent accumulation of orphaned device records.<br/><br/><b>Required Permissions:</b><br/>This feature requires a User-Assigned Managed Identity with the following Microsoft Graph API permissions:<ul><li><b>'Device.ReadWrite.All'</b> - Required for Entra ID device cleanup</li><li><b>'DeviceManagementManagedDevices.ReadWrite.All'</b> - Required for Intune device cleanup</li></ul>Ensure these permissions are granted to the user-assigned managed identity before deployment.<br/><br/><b>Important:</b> If you enable either cleanup option below, you <b>must select a pre-existing User-Assigned Managed Identity</b> in the Infrastructure section that has been granted the appropriate Microsoft Graph API permissions.<br/><br/><b>Air-Gapped Cloud Limitations:</b><br/>Intune is not currently available in Air-Gapped Clouds such as <b>Azure Government Secret</b> and <b>Azure Government Top Secret</b>. In these environments, the Intune Device Cleanup option will be automatically disabled, and the 'DeviceManagementManagedDevices.ReadWrite.All' permission is not required.",
+										"text": "<b>Device Cleanup Automation Overview</b><br/><br/>Device cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. <b>This is especially important when session hosts are Entra ID-joined</b> (i.e., not joined to Active Directory Domain Services or Entra Domain Services) to prevent accumulation of orphaned device records.<br/><br/><b>Required Permissions:</b><br/>This feature requires a User-Assigned Managed Identity with the following Microsoft Graph API permissions:<ul><li><b>'Directory.ReadWrite.All'</b> - Required for Entra ID device deletion</li><li><b>'DeviceManagementManagedDevices.ReadWrite.All'</b> - Required for Intune device deletion</li></ul><b>Important Note:</b> <i>Device.ReadWrite.All</i> does NOT allow device deletion despite its name. You must use <i>Directory.ReadWrite.All</i> for Entra ID device cleanup.<br/><br/>Ensure these permissions are granted to the user-assigned managed identity before deployment.<br/><br/><b>Important:</b> If you enable either cleanup option below, you <b>must select a pre-existing User-Assigned Managed Identity</b> in the Infrastructure section that has been granted the appropriate Microsoft Graph API permissions.<br/><br/><b>Air-Gapped Cloud Limitations:</b><br/>Intune is not currently available in Air-Gapped Clouds such as <b>Azure Government Secret</b> and <b>Azure Government Top Secret</b>. In these environments, the Intune Device Cleanup option will be automatically disabled, and the 'DeviceManagementManagedDevices.ReadWrite.All' permission is not required.",
 										"style": "Info",
 										"uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
 									}
@@ -461,7 +529,7 @@
 									"type": "Microsoft.Common.InfoBox",
 									"visible": "[or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice)]",
 									"options": {
-										"text": "Device cleanup automation requires a User-Assigned Managed Identity with Microsoft Graph API permissions. The required permissions depend on which cleanup options you enabled above: 'Device.ReadWrite.All' (for Entra ID cleanup) and/or 'DeviceManagementManagedDevices.ReadWrite.All' (for Intune cleanup).",
+										"text": "Device cleanup automation requires a User-Assigned Managed Identity with the following Microsoft Graph API permissions:<ul><li><b>'Directory.ReadWrite.All'</b> - Required for Entra ID device deletion</li><li><b>'DeviceManagementManagedDevices.ReadWrite.All'</b> - Required for Intune device deletion</li></ul>Note: <i>Device.ReadWrite.All</i> does NOT allow device deletion despite its name. You must use <i>Directory.ReadWrite.All</i> for Entra ID device cleanup.",
 										"style": "Info",
 										"uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
 									}
@@ -501,6 +569,35 @@
 									"toolTip": "Select the existing App Service Plan. Only plans in the selected subscription and location are shown.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('functionApp').infrastructure.serverFarmsApi.value, (sf) => equals(sf.location, steps('basics').scope.location.displayName)), (sf) => parse(concat('{\"label\":\"', sf.name, '\",\"description\":\"Location: ', sf.location, ' | Resource Group: ', first(skip(split(sf.id, '/'), 4)), '\",\"value\":\"', sf.id, '\"}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "planSku",
+									"type": "Microsoft.Common.DropDown",
+									"visible": "[not(steps('functionApp').infrastructure.useExistingHostingPlan)]",
+									"label": "App Service Plan SKU",
+									"defaultValue": "P0v3 (1 vCPU, 4 GB RAM) - Most Cost-Effective",
+									"toolTip": "Select the SKU for the new App Service Plan. P0v3 is recommended for cost optimization and fully supports all required features (Always On, VNet integration, PowerShell 7.4).",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "P0v3 (1 vCPU, 4 GB RAM) - Most Cost-Effective",
+												"value": "PremiumV3_P0v3"
+											},
+											{
+												"label": "P1v3 (2 vCPU, 8 GB RAM)",
+												"value": "PremiumV3_P1v3"
+											},
+											{
+												"label": "P2v3 (4 vCPU, 16 GB RAM)",
+												"value": "PremiumV3_P2v3"
+											},
+											{
+												"label": "P3v3 (8 vCPU, 32 GB RAM)",
+												"value": "PremiumV3_P3v3"
+											}
+										],
 										"required": true
 									}
 								},
@@ -988,7 +1085,7 @@
 							"label": "Naming",
 							"elements": [
 								{
-									"name": "virtualMachineNamePrefix",
+									"name": "sessionHostNamePrefix",
 									"type": "Microsoft.Common.TextBox",
 									"label": "Virtual Machine Name Prefix",
 									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmNamePrefix), '', steps('functionApp').executionSettings.hostsRGProps.tags.vmNamePrefix)]",
@@ -1001,7 +1098,7 @@
 												"message": "The prefix can only contain valid character types for computer names."
 											},
 											{
-												"isValid": "[if(lessOrEquals(add(length(steps('hosts').naming.virtualMachineNamePrefix), steps('hosts').naming.indexPadding), 15), true, false)]",
+												"isValid": "[if(lessOrEquals(add(length(steps('hosts').naming.sessionHostNamePrefix), steps('hosts').naming.indexPadding), 15), true, false)]",
 												"message": "The length of the virtual machine name prefix and the index padding cannot exceed 15 characters."
 											}
 										]
@@ -2112,7 +2209,7 @@
 							"visible": "[equals(steps('userProfiles').storageService, 'AzureFiles')]",
 							"elements": [
 								{
-									"name": "leastPrivShardHeader",
+									"name": "shardHeader",
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('identity').solution, 'EntraId')))]",
 									"options": {
@@ -2527,12 +2624,16 @@
 			"parameters": {
 				"location": "[steps('basics').scope.location.name]",
 				"hostPoolResourceId": "[steps('functionApp').executionSettings.hostPool.id]",
-				"sessionHostTemplateSpecVersionResourceId": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing'), steps('functionApp').executionSettings.templateSpecResourceSelector.id, '')]",
+				"sessionHostTemplateSpecResourceId": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing'), steps('functionApp').executionSettings.templateSpecResourceSelector.id, '')]",
 				"templateSpecName": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecName, '')]",
 				"templateSpecVersion": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecVersion, '1.0.0')]",
 				"timerSchedule": "[concat('0 0 ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]",
-				"targetVMAgeDays": "[steps('functionApp').executionSettings.targetVMAgeDays]",
+				"replacementMode": "[steps('functionApp').executionSettings.replacementMode]",
+				"targetVMAgeDays": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'Age-based'), steps('functionApp').executionSettings.targetVMAgeDays, 0)]",
+				"replaceSessionHostOnNewImageVersionDelayDays": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'ImageVersion'), steps('functionApp').executionSettings.replaceSessionHostOnNewImageVersionDelayDays, 0)]",
 				"drainGracePeriodHours": "[steps('functionApp').executionSettings.drainGracePeriodHours]",
+				"targetSessionHostCount": "[steps('functionApp').executionSettings.targetSessionHostCount]",
+				"targetSessionHostBuffer": "[steps('functionApp').executionSettings.targetSessionHostBuffer]",				
 				"maxDeploymentBatchSize": "[steps('functionApp').executionSettings.maxDeploymentBatchSize]",
 				"fixSessionHostTags": "[steps('functionApp').executionSettings.fixSessionHostTags]",
 				"includePreExistingSessionHosts": "[steps('functionApp').executionSettings.includePreExistingSessionHosts]",
@@ -2548,6 +2649,7 @@
 				"successfulRunsBeforeScaleUp": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.successfulRunsBeforeScaleUp, 1)]",
 				"sessionHostReplacerUserAssignedIdentityResourceId": "[if(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), steps('functionApp').infrastructure.sessionHostReplacerUserAssignedIdentity.id, '')]",
 				"appServicePlanResourceId": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, steps('functionApp').infrastructure.appServicePlan, '')]",
+				"appServicePlanSku": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.planSku, 'PremiumV3_P0v3')]",
 				"zoneRedundant": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.zoneRedundant, false)]",
 				"keyManagementStorageAccounts": "[steps('functionApp').infrastructure.keyManagementStorageAccounts]",
 				"encryptionKeyVaultResourceId": "[if(contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'), steps('functionApp').infrastructure.encryptionKeyVault, '')]",
@@ -2564,8 +2666,8 @@
 				"credentialsKeyVaultResourceId": "[steps('identity').credentials.keyVault.id]",
 				"virtualMachinesResourceGroupId": "[steps('hosts').scope.resourceGroup.id]",
 				"timeZone": "[steps('hosts').scope.timeZone]",
-				"virtualMachineNamePrefix": "[steps('hosts').naming.virtualMachineNamePrefix]",
-				"vmNameIndexLength": "[steps('hosts').naming.indexPadding]",
+				"sessionHostNamePrefix": "[steps('hosts').naming.sessionHostNamePrefix]",
+				"sessionHostNameIndexLength": "[steps('hosts').naming.indexPadding]",
 				"virtualMachineSubnetResourceId": "[steps('hosts').network.subnet.id]",
 				"imagePublisher": "[if(equals(steps('hosts').image.source, 'marketplace'), 'MicrosoftWindowsDesktop', '')]",
 				"imageOffer": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.offer, '')]",
@@ -2577,6 +2679,7 @@
 				"integrityMonitoring": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.integrityMonitoring)]",
 				"encryptionAtHost": "[steps('hosts').diskEncryption.encryptionAtHost]",
 				"confidentialVMOSDiskEncryption": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, false)]",
+				"diskEncryptionSetResourceId": "[if(steps('hosts').diskEncryption.selectDiskEncryptionSet, steps('hosts').diskEncryption.existingDiskEncryptionSet, '')]",
 				"virtualMachineSize": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric)]",
 				"diskSizeGB": "[steps('hosts').specs.diskSizeGB]",
 				"diskSku": "[steps('hosts').specs.diskSku]",

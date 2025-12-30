@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "926272795063144079"
+      "templateHash": "18399532378519447159"
     }
   },
   "parameters": {
@@ -5694,7 +5694,7 @@
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.globalFeedWorkspaceName.value]"
           },
           "hostPoolCustomTags": {
-            "value": "[union(createObject('hostResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', variables('hostsSubscription'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupHosts.value)), if(parameters('deployFSLogixStorage'), createObject('storageResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', variables('storageSubscription'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupStorage.value)), createObject()))]"
+            "value": "[union(createObject('hostsResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', variables('hostsSubscription'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupHosts.value)), if(parameters('deployFSLogixStorage'), createObject('storageResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', variables('storageSubscription'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupStorage.value)), createObject()))]"
           },
           "hostPoolMaxSessionLimit": {
             "value": "[parameters('hostPoolMaxSessionLimit')]"

@@ -25,7 +25,6 @@ param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
 param privateLinkScopeResourceId string
-param roleAssignments array = []
 param storageAccountRoleDefinitionIds array = []
 param serverFarmId string
 param storageAccountName string
@@ -50,6 +49,14 @@ var storageSubResources = [
   'queue'
   'table'
 ]
+
+resource functionAppUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = if (!empty(functionAppUserAssignedIdentityResourceId)) {
+  name: last(split(functionAppUserAssignedIdentityResourceId, '/'))
+  scope: resourceGroup(
+    split(functionAppUserAssignedIdentityResourceId, '/')[2],
+    split(functionAppUserAssignedIdentityResourceId, '/')[4]
+  )
+}
 
 // Create the Function App Storage Account with Microsoft Managed Keys first
 resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
@@ -245,25 +252,27 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
     siteConfig: {
       alwaysOn: true
       appSettings: union(
+        empty(functionAppUserAssignedIdentityResourceId)
+          ? []
+          : [
+              {
+                name: 'AzureWebJobsStorage__clientId'
+                value: functionAppUAI!.properties.clientId
+              }
+              {
+                name: 'UserAssignedIdentityClientId'
+                value: functionAppUAI!.properties.clientId
+              }
+            ],
         [
+          {
+            name: 'AzureWebJobsStorage__credential'
+            value: 'managedidentity'
+          }
           {
             name: 'AzureWebJobsStorage__blobServiceUri'
             value: 'https://${storageAccount.name}.blob.${environment().suffixes.storage}'
           }
-        ],
-        empty(functionAppUserAssignedIdentityResourceId)
-        ? []
-        : [
-            {
-              name: 'AzureWebJobsStorage__credential'
-              value: 'managedidentity'
-            }
-            {
-              name: 'AzureWebJobsStorage__clientId'
-              value: reference(functionAppUserAssignedIdentityResourceId, '2023-01-31').clientId
-            }
-        ],
-        [
           {
             name: 'AzureWebJobsStorage__queueServiceUri'
             value: 'https://${storageAccount.name}.queue.${environment().suffixes.storage}'
@@ -289,11 +298,9 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
             value: environment().name
           }
           {
-            name: 'ResourceManagerUrl'
+            name: 'ResourceManagerUri'
             // This workaround is needed because the environment().resourceManager value is missing the trailing slash for some Azure environments
-            value: endsWith(environment().resourceManager, '/')
-              ? environment().resourceManager
-              : '${environment().resourceManager}/'
+            value: environment().resourceManager
           }
           {
             name: 'StorageSuffix'
@@ -302,12 +309,6 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
           {
             name: 'TenantId'
             value: subscription().tenantId
-          }
-          {
-            name: 'UserAssignedIdentityClientId'
-            value: !empty(functionAppUserAssignedIdentityResourceId)
-              ? reference(functionAppUserAssignedIdentityResourceId, '2023-01-31').clientId
-              : ''
           }
         ],
         enableApplicationInsights
@@ -397,41 +398,14 @@ resource privateDnsZoneGroup_functionApp 'Microsoft.Network/privateEndpoints/pri
 // Get principal ID from User-Assigned Identity if provided, otherwise use System-Assigned
 // Get the principal ID of the identity being used (user-assigned if provided, otherwise system-assigned)
 var functionAppPrincipalId = !empty(functionAppUserAssignedIdentityResourceId)
-  ? reference(functionAppUserAssignedIdentityResourceId, '2023-01-31', 'Full').properties.principalId
+  ? functionAppUAI!.properties.principalId
   : functionApp.identity.principalId
 
-module roleAssignments_resourceGroups '../../resources/authorization/role-assignment/resource-group/main.bicep' = [
-  for i in range(0, length(roleAssignments)): if (length(split(roleAssignments[i].scope, '/')) > 3) {
-    name: 'set-role-assignment-rg-${i}-${deploymentSuffix}'
-    scope: resourceGroup(
-      split(roleAssignments[i].scope, '/')[2],
-      // Extract subscription ID from resource ID
-      last(split(roleAssignments[i].scope, '/')) // Extract resource group name from resource ID
-    )
-    params: {
-      principalId: functionAppPrincipalId
-      principalType: 'ServicePrincipal'
-      roleDefinitionId: roleAssignments[i].roleDefinitionId
-    }
-  }
-]
-
-module roleAssignments_subscriptions '../../resources/authorization/role-assignment/subscription/main.bicep' = [
-  for i in range(0, length(roleAssignments)): if (length(split(roleAssignments[i].scope, '/')) == 3) {
-    name: 'set-role-assignment-sub-${i}-${deploymentSuffix}'
-    scope: subscription(split(roleAssignments[i].scope, '/')[2])
-    params: {
-      principalId: functionAppPrincipalId
-      principalType: 'ServicePrincipal'
-      roleDefinitionId: roleAssignments[i].roleDefinitionId
-    }
-  }
-]
-
-// Storage account role assignments - always include Blob Data Owner, optionally add others
+// Storage account role assignments - always include Storage Blob Data Contributor and Storage Queue Data Contributor, optionally add others
 var storageAccountRoleDefinitions = union(
   [
-    'b7e6dc6d-f1e8-4753-8033-0f276bb0955b' // Storage Blob Data Owner (always required)
+    'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor (always required)
+    '974c5e8b-45b9-4653-ba55-5f855dd0fb88' // Storage Queue Data Contributor
   ],
   storageAccountRoleDefinitionIds
 )
@@ -465,4 +439,4 @@ module updateStorageAccount 'updateStorageAccountKey.bicep' = if (keyManagementS
 }
 
 output functionAppName string = functionApp.name
-output functionAppPrincipalId string = empty(functionAppUserAssignedIdentityResourceId) ? functionApp.identity.principalId : reference(functionAppUserAssignedIdentityResourceId, '2023-01-31').principalId
+output functionAppPrincipalId string = functionAppPrincipalId

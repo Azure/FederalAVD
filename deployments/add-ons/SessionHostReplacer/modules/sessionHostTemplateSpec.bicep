@@ -19,7 +19,6 @@ resource sessionHostTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versi
   location: location
   tags: tags
   properties: {
-    description: 'Session Host deployment template for automated replacement'
     mainTemplate: loadJsonContent('sessionHosts/sessionHosts.json')
   }
 }

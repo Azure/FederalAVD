@@ -69,7 +69,7 @@ param privateLinkScopeResourceId string = ''
 param hostPoolResourceId string
 
 @description('Required. The resource id of the resource group containing the FSLogix storage accounts.')
-param storageResourceGroupId string = ''
+param storageResourceGroupId string
 
 @description('Optional. Timer schedule for the function app (cron expression). Default is every 15 minutes.')
 param timerSchedule string = '0 */15 * * * *'
@@ -234,15 +234,20 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
-    roleAssignments: [
-      {
-        roleDefinitionId: '17d1049b-9a84-46fb-8f53-869881c3d3ab' // Storage Account Contributor
-        scope: storageResourceGroupId
-      }
-    ]
     serverFarmId: empty(appServicePlanResourceId) ? hostingPlan!.outputs.hostingPlanId : appServicePlanResourceId
     storageAccountName: storageAccountName
     tags: tags
+  }
+}
+
+module roleAssignment_StorageAccounts '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = {
+  name: 'RA-StorageAccounts-${deploymentSuffix}'
+  scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
+  params: {
+    principalId: functionApp.outputs.functionAppPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: '17d1049b-9a84-46fb-8f53-869881c3d3ab' // Storage Account Contributor
+    resourceGroupName: storageResourceGroupName
   }
 }
 
