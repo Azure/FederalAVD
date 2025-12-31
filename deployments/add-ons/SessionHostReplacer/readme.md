@@ -41,8 +41,9 @@ The Session Host Replacer monitors AVD session hosts and automatically replaces 
 - **Zero Trust Networking**: Private endpoints and VNet integration
 - **Customer-Managed Encryption**: CMK support for function storage
 - **Multi-Cloud**: Commercial, GCC High, DoD environments
-- **Comprehensive Monitoring**: Application Insights integration
+- **Comprehensive Monitoring**: Application Insights integration with pre-built dashboard
 - **Template Spec Integration**: Consistent deployments with versioning
+- **Real-Time Visibility**: Azure Monitor Workbook dashboard for deployment tracking and host pool health
 
 ## Prerequisites
 
@@ -555,6 +556,86 @@ traces
 | where severityLevel >= 3
 | order by timestamp desc
 ```
+
+### Monitoring Dashboard
+
+The Session Host Replacer includes a pre-built Azure Monitor Workbook that provides real-time visibility into automation status and host pool health.
+
+**Access the Dashboard:**
+
+1. Navigate to Azure Portal → **Monitor** → **Workbooks**
+2. Select **AVD Session Host Replacer Dashboard**
+3. Or navigate directly from the Function App → **Monitoring** → **Workbooks**
+4. **Select Host Pool**: Use the dropdown to filter by a specific host pool or view all
+
+**Dashboard Features:**
+
+- **📊 Key Performance Indicators**
+  - Total session hosts
+  - Hosts pending replacement
+  - Hosts in drain mode
+  - Hosts pending deletion
+
+- **🎯 Host Pool Consistency**
+  - Hosts by image version
+  - Hosts by age distribution
+  - Replacement status breakdown
+
+- **🔄 Deployment Progress**
+  - Deployment activity timeline
+  - Progressive scale-up status
+  - Success/failure tracking
+
+- **⏱️ Session Drain Status**
+  - Hosts currently draining
+  - Grace period countdowns
+  - Active session counts
+
+- **🗑️ Deletion Activity**
+  - Host deletion operations
+  - Device cleanup (Entra ID + Intune)
+
+- **⚠️ Errors and Warnings**
+  - Recent errors with timestamps
+  - Error trends over time
+
+- **📈 Historical Trends**
+  - Function execution frequency
+  - Average host pool size
+  - Replacement cycle duration
+
+**Customization:**
+
+The workbook is fully customizable. You can:
+- **Switch between host pools**: Dynamic dropdown populated from your environment
+- Adjust time ranges (1 hour to 30 days)
+- Add custom queries
+- Modify visualizations
+- Export data for reporting
+
+> **Multi-Tenant Support**: If you manage multiple host pools with separate Session Host Replacer deployments logging to the same Application Insights workspace, use the **Host Pool** parameter to filter the dashboard to a specific host pool or view aggregate data across all pools.
+
+### Enterprise Workbook Architecture
+
+The Session Host Replacer uses a **centralized workbook** pattern for enterprise-wide visibility:
+
+- **Single Workbook** deploys to a central location (defaults to first deployment region)
+- **Cross-Region Queries**: The workbook queries all regional Application Insights instances in your subscription
+- **Multi-Region Filtering**: Use the **Application Insights** parameter to select which regions to view
+- **Host Pool Filtering**: Use the **Host Pool** parameter to filter to specific pools or view all
+
+**Deployment Behavior:**
+- **First Deployment**: Creates the workbook in the specified `workbookLocation` (defaults to deployment region)
+- **Subsequent Deployments**: Reuse the existing workbook (idempotent deployment)
+- The workbook automatically discovers all Session Host Replacer Application Insights instances
+
+**Location Note:** The workbook's physical location doesn't affect its cross-region query capabilities (similar to AVD Insights). You can optionally specify a preferred `workbookLocation` parameter if you want to control where it's deployed.
+
+This pattern:
+- **Single Pane of Glass**: One dashboard for all regions and host pools
+- **Flexible Filtering**: View one region, multiple regions, or all regions
+- **Idempotent**: No conflicts when deploying to multiple regions
+- **Cost Efficient**: One workbook vs N (per region)
 
 ## Maintenance
 

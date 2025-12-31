@@ -30,6 +30,7 @@
     "templateSpecs": "ts",
     "userAssignedIdentities": "uai",
     "virtualMachines": "vm",
+    "workbooks": "wb",
     "workspaces": "vdws",
     "imageDefinitions": "vmid"
 }

@@ -456,7 +456,6 @@ function Invoke-GraphApiWithRetry {
             }
             
             $result = Invoke-RestMethod @params -ErrorAction Stop
-            Write-HostDetailed "Successfully called Graph API at $endpoint" -Level Verbose
             return $result
         }
         catch {
@@ -663,9 +662,6 @@ function Get-LastDeploymentStatus {
             
             if ($result.Failed) {
                 Write-HostDetailed "Previous deployment failed with error: $($result.ErrorMessage)" -Level Error
-            }
-            elseif ($result.Succeeded) {
-                Write-HostDetailed "Previous deployment completed successfully" -Level Verbose
             }
             elseif ($result.Running) {
                 Write-HostDetailed "Previous deployment is still running" -Level Warning
@@ -1149,7 +1145,6 @@ function Deploy-SessionHosts {
     }
     
     Write-HostDetailed -Message "Deployment submitted successfully. Deployment name: $deploymentName" -Level Verbose
-    Write-HostDetailed -Message "Deployment status will be checked on next function run." -Level Verbose
     
     # Return deployment information for state tracking
     # Note: Succeeded is initially null - will be determined on next run

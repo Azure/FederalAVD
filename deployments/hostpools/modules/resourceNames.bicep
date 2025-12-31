@@ -228,16 +228,6 @@ var scalingPlanName = replace(
 
 // Common HostPool Specific Resource Naming Conventions
 var uniqueStringHosts = take(uniqueString(subscription().subscriptionId, resourceGroupHosts), 6)
-var appInsightsNameConv = replace(
-  replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
-  'LOCATION',
-  virtualMachinesRegionAbbreviation
-)
-var functionAppNameConv = replace(
-  replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
-  'LOCATION',
-  virtualMachinesRegionAbbreviation
-)
 
 var privateEndpointNameConv = replace(
   nameConvReversed ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
@@ -351,10 +341,6 @@ var fslogixfileShareNames = {
   ]
 }
 
-output appInsightsNames object = {
-  increaseStorageQuota: replace(appInsightsNameConv, 'TOKEN-', 'saquota-${uniqueStringStorage}-')
-  sessionHostReplacement: replace(appInsightsNameConv, 'TOKEN-', 'shreplacer-${uniqueStringHosts}-')
-}
 output appServicePlanName string = appServicePlanName
 output availabilitySetNamePrefix string = availabilitySetNamePrefix
 output dataCollectionEndpointName string = dataCollectionEndpointName
@@ -369,10 +355,6 @@ output diskEncryptionSetNames object = {
   platformAndCustomerManaged: replace(diskEncryptionSetNameConv, 'TOKEN-', 'platform-and-customer-keys-')
 }
 output fslogixFileShareNames object = fslogixfileShareNames
-output functionAppNames object = {
-  increaseStorageQuota: replace(functionAppNameConv, 'TOKEN-', 'saquota-${uniqueStringStorage}-')
-  sessionHostReplacement: replace(functionAppNameConv, 'TOKEN-', 'shreplacer-${uniqueStringHosts}-')
-}
 output globalFeedWorkspaceName string = globalFeedWorkspaceName
 output hostPoolName string = hostPoolName
 output keyVaultNames object = {

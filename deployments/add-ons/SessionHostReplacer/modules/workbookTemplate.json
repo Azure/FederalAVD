@@ -1,0 +1,419 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## AVD Session Host Replacer - Enterprise Dashboard\n\nThis dashboard provides real-time visibility across all Session Host Replacer deployments in your subscription, including replacement status, deployment progress, and host pool consistency.\n\n---"
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "f1e2d3c4-5b6a-7h8i-9j0k-1l2m3n4o5p6q",
+            "version": "KqlParameterItem/1.0",
+            "name": "ApplicationInsights",
+            "type": 5,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "resources\n| where type == 'microsoft.insights/components'\n| where name contains 'sessionhostreplacer'\n| order by name asc\n| project value = id, label = name, selected = true",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "showDefault": false
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources",
+            "value": [
+              "value::all"
+            ],
+            "label": "Application Insights"
+          },
+          {
+            "id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
+            "version": "KqlParameterItem/1.0",
+            "name": "FunctionApp",
+            "type": 2,
+            "isRequired": true,
+            "query": "traces\n| distinct cloud_RoleName\n| where isnotempty(cloud_RoleName)\n| order by cloud_RoleName asc\n| project value = cloud_RoleName, label = cloud_RoleName, selected = false\n| union (datatable(value:string, label:string, selected:bool) [\n    \"*\", \"All Function Apps\", true\n])",
+            "crossComponentResources": [
+              "{ApplicationInsights}"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.insights/components",
+            "value": "*",
+            "label": "Function App"
+          },
+          {
+            "id": "b8f9c5e7-6f88-4c5a-a7c3-5e8d9f0c1a2b",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "label": "Time Range"
+          }
+        ],
+        "style": "pills",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 📊 Key Performance Indicators"
+      },
+      "name": "kpi-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let functionAppFilter = '{FunctionApp}';\ntraces\n| where timestamp {TimeRange}\n| where functionAppFilter == '*' or cloud_RoleName == functionAppFilter\n| where message contains \"METRICS |\"\n| extend metrics = extract_all(@\"Total: (\\d+) \\| Enabled: (\\d+) \\| Target: (\\d+) \\| ToReplace: (\\d+) \\([\\d.]+%\\) \\| InDrain: (\\d+) \\| ToDeployNow: (\\d+)\", dynamic([1,2,3,4,5,6]), message)\n| where array_length(metrics) > 0\n| extend Total = toint(metrics[0][0]), Enabled = toint(metrics[0][1]), Target = toint(metrics[0][2]), ToReplace = toint(metrics[0][3]), InDrain = toint(metrics[0][4]), ToDeployNow = toint(metrics[0][5])\n| summarize arg_max(timestamp, *) by cloud_RoleName\n| project \n    Column1 = 'Total Hosts', Value1 = Total,\n    Column2 = 'Enabled', Value2 = Enabled,\n    Column3 = 'Target', Value3 = Target,\n    Column4 = 'To Replace', Value4 = ToReplace,\n    Column5 = 'In Drain', Value5 = InDrain,\n    Column6 = 'To Deploy', Value6 = ToDeployNow\n| mv-expand Column = pack_array(Column1, Column2, Column3, Column4, Column5, Column6), Value = pack_array(Value1, Value2, Value3, Value4, Value5, Value6)\n| project Column = tostring(Column), Value = toint(Value)",
+        "size": 4,
+        "title": "Current Status",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": [
+          "{ApplicationInsights}"
+        ],
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Column",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Value",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "useGrouping": false,
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "showBorder": true
+        }
+      },
+      "customWidth": "100",
+      "name": "kpi-tiles"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🎯 Host Pool Consistency"
+      },
+      "name": "consistency-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let functionAppFilter = '{FunctionApp}';\ntraces\n| where timestamp {TimeRange}\n| where functionAppFilter == '*' or cloud_RoleName == functionAppFilter\n| where message contains \"METRICS |\"\n| extend metrics = extract_all(@\"Total: (\\d+) \\| Enabled: (\\d+) \\| Target: (\\d+) \\| ToReplace: (\\d+) \\([\\d.]+%\\) \\| InDrain: (\\d+) \\| ToDeployNow: (\\d+)\", dynamic([1,2,3,4,5,6]), message)\n| where array_length(metrics) > 0\n| extend Total = toint(metrics[0][0]), ToReplace = toint(metrics[0][3])\n| summarize arg_max(timestamp, *) by cloud_RoleName\n| extend OnLatestImage = Total - ToReplace, NeedsReplacement = ToReplace\n| project Status = pack_array(\"On Latest Image\", \"Needs Replacement\"), Count = pack_array(OnLatestImage, NeedsReplacement)\n| mv-expand Status, Count\n| project Status = tostring(Status), Count = toint(Count)\n| render piechart",
+        "size": 0,
+        "title": "Image Version Compliance",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "HostCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "consistency-table"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let functionAppFilter = '{FunctionApp}';\ntraces\n| where timestamp {TimeRange}\n| where functionAppFilter == '*' or cloud_RoleName == functionAppFilter\n| where message contains \"Previous deployment\" and (message contains \"succeeded\" or message contains \"failed\")\n| extend Status = case(\n    message contains \"succeeded\", \"Success\",\n    message contains \"failed\", \"Failed\",\n    \"Unknown\")\n| summarize Count = count() by Status\n| render piechart",
+        "size": 0,
+        "title": "Deployment Success Rate",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "customWidth": "50",
+      "name": "consistency-pie"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🔄 Deployment Progress"
+      },
+      "name": "deployment-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let functionAppFilter = '{FunctionApp}';\ntraces\n| where timestamp {TimeRange}\n| where functionAppFilter == '*' or cloud_RoleName == functionAppFilter\n| where message contains \"deployment\" or message contains \"Deploying\" or message contains \"Template\"\n| summarize Count = count() by bin(timestamp, 1h)\n| render timechart",
+        "size": 0,
+        "title": "Deployment Activity Over Time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "customWidth": "50",
+      "name": "deployment-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let functionAppFilter = '{FunctionApp}';\ntraces\n| where timestamp {TimeRange}\n| where functionAppFilter == '*' or cloud_RoleName == functionAppFilter\n| where message contains \"Checking status of previous deployment\" or message contains \"ConsecutiveSuccesses\"\n| project timestamp, message\n| top 10 by timestamp desc",
+        "size": 0,
+        "title": "Progressive Scale-Up Status",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      },
+      "customWidth": "50",
+      "name": "scaleup-table"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### ⏱️ Session Drain Status"
+      },
+      "name": "drain-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let functionAppFilter = '{FunctionApp}';\ntraces\n| where timestamp {TimeRange}\n| where functionAppFilter == '*' or cloud_RoleName == functionAppFilter\n| where message contains \"decommission\"\n| project timestamp, message\n| top 20 by timestamp desc",
+        "size": 0,
+        "title": "Hosts Currently in Drain Mode",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "SessionCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            },
+            {
+              "columnMatch": "LastCheck",
+              "formatter": 6
+            }
+          ]
+        }
+      },
+      "name": "drain-table"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🗑️ Deletion Activity"
+      },
+      "name": "deletion-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let functionAppFilter = '{FunctionApp}';\ntraces\n| where timestamp {TimeRange}\n| where functionAppFilter == '*' or cloud_RoleName == functionAppFilter\n| where message contains \"Deleting\" or message contains \"Removed\" or message contains \"device\"\n| summarize Count = count() by bin(timestamp, 1h)\n| render areachart",
+        "size": 0,
+        "title": "Deletion Operations Over Time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "name": "deletion-chart"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### ⚠️ Errors and Warnings"
+      },
+      "name": "errors-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let functionAppFilter = '{FunctionApp}';\nunion traces, exceptions\n| where severityLevel >= 2\n| where timestamp {TimeRange}\n| where functionAppFilter == '*' or cloud_RoleName == functionAppFilter or message contains strcat(\"Host Pool: \", functionAppFilter) or outerMessage contains strcat(\"Host Pool: \", functionAppFilter)\n| project timestamp, message = coalesce(message, outerMessage), severityLevel\n| extend Severity = case(\n    severityLevel == 4, \"❌ Critical\",\n    severityLevel == 3, \"🔴 Error\",\n    severityLevel == 2, \"⚠️ Warning\",\n    \"ℹ️ Info\"\n)\n| summarize Count = count() by Severity, bin(timestamp, 1h)\n| render barchart",
+        "size": 0,
+        "title": "Errors and Warnings Over Time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "customWidth": "50",
+      "name": "errors-chart"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let functionAppFilter = '{FunctionApp}';\nunion traces, exceptions\n| where severityLevel >= 3\n| where timestamp {TimeRange}\n| where functionAppFilter == '*' or cloud_RoleName == functionAppFilter or message contains strcat(\"Host Pool: \", functionAppFilter) or outerMessage contains strcat(\"Host Pool: \", functionAppFilter)\n| project timestamp, message = coalesce(message, outerMessage), severityLevel\n| where message !contains \"The listener for function\"\n| top 20 by timestamp desc\n| project Timestamp = format_datetime(timestamp, 'yyyy-MM-dd HH:mm:ss'), Message = substring(message, 0, 200)",
+        "size": 0,
+        "title": "Recent Errors (Top 20)",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      },
+      "customWidth": "50",
+      "name": "errors-table"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 📈 Historical Trends"
+      },
+      "name": "trends-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let functionAppFilter = '{FunctionApp}';\ntraces\n| where timestamp {TimeRange}\n| where functionAppFilter == '*' or cloud_RoleName == functionAppFilter\n| where message contains \"SessionHostReplacer function started\"\n| summarize Executions = count() by bin(timestamp, 1h)\n| render timechart",
+        "size": 0,
+        "title": "Function Execution Frequency",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "customWidth": "50",
+      "name": "frequency-chart"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let functionAppFilter = '{FunctionApp}';\ntraces\n| where timestamp {TimeRange}\n| where functionAppFilter == '*' or cloud_RoleName == functionAppFilter\n| where message contains \"Found\" and message contains \"session hosts\"\n| extend totalHosts = toint(extract(\"Found (\\\\d+) session hosts\", 1, message))\n| where isnotempty(totalHosts)\n| summarize avg(totalHosts) by bin(timestamp, 1h)\n| render timechart",
+        "size": 0,
+        "title": "Average Host Pool Size Over Time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "customWidth": "50",
+      "name": "pool-size-chart"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n\n💡 **Tip:** Use the time range selector at the top to adjust the dashboard view. For more detailed analysis, click on any chart to explore the underlying data in Application Insights."
+      },
+      "name": "footer"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/placeholder/providers/Microsoft.Insights/components/placeholder"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

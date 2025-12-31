@@ -440,3 +440,4 @@ module updateStorageAccount 'updateStorageAccountKey.bicep' = if (keyManagementS
 
 output functionAppName string = functionApp.name
 output functionAppPrincipalId string = functionAppPrincipalId
+output applicationInsightsResourceId string = enableApplicationInsights ? applicationInsights.id : ''

@@ -23,7 +23,6 @@ try {
     if ([string]::IsNullOrEmpty($ARMToken)) {
         throw "Get-AccessToken returned null or empty token"
     }
-    Write-HostDetailed -Message "Successfully acquired ARM access token (length: {0})" -StringValues $ARMToken.Length -Level Verbose
 }
 catch {
     Write-Error "Failed to acquire ARM access token: $_"
@@ -88,9 +87,6 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
             Save-DeploymentState -DeploymentState $deploymentState
         }
     }
-    else {
-        Write-HostDetailed "No previous deployment to check" -Level Information
-    }
 }
 
 # Filter to Session hosts that are included in auto replace
@@ -111,6 +107,25 @@ $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference
 
 # Get number session hosts to deploy
 $hostPoolDecisions = Get-HostPoolDecisions -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion
+
+# Log comprehensive metrics for monitoring dashboard
+$metricsLog = @{
+    TotalSessionHosts = $sessionHosts.Count
+    EnabledForAutomation = $sessionHostsFiltered.Count
+    TargetCount = if ($hostPoolDecisions.TargetSessionHostCount) { $hostPoolDecisions.TargetSessionHostCount } else { 0 }
+    ToReplace = if ($hostPoolDecisions.TotalSessionHostsToReplace) { $hostPoolDecisions.TotalSessionHostsToReplace } else { 0 }
+    ToReplacePercentage = if ($sessionHostsFiltered.Count -gt 0) { [math]::Round(($hostPoolDecisions.TotalSessionHostsToReplace / $sessionHostsFiltered.Count) * 100, 1) } else { 0 }
+    InDrain = $hostPoolDecisions.SessionHostsPendingDelete.Count
+    PendingDelete = $hostPoolDecisions.SessionHostsPendingDelete.Count
+    ToDeployNow = $hostPoolDecisions.PossibleDeploymentsCount
+    RunningDeployments = $runningDeployments.Count
+    ReplacementMode = Read-FunctionAppSetting ReplacementMode
+    LatestImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { "N/A" }
+    LatestImageDate = $latestImageVersion.Date
+}
+Write-HostDetailed -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | ToDeployNow: {6} | RunningDeployments: {7} | Mode: {8} | LatestImage: {9}" `
+    -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.ReplacementMode, $metricsLog.LatestImageVersion `
+    -Level Host
 
 # Deploy new session hosts
 $deploymentResult = $null
@@ -178,9 +193,6 @@ if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisi
                 Write-Warning "Get-AccessToken returned null or empty Graph token. Device cleanup will be skipped."
                 Write-HostDetailed "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Warning
                 $GraphToken = $null
-            }
-            else {
-                Write-HostDetailed -Message "Successfully acquired Graph access token" -Level Verbose
             }
         }
         catch {

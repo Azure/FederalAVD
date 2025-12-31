@@ -671,45 +671,18 @@ var deployManagementResources = deploymentType == 'Complete' && (deploySecretsKe
 
 var hostPoolVmTemplate = deploymentType != 'SessionHostsOnly'
   ? {
-      resourceGroup: resourceNames.outputs.resourceGroupHosts
-      identityType: identitySolution
-      intuneEnrollment: intuneEnrollment
-      domain: !empty(domainName) ? domainName : null
-      ouPath: !empty(vmOUPath) ? vmOUPath : null
-      namePrefix: virtualMachineNamePrefix
-      indexPadding: vmNameIndexLength
-      imageType: empty(customImageResourceId) ? 'Gallery' : 'CustomImage'
-      imageUri: null
-      customImageId: empty(customImageResourceId) ? null : customImageResourceId
-      galleryImageOffer: empty(customImageResourceId) ? imageOffer : null
-      galleryImagePublisher: empty(customImageResourceId) ? imagePublisher : null
-      galleryImageSku: empty(customImageResourceId) ? imageSku : null
-      osDiskType: diskSku
-      diskSizeGB: diskSizeGB
-      useManagedDisks: true
-      vmSize: {
-        id: virtualMachineSize
-        cores: vCPUs == 0 ? null : vCPUs
-        ram: memoryGB == 0 ? null : memoryGB
-      }
-      encryptionAtHost: encryptionAtHost
-      acceleratedNetworking: enableAcceleratedNetworking
-      diskEncryptionSetName: confidentialVMOSDiskEncryption
-        ? resourceNames.outputs.diskEncryptionSetNames.confidentialVMs
-        : startsWith(keyManagementDisks, 'CustomerManaged')
-            ? resourceNames.outputs.diskEncryptionSetNames.customerManaged
-            : contains(keyManagementDisks, 'PlatformManagedAndCustomerManaged')
-                ? resourceNames.outputs.diskEncryptionSetNames.platformAndCustomerManaged
-                : null
-      hibernate: hibernationEnabled
+      namePrefix: virtualMachineNamePrefix //1
+      hibernate: hibernationEnabled // 2
+      osDiskType: diskSku // 3
+      diskSizeGB: diskSizeGB // 4
       securityType: securityType
       secureBoot: secureBootEnabled
       vTPM: vTpmEnabled
-      subnetId: virtualMachineSubnetResourceId
-      availability: availability == 'AvailabilityZones'
-        ? 'Availability Zones'
-        : availability == 'AvailabilitySets' ? 'Availability Sets' : 'No infrastructure redundancy required'
       vmInfrastructureType: 'Cloud'
+      virtualProcessorCount: vCPUs == 0 ? null : vCPUs
+      memoryGB: memoryGB == 0 ? null : memoryGB
+      minimumMemoryGB: memoryGB == 0 ? null : memoryGB
+      dynamicMemoryConfig: false     
     }
   : {}
 
@@ -723,9 +696,16 @@ var vmImagePublisher = !empty(customImageResourceId) || empty(imagePublisher)
   ? {}
   : { vmImagePublisher: imagePublisher }
 var vmImageSku = !empty(customImageResourceId) || empty(imageSku) ? {} : { vmImageSku: imageSku }
-var vmDiskEncryptionSetName = empty(hostPoolVmTemplate.diskEncryptionSetName)
+var diskEncryptionSetName = confidentialVMOSDiskEncryption
+        ? resourceNames.outputs.diskEncryptionSetNames.confidentialVMs
+        : startsWith(keyManagementDisks, 'CustomerManaged')
+            ? resourceNames.outputs.diskEncryptionSetNames.customerManaged
+            : contains(keyManagementDisks, 'PlatformManagedAndCustomerManaged')
+                ? resourceNames.outputs.diskEncryptionSetNames.platformAndCustomerManaged
+                : null
+var vmDiskEncryptionSetName = empty(diskEncryptionSetName)
   ? {}
-  : { vmDiskEncryptionSetName: hostPoolVmTemplate.diskEncryptionSetName }
+  : { vmDiskEncryptionSetName: diskEncryptionSetName }
 
 var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
   ? { fslLocalStorageAccountNames: string(map(fslogix!.outputs.storageAccountResourceIds, id => last(split(id, '/')))) }
@@ -768,25 +748,27 @@ var fslogixConfigurationTags = fslogixConfigureSessionHosts
       fslRemoteNetAppVolumeResourceIds
     )
   : {}
-
+     
 var vmConfigurationTags = union(
   {
-    vmResourceGroup: hostPoolVmTemplate.resourceGroup
-    vmIdentityType: hostPoolVmTemplate.identityType
-    vmNamePrefix: hostPoolVmTemplate.namePrefix
-    vmIndexPadding: hostPoolVmTemplate.indexPadding
-    vmImageType: hostPoolVmTemplate.imageType
-    vmOSDiskType: hostPoolVmTemplate.osDiskType
-    vmDiskSizeGB: hostPoolVmTemplate.diskSizeGB
-    vmSize: hostPoolVmTemplate.vmSize.id
-    vmAvailability: hostPoolVmTemplate.availability
-    vmEncryptionAtHost: hostPoolVmTemplate.?encryptionAtHost ?? false
-    vmAcceleratedNetworking: hostPoolVmTemplate.?acceleratedNetworking ?? false
-    vmHibernate: hostPoolVmTemplate.?hibernate ?? false
-    vmSecurityType: hostPoolVmTemplate.?securityType ?? 'Standard'
-    vmSecureBoot: hostPoolVmTemplate.?secureBoot ?? false
-    vmVirtualTPM: hostPoolVmTemplate.?vTPM ?? false
-    vmSubnetId: hostPoolVmTemplate.subnetId
+    vmResourceGroup: resourceNames.outputs.resourceGroupHosts
+    vmIdentityType: identitySolution
+    vmNamePrefix: virtualMachineNamePrefix
+    vmIndexPadding: vmNameIndexLength
+    vmImageType: empty(customImageResourceId) ? 'Gallery' : 'CustomImage'
+    vmOSDiskType: diskSku
+    vmDiskSizeGB: diskSizeGB
+    vmSize: virtualMachineSize
+    vmAvailability: availability == 'AvailabilityZones'
+      ? 'Availability Zones'
+      : availability == 'AvailabilitySets' ? 'Availability Sets' : 'No infrastructure redundancy required'
+    vmEncryptionAtHost: encryptionAtHost
+    vmAcceleratedNetworking: enableAcceleratedNetworking
+    vmHibernate: hibernationEnabled
+    vmSecurityType: securityType
+    vmSecureBoot: secureBootEnabled
+    vmVirtualTPM: vTpmEnabled
+    vmSubnetId: virtualMachineSubnetResourceId
   },
   vmDomain,
   vmOU,

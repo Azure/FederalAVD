@@ -16,7 +16,7 @@
 								"text": "Configure the basic settings for deploying the Session Host Replacer function app and supporting resources."
 							}
 						},
-												{
+						{
 							"name": "subscriptionsApi",
 							"type": "Microsoft.Solutions.ArmApiControl",
 							"request": {
@@ -80,7 +80,7 @@
 									}
 								}
 							]
-						}						
+						}
 					]
 				},
 				{
@@ -209,36 +209,133 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Schedule Hours",
 									"toolTip": "Select the hours when the function should run. You can select multiple hours.",
-									"defaultValue": ["12 AM", "1 AM", "2 AM", "3 AM", "4 AM", "5 AM", "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"],
+									"defaultValue": [
+										"12 AM",
+										"1 AM",
+										"2 AM",
+										"3 AM",
+										"4 AM",
+										"5 AM",
+										"6 AM",
+										"7 AM",
+										"8 AM",
+										"9 AM",
+										"10 AM",
+										"11 AM",
+										"12 PM",
+										"1 PM",
+										"2 PM",
+										"3 PM",
+										"4 PM",
+										"5 PM",
+										"6 PM",
+										"7 PM",
+										"8 PM",
+										"9 PM",
+										"10 PM",
+										"11 PM"
+									],
 									"multiselect": true,
 									"selectAll": true,
 									"constraints": {
 										"required": true,
 										"allowedValues": [
-											{ "label": "12 AM", "value": "0" },
-											{ "label": "1 AM", "value": "1" },
-											{ "label": "2 AM", "value": "2" },
-											{ "label": "3 AM", "value": "3" },
-											{ "label": "4 AM", "value": "4" },
-											{ "label": "5 AM", "value": "5" },
-											{ "label": "6 AM", "value": "6" },
-											{ "label": "7 AM", "value": "7" },
-											{ "label": "8 AM", "value": "8" },
-											{ "label": "9 AM", "value": "9" },
-											{ "label": "10 AM", "value": "10" },
-											{ "label": "11 AM", "value": "11" },
-											{ "label": "12 PM", "value": "12" },
-											{ "label": "1 PM", "value": "13" },
-											{ "label": "2 PM", "value": "14" },
-											{ "label": "3 PM", "value": "15" },
-											{ "label": "4 PM", "value": "16" },
-											{ "label": "5 PM", "value": "17" },
-											{ "label": "6 PM", "value": "18" },
-											{ "label": "7 PM", "value": "19" },
-											{ "label": "8 PM", "value": "20" },
-											{ "label": "9 PM", "value": "21" },
-											{ "label": "10 PM", "value": "22" },
-											{ "label": "11 PM", "value": "23" }
+											{
+												"label": "12 AM",
+												"value": "0"
+											},
+											{
+												"label": "1 AM",
+												"value": "1"
+											},
+											{
+												"label": "2 AM",
+												"value": "2"
+											},
+											{
+												"label": "3 AM",
+												"value": "3"
+											},
+											{
+												"label": "4 AM",
+												"value": "4"
+											},
+											{
+												"label": "5 AM",
+												"value": "5"
+											},
+											{
+												"label": "6 AM",
+												"value": "6"
+											},
+											{
+												"label": "7 AM",
+												"value": "7"
+											},
+											{
+												"label": "8 AM",
+												"value": "8"
+											},
+											{
+												"label": "9 AM",
+												"value": "9"
+											},
+											{
+												"label": "10 AM",
+												"value": "10"
+											},
+											{
+												"label": "11 AM",
+												"value": "11"
+											},
+											{
+												"label": "12 PM",
+												"value": "12"
+											},
+											{
+												"label": "1 PM",
+												"value": "13"
+											},
+											{
+												"label": "2 PM",
+												"value": "14"
+											},
+											{
+												"label": "3 PM",
+												"value": "15"
+											},
+											{
+												"label": "4 PM",
+												"value": "16"
+											},
+											{
+												"label": "5 PM",
+												"value": "17"
+											},
+											{
+												"label": "6 PM",
+												"value": "18"
+											},
+											{
+												"label": "7 PM",
+												"value": "19"
+											},
+											{
+												"label": "8 PM",
+												"value": "20"
+											},
+											{
+												"label": "9 PM",
+												"value": "21"
+											},
+											{
+												"label": "10 PM",
+												"value": "22"
+											},
+											{
+												"label": "11 PM",
+												"value": "23"
+											}
 										]
 									}
 								},
@@ -247,20 +344,69 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Days of Week",
 									"toolTip": "Select which days of the week the function should run.",
-									"defaultValue": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+									"defaultValue": [
+										"Sunday",
+										"Monday",
+										"Tuesday",
+										"Wednesday",
+										"Thursday",
+										"Friday",
+										"Saturday"
+									],
 									"multiselect": true,
 									"selectAll": true,
 									"constraints": {
 										"required": true,
 										"allowedValues": [
-											{ "label": "Sunday", "value": "0" },
-											{ "label": "Monday", "value": "1" },
-											{ "label": "Tuesday", "value": "2" },
-											{ "label": "Wednesday", "value": "3" },
-											{ "label": "Thursday", "value": "4" },
-											{ "label": "Friday", "value": "5" },
-											{ "label": "Saturday", "value": "6" }
+											{
+												"label": "Sunday",
+												"value": "0"
+											},
+											{
+												"label": "Monday",
+												"value": "1"
+											},
+											{
+												"label": "Tuesday",
+												"value": "2"
+											},
+											{
+												"label": "Wednesday",
+												"value": "3"
+											},
+											{
+												"label": "Thursday",
+												"value": "4"
+											},
+											{
+												"label": "Friday",
+												"value": "5"
+											},
+											{
+												"label": "Saturday",
+												"value": "6"
+											}
 										]
+									}
+								},
+								{
+									"name": "scheduleStaggeringTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "To prevent multiple function apps from running simultaneously and potentially causing API throttling, you can stagger the execution time. The function will run at a random minute between 0 and the specified maximum offset within each scheduled hour."
+									}
+								},
+								{
+									"name": "scheduleMaxMinuteOffset",
+									"type": "Microsoft.Common.Slider",
+									"label": "Maximum Minute Offset",
+									"toolTip": "The function will run at a random minute between 0 and this value within each scheduled hour. For example, if set to 15, the function will execute somewhere between :00 and :15 of each hour. Set to 0 to disable staggering.",
+									"min": 0,
+									"max": 59,
+									"defaultValue": 15,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": true
 									}
 								},
 								{
@@ -303,7 +449,7 @@
 									"constraints": {
 										"required": true
 									}
-								},								
+								},
 								{
 									"name": "replaceSessionHostOnNewImageVersionDelayDays",
 									"type": "Microsoft.Common.Slider",
@@ -440,7 +586,7 @@
 										"style": "Info",
 										"uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
 									}
-								},								
+								},
 								{
 									"name": "removeEntraDevice",
 									"type": "Microsoft.Common.CheckBox",
@@ -559,7 +705,7 @@
 										"method": "GET",
 										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2024-11-01')]"
 									}
-								},								
+								},
 								{
 									"name": "appServicePlan",
 									"type": "Microsoft.Common.DropDown",
@@ -658,7 +804,7 @@
 										"required": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
 										"allowedValues": "[map(filter(steps('functionApp').infrastructure.keyVaultsApi.value, (kv) => equals(kv.location, steps('basics').scope.location.name)), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Location: ', kv.location, ' | Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
 									}
-								},							
+								},
 								{
 									"name": "zeroTrustNetworkingInfoBox",
 									"type": "Microsoft.Common.InfoBox",
@@ -667,7 +813,7 @@
 										"style": "Info",
 										"uri": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options?tabs=azure-portal"
 									}
-								},								
+								},
 								{
 									"name": "configureZeroTrustNetworking",
 									"type": "Microsoft.Common.CheckBox",
@@ -714,7 +860,7 @@
 										"allowedValues": "[map(filter(steps('functionApp').infrastructure.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
 									}
-								},												
+								},
 								{
 									"name": "subnetsApi",
 									"condition": "[not(empty(steps('functionApp').infrastructure.virtualNetwork))]",
@@ -808,7 +954,7 @@
 										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": true
 									}
-								},				
+								},
 								{
 									"name": "azureBlobPrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
@@ -821,7 +967,7 @@
 										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": true
 									}
-								},																
+								},
 								{
 									"name": "azureQueuePrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
@@ -847,8 +993,7 @@
 										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": true
 									}
-								}								
-
+								}
 							]
 						}
 					]
@@ -1032,25 +1177,82 @@
 									"defaultValue": "(UTC-05:00) Eastern Time (US & Canada)",
 									"constraints": {
 										"allowedValues": [
-											{ "label": "(UTC-10:00) Hawaii", "value": "Hawaiian Standard Time" },
-											{ "label": "(UTC-09:00) Alaska", "value": "Alaskan Standard Time" },
-											{ "label": "(UTC-08:00) Pacific Time (US & Canada)", "value": "Pacific Standard Time" },
-											{ "label": "(UTC-07:00) Arizona", "value": "US Mountain Standard Time" },
-											{ "label": "(UTC-07:00) Mountain Time (US & Canada)", "value": "Mountain Standard Time" },
-											{ "label": "(UTC-06:00) Central Time (US & Canada)", "value": "Central Standard Time" },
-											{ "label": "(UTC-05:00) Eastern Time (US & Canada)", "value": "Eastern Standard Time" },
-											{ "label": "(UTC+00:00) Dublin, Edinburgh, Lisbon, London", "value": "GMT Standard Time" },
-											{ "label": "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris", "value": "Romance Standard Time" },
-											{ "label": "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb", "value": "Central European Standard Time" },
-											{ "label": "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague", "value": "Central Europe Standard Time" },
-											{ "label": "(UTC+01:00) West Central Africa", "value": "W. Central Africa Standard Time" },
-											{ "label": "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna", "value": "W. Europe Standard Time" },
-											{ "label": "(UTC+02:00) Jerusalem", "value": "Israel Standard Time" },
-											{ "label": "(UTC+03:00) Kuwait, Riyadh", "value": "Arab Standard Time" },
-											{ "label": "(UTC+03:00) Nairobi", "value": "E. Africa Standard Time" },
-											{ "label": "(UTC+09:00) Osaka, Sapporo, Tokyo", "value": "Tokyo Standard Time" },
-											{ "label": "(UTC+09:00) Seoul", "value": "Korea Standard Time" },
-											{ "label": "(UTC+10:00) Guam, Port Moresby", "value": "West Pacific Standard Time" }
+											{
+												"label": "(UTC-10:00) Hawaii",
+												"value": "Hawaiian Standard Time"
+											},
+											{
+												"label": "(UTC-09:00) Alaska",
+												"value": "Alaskan Standard Time"
+											},
+											{
+												"label": "(UTC-08:00) Pacific Time (US & Canada)",
+												"value": "Pacific Standard Time"
+											},
+											{
+												"label": "(UTC-07:00) Arizona",
+												"value": "US Mountain Standard Time"
+											},
+											{
+												"label": "(UTC-07:00) Mountain Time (US & Canada)",
+												"value": "Mountain Standard Time"
+											},
+											{
+												"label": "(UTC-06:00) Central Time (US & Canada)",
+												"value": "Central Standard Time"
+											},
+											{
+												"label": "(UTC-05:00) Eastern Time (US & Canada)",
+												"value": "Eastern Standard Time"
+											},
+											{
+												"label": "(UTC+00:00) Dublin, Edinburgh, Lisbon, London",
+												"value": "GMT Standard Time"
+											},
+											{
+												"label": "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris",
+												"value": "Romance Standard Time"
+											},
+											{
+												"label": "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb",
+												"value": "Central European Standard Time"
+											},
+											{
+												"label": "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague",
+												"value": "Central Europe Standard Time"
+											},
+											{
+												"label": "(UTC+01:00) West Central Africa",
+												"value": "W. Central Africa Standard Time"
+											},
+											{
+												"label": "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna",
+												"value": "W. Europe Standard Time"
+											},
+											{
+												"label": "(UTC+02:00) Jerusalem",
+												"value": "Israel Standard Time"
+											},
+											{
+												"label": "(UTC+03:00) Kuwait, Riyadh",
+												"value": "Arab Standard Time"
+											},
+											{
+												"label": "(UTC+03:00) Nairobi",
+												"value": "E. Africa Standard Time"
+											},
+											{
+												"label": "(UTC+09:00) Osaka, Sapporo, Tokyo",
+												"value": "Tokyo Standard Time"
+											},
+											{
+												"label": "(UTC+09:00) Seoul",
+												"value": "Korea Standard Time"
+											},
+											{
+												"label": "(UTC+10:00) Guam, Port Moresby",
+												"value": "West Pacific Standard Time"
+											}
 										],
 										"required": true
 									},
@@ -2455,148 +2657,217 @@
 					"label": "Monitoring",
 					"elements": [
 						{
-							"name": "enableMonitoring",
-							"type": "Microsoft.Common.CheckBox",
-							"visible": true,
-							"label": "Enable Monitoring for the Function App and AVD and VM Insights",
-							"defaultValue": true,
-							"toolTip": "Deploy the required resources to enable AVD and VM Insights."
-						},
-						{
-							"name": "subscription",
-							"type": "Microsoft.Common.DropDown",
-							"label": "AVD Monitoring Subscription",
-							"defaultValue": "[steps('basics').scope.subscription.displayName]",
-							"toolTip": "Select the subscription where existing AVD monitoring resources are located",
-							"constraints": {
-								"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-								"required": true
-							},
-							"visible": "[steps('monitoring').enableMonitoring]"
-						},
-						{
-							"name": "logAnalyticsWorkspacesApi",
-							"condition": "[and(steps('monitoring').enableMonitoring, not(empty(steps('monitoring').subscription)))]",
-							"type": "Microsoft.Solutions.ArmApiControl",
-							"request": {
-								"method": "GET",
-								"path": "[concat(steps('monitoring').subscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
-							}
-						},
-						{
-							"name": "logAnalyticsWorkspace",
-							"type": "Microsoft.Common.DropDown",
-							"defaultValue": "[first(map(filter(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => and(contains(la.name, '-avd-'), equals(la.location, steps('hosts').scope.location.name))), (la) => la.name))]",
-							"visible": "[steps('monitoring').enableMonitoring]",
-							"label": "Existing Log Analytics Workspace",
-							"multiLine": true,
-							"toolTip": "Select the existing Log Analytics Workspace to which function app diagnostic logs will be sent.",
-							"constraints": {
-								"allowedValues": "[map(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ', Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]",
-								"required": true
-							}
-						},
-						{
-							"name": "dataCollectionRulesApi",
-							"condition": "[and(steps('monitoring').enableMonitoring, not(empty(steps('monitoring').subscription)))]",
-							"type": "Microsoft.Solutions.ArmApiControl",
-							"request": {
-								"method": "GET",
-								"path": "[concat(steps('monitoring').subscription.id, '/providers/Microsoft.Insights/dataCollectionRules?api-version=2023-03-11')]"
-							}
-						},
-						{
-							"name": "avdInsightsDataCollectionRule",
-							"type": "Microsoft.Common.DropDown",
-							"defaultValue": "[first(map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('microsoft-avdi-', steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
-							"visible": "[steps('monitoring').enableMonitoring]",
-							"label": "AVD Insights Data Collection Rule",
-							"multiLine": true,
-							"toolTip": "Select the existing AVD Insights Data Collection Rule.",
-							"constraints": {
-								"allowedValues": "[map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'avdi'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
-								"required": false
-							}
-						},
-						{
-							"name": "vmInsightsDataCollectionRule",
-							"type": "Microsoft.Common.DropDown",
-							"defaultValue": "[first(map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('MSVMI-', steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
-							"visible": "[steps('monitoring').enableMonitoring]",
-							"label": "VM Insights Data Collection Rule",
-							"multiLine": true,
-							"toolTip": "Select the existing Virtual Machines Insights Data Collection Rule.",
-							"constraints": {
-								"allowedValues": "[map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'MSVMI'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
-								"required": false
-							}
-						},
-						{
-							"name": "dataCollectionEndpointsApi",
-							"condition": "[and(not(empty(steps('monitoring').subscription.id)), steps('monitoring').enableMonitoring)]",
-							"type": "Microsoft.Solutions.ArmApiControl",
-							"request": {
-								"method": "GET",
-								"path": "[concat(steps('monitoring').subscription.id, '/providers/Microsoft.Insights/dataCollectionEndpoints?api-version=2023-03-11')]"
-							}
-						},
-						{
-							"name": "dataCollectionEndpoint",
-							"type": "Microsoft.Common.DropDown",
-							"defaultValue": "[first(map(filter(steps('monitoring').dataCollectionEndpointsApi.value, (dce) => and(contains(dce.name, 'avd'), equals(dce.location, steps('hosts').scope.location.name))), (dce) => dce.name))]",
-							"visible": "[steps('monitoring').enableMonitoring]",
-							"label": "Data Collection Endpoint",
-							"multiLine": true,
-							"toolTip": "Select the existing Data Collection Endpoint.",
-							"constraints": {
-								"allowedValues": "[map(filter(steps('monitoring').dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('hosts').scope.location.name)), (dce) => parse(concat('{\"label\":\"', dce.name, '\",\"description\":\"Resource Group: ', first(skip(split(dce.id, '/'), 4)), ', Location: ', dce.location, '\",\"value\":\"', dce.id, '\"}')))]",
-								"required": false
-							}
-						},
-						{
-							"name": "enableCentralMonitoring",
-							"type": "Microsoft.Common.CheckBox",
-							"visible": true,
-							"label": "Configure Centralized Security Monitoring for Session Hosts",
-							"toolTip": "Creates a Data Collection Rule Association to use the Azure Monitoring Agent for collecting data in a centralized workspace."
-						},
-						{
-							"name": "securityDataCollectionRule",
-							"type": "Microsoft.Solutions.ResourceSelector",
-							"label": "Security Monitoring Data Collection Rule",
-							"visible": "[steps('monitoring').enableCentralMonitoring]",
-							"resourceType": "Microsoft.Insights/dataCollectionRules",
-							"toolTip": "Select the Data Collection Rule used for collecting security data for Sentinel or Defender for Cloud. This is required to create the Data Collection Rule Association",
-							"constraints": {
-								"required": true
-							}
-						},
-						{
-							"name": "privateLinkTextBlock",
-							"type": "Microsoft.Common.TextBlock",
-							"visible": true,
-							"options": {
-								"text": "Azure Monitor is a constellation of different interconnected services that work together to monitor your workloads. An Azure Monitor private link connects a private endpoint to a set of Azure Monitor resources to define the boundaries of your monitoring network. That set is called an Azure Monitor Private Link Scope (AMPLS).",
-								"link": {
-									"label": "Use Azure Private Link to connect networks to Azure Monitor - Azure Monitor | Microsoft Learn",
-									"uri": "https://learn.microsoft.com/en-us/azure/azure-monitor/logs/private-link-security"
+							"name": "functionAppMonitoringSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Function App Monitoring",
+							"elements": [
+								{
+									"name": "enableFunctionAppMonitoring",
+									"type": "Microsoft.Common.CheckBox",
+									"visible": true,
+									"label": "Enable Function App Monitoring (Application Insights)",
+									"defaultValue": true,
+									"toolTip": "Deploy Application Insights for the Session Host Replacer function app to enable monitoring, logging, and the workbook dashboard."
+								},
+								{
+									"name": "subscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Monitoring Subscription",
+									"defaultValue": "[steps('basics').scope.subscription.displayName]",
+									"toolTip": "Select the subscription where monitoring resources are located",
+									"constraints": {
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+										"required": true
+									},
+									"visible": "[steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring]"
+								},
+								{
+									"name": "locationsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('monitoring').functionAppMonitoringSection.subscription))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('monitoring').functionAppMonitoringSection.subscription.id, '/locations?api-version=2022-12-01')]",
+										"transforms": {
+											"list": "sort_by(value, &displayName)[?name!='global' && !contains(displayName, '(Stage)')] | [*].{label: displayName, value: { displayName: displayName, name: name }}"
+										}
+									}
+								},
+								{
+									"name": "logAnalyticsWorkspacesApi",
+									"condition": "[and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, not(empty(steps('monitoring').functionAppMonitoringSection.subscription)))]",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('monitoring').functionAppMonitoringSection.subscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
+									}
+								},
+								{
+									"name": "logAnalyticsWorkspace",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('monitoring').functionAppMonitoringSection.logAnalyticsWorkspacesApi.value, (la) => and(contains(la.name, '-avd-'), equals(la.location, steps('hosts').scope.location.name))), (la) => la.name))]",
+									"visible": "[steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring]",
+									"label": "Log Analytics Workspace",
+									"multiLine": true,
+									"toolTip": "Select the Log Analytics Workspace for Application Insights. Function app diagnostic logs will be sent here.",
+									"constraints": {
+										"allowedValues": "[map(steps('monitoring').functionAppMonitoringSection.logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ', Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "deployWorkbook",
+									"type": "Microsoft.Common.CheckBox",
+									"visible": "[steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring]",
+									"label": "Deploy Azure Monitor Workbook Dashboard",
+									"defaultValue": true,
+									"toolTip": "Deploy a centralized workbook for monitoring all Session Host Replacer deployments. The workbook provides real-time visibility into replacement status, deployment progress, and host pool health across all regions."
+								},
+								{
+									"name": "workbookInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook)]",
+									"options": {
+										"icon": "Info",
+										"text": "The workbook is deployed enterprise-wide and can query across all regions. It provides filtering by Application Insights instance and Host Pool. If a workbook already exists from a previous deployment in this subscription, it will be reused automatically (idempotent deployment). Only check this box for the first deployment or when you want to update an existing workbook."
+									}
+								},
+								{
+									"name": "workbookLocation",
+									"type": "Microsoft.Common.DropDown",
+									"visible": "[and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook)]",
+									"label": "Workbook Location",
+									"defaultValue": "[steps('basics').scope.location.displayName]",
+									"toolTip": "Select the Azure region where the workbook will be deployed. The workbook's location does not affect its ability to query cross-region Application Insights instances. This should match the location of your first deployment to ensure idempotency.",
+									"constraints": {
+										"allowedValues": "[steps('monitoring').functionAppMonitoringSection.locationsApi.transformed.list]",
+										"required": true
+									}
+								},
+								{
+									"name": "privateLinkTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring]",
+									"options": {
+										"text": "Azure Monitor is a constellation of different interconnected services that work together to monitor your workloads. An Azure Monitor private link connects a private endpoint to a set of Azure Monitor resources to define the boundaries of your monitoring network. That set is called an Azure Monitor Private Link Scope (AMPLS).",
+										"link": {
+											"label": "Use Azure Private Link to connect networks to Azure Monitor",
+											"uri": "https://learn.microsoft.com/en-us/azure/azure-monitor/logs/private-link-security"
+										}
+									}
+								},
+								{
+									"name": "enableAMPLS",
+									"type": "Microsoft.Common.CheckBox",
+									"visible": "[steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring]",
+									"label": "Attach Application Insights to an Azure Monitor Private Link Scope",
+									"defaultValue": false,
+									"toolTip": "Connect the function app's Application Insights to an existing AMPLS for private network access."
+								},
+								{
+									"name": "privateLinkScope",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Azure Monitor Private Link Scope",
+									"resourceType": "Microsoft.Insights/privateLinkScopes",
+									"constraints": {
+										"required": true
+									},
+									"visible": "[and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.enableAMPLS)]"
 								}
-							}
+							],
+							"visible": true
 						},
 						{
-							"name": "enableAMPLS",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Attach function app Application Insights to an existing Azure Monitor Private Link Scope"
-						},
-						{
-							"name": "privateLinkScope",
-							"type": "Microsoft.Solutions.ResourceSelector",
-							"label": "Azure Monitor Private Link Scope",
-							"resourceType": "Microsoft.Insights/privateLinkScopes",
-							"constraints": {
-								"required": true
-							},
-							"visible": "[steps('monitoring').enableAMPLS]"
+							"name": "sessionHostMonitoringSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Session Host Monitoring",
+							"elements": [
+								{
+									"name": "enableSessionHostMonitoring",
+									"type": "Microsoft.Common.CheckBox",
+									"visible": true,
+									"label": "Enable Session Host Monitoring (AVD Insights & VM Insights)",
+									"defaultValue": true,
+									"toolTip": "Deploy the Azure Monitor Agent and configure data collection rules to enable AVD Insights and VM Insights for session hosts."
+								},
+								{
+									"name": "dataCollectionRulesApi",
+									"condition": "[and(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, not(empty(steps('monitoring').functionAppMonitoringSection.subscription)))]",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('monitoring').functionAppMonitoringSection.subscription.id, '/providers/Microsoft.Insights/dataCollectionRules?api-version=2023-03-11')]"
+									}
+								},
+								{
+									"name": "avdInsightsDataCollectionRule",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('monitoring').sessionHostMonitoringSection.dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('microsoft-avdi-', steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
+									"visible": "[steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring]",
+									"label": "AVD Insights Data Collection Rule",
+									"multiLine": true,
+									"toolTip": "Select the existing AVD Insights Data Collection Rule for session host monitoring.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('monitoring').sessionHostMonitoringSection.dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'avdi'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
+										"required": false
+									}
+								},
+								{
+									"name": "vmInsightsDataCollectionRule",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('monitoring').sessionHostMonitoringSection.dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('MSVMI-', steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
+									"visible": "[steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring]",
+									"label": "VM Insights Data Collection Rule",
+									"multiLine": true,
+									"toolTip": "Select the existing Virtual Machines Insights Data Collection Rule.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('monitoring').sessionHostMonitoringSection.dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'MSVMI'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
+										"required": false
+									}
+								},
+								{
+									"name": "dataCollectionEndpointsApi",
+									"condition": "[and(not(empty(steps('monitoring').functionAppMonitoringSection.subscription.id)), steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring)]",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('monitoring').functionAppMonitoringSection.subscription.id, '/providers/Microsoft.Insights/dataCollectionEndpoints?api-version=2023-03-11')]"
+									}
+								},
+								{
+									"name": "dataCollectionEndpoint",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('monitoring').sessionHostMonitoringSection.dataCollectionEndpointsApi.value, (dce) => and(contains(dce.name, 'avd'), equals(dce.location, steps('hosts').scope.location.name))), (dce) => dce.name))]",
+									"visible": "[steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring]",
+									"label": "Data Collection Endpoint",
+									"multiLine": true,
+									"toolTip": "Select the existing Data Collection Endpoint for session host monitoring.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('monitoring').sessionHostMonitoringSection.dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('hosts').scope.location.name)), (dce) => parse(concat('{\"label\":\"', dce.name, '\",\"description\":\"Resource Group: ', first(skip(split(dce.id, '/'), 4)), ', Location: ', dce.location, '\",\"value\":\"', dce.id, '\"}')))]",
+										"required": false
+									}
+								},
+								{
+									"name": "enableCentralMonitoring",
+									"type": "Microsoft.Common.CheckBox",
+									"visible": "[steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring]",
+									"label": "Configure Centralized Security Monitoring for Session Hosts",
+									"defaultValue": false,
+									"toolTip": "Creates a Data Collection Rule Association to use the Azure Monitoring Agent for collecting security data in a centralized workspace (for Sentinel or Defender for Cloud)."
+								},
+								{
+									"name": "securityDataCollectionRule",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Security Monitoring Data Collection Rule",
+									"visible": "[and(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, steps('monitoring').sessionHostMonitoringSection.enableCentralMonitoring)]",
+									"resourceType": "Microsoft.Insights/dataCollectionRules",
+									"toolTip": "Select the Data Collection Rule used for collecting security events data for Sentinel or Defender for Cloud.",
+									"constraints": {
+										"required": true
+									}
+								}
+							],
+							"visible": true
 						}
 					]
 				},
@@ -2627,13 +2898,13 @@
 				"sessionHostTemplateSpecResourceId": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing'), steps('functionApp').executionSettings.templateSpecResourceSelector.id, '')]",
 				"templateSpecName": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecName, '')]",
 				"templateSpecVersion": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecVersion, '1.0.0')]",
-				"timerSchedule": "[concat('0 0 ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]",
+				"timerSchedule": "[concat('0 ', if(equals(steps('functionApp').executionSettings.scheduleMaxMinuteOffset, 0), '0', concat('0-', steps('functionApp').executionSettings.scheduleMaxMinuteOffset)), ' ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]",
 				"replacementMode": "[steps('functionApp').executionSettings.replacementMode]",
 				"targetVMAgeDays": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'Age-based'), steps('functionApp').executionSettings.targetVMAgeDays, 0)]",
 				"replaceSessionHostOnNewImageVersionDelayDays": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'ImageVersion'), steps('functionApp').executionSettings.replaceSessionHostOnNewImageVersionDelayDays, 0)]",
 				"drainGracePeriodHours": "[steps('functionApp').executionSettings.drainGracePeriodHours]",
 				"targetSessionHostCount": "[steps('functionApp').executionSettings.targetSessionHostCount]",
-				"targetSessionHostBuffer": "[steps('functionApp').executionSettings.targetSessionHostBuffer]",				
+				"targetSessionHostBuffer": "[steps('functionApp').executionSettings.targetSessionHostBuffer]",
 				"maxDeploymentBatchSize": "[steps('functionApp').executionSettings.maxDeploymentBatchSize]",
 				"fixSessionHostTags": "[steps('functionApp').executionSettings.fixSessionHostTags]",
 				"includePreExistingSessionHosts": "[steps('functionApp').executionSettings.includePreExistingSessionHosts]",
@@ -2687,9 +2958,15 @@
 				"availability": "[if(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), steps('hosts').availability.availability, 'none')]",
 				"availabilityZones": "[if(and(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), equals(steps('hosts').availability.availability, 'AvailabilityZones')), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
-				"enableMonitoring": "[steps('monitoring').enableMonitoring]",
-				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
-				"privateLinkScopeResourceId": "[if(steps('monitoring').enableAMPLS, steps('monitoring').privateLinkScope.id, '')]",
+				"enableMonitoring": "[steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring]",
+				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.logAnalyticsWorkspace, '')]",
+				"deployWorkbook": "[if(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook, false)]",
+				"workbookLocation": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook), steps('monitoring').functionAppMonitoringSection.workbookLocation.name, steps('basics').scope.location.name)]",
+				"avdInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.avdInsightsDataCollectionRule, ''), '')]",
+				"vmInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.vmInsightsDataCollectionRule, ''), '')]",
+				"dataCollectionEndpointResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.dataCollectionEndpoint, ''), '')]",
+				"securityDataCollectionRulesResourceId": "[if(and(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, steps('monitoring').sessionHostMonitoringSection.enableCentralMonitoring), steps('monitoring').sessionHostMonitoringSection.securityDataCollectionRule.id, '')]",
+				"privateLinkScopeResourceId": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.enableAMPLS), steps('monitoring').functionAppMonitoringSection.privateLinkScope.id, '')]",
 				"tags": "[steps('tags').tags]"
 			},
 			"kind": "ResourceGroup",

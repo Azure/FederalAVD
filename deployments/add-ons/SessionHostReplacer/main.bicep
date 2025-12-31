@@ -91,8 +91,14 @@ param templateSpecName string = ''
 @description('Optional. The version of the Template Spec. Default is 1.0.0.')
 param templateSpecVersion string = '1.0.0'
 
-@description('Optional. Timer schedule for the function app (cron expression). Default is every hour.')
+@description('Optional. Timer schedule for the function app (NCrontab expression). Default is every hour at minute 0. Use range syntax (e.g., "0 0-15 * * * *") to stagger execution across multiple deployments and prevent API throttling.')
 param timerSchedule string = '0 0 * * * *'
+
+@description('Optional. Whether to deploy the Azure Monitor Workbook dashboard. Set to true for the first deployment or when updating the workbook. Set to false for subsequent deployments in the same subscription to avoid conflicts. Default is true.')
+param deployWorkbook bool = true
+
+@description('Optional. The Azure region for the centralized workbook deployment. Defaults to the function app location. The workbook location does not affect its ability to query cross-region Application Insights instances.')
+param workbookLocation string = location
 
 @description('Required. The replacement mode for session hosts. Valid values: Age-based (replace based on VM age) or ImageVersion (replace when new image version is available).')
 @allowed([
@@ -446,16 +452,24 @@ var privateEndpointNICNameConv = replace(
 
 // Session host replacer resource names
 
-// Resource naming conventions for session host replacer
+// Shared Application Insights naming - same name across all Session Host Replacer deployments
+// This enables multi-host-pool monitoring with a single App Insights instance
 var appInsightsName = replace(
   replace(
-    replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
-    'LOCATION',
-    functionAppRegionAbbreviation
+    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
+    'TOKEN-',
+    'sessionhostreplacer-'
   ),
-  'TOKEN-',
-  'shr-${uniqueStringHosts}-'
+  'LOCATION',
+  functionAppRegionAbbreviation
 )
+
+// Enterprise Workbook naming - single workbook for all host pools across all regions
+// Azure Monitor Workbooks require GUID names for deterministic deployment
+// Removing location enables cross-region monitoring with a single dashboard (like AVD Insights)
+var workbookName = guid(subscription().subscriptionId, 'session-host-replacer-workbook')
+
+// Function App naming - unique per host pool
 var functionAppName = replace(
   replace(
     replace(
@@ -862,9 +876,22 @@ module functionCode '../../sharedModules/custom/functionApp/function.bicep' = {
   }
 }
 
+module workbook 'modules/workbook.bicep' = if (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId)) {
+  name: 'SessionHostReplacerWorkbook-${deploymentSuffix}'
+  params: {
+    workbookName: workbookName
+    location: workbookLocation
+    applicationInsightsResourceId: functionApp.outputs.applicationInsightsResourceId
+    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Insights/workbooks'] ?? {})
+  }
+}
+
 // ========== //
 // Outputs    //
 // ========== //
 
 @description('The name of the deployed function app.')
 output functionAppName string = functionApp.outputs.functionAppName
+
+@description('The resource ID of the monitoring workbook.')
+output workbookId string = (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId)) ? workbook!.outputs.workbookId : ''
