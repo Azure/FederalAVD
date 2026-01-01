@@ -193,7 +193,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
   identity: identity
   properties: {
     availabilitySet: availability == 'AvailabilitySets' ? {
-      id: resourceId('Microsoft.Compute/availabilitySets', '${availabilitySetNamePrefix}${padLeft(vmNumbers[i] / 200, 2, '0')}')
+      id: resourceId('Microsoft.Compute/availabilitySets', '${availabilitySetNamePrefix}${padLeft(((vmNumbers[i] - 1) / 200) + 1, 2, '0')}')
     } : null
     hardwareProfile: {
       vmSize: virtualMachineSize

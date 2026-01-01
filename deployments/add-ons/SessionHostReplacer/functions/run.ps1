@@ -33,6 +33,9 @@ catch {
 Write-HostDetailed -Message "Host Pool SubscriptionId: {0}" -StringValues $HostPoolSubscriptionId -Level Verbose
 Write-HostDetailed -Message "Virtual Machines SubscriptionId: {0}" -StringValues $VirtualMachinesSubscriptionId -Level Verbose
 
+# Set host pool name for log prefixing
+Set-HostPoolNameForLogging -HostPoolName (Read-FunctionAppSetting HostPoolName)
+
 # Get session hosts and update tags if needed.
 $sessionHosts = Get-SessionHosts -ARMToken $ARMToken
 Write-HostDetailed -Message "Found {0} session hosts" -StringValues $sessionHosts.Count -Level Host
@@ -93,9 +96,31 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
 $sessionHostsFiltered = $sessionHosts | Where-Object { $_.IncludeInAutomation }
 Write-HostDetailed -Message "Filtered to {0} session hosts enabled for automatic replacement: {1}" -StringValues $sessionHostsFiltered.Count, ($sessionHostsFiltered.SessionHostName -join ',') -Level Host
 
-# Get running deployments, if any
-$runningDeployments = Get-RunningDeployments -ARMToken $ARMToken
-Write-HostDetailed -Message "Found {0} running deployments" -StringValues $runningDeployments.Count -Level Verbose
+# Get running and failed deployments
+$deploymentsInfo = Get-RunningDeployments -ARMToken $ARMToken
+$runningDeployments = $deploymentsInfo.RunningDeployments
+$failedDeployments = $deploymentsInfo.FailedDeployments
+Write-HostDetailed -Message "Found {0} running deployments and {1} failed deployments" -StringValues $runningDeployments.Count, $failedDeployments.Count -Level Verbose
+
+# Handle failed deployments - mark VMs from failed deployments for deletion if they're in the host pool
+if ($failedDeployments.Count -gt 0) {
+    $failedDeploymentVMs = $failedDeployments.SessionHostNames | Select-Object -Unique
+    $sessionHostsFromFailedDeployments = $sessionHostsFiltered | Where-Object { 
+        $vmName = $_.SessionHostName
+        $failedDeploymentVMs | Where-Object { $vmName -like "$_*" }
+    }
+    
+    if ($sessionHostsFromFailedDeployments) {
+        Write-HostDetailed -Message "Found {0} session hosts from failed deployments in the host pool: {1}" -StringValues $sessionHostsFromFailedDeployments.Count, ($sessionHostsFromFailedDeployments.SessionHostName -join ',') -Level Warning
+        Write-HostDetailed -Message "These hosts will be marked for deletion and the failed deployment records should be cleaned up manually or will be handled automatically" -Level Warning
+        
+        # Tag these hosts for deletion by updating their IncludeInAutomation status
+        # They'll be picked up in the normal deletion flow
+        foreach ($sh in $sessionHostsFromFailedDeployments) {
+            Write-HostDetailed -Message "Marking session host {0} from failed deployment for cleanup" -StringValues $sh.SessionHostName -Level Warning
+        }
+    }
+}
 
 # Load session host parameters
 $sessionHostParameters = [hashtable]::new([System.StringComparer]::InvariantCultureIgnoreCase)
@@ -106,7 +131,7 @@ Write-HostDetailed -Message "Getting latest image version using Image Reference:
 $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location
 
 # Get number session hosts to deploy
-$hostPoolDecisions = Get-HostPoolDecisions -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion
+$hostPoolDecisions = Get-HostPoolDecisions -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -FailedDeployments $failedDeployments -LatestImageVersion $latestImageVersion
 
 # Log comprehensive metrics for monitoring dashboard
 $metricsLog = @{

@@ -229,9 +229,9 @@ module artifactsUserAssignedIdentity 'modules/getUserAssignedIdentity.bicep' = i
 
 module availabilitySets '../../../../sharedModules/resources/compute/availability-set/main.bicep' = [
   for i in range(0, calculatedAvailabilitySetsCount): if (availability == 'AvailabilitySets') {
-    name: '${availabilitySetNamePrefix}${padLeft((i + calculatedAvailabilitySetsIndex), 2, '0')}-${deploymentSuffix}'
+    name: '${availabilitySetNamePrefix}${padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
     params: {
-      name: '${availabilitySetNamePrefix}${padLeft((i + calculatedAvailabilitySetsIndex), 2, '0')}'
+      name: '${availabilitySetNamePrefix}${padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0')}'
       platformFaultDomainCount: 2
       platformUpdateDomainCount: 5
       proximityPlacementGroupResourceId: ''
@@ -265,7 +265,7 @@ module remoteNetAppVolumes 'modules/getNetAppVolumeSmbServerFqdn.bicep' = [
 @batchSize(5)
 module virtualMachines 'modules/virtualMachines.bicep' = [
   for i in range(1, sessionHostBatchCount): {
-    name: '${take(deployment().name, 10)}-VMs-Batch-${i-1}-${deploymentSuffix}'
+    name: 'VMs-Batch-${i-1}-${deploymentSuffix}'
     params: {
       artifactsContainerUri: artifactsContainerUri
       artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId

@@ -91,7 +91,7 @@ param templateSpecName string = ''
 @description('Optional. The version of the Template Spec. Default is 1.0.0.')
 param templateSpecVersion string = '1.0.0'
 
-@description('Optional. Timer schedule for the function app (NCrontab expression). Default is every hour at minute 0. Use range syntax (e.g., "0 0-15 * * * *") to stagger execution across multiple deployments and prevent API throttling.')
+@description('Optional. Timer schedule for the function app (NCrontab format: {second} {minute} {hour} {day} {month} {day-of-week}). Default runs every hour at minute 0. To stagger across deployments, vary the minute (e.g., "0 5 * * * *" runs at 5 past each hour). For daily execution, use "0 0 2 * * *" for 2:00 AM. Note: Ranges like "0 0-15 * * * *" run EVERY hour in that range (16 times), not once randomly.')
 param timerSchedule string = '0 0 * * * *'
 
 @description('Optional. Whether to deploy the Azure Monitor Workbook dashboard. Set to true for the first deployment or when updating the workbook. Set to false for subsequent deployments in the same subscription to avoid conflicts. Default is true.')
@@ -370,7 +370,7 @@ param sessionHostCustomizations array = []
 // ========== //
 
 var deploymentSuffix = uniqueString(resourceGroup().id, deployment().name)
-var hostPoolName = split(hostPoolResourceId, '/')[8]
+var hostPoolName = last(split(hostPoolResourceId, '/'))
 var hostPoolResourceGroupName = split(hostPoolResourceId, '/')[4]
 var hostPoolSubscriptionId = split(hostPoolResourceId, '/')[2]
 var virtualMachineResourceGroupLocation = reference(virtualMachinesResourceGroupId, '2021-04-01', 'Full').location
@@ -526,7 +526,9 @@ var networkInterfaceNameConv = nameConvReversed
 // Image definition format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}
 // Image version format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}/versions/{version}
 // Gallery format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}
-var computeGalleryResourceId = !empty(customImageResourceId) ? join(take(split(customImageResourceId, '/'), 9), '/') : ''
+var computeGalleryResourceId = !empty(customImageResourceId)
+  ? join(take(split(customImageResourceId, '/'), 9), '/')
+  : ''
 
 // Session Host Parameters - Passed to Template Spec Deployment
 // These parameters are passed to the function app which will use them when deploying new session hosts
@@ -626,6 +628,33 @@ module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPla
   }
 }
 
+var monitoringResourceGroupId = !empty(avdInsightsDataCollectionRulesResourceId)
+  ? '/subscriptions/${split(avdInsightsDataCollectionRulesResourceId, '/')[2]}/resourceGroups/${split(avdInsightsDataCollectionRulesResourceId, '/')[4]}'
+  : !empty(vmInsightsDataCollectionRulesResourceId)
+      ? '/subscriptions/${split(vmInsightsDataCollectionRulesResourceId, '/')[2]}/resourceGroups/${split(vmInsightsDataCollectionRulesResourceId, '/')[4]}'
+      : ''
+
+var hostPoolResourceGroupId = '/subscriptions/${hostPoolSubscriptionId}/resourceGroups/${hostPoolResourceGroupName}'
+
+var roleAssignmentsResourceGroups = union(
+  [
+    {
+      resourceGroupId: hostPoolResourceGroupId
+      roleDefinitionId: 'e307426c-f9b6-4e81-87de-d99efb3c32bc'
+      roleDescription: 'DVHPC' // Desktop Virtualization Host Pool Contributor
+    }
+  ],
+  !empty(monitoringResourceGroupId)
+    ? [
+        {
+          resourceGroupId: monitoringResourceGroupId
+          roleDefinitionId: '749f88d5-cbae-40b8-bcfc-e573ddc772fa' // Monitoring Contributor
+          roleDescription: 'MonCont'
+        }
+      ]
+    : []
+)
+
 module roleAssignmentsKeyVault '../../sharedModules/resources/key-vault/vault/rbac.bicep' = {
   name: 'KeyVaultRoleAssignment-${deploymentSuffix}'
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
@@ -648,29 +677,18 @@ module roleAssignmentVirtualMachinesSubscription '../../sharedModules/resources/
   }
 }
 
-module roleAssignmentVirtualMachinesResourceGroup '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = {
-  name: 'VirtualMachinesResourceGroupRoleAssignment-${deploymentSuffix}'
-  scope: resourceGroup(virtualMachinesSubscriptionId, virtualMachinesResourceGroupName)
-  params: {
-    principalId: userAssignedIdentity.properties.principalId
-    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
-    resourceGroupName: virtualMachinesResourceGroupName
-    subscriptionId: virtualMachinesSubscriptionId
-    principalType: 'ServicePrincipal'
+module roleAssignmentsRGs '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
+  for rgRole in roleAssignmentsResourceGroups: {
+    name: 'RoleAssign-${rgRole.roleDescription}-${last(split(rgRole.resourceGroupId, '/'))}-${deploymentSuffix}'
+    scope: resourceGroup(split(rgRole.resourceGroupId, '/')[2], split(rgRole.resourceGroupId, '/')[4])
+    params: {
+      principalId: userAssignedIdentity.properties.principalId
+      roleDefinitionId: rgRole.roleDefinitionId
+      resourceGroupName: last(split(rgRole.resourceGroupId, '/'))
+      principalType: 'ServicePrincipal'
+    }
   }
-}
-
-module roleAssignmentHostPoolResourceGroup '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = {
-  name: 'HostPoolResourceGroupRoleAssignment-${deploymentSuffix}'
-  scope: resourceGroup(hostPoolSubscriptionId, hostPoolResourceGroupName)
-  params: {
-    principalId: userAssignedIdentity.properties.principalId
-    roleDefinitionId: 'e307426c-f9b6-4e81-87de-d99efb3c32bc' // Desktop Virtualization Host Pool Contributor
-    resourceGroupName: hostPoolResourceGroupName
-    subscriptionId: hostPoolSubscriptionId
-    principalType: 'ServicePrincipal'
-  }
-}
+]
 
 module roleAssignmentTemplateSpec '../../sharedModules/resources/resources/templateSpecs/rbac.bicep' = {
   name: 'TemplateSpecRoleAssignment-${deploymentSuffix}'
@@ -894,4 +912,6 @@ module workbook 'modules/workbook.bicep' = if (deployWorkbook && !empty(logAnaly
 output functionAppName string = functionApp.outputs.functionAppName
 
 @description('The resource ID of the monitoring workbook.')
-output workbookId string = (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId)) ? workbook!.outputs.workbookId : ''
+output workbookId string = (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId))
+  ? workbook!.outputs.workbookId
+  : ''

@@ -12,6 +12,9 @@ $script:ResourceManagerUri = $null
 # Cached and normalized GraphEndpoint without trailing slash
 $script:GraphEndpoint = $null
 
+# Host Pool Name for log message prefixing
+$script:HostPoolNameForLogging = $null
+
 #EndRegion Module-Level Variables
 
 #Region Helper Functions
@@ -202,6 +205,26 @@ function Read-FunctionAppSetting {
 
 #Region Logging and Error Handling
 
+function Set-HostPoolNameForLogging {
+    <#
+    .SYNOPSIS
+        Sets the host pool name to be used as a prefix in all log messages.
+    .DESCRIPTION
+        This function sets the module-level variable used by Write-HostDetailed to prefix all log messages.
+    .PARAMETER HostPoolName
+        The name of the host pool to use as a prefix.
+    .EXAMPLE
+        Set-HostPoolNameForLogging -HostPoolName "vdpool-test-01-use2"
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $HostPoolName
+    )
+    
+    $script:HostPoolNameForLogging = $HostPoolName
+}
+
 function Write-HostDetailed {
     <#
     .SYNOPSIS
@@ -244,9 +267,12 @@ function Write-HostDetailed {
         $formattedMessage = $Message
     }
     
+    # Add host pool prefix if available
+    $prefix = if ($script:HostPoolNameForLogging) { "[$($script:HostPoolNameForLogging)]" } else { "" }
+    
     # Add timestamp
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    $output = "[$timestamp] [$Level] $formattedMessage"
+    $output = "[$timestamp] [$Level] $prefix $formattedMessage".Trim()
     
     # Output based on level
     switch ($Level) {
@@ -1316,6 +1342,8 @@ function Get-HostPoolDecisions {
         [Parameter()]
         $RunningDeployments,
         [Parameter()]
+        $FailedDeployments = @(),
+        [Parameter()]
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
         [Parameter()]
         [int] $TargetVMAgeDays = (Read-FunctionAppSetting TargetVMAgeDays),
@@ -1369,7 +1397,24 @@ function Get-HostPoolDecisions {
         }
     }
     
+    # Identify session hosts from failed deployments that need cleanup
+    [array] $sessionHostsFromFailedDeployments = @()
+    if ($FailedDeployments -and $FailedDeployments.Count -gt 0) {
+        $failedDeploymentVMNames = $FailedDeployments.SessionHostNames | Select-Object -Unique
+        $sessionHostsFromFailedDeployments = $SessionHosts | Where-Object { 
+            $vmName = $_.SessionHostName
+            $failedDeploymentVMNames | Where-Object { $vmName -like "$_*" }
+        }
+        
+        if ($sessionHostsFromFailedDeployments.Count -gt 0) {
+            Write-HostDetailed "Found $($sessionHostsFromFailedDeployments.Count) session hosts from failed deployments that need cleanup: $($sessionHostsFromFailedDeployments.SessionHostName -join ',')" -Level Warning
+        }
+    }
+    
     # Determine which session hosts need replacement based on the replacement mode
+    [array] $sessionHostsOldAge = @()
+    [array] $sessionHostsOldVersion = @()
+    
     if ($ReplacementMode -eq 'Age-based') {
         Write-HostDetailed "Replacement Mode: Age-based (replacing hosts older than $TargetVMAgeDays days)"
         if ($TargetVMAgeDays -gt 0) {
@@ -1398,7 +1443,7 @@ function Get-HostPoolDecisions {
         Write-HostDetailed "Unknown replacement mode: $ReplacementMode" -Level Error
     }
 
-    [array] $sessionHostsToReplace = ($sessionHostsOldAge + $sessionHostsOldVersion) | Select-Object -Property * -Unique
+    [array] $sessionHostsToReplace = ($sessionHostsOldAge + $sessionHostsOldVersion + $sessionHostsFromFailedDeployments) | Select-Object -Property * -Unique
     Write-HostDetailed "Found $($sessionHostsToReplace.Count) session hosts to replace in total. $($($sessionHostsToReplace.SessionHostName) -join ',')"
 
     $goodSessionHosts = $SessionHosts | Where-Object { $_.SessionHostName -notin $sessionHostsToReplace.SessionHostName }
@@ -1512,6 +1557,8 @@ function Get-HostPoolDecisions {
         PossibleSessionHostDeleteCount = $weCanDelete
         SessionHostsPendingDelete      = $sessionHostsPendingDelete
         ExistingSessionHostNames       = ([array]$SessionHosts.SessionHostName + [array]$runningDeployments.SessionHostNames) | Select-Object -Unique
+        TargetSessionHostCount         = $TargetSessionHostCount
+        TotalSessionHostsToReplace     = $sessionHostsToReplace.Count
     }
 }
 
@@ -1540,10 +1587,15 @@ function Get-RunningDeployments {
     $deployments = $deployments | Where-Object { $_.DeploymentName -like "$DeploymentPrefix*" }
     Write-HostDetailed -Message "Found $($deployments.Count) deployments marked with $DeploymentPrefix."
     
+    # Handle failed deployments - don't block automation, but return info for cleanup
     $failedDeployments = $deployments | Where-Object { $_.ProvisioningState -eq 'Failed' }
     if ($failedDeployments) {
-        Write-HostDetailed -Message "Found $($failedDeployments.Count) failed deployments. These should be cleaned up before automation can resume." -Level Error
-        throw "Found {0} failed deployments. These should be cleaned up before automation can resume." -f $failedDeployments.Count
+        Write-HostDetailed -Message "Found $($failedDeployments.Count) failed deployments. VMs from these deployments will be marked for cleanup." -Level Warning
+        foreach ($failedDeploy in $failedDeployments) {
+            $parameters = $failedDeploy.Parameters | ConvertTo-CaseInsensitiveHashtable
+            $failedVMs = if ($parameters.ContainsKey('sessionHostNames')) { $parameters['sessionHostNames'].Value } else { @() }
+            Write-HostDetailed -Message "Failed deployment '$($failedDeploy.DeploymentName)' attempted to deploy: $($failedVMs -join ',')" -Level Warning
+        }
     }
     
     $runningDeployments = $deployments | Where-Object { $_.ProvisioningState -eq 'Running' }
@@ -1555,7 +1607,13 @@ function Get-RunningDeployments {
         Write-HostDetailed -Message "Found $($longRunningDeployments.Count) deployments that have been running for more than 2 hours. This could block future deployments" -Level Warning
     }
 
-    $output = foreach ($deployment in $runningDeployments) {
+    # Return both running and failed deployments for proper handling
+    $output = @{
+        RunningDeployments = @()
+        FailedDeployments  = @()
+    }
+    
+    $output.RunningDeployments = foreach ($deployment in $runningDeployments) {
         $parameters = $deployment.Parameters | ConvertTo-CaseInsensitiveHashtable
         Write-HostDetailed -Message "Deployment $($deployment.DeploymentName) is running and deploying: $(($parameters['sessionHostNames'].Value -join ','))"
         [PSCustomObject]@{
@@ -1565,6 +1623,17 @@ function Get-RunningDeployments {
             Status           = $deployment.ProvisioningState
         }
     }
+    
+    $output.FailedDeployments = foreach ($deployment in $failedDeployments) {
+        $parameters = $deployment.Parameters | ConvertTo-CaseInsensitiveHashtable
+        [PSCustomObject]@{
+            DeploymentName   = $deployment.DeploymentName
+            SessionHostNames = if ($parameters.ContainsKey('sessionHostNames')) { $parameters['sessionHostNames'].Value } else { @() }
+            Timestamp        = $deployment.Timestamp
+            Status           = $deployment.ProvisioningState
+        }
+    }
+    
     return $output
 }
 
@@ -2069,6 +2138,7 @@ Export-ModuleMember -Function @(
     'Get-AccessToken'
     'Get-GraphEndpoint'
     'Read-FunctionAppSetting'
+    'Set-HostPoolNameForLogging'
     'Write-HostDetailed'
     'Invoke-AzureRestMethodWithRetry'
     'Invoke-GraphApiWithRetry'

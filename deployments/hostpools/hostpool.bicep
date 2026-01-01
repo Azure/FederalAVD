@@ -751,7 +751,6 @@ var fslogixConfigurationTags = fslogixConfigureSessionHosts
      
 var vmConfigurationTags = union(
   {
-    vmResourceGroup: resourceNames.outputs.resourceGroupHosts
     vmIdentityType: identitySolution
     vmNamePrefix: virtualMachineNamePrefix
     vmIndexPadding: vmNameIndexLength
@@ -967,9 +966,7 @@ module resourceNames 'modules/resourceNames.bicep' = {
     controlPlaneRegion: controlPlaneRegion
     globalFeedRegion: globalFeedRegion!
     virtualMachinesRegion: virtualMachinesRegion
-    nameConvResTypeAtEnd: deploymentType != 'SessionHostsOnly'
-      ? nameConvResTypeAtEnd
-      : bool(existingHostPool.?tags.?nameConvResTypeAtEnd) ?? false
+    nameConvResTypeAtEnd: nameConvResTypeAtEnd
     virtualMachineNamePrefix: virtualMachineNamePrefix
   }
 }

@@ -393,14 +393,14 @@
 									"name": "scheduleStaggeringTextBlock",
 									"type": "Microsoft.Common.TextBlock",
 									"options": {
-										"text": "To prevent multiple function apps from running simultaneously and potentially causing API throttling, you can stagger the execution time. The function will run at a random minute between 0 and the specified maximum offset within each scheduled hour."
+										"text": "To prevent multiple function apps from running simultaneously and potentially causing API throttling, you can stagger the execution time by setting different start minutes for each deployment. The function will execute at the specified minute within each scheduled hour."
 									}
 								},
 								{
-									"name": "scheduleMaxMinuteOffset",
+									"name": "scheduleMinuteOffset",
 									"type": "Microsoft.Common.Slider",
-									"label": "Maximum Minute Offset",
-									"toolTip": "The function will run at a random minute between 0 and this value within each scheduled hour. For example, if set to 15, the function will execute somewhere between :00 and :15 of each hour. Set to 0 to disable staggering.",
+									"label": "Start Minute",
+									"toolTip": "The minute within each hour when the function will execute. For example, if set to 15, the function will run at :15 of each scheduled hour (8:15, 9:15, etc.). Set to 0 to run at the top of each hour. Use different values across deployments to stagger execution.",
 									"min": 0,
 									"max": 59,
 									"defaultValue": 15,
@@ -592,14 +592,14 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Remove Entra ID Device Records",
 									"toolTip": "Remove Entra ID device records when deleting session hosts.",
-									"defaultValue": "[not(contains(coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmIdentityType, ''), 'DomainServices'))]"
+									"defaultValue": true
 								},
 								{
 									"name": "removeIntuneDevice",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Remove Intune Device Records",
 									"toolTip": "Remove Intune device records when deleting session hosts.",
-									"defaultValue": "[equals(coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntuneEnrollment, 'false'), 'true')]"
+									"defaultValue": true
 								},
 								{
 									"name": "progressiveScaleUpHeader",
@@ -1937,7 +1937,7 @@
 									"name": "intune",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Intune Enrollment",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.intuneEnrollment), 'No', if(steps('functionApp').executionSettings.hostsRGProps.tags.intuneEnrollment, 'Yes', 'No'))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntuneEnrollment), 'No', if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntuneEnrollment, 'true'), 'Yes', 'No'))]",
 									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting Yes.",
 									"constraints": {
 										"required": true,
@@ -2898,7 +2898,7 @@
 				"sessionHostTemplateSpecResourceId": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing'), steps('functionApp').executionSettings.templateSpecResourceSelector.id, '')]",
 				"templateSpecName": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecName, '')]",
 				"templateSpecVersion": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecVersion, '1.0.0')]",
-				"timerSchedule": "[concat('0 ', if(equals(steps('functionApp').executionSettings.scheduleMaxMinuteOffset, 0), '0', concat('0-', steps('functionApp').executionSettings.scheduleMaxMinuteOffset)), ' ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]",
+				"timerSchedule": "[concat('0 ', string(steps('functionApp').executionSettings.scheduleMinuteOffset), ' ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]" ,
 				"replacementMode": "[steps('functionApp').executionSettings.replacementMode]",
 				"targetVMAgeDays": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'Age-based'), steps('functionApp').executionSettings.targetVMAgeDays, 0)]",
 				"replaceSessionHostOnNewImageVersionDelayDays": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'ImageVersion'), steps('functionApp').executionSettings.replaceSessionHostOnNewImageVersionDelayDays, 0)]",

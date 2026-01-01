@@ -204,7 +204,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
       hibernationEnabled: hibernationEnabled
     }
     availabilitySet: availability == 'AvailabilitySets' ? {
-      id: resourceId('Microsoft.Compute/availabilitySets', '${availabilitySetNamePrefix}-${(i + sessionHostIndex) / 200}')
+      id: resourceId('Microsoft.Compute/availabilitySets', '${availabilitySetNamePrefix}${padLeft((((i + sessionHostIndex) - 1) / 200) + 1, 2, '0')}')
     } : null
     hardwareProfile: {
       vmSize: virtualMachineSize

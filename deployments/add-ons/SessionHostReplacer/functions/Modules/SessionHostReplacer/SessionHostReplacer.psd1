@@ -29,6 +29,7 @@
         'Get-GraphEndpoint'
         'Get-AccessToken'
         'Read-FunctionAppSetting'
+        'Set-HostPoolNameForLogging'
         'Write-HostDetailed'
         'Invoke-AzureRestMethodWithRetry'
         'Invoke-GraphApiWithRetry'

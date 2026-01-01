@@ -2158,7 +2158,7 @@
 									"name": "intune",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Intune Enrollment",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.intuneEnrollment)), 'No', if(steps('basics').hostsRGProps.tags.intuneEnrollment, 'Yes', 'No'))]",
+									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment)), 'No', if(equals(steps('basics').hostsRGProps.tags.vmIntuneEnrollment, 'true'), 'Yes', 'No'))]",
 									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting Yes.",
 									"constraints": {
 										"required": true,

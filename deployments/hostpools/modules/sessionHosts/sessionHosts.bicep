@@ -223,10 +223,10 @@ module artifactsUserAssignedIdentity 'modules/getUserAssignedIdentity.bicep' = i
 }
 
 module availabilitySets '../../../sharedModules/resources/compute/availability-set/main.bicep' = [for i in range(0, availabilitySetsCount): if (pooledHostPool && availability == 'AvailabilitySets') {
-  name: '${availabilitySetNamePrefix}${padLeft((i + availabilitySetsIndex), 2, '0')}-${deploymentSuffix}'
+  name: '${availabilitySetNamePrefix}${padLeft((i + availabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
-    name: '${availabilitySetNamePrefix}${padLeft((i + availabilitySetsIndex), 2, '0')}'
+    name: '${availabilitySetNamePrefix}${padLeft((i + availabilitySetsIndex) + 1, 2, '0')}'
     platformFaultDomainCount: 2
     platformUpdateDomainCount: 5
     proximityPlacementGroupResourceId: ''
