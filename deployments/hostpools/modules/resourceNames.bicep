@@ -4,7 +4,7 @@ param existingHostPoolResourceId string
 param existingFeedWorkspaceResourceId string = ''
 param fslogixStorageCustomPrefix string = ''
 param identifier string = ''
-param index string = ''
+param index int
 param controlPlaneRegion string
 param globalFeedRegion string = ''
 param virtualMachinesRegion string
@@ -25,11 +25,11 @@ var controlPlaneRegionAbbreviation = locations[varLocationControlPlane].abbrevia
 
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
-var existingHostPoolName = empty(existingHostPoolResourceId) ? '' : split(existingHostPoolResourceId, '/')[8]
+var existingHostPoolName = empty(existingHostPoolResourceId) ? '' : last(split(existingHostPoolResourceId, '/'))
 
 // Dynamically determine naming convention from existing host pool name
-// nameConvReversed = true means resource type at end (e.g., "avd-01-hp")
-// nameConvReversed = false means resource type at beginning (e.g., "hp-avd-01")
+// nameConvReversed = true means resource type at end (e.g., "avd-01-eus-hp")
+// nameConvReversed = false means resource type at beginning (e.g., "hp-avd-01-eus")
 var nameConvReversed = !empty(existingHostPoolName)
   ? startsWith(existingHostPoolName, resourceAbbreviations.hostPools)
       ? false // Resource type is at the beginning
@@ -39,22 +39,18 @@ var nameConvReversed = !empty(existingHostPoolName)
   : nameConvResTypeAtEnd
 
 var arrHostPoolName = split(existingHostPoolName, '-')
-var lengthArrHostPoolName = length(arrHostPoolName)
 
-var hpIdentifier = !empty(existingHostPoolName)
+var hpIndexString = index >= 0 ? format('{0:00}', index) : ''
+
+// Extract hpBaseName from existing host pool name by removing resource type and location
+// Not reversed: hp-{hpBaseName}-{location} → remove first segment (hp) and last segment (location)
+// Reversed: {hpBaseName}-{location}-hp → remove last two segments (location-hp)
+// For new deployments, construct hpBaseName from identifier and index
+var hpBaseName = !empty(existingHostPoolName)
   ? nameConvReversed
-      ? lengthArrHostPoolName < 5 ? arrHostPoolName[0] : '${arrHostPoolName[0]}-${arrHostPoolName[1]}'
-      : lengthArrHostPoolName < 5 ? arrHostPoolName[1] : '${arrHostPoolName[1]}-${arrHostPoolName[2]}'
-  : toLower(identifier)
-var hpIndex = !empty(existingHostPoolName)
-  ? lengthArrHostPoolName == 3
-      ? ''
-      : nameConvReversed
-          ? lengthArrHostPoolName < 5 ? arrHostPoolName[1] : arrHostPoolName[2]
-          : lengthArrHostPoolName < 5 ? arrHostPoolName[2] : arrHostPoolName[3]
-  : index
-
-var hpBaseName = empty(hpIndex) ? hpIdentifier : '${hpIdentifier}-${hpIndex}'
+      ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-') // Remove last 2 segments (location-hp)
+      : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-') // Remove first (hp) and last (location)
+  : empty(hpIndexString) ? toLower(identifier) : '${toLower(identifier)}-${hpIndexString}'
 var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
 
 var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
@@ -259,12 +255,8 @@ var resourceGroupHosts = replace(
   'RESOURCETYPE',
   '${resourceAbbreviations.resourceGroups}'
 )
-var vmNamePrefixWithoutDash = toLower(last(virtualMachineNamePrefix) == '-'
-  ? take(virtualMachineNamePrefix, length(virtualMachineNamePrefix) - 1)
-  : virtualMachineNamePrefix)
-var availabilitySetNamePrefix = nameConvReversed
-  ? '${vmNamePrefixWithoutDash}-${resourceAbbreviations.availabilitySets}-'
-  : '${resourceAbbreviations.availabilitySets}-${vmNamePrefixWithoutDash}-'
+
+var availabilitySetNameConv = nameConvReversed ? replace(replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '') : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '')}-##'
 var virtualMachineNameConv = nameConvReversed
   ? '${virtualMachineNamePrefix}###-${resourceAbbreviations.virtualMachines}'
   : '${resourceAbbreviations.virtualMachines}-${virtualMachineNamePrefix}###'
@@ -342,7 +334,7 @@ var fslogixfileShareNames = {
 }
 
 output appServicePlanName string = appServicePlanName
-output availabilitySetNamePrefix string = availabilitySetNamePrefix
+output availabilitySetNameConv string = availabilitySetNameConv
 output dataCollectionEndpointName string = dataCollectionEndpointName
 output depVirtualMachineName string = depVirtualMachineName
 output depVirtualMachineNicName string = depVirtualMachineNicName

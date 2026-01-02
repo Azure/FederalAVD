@@ -1,6 +1,9 @@
 # Input bindings are passed in via param block.
 param($Timer)
 
+# Set host pool name for log prefixing
+Set-HostPoolNameForLogging -HostPoolName (Read-FunctionAppSetting HostPoolName)
+
 Write-HostDetailed -Message "SessionHostReplacer function started at {0}" -StringValues (Get-Date -AsUTC -Format 'o') -Level Host
 
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
@@ -9,13 +12,8 @@ if ($Timer.IsPastDue) {
 }
 
 # Initialize environment-agnostic variables from Function App Configuration
-$HostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
 $VirtualMachinesSubscriptionId = Read-FunctionAppSetting VirtualMachinesSubscriptionId
 $UserAssignedIdentityClientId = Read-FunctionAppSetting UserAssignedIdentityClientId
-
-Write-HostDetailed -Message "UserAssignedIdentityClientId: {0}" -StringValues $(if ($UserAssignedIdentityClientId) { $UserAssignedIdentityClientId } else { "(using system-assigned identity)" }) -Level Verbose
-Write-HostDetailed -Message "IDENTITY_ENDPOINT: {0}" -StringValues $(if ($env:IDENTITY_ENDPOINT) { "configured" } else { "MISSING" }) -Level Verbose
-Write-HostDetailed -Message "IDENTITY_HEADER: {0}" -StringValues $(if ($env:IDENTITY_HEADER) { "configured" } else { "MISSING" }) -Level Verbose
 
 # Acquire ARM access token
 try {
@@ -29,12 +27,6 @@ catch {
     Write-HostDetailed -Message "Token acquisition error details: {0}" -StringValues $_.Exception.Message -Level Host
     throw
 }
-
-Write-HostDetailed -Message "Host Pool SubscriptionId: {0}" -StringValues $HostPoolSubscriptionId -Level Verbose
-Write-HostDetailed -Message "Virtual Machines SubscriptionId: {0}" -StringValues $VirtualMachinesSubscriptionId -Level Verbose
-
-# Set host pool name for log prefixing
-Set-HostPoolNameForLogging -HostPoolName (Read-FunctionAppSetting HostPoolName)
 
 # Get session hosts and update tags if needed.
 $sessionHosts = Get-SessionHosts -ARMToken $ARMToken
@@ -232,4 +224,10 @@ if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisi
     Else {
         Remove-SessionHosts -ARMToken $ARMToken -GraphToken $null -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $false -RemoveIntuneDevice $false
     }
+}
+
+# Log schedule information for workbook visibility
+if ($Timer.ScheduleStatus) {
+    $nextRun = if ($Timer.ScheduleStatus.Next) { $Timer.ScheduleStatus.Next.ToString('o') } else { "Not available" }
+    Write-HostDetailed -Message "SCHEDULE | Next scheduled run: {0}" -StringValues $nextRun -Level Host
 }

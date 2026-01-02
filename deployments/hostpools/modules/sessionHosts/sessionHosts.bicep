@@ -5,7 +5,7 @@ param appGroupSecurityGroups array
 param artifactsContainerUri string
 param artifactsUserAssignedIdentityResourceId string
 param availability string
-param availabilitySetNamePrefix string
+param availabilitySetNameConv string
 param availabilitySetsCount int
 param availabilitySetsIndex int
 param availabilityZones array
@@ -223,10 +223,10 @@ module artifactsUserAssignedIdentity 'modules/getUserAssignedIdentity.bicep' = i
 }
 
 module availabilitySets '../../../sharedModules/resources/compute/availability-set/main.bicep' = [for i in range(0, availabilitySetsCount): if (pooledHostPool && availability == 'AvailabilitySets') {
-  name: '${availabilitySetNamePrefix}${padLeft((i + availabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
+  name: '${replace(availabilitySetNameConv, '##', padLeft((i + availabilitySetsIndex) + 1, 2, '0'))}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
-    name: '${availabilitySetNamePrefix}${padLeft((i + availabilitySetsIndex) + 1, 2, '0')}'
+    name: replace(availabilitySetNameConv, '##', padLeft((i + availabilitySetsIndex) + 1, 2, '0'))
     platformFaultDomainCount: 2
     platformUpdateDomainCount: 5
     proximityPlacementGroupResourceId: ''
@@ -260,7 +260,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId) ? '' : artifactsUserAssignedIdentity!.outputs.clientId
     availability: availability
     availabilityZones: availabilityZones
-    availabilitySetNamePrefix: availabilitySetNamePrefix
+    availabilitySetNameConv: availabilitySetNameConv
     avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
     confidentialVMOSDiskEncryptionType: confidentialVMOSDiskEncryptionType
     customImageResourceId: customImageResourceId

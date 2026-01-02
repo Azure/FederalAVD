@@ -25,7 +25,7 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
       {
         name: 'DefaultSharePermission'
         value: defaultSharePermission
-      }      
+      }     
       {
         name: 'ResourceManagerUri'
         value: environment().resourceManager

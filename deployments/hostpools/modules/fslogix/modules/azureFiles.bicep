@@ -10,6 +10,7 @@ param deploymentVirtualMachineName string
 param domainJoinUserPassword string
 @secure()
 param domainJoinUserPrincipalName string
+param domainName string
 param fslogixEncryptionKeyNameConv string
 param encryptionKeyVaultUri string
 param encryptionUserAssignedIdentityResourceId string
@@ -294,8 +295,8 @@ module configureADDSAuth 'domainJoin.bicep' = if (identitySolution == 'ActiveDir
     shares
   ]
 }
-
-module configureEntraKerberosWithDomainInfo 'azureFilesEntraKerberosWithDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
+// Configure Entra Kerberos Hybrid with Domain Info if domainName, domainJoinUserPrincipalName and domainJoinUserPassword are provided. If they were, the deployment helper VM is domain joined. If not, then the deployment helper VM is not domain joined and can't run this configuration.
+module configureEntraKerberosWithDomainInfo 'azureFilesEntraKerberosWithDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
   name: 'Configure-Entra-Kerberos-DomainInfo-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
@@ -316,7 +317,7 @@ module configureEntraKerberosWithDomainInfo 'azureFilesEntraKerberosWithDomainIn
   ]
 }
 
-module configureEntraKerberosWithoutDomainInfo 'azureFilesEntraKerberosWithoutDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-CloudOnly' || (identitySolution == 'EntraKerberos-Hybrid' && (empty(domainJoinUserPassword) || empty(domainJoinUserPrincipalName)))) {
+module configureEntraKerberosWithoutDomainInfo 'azureFilesEntraKerberosWithoutDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-CloudOnly' || (identitySolution == 'EntraKerberos-Hybrid' && (empty(domainName) || empty(domainJoinUserPassword) || empty(domainJoinUserPrincipalName)))) {
   name: 'Configure-Entra-Kerberos-${deploymentSuffix}'
   params: {
     defaultSharePermission: defaultSharePermission

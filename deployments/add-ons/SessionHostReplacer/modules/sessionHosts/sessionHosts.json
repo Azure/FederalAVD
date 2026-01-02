@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.28.1.47646",
-      "templateHash": "10809319203760492686"
+      "templateHash": "12233142466589664577"
     }
   },
   "parameters": {
@@ -27,10 +27,10 @@
         "description": "Availability option for session hosts. Valid values: AvailabilitySets, AvailabilityZones, None."
       }
     },
-    "availabilitySetNamePrefix": {
+    "availabilitySetNameConv": {
       "type": "string",
       "metadata": {
-        "description": "Naming prefix for availability sets when availability is set to AvailabilitySets."
+        "description": "Naming convention for availability sets when availability is set to AvailabilitySets. Use ## as placeholder for the index."
       }
     },
     "availabilityZones": {
@@ -415,7 +415,7 @@
       "condition": "[equals(parameters('availability'), 'AvailabilitySets')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2022-09-01",
-      "name": "[format('{0}{1}-{2}', parameters('availabilitySetNamePrefix'), padLeft(add(add(range(0, variables('calculatedAvailabilitySetsCount'))[copyIndex()], variables('calculatedAvailabilitySetsIndex')), 1), 2, '0'), variables('deploymentSuffix'))]",
+      "name": "[format('{0}-{1}', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(add(range(0, variables('calculatedAvailabilitySetsCount'))[copyIndex()], variables('calculatedAvailabilitySetsIndex')), 1), 2, '0')), variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -423,7 +423,7 @@
         "mode": "Incremental",
         "parameters": {
           "name": {
-            "value": "[format('{0}{1}', parameters('availabilitySetNamePrefix'), padLeft(add(add(range(0, variables('calculatedAvailabilitySetsCount'))[copyIndex()], variables('calculatedAvailabilitySetsIndex')), 1), 2, '0'))]"
+            "value": "[replace(parameters('availabilitySetNameConv'), '##', padLeft(add(add(range(0, variables('calculatedAvailabilitySetsCount'))[copyIndex()], variables('calculatedAvailabilitySetsIndex')), 1), 2, '0'))]"
           },
           "platformFaultDomainCount": {
             "value": 2
@@ -678,8 +678,8 @@
           "availabilityZones": {
             "value": "[parameters('availabilityZones')]"
           },
-          "availabilitySetNamePrefix": {
-            "value": "[parameters('availabilitySetNamePrefix')]"
+          "availabilitySetNameConv": {
+            "value": "[parameters('availabilitySetNameConv')]"
           },
           "avdInsightsDataCollectionRulesResourceId": {
             "value": "[parameters('avdInsightsDataCollectionRulesResourceId')]"
@@ -872,7 +872,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.28.1.47646",
-              "templateHash": "17710607554497566074"
+              "templateHash": "10802583208881608842"
             }
           },
           "parameters": {
@@ -888,7 +888,7 @@
             "availability": {
               "type": "string"
             },
-            "availabilitySetNamePrefix": {
+            "availabilitySetNameConv": {
               "type": "string"
             },
             "availabilityZones": {
@@ -1183,7 +1183,7 @@
               "zones": "[if(or(not(empty(parameters('dedicatedHostResourceId'))), not(empty(parameters('dedicatedHostGroupResourceId')))), parameters('dedicatedHostGroupZones'), if(and(equals(parameters('availability'), 'AvailabilityZones'), not(empty(parameters('availabilityZones')))), createArray(parameters('availabilityZones')[mod(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), length(parameters('availabilityZones')))]), null()))]",
               "identity": "[variables('identity')]",
               "properties": {
-                "availabilitySet": "[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', format('{0}{1}', parameters('availabilitySetNamePrefix'), padLeft(add(div(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), 200), 1), 2, '0')))), null())]",
+                "availabilitySet": "[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(div(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), 200), 1), 2, '0')))), null())]",
                 "hardwareProfile": {
                   "vmSize": "[parameters('virtualMachineSize')]"
                 },

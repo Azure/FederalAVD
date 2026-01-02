@@ -7,8 +7,8 @@ param artifactsUserAssignedIdentityResourceId string
 @description('Availability option for session hosts. Valid values: AvailabilitySets, AvailabilityZones, None.')
 param availability string
 
-@description('Naming prefix for availability sets when availability is set to AvailabilitySets.')
-param availabilitySetNamePrefix string
+@description('Naming convention for availability sets when availability is set to AvailabilitySets. Use ## as placeholder for the index.')
+param availabilitySetNameConv string
 
 @description('Array of availability zones to distribute session hosts across when availability is set to AvailabilityZones.')
 param availabilityZones array
@@ -229,9 +229,9 @@ module artifactsUserAssignedIdentity 'modules/getUserAssignedIdentity.bicep' = i
 
 module availabilitySets '../../../../sharedModules/resources/compute/availability-set/main.bicep' = [
   for i in range(0, calculatedAvailabilitySetsCount): if (availability == 'AvailabilitySets') {
-    name: '${availabilitySetNamePrefix}${padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
+    name: '${replace(availabilitySetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))}-${deploymentSuffix}'
     params: {
-      name: '${availabilitySetNamePrefix}${padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0')}'
+      name: replace(availabilitySetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))
       platformFaultDomainCount: 2
       platformUpdateDomainCount: 5
       proximityPlacementGroupResourceId: ''
@@ -274,7 +274,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
         : artifactsUserAssignedIdentity!.outputs.clientId
       availability: availability
       availabilityZones: availabilityZones
-      availabilitySetNamePrefix: availabilitySetNamePrefix
+      availabilitySetNameConv: availabilitySetNameConv
       avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
       confidentialVMOSDiskEncryptionType: confidentialVMOSDiskEncryptionType
       dataCollectionEndpointResourceId: dataCollectionEndpointResourceId

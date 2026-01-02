@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "10634203718255843245"
+      "templateHash": "14328374959376106785"
     }
   },
   "parameters": {
@@ -30,11 +30,10 @@
       }
     },
     "index": {
-      "type": "string",
-      "defaultValue": "",
-      "maxLength": 2,
+      "type": "int",
+      "defaultValue": -1,
       "metadata": {
-        "description": "Optional. An index value used to distinquish each host pool with the same persona identifier.\nThis can be provided to shard the host pool across multiple groups for performance reasons or to uniquely define host pools under the same identifier.\n"
+        "description": "Optional. An index value used to distinquish each host pool with the same persona identifier.\nThis can be provided to shard the host pool across multiple groups for performance reasons or to uniquely define host pools under the same identifier.\nValid values are 0-99. If not provided, the host pool will be created without an index in the name.\n"
       }
     },
     "nameConvResTypeAtEnd": {
@@ -1114,7 +1113,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "695278869791280022"
+              "templateHash": "13254100636615014627"
             }
           },
           "parameters": {
@@ -1134,8 +1133,7 @@
               "defaultValue": ""
             },
             "index": {
-              "type": "string",
-              "defaultValue": ""
+              "type": "int"
             },
             "controlPlaneRegion": {
               "type": "string"
@@ -1453,13 +1451,11 @@
             "varLocationControlPlane": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('controlPlaneRegion'), 5, sub(length(parameters('controlPlaneRegion')), 5)), parameters('controlPlaneRegion'))]",
             "controlPlaneRegionAbbreviation": "[variables('locations')[variables('varLocationControlPlane')].abbreviation]",
             "resourceAbbreviations": "[variables('$fxv#1')]",
-            "existingHostPoolName": "[if(empty(parameters('existingHostPoolResourceId')), '', split(parameters('existingHostPoolResourceId'), '/')[8])]",
+            "existingHostPoolName": "[if(empty(parameters('existingHostPoolResourceId')), '', last(split(parameters('existingHostPoolResourceId'), '/')))]",
             "nameConvReversed": "[if(not(empty(variables('existingHostPoolName'))), if(startsWith(variables('existingHostPoolName'), variables('resourceAbbreviations').hostPools), false(), if(endsWith(variables('existingHostPoolName'), variables('resourceAbbreviations').hostPools), true(), parameters('nameConvResTypeAtEnd'))), parameters('nameConvResTypeAtEnd'))]",
             "arrHostPoolName": "[split(variables('existingHostPoolName'), '-')]",
-            "lengthArrHostPoolName": "[length(variables('arrHostPoolName'))]",
-            "hpIdentifier": "[if(not(empty(variables('existingHostPoolName'))), if(variables('nameConvReversed'), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[0], format('{0}-{1}', variables('arrHostPoolName')[0], variables('arrHostPoolName')[1])), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[1], format('{0}-{1}', variables('arrHostPoolName')[1], variables('arrHostPoolName')[2]))), toLower(parameters('identifier')))]",
-            "hpIndex": "[if(not(empty(variables('existingHostPoolName'))), if(equals(variables('lengthArrHostPoolName'), 3), '', if(variables('nameConvReversed'), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[1], variables('arrHostPoolName')[2]), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[2], variables('arrHostPoolName')[3]))), parameters('index'))]",
-            "hpBaseName": "[if(empty(variables('hpIndex')), variables('hpIdentifier'), format('{0}-{1}', variables('hpIdentifier'), variables('hpIndex')))]",
+            "hpIndexString": "[if(greaterOrEquals(parameters('index'), 0), format('{0:00}', parameters('index')), '')]",
+            "hpBaseName": "[if(not(empty(variables('existingHostPoolName'))), if(variables('nameConvReversed'), join(take(variables('arrHostPoolName'), sub(length(variables('arrHostPoolName')), 2)), '-'), join(take(skip(variables('arrHostPoolName'), 1), sub(length(variables('arrHostPoolName')), 2)), '-')), if(empty(variables('hpIndexString')), toLower(parameters('identifier')), format('{0}-{1}', toLower(parameters('identifier')), variables('hpIndexString'))))]",
             "hpResPrfx": "[if(variables('nameConvReversed'), variables('hpBaseName'), format('RESOURCETYPE-{0}', variables('hpBaseName')))]",
             "nameConvSuffix": "[if(variables('nameConvReversed'), 'LOCATION-RESOURCETYPE', 'LOCATION')]",
             "nameConv_Shared_ResGroup": "[if(variables('nameConvReversed'), format('avd-TOKEN-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-TOKEN-{0}', variables('nameConvSuffix')))]",
@@ -1494,8 +1490,7 @@
             "recoveryServicesVaultsNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').recoveryServicesVaults), 'LOCATION', variables('virtualMachinesRegionAbbreviation'))]",
             "userAssignedIdentityNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'LOCATION', variables('virtualMachinesRegionAbbreviation'))]",
             "resourceGroupHosts": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('virtualMachinesRegionAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
-            "vmNamePrefixWithoutDash": "[toLower(if(equals(last(parameters('virtualMachineNamePrefix')), '-'), take(parameters('virtualMachineNamePrefix'), sub(length(parameters('virtualMachineNamePrefix')), 1)), parameters('virtualMachineNamePrefix')))]",
-            "availabilitySetNamePrefix": "[if(variables('nameConvReversed'), format('{0}-{1}-', variables('vmNamePrefixWithoutDash'), variables('resourceAbbreviations').availabilitySets), format('{0}-{1}-', variables('resourceAbbreviations').availabilitySets, variables('vmNamePrefixWithoutDash')))]",
+            "availabilitySetNameConv": "[if(variables('nameConvReversed'), replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', ''), format('{0}-##', replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', '')))]",
             "virtualMachineNameConv": "[if(variables('nameConvReversed'), format('{0}###-{1}', parameters('virtualMachineNamePrefix'), variables('resourceAbbreviations').virtualMachines), format('{0}-{1}###', variables('resourceAbbreviations').virtualMachines, parameters('virtualMachineNamePrefix')))]",
             "diskNameConv": "[if(variables('nameConvReversed'), format('{0}###-{1}', parameters('virtualMachineNamePrefix'), variables('resourceAbbreviations').osdisks), format('{0}-{1}###', variables('resourceAbbreviations').osdisks, parameters('virtualMachineNamePrefix')))]",
             "networkInterfaceNameConv": "[if(variables('nameConvReversed'), format('{0}###-{1}', parameters('virtualMachineNamePrefix'), variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}###', variables('resourceAbbreviations').networkInterfaces, parameters('virtualMachineNamePrefix')))]",
@@ -1532,9 +1527,9 @@
               "type": "string",
               "value": "[variables('appServicePlanName')]"
             },
-            "availabilitySetNamePrefix": {
+            "availabilitySetNameConv": {
               "type": "string",
-              "value": "[variables('availabilitySetNamePrefix')]"
+              "value": "[variables('availabilitySetNameConv')]"
             },
             "dataCollectionEndpointName": {
               "type": "string",
@@ -7995,7 +7990,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "11810120983444418141"
+              "templateHash": "18221262446997057630"
             }
           },
           "parameters": {
@@ -9109,6 +9104,9 @@
                   "domainJoinUserPrincipalName": {
                     "value": "[parameters('domainJoinUserPrincipalName')]"
                   },
+                  "domainName": {
+                    "value": "[parameters('domainName')]"
+                  },
                   "encryptionKeyVaultUri": {
                     "value": "[parameters('encryptionKeyVaultUri')]"
                   },
@@ -9202,7 +9200,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "698719459268714176"
+                      "templateHash": "15357002462926284104"
                     }
                   },
                   "parameters": {
@@ -9235,6 +9233,9 @@
                     },
                     "domainJoinUserPrincipalName": {
                       "type": "securestring"
+                    },
+                    "domainName": {
+                      "type": "string"
                     },
                     "fslogixEncryptionKeyNameConv": {
                       "type": "string"
@@ -10105,7 +10106,7 @@
                       ]
                     },
                     {
-                      "condition": "[and(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), not(empty(parameters('domainJoinUserPassword')))), not(empty(parameters('domainJoinUserPrincipalName'))))]",
+                      "condition": "[and(and(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), not(empty(parameters('domainName')))), not(empty(parameters('domainJoinUserPassword')))), not(empty(parameters('domainJoinUserPrincipalName'))))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
                       "name": "[format('Configure-Entra-Kerberos-DomainInfo-{0}', parameters('deploymentSuffix'))]",
@@ -10267,7 +10268,7 @@
                       ]
                     },
                     {
-                      "condition": "[or(equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly'), and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), or(empty(parameters('domainJoinUserPassword')), empty(parameters('domainJoinUserPrincipalName')))))]",
+                      "condition": "[or(equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly'), and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), or(or(empty(parameters('domainName')), empty(parameters('domainJoinUserPassword'))), empty(parameters('domainJoinUserPrincipalName')))))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
                       "name": "[format('Configure-Entra-Kerberos-{0}', parameters('deploymentSuffix'))]",
@@ -12695,8 +12696,8 @@
           "availability": {
             "value": "[parameters('availability')]"
           },
-          "availabilitySetNamePrefix": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.availabilitySetNamePrefix.value]"
+          "availabilitySetNameConv": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.availabilitySetNameConv.value]"
           },
           "availabilitySetsCount": {
             "value": "[variables('availabilitySetsCount')]"
@@ -12939,7 +12940,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "250860469017659576"
+              "templateHash": "2281265027004435828"
             }
           },
           "parameters": {
@@ -12958,7 +12959,7 @@
             "availability": {
               "type": "string"
             },
-            "availabilitySetNamePrefix": {
+            "availabilitySetNameConv": {
               "type": "string"
             },
             "availabilitySetsCount": {
@@ -15311,7 +15312,7 @@
               "condition": "[and(parameters('pooledHostPool'), equals(parameters('availability'), 'AvailabilitySets'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('{0}{1}-{2}', parameters('availabilitySetNamePrefix'), padLeft(add(add(range(0, parameters('availabilitySetsCount'))[copyIndex()], parameters('availabilitySetsIndex')), 1), 2, '0'), parameters('deploymentSuffix'))]",
+              "name": "[format('{0}-{1}', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(add(range(0, parameters('availabilitySetsCount'))[copyIndex()], parameters('availabilitySetsIndex')), 1), 2, '0')), parameters('deploymentSuffix'))]",
               "resourceGroup": "[parameters('resourceGroupHosts')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -15320,7 +15321,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[format('{0}{1}', parameters('availabilitySetNamePrefix'), padLeft(add(add(range(0, parameters('availabilitySetsCount'))[copyIndex()], parameters('availabilitySetsIndex')), 1), 2, '0'))]"
+                    "value": "[replace(parameters('availabilitySetNameConv'), '##', padLeft(add(add(range(0, parameters('availabilitySetsCount'))[copyIndex()], parameters('availabilitySetsIndex')), 1), 2, '0'))]"
                   },
                   "platformFaultDomainCount": {
                     "value": 2
@@ -15574,8 +15575,8 @@
                   "availabilityZones": {
                     "value": "[parameters('availabilityZones')]"
                   },
-                  "availabilitySetNamePrefix": {
-                    "value": "[parameters('availabilitySetNamePrefix')]"
+                  "availabilitySetNameConv": {
+                    "value": "[parameters('availabilitySetNameConv')]"
                   },
                   "avdInsightsDataCollectionRulesResourceId": {
                     "value": "[parameters('avdInsightsDataCollectionRulesResourceId')]"
@@ -15767,7 +15768,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "1526163264656560471"
+                      "templateHash": "2535712537990794901"
                     }
                   },
                   "parameters": {
@@ -15783,7 +15784,7 @@
                     "availability": {
                       "type": "string"
                     },
-                    "availabilitySetNamePrefix": {
+                    "availabilitySetNameConv": {
                       "type": "string"
                     },
                     "availabilityZones": {
@@ -16092,7 +16093,7 @@
                         "additionalCapabilities": {
                           "hibernationEnabled": "[parameters('hibernationEnabled')]"
                         },
-                        "availabilitySet": "[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', format('{0}{1}', parameters('availabilitySetNamePrefix'), padLeft(add(div(sub(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), 1), 200), 1), 2, '0')))), null())]",
+                        "availabilitySet": "[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(div(sub(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), 1), 200), 1), 2, '0')))), null())]",
                         "hardwareProfile": {
                           "vmSize": "[parameters('virtualMachineSize')]"
                         },

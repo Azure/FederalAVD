@@ -122,8 +122,7 @@
         "timeContextFromParameter": "TimeRange",
         "crossComponentResources": [
           "{ApplicationInsights}"
-        ],
-        "crossComponentResources": ["{ApplicationInsights}"],
+        ],        
         "queryType": 0,
         "resourceType": "microsoft.insights/components",
         "visualization": "tiles",
@@ -197,6 +196,70 @@
         "comparison": "isNotEqualTo"
       },
       "name": "failed-deployments-tile"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### ⏰ Schedule Information"
+      },
+      "name": "schedule-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp > ago(7d)\n| where message contains \"SCHEDULE\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend NextRun = extract(@\"Next scheduled run: ([^\\s]+)\", 1, message)\n| where isnotempty(NextRun)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend NextRunTime = todatetime(NextRun)\n| extend MinutesUntilNext = datetime_diff('minute', NextRunTime, now())\n| extend Status = case(\n    MinutesUntilNext < 0, \"⚠️ Overdue\",\n    MinutesUntilNext < 60, \"🟢 Running Soon\",\n    \"🟦 Scheduled\"\n)\n| project HostPool = HostPoolName, ['Next Run'] = format_datetime(NextRunTime, 'yyyy-MM-dd HH:mm:ss UTC'), ['Time Until'] = strcat(MinutesUntilNext, ' min'), Status\n| order by HostPool asc",
+        "size": 0,
+        "title": "Next Scheduled Execution",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Next Run",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "Time Until",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "Status",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "contains",
+                    "thresholdValue": "Overdue",
+                    "representation": "warning",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "contains",
+                    "thresholdValue": "Soon",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "info",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "schedule-table"
     },
     {
       "type": 1,

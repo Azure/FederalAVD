@@ -390,31 +390,26 @@ var graphEndpoint = environment().name == 'AzureUSGovernment'
       : 'https://graph.microsoft.com'
 
 var functionAppRegionAbbreviation = locations[location].abbreviation
+#disable-next-line BCP329
+var varLocationVirtualMachines = startsWith(cloud, 'us') ? substring(virtualMachineResourceGroupLocation, 5, length(virtualMachineResourceGroupLocation) - 5) : virtualMachineResourceGroupLocation
+var virtualMachinesRegionAbbreviation = locations[varLocationVirtualMachines].abbreviation
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
 // Dynamically determine naming convention from existing host pool name
-var nameConvReversed = startsWith(hostPoolName, resourceAbbreviations.hostPools)
-  ? false // Resource type is at the beginning (e.g., "hp-avd-01")
-  : endsWith(hostPoolName, resourceAbbreviations.hostPools)
-      ? true // Resource type is at the end (e.g., "avd-01-hp")
+var nameConvReversed = startsWith(hostPoolName, '${resourceAbbreviations.hostPools}-')
+  ? false // Resource type is at the beginning (e.g., "hp-avd-01-eus")
+  : endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}')
+      ? true // Resource type is at the end (e.g., "avd-01-eus-hp")
       : false // Default fallback
 
+// Extract hpBaseName by removing resource type and location from the host pool name
+// Not reversed: hp-{hpBaseName}-{location} → remove first segment (hp) and last segment (location)
+// Reversed: {hpBaseName}-{location}-hp → remove last two segments (location-hp)
 var arrHostPoolName = split(hostPoolName, '-')
-var lengthArrHostPoolName = length(arrHostPoolName)
-
-var hpIdentifier = nameConvReversed
-  ? lengthArrHostPoolName < 5 ? arrHostPoolName[0] : '${arrHostPoolName[0]}-${arrHostPoolName[1]}'
-  : lengthArrHostPoolName < 5 ? arrHostPoolName[1] : '${arrHostPoolName[1]}-${arrHostPoolName[2]}'
-
-var hpIndex = lengthArrHostPoolName == 3
-  ? ''
-  : nameConvReversed
-      ? lengthArrHostPoolName < 5 ? arrHostPoolName[1] : arrHostPoolName[2]
-      : lengthArrHostPoolName < 5 ? arrHostPoolName[2] : arrHostPoolName[3]
-
-var hpBaseName = empty(hpIndex) ? hpIdentifier : '${hpIdentifier}-${hpIndex}'
+var hpBaseName = nameConvReversed
+  ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-') // Remove last 2 segments (location-hp)
+  : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-') // Remove first (hp) and last (location)
 var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
-
 var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
 var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
 
@@ -506,12 +501,7 @@ var templateSpecNameFinal = !empty(templateSpecName)
     )
 
 // Virtual Machine naming conventions
-var sessionHostNamePrefixWithoutDash = toLower(last(sessionHostNamePrefix) == '-'
-  ? take(sessionHostNamePrefix, length(sessionHostNamePrefix) - 1)
-  : sessionHostNamePrefix)
-var availabilitySetNamePrefix = nameConvReversed
-  ? '${sessionHostNamePrefixWithoutDash}-${resourceAbbreviations.availabilitySets}-'
-  : '${resourceAbbreviations.availabilitySets}-${sessionHostNamePrefixWithoutDash}-'
+var availabilitySetNameConv = nameConvReversed ? replace(replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '') : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '')}-##'
 var virtualMachineNameConv = nameConvReversed
   ? 'VMNAMEPREFIX###-${resourceAbbreviations.virtualMachines}'
   : '${resourceAbbreviations.virtualMachines}-VMNAMEPREFIX###'
@@ -536,7 +526,7 @@ var sessionHostParameters = {
   artifactsContainerUri: artifactsContainerUri
   artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
   availability: availability
-  availabilitySetNamePrefix: availabilitySetNamePrefix
+  availabilitySetNameConv: availabilitySetNameConv
   availabilityZones: availabilityZones
   avdAgentsDSCPackage: avdAgentsDSCPackage
   avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
@@ -894,7 +884,7 @@ module functionCode '../../sharedModules/custom/functionApp/function.bicep' = {
   }
 }
 
-module workbook 'modules/workbook.bicep' = if (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId)) {
+module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId)) {
   name: 'SessionHostReplacerWorkbook-${deploymentSuffix}'
   params: {
     workbookName: workbookName

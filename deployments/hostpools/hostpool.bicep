@@ -30,11 +30,11 @@ and other host pool specific resource names.
 ''')
 param identifier string = ''
 
-@maxLength(2)
 @description('''Optional. An index value used to distinquish each host pool with the same persona identifier.
 This can be provided to shard the host pool across multiple groups for performance reasons or to uniquely define host pools under the same identifier.
+Valid values are 0-99. If not provided, the host pool will be created without an index in the name.
 ''')
-param index string = ''
+param index int = -1
 
 @description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
 param nameConvResTypeAtEnd bool = false
@@ -917,11 +917,6 @@ resource dedicatedHostGroup 'Microsoft.Compute/hostGroups@2024-11-01' existing =
   name: dedicatedHostGroupName
 }
 
-resource existingHostPool 'Microsoft.DesktopVirtualization/hostPools@2024-04-03' existing = if (!empty(existingHostPoolResourceId)) {
-  name: last(split(existingHostPoolResourceId, '/'))
-  scope: resourceGroup(split(existingHostPoolResourceId, '/')[2], split(existingHostPoolResourceId, '/')[4])
-}
-
 // Existing Session Host Virtual Network location
 resource vmVirtualNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existing = {
   name: split(virtualMachineSubnetResourceId, '/')[8]
@@ -1024,7 +1019,7 @@ module globalFeedResourceGroup 'modules/resourceGroups.bicep' = if (avdPrivateLi
   }
 }
 
-// Host Resource Group with No Tags to prevent circular dependency between deployment prerequisites and outputs from fslogix.
+// Host Resource Group without Tags to prevent circular dependency between deployment prerequisites and outputs from fslogix.
 
 module hostsResourceGroupNoTags 'modules/resourceGroups.bicep' = if (deploymentType != 'SessionHostsOnly') {
   name: 'Resource-Group-Hosts-${deploymentSuffix}'
@@ -1347,7 +1342,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
           : existingAVDInsightsDataCollectionRuleResourceId)
       : ''
     availability: availability
-    availabilitySetNamePrefix: resourceNames.outputs.availabilitySetNamePrefix
+    availabilitySetNameConv: resourceNames.outputs.availabilitySetNameConv
     availabilitySetsCount: availabilitySetsCount
     availabilitySetsIndex: beginAvSetRange
     availabilityZones: availabilityZones

@@ -170,13 +170,13 @@
 									"name": "index",
 									"type": "Microsoft.Common.TextBox",
 									"label": "HostPool Index",
-									"toolTip": "Input a numeric index value for the hostpool created by this solution.",
+									"toolTip": "Input a 2-digit numeric index value (00-99) for the hostpool created by this solution. Leave blank if you only need one host pool for this persona.",
 									"constraints": {
 										"required": false,
 										"validations": [
 											{
 												"regex": "^\\d{0,2}$",
-												"message": "Only a blank value or an integer value from 0 to 99 are allowed."
+												"message": "Only a blank value or a 2-digit integer value from 0 to 99 are allowed."
 											}
 										]
 									}
@@ -3073,11 +3073,11 @@
 									"type": "Microsoft.Common.TextBox",
 									"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms')))]",
 									"label": "User Active Directory Domain Name",
-									"toolTip": "Provide domain name from where users are synchronized. This is required to use file explorer to configure permissions.",
+									"toolTip": "Provide domain name from where users are synchronized. This is required to configure least-privilege or shard permissions.",
 									"placeholder": "Example: contoso.com",
 									"constraints": {
 										"regex": "^([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$",
-										"required": false,
+										"required": true,
 										"validationMessage": "Provide a valid fully qualified domain name."
 									}
 								},
@@ -4456,7 +4456,7 @@
 			"parameters": {
 				"deploymentType": "[steps('basics').deploymentType]",
 				"identifier": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('basics').naming.identifier, '')]",
-				"index": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('basics').naming.index, '')]",
+				"index": "[if(or(equals(steps('basics').deploymentType, 'SessionHostsOnly'), empty(steps('basics').naming.index)), -1, steps('basics').naming.index)]",
 				"nameConvResTypeAtEnd": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('basics').naming.nameConvResTypeAtEnd, false)]",
 				"identitySolution": "[steps('identity').solution]",
 				"domainName": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.domainName, if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), steps('userProfiles').azureFiles.domainName, ''))]",
