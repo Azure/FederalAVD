@@ -118,9 +118,6 @@ param ouPath string
 @description('Enable secure boot for generation 2 VMs.')
 param secureBootEnabled bool
 
-@description('Resource ID of the data collection rule for security monitoring with Microsoft Defender for Cloud.')
-param securityDataCollectionRulesResourceId string
-
 @description('Security type for VMs. Valid values: Standard, TrustedLaunch, ConfidentialVM.')
 param securityType string
 
@@ -315,7 +312,6 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       osDiskNameConv: osDiskNameConv
       ouPath: ouPath
       sessionHostCustomizations: sessionHostCustomizations
-      securityDataCollectionRulesResourceId: securityDataCollectionRulesResourceId
       secureBootEnabled: secureBootEnabled
       securityType: securityType
       sessionHostNameIndexLength: sessionHostNameIndexLength

@@ -795,6 +795,8 @@ function Get-DeploymentState {
                 ConsecutiveSuccesses     = [int]$entity.ConsecutiveSuccesses
                 CurrentPercentage        = [int]$entity.CurrentPercentage
                 TargetSessionHostCount   = [int]$entity.TargetSessionHostCount
+                LastImageVersion         = $entity.LastImageVersion
+                LastTotalToReplace       = [int]$entity.LastTotalToReplace
             }
         }
         catch {
@@ -810,6 +812,8 @@ function Get-DeploymentState {
                     ConsecutiveSuccesses     = 0
                     CurrentPercentage        = (Read-FunctionAppSetting InitialDeploymentPercentage)
                     TargetSessionHostCount   = 0
+                    LastImageVersion         = ''
+                    LastTotalToReplace       = 0
                 }
             }
             else {
@@ -830,6 +834,8 @@ function Get-DeploymentState {
             ConsecutiveSuccesses     = 0
             CurrentPercentage        = (Read-FunctionAppSetting InitialDeploymentPercentage)
             TargetSessionHostCount   = 0
+            LastImageVersion         = ''
+            LastTotalToReplace       = 0
         }
     }
 }
@@ -1270,14 +1276,48 @@ function Get-LatestImageVersion {
                 throw "No image versions found in gallery '$imageGalleryName' for image '$imageDefinitionName'."
             }
             
-            Write-HostDetailed "Found $($imageVersions.Count) image versions in gallery" -Level Verbose
+            Write-HostDetailed "Found $($imageVersions.Count) total image versions in gallery" -Level Verbose
             
-            # Filter out versions marked as excluded from latest and those without published dates
+            # Normalize location for comparison (Azure returns full names like "East US 2")
+            $normalizedLocation = $Location -replace '\s', ''
+            
+            # Log all versions and their excludeFromLatest status (both global and regional)
+            foreach ($ver in $imageVersions) {
+                $globalExcluded = $ver.properties.publishingProfile.excludeFromLatest
+                $publishedDate = $ver.properties.publishingProfile.publishedDate
+                
+                # Check regional excludeFromLatest for the target location
+                $regionalExcluded = $false
+                $targetRegion = $ver.properties.publishingProfile.targetRegions | Where-Object { 
+                    ($_.name -replace '\s', '') -eq $normalizedLocation 
+                }
+                if ($targetRegion) {
+                    $regionalExcluded = $targetRegion.excludeFromLatest
+                }
+                
+                Write-HostDetailed "Version $($ver.name): global excludeFromLatest=$globalExcluded, regional excludeFromLatest=$regionalExcluded, publishedDate=$publishedDate" -Level Verbose
+            }
+            
+            # Filter out versions marked as excluded from latest (checking both global AND regional flags)
+            # Azure VM deployments respect the regional flag when using image definition without version
             $validVersions = $imageVersions |
             Where-Object { 
-                -not $_.properties.publishingProfile.excludeFromLatest -and 
-                $_.properties.publishingProfile.publishedDate 
+                $globalExclude = $_.properties.publishingProfile.excludeFromLatest
+                $regionalExclude = $false
+                
+                # Check if this version is excluded in the target region
+                $targetRegion = $_.properties.publishingProfile.targetRegions | Where-Object { 
+                    ($_.name -replace '\s', '') -eq $normalizedLocation 
+                }
+                if ($targetRegion) {
+                    $regionalExclude = $targetRegion.excludeFromLatest
+                }
+                
+                # Include only if NOT excluded globally AND NOT excluded regionally AND has published date
+                -not $globalExclude -and -not $regionalExclude -and $_.properties.publishingProfile.publishedDate
             }
+            
+            Write-HostDetailed "Found $($validVersions.Count) valid image versions (not excluded from latest globally or regionally, and have published date)" -Level Verbose
             
             if (-not $validVersions -or $validVersions.Count -eq 0) {
                 # Fallback: if no versions have dates, just get the first non-excluded version
@@ -1286,7 +1326,7 @@ function Get-LatestImageVersion {
                 Select-Object -First 1
                 
                 if (-not $latestImageVersion) {
-                    throw "No available image versions found (all versions may be excluded from latest)."
+                    throw "No available image versions found (all versions are marked as excluded from latest)."
                 }
                 
                 Write-HostDetailed "Selected image version (no published dates available) with resource Id {0}" -StringValues $latestImageVersion.id -Level Warning
@@ -1299,7 +1339,7 @@ function Get-LatestImageVersion {
                 Sort-Object -Property { [DateTime]$_.properties.publishingProfile.publishedDate } -Descending |
                 Select-Object -First 1
                 
-                Write-HostDetailed "Selected image version with resource Id {0}" -StringValues $latestImageVersion.id
+                Write-HostDetailed "Selected image version with resource Id {0} (most recent non-excluded version)" -StringValues $latestImageVersion.id
                 $azImageVersion = $latestImageVersion.name
                 $azImageDate = [DateTime]$latestImageVersion.properties.publishingProfile.publishedDate
                 Write-HostDetailed "Image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
@@ -1432,8 +1472,21 @@ function Get-HostPoolDecisions {
         Write-HostDetailed "Latest Image $($LatestImageVersion.Version) is $latestImageAge days old."
         if ($latestImageAge -ge $ReplaceSessionHostOnNewImageVersionDelayDays) {
             Write-HostDetailed "Latest Image age is older than (or equal) New Image Delay value $ReplaceSessionHostOnNewImageVersionDelayDays"
+            
+            # Log each session host's image version for debugging
+            foreach ($sh in $sessionHosts) {
+                Write-HostDetailed "Session host $($sh.SessionHostName) has image version: $($sh.ImageVersion)" -Level Verbose
+            }
+            
             [array] $sessionHostsOldVersion = $sessionHosts | Where-Object { $_.ImageVersion -ne $LatestImageVersion.Version }
             Write-HostDetailed "Found $($sessionHostsOldVersion.Count) session hosts to replace due to new image version. $($($sessionHostsOldVersion.SessionHostName) -Join ',')"
+            
+            # Log which hosts are being replaced and why
+            if ($sessionHostsOldVersion.Count -gt 0) {
+                foreach ($sh in $sessionHostsOldVersion) {
+                    Write-HostDetailed "Replacing $($sh.SessionHostName): current version '$($sh.ImageVersion)' != latest version '$($LatestImageVersion.Version)'" -Level Verbose
+                }
+            }
         }
         else {
             Write-HostDetailed "Latest image version delay not yet met ($latestImageAge days < $ReplaceSessionHostOnNewImageVersionDelayDays days required)"
@@ -1447,20 +1500,45 @@ function Get-HostPoolDecisions {
     Write-HostDetailed "Found $($sessionHostsToReplace.Count) session hosts to replace in total. $($($sessionHostsToReplace.SessionHostName) -join ',')"
 
     $goodSessionHosts = $SessionHosts | Where-Object { $_.SessionHostName -notin $sessionHostsToReplace.SessionHostName }
-    $sessionHostsCurrentTotal = ([array]$goodSessionHosts.SessionHostName + [array]$runningDeployments.SessionHostNames ) | Select-Object -Unique
-    Write-HostDetailed "We have $($sessionHostsCurrentTotal.Count) good session hosts including $($runningDeployments.SessionHostName.Count) session hosts being deployed"
+    
+    # Count running deployment VMs - handle both ARM deployments (with SessionHostNames) and state-tracked deployments (with VirtualCount)
+    $runningDeploymentVMCount = 0
+    $runningDeploymentVMNames = @()
+    foreach ($deployment in $runningDeployments) {
+        if ($deployment.SessionHostNames -and $deployment.SessionHostNames.Count -gt 0) {
+            $runningDeploymentVMCount += $deployment.SessionHostNames.Count
+            $runningDeploymentVMNames += $deployment.SessionHostNames
+        }
+        elseif ($deployment.VirtualCount) {
+            # Synthetic deployment from state - use virtual count
+            $runningDeploymentVMCount += $deployment.VirtualCount
+            Write-HostDetailed "Counting $($deployment.VirtualCount) VMs from recently submitted deployment '$($deployment.DeploymentName)'" -Level Verbose
+        }
+    }
+    
+    $sessionHostsCurrentTotal = ([array]$goodSessionHosts.SessionHostName + [array]$runningDeploymentVMNames) | Select-Object -Unique
+    Write-HostDetailed "We have $($sessionHostsCurrentTotal.Count) good session hosts including $runningDeploymentVMCount session hosts being deployed"
     Write-HostDetailed "We target having $TargetSessionHostCount session hosts in good shape"
     Write-HostDetailed "We have a buffer of $TargetSessionHostBuffer session hosts more than the target."
-    $weCanDeployUpTo = $TargetSessionHostCount + $TargetSessionHostBuffer - $SessionHosts.count - $RunningDeployments.SessionHostNames.Count
     
-    if ($weCanDeployUpTo -ge 0) {
-        Write-HostDetailed "We can deploy up to $weCanDeployUpTo session hosts" 
-        $weNeedToDeploy = $TargetSessionHostCount - $sessionHostsCurrentTotal.Count
+    # Check if there are any running or recently submitted deployments - if so, don't submit new ones
+    if ($runningDeployments -and $runningDeployments.Count -gt 0) {
+        Write-HostDetailed "Found $($runningDeployments.Count) running or recently submitted deployment(s). Will not submit new deployments until these complete." -Level Warning
+        $deploymentNames = $runningDeployments | ForEach-Object { $_.DeploymentName }
+        Write-HostDetailed "Active deployments: $($deploymentNames -join ', ')" -Level Verbose
+        $weCanDeploy = 0
+    }
+    else {
+        $weCanDeployUpTo = $TargetSessionHostCount + $TargetSessionHostBuffer - $SessionHosts.count - $runningDeploymentVMCount
         
-        if ($weNeedToDeploy -gt 0) {
-            Write-HostDetailed "We need to deploy $weNeedToDeploy new session hosts"
-            $weCanDeploy = if ($weNeedToDeploy -gt $weCanDeployUpTo) { $weCanDeployUpTo } else { $weNeedToDeploy }
-            Write-HostDetailed "Buffer allows deploying $weCanDeploy session hosts"
+        if ($weCanDeployUpTo -ge 0) {
+            Write-HostDetailed "We can deploy up to $weCanDeployUpTo session hosts" 
+            $weNeedToDeploy = $TargetSessionHostCount - $sessionHostsCurrentTotal.Count
+            
+            if ($weNeedToDeploy -gt 0) {
+                Write-HostDetailed "We need to deploy $weNeedToDeploy new session hosts"
+                $weCanDeploy = if ($weNeedToDeploy -gt $weCanDeployUpTo) { $weCanDeployUpTo } else { $weNeedToDeploy }
+                Write-HostDetailed "Buffer allows deploying $weCanDeploy session hosts"
             
             if ($EnableProgressiveScaleUp -and $weCanDeploy -gt 0) {
                 Write-HostDetailed "Progressive scale-up is enabled"
@@ -1489,6 +1567,7 @@ function Get-HostPoolDecisions {
     else {
         Write-HostDetailed "Buffer is full. We can not deploy more session hosts"
         $weCanDeploy = 0
+    }
     }
     
     $weCanDelete = $SessionHosts.Count - $TargetSessionHostCount
@@ -1556,7 +1635,7 @@ function Get-HostPoolDecisions {
         PossibleDeploymentsCount       = $weCanDeploy
         PossibleSessionHostDeleteCount = $weCanDelete
         SessionHostsPendingDelete      = $sessionHostsPendingDelete
-        ExistingSessionHostNames       = ([array]$SessionHosts.SessionHostName + [array]$runningDeployments.SessionHostNames) | Select-Object -Unique
+        ExistingSessionHostNames       = ([array]$SessionHosts.SessionHostName + [array]$runningDeploymentVMNames) | Select-Object -Unique
         TargetSessionHostCount         = $TargetSessionHostCount
         TotalSessionHostsToReplace     = $sessionHostsToReplace.Count
     }
@@ -1578,31 +1657,49 @@ function Get-RunningDeployments {
         [string] $ResourceGroupName = (Read-FunctionAppSetting VirtualMachinesResourceGroupName),
 
         [Parameter()]
-        [string] $DeploymentPrefix = (Read-FunctionAppSetting DeploymentPrefix)
+        [string] $DeploymentPrefix = (Read-FunctionAppSetting DeploymentPrefix),
+
+        [Parameter()]
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName)
     )
 
     Write-HostDetailed -Message "Getting deployments for resource group '$ResourceGroupName'"
     $Uri = "$ResourceManagerUri/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Resources/deployments/?api-version=2021-04-01"
     $deployments = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
-    $deployments = $deployments | Where-Object { $_.DeploymentName -like "$DeploymentPrefix*" }
-    Write-HostDetailed -Message "Found $($deployments.Count) deployments marked with $DeploymentPrefix."
+    Write-HostDetailed -Message "Retrieved $($deployments.Count) total deployments from ARM" -Level Verbose
+    
+    # Filter by deployment prefix
+    $deployments = $deployments | Where-Object { $_.name -like "$DeploymentPrefix*" }
+    Write-HostDetailed -Message "Found $($deployments.Count) deployments with prefix '$DeploymentPrefix'" -Level Verbose
+    
+    if ($deployments) {
+        Write-HostDetailed -Message "Deployment names: $($deployments.name -join ', ')" -Level Verbose
+    }
     
     # Handle failed deployments - don't block automation, but return info for cleanup
-    $failedDeployments = $deployments | Where-Object { $_.ProvisioningState -eq 'Failed' }
+    $failedDeployments = $deployments | Where-Object { $_.properties.provisioningState -eq 'Failed' }
     if ($failedDeployments) {
         Write-HostDetailed -Message "Found $($failedDeployments.Count) failed deployments. VMs from these deployments will be marked for cleanup." -Level Warning
         foreach ($failedDeploy in $failedDeployments) {
-            $parameters = $failedDeploy.Parameters | ConvertTo-CaseInsensitiveHashtable
-            $failedVMs = if ($parameters.ContainsKey('sessionHostNames')) { $parameters['sessionHostNames'].Value } else { @() }
-            Write-HostDetailed -Message "Failed deployment '$($failedDeploy.DeploymentName)' attempted to deploy: $($failedVMs -join ',')" -Level Warning
+            if ($failedDeploy.properties.parameters) {
+                $parameters = $failedDeploy.properties.parameters | ConvertTo-CaseInsensitiveHashtable
+                $failedVMs = if ($parameters.ContainsKey('sessionHostNames')) { $parameters['sessionHostNames'].Value } else { @() }
+                Write-HostDetailed -Message "Failed deployment '$($failedDeploy.name)' attempted to deploy: $($failedVMs -join ',')" -Level Warning
+            }
         }
     }
     
-    $runningDeployments = $deployments | Where-Object { $_.ProvisioningState -eq 'Running' }
+    $runningDeployments = $deployments | Where-Object { $_.properties.provisioningState -eq 'Running' }
     Write-HostDetailed -Message "Found $($runningDeployments.Count) running deployments."
     
+    if ($runningDeployments) {
+        Write-HostDetailed -Message "Running deployment names: $($runningDeployments.name -join ', ')" -Level Verbose
+    }
+    
     $warningThreshold = (Get-Date -AsUTC).AddHours(-2)
-    $longRunningDeployments = $runningDeployments | Where-Object { $_.Timestamp -lt $warningThreshold }
+    $longRunningDeployments = $runningDeployments | Where-Object { 
+        $_.properties.timestamp -and $_.properties.timestamp -lt $warningThreshold
+    }
     if ($longRunningDeployments) {
         Write-HostDetailed -Message "Found $($longRunningDeployments.Count) deployments that have been running for more than 2 hours. This could block future deployments" -Level Warning
     }
@@ -1614,23 +1711,46 @@ function Get-RunningDeployments {
     }
     
     $output.RunningDeployments = foreach ($deployment in $runningDeployments) {
-        $parameters = $deployment.Parameters | ConvertTo-CaseInsensitiveHashtable
-        Write-HostDetailed -Message "Deployment $($deployment.DeploymentName) is running and deploying: $(($parameters['sessionHostNames'].Value -join ','))"
-        [PSCustomObject]@{
-            DeploymentName   = $deployment.DeploymentName
-            SessionHostNames = $parameters['sessionHostNames'].Value
-            Timestamp        = $deployment.Timestamp
-            Status           = $deployment.ProvisioningState
+        if ($deployment.properties.parameters) {
+            $parameters = $deployment.properties.parameters | ConvertTo-CaseInsensitiveHashtable
+            Write-HostDetailed -Message "Running deployment '$($deployment.name)' is deploying: $(($parameters['sessionHostNames'].Value -join ','))" -Level Verbose
+            [PSCustomObject]@{
+                DeploymentName   = $deployment.name
+                SessionHostNames = $parameters['sessionHostNames'].Value
+                Timestamp        = $deployment.properties.timestamp
+                Status           = $deployment.properties.provisioningState
+            }
+        }
+        else {
+            # Deployment has no parameters - still count it as running to prevent duplicates
+            Write-HostDetailed -Message "Running deployment '$($deployment.name)' has no parameters available - treating as running to prevent duplicate deployment" -Level Information
+            [PSCustomObject]@{
+                DeploymentName   = $deployment.name
+                SessionHostNames = @()
+                Timestamp        = $deployment.properties.timestamp
+                Status           = $deployment.properties.provisioningState
+            }
         }
     }
     
     $output.FailedDeployments = foreach ($deployment in $failedDeployments) {
-        $parameters = $deployment.Parameters | ConvertTo-CaseInsensitiveHashtable
-        [PSCustomObject]@{
-            DeploymentName   = $deployment.DeploymentName
-            SessionHostNames = if ($parameters.ContainsKey('sessionHostNames')) { $parameters['sessionHostNames'].Value } else { @() }
-            Timestamp        = $deployment.Timestamp
-            Status           = $deployment.ProvisioningState
+        if ($deployment.properties.parameters) {
+            $parameters = $deployment.properties.parameters | ConvertTo-CaseInsensitiveHashtable
+            [PSCustomObject]@{
+                DeploymentName   = $deployment.name
+                SessionHostNames = if ($parameters.ContainsKey('sessionHostNames')) { $parameters['sessionHostNames'].Value } else { @() }
+                Timestamp        = $deployment.properties.timestamp
+                Status           = $deployment.properties.provisioningState
+            }
+        }
+        else {
+            Write-HostDetailed -Message "Failed deployment '$($deployment.name)' has no parameters available" -Level Information
+            [PSCustomObject]@{
+                DeploymentName   = $deployment.name
+                SessionHostNames = @()
+                Timestamp        = $deployment.properties.timestamp
+                Status           = $deployment.properties.provisioningState
+            }
         }
     }
     
@@ -1691,7 +1811,36 @@ function Get-SessionHosts {
         }
         
         Write-HostDetailed -Message "VM was created on $($vm.TimeCreated)"
-        Write-HostDetailed -Message "VM Image Reference version is $($vm.StorageProfile.ImageReference.ExactVersion)"
+        
+        # Extract image version - handle both ExactVersion (specific version) and id (image definition reference)
+        $vmImageVersion = $null
+        if ($vm.StorageProfile.ImageReference.ExactVersion) {
+            $vmImageVersion = $vm.StorageProfile.ImageReference.ExactVersion
+            Write-HostDetailed -Message "VM Image Reference ExactVersion is $vmImageVersion"
+        }
+        elseif ($vm.StorageProfile.ImageReference.id) {
+            # VM was deployed with image definition (not specific version), need to resolve from id
+            $imageRef = $vm.StorageProfile.ImageReference.id
+            Write-HostDetailed -Message "VM Image Reference id is $imageRef"
+            
+            # Check if this is a version-specific reference or definition reference
+            if ($imageRef -match '/versions/(?<version>[^/]+)$') {
+                $vmImageVersion = $Matches['version']
+                Write-HostDetailed -Message "Extracted version $vmImageVersion from image reference id"
+            }
+            else {
+                Write-HostDetailed -Message "VM was deployed with image definition (latest), ExactVersion should be populated but is not" -Level Warning
+            }
+        }
+        elseif ($vm.StorageProfile.ImageReference.version) {
+            # Marketplace image version
+            $vmImageVersion = $vm.StorageProfile.ImageReference.version
+            Write-HostDetailed -Message "VM Marketplace image version is $vmImageVersion"
+        }
+        else {
+            Write-HostDetailed -Message "Unable to determine VM image version from StorageProfile" -Level Warning
+        }
+        
         Write-HostDetailed -Message 'Getting VM tags'
         $Uri = "$ResourceManagerUri$($sh.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
         $vmTagsResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
@@ -1772,7 +1921,7 @@ function Get-SessionHosts {
             DeployTimestamp       = $vmDeployTimeStamp
             IncludeInAutomation   = $vmIncludeInAutomation
             PendingDrainTimeStamp = $vmPendingDrainTimeStamp
-            ImageVersion          = $vm.StorageProfile.ImageReference.ExactVersion
+            ImageVersion          = $vmImageVersion
         }
         $sh.PSObject.Properties.ForEach{ $hostOutput[$_.Name] = $_.Value }
         [PSCustomObject]$hostOutput
@@ -1869,7 +2018,9 @@ function Remove-SessionHosts {
         [Parameter()]
         [bool] $RemoveEntraDevice,
         [Parameter()]
-        [bool] $RemoveIntuneDevice
+        [bool] $RemoveIntuneDevice,
+        [Parameter()]
+        [string] $ClientId
     )
 
     foreach ($sessionHost in $SessionHostsPendingDelete) {
@@ -1945,11 +2096,11 @@ function Remove-SessionHosts {
             Write-HostDetailed -Message "Deleting session host $($SessionHost.SessionHostName)..."
             if ($GraphToken -and $RemoveEntraDevice) {
                 Write-HostDetailed -Message 'Deleting device from Entra ID'
-                Remove-EntraDevice -GraphToken $GraphToken -Name $sessionHost.SessionHostName
+                Remove-EntraDevice -GraphToken $GraphToken -Name $sessionHost.SessionHostName -ClientId $ClientId
             }
             if ($GraphToken -and $RemoveIntuneDevice) {
                 Write-HostDetailed -Message 'Deleting device from Intune'
-                Remove-IntuneDevice -GraphToken $GraphToken -Name $sessionHost.SessionHostName
+                Remove-IntuneDevice -GraphToken $GraphToken -Name $sessionHost.SessionHostName -ClientId $ClientId
             }
             Write-HostDetailed -Message "Removing Session Host from Host Pool $HostPoolName"
             $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$($sessionHost.FQDN)?api-version=2024-04-03"
@@ -1996,12 +2147,19 @@ function Remove-EntraDevice {
             Write-HostDetailed -Message "Successfully removed device $Name from Entra ID"
         }
         else {
-            Write-HostDetailed -Message "Device $Name not found in Entra ID" -Level Warning
+            Write-HostDetailed -Message "Device $Name not found in Entra ID" -Level Information
         }
     }
     catch {
-        Write-HostDetailed -Message "Failed to remove Entra device $Name : $($_.Exception.Message)" -Level Error
-        throw
+        # Check if error is 404 (device already deleted)
+        $is404 = $_.Exception.Response.StatusCode.value__ -eq 404
+        if ($is404) {
+            Write-HostDetailed -Message "Device $Name not found in Entra ID (404)" -Level Information
+        }
+        else {
+            Write-HostDetailed -Message "Failed to remove Entra device $Name : $($_.Exception.Message)" -Level Error
+            throw
+        }
     }
 }
 
@@ -2040,12 +2198,19 @@ function Remove-IntuneDevice {
             Write-HostDetailed -Message "Successfully removed device $Name from Intune"
         }
         else {
-            Write-HostDetailed -Message "Device $Name not found in Intune" -Level Warning
+            Write-HostDetailed -Message "Device $Name not found in Intune" -Level Information
         }
     }
     catch {
-        Write-HostDetailed -Message "Failed to remove Intune device $Name : $($_.Exception.Message)" -Level Error
-        throw
+        # Check if error is 404 (device not enrolled or already deleted)
+        $is404 = $_.Exception.Response.StatusCode.value__ -eq 404
+        if ($is404) {
+            Write-HostDetailed -Message "Device $Name not found in Intune (404)" -Level Information
+        }
+        else {
+            Write-HostDetailed -Message "Failed to remove Intune device $Name : $($_.Exception.Message)" -Level Error
+            throw
+        }
     }
 }
 

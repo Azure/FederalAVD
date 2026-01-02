@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "14328374959376106785"
+      "templateHash": "13827121649394176270"
     }
   },
   "parameters": {
@@ -12940,7 +12940,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "2281265027004435828"
+              "templateHash": "3106383553192384088"
             }
           },
           "parameters": {
@@ -15768,7 +15768,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "2535712537990794901"
+                      "templateHash": "7138591078712084464"
                     }
                   },
                   "parameters": {
@@ -16083,7 +16083,7 @@
                         "count": "[length(range(0, parameters('sessionHostCount')))]"
                       },
                       "type": "Microsoft.Compute/virtualMachines",
-                      "apiVersion": "2022-11-01",
+                      "apiVersion": "2024-03-01",
                       "name": "[replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))]",
                       "location": "[parameters('location')]",
                       "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))]",
@@ -16094,6 +16094,11 @@
                           "hibernationEnabled": "[parameters('hibernationEnabled')]"
                         },
                         "availabilitySet": "[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(div(sub(add(range(0, parameters('sessionHostCount'))[copyIndex()], parameters('sessionHostIndex')), 1), 200), 1), 2, '0')))), null())]",
+                        "diagnosticsProfile": {
+                          "bootDiagnostics": {
+                            "enabled": true
+                          }
+                        },
                         "hardwareProfile": {
                           "vmSize": "[parameters('virtualMachineSize')]"
                         },
@@ -16141,11 +16146,6 @@
                           "encryptionAtHost": "[if(parameters('encryptionAtHost'), true(), null())]",
                           "securityType": "[if(not(equals(parameters('securityType'), 'Standard')), parameters('securityType'), null())]",
                           "uefiSettings": "[if(not(equals(parameters('securityType'), 'Standard')), createObject('secureBootEnabled', parameters('secureBootEnabled'), 'vTpmEnabled', parameters('vTpmEnabled')), null())]"
-                        },
-                        "diagnosticsProfile": {
-                          "bootDiagnostics": {
-                            "enabled": false
-                          }
                         },
                         "licenseType": "[if(or(equals(parameters('imagePublisher'), 'MicrosoftWindowsDesktop'), not(empty(parameters('customImageResourceId')))), 'Windows_Client', 'Windows_Server')]"
                       },
@@ -16707,7 +16707,7 @@
                             "value": "[parameters('diskAccessId')]"
                           },
                           "diskName": {
-                            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))), '2022-11-01').storageProfile.osDisk.name]"
+                            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))), '2024-03-01').storageProfile.osDisk.name]"
                           },
                           "location": {
                             "value": "[parameters('location')]"

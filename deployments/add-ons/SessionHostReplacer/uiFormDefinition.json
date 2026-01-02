@@ -2846,25 +2846,6 @@
 										"allowedValues": "[map(filter(steps('monitoring').sessionHostMonitoringSection.dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('hosts').scope.location.name)), (dce) => parse(concat('{\"label\":\"', dce.name, '\",\"description\":\"Resource Group: ', first(skip(split(dce.id, '/'), 4)), ', Location: ', dce.location, '\",\"value\":\"', dce.id, '\"}')))]",
 										"required": false
 									}
-								},
-								{
-									"name": "enableCentralMonitoring",
-									"type": "Microsoft.Common.CheckBox",
-									"visible": "[steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring]",
-									"label": "Configure Centralized Security Monitoring for Session Hosts",
-									"defaultValue": false,
-									"toolTip": "Creates a Data Collection Rule Association to use the Azure Monitoring Agent for collecting security data in a centralized workspace (for Sentinel or Defender for Cloud)."
-								},
-								{
-									"name": "securityDataCollectionRule",
-									"type": "Microsoft.Solutions.ResourceSelector",
-									"label": "Security Monitoring Data Collection Rule",
-									"visible": "[and(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, steps('monitoring').sessionHostMonitoringSection.enableCentralMonitoring)]",
-									"resourceType": "Microsoft.Insights/dataCollectionRules",
-									"toolTip": "Select the Data Collection Rule used for collecting security events data for Sentinel or Defender for Cloud.",
-									"constraints": {
-										"required": true
-									}
 								}
 							],
 							"visible": true
@@ -2965,7 +2946,6 @@
 				"avdInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.avdInsightsDataCollectionRule, ''), '')]",
 				"vmInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.vmInsightsDataCollectionRule, ''), '')]",
 				"dataCollectionEndpointResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.dataCollectionEndpoint, ''), '')]",
-				"securityDataCollectionRulesResourceId": "[if(and(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, steps('monitoring').sessionHostMonitoringSection.enableCentralMonitoring), steps('monitoring').sessionHostMonitoringSection.securityDataCollectionRule.id, '')]",
 				"privateLinkScopeResourceId": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.enableAMPLS), steps('monitoring').functionAppMonitoringSection.privateLinkScope.id, '')]",
 				"tags": "[steps('tags').tags]"
 			},

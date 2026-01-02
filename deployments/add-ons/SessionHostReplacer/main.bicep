@@ -391,7 +391,9 @@ var graphEndpoint = environment().name == 'AzureUSGovernment'
 
 var functionAppRegionAbbreviation = locations[location].abbreviation
 #disable-next-line BCP329
-var varLocationVirtualMachines = startsWith(cloud, 'us') ? substring(virtualMachineResourceGroupLocation, 5, length(virtualMachineResourceGroupLocation) - 5) : virtualMachineResourceGroupLocation
+var varLocationVirtualMachines = startsWith(cloud, 'us')
+  ? substring(virtualMachineResourceGroupLocation, 5, length(virtualMachineResourceGroupLocation) - 5)
+  : virtualMachineResourceGroupLocation
 var virtualMachinesRegionAbbreviation = locations[varLocationVirtualMachines].abbreviation
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
@@ -501,7 +503,21 @@ var templateSpecNameFinal = !empty(templateSpecName)
     )
 
 // Virtual Machine naming conventions
-var availabilitySetNameConv = nameConvReversed ? replace(replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '') : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '')}-##'
+var availabilitySetNameConv = nameConvReversed
+  ? replace(
+      replace(
+        replace(
+          replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'),
+          'RESOURCETYPE',
+          resourceAbbreviations.availabilitySets
+        ),
+        'LOCATION',
+        virtualMachinesRegionAbbreviation
+      ),
+      'TOKEN-',
+      ''
+    )
+  : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '')}-##'
 var virtualMachineNameConv = nameConvReversed
   ? 'VMNAMEPREFIX###-${resourceAbbreviations.virtualMachines}'
   : '${resourceAbbreviations.virtualMachines}-VMNAMEPREFIX###'
@@ -622,7 +638,9 @@ var monitoringResourceGroupId = !empty(avdInsightsDataCollectionRulesResourceId)
   ? '/subscriptions/${split(avdInsightsDataCollectionRulesResourceId, '/')[2]}/resourceGroups/${split(avdInsightsDataCollectionRulesResourceId, '/')[4]}'
   : !empty(vmInsightsDataCollectionRulesResourceId)
       ? '/subscriptions/${split(vmInsightsDataCollectionRulesResourceId, '/')[2]}/resourceGroups/${split(vmInsightsDataCollectionRulesResourceId, '/')[4]}'
-      : ''
+      : !empty(dataCollectionEndpointResourceId)
+          ? '/subscriptions/${split(dataCollectionEndpointResourceId, '/')[2]}/resourceGroups/${split(dataCollectionEndpointResourceId, '/')[4]}'
+          : ''
 
 var hostPoolResourceGroupId = '/subscriptions/${hostPoolSubscriptionId}/resourceGroups/${hostPoolResourceGroupName}'
 
@@ -631,10 +649,19 @@ var roleAssignmentsResourceGroups = union(
     {
       resourceGroupId: hostPoolResourceGroupId
       roleDefinitionId: 'e307426c-f9b6-4e81-87de-d99efb3c32bc'
-      roleDescription: 'DVHPC' // Desktop Virtualization Host Pool Contributor
+      roleDescription: 'DVHPCont' // Desktop Virtualization Host Pool Contributor
     }
   ],
   !empty(monitoringResourceGroupId)
+    ? [
+        {
+          resourceGroupId: virtualMachinesResourceGroupId
+          roleDefinitionId: '749f88d5-cbae-40b8-bcfc-e573ddc772fa' // Monitoring Contributor (needed for data collection rule associations on VMs)
+          roleDescription: 'MonCont'
+        }
+      ]
+    : [],
+  !empty(monitoringResourceGroupId) && monitoringResourceGroupId != virtualMachinesResourceGroupId
     ? [
         {
           resourceGroupId: monitoringResourceGroupId
@@ -646,7 +673,7 @@ var roleAssignmentsResourceGroups = union(
 )
 
 module roleAssignmentsKeyVault '../../sharedModules/resources/key-vault/vault/rbac.bicep' = {
-  name: 'KeyVaultRoleAssignment-${deploymentSuffix}'
+  name: 'RoleAssign-KeyVault-KVCont-${deploymentSuffix}'
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
   params: {
     principalId: userAssignedIdentity.properties.principalId
@@ -657,7 +684,7 @@ module roleAssignmentsKeyVault '../../sharedModules/resources/key-vault/vault/rb
 }
 
 module roleAssignmentVirtualMachinesSubscription '../../sharedModules/resources/authorization/role-assignment/subscription/main.bicep' = {
-  name: 'VirtualMachinesSubscriptionRoleAssignment-${deploymentSuffix}'
+  name: 'RoleAssign-Sub-VirtMachCont-${deploymentSuffix}'
   scope: subscription(virtualMachinesSubscriptionId)
   params: {
     principalId: userAssignedIdentity.properties.principalId
@@ -669,7 +696,7 @@ module roleAssignmentVirtualMachinesSubscription '../../sharedModules/resources/
 
 module roleAssignmentsRGs '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
   for rgRole in roleAssignmentsResourceGroups: {
-    name: 'RoleAssign-${rgRole.roleDescription}-${last(split(rgRole.resourceGroupId, '/'))}-${deploymentSuffix}'
+    name: 'RoleAssign-${last(split(rgRole.resourceGroupId, '/'))}-${rgRole.roleDescription}-${deploymentSuffix}'
     scope: resourceGroup(split(rgRole.resourceGroupId, '/')[2], split(rgRole.resourceGroupId, '/')[4])
     params: {
       principalId: userAssignedIdentity.properties.principalId
@@ -681,7 +708,7 @@ module roleAssignmentsRGs '../../sharedModules/resources/authorization/role-assi
 ]
 
 module roleAssignmentTemplateSpec '../../sharedModules/resources/resources/templateSpecs/rbac.bicep' = {
-  name: 'TemplateSpecRoleAssignment-${deploymentSuffix}'
+  name: 'RoleAssign-TemplateSpec-Reader-${deploymentSuffix}'
   params: {
     principalId: userAssignedIdentity.properties.principalId
     roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
@@ -693,7 +720,7 @@ module roleAssignmentTemplateSpec '../../sharedModules/resources/resources/templ
 }
 
 module roleAssignmentComputeGallery '../../sharedModules/resources/compute/gallery/rbac.bicep' = if (!empty(customImageResourceId)) {
-  name: 'ComputeGalleryRoleAssignment-${deploymentSuffix}'
+  name: 'RoleAssign-ComputeGallery-Reader-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
     principalId: userAssignedIdentity.properties.principalId

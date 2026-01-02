@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.28.1.47646",
-      "templateHash": "12233142466589664577"
+      "templateHash": "10595453318652861768"
     }
   },
   "parameters": {
@@ -247,12 +247,6 @@
       "type": "bool",
       "metadata": {
         "description": "Enable secure boot for generation 2 VMs."
-      }
-    },
-    "securityDataCollectionRulesResourceId": {
-      "type": "string",
-      "metadata": {
-        "description": "Resource ID of the data collection rule for security monitoring with Microsoft Defender for Cloud."
       }
     },
     "securityType": {
@@ -811,9 +805,6 @@
           "sessionHostCustomizations": {
             "value": "[parameters('sessionHostCustomizations')]"
           },
-          "securityDataCollectionRulesResourceId": {
-            "value": "[parameters('securityDataCollectionRulesResourceId')]"
-          },
           "secureBootEnabled": {
             "value": "[parameters('secureBootEnabled')]"
           },
@@ -872,7 +863,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.28.1.47646",
-              "templateHash": "10802583208881608842"
+              "templateHash": "1747664149951255735"
             }
           },
           "parameters": {
@@ -1006,9 +997,6 @@
               "type": "array"
             },
             "sessionHostRegistrationDSCUrl": {
-              "type": "string"
-            },
-            "securityDataCollectionRulesResourceId": {
               "type": "string"
             },
             "securityType": {
@@ -1176,7 +1164,7 @@
                 "count": "[length(range(0, variables('sessionHostCount')))]"
               },
               "type": "Microsoft.Compute/virtualMachines",
-              "apiVersion": "2022-11-01",
+              "apiVersion": "2024-03-01",
               "name": "[replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[copyIndex()]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[copyIndex()]])]",
               "location": "[parameters('location')]",
               "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))]",
@@ -1184,6 +1172,11 @@
               "identity": "[variables('identity')]",
               "properties": {
                 "availabilitySet": "[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(div(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), 200), 1), 2, '0')))), null())]",
+                "diagnosticsProfile": {
+                  "bootDiagnostics": {
+                    "enabled": true
+                  }
+                },
                 "hardwareProfile": {
                   "vmSize": "[parameters('virtualMachineSize')]"
                 },
@@ -1231,11 +1224,6 @@
                   "encryptionAtHost": "[if(parameters('encryptionAtHost'), true(), null())]",
                   "securityType": "[if(not(equals(parameters('securityType'), 'Standard')), parameters('securityType'), null())]",
                   "uefiSettings": "[if(not(equals(parameters('securityType'), 'Standard')), createObject('secureBootEnabled', parameters('secureBootEnabled'), 'vTpmEnabled', parameters('vTpmEnabled')), null())]"
-                },
-                "diagnosticsProfile": {
-                  "bootDiagnostics": {
-                    "enabled": false
-                  }
                 },
                 "licenseType": "[if(or(not(empty(tryGet(parameters('imageReference'), 'id'))), equals(tryGet(parameters('imageReference'), 'publisher'), 'MicrosoftWindowsDesktop')), 'Windows_Client', 'Windows_Server')]"
               },
@@ -1406,26 +1394,6 @@
               "properties": {
                 "dataCollectionRuleId": "[parameters('vmInsightsDataCollectionRulesResourceId')]",
                 "description": "VM Insights data collection rule association"
-              },
-              "dependsOn": [
-                "extension_AzureMonitorWindowsAgent",
-                "[resourceId('Microsoft.Compute/virtualMachines', replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]))]",
-                "[resourceId('Microsoft.Compute/virtualMachines', replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]))]"
-              ]
-            },
-            {
-              "copy": {
-                "name": "securityDataCollectionRuleAssociation",
-                "count": "[length(range(0, variables('sessionHostCount')))]"
-              },
-              "condition": "[not(empty(parameters('securityDataCollectionRulesResourceId')))]",
-              "type": "Microsoft.Insights/dataCollectionRuleAssociations",
-              "apiVersion": "2022-06-01",
-              "scope": "[format('Microsoft.Compute/virtualMachines/{0}', replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]))]",
-              "name": "[format('{0}-security-data-coll-rule-assoc', replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]))]",
-              "properties": {
-                "dataCollectionRuleId": "[parameters('securityDataCollectionRulesResourceId')]",
-                "description": "Security Events data collection rule association"
               },
               "dependsOn": [
                 "extension_AzureMonitorWindowsAgent",
@@ -1797,7 +1765,7 @@
                     "value": ""
                   },
                   "diskName": {
-                    "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), '2022-11-01').storageProfile.osDisk.name]"
+                    "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), '2024-03-01').storageProfile.osDisk.name]"
                   },
                   "location": {
                     "value": "[parameters('location')]"

@@ -191,7 +191,7 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [fo
   }
 }]
 
-resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i in range(0, sessionHostCount): {
+resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [for i in range(0, sessionHostCount): {
   name: replace(virtualMachineNameConv, '###', padLeft((i + sessionHostIndex), vmNameIndexLength, '0'))
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
@@ -206,6 +206,11 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
     availabilitySet: availability == 'AvailabilitySets' ? {
       id: resourceId('Microsoft.Compute/availabilitySets', replace(availabilitySetNameConv, '##', padLeft((((i + sessionHostIndex) - 1) / 200) + 1, 2, '0')))
     } : null
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: true
+      }
+    }
     hardwareProfile: {
       vmSize: virtualMachineSize
     }
@@ -267,11 +272,6 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
         secureBootEnabled: secureBootEnabled
         vTpmEnabled: vTpmEnabled
       } : null 
-    }
-    diagnosticsProfile: {
-      bootDiagnostics: {
-        enabled: false
-      }
     }
     licenseType: ((imagePublisher == 'MicrosoftWindowsDesktop' || !empty(customImageResourceId)) ? 'Windows_Client' : 'Windows_Server')
   }

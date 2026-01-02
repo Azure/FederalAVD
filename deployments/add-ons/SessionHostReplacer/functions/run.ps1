@@ -125,6 +125,45 @@ $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference
 # Get number session hosts to deploy
 $hostPoolDecisions = Get-HostPoolDecisions -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -FailedDeployments $failedDeployments -LatestImageVersion $latestImageVersion
 
+# Check if we're starting a new update cycle and reset progressive scale-up if needed
+if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
+    $deploymentState = Get-DeploymentState
+    $currentImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { "N/A" }
+    $totalToReplace = if ($hostPoolDecisions.TotalSessionHostsToReplace) { $hostPoolDecisions.TotalSessionHostsToReplace } else { 0 }
+    
+    # Detect if we're starting a new update cycle
+    $isNewCycle = $false
+    $resetReason = ""
+    
+    # Check if image version changed
+    if ($deploymentState.LastImageVersion -and $deploymentState.LastImageVersion -ne $currentImageVersion) {
+        $isNewCycle = $true
+        $resetReason = "Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion"
+    }
+    
+    # Check if we completed the previous cycle (no hosts to replace) and now have new hosts to replace
+    if ($deploymentState.LastTotalToReplace -eq 0 -and $totalToReplace -gt 0) {
+        $isNewCycle = $true
+        $resetReason = "Starting new update cycle with $totalToReplace hosts to replace (was 0)"
+    }
+    
+    # Reset progressive scale-up for new cycle
+    if ($isNewCycle) {
+        Write-HostDetailed "Detected new update cycle: $resetReason" -Level Host
+        Write-HostDetailed "Resetting progressive scale-up to initial percentage" -Level Host
+        $deploymentState.ConsecutiveSuccesses = 0
+        $deploymentState.CurrentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+        $deploymentState.LastStatus = 'NewCycle'
+        $deploymentState.LastDeploymentName = ''
+        Save-DeploymentState -DeploymentState $deploymentState
+    }
+    
+    # Update tracking values
+    $deploymentState.LastImageVersion = $currentImageVersion
+    $deploymentState.LastTotalToReplace = $totalToReplace
+    Save-DeploymentState -DeploymentState $deploymentState
+}
+
 # Log comprehensive metrics for monitoring dashboard
 $metricsLog = @{
     TotalSessionHosts = $sessionHosts.Count
@@ -219,7 +258,7 @@ if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisi
         }
     }
     If ($GraphToken) {
-        Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
+        Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice -ClientId $UserAssignedIdentityClientId
     }
     Else {
         Remove-SessionHosts -ARMToken $ARMToken -GraphToken $null -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $false -RemoveIntuneDevice $false

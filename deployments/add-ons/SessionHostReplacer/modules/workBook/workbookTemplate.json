@@ -157,7 +157,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"failed deployments\" and message contains \"Found\"\n| extend FailedCount = toint(extract(@\"Found (\\d+) failed deployments\", 1, message))\n| where isnotempty(FailedCount)\n| summarize arg_max(timestamp, *) by HostPoolName\n| summarize TotalFailed = sum(FailedCount)\n| project Column = 'Failed Deployments', Value = TotalFailed",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet failedCount = toscalar(\n    traces\n    | where timestamp {TimeRange}\n    | extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n    | where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n    | where message contains \"failed deployments\" and message contains \"Found\"\n    | extend FailedCount = toint(extract(@\"Found (\\d+) failed deployments\", 1, message))\n    | where isnotempty(FailedCount)\n    | summarize arg_max(timestamp, *) by HostPoolName\n    | summarize sum(FailedCount)\n);\nprint Column = 'Failed Deployments', Value = toint(failedCount)",
         "size": 4,
         "title": "⚠️ Deployment Health",
         "timeContext": {
@@ -191,10 +191,6 @@
         }
       },
       "customWidth": "25",
-      "conditionalVisibility": {
-        "parameterName": "alwaysShow",
-        "comparison": "isNotEqualTo"
-      },
       "name": "failed-deployments-tile"
     },
     {
@@ -208,7 +204,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp > ago(7d)\n| where message contains \"SCHEDULE\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend NextRun = extract(@\"Next scheduled run: ([^\\s]+)\", 1, message)\n| where isnotempty(NextRun)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend NextRunTime = todatetime(NextRun)\n| extend MinutesUntilNext = datetime_diff('minute', NextRunTime, now())\n| extend Status = case(\n    MinutesUntilNext < 0, \"⚠️ Overdue\",\n    MinutesUntilNext < 60, \"🟢 Running Soon\",\n    \"🟦 Scheduled\"\n)\n| project HostPool = HostPoolName, ['Next Run'] = format_datetime(NextRunTime, 'yyyy-MM-dd HH:mm:ss UTC'), ['Time Until'] = strcat(MinutesUntilNext, ' min'), Status\n| order by HostPool asc",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet results = traces\n| where timestamp > ago(7d)\n| where message contains \"SCHEDULE\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend NextRun = extract(@\"Next scheduled run: ([^\\s]+)\", 1, message)\n| where isnotempty(NextRun)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend NextRunTime = todatetime(NextRun)\n| extend MinutesUntilNext = datetime_diff('minute', NextRunTime, now())\n| extend Status = case(\n    MinutesUntilNext < 0, \"⚠️ Overdue\",\n    MinutesUntilNext < 60, \"🟢 Running Soon\",\n    \"🟦 Scheduled\"\n)\n| project HostPool = HostPoolName, ['Next Run'] = format_datetime(NextRunTime, 'yyyy-MM-dd HH:mm:ss'), ['Time Until'] = strcat(MinutesUntilNext, ' min'), Status;\nresults\n| union (datatable(HostPool:string, ['Next Run']:string, ['Time Until']:string, Status:string) ['No Data', 'No schedule data found', 'N/A', 'ℹ️ No Data'])\n| where HostPool != 'No Data' or toscalar(results | count) == 0\n| order by HostPool asc",
         "size": 0,
         "title": "Next Scheduled Execution",
         "timeContext": {
@@ -345,7 +341,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"Checking status of previous deployment\" or message contains \"ConsecutiveSuccesses\"\n| project timestamp, message\n| top 10 by timestamp desc",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet results = traces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"ConsecutiveSuccesses\"\n| extend ConsecutiveSuccesses = toint(extract(@\"ConsecutiveSuccesses: (\\d+)\", 1, message))\n| where isnotempty(ConsecutiveSuccesses)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend Status = case(\n    ConsecutiveSuccesses == 0, \"🔴 Starting\",\n    ConsecutiveSuccesses < 3, \"🟡 In Progress\",\n    \"🟢 Stable\"\n)\n| project HostPool = HostPoolName, ['Consecutive Successes'] = ConsecutiveSuccesses, Status, ['Last Updated'] = format_datetime(timestamp, 'yyyy-MM-dd HH:mm:ss');\nresults\n| union (datatable(HostPool:string, ['Consecutive Successes']:int, Status:string, ['Last Updated']:string) ['No Data', 0, 'ℹ️ No deployment activity', 'N/A'])\n| where HostPool != 'No Data' or toscalar(results | count) == 0\n| order by HostPool asc",
         "size": 0,
         "title": "Progressive Scale-Up Status",
         "timeContext": {
@@ -355,7 +351,49 @@
         "crossComponentResources": ["{ApplicationInsights}"],
         "queryType": 0,
         "resourceType": "microsoft.insights/components",
-        "visualization": "table"
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Consecutive Successes",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "green"
+              }
+            },
+            {
+              "columnMatch": "Status",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "contains",
+                    "thresholdValue": "Starting",
+                    "representation": "failed",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "contains",
+                    "thresholdValue": "Progress",
+                    "representation": "warning",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "Last Updated",
+              "formatter": 6
+            }
+          ]
+        }
       },
       "customWidth": "50",
       "name": "scaleup-table"
@@ -371,7 +409,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"decommission\"\n| project timestamp, message\n| top 20 by timestamp desc",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"decommission\"\n| project timestamp, message\n| top 20 by timestamp desc\n| union (print timestamp = now(), message = '✅ No hosts currently in drain mode')\n| top 20 by timestamp desc",
         "size": 0,
         "title": "Hosts Currently in Drain Mode",
         "timeContext": {
@@ -411,7 +449,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"failed deployment\" or message contains \"Failed deployment\"\n| project timestamp, HostPoolName, Message = message\n| order by timestamp desc\n| take 20",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"failed deployment\" or message contains \"Failed deployment\"\n| project timestamp, HostPoolName, Message = message\n| order by timestamp desc\n| take 20\n| union (print timestamp = now(), HostPoolName = 'N/A', Message = '✅ No failed deployments in selected time range')\n| order by timestamp desc\n| take 20",
         "size": 0,
         "title": "Recent Failed Deployment Activity",
         "timeContext": {
@@ -445,7 +483,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"session hosts from failed deployments\" or message contains \"Marking session host\" and message contains \"failed deployment\"\n| extend VmCount = case(\n    message contains \"Found\", toint(extract(@\"Found (\\d+) session hosts\", 1, message)),\n    1\n)\n| summarize HostsMarkedForCleanup = sum(VmCount) by bin(timestamp, 1h)\n| render timechart",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet results = traces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"session hosts from failed deployments\" or message contains \"Marking session host\" and message contains \"failed deployment\"\n| extend VmCount = case(\n    message contains \"Found\", toint(extract(@\"Found (\\d+) session hosts\", 1, message)),\n    1\n)\n| summarize HostsMarkedForCleanup = sum(VmCount) by bin(timestamp, 1h);\nresults\n| union (print timestamp = now(), HostsMarkedForCleanup = 0)\n| where HostsMarkedForCleanup > 0 or toscalar(results | count) == 0\n| render timechart",
         "size": 0,
         "title": "VMs Marked for Cleanup from Failed Deployments",
         "timeContext": {
@@ -512,7 +550,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\nunion traces, exceptions\n| where severityLevel >= 3\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, coalesce(message, outerMessage, ''))\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| project timestamp, message = coalesce(message, outerMessage), severityLevel\n| where message !contains \"The listener for function\"\n| top 20 by timestamp desc\n| project Timestamp = format_datetime(timestamp, 'yyyy-MM-dd HH:mm:ss'), Message = substring(message, 0, 200)",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet results = union traces, exceptions\n| where severityLevel >= 3\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, coalesce(message, outerMessage, ''))\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| project timestamp, message = coalesce(message, outerMessage), severityLevel\n| where message !contains \"The listener for function\"\n| top 20 by timestamp desc\n| project Timestamp = format_datetime(timestamp, 'yyyy-MM-dd HH:mm:ss'), Message = substring(message, 0, 200);\nresults\n| union (datatable(Timestamp:string, Message:string) ['N/A', '✅ No errors in selected time range'])\n| where Message != '✅ No errors in selected time range' or toscalar(results | count) == 0\n| take 20",
         "size": 0,
         "title": "Recent Errors (Top 20)",
         "timeContext": {

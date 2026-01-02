@@ -44,7 +44,6 @@ param sessionHostCustomizations array
 param sessionHostNameIndexLength int
 param sessionHostNames array
 param sessionHostRegistrationDSCUrl string
-param securityDataCollectionRulesResourceId string
 param securityType string
 param secureBootEnabled bool
 param subnetResourceId string
@@ -183,7 +182,7 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [fo
   }
 }]
 
-resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i in range(0, sessionHostCount): {
+resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [for i in range(0, sessionHostCount): {
   name: replace(replace(virtualMachineNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
@@ -195,6 +194,11 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
     availabilitySet: availability == 'AvailabilitySets' ? {
       id: resourceId('Microsoft.Compute/availabilitySets', replace(availabilitySetNameConv, '##', padLeft(((vmNumbers[i] - 1) / 200) + 1, 2, '0')))
     } : null
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: true
+      }
+    }
     hardwareProfile: {
       vmSize: virtualMachineSize
     }
@@ -256,11 +260,6 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
         secureBootEnabled: secureBootEnabled
         vTpmEnabled: vTpmEnabled
       } : null 
-    }
-    diagnosticsProfile: {
-      bootDiagnostics: {
-        enabled: false
-      }
     }
     licenseType: (!empty(imageReference.?id) || imageReference.?publisher == 'MicrosoftWindowsDesktop') ? 'Windows_Client' : 'Windows_Server'
   }
@@ -384,18 +383,6 @@ resource vmInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollect
   properties: {
     dataCollectionRuleId: vmInsightsDataCollectionRulesResourceId
     description: 'VM Insights data collection rule association'
-  }
-  dependsOn: [
-    extension_AzureMonitorWindowsAgent
-  ]
-}]
-
-resource securityDataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [for i in range(0, sessionHostCount): if (!empty(securityDataCollectionRulesResourceId)) {
-  scope: virtualMachine[i]
-  name: '${virtualMachine[i].name}-security-data-coll-rule-assoc'
-  properties: {
-    dataCollectionRuleId: securityDataCollectionRulesResourceId
-    description: 'Security Events data collection rule association'
   }
   dependsOn: [
     extension_AzureMonitorWindowsAgent
