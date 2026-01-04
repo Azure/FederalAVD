@@ -157,6 +157,46 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet deployingFromRunning = toscalar(\n    traces\n    | where timestamp {TimeRange}\n    | extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n    | where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n    | where message contains \"running deployments\" and message contains \"Found\"\n    | extend RunningCount = toint(extract(@\"Found (\\d+) running deployments\", 1, message))\n    | where isnotempty(RunningCount)\n    | summarize arg_max(timestamp, *) by HostPoolName\n    | summarize sum(RunningCount)\n);\nlet deployingFromSubmitted = toscalar(\n    traces\n    | where timestamp > ago(2h)\n    | extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n    | where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n    | where message contains \"Deployment submitted:\"\n    | extend VMCount = toint(extract(@\"Deployment submitted: (\\d+) VMs\", 1, message))\n    | where isnotempty(VMCount)\n    | summarize arg_max(timestamp, *)\n    | project VMCount\n);\nprint Column = 'Currently Deploying', Value = toint(coalesce(deployingFromRunning, 0) + coalesce(deployingFromSubmitted, 0))",
+        "size": 4,
+        "title": "🚀 Active Deployments",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Column",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Value",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "blue"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "useGrouping": false
+              }
+            }
+          },
+          "showBorder": true
+        }
+      },
+      "customWidth": "25",
+      "name": "deploying-tile"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
         "query": "let hostPoolFilter = '{HostPool}';\nlet failedCount = toscalar(\n    traces\n    | where timestamp {TimeRange}\n    | extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n    | where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n    | where message contains \"failed deployments\" and message contains \"Found\"\n    | extend FailedCount = toint(extract(@\"Found (\\d+) failed deployments\", 1, message))\n    | where isnotempty(FailedCount)\n    | summarize arg_max(timestamp, *) by HostPoolName\n    | summarize sum(FailedCount)\n);\nprint Column = 'Failed Deployments', Value = toint(failedCount)",
         "size": 4,
         "title": "⚠️ Deployment Health",
@@ -204,9 +244,9 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\nlet results = traces\n| where timestamp > ago(7d)\n| where message contains \"SCHEDULE\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend NextRun = extract(@\"Next scheduled run: ([^\\s]+)\", 1, message)\n| where isnotempty(NextRun)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend NextRunTime = todatetime(NextRun)\n| extend MinutesUntilNext = datetime_diff('minute', NextRunTime, now())\n| extend Status = case(\n    MinutesUntilNext < 0, \"⚠️ Overdue\",\n    MinutesUntilNext < 60, \"🟢 Running Soon\",\n    \"🟦 Scheduled\"\n)\n| project HostPool = HostPoolName, ['Next Run'] = format_datetime(NextRunTime, 'yyyy-MM-dd HH:mm:ss'), ['Time Until'] = strcat(MinutesUntilNext, ' min'), Status;\nresults\n| union (datatable(HostPool:string, ['Next Run']:string, ['Time Until']:string, Status:string) ['No Data', 'No schedule data found', 'N/A', 'ℹ️ No Data'])\n| where HostPool != 'No Data' or toscalar(results | count) == 0\n| order by HostPool asc",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet results = traces\n| where timestamp > ago(7d)\n| where message contains \"SCHEDULE\" and message contains \"completed\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| summarize LastRun = max(timestamp) by HostPoolName\n| extend MinutesSinceLastRun = datetime_diff('minute', now(), LastRun)\n| extend Status = case(\n    MinutesSinceLastRun > 90, \"⚠️ Delayed\",\n    MinutesSinceLastRun > 65, \"🟡 Due Soon\",\n    \"🟢 On Schedule\"\n)\n| project HostPool = HostPoolName, ['Last Execution'] = LastRun, ['Minutes Ago'] = MinutesSinceLastRun, Status;\nresults\n| union (datatable(HostPool:string, ['Last Execution']:datetime, ['Minutes Ago']:long, Status:string) ['No Data', datetime(null), 0, 'ℹ️ No Data'])\n| where HostPool != 'No Data' or toscalar(results | count) == 0\n| order by HostPool asc",
         "size": 0,
-        "title": "Next Scheduled Execution",
+        "title": "Recent Execution History",
         "timeContext": {
           "durationMs": 0
         },
@@ -218,11 +258,11 @@
         "gridSettings": {
           "formatters": [
             {
-              "columnMatch": "Next Run",
+              "columnMatch": "Last Execution",
               "formatter": 6
             },
             {
-              "columnMatch": "Time Until",
+              "columnMatch": "Minutes Ago",
               "formatter": 1
             },
             {
@@ -233,20 +273,20 @@
                 "thresholdsGrid": [
                   {
                     "operator": "contains",
-                    "thresholdValue": "Overdue",
+                    "thresholdValue": "Delayed",
                     "representation": "warning",
                     "text": "{0}{1}"
                   },
                   {
                     "operator": "contains",
-                    "thresholdValue": "Soon",
-                    "representation": "success",
+                    "thresholdValue": "Due",
+                    "representation": "2",
                     "text": "{0}{1}"
                   },
                   {
                     "operator": "Default",
                     "thresholdValue": null,
-                    "representation": "info",
+                    "representation": "success",
                     "text": "{0}{1}"
                   }
                 ]
@@ -256,6 +296,66 @@
         }
       },
       "name": "schedule-table"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🖼️ Image Information"
+      },
+      "name": "image-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet results = traces\n| where timestamp {TimeRange}\n| where message contains \"IMAGE_INFO\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend ImageType = extract(@\"Type:\\s*([^\\|]+)\", 1, message)\n| extend Publisher = extract(@\"Publisher:\\s*([^\\|]+)\", 1, message)\n| extend Offer = extract(@\"Offer:\\s*([^\\|]+)\", 1, message)\n| extend Sku = extract(@\"Sku:\\s*([^\\|]+)\", 1, message)\n| extend Gallery = extract(@\"Gallery:\\s*([^\\|]+)\", 1, message)\n| extend ImageDefinition = extract(@\"ImageDefinition:\\s*([^\\|]+)\", 1, message)\n| extend Version = extract(@\"Version:\\s*([^\\s]+)\", 1, message)\n| where isnotempty(ImageType)\n| summarize arg_max(timestamp, *) by HostPoolName\n| project \n    HostPool = HostPoolName,\n    ['Image Type'] = trim_end(@\"\\s\", ImageType),\n    ['Image Details'] = case(\n        trim_end(@\"\\s\", ImageType) == \"Marketplace\", strcat(trim_end(@\"\\s\", Publisher), \"/\", trim_end(@\"\\s\", Offer), \"/\", trim_end(@\"\\s\", Sku)),\n        trim_end(@\"\\s\", ImageType) == \"Gallery\", strcat(trim_end(@\"\\s\", Gallery), \"/\", trim_end(@\"\\s\", ImageDefinition)),\n        \"Unknown\"\n    ),\n    Version = trim_end(@\"\\s\", Version),\n    ['Last Updated'] = timestamp;\nresults\n| union (datatable(HostPool:string, ['Image Type']:string, ['Image Details']:string, Version:string, ['Last Updated']:datetime) ['No Data', 'N/A', 'N/A', 'N/A', datetime(null)])\n| where HostPool != 'No Data' or toscalar(results | count) == 0\n| order by HostPool asc",
+        "size": 0,
+        "title": "Current Image Configuration",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Image Type",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Marketplace",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Gallery",
+                    "representation": "info",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "Last Updated",
+              "formatter": 6
+            }
+          ]
+        }
+      },
+      "name": "image-table"
     },
     {
       "type": 1,
@@ -323,7 +423,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"deployment\" or message contains \"Deploying\" or message contains \"Template\"\n| summarize Count = count() by bin(timestamp, 1h)\n| render timechart",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where (message contains \"Previous deployment\" and message contains \"succeeded\") or (message contains \"Previous deployment\" and message contains \"failed\")\n| summarize Count = count() by bin(timestamp, 1h)\n| render timechart",
         "size": 0,
         "title": "Deployment Activity Over Time",
         "timeContext": {
@@ -341,7 +441,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\nlet results = traces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"ConsecutiveSuccesses\"\n| extend ConsecutiveSuccesses = toint(extract(@\"ConsecutiveSuccesses: (\\d+)\", 1, message))\n| where isnotempty(ConsecutiveSuccesses)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend Status = case(\n    ConsecutiveSuccesses == 0, \"🔴 Starting\",\n    ConsecutiveSuccesses < 3, \"🟡 In Progress\",\n    \"🟢 Stable\"\n)\n| project HostPool = HostPoolName, ['Consecutive Successes'] = ConsecutiveSuccesses, Status, ['Last Updated'] = format_datetime(timestamp, 'yyyy-MM-dd HH:mm:ss');\nresults\n| union (datatable(HostPool:string, ['Consecutive Successes']:int, Status:string, ['Last Updated']:string) ['No Data', 0, 'ℹ️ No deployment activity', 'N/A'])\n| where HostPool != 'No Data' or toscalar(results | count) == 0\n| order by HostPool asc",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet results = traces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"ConsecutiveSuccesses\"\n| extend ConsecutiveSuccesses = toint(extract(@\"ConsecutiveSuccesses: (\\d+)\", 1, message))\n| where isnotempty(ConsecutiveSuccesses)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend Status = case(\n    ConsecutiveSuccesses == 0, \"🔴 Starting\",\n    ConsecutiveSuccesses < 3, \"🟡 In Progress\",\n    \"🟢 Stable\"\n)\n| project HostPool = HostPoolName, ['Consecutive Successes'] = ConsecutiveSuccesses, Status, ['Last Updated'] = timestamp;\nresults\n| union (datatable(HostPool:string, ['Consecutive Successes']:int, Status:string, ['Last Updated']:datetime) ['No Data', 0, 'ℹ️ No deployment activity', datetime(null)])\n| where HostPool != 'No Data' or toscalar(results | count) == 0\n| order by HostPool asc",
         "size": 0,
         "title": "Progressive Scale-Up Status",
         "timeContext": {
@@ -409,7 +509,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"decommission\"\n| project timestamp, message\n| top 20 by timestamp desc\n| union (print timestamp = now(), message = '✅ No hosts currently in drain mode')\n| top 20 by timestamp desc",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet results = traces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"is in drain mode\" or (message contains \"drain\" and message contains \"sessions\" and message contains \"timestamp\")\n| project timestamp, message\n| top 20 by timestamp desc;\nresults\n| union (print timestamp = now(), message = '✅ No hosts currently in drain mode')\n| where message != '✅ No hosts currently in drain mode' or toscalar(results | count) == 0\n| top 20 by timestamp desc",
         "size": 0,
         "title": "Hosts Currently in Drain Mode",
         "timeContext": {
@@ -508,7 +608,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"Deleting\" or message contains \"Removed\" or message contains \"device\"\n| summarize Count = count() by bin(timestamp, 1h)\n| render areachart",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"Deleting session host\"\n| summarize Count = count() by bin(timestamp, 1h)\n| render areachart",
         "size": 0,
         "title": "Deletion Operations Over Time",
         "timeContext": {
@@ -550,7 +650,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\nlet results = union traces, exceptions\n| where severityLevel >= 3\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, coalesce(message, outerMessage, ''))\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| project timestamp, message = coalesce(message, outerMessage), severityLevel\n| where message !contains \"The listener for function\"\n| top 20 by timestamp desc\n| project Timestamp = format_datetime(timestamp, 'yyyy-MM-dd HH:mm:ss'), Message = substring(message, 0, 200);\nresults\n| union (datatable(Timestamp:string, Message:string) ['N/A', '✅ No errors in selected time range'])\n| where Message != '✅ No errors in selected time range' or toscalar(results | count) == 0\n| take 20",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet results = union traces, exceptions\n| where severityLevel >= 3\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, coalesce(message, outerMessage, ''))\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| project timestamp, message = coalesce(message, outerMessage), severityLevel\n| where message !contains \"The listener for function\"\n| top 20 by timestamp desc\n| project Timestamp = timestamp, Message = substring(message, 0, 200);\nresults\n| union (datatable(Timestamp:datetime, Message:string) [datetime(null), '✅ No errors in selected time range'])\n| where Message != '✅ No errors in selected time range' or toscalar(results | count) == 0\n| take 20",
         "size": 0,
         "title": "Recent Errors (Top 20)",
         "timeContext": {
@@ -560,7 +660,15 @@
         "crossComponentResources": ["{ApplicationInsights}"],
         "queryType": 0,
         "resourceType": "microsoft.insights/components",
-        "visualization": "table"
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Timestamp",
+              "formatter": 6
+            }
+          ]
+        }
       },
       "customWidth": "50",
       "name": "errors-table"
@@ -594,7 +702,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"Found\" and message contains \"session hosts\"\n| extend totalHosts = toint(extract(\"Found (\\\\d+) session hosts\", 1, message))\n| where isnotempty(totalHosts)\n| summarize avg(totalHosts) by bin(timestamp, 1h)\n| render timechart",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName, bin(timestamp, 1h)\n| summarize avg(Total) by bin(timestamp, 1h)\n| render timechart",
         "size": 0,
         "title": "Average Host Pool Size Over Time",
         "timeContext": {

@@ -413,41 +413,7 @@
 									"name": "replacementModeTextBlock",
 									"type": "Microsoft.Common.TextBlock",
 									"options": {
-										"text": "Choose how you want to manage session host replacements. You can replace session hosts automatically when a new image version is available, or replace them based on their age in days. If you choose age-based replacement, session hosts older than the specified number of days will be marked for replacement. If you choose image version-based replacement, you can optionally specify a delay period before triggering replacements after a new image is published."
-									}
-								},
-								{
-									"name": "replacementMode",
-									"type": "Microsoft.Common.OptionsGroup",
-									"label": "Replacement Mode",
-									"toolTip": "Select how session hosts should be replaced.",
-									"defaultValue": "Replace Session Hosts on New Image Version",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Replace Session Hosts on New Image Version",
-												"value": "ImageVersion"
-											},
-											{
-												"label": "Replace Session Hosts based on age (days)",
-												"value": "Age-based"
-											}
-										]
-									}
-								},
-								{
-									"name": "targetVMAgeDays",
-									"type": "Microsoft.Common.Slider",
-									"label": "Target VM Age (days)",
-									"toolTip": "Session hosts older than this will be marked for replacement.",
-									"min": 1,
-									"max": 180,
-									"defaultValue": 45,
-									"showStepMarkers": false,
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'Age-based')]",
-									"constraints": {
-										"required": true
+										"text": "Session hosts are automatically replaced when a new image version is available. You can optionally specify a delay period before triggering replacements after a new image is published to allow for testing."
 									}
 								},
 								{
@@ -459,7 +425,16 @@
 									"max": 30,
 									"defaultValue": 0,
 									"showStepMarkers": false,
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'ImageVersion')]",
+									"constraints": {
+										"required": false
+									}
+								},
+								{
+									"name": "allowImageVersionRollback",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Allow Image Version Rollback",
+									"toolTip": "When enabled, allows session hosts to be replaced even if their current image version is newer than the latest available version. When disabled (recommended), prevents unintended rollbacks to older images.",
+									"defaultValue": false,
 									"constraints": {
 										"required": false
 									}
@@ -484,19 +459,6 @@
 									"toolTip": "The target number of session hosts to maintain. Set to 0 for auto-detect mode: automatically maintains current count during each replacement cycle, allowing manual scaling between image updates.",
 									"min": 0,
 									"max": 1000,
-									"defaultValue": 0,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "targetSessionHostBuffer",
-									"type": "Microsoft.Common.Slider",
-									"label": "Target Session Host Buffer",
-									"toolTip": "Additional temporary capacity above target during replacements. Enables rolling updates without reducing user capacity (e.g., target=3, buffer=2 allows up to 5 hosts during replacement).",
-									"min": 0,
-									"max": 100,
 									"defaultValue": 0,
 									"showStepMarkers": false,
 									"constraints": {
@@ -2880,12 +2842,10 @@
 				"templateSpecName": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecName, '')]",
 				"templateSpecVersion": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecVersion, '1.0.0')]",
 				"timerSchedule": "[concat('0 ', string(steps('functionApp').executionSettings.scheduleMinuteOffset), ' ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]" ,
-				"replacementMode": "[steps('functionApp').executionSettings.replacementMode]",
-				"targetVMAgeDays": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'Age-based'), steps('functionApp').executionSettings.targetVMAgeDays, 0)]",
-				"replaceSessionHostOnNewImageVersionDelayDays": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'ImageVersion'), steps('functionApp').executionSettings.replaceSessionHostOnNewImageVersionDelayDays, 0)]",
+				"replaceSessionHostOnNewImageVersionDelayDays": "[steps('functionApp').executionSettings.replaceSessionHostOnNewImageVersionDelayDays]",
+				"allowImageVersionRollback": "[steps('functionApp').executionSettings.allowImageVersionRollback]",
 				"drainGracePeriodHours": "[steps('functionApp').executionSettings.drainGracePeriodHours]",
 				"targetSessionHostCount": "[steps('functionApp').executionSettings.targetSessionHostCount]",
-				"targetSessionHostBuffer": "[steps('functionApp').executionSettings.targetSessionHostBuffer]",
 				"maxDeploymentBatchSize": "[steps('functionApp').executionSettings.maxDeploymentBatchSize]",
 				"fixSessionHostTags": "[steps('functionApp').executionSettings.fixSessionHostTags]",
 				"includePreExistingSessionHosts": "[steps('functionApp').executionSettings.includePreExistingSessionHosts]",

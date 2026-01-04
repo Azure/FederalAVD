@@ -188,32 +188,19 @@ var endAvSetRange = maxVmNumber / maxAvSetMembers
 var calculatedAvailabilitySetsCount = endAvSetRange - beginAvSetRange + 1
 var calculatedAvailabilitySetsIndex = beginAvSetRange
 
-// create new arrays that always contain the profile-containers volume as the first element.
-var localNetAppProfileContainerVolumeResourceIds = !empty(fslogixLocalNetAppVolumeResourceIds)
-  ? filter(fslogixLocalNetAppVolumeResourceIds, id => contains(id, fslogixFileShareNames[0]))
-  : []
-var localNetAppOfficeContainerVolumeResourceIds = !empty(fslogixLocalNetAppVolumeResourceIds) && length(fslogixFileShareNames) > 1
-  ? filter(fslogixLocalNetAppVolumeResourceIds, id => contains(id, fslogixFileShareNames[1]))
-  : []
-var sortedLocalNetAppResourceIds = union(
-  localNetAppProfileContainerVolumeResourceIds,
-  localNetAppOfficeContainerVolumeResourceIds
-)
-var remoteNetAppProfileContainerVolumeResourceIds = !empty(fslogixRemoteNetAppVolumeResourceIds)
-  ? filter(fslogixRemoteNetAppVolumeResourceIds, id => contains(id, fslogixFileShareNames[0]))
-  : []
-var remoteNetAppOfficeContainerVolumeResourceIds = !empty(fslogixRemoteNetAppVolumeResourceIds) && length(fslogixFileShareNames) > 1
-  ? filter(fslogixRemoteNetAppVolumeResourceIds, id => !contains(id, fslogixFileShareNames[0]))
-  : []
-var sortedRemoteNetAppResourceIds = union(
-  remoteNetAppProfileContainerVolumeResourceIds,
-  remoteNetAppOfficeContainerVolumeResourceIds
-)
-
 // Existing Key Vault for secrets
 resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: last(split(credentialsKeyVaultResourceId, '/'))
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
+}
+
+module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if(fslogixConfigureSessionHosts && (!empty(fslogixLocalNetAppVolumeResourceIds) || !empty(fslogixRemoteNetAppVolumeResourceIds))) {
+  name: 'NetAppVolumeFqdns-${deploymentSuffix}'
+  params: {
+    localNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
+    remoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
+    shareNames: fslogixFileShareNames
+  }
 }
 
 module artifactsUserAssignedIdentity 'modules/getUserAssignedIdentity.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
@@ -235,26 +222,6 @@ module availabilitySets '../../../../sharedModules/resources/compute/availabilit
       location: location
       skuName: 'Aligned'
       tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Compute/availabilitySets'] ?? {})
-    }
-  }
-]
-
-module localNetAppVolumes 'modules/getNetAppVolumeSmbServerFqdn.bicep' = [
-  for i in range(0, length(sortedLocalNetAppResourceIds)): if (!empty(sortedLocalNetAppResourceIds)) {
-    scope: subscription()
-    name: 'LocalNetAppVolumes-${i}-${deploymentSuffix}'
-    params: {
-      netAppVolumeResourceId: sortedLocalNetAppResourceIds[i]
-    }
-  }
-]
-
-module remoteNetAppVolumes 'modules/getNetAppVolumeSmbServerFqdn.bicep' = [
-  for i in range(0, length(sortedRemoteNetAppResourceIds)): if (!empty(sortedRemoteNetAppResourceIds)) {
-    scope: subscription()
-    name: 'RemoteNetAppVolumes-${i}-${deploymentSuffix}'
-    params: {
-      netAppVolumeResourceId: sortedRemoteNetAppResourceIds[i]
     }
   }
 ]
@@ -292,13 +259,9 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       fslogixContainerType: fslogixContainerType
       fslogixFileShareNames: fslogixFileShareNames
       fslogixOSSGroups: fslogixOSSGroups
-      fslogixLocalNetAppServerFqdns: [
-        for j in range(0, length(sortedLocalNetAppResourceIds)): localNetAppVolumes[j]!.outputs.smbServerFqdn
-      ]
+      fslogixLocalNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.localNetAppVolumeSmbServerFqdns : []
       fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
-      fslogixRemoteNetAppServerFqdns: [
-        for j in range(0, length(sortedRemoteNetAppResourceIds)): remoteNetAppVolumes[j]!.outputs.smbServerFqdn
-      ]
+      fslogixRemoteNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns : []
       fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
       fslogixSizeInMBs: fslogixSizeInMBs
       fslogixStorageService: fslogixStorageService

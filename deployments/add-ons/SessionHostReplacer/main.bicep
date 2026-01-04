@@ -100,18 +100,6 @@ param deployWorkbook bool = true
 @description('Optional. The Azure region for the centralized workbook deployment. Defaults to the function app location. The workbook location does not affect its ability to query cross-region Application Insights instances.')
 param workbookLocation string = location
 
-@description('Required. The replacement mode for session hosts. Valid values: Age-based (replace based on VM age) or ImageVersion (replace when new image version is available).')
-@allowed([
-  'Age-based'
-  'ImageVersion'
-])
-param replacementMode string = 'Age-based'
-
-@description('Optional. The target age in days for session hosts before replacement. Only used when replacementMode is Age-based. Default is 45 days.')
-@minValue(0)
-@maxValue(180)
-param targetVMAgeDays int = 45
-
 @description('Optional. The grace period in hours after draining before deleting session hosts. Default is 24 hours.')
 @minValue(1)
 @maxValue(168)
@@ -121,11 +109,6 @@ param drainGracePeriodHours int = 24
 @minValue(0)
 @maxValue(1000)
 param targetSessionHostCount int
-
-@description('Optional. Additional buffer of session hosts above the target count during replacements. Provides headroom for rolling updates without reducing capacity. Default is 0.')
-@minValue(0)
-@maxValue(100)
-param targetSessionHostBuffer int = 0
 
 @description('Optional. Whether to fix session host tags during execution. Default is true.')
 param fixSessionHostTags bool = true
@@ -179,6 +162,9 @@ param successfulRunsBeforeScaleUp int = 1
 @maxValue(30)
 param replaceSessionHostOnNewImageVersionDelayDays int = 0
 
+@description('Optional. Allow replacement of session hosts even if their current image version is newer than the latest available version. When false (default), session hosts with newer versions will not be replaced to prevent unintended rollbacks. Only used when replacementMode is ImageVersion.')
+param allowImageVersionRollback bool = false
+
 // ================================================================================================
 // Session Host Configuration Parameters
 // These parameters define the configuration for session hosts that will be deployed as replacements.
@@ -209,7 +195,7 @@ param imageSku string = 'win11-25h2-avd'
 param customImageResourceId string = ''
 
 @description('Optional. The VM size for session hosts.')
-param virtualMachineSize string = 'Standard_D4ads_v5'
+param virtualMachineSize string = 'Standard_D4ads_v6'
 
 @description('Required. The subnet resource ID for session host NICs.')
 param virtualMachineSubnetResourceId string
@@ -242,7 +228,7 @@ param timeZone string = 'Eastern Standard Time'
   'AvailabilitySets'
   'None'
 ])
-param availability string = 'AvailabilityZones'
+param availability string = 'None'
 
 @description('Optional. Availability zones for session hosts.')
 param availabilityZones array = []
@@ -383,9 +369,9 @@ var locationsObject = loadJsonContent('../../../.common/data/locations.json')
 var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : cloud
 var locations = locationsObject[locationsEnvProperty]
 // the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.
-var graphEndpoint = environment().name == 'AzureUSGovernment'
+var graphEndpoint = cloud == 'azureusgovernment'
   ? 'https://graph.microsoft.us'
-  : startsWith(environment().name, 'us')
+  : startsWith(cloud, 'us')
       ? 'https://graph.${environment().suffixes.storage}'
       : 'https://graph.microsoft.com'
 
@@ -797,12 +783,12 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
         value: string(removeIntuneDevice)
       }
       {
-        name: 'ReplacementMode'
-        value: replacementMode
+        name: 'ReplaceSessionHostOnNewImageVersionDelayDays'
+        value: string(replaceSessionHostOnNewImageVersionDelayDays)
       }
       {
-        name: 'ReplaceSessionHostOnNewImageVersionDelayDays'
-        value: replacementMode == 'ImageVersion' ? string(replaceSessionHostOnNewImageVersionDelayDays) : '0'
+        name: 'AllowImageVersionRollback'
+        value: string(allowImageVersionRollback)
       }
       {
         name: 'ScaleUpIncrementPercentage'
@@ -851,17 +837,11 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
         value: tagScalingPlanExclusionTag
       }
       {
-        name: 'TargetSessionHostBuffer'
-        value: string(targetSessionHostBuffer)
-      }
-      {
+
         name: 'TargetSessionHostCount'
         value: string(targetSessionHostCount)
       }
-      {
-        name: 'TargetVMAgeDays'
-        value: replacementMode == 'Age-based' ? string(targetVMAgeDays) : '0'
-      }
+
       {
         name: 'VirtualMachinesResourceGroupName'
         value: virtualMachinesResourceGroupName

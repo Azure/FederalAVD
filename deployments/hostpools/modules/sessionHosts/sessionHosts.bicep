@@ -105,14 +105,6 @@ param vmInsightsDataCollectionRulesResourceId string
 var backupPolicyName = 'AvdPolicyVm'
 var confidentialVMOSDiskEncryptionType = confidentialVMOSDiskEncryption ? 'DiskWithVMGuestState' : 'VMGuestStateOnly'
 
-// create new arrays that always contain the profile-containers volume as the first element.
-var localNetAppProfileContainerVolumeResourceIds = !empty(fslogixLocalNetAppVolumeResourceIds) ? filter(fslogixLocalNetAppVolumeResourceIds, id => contains(id, fslogixFileShareNames[0])) : []
-var localNetAppOfficeContainerVolumeResourceIds = !empty(fslogixLocalNetAppVolumeResourceIds) && length(fslogixFileShareNames) > 1 ? filter(fslogixLocalNetAppVolumeResourceIds, id => contains(id, fslogixFileShareNames[1])) : []
-var sortedLocalNetAppResourceIds = union(localNetAppProfileContainerVolumeResourceIds, localNetAppOfficeContainerVolumeResourceIds)
-var remoteNetAppProfileContainerVolumeResourceIds = !empty(fslogixRemoteNetAppVolumeResourceIds) ? filter(fslogixRemoteNetAppVolumeResourceIds, id => contains(id, fslogixFileShareNames[0])) : []
-var remoteNetAppOfficeContainerVolumeResourceIds = !empty(fslogixRemoteNetAppVolumeResourceIds) && length(fslogixFileShareNames) > 1 ? filter(fslogixRemoteNetAppVolumeResourceIds, id => !contains(id, fslogixFileShareNames[0])) : []
-var sortedRemoteNetAppResourceIds = union(remoteNetAppProfileContainerVolumeResourceIds, remoteNetAppOfficeContainerVolumeResourceIds)
-
 var backupPrivateDNSZoneResourceIds = [
   azureBackupPrivateDnsZoneResourceId
   azureBlobPrivateDnsZoneResourceId
@@ -236,19 +228,15 @@ module availabilitySets '../../../sharedModules/resources/compute/availability-s
   }
 }]
 
-module localNetAppVolumes 'modules/getNetAppVolumeSmbServerFqdn.bicep' = [for i in range(0, length(sortedLocalNetAppResourceIds)): if(!empty(sortedLocalNetAppResourceIds)) {
-  name: 'LocalNetAppVolumes-${i}-${deploymentSuffix}'
+module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if(fslogixConfigureSessionHosts && (!empty(fslogixLocalNetAppVolumeResourceIds) || !empty(fslogixRemoteNetAppVolumeResourceIds))) {
+  name: 'NetAppVolumeFqdns-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupHosts)
   params: {
-    netAppVolumeResourceId: sortedLocalNetAppResourceIds[i]
+    localNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
+    remoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
+    shareNames: fslogixFileShareNames
   }
-}]
-
-module remoteNetAppVolumes 'modules/getNetAppVolumeSmbServerFqdn.bicep' = [for i in range(0, length(sortedRemoteNetAppResourceIds)) : if(!empty(sortedRemoteNetAppResourceIds)) {
-  name: 'RemoteNetAppVolumes-${i}-${deploymentSuffix}'
-  params: {
-    netAppVolumeResourceId: sortedRemoteNetAppResourceIds[i]
-  }
-}]
+}
 
 @batchSize(5)
 module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sessionHostBatchCount): {
@@ -282,9 +270,9 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames
     fslogixOSSGroups: fslogixOSSGroups
-    fslogixLocalNetAppServerFqdns: [for j in range(0, length(sortedLocalNetAppResourceIds)) : localNetAppVolumes[j]!.outputs.smbServerFqdn]
+    fslogixLocalNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.localNetAppVolumeSmbServerFqdns : []
     fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
-    fslogixRemoteNetAppServerFqdns: [for j in range(0, length(sortedRemoteNetAppResourceIds)) : remoteNetAppVolumes[j]!.outputs.smbServerFqdn]
+    fslogixRemoteNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns : []
     fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs    
     fslogixStorageService: fslogixStorageService

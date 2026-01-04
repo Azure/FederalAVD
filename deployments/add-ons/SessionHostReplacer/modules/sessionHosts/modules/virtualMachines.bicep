@@ -337,12 +337,12 @@ resource extension_IaasAntimalware 'Microsoft.Compute/virtualMachines/extensions
 
 resource extension_AzureMonitorWindowsAgent 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = [for i in range(0, sessionHostCount): if (enableMonitoring) {
   parent: virtualMachine[i]
-  name: 'AzureMonitorAgent'
+  name: 'AzureMonitorWindowsAgent'
   location: location
   properties: {
     publisher: 'Microsoft.Azure.Monitor'
     type: 'AzureMonitorWindowsAgent'
-    typeHandlerVersion: '1.0'
+    typeHandlerVersion: '1.1'
     autoUpgradeMinorVersion: true
     enableAutomaticUpgrade: true
   }

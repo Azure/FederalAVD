@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "13827121649394176270"
+      "templateHash": "11911922552084356396"
     }
   },
   "parameters": {
@@ -12940,7 +12940,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "3106383553192384088"
+              "templateHash": "11922344137740289421"
             }
           },
           "parameters": {
@@ -13239,12 +13239,6 @@
           "variables": {
             "backupPolicyName": "AvdPolicyVm",
             "confidentialVMOSDiskEncryptionType": "[if(parameters('confidentialVMOSDiskEncryption'), 'DiskWithVMGuestState', 'VMGuestStateOnly')]",
-            "localNetAppProfileContainerVolumeResourceIds": "[if(not(empty(parameters('fslogixLocalNetAppVolumeResourceIds'))), filter(parameters('fslogixLocalNetAppVolumeResourceIds'), lambda('id', contains(lambdaVariables('id'), parameters('fslogixFileShareNames')[0]))), createArray())]",
-            "localNetAppOfficeContainerVolumeResourceIds": "[if(and(not(empty(parameters('fslogixLocalNetAppVolumeResourceIds'))), greater(length(parameters('fslogixFileShareNames')), 1)), filter(parameters('fslogixLocalNetAppVolumeResourceIds'), lambda('id', contains(lambdaVariables('id'), parameters('fslogixFileShareNames')[1]))), createArray())]",
-            "sortedLocalNetAppResourceIds": "[union(variables('localNetAppProfileContainerVolumeResourceIds'), variables('localNetAppOfficeContainerVolumeResourceIds'))]",
-            "remoteNetAppProfileContainerVolumeResourceIds": "[if(not(empty(parameters('fslogixRemoteNetAppVolumeResourceIds'))), filter(parameters('fslogixRemoteNetAppVolumeResourceIds'), lambda('id', contains(lambdaVariables('id'), parameters('fslogixFileShareNames')[0]))), createArray())]",
-            "remoteNetAppOfficeContainerVolumeResourceIds": "[if(and(not(empty(parameters('fslogixRemoteNetAppVolumeResourceIds'))), greater(length(parameters('fslogixFileShareNames')), 1)), filter(parameters('fslogixRemoteNetAppVolumeResourceIds'), lambda('id', not(contains(lambdaVariables('id'), parameters('fslogixFileShareNames')[0])))), createArray())]",
-            "sortedRemoteNetAppResourceIds": "[union(variables('remoteNetAppProfileContainerVolumeResourceIds'), variables('remoteNetAppOfficeContainerVolumeResourceIds'))]",
             "backupPrivateDNSZoneResourceIds": [
               "[parameters('azureBackupPrivateDnsZoneResourceId')]",
               "[parameters('azureBlobPrivateDnsZoneResourceId')]",
@@ -15456,90 +15450,71 @@
               }
             },
             {
-              "copy": {
-                "name": "localNetAppVolumes",
-                "count": "[length(range(0, length(variables('sortedLocalNetAppResourceIds'))))]"
-              },
-              "condition": "[not(empty(variables('sortedLocalNetAppResourceIds')))]",
+              "condition": "[and(parameters('fslogixConfigureSessionHosts'), or(not(empty(parameters('fslogixLocalNetAppVolumeResourceIds'))), not(empty(parameters('fslogixRemoteNetAppVolumeResourceIds')))))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('LocalNetAppVolumes-{0}-{1}', range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()], parameters('deploymentSuffix'))]",
-              "location": "[deployment().location]",
+              "name": "[format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupHosts')]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
                 },
                 "mode": "Incremental",
                 "parameters": {
-                  "netAppVolumeResourceId": {
-                    "value": "[variables('sortedLocalNetAppResourceIds')[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()]]]"
+                  "localNetAppVolumeResourceIds": {
+                    "value": "[parameters('fslogixLocalNetAppVolumeResourceIds')]"
+                  },
+                  "remoteNetAppVolumeResourceIds": {
+                    "value": "[parameters('fslogixRemoteNetAppVolumeResourceIds')]"
+                  },
+                  "shareNames": {
+                    "value": "[parameters('fslogixFileShareNames')]"
                   }
                 },
                 "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "5461462028360552444"
+                      "templateHash": "11609031045672993663"
                     }
                   },
                   "parameters": {
-                    "netAppVolumeResourceId": {
-                      "type": "string"
+                    "localNetAppVolumeResourceIds": {
+                      "type": "array"
+                    },
+                    "remoteNetAppVolumeResourceIds": {
+                      "type": "array"
+                    },
+                    "shareNames": {
+                      "type": "array"
                     }
+                  },
+                  "variables": {
+                    "localNetAppProfileContainerVolumeResourceIds": "[if(not(empty(parameters('localNetAppVolumeResourceIds'))), filter(parameters('localNetAppVolumeResourceIds'), lambda('id', contains(lambdaVariables('id'), parameters('shareNames')[0]))), createArray())]",
+                    "localNetAppOfficeContainerVolumeResourceIds": "[if(and(not(empty(parameters('localNetAppVolumeResourceIds'))), greater(length(parameters('shareNames')), 1)), filter(parameters('localNetAppVolumeResourceIds'), lambda('id', contains(lambdaVariables('id'), parameters('shareNames')[1]))), createArray())]",
+                    "sortedLocalNetAppResourceIds": "[union(variables('localNetAppProfileContainerVolumeResourceIds'), variables('localNetAppOfficeContainerVolumeResourceIds'))]",
+                    "remoteNetAppProfileContainerVolumeResourceIds": "[if(not(empty(parameters('remoteNetAppVolumeResourceIds'))), filter(parameters('remoteNetAppVolumeResourceIds'), lambda('id', contains(lambdaVariables('id'), parameters('shareNames')[0]))), createArray())]",
+                    "remoteNetAppOfficeContainerVolumeResourceIds": "[if(and(not(empty(parameters('remoteNetAppVolumeResourceIds'))), greater(length(parameters('shareNames')), 1)), filter(parameters('remoteNetAppVolumeResourceIds'), lambda('id', not(contains(lambdaVariables('id'), parameters('shareNames')[0])))), createArray())]",
+                    "sortedRemoteNetAppResourceIds": "[union(variables('remoteNetAppProfileContainerVolumeResourceIds'), variables('remoteNetAppOfficeContainerVolumeResourceIds'))]"
                   },
                   "resources": [],
                   "outputs": {
-                    "smbServerFqdn": {
-                      "type": "string",
-                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('netAppVolumeResourceId'), '/')[2], split(parameters('netAppVolumeResourceId'), '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(parameters('netAppVolumeResourceId'), '/')[8], split(parameters('netAppVolumeResourceId'), '/')[10], last(split(parameters('netAppVolumeResourceId'), '/'))), '2023-11-01').mountTargets[0].smbServerFqdn]"
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "copy": {
-                "name": "remoteNetAppVolumes",
-                "count": "[length(range(0, length(variables('sortedRemoteNetAppResourceIds'))))]"
-              },
-              "condition": "[not(empty(variables('sortedRemoteNetAppResourceIds')))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('RemoteNetAppVolumes-{0}-{1}', range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()], parameters('deploymentSuffix'))]",
-              "location": "[deployment().location]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "netAppVolumeResourceId": {
-                    "value": "[variables('sortedRemoteNetAppResourceIds')[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()]]]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "5461462028360552444"
-                    }
-                  },
-                  "parameters": {
-                    "netAppVolumeResourceId": {
-                      "type": "string"
-                    }
-                  },
-                  "resources": [],
-                  "outputs": {
-                    "smbServerFqdn": {
-                      "type": "string",
-                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('netAppVolumeResourceId'), '/')[2], split(parameters('netAppVolumeResourceId'), '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(parameters('netAppVolumeResourceId'), '/')[8], split(parameters('netAppVolumeResourceId'), '/')[10], last(split(parameters('netAppVolumeResourceId'), '/'))), '2023-11-01').mountTargets[0].smbServerFqdn]"
+                    "localNetAppVolumeSmbServerFqdns": {
+                      "type": "array",
+                      "copy": {
+                        "count": "[length(range(0, length(variables('sortedLocalNetAppResourceIds'))))]",
+                        "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(variables('sortedLocalNetAppResourceIds')[range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()]]], '/')[2], split(variables('sortedLocalNetAppResourceIds')[range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(variables('sortedLocalNetAppResourceIds')[range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()]]], '/')), '/')[0], split(last(split(variables('sortedLocalNetAppResourceIds')[range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()]]], '/')), '/')[1], split(last(split(variables('sortedLocalNetAppResourceIds')[range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+                      }
+                    },
+                    "remoteNetAppVolumeSmbServerFqdns": {
+                      "type": "array",
+                      "copy": {
+                        "count": "[length(range(0, length(variables('sortedRemoteNetAppResourceIds'))))]",
+                        "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(variables('sortedRemoteNetAppResourceIds')[range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()]]], '/')[2], split(variables('sortedRemoteNetAppResourceIds')[range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(variables('sortedRemoteNetAppResourceIds')[range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()]]], '/')), '/')[0], split(last(split(variables('sortedRemoteNetAppResourceIds')[range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()]]], '/')), '/')[1], split(last(split(variables('sortedRemoteNetAppResourceIds')[range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+                      }
                     }
                   }
                 }
@@ -15637,27 +15612,11 @@
                   "fslogixOSSGroups": {
                     "value": "[parameters('fslogixOSSGroups')]"
                   },
-                  "fslogixLocalNetAppServerFqdns": {
-                    "copy": [
-                      {
-                        "name": "value",
-                        "count": "[length(range(0, length(variables('sortedLocalNetAppResourceIds'))))]",
-                        "input": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('LocalNetAppVolumes-{0}-{1}', range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex('value')]], parameters('deploymentSuffix'))), '2025-04-01').outputs.smbServerFqdn.value]"
-                      }
-                    ]
-                  },
+                  "fslogixLocalNetAppServerFqdns": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixLocalNetAppVolumeResourceIds')))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.localNetAppVolumeSmbServerFqdns.value), createObject('value', createArray()))]",
                   "fslogixLocalStorageAccountResourceIds": {
                     "value": "[parameters('fslogixLocalStorageAccountResourceIds')]"
                   },
-                  "fslogixRemoteNetAppServerFqdns": {
-                    "copy": [
-                      {
-                        "name": "value",
-                        "count": "[length(range(0, length(variables('sortedRemoteNetAppResourceIds'))))]",
-                        "input": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('RemoteNetAppVolumes-{0}-{1}', range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex('value')]], parameters('deploymentSuffix'))), '2025-04-01').outputs.smbServerFqdn.value]"
-                      }
-                    ]
-                  },
+                  "fslogixRemoteNetAppServerFqdns": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixRemoteNetAppVolumeResourceIds')))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.remoteNetAppVolumeSmbServerFqdns.value), createObject('value', createArray()))]",
                   "fslogixRemoteStorageAccountResourceIds": {
                     "value": "[parameters('fslogixRemoteStorageAccountResourceIds')]"
                   },
@@ -15768,7 +15727,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "7138591078712084464"
+                      "templateHash": "13705147967210929448"
                     }
                   },
                   "parameters": {
@@ -16248,12 +16207,12 @@
                       "condition": "[parameters('enableMonitoring')]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2023-03-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AzureMonitorAgent')]",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AzureMonitorWindowsAgent')]",
                       "location": "[parameters('location')]",
                       "properties": {
                         "publisher": "Microsoft.Azure.Monitor",
                         "type": "AzureMonitorWindowsAgent",
-                        "typeHandlerVersion": "1.0",
+                        "typeHandlerVersion": "1.1",
                         "autoUpgradeMinorVersion": true,
                         "enableAutomaticUpgrade": true
                       },
@@ -16850,8 +16809,7 @@
                 "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('Customer-Managed-Keys-{0}', parameters('deploymentSuffix')))]",
                 "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess-{0}', parameters('deploymentSuffix')))]",
                 "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.Resources/deployments', format('HostPoolRegistrationTokenUpdate-{0}', parameters('deploymentSuffix')))]",
-                "localNetAppVolumes",
-                "remoteNetAppVolumes"
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix')))]"
               ]
             },
             {

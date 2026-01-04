@@ -95,10 +95,9 @@ try {
     }
     
     # Define required Graph API permissions
-    # For Graph API calls by service principals, app permissions (not directory roles) are required
-    # Note: Device.ReadWrite.All does NOT allow deletion despite the name
+    # For Graph API calls by service principals, app permissions are required (no directory role assignments needed)
     $requiredPermissions = @(
-        @{ Name = "Directory.ReadWrite.All"; Id = "19dbc75e-c2e2-444c-a770-ec69d8559fc7" }
+        @{ Name = "Device.ReadWrite.All"; Id = "1138cb37-bd11-4084-a2b7-9f71582aeddb" }
         @{ Name = "DeviceManagementManagedDevices.ReadWrite.All"; Id = "243333ab-4d21-40cb-a475-36241daa0842" }
     )
     
@@ -131,13 +130,9 @@ try {
     Write-Host "`n=== Configuration Summary ===" -ForegroundColor Cyan
     Write-Host "Managed Identity: $($managedIdentitySp.DisplayName)" -ForegroundColor White
     Write-Host "`nGranted Graph API Permissions:" -ForegroundColor Yellow
-    Write-Host "  ✓ Directory.ReadWrite.All - Required for Entra ID device deletion via Graph API" -ForegroundColor White
+    Write-Host "  ✓ Device.ReadWrite.All - Required for Entra ID device deletion" -ForegroundColor White
     Write-Host "  ✓ DeviceManagementManagedDevices.ReadWrite.All - Required for Intune device deletion" -ForegroundColor White
-    Write-Host "`nNote: Directory.ReadWrite.All is required because Graph API requires app permissions" -ForegroundColor Gray
-    Write-Host "      for service principal API calls, not directory role assignments." -ForegroundColor Gray
-    
-    Write-Host "`nNote: Device.ReadWrite.All Graph permission does NOT allow deletion despite the name." -ForegroundColor Yellow
-    Write-Host "See: https://learn.microsoft.com/en-us/graph/permissions-reference#devicereadwriteall" -ForegroundColor Gray
+    Write-Host "`nNote: No directory role assignments are required (Cloud Device Administrator is NOT needed)" -ForegroundColor Gray
     
     Write-Host "`nNext steps:" -ForegroundColor Cyan
     Write-Host "  1. Wait 5-10 minutes for changes to propagate" -ForegroundColor White

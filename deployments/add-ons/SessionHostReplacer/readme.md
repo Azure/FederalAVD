@@ -1,8 +1,9 @@
 # AVD Session Host Replacer
 
-Automated Azure Function for managing Azure Virtual Desktop session host lifecycle through continuous image updates and age-based replacement.
+Automated Azure Function for managing Azure Virtual Desktop session host lifecycle through continuous image updates.
 
 ## Table of Contents
+
 - [Overview](#overview)
 - [Features](#features)
 - [Prerequisites](#prerequisites)
@@ -15,12 +16,12 @@ Automated Azure Function for managing Azure Virtual Desktop session host lifecyc
 
 ## Overview
 
-The Session Host Replacer monitors AVD session hosts and automatically replaces them based on age and image version. It handles the complete lifecycle: detection → draining → deployment → deletion → device cleanup.
+The Session Host Replacer monitors AVD session hosts and automatically replaces them when new images are available. It handles the complete lifecycle: detection → draining → deployment → deletion → device cleanup.
 
 **Key Benefits:**
 
+- Zero-downtime rolling updates with automatic capacity management
 - Zero-touch image updates
-- Compliance with age-based policies
 - Graceful user session handling
 - Optional device cleanup (Entra ID + Intune)
 - Multi-cloud support (Commercial, GCC High, DoD, China; US Secret/Top Secret via auto-detection)
@@ -29,10 +30,10 @@ The Session Host Replacer monitors AVD session hosts and automatically replaces 
 
 ### Core Capabilities
 
-- **Automated Age-Based Replacement**: Replaces hosts exceeding configured age (default: 45 days)
 - **Image Version Tracking**: Detects outdated images and triggers updates
+- **Automatic Capacity Management**: Host pool can temporarily double during replacements (zero-downtime rolling updates)
 - **Graceful Draining**: Configurable grace period for active sessions (default: 24 hours)
-- **Progressive Scale-Up**: Gradually increase batch size after successful deployments
+- **Flexible Deployment Velocity**: Progressive scale-up with configurable batch size ceiling
 - **Tag-Based Opt-In**: Only affects hosts tagged with `IncludeInAutoReplace: true`
 - **Device Cleanup**: Removes Entra ID and Intune device records automatically
 
@@ -68,7 +69,7 @@ The Session Host Replacer monitors AVD session hosts and automatically replaces 
      - `Contributor` on Session Host Resource Group
      - `Reader` on Image Gallery/Marketplace
    - **Microsoft Graph API:** (Must be done via script)
-     - `Directory.ReadWrite.All` - For Entra ID device deletion
+     - `Device.ReadWrite.All` - For Entra ID device deletion
      - `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
 
 3. **Template Spec**
@@ -139,7 +140,7 @@ The custom UI form provides a guided experience with tooltips and validation:
 4. Fill out the form with your configuration:
    - **Basics**: Resource group, location, naming prefix
    - **Host Pool Configuration**: Host pool resource ID, target session host count
-   - **Replacement Mode**: Choose Age-based or ImageVersion
+   - **Image Version Settings**: Optional delay before replacement after new image detection
    - **Identity & Permissions**: User-assigned managed identity
    - **Monitoring**: Application Insights, Log Analytics workspace
    - **Networking**: VNet integration, private endpoints (optional)
@@ -208,7 +209,8 @@ Required settings (automatically configured during deployment):
     "HostPoolSubscriptionId": "...",
     "VirtualMachinesResourceGroupName": "rg-avd-sessionhosts",
     "VirtualMachinesSubscriptionId": "...",
-    "TargetVMAgeDays": "45",
+    "TargetSessionHostCount": "0",
+    "MaxDeploymentBatchSize": "10",
     "SessionHostDrainGraceMinutes": "1440",
     "UserAssignedIdentityClientId": "...",
     "ResourceManagerUri": "https://management.azure.com/",
@@ -241,13 +243,13 @@ Update-AzTag -ResourceId "/subscriptions/.../resourceGroups/$resourceGroup/provi
 **For Graph API calls by service principals/managed identities:**
 
 - ✅ **Application Permissions** (App Roles) - Required in token's `roles` claim
-- ❌ **Directory Roles** - Do NOT work for API calls by service principals
+- ❌ **Directory Roles** - Do NOT work for API calls by service principals (e.g., Cloud Device Administrator is NOT needed)
 
 **Required Permissions:**
 
-1. **Directory.ReadWrite.All** (19dbc75e-c2e2-444c-a770-ec69d8559fc7)
+1. **Device.ReadWrite.All** (1138cb37-bd11-4084-a2b7-9f71582aeddb)
    - Purpose: Delete devices from Entra ID
-   - Note: `Device.ReadWrite.All` does NOT allow deletion despite the name
+   - Note: This permission IS sufficient for device deletion when used by service principals
 
 2. **DeviceManagementManagedDevices.ReadWrite.All** (243333ab-4d21-40cb-a475-36241daa0842)
    - Purpose: Delete devices from Intune
@@ -262,8 +264,8 @@ Connect-MgGraph -Scopes "Application.Read.All","AppRoleAssignment.ReadWrite.All"
 $mi = Get-MgServicePrincipal -ServicePrincipalId <managed-identity-object-id>
 $graph = Get-MgServicePrincipal -Filter "displayName eq 'Microsoft Graph'"
 
-# Grant Directory.ReadWrite.All
-$roleId = "19dbc75e-c2e2-444c-a770-ec69d8559fc7"
+# Grant Device.ReadWrite.All
+$roleId = "1138cb37-bd11-4084-a2b7-9f71582aeddb"
 New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $mi.Id `
     -PrincipalId $mi.Id -ResourceId $graph.Id -AppRoleId $roleId
 
@@ -302,9 +304,9 @@ $assignments | Where-Object { $_.ResourceId -eq $graph.Id } | ForEach-Object {
                     ┌───────────────┴───────────────┐
                     │                               │
             ┌───────▼─────────┐            ┌────────▼────────┐
-            │  Drain Hosts    │            │  Deploy New     │
-            │  (Set Drain     │            │  (Template      │
-            │   Mode Tag)     │            │   Spec)         │
+            │  Drain Hosts    │            │      Deploy     │
+            │  (Set Drain     │            │     New Hosts   │
+            │   Mode Tag)     │            │                 │
             └───────┬─────────┘            └────────┬────────┘
                     │                               │
             ┌───────▼─────────┐                     │
@@ -319,40 +321,80 @@ $assignments | Where-Object { $_.ResourceId -eq $graph.Id } | ForEach-Object {
             └─────────────────┘
 ```
 
-### Replacement Modes
+### Replacement Mode
 
-The Session Host Replacer operates in one of two mutually exclusive modes, controlled by the `replacementMode` parameter:
-
-**Age-Based Replacement** (`replacementMode = 'Age-based'`):
-
-- Replaces session hosts that exceed the configured age threshold (`targetVMAgeDays`)
-- Does NOT check for image version updates
-- Use this mode for time-based compliance requirements (e.g., "replace all hosts older than 45 days")
-- Predictable replacement schedule based purely on host age
-
-**Image-Version-Based Replacement** (`replacementMode = 'ImageVersion'`):
+The Session Host Replacer operates in **Image-Version-Based Replacement** mode:
 
 - Replaces session hosts when their image version differs from the latest available version
-- Does NOT check host age - only image version matters
-- Use this mode to ensure all hosts run the latest OS/application patches
-- Replacement happens whenever a new image is published, regardless of host age
+- Use this to ensure all hosts run the latest OS/application patches
+- Replacement happens whenever a new image is published (subject to optional delay)
 - **Ringed Roll-out Support**: Use `replaceSessionHostOnNewImageVersionDelayDays` to delay replacement after a new image is detected (0-30 days). This emulates a staged deployment strategy similar to Windows Update rings, allowing you to validate a new image in production before rolling it out fleet-wide
+- **Rollback Protection**: By default, the function will not replace hosts if their current image version is newer than the latest available version. Set `allowImageVersionRollback` to true to override this behavior
 
-> **Important:** The function operates in ONE mode at a time. It does not replace hosts based on BOTH age AND image version simultaneously. Choose the mode that aligns with your operational requirements.
+### Zero-Downtime Rolling Updates
+
+The Session Host Replacer automatically provides capacity for zero-downtime rolling updates through intelligent buffer management:
+
+**How It Works:**
+
+- **Automatic Buffer**: The function automatically reserves capacity equal to your target session host count
+- **Pool Doubling**: During replacement cycles, your host pool can temporarily double in size
+  - Example: 100 target hosts → Up to 200 total (100 old + 100 new) during replacement
+- **No Configuration Required**: The buffer is calculated automatically—no parameters to set
+
+**Capacity vs. Velocity:**
+
+The function separates capacity management from deployment velocity:
+
+- **Capacity (Automatic Buffer)**: How many hosts can exist simultaneously
+  - Automatic buffer = target count (allows pool doubling)
+  - Provides headroom for new hosts before old hosts are deleted
+  - Ensures users can migrate to new hosts without disruption
+
+- **Velocity (Progressive Scale-Up + MaxDeploymentBatchSize)**: How fast deployments occur
+  - `MaxDeploymentBatchSize`: Maximum deployments per run (default: 10, max: 1000)
+  - `EnableProgressiveScaleUp`: Gradually increase batch size after successes
+  - Controls deployment rate independent of capacity limits
+
+**Target Session Host Count:**
+
+The `targetSessionHostCount` parameter defines your desired host pool size:
+
+- **Explicit Count**: Set to a specific number (e.g., 100) to maintain that count throughout replacement
+- **Auto-Detect Mode**: Set to 0 to automatically maintain the current count at replacement cycle start
+  - The function stores the initial count when the first outdated host is detected
+  - This count is maintained throughout the entire replacement cycle
+  - After all hosts are replaced, the next cycle will capture the new current count
+  - Useful for host pools with dynamic sizing from scaling plans
+
+**Example Scenarios:**
+
+1. **Small Pool (10 hosts):**
+   - Target: 10 hosts
+   - Buffer: 10 (automatic)
+   - During replacement: Up to 20 total hosts
+   - Velocity: Limited by MaxDeploymentBatchSize (default 10)
+
+2. **Large Pool (500 hosts) with Progressive Scale-Up:**
+   - Target: 500 hosts  
+   - Buffer: 500 (automatic)
+   - During replacement: Up to 1000 total hosts
+   - Velocity: Starts at 10% (50 hosts), scales up to 100% after successes
+   - Each run deploys up to MaxDeploymentBatchSize (default 10) or current batch percentage, whichever is lower
 
 ### Detailed Steps
 
 1. **Discovery**: Enumerate session hosts via ARM API
 2. **Tag Validation**: Filter to hosts with `IncludeInAutoReplace: true`
-3. **Replacement Check** (mode-dependent):
-   - **Age-Based Mode** (`replacementMode = 'Age-based'`): Compare `AutoReplaceDeployTimestamp` to `targetVMAgeDays`
-   - **Image-Version Mode** (`replacementMode = 'ImageVersion'`): Compare current image to latest marketplace/gallery version
-4. **Drain Decision**: Mark for draining if replacement criteria met
-5. **Deployment**: Deploy new hosts using Template Spec (respects batch size)
-6. **Grace Period**: Track with `AutoReplacePendingDrainTimestamp` tag
-7. **Deletion**: Remove after grace period + zero sessions
-8. **Device Cleanup**: Delete from Entra ID and Intune
-9. **State Tracking**: Save deployment state to Table Storage for progressive scale-up
+3. **Target Count Management**: Determine target session host count (explicit or auto-detect)
+4. **Replacement Check**: Compare current image to latest marketplace/gallery version
+5. **Capacity Planning**: Calculate automatic buffer (equals target count) for zero-downtime updates
+6. **Drain Decision**: Mark for draining if replacement criteria met
+7. **Deployment**: Deploy new hosts using Template Spec (respects MaxDeploymentBatchSize and progressive scale-up)
+8. **Grace Period**: Track with `AutoReplacePendingDrainTimestamp` tag
+9. **Deletion**: Remove after grace period + zero sessions
+10. **Device Cleanup**: Delete from Entra ID and Intune
+11. **State Tracking**: Save deployment state to Table Storage for progressive scale-up and auto-detect mode
 
 ### Tag Schema
 
@@ -361,7 +403,7 @@ Session hosts use these tags for automation:
 | Tag | Purpose | Example Value |
 |-----|---------|---------------|
 | `IncludeInAutoReplace` | Opt-in to automation | `true` |
-| `AutoReplaceDeployTimestamp` | Birth timestamp for age calculation | `2024-12-01T10:00:00Z` |
+| `AutoReplaceDeployTimestamp` | Birth timestamp for tracking | `2024-12-01T10:00:00Z` |
 | `AutoReplacePendingDrainTimestamp` | When draining started | `2024-12-15T14:30:00Z` |
 | `ScalingPlanExclusion` | Exclude from scaling (set during drain) | `true` |
 
@@ -371,12 +413,15 @@ Session hosts use these tags for automation:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `TargetVMAgeDays` | `45` | Maximum age before replacement |
+| `TargetSessionHostCount` | `0` | Target host pool size. Set to 0 for auto-detect mode (maintains current count at cycle start) |
+| `MaxDeploymentBatchSize` | `10` | Maximum deployments per function run (1-1000). Works with progressive scale-up as ceiling constraint |
 | `SessionHostDrainGraceMinutes` | `1440` (24h) | Wait time before deletion |
 | `AutoHealUntaggedVMs` | `true` | Auto-tag hosts missing tags |
 | `RemoveEntraDevice` | `true` | Clean up Entra ID devices |
 | `RemoveIntuneDevice` | `true` | Clean up Intune devices |
 | `ReplaceSessionHostsOnNewImageVersion` | `true` | Trigger on image updates |
+| `ReplaceSessionHostOnNewImageVersionDelayDays` | `0` | Days to wait after new image |
+| `AllowImageVersionRollback` | `false` | Allow downgrade to older images |
 | `EnableProgressiveScaleUp` | `false` | Gradually increase batch size |
 | `ProgressiveScaleUpInitialPercent` | `10` | Starting batch size (%) |
 | `ProgressiveScaleUpMaxPercent` | `100` | Maximum batch size (%) |
@@ -386,6 +431,7 @@ Session hosts use these tags for automation:
 ### Environment-Specific Settings
 
 **Commercial Azure (Global):**
+
 ```json
 {
     "ResourceManagerUri": "https://management.azure.com/",
@@ -395,6 +441,7 @@ Session hosts use these tags for automation:
 ```
 
 **GCC High (USGov):**
+
 ```json
 {
     "ResourceManagerUri": "https://management.usgovcloudapi.net/",
@@ -404,6 +451,7 @@ Session hosts use these tags for automation:
 ```
 
 **DoD (USGovDoD):**
+
 ```json
 {
     "ResourceManagerUri": "https://management.usgovcloudapi.net/",
@@ -421,12 +469,14 @@ Session hosts use these tags for automation:
 #### 1. Graph API 401 "Invalid Audience" Error
 
 **Symptoms:**
+
 - Logs show: "Access token validation failure. Invalid audience."
 - Device deletion fails with 401
 
 **Cause:** Token's audience claim doesn't match Graph endpoint
 
 **Resolution:**
+
 ```powershell
 # Verify token audience in Application Insights
 traces
@@ -443,33 +493,37 @@ traces
 #### 2. Graph API 401 "Insufficient Privileges"
 
 **Symptoms:**
+
 - Logs show: "Insufficient privileges to complete the operation"
 - Devices can be read but not deleted
 
-**Cause:** Missing Directory.ReadWrite.All permission in token
+**Cause:** Missing Device.ReadWrite.All permission in token
 
 **Resolution:**
+
 ```powershell
 # Check if permission is granted
-.\VERIFY-GRAPH-PERMISSIONS.ps1 -ManagedIdentityObjectId <object-id>
+.\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id>
 
 # If granted but not in token:
 1. Wait 10-60 minutes for Azure AD propagation
 2. Stop Function App completely
 3. Wait 2-3 minutes
 4. Start Function App
-5. Check logs for token roles - should include Directory.ReadWrite.All
+5. Check logs for token roles - should include Device.ReadWrite.All
 ```
 
 #### 3. Session Hosts Not Being Replaced
 
 **Symptoms:**
+
 - Function runs but doesn't drain/replace hosts
 - No hosts in "pending delete" list
 
 **Common Causes:**
 
 **A. Missing/Invalid Tags:**
+
 ```powershell
 # Check tags
 $vm = Get-AzVM -ResourceGroupName "rg-sessionhosts" -Name "avdvm-001"
@@ -485,15 +539,14 @@ Update-AzTag -ResourceId $vm.Id -Operation Merge -Tag @{
 }
 ```
 
-**B. Age Not Exceeded:**
-Check `TargetVMAgeDays` setting and host age in logs
+**B. Image Version Not Detected:****
 
-**C. Image Version Not Detected:**
 Verify `ReplaceSessionHostsOnNewImageVersion` is enabled
 
 #### 4. Deployment Fails
 
 **Common Issues:**
+
 - Template Spec not found/accessible
 - Insufficient RBAC permissions
 - Quota limits exceeded
@@ -516,6 +569,7 @@ Get-AzRoleAssignment -ObjectId $mi.PrincipalId
 #### 5. Device Not Deleted from Entra ID/Intune
 
 **Resolution:**
+
 ```powershell
 # Verify settings
 $app = Get-AzFunctionApp -ResourceGroupName "rg-management" -Name "func-sessionhostreplacer"
@@ -523,6 +577,7 @@ $app.ApplicationSettings["RemoveEntraDevice"]  # Should be "true"
 $app.ApplicationSettings["RemoveIntuneDevice"]  # Should be "true"
 
 # Check Graph API calls in logs
+
 traces
 | where message contains "Removing session host" or message contains "Entra" or message contains "Intune"
 | order by timestamp desc
@@ -607,6 +662,7 @@ The Session Host Replacer includes a pre-built Azure Monitor Workbook that provi
 **Customization:**
 
 The workbook is fully customizable. You can:
+
 - **Switch between host pools**: Dynamic dropdown populated from your environment
 - Adjust time ranges (1 hour to 30 days)
 - Add custom queries
@@ -625,6 +681,7 @@ The Session Host Replacer uses a **centralized workbook** pattern for enterprise
 - **Host Pool Filtering**: Use the **Host Pool** parameter to filter to specific pools or view all
 
 **Deployment Behavior:**
+
 - **First Deployment**: Creates the workbook in the specified `workbookLocation` (defaults to deployment region)
 - **Subsequent Deployments**: Reuse the existing workbook (idempotent deployment)
 - The workbook automatically discovers all Session Host Replacer Application Insights instances
@@ -632,6 +689,7 @@ The Session Host Replacer uses a **centralized workbook** pattern for enterprise
 **Location Note:** The workbook's physical location doesn't affect its cross-region query capabilities (similar to AVD Insights). You can optionally specify a preferred `workbookLocation` parameter if you want to control where it's deployed.
 
 This pattern:
+
 - **Single Pane of Glass**: One dashboard for all regions and host pools
 - **Flexible Filtering**: View one region, multiple regions, or all regions
 - **Idempotent**: No conflicts when deploying to multiple regions
@@ -642,12 +700,14 @@ This pattern:
 ### Updating the Function
 
 **Option 1: Portal (Quick Updates)**
+
 1. Navigate to Function App → App Service Editor
 2. Edit `Modules/SessionHostReplacer/SessionHostReplacer.psm1`
 3. Save changes
 4. Restart Function App
 
 **Option 2: PowerShell Deployment**
+
 ```powershell
 $sourcePath = ".\deployments\add-ons\SessionHostReplacer\functions"
 $zipPath = ".\SessionHostReplacer.zip"
@@ -663,6 +723,7 @@ Restart-AzFunctionApp -ResourceGroupName "rg-management" `
 ```
 
 **Option 3: Azure CLI**
+
 ```bash
 cd deployments/add-ons/SessionHostReplacer
 zip -r SessionHostReplacer.zip functions/*
@@ -680,6 +741,7 @@ az functionapp restart \
 ### Monitoring Best Practices
 
 1. **Set up Alerts:**
+
    ```kusto
    // Alert on repeated failures
    traces

@@ -81,7 +81,7 @@ function Get-AccessToken {
         [string] $ResourceUri,
         
         [Parameter(Mandatory = $false)]
-        [string] $ClientId
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
     
     # Determine token type for logging
@@ -417,7 +417,7 @@ function Invoke-GraphApiWithRetry {
         [hashtable] $Headers = @{},
         
         [Parameter()]
-        [string] $ClientId
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
     
     # Ensure GraphEndpoint doesn't have trailing slash
@@ -1068,7 +1068,7 @@ function Deploy-SessionHosts {
         [Parameter()]
         [string] $HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
 
-        [Parameter(Mandatory = $true)]
+        [Parameter()]
         [string] $VirtualMachinesSubscriptionId = (Read-FunctionAppSetting VirtualMachinesSubscriptionId),
 
         [Parameter()]
@@ -1189,6 +1189,76 @@ function Deploy-SessionHosts {
     }
 }
 
+function Compare-ImageVersion {
+    <#
+    .SYNOPSIS
+    Compares two image versions to determine their relative order.
+    
+    .DESCRIPTION
+    Compares two image versions using semantic versioning rules (major.minor.patch).
+    Returns:
+        -1 if version1 < version2
+         0 if version1 = version2
+         1 if version1 > version2
+    
+    .PARAMETER Version1
+    The first version to compare.
+    
+    .PARAMETER Version2
+    The second version to compare.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $Version1,
+        
+        [Parameter(Mandatory = $true)]
+        [string] $Version2
+    )
+    
+    # If versions are identical strings, return equal
+    if ($Version1 -eq $Version2) {
+        return 0
+    }
+    
+    try {
+        # Try to parse as semantic versions (e.g., 1.0.0, 2.1.3)
+        $v1Parts = $Version1 -split '\.' | ForEach-Object { 
+            $num = 0
+            if ([int]::TryParse($_, [ref]$num)) { $num } else { 0 }
+        }
+        $v2Parts = $Version2 -split '\.' | ForEach-Object { 
+            $num = 0
+            if ([int]::TryParse($_, [ref]$num)) { $num } else { 0 }
+        }
+        
+        # Pad arrays to same length with zeros
+        $maxLength = [Math]::Max($v1Parts.Count, $v2Parts.Count)
+        while ($v1Parts.Count -lt $maxLength) { $v1Parts += 0 }
+        while ($v2Parts.Count -lt $maxLength) { $v2Parts += 0 }
+        
+        # Compare each part
+        for ($i = 0; $i -lt $maxLength; $i++) {
+            if ($v1Parts[$i] -lt $v2Parts[$i]) {
+                return -1
+            }
+            elseif ($v1Parts[$i] -gt $v2Parts[$i]) {
+                return 1
+            }
+        }
+        
+        # All parts equal
+        return 0
+    }
+    catch {
+        # If parsing fails, fall back to string comparison
+        Write-HostDetailed "Failed to parse versions as semantic versions, using string comparison: $_" -Level Warning
+        if ($Version1 -lt $Version2) { return -1 }
+        elseif ($Version1 -gt $Version2) { return 1 }
+        else { return 0 }
+    }
+}
+
 function Get-LatestImageVersion {
     [CmdletBinding()]
     param (
@@ -1211,9 +1281,13 @@ function Get-LatestImageVersion {
     # Initialize variables
     $azImageVersion = $null
     $azImageDate = $null
+    $azImageDefinition = $null
     
     # Marketplace image
     if ($ImageReference.publisher) {
+        # Set marketplace image definition for both latest and specific versions
+        $azImageDefinition = "marketplace:$($ImageReference.publisher)/$($ImageReference.offer)/$($ImageReference.sku)"
+        
         if ($null -ne $ImageReference.version -and $ImageReference.version -ne 'latest') {
             Write-HostDetailed  "Image version is not set to latest. Returning version '$($ImageReference.version)'"
             $azImageVersion = $ImageReference.version
@@ -1268,6 +1342,9 @@ function Get-LatestImageVersion {
             $imageResourceGroup = $Matches.resourceGroup
             $imageGalleryName = $Matches.gallery
             $imageDefinitionName = $Matches.image
+            
+            # Store the image definition resource ID for tracking
+            $azImageDefinition = $ImageReference.id
 
             $Uri = "$ResourceManagerUri/subscriptions/$imageSubscriptionId/resourceGroups/$imageResourceGroup/providers/Microsoft.Compute/galleries/$imageGalleryName/images/$imageDefinitionName/versions?api-version=2023-07-03"
             $imageVersions = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
@@ -1347,6 +1424,10 @@ function Get-LatestImageVersion {
         }
         elseif ($ImageReference.id -match $imageVersionResourceIdPattern ) {
             Write-HostDetailed 'Image reference is an Image Version resource.'
+            # Extract image definition path (without version)
+            if ($ImageReference.id -match '^(?<definition>.+)/versions/[^/]+$') {
+                $azImageDefinition = $Matches['definition']
+            }
             $Uri = "$ResourceManagerUri$($ImageReference.id)?api-version=2023-07-03"
             $imageVersion = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
             $azImageVersion = $imageVersion.name
@@ -1369,8 +1450,9 @@ function Get-LatestImageVersion {
         throw "Image reference does not contain a publisher or id property. ImageReference, publisher, and id are case sensitive!!"
     }
     return [PSCustomObject]@{
-        Version = $azImageVersion
-        Date    = $azImageDate
+        Version    = $azImageVersion
+        Date       = $azImageDate
+        Definition = $azImageDefinition
     }
 }
 
@@ -1386,18 +1468,13 @@ function Get-HostPoolDecisions {
         [Parameter()]
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
         [Parameter()]
-        [int] $TargetVMAgeDays = (Read-FunctionAppSetting TargetVMAgeDays),
-        [Parameter()]
         [int] $TargetSessionHostCount = (Read-FunctionAppSetting TargetSessionHostCount),
-        [Parameter()]
-        [int] $TargetSessionHostBuffer = (Read-FunctionAppSetting TargetSessionHostBuffer),
         [Parameter()]
         [PSCustomObject] $LatestImageVersion,
         [Parameter()]
-        [ValidateSet('Age-based', 'ImageVersion')]
-        [string] $ReplacementMode = (Read-FunctionAppSetting ReplacementMode),
-        [Parameter()]
         [int] $ReplaceSessionHostOnNewImageVersionDelayDays = [int]::Parse((Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersionDelayDays)),
+        [Parameter()]
+        [bool] $AllowImageVersionRollback = $false,
         [Parameter()]
         [bool] $EnableProgressiveScaleUp = [bool]::Parse((Read-FunctionAppSetting EnableProgressiveScaleUp)),
         [Parameter()]
@@ -1451,26 +1528,13 @@ function Get-HostPoolDecisions {
         }
     }
     
-    # Determine which session hosts need replacement based on the replacement mode
-    [array] $sessionHostsOldAge = @()
+    # Determine which session hosts need replacement based on image version
     [array] $sessionHostsOldVersion = @()
     
-    if ($ReplacementMode -eq 'Age-based') {
-        Write-HostDetailed "Replacement Mode: Age-based (replacing hosts older than $TargetVMAgeDays days)"
-        if ($TargetVMAgeDays -gt 0) {
-            $targetReplacementDate = (Get-Date).AddDays(-$TargetVMAgeDays)
-            [array] $sessionHostsOldAge = $SessionHosts | Where-Object { $_.DeployTimestamp -lt $targetReplacementDate }
-            Write-HostDetailed "Found $($sessionHostsOldAge.Count) hosts to replace due to old age. $($($sessionHostsOldAge.SessionHostName) -join ',')"
-        }
-        else {
-            Write-HostDetailed "TargetVMAgeDays is 0, no age-based replacement will occur" -Level Warning
-        }
-    }
-    elseif ($ReplacementMode -eq 'ImageVersion') {
-        Write-HostDetailed "Replacement Mode: ImageVersion (replacing hosts when new image version is available)"
-        $latestImageAge = (New-TimeSpan -Start $LatestImageVersion.Date -End (Get-Date -AsUTC)).TotalDays
-        Write-HostDetailed "Latest Image $($LatestImageVersion.Version) is $latestImageAge days old."
-        if ($latestImageAge -ge $ReplaceSessionHostOnNewImageVersionDelayDays) {
+    Write-HostDetailed "Replacement Mode: ImageVersion (replacing hosts when new image version is available)"
+    $latestImageAge = (New-TimeSpan -Start $LatestImageVersion.Date -End (Get-Date -AsUTC)).TotalDays
+    Write-HostDetailed "Latest Image $($LatestImageVersion.Version) is $latestImageAge days old."
+    if ($latestImageAge -ge $ReplaceSessionHostOnNewImageVersionDelayDays) {
             Write-HostDetailed "Latest Image age is older than (or equal) New Image Delay value $ReplaceSessionHostOnNewImageVersionDelayDays"
             
             # Log each session host's image version for debugging
@@ -1478,25 +1542,65 @@ function Get-HostPoolDecisions {
                 Write-HostDetailed "Session host $($sh.SessionHostName) has image version: $($sh.ImageVersion)" -Level Verbose
             }
             
-            [array] $sessionHostsOldVersion = $sessionHosts | Where-Object { $_.ImageVersion -ne $LatestImageVersion.Version }
-            Write-HostDetailed "Found $($sessionHostsOldVersion.Count) session hosts to replace due to new image version. $($($sessionHostsOldVersion.SessionHostName) -Join ',')"
+            # Compare versions with rollback protection
+            [array] $sessionHostsOldVersion = @()
+            foreach ($sh in $sessionHosts) {
+                if ($sh.ImageVersion -ne $LatestImageVersion.Version) {
+                    # Check if image definition has changed
+                    $imageDefinitionChanged = $false
+                    if ($sh.ImageDefinition -and $LatestImageVersion.Definition) {
+                        $imageDefinitionChanged = ($sh.ImageDefinition -ne $LatestImageVersion.Definition)
+                        if ($imageDefinitionChanged) {
+                            Write-HostDetailed "Session host $($sh.SessionHostName) has different image definition - VM: '$($sh.ImageDefinition)', Latest: '$($LatestImageVersion.Definition)'" -Level Verbose
+                        }
+                    }
+                    
+                    if ($imageDefinitionChanged) {
+                        # Image definition changed - this is a legitimate upgrade, not a rollback
+                        Write-HostDetailed "Session host $($sh.SessionHostName) will be replaced due to image definition change (version '$($sh.ImageVersion)' -> '$($LatestImageVersion.Version)')" -Level Verbose
+                        $sessionHostsOldVersion += $sh
+                    }
+                    else {
+                        # Same image definition, different version - check for rollback
+                        $versionComparison = Compare-ImageVersion -Version1 $sh.ImageVersion -Version2 $LatestImageVersion.Version
+                        
+                        if ($versionComparison -lt 0) {
+                            # VM version is older than latest - safe to replace
+                            Write-HostDetailed "Session host $($sh.SessionHostName) has older version '$($sh.ImageVersion)' (latest: '$($LatestImageVersion.Version)') - will replace" -Level Verbose
+                            $sessionHostsOldVersion += $sh
+                        }
+                        elseif ($versionComparison -gt 0) {
+                            # VM version is NEWER than "latest" - potential rollback scenario
+                            if ($AllowImageVersionRollback) {
+                                Write-HostDetailed "Session host $($sh.SessionHostName) has NEWER version '$($sh.ImageVersion)' than latest '$($LatestImageVersion.Version)' - will replace (AllowImageVersionRollback=true)" -Level Warning
+                                $sessionHostsOldVersion += $sh
+                            }
+                            else {
+                                Write-HostDetailed "Session host $($sh.SessionHostName) has NEWER version '$($sh.ImageVersion)' than latest '$($LatestImageVersion.Version)' - skipping replacement (AllowImageVersionRollback=false)" -Level Warning
+                            }
+                        }
+                        else {
+                            # Versions are functionally equal but string representation differs (shouldn't happen)
+                            Write-HostDetailed "Session host $($sh.SessionHostName) version '$($sh.ImageVersion)' is equivalent to latest '$($LatestImageVersion.Version)' - skipping" -Level Verbose
+                        }
+                    }
+                }
+            }
+            
+            Write-HostDetailed "Found $($sessionHostsOldVersion.Count) session hosts to replace due to image version. $($($sessionHostsOldVersion.SessionHostName) -Join ',')"
             
             # Log which hosts are being replaced and why
             if ($sessionHostsOldVersion.Count -gt 0) {
                 foreach ($sh in $sessionHostsOldVersion) {
-                    Write-HostDetailed "Replacing $($sh.SessionHostName): current version '$($sh.ImageVersion)' != latest version '$($LatestImageVersion.Version)'" -Level Verbose
+                    Write-HostDetailed "Replacing $($sh.SessionHostName): current version '$($sh.ImageVersion)' -> latest version '$($LatestImageVersion.Version)'" -Level Verbose
                 }
             }
-        }
-        else {
-            Write-HostDetailed "Latest image version delay not yet met ($latestImageAge days < $ReplaceSessionHostOnNewImageVersionDelayDays days required)"
-        }
     }
     else {
-        Write-HostDetailed "Unknown replacement mode: $ReplacementMode" -Level Error
+        Write-HostDetailed "Latest image version delay not yet met ($latestImageAge days < $ReplaceSessionHostOnNewImageVersionDelayDays days required)"
     }
 
-    [array] $sessionHostsToReplace = ($sessionHostsOldAge + $sessionHostsOldVersion + $sessionHostsFromFailedDeployments) | Select-Object -Property * -Unique
+    [array] $sessionHostsToReplace = ($sessionHostsOldVersion + $sessionHostsFromFailedDeployments) | Select-Object -Property * -Unique
     Write-HostDetailed "Found $($sessionHostsToReplace.Count) session hosts to replace in total. $($($sessionHostsToReplace.SessionHostName) -join ',')"
 
     $goodSessionHosts = $SessionHosts | Where-Object { $_.SessionHostName -notin $sessionHostsToReplace.SessionHostName }
@@ -1519,28 +1623,32 @@ function Get-HostPoolDecisions {
     $sessionHostsCurrentTotal = ([array]$goodSessionHosts.SessionHostName + [array]$runningDeploymentVMNames) | Select-Object -Unique
     Write-HostDetailed "We have $($sessionHostsCurrentTotal.Count) good session hosts including $runningDeploymentVMCount session hosts being deployed"
     Write-HostDetailed "We target having $TargetSessionHostCount session hosts in good shape"
-    Write-HostDetailed "We have a buffer of $TargetSessionHostBuffer session hosts more than the target."
+    
+    # Calculate automatic buffer: equals target count, allowing pool to double during replacements
+    # Use target (not current count) so buffer doesn't grow as new hosts are added
+    $effectiveBuffer = $TargetSessionHostCount
+    Write-HostDetailed "Automatic buffer: $effectiveBuffer session hosts (allows pool to double during rolling updates)"
     
     # Check if there are any running or recently submitted deployments - if so, don't submit new ones
     if ($runningDeployments -and $runningDeployments.Count -gt 0) {
         Write-HostDetailed "Found $($runningDeployments.Count) running or recently submitted deployment(s). Will not submit new deployments until these complete." -Level Warning
         $deploymentNames = $runningDeployments | ForEach-Object { $_.DeploymentName }
         Write-HostDetailed "Active deployments: $($deploymentNames -join ', ')" -Level Verbose
-        $weCanDeploy = 0
+        $canDeploy = 0
     }
     else {
-        $weCanDeployUpTo = $TargetSessionHostCount + $TargetSessionHostBuffer - $SessionHosts.count - $runningDeploymentVMCount
+        $canDeployUpTo = $TargetSessionHostCount + $effectiveBuffer - $SessionHosts.count - $runningDeploymentVMCount
         
-        if ($weCanDeployUpTo -ge 0) {
-            Write-HostDetailed "We can deploy up to $weCanDeployUpTo session hosts" 
+        if ($canDeployUpTo -ge 0) {
+            Write-HostDetailed "We can deploy up to $canDeployUpTo session hosts" 
             $weNeedToDeploy = $TargetSessionHostCount - $sessionHostsCurrentTotal.Count
             
             if ($weNeedToDeploy -gt 0) {
                 Write-HostDetailed "We need to deploy $weNeedToDeploy new session hosts"
-                $weCanDeploy = if ($weNeedToDeploy -gt $weCanDeployUpTo) { $weCanDeployUpTo } else { $weNeedToDeploy }
-                Write-HostDetailed "Buffer allows deploying $weCanDeploy session hosts"
+                $canDeploy = if ($weNeedToDeploy -gt $canDeployUpTo) { $canDeployUpTo } else { $weNeedToDeploy }
+                Write-HostDetailed "Buffer allows deploying $canDeploy session hosts"
             
-            if ($EnableProgressiveScaleUp -and $weCanDeploy -gt 0) {
+            if ($EnableProgressiveScaleUp -and $canDeploy -gt 0) {
                 Write-HostDetailed "Progressive scale-up is enabled"
                 $deploymentState = Get-DeploymentState
                 $currentPercentage = $InitialDeploymentPercentage
@@ -1551,31 +1659,31 @@ function Get-HostPoolDecisions {
                 }
                 
                 $currentPercentage = [Math]::Min($currentPercentage, 100)
-                $percentageBasedCount = [Math]::Ceiling($weCanDeploy * ($currentPercentage / 100.0))
+                $percentageBasedCount = [Math]::Ceiling($canDeploy * ($currentPercentage / 100.0))
                 $actualDeployCount = [Math]::Min($percentageBasedCount, $MaxDeploymentBatchSize)
-                $actualDeployCount = [Math]::Min($actualDeployCount, $weCanDeploy)
+                $actualDeployCount = [Math]::Min($actualDeployCount, $canDeploy)
                 
-                Write-HostDetailed "Progressive scale-up: Using $currentPercentage% of $weCanDeploy needed = $actualDeployCount hosts (ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), Max: $MaxDeploymentBatchSize)"
-                $weCanDeploy = $actualDeployCount
+                Write-HostDetailed "Progressive scale-up: Using $currentPercentage% of $canDeploy needed = $actualDeployCount hosts (ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), Max: $MaxDeploymentBatchSize)"
+                $canDeploy = $actualDeployCount
             }
         }
         else {
-            $weCanDeploy = 0
+            $canDeploy = 0
             Write-HostDetailed "We have enough session hosts in good shape."
         }
     }
     else {
         Write-HostDetailed "Buffer is full. We can not deploy more session hosts"
-        $weCanDeploy = 0
+        $canDeploy = 0
     }
     }
     
-    $weCanDelete = $SessionHosts.Count - $TargetSessionHostCount
-    if ($weCanDelete -gt 0) {
-        Write-HostDetailed "We need to delete $weCanDelete session hosts"
-        if ($weCanDelete -gt $sessionHostsToReplace.Count) {
+    $canDelete = $SessionHosts.Count - $TargetSessionHostCount
+    if ($canDelete -gt 0) {
+        Write-HostDetailed "We need to delete $canDelete session hosts"
+        if ($canDelete -gt $sessionHostsToReplace.Count) {
             Write-HostDetailed "Host pool is over populated"
-            $goodSessionHostsToDeleteCount = $weCanDelete - $sessionHostsToReplace.Count
+            $goodSessionHostsToDeleteCount = $canDelete - $sessionHostsToReplace.Count
             Write-HostDetailed "We will delete $goodSessionHostsToDeleteCount good session hosts"
             $selectedGoodHostsTotDelete = [array] ($goodSessionHosts | Sort-Object -Property Session | Select-Object -First $goodSessionHostsToDeleteCount)
             Write-HostDetailed "Selected the following good session hosts to delete: $($($selectedGoodHostsTotDelete.VMName) -join ',')"
@@ -1584,7 +1692,7 @@ function Get-HostPoolDecisions {
             $selectedGoodHostsTotDelete = @()
             Write-HostDetailed "Host pool is not over populated"
         }
-        $sessionHostsPendingDelete = ($sessionHostsToReplace + $selectedGoodHostsTotDelete) | Select-Object -First $weCanDelete
+        $sessionHostsPendingDelete = ($sessionHostsToReplace + $selectedGoodHostsTotDelete) | Select-Object -First $canDelete
         
         if ($EnableProgressiveScaleUp -and $sessionHostsPendingDelete.Count -gt 0) {
             Write-HostDetailed "Progressive scale-up is enabled for deletions"
@@ -1632,8 +1740,8 @@ function Get-HostPoolDecisions {
     }
 
     return [PSCustomObject]@{
-        PossibleDeploymentsCount       = $weCanDeploy
-        PossibleSessionHostDeleteCount = $weCanDelete
+        PossibleDeploymentsCount       = $canDeploy
+        PossibleSessionHostDeleteCount = $canDelete
         SessionHostsPendingDelete      = $sessionHostsPendingDelete
         ExistingSessionHostNames       = ([array]$SessionHosts.SessionHostName + [array]$runningDeploymentVMNames) | Select-Object -Unique
         TargetSessionHostCount         = $TargetSessionHostCount
@@ -1812,30 +1920,43 @@ function Get-SessionHosts {
         
         Write-HostDetailed -Message "VM was created on $($vm.TimeCreated)"
         
-        # Extract image version - handle both ExactVersion (specific version) and id (image definition reference)
+        # Extract image version and definition - handle both ExactVersion (specific version) and id (image definition reference)
         $vmImageVersion = $null
-        if ($vm.StorageProfile.ImageReference.ExactVersion) {
-            $vmImageVersion = $vm.StorageProfile.ImageReference.ExactVersion
-            Write-HostDetailed -Message "VM Image Reference ExactVersion is $vmImageVersion"
-        }
-        elseif ($vm.StorageProfile.ImageReference.id) {
-            # VM was deployed with image definition (not specific version), need to resolve from id
+        $vmImageDefinition = $null
+        
+        if ($vm.StorageProfile.ImageReference.id) {
+            # Gallery image reference (either specific version or definition for "latest")
             $imageRef = $vm.StorageProfile.ImageReference.id
             Write-HostDetailed -Message "VM Image Reference id is $imageRef"
             
-            # Check if this is a version-specific reference or definition reference
-            if ($imageRef -match '/versions/(?<version>[^/]+)$') {
+            # Extract the image definition path (without version)
+            if ($imageRef -match '^(?<definition>.+)/versions/[^/]+$') {
+                $vmImageDefinition = $Matches['definition']
+                Write-HostDetailed -Message "Extracted image definition: $vmImageDefinition" -Level Verbose
+            }
+            elseif ($imageRef -match '^(?<definition>/subscriptions/.+/images/[^/]+)$') {
+                $vmImageDefinition = $Matches['definition']
+                Write-HostDetailed -Message "Image definition reference: $vmImageDefinition" -Level Verbose
+            }
+            
+            # Get version - prefer ExactVersion if available, otherwise extract from id
+            if ($vm.StorageProfile.ImageReference.ExactVersion) {
+                $vmImageVersion = $vm.StorageProfile.ImageReference.ExactVersion
+                Write-HostDetailed -Message "VM Image Reference ExactVersion is $vmImageVersion"
+            }
+            elseif ($imageRef -match '/versions/(?<version>[^/]+)$') {
                 $vmImageVersion = $Matches['version']
                 Write-HostDetailed -Message "Extracted version $vmImageVersion from image reference id"
             }
             else {
-                Write-HostDetailed -Message "VM was deployed with image definition (latest), ExactVersion should be populated but is not" -Level Warning
+                Write-HostDetailed -Message "VM was deployed with image definition (latest), ExactVersion is not populated." -Level Information
             }
         }
-        elseif ($vm.StorageProfile.ImageReference.version) {
-            # Marketplace image version
+        elseif ($vm.StorageProfile.ImageReference.publisher) {
+            # Marketplace image
             $vmImageVersion = $vm.StorageProfile.ImageReference.version
-            Write-HostDetailed -Message "VM Marketplace image version is $vmImageVersion"
+            $vmImageDefinition = "marketplace:$($vm.StorageProfile.ImageReference.publisher)/$($vm.StorageProfile.ImageReference.offer)/$($vm.StorageProfile.ImageReference.sku)"
+            Write-HostDetailed -Message "VM Marketplace image version is $vmImageVersion, definition: $vmImageDefinition"
         }
         else {
             Write-HostDetailed -Message "Unable to determine VM image version from StorageProfile" -Level Warning
@@ -1869,7 +1990,7 @@ function Get-SessionHosts {
                     }
                     operation  = 'Merge'
                 }
-                $tagResult = Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 10) -Method PATCH -Uri $Uri
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 10) -Method PATCH -Uri $Uri | Out-Null
                 Write-HostDetailed -Message "Successfully updated $TagDeployTimestamp tag" -Level Information
             }
             $vmDeployTimeStamp = $vm.TimeCreated
@@ -1922,6 +2043,7 @@ function Get-SessionHosts {
             IncludeInAutomation   = $vmIncludeInAutomation
             PendingDrainTimeStamp = $vmPendingDrainTimeStamp
             ImageVersion          = $vmImageVersion
+            ImageDefinition       = $vmImageDefinition
         }
         $sh.PSObject.Properties.ForEach{ $hostOutput[$_.Name] = $_.Value }
         [PSCustomObject]$hostOutput

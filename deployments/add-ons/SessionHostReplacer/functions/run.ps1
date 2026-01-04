@@ -11,13 +11,9 @@ if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
 }
 
-# Initialize environment-agnostic variables from Function App Configuration
-$VirtualMachinesSubscriptionId = Read-FunctionAppSetting VirtualMachinesSubscriptionId
-$UserAssignedIdentityClientId = Read-FunctionAppSetting UserAssignedIdentityClientId
-
 # Acquire ARM access token
 try {
-    $ARMToken = Get-AccessToken -ResourceUri (Get-ResourceManagerUri) -ClientId $UserAssignedIdentityClientId
+    $ARMToken = Get-AccessToken -ResourceUri (Get-ResourceManagerUri)
     if ([string]::IsNullOrEmpty($ARMToken)) {
         throw "Get-AccessToken returned null or empty token"
     }
@@ -56,16 +52,14 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
                 $deploymentState.CurrentPercentage = [Math]::Min(
                     $initialDeploymentPercentage + ($scaleUpMultiplier * $scaleUpIncrementPercentage),
                     100
-                )
-                
+                )                
                 Write-HostDetailed "Previous deployment succeeded. ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), CurrentPercentage: $($deploymentState.CurrentPercentage)%" -Level Host
             }
             elseif ($previousDeploymentStatus.Failed) {
                 # Reset on failure
                 $deploymentState.ConsecutiveSuccesses = 0
                 $deploymentState.CurrentPercentage = $initialDeploymentPercentage
-                $deploymentState.LastStatus = 'Failed'
-                
+                $deploymentState.LastStatus = 'Failed'                
                 Write-HostDetailed "Previous deployment failed. Resetting consecutive successes to 0, CurrentPercentage: $($deploymentState.CurrentPercentage)%" -Level Warning
             }
             elseif ($previousDeploymentStatus.Running) {
@@ -122,8 +116,16 @@ $sessionHostParameters += (Read-FunctionAppSetting SessionHostParameters)
 Write-HostDetailed -Message "Getting latest image version using Image Reference: {0}" -StringValues ($sessionHostParameters.ImageReference | Out-String) -Level Verbose
 $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location
 
+# Read AllowImageVersionRollback setting with default of false
+$allowImageVersionRollback = Read-FunctionAppSetting AllowImageVersionRollback
+if ($null -eq $allowImageVersionRollback) {
+    $allowImageVersionRollback = $false
+} else {
+    $allowImageVersionRollback = [bool]::Parse($allowImageVersionRollback)
+}
+
 # Get number session hosts to deploy
-$hostPoolDecisions = Get-HostPoolDecisions -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -FailedDeployments $failedDeployments -LatestImageVersion $latestImageVersion
+$hostPoolDecisions = Get-HostPoolDecisions -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -FailedDeployments $failedDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback
 
 # Check if we're starting a new update cycle and reset progressive scale-up if needed
 if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
@@ -164,25 +166,6 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
     Save-DeploymentState -DeploymentState $deploymentState
 }
 
-# Log comprehensive metrics for monitoring dashboard
-$metricsLog = @{
-    TotalSessionHosts = $sessionHosts.Count
-    EnabledForAutomation = $sessionHostsFiltered.Count
-    TargetCount = if ($hostPoolDecisions.TargetSessionHostCount) { $hostPoolDecisions.TargetSessionHostCount } else { 0 }
-    ToReplace = if ($hostPoolDecisions.TotalSessionHostsToReplace) { $hostPoolDecisions.TotalSessionHostsToReplace } else { 0 }
-    ToReplacePercentage = if ($sessionHostsFiltered.Count -gt 0) { [math]::Round(($hostPoolDecisions.TotalSessionHostsToReplace / $sessionHostsFiltered.Count) * 100, 1) } else { 0 }
-    InDrain = $hostPoolDecisions.SessionHostsPendingDelete.Count
-    PendingDelete = $hostPoolDecisions.SessionHostsPendingDelete.Count
-    ToDeployNow = $hostPoolDecisions.PossibleDeploymentsCount
-    RunningDeployments = $runningDeployments.Count
-    ReplacementMode = Read-FunctionAppSetting ReplacementMode
-    LatestImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { "N/A" }
-    LatestImageDate = $latestImageVersion.Date
-}
-Write-HostDetailed -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | ToDeployNow: {6} | RunningDeployments: {7} | Mode: {8} | LatestImage: {9}" `
-    -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.ReplacementMode, $metricsLog.LatestImageVersion `
-    -Level Host
-
 # Deploy new session hosts
 $deploymentResult = $null
 if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
@@ -191,7 +174,10 @@ if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
     $existingSessionHostNames = (@($sessionHosts.SessionHostName) + @($hostPoolDecisions.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
     
     try {
-        $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -VirtualMachinesSubscriptionId $VirtualMachinesSubscriptionId -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames
+        $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames
+        
+        # Log deployment submission immediately for workbook visibility
+        Write-HostDetailed -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName -Level Information
         
         # Update deployment state for progressive scale-up tracking
         if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
@@ -243,7 +229,7 @@ if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisi
     if ($removeEntraDevice -or $removeIntuneDevice) {
         Try {
             $graphEndpoint = Get-GraphEndpoint
-            $GraphToken = Get-AccessToken -ResourceUri $graphEndpoint -ClientId $UserAssignedIdentityClientId
+            $GraphToken = Get-AccessToken -ResourceUri $graphEndpoint
             
             if ([string]::IsNullOrEmpty($GraphToken)) {
                 Write-Warning "Get-AccessToken returned null or empty Graph token. Device cleanup will be skipped."
@@ -258,15 +244,62 @@ if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisi
         }
     }
     If ($GraphToken) {
-        Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice -ClientId $UserAssignedIdentityClientId
+        Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
     }
     Else {
         Remove-SessionHosts -ARMToken $ARMToken -GraphToken $null -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $false -RemoveIntuneDevice $false
     }
 }
 
-# Log schedule information for workbook visibility
-if ($Timer.ScheduleStatus) {
-    $nextRun = if ($Timer.ScheduleStatus.Next) { $Timer.ScheduleStatus.Next.ToString('o') } else { "Not available" }
-    Write-HostDetailed -Message "SCHEDULE | Next scheduled run: {0}" -StringValues $nextRun -Level Host
+# Log completion timestamp for workbook visibility
+Write-HostDetailed -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o') -Level Host
+
+# Log comprehensive metrics for monitoring dashboard (after all operations complete)
+$hostsInDrainMode = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
+
+# Calculate current deployment status accounting for just-submitted deployments
+$currentlyDeploying = $runningDeployments.Count
+$remainingToDeploy = $hostPoolDecisions.PossibleDeploymentsCount
+if ($deploymentResult) {
+    # A deployment was just submitted this run, so it's now running
+    $currentlyDeploying += $deploymentResult.SessionHostCount
+    # Reduce the remaining count by what was just deployed
+    $remainingToDeploy = [Math]::Max(0, $remainingToDeploy - $deploymentResult.SessionHostCount)
 }
+
+$metricsLog = @{
+    TotalSessionHosts = $sessionHosts.Count
+    EnabledForAutomation = $sessionHostsFiltered.Count
+    TargetCount = if ($hostPoolDecisions.TargetSessionHostCount) { $hostPoolDecisions.TargetSessionHostCount } else { 0 }
+    ToReplace = if ($hostPoolDecisions.TotalSessionHostsToReplace) { $hostPoolDecisions.TotalSessionHostsToReplace } else { 0 }
+    ToReplacePercentage = if ($sessionHostsFiltered.Count -gt 0) { [math]::Round(($hostPoolDecisions.TotalSessionHostsToReplace / $sessionHostsFiltered.Count) * 100, 1) } else { 0 }
+    InDrain = $hostsInDrainMode
+    PendingDelete = $hostPoolDecisions.SessionHostsPendingDelete.Count
+    ToDeployNow = $remainingToDeploy
+    RunningDeployments = $currentlyDeploying
+    LatestImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { "N/A" }
+    LatestImageDate = $latestImageVersion.Date
+}
+
+# Log image metadata for workbook visibility
+if ($latestImageVersion.Definition -like "marketplace:*") {
+    # Parse marketplace identifier: "marketplace:publisher/offer/sku"
+    $marketplaceParts = $latestImageVersion.Definition -replace "^marketplace:", "" -split "/"
+    Write-HostDetailed -Message "IMAGE_INFO | Type: Marketplace | Publisher: {0} | Offer: {1} | Sku: {2} | Version: {3}" `
+        -StringValues $marketplaceParts[0], $marketplaceParts[1], $marketplaceParts[2], $latestImageVersion.Version `
+        -Level Host
+}
+else {
+    # Parse gallery path: /subscriptions/.../resourceGroups/.../providers/Microsoft.Compute/galleries/{galleryName}/images/{imageName}
+    $galleryMatch = [regex]::Match($latestImageVersion.Definition, "/galleries/([^/]+)/images/([^/]+)")
+    $galleryName = $galleryMatch.Groups[1].Value
+    $imageDefinition = $galleryMatch.Groups[2].Value
+    Write-HostDetailed -Message "IMAGE_INFO | Type: Gallery | Gallery: {0} | ImageDefinition: {1} | Version: {2}" `
+        -StringValues $galleryName, $imageDefinition, $latestImageVersion.Version `
+        -Level Host
+}
+
+Write-HostDetailed -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | ToDeployNow: {6} | RunningDeployments: {7} | LatestImage: {8}" `
+    -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.LatestImageVersion `
+    -Level Host
+
