@@ -1,5 +1,7 @@
 # AVD Session Host Replacer
 
+> **Part of the [Federal AVD Solution](../../../README.md)** | See also: [Features Overview](../../../docs/features.md) | [Quick Start Guide](../../../docs/quickStart.md)
+
 Automated Azure Function for managing Azure Virtual Desktop session host lifecycle through continuous image updates.
 
 ## Table of Contents

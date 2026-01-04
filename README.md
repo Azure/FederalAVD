@@ -17,7 +17,7 @@ The code is idempotent to allow all resources deployed via this solution to be r
 Optional add-ons extend the base AVD deployment with advanced lifecycle management and automation capabilities:
 
 - **[Storage Quota Manager](deployments/add-ons/StorageQuotaManager/readme.md)** - Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage
-- **[Session Host Replacer](deployments/add-ons/SessionHostReplacer/readme.md)** - Automatically replaces aging or outdated session hosts based on configurable lifecycle policies
+- **[Session Host Replacer](deployments/add-ons/SessionHostReplacer/readme.md)** - Automatically replaces session hosts when new images are available with zero-downtime rolling updates
 - **[Run Commands on VMs](deployments/add-ons/RunCommandsOnVms/readme.md)** - Execute one or multiple scripts on selected virtual machines from a resource group
 - **[Update Storage Account Key on Session Hosts](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md)** - Update FSLogix storage account keys on session hosts to support Entra ID-only identities with FSLogix
 

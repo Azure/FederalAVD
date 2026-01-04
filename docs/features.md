@@ -536,18 +536,20 @@ Automatically monitors and increases Azure Files Premium file share quotas for F
 
 ### Session Host Replacer
 
-Automatically replaces aging or outdated session hosts with new VMs based on configurable lifecycle policies.
+Automatically replaces session hosts when new images are available with zero-downtime rolling updates.
 
 **Key Features:**
-- Age-based replacement (default: 45 days)
+
 - Image version tracking and automatic updates
+- Automatic capacity management (host pool can temporarily double during replacements)
 - Graceful session draining with configurable grace period (default: 24 hours)
-- Progressive scale-up for gradual rollouts in large environments
+- Flexible deployment velocity (progressive scale-up with configurable batch size ceiling)
 - Tag-based opt-in model for controlled automation
 - Optional Entra ID and Intune device cleanup
 - Template Spec integration for consistent deployments
 
 **Use Cases:**
+
 - Continuous image updates without manual intervention
 - Maintaining fleet health and security compliance
 - Large-scale AVD deployments requiring automated lifecycle management
@@ -560,6 +562,7 @@ Automatically replaces aging or outdated session hosts with new VMs based on con
 Execute one or multiple scripts on selected virtual machines from a resource group using Azure Run Command.
 
 **Key Features:**
+
 - Execute scripts from public URLs or Base64-encoded content
 - Target multiple VMs in a single deployment
 - Support for both PowerShell and shell scripts
@@ -579,6 +582,7 @@ Execute one or multiple scripts on selected virtual machines from a resource gro
 Update FSLogix storage account keys on session hosts to support Entra ID-only identities with FSLogix and enable regular key rotation for enhanced security.
 
 **Key Features:**
+
 - Updates FSLogix registry configuration with new storage account keys
 - Supports key rotation workflows
 - Targets multiple session hosts in a single deployment
@@ -586,6 +590,7 @@ Update FSLogix storage account keys on session hosts to support Entra ID-only id
 - Compatible with Entra ID-only (cloud-only) identity scenarios
 
 **Use Cases:**
+
 - Regular storage account key rotation for security compliance
 - FSLogix configuration updates in Entra ID-only environments
 - Automated key distribution after manual or automated key rotation
