@@ -207,11 +207,9 @@ module customerManagedKeys 'modules/customerManagedKeys.bicep' =  if (deployment
   }
 }
 
-module artifactsUserAssignedIdentity 'modules/getUserAssignedIdentity.bicep' = if(!empty(artifactsUserAssignedIdentityResourceId)) {
-  name: 'ArtifactsUserAssignedIdentity-${deploymentSuffix}'
-  params: {
-    userAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
-  }
+resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(artifactsUserAssignedIdentityResourceId)) {
+  scope: resourceGroup(split(artifactsUserAssignedIdentityResourceId, '/')[2], split(artifactsUserAssignedIdentityResourceId, '/')[4])
+  name: last(split(artifactsUserAssignedIdentityResourceId, '/'))
 }
 
 module availabilitySets '../../../sharedModules/resources/compute/availability-set/main.bicep' = [for i in range(0, availabilitySetsCount): if (pooledHostPool && availability == 'AvailabilitySets') {
@@ -245,7 +243,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
   params: {
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
-    artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId) ? '' : artifactsUserAssignedIdentity!.outputs.clientId
+    artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId) ? '' : artifactsUAI!.properties.clientId
     availability: availability
     availabilityZones: availabilityZones
     availabilitySetNameConv: availabilitySetNameConv

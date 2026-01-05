@@ -1129,8 +1129,19 @@ function Deploy-SessionHosts {
 
     # Update Session Host Parameters
     $sessionHostParameters['sessionHostNames'] = $sessionHostNames
-    $sessionHostParameters['Tags'][$TagIncludeInAutomation] = $true
-    $sessionHostParameters['Tags'][$TagDeployTimestamp] = (Get-Date -AsUTC -Format 'o')
+    
+    # Ensure Tags hashtable exists and has Microsoft.Compute/virtualMachines section
+    if (-not $sessionHostParameters.ContainsKey('Tags') -or $null -eq $sessionHostParameters['Tags']) {
+        $sessionHostParameters['Tags'] = @{}
+    }
+    if (-not $sessionHostParameters['Tags'].ContainsKey('Microsoft.Compute/virtualMachines') -or $null -eq $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines']) {
+        $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines'] = @{}
+    }
+    
+    # Add automation tags to VM resource type
+    $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines'][$TagIncludeInAutomation] = $true
+    $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines'][$TagDeployTimestamp] = (Get-Date -AsUTC -Format 'o')
+    
     $deploymentTimestamp = Get-Date -AsUTC -Format 'FileDateTime'
     $deploymentName = "{0}_{1}_Count_{2}_VMs" -f $DeploymentPrefix, $deploymentTimestamp, $sessionHostNames.count
     
@@ -1464,8 +1475,6 @@ function Get-HostPoolDecisions {
         [Parameter()]
         $RunningDeployments,
         [Parameter()]
-        $FailedDeployments = @(),
-        [Parameter()]
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
         [Parameter()]
         [int] $TargetSessionHostCount = (Read-FunctionAppSetting TargetSessionHostCount),
@@ -1511,20 +1520,6 @@ function Get-HostPoolDecisions {
             # If state storage fails, fall back to current count (stateless mode)
             $TargetSessionHostCount = $SessionHosts.Count
             Write-HostDetailed "Auto-detect mode: Unable to access deployment state storage. Using current count of $TargetSessionHostCount. Note: Managed identity needs 'Storage Table Data Contributor' role on storage account for persistent target tracking. Error: $_" -Level Warning
-        }
-    }
-    
-    # Identify session hosts from failed deployments that need cleanup
-    [array] $sessionHostsFromFailedDeployments = @()
-    if ($FailedDeployments -and $FailedDeployments.Count -gt 0) {
-        $failedDeploymentVMNames = $FailedDeployments.SessionHostNames | Select-Object -Unique
-        $sessionHostsFromFailedDeployments = $SessionHosts | Where-Object { 
-            $vmName = $_.SessionHostName
-            $failedDeploymentVMNames | Where-Object { $vmName -like "$_*" }
-        }
-        
-        if ($sessionHostsFromFailedDeployments.Count -gt 0) {
-            Write-HostDetailed "Found $($sessionHostsFromFailedDeployments.Count) session hosts from failed deployments that need cleanup: $($sessionHostsFromFailedDeployments.SessionHostName -join ',')" -Level Warning
         }
     }
     
@@ -1600,7 +1595,7 @@ function Get-HostPoolDecisions {
         Write-HostDetailed "Latest image version delay not yet met ($latestImageAge days < $ReplaceSessionHostOnNewImageVersionDelayDays days required)"
     }
 
-    [array] $sessionHostsToReplace = ($sessionHostsOldVersion + $sessionHostsFromFailedDeployments) | Select-Object -Property * -Unique
+    [array] $sessionHostsToReplace = $sessionHostsOldVersion | Select-Object -Property * -Unique
     Write-HostDetailed "Found $($sessionHostsToReplace.Count) session hosts to replace in total. $($($sessionHostsToReplace.SessionHostName) -join ',')"
 
     $goodSessionHosts = $SessionHosts | Where-Object { $_.SessionHostName -notin $sessionHostsToReplace.SessionHostName }
@@ -2114,6 +2109,129 @@ function Get-TemplateSpecVersionResourceId {
     }
 }
 
+function Remove-FailedDeploymentArtifacts {
+    <#
+    .SYNOPSIS
+        Cleans up orphaned VMs and failed deployment records from previous failed deployments.
+    
+    .DESCRIPTION
+        Checks for VMs from failed deployments that may not be registered as session hosts,
+        deletes any orphaned VMs, and removes failed deployment records from ARM history.
+        This prevents the function from getting stuck with repeated failures on the same VM names.
+    
+    .PARAMETER ARMToken
+        The ARM access token for API calls.
+    
+    .PARAMETER FailedDeployments
+        Array of failed deployment objects from Get-RunningDeployments.
+    
+    .PARAMETER RegisteredSessionHostNames
+        Array of session host names currently registered in the host pool.
+    
+    .EXAMPLE
+        Remove-FailedDeploymentArtifacts -ARMToken $token -FailedDeployments $failed -RegisteredSessionHostNames $sessionHosts.SessionHostName
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $ARMToken,
+        
+        [Parameter(Mandatory = $true)]
+        [array] $FailedDeployments,
+        
+        [Parameter()]
+        [array] $RegisteredSessionHostNames = @(),
+        
+        [Parameter()]
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri),
+        
+        [Parameter()]
+        [string] $VirtualMachinesSubscriptionId = (Read-FunctionAppSetting VirtualMachinesSubscriptionId),
+        
+        [Parameter()]
+        [string] $VirtualMachinesResourceGroupName = (Read-FunctionAppSetting VirtualMachinesResourceGroupName)
+    )
+    
+    if ($FailedDeployments.Count -eq 0) {
+        Write-HostDetailed "No failed deployments to clean up" -Level Verbose
+        return
+    }
+    
+    Write-HostDetailed "Processing $($FailedDeployments.Count) failed deployments for cleanup" -Level Host
+    
+    # Get all VMs in the resource group to check for orphaned VMs
+    $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
+    $allVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+    
+    $orphanedVMs = @()
+    $failedDeploymentNames = @()
+    
+    foreach ($deployment in $FailedDeployments) {
+        $failedDeploymentNames += $deployment.DeploymentName
+        
+        foreach ($vmName in $deployment.SessionHostNames) {
+            # Check if this VM exists in Azure but is NOT registered as a session host
+            $vm = $allVMs | Where-Object { $_.name -eq $vmName }
+            
+            if ($vm) {
+                $isRegistered = $RegisteredSessionHostNames | Where-Object { $_ -like "$vmName*" }
+                
+                if (-not $isRegistered) {
+                    Write-HostDetailed "Found orphaned VM from failed deployment: $vmName (VM exists but not registered as session host)" -Level Warning
+                    $orphanedVMs += [PSCustomObject]@{
+                        Name         = $vmName
+                        ResourceId   = $vm.id
+                        DeploymentName = $deployment.DeploymentName
+                    }
+                }
+                else {
+                    Write-HostDetailed "VM $vmName from failed deployment is registered as session host - will be handled by normal cleanup flow" -Level Verbose
+                }
+            }
+            else {
+                Write-HostDetailed "VM $vmName from failed deployment does not exist (deployment may have rolled back)" -Level Verbose
+            }
+        }
+    }
+    
+    # Delete orphaned VMs
+    if ($orphanedVMs.Count -gt 0) {
+        Write-HostDetailed "Deleting $($orphanedVMs.Count) orphaned VMs from failed deployments" -Level Host
+        
+        foreach ($orphanedVM in $orphanedVMs) {
+            try {
+                Write-HostDetailed "Deleting orphaned VM: $($orphanedVM.Name) (from deployment: $($orphanedVM.DeploymentName))" -Level Warning
+                $Uri = "$ResourceManagerUri$($orphanedVM.ResourceId)?forceDeletion=true&api-version=2024-07-01"
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
+                Write-HostDetailed "Successfully deleted orphaned VM: $($orphanedVM.Name)" -Level Information
+            }
+            catch {
+                Write-HostDetailed "Failed to delete orphaned VM $($orphanedVM.Name): $_" -Level Error
+            }
+        }
+    }
+    else {
+        Write-HostDetailed "No orphaned VMs found from failed deployments" -Level Verbose
+    }
+    
+    # Clean up failed deployment records from ARM
+    Write-HostDetailed "Cleaning up $($failedDeploymentNames.Count) failed deployment records from ARM history" -Level Host
+    
+    foreach ($deploymentName in $failedDeploymentNames) {
+        try {
+            Write-HostDetailed "Deleting failed deployment record: $deploymentName" -Level Information
+            $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/providers/Microsoft.Resources/deployments/$deploymentName`?api-version=2021-04-01"
+            Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
+            Write-HostDetailed "Successfully deleted failed deployment record: $deploymentName" -Level Information
+        }
+        catch {
+            Write-HostDetailed "Failed to delete deployment record $deploymentName`: $_" -Level Warning
+        }
+    }
+    
+    Write-HostDetailed "Failed deployment cleanup completed" -Level Host
+}
+
 function Remove-SessionHosts {
     [CmdletBinding()]
     param (
@@ -2441,6 +2559,7 @@ Export-ModuleMember -Function @(
     'Get-SessionHosts'
     'Get-SessionHostParameters'
     'Get-TemplateSpecVersionResourceId'
+    'Remove-FailedDeploymentArtifacts'
     'Remove-SessionHosts'
     'Remove-EntraDevice'
     'Remove-IntuneDevice'

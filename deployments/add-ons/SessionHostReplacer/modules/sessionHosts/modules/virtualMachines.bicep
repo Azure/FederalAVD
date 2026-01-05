@@ -160,7 +160,7 @@ resource remoteStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' ex
 }]
 
 resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [for i in range(0, sessionHostCount): {
-  name: replace(replace(networkInterfaceNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
+  name: empty(networkInterfaceNameConv) ? 'nic-${sessionHostNames[i]}' : replace(replace(networkInterfaceNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Network/networkInterfaces'] ?? {})
   properties: {
@@ -183,7 +183,7 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [fo
 }]
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [for i in range(0, sessionHostCount): {
-  name: replace(replace(virtualMachineNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
+  name: empty(virtualMachineNameConv) ? sessionHostNames[i] : replace(replace(virtualMachineNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
   zones: !empty(dedicatedHostResourceId) || !empty(dedicatedHostGroupResourceId) ? dedicatedHostGroupZones : availability == 'AvailabilityZones' && !empty(availabilityZones) ? [
@@ -212,7 +212,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [for i 
       imageReference: imageReference
       osDisk: {
         diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
-        name: replace(replace(osDiskNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
+        name: empty(osDiskNameConv) ? null : replace(replace(osDiskNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
         osType: 'Windows'
         createOption: 'FromImage'
         caching: 'ReadWrite'

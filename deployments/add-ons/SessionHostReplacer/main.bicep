@@ -108,7 +108,7 @@ param drainGracePeriodHours int = 24
 @description('Required. The target number of session hosts to maintain in the host pool. Set to 0 for auto-detect mode: the function will automatically maintain whatever count exists when a replacement cycle begins, allowing you to manually scale between image updates.')
 @minValue(0)
 @maxValue(1000)
-param targetSessionHostCount int
+param targetSessionHostCount int = 0
 
 @description('Optional. Whether to fix session host tags during execution. Default is true.')
 param fixSessionHostTags bool = true
@@ -140,17 +140,17 @@ param enableProgressiveScaleUp bool = false
 @description('Optional. Initial deployment size as percentage of total needed hosts. Used when progressive scale-up is enabled. Default is 10%.')
 @minValue(1)
 @maxValue(100)
-param initialDeploymentPercentage int = 10
+param initialDeploymentPercentage int = 20
 
 @description('Optional. Percentage increment added after each successful deployment run. Used when progressive scale-up is enabled. Default is 20%.')
 @minValue(5)
 @maxValue(50)
-param scaleUpIncrementPercentage int = 20
+param scaleUpIncrementPercentage int = 50
 
 @description('Optional. Maximum number of hosts to deploy per run (ceiling constraint). Prevents deploying more than this number even if percentage calculation is higher. Default is 10.')
 @minValue(1)
 @maxValue(1000)
-param maxDeploymentBatchSize int = 10
+param maxDeploymentBatchSize int = 100
 
 @description('Optional. Number of consecutive successful deployment runs required before increasing the deployment percentage. Default is 1.')
 @minValue(1)
@@ -180,7 +180,7 @@ param hostPoolResourceId string
 param sessionHostNamePrefix string
 
 @description('Optional. VM name index length for padding.')
-param sessionHostNameIndexLength int = 3
+param sessionHostNameIndexLength int = 2
 
 @description('Optional. Publisher of the marketplace image. Default is MicrosoftWindowsDesktop.')
 param imagePublisher string = 'MicrosoftWindowsDesktop'
@@ -290,9 +290,6 @@ param avdInsightsDataCollectionRulesResourceId string = ''
 
 @description('Optional. VM Insights data collection rules resource ID.')
 param vmInsightsDataCollectionRulesResourceId string = ''
-
-@description('Optional. Security data collection rules resource ID.')
-param securityDataCollectionRulesResourceId string = ''
 
 @description('Optional. Data collection endpoint resource ID.')
 param dataCollectionEndpointResourceId string = ''
@@ -573,7 +570,6 @@ var sessionHostParameters = {
   osDiskNameConv: diskNameConv
   ouPath: ouPath
   secureBootEnabled: secureBootEnabled
-  securityDataCollectionRulesResourceId: securityDataCollectionRulesResourceId
   securityType: securityType
   sessionHostCustomizations: sessionHostCustomizations
   sessionHostNameIndexLength: sessionHostNameIndexLength
@@ -713,6 +709,20 @@ module roleAssignmentComputeGallery '../../sharedModules/resources/compute/galle
     roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
     galleryName: empty(computeGalleryResourceId) ? '' : last(split(computeGalleryResourceId, '/'))
     principalType: 'ServicePrincipal'
+  }
+}
+
+module roleAssignmentUaiArtifacts '../../sharedModules/resources/managed-identity/user-assigned-identity/rbac.bicep' = if(!empty(artifactsUserAssignedIdentityResourceId)) {
+  name: 'RoleAssign-UAI-Artifacts-MngdIdOperator-${deploymentSuffix}'
+  scope: resourceGroup(
+    split(artifactsUserAssignedIdentityResourceId, '/')[2],
+    split(artifactsUserAssignedIdentityResourceId, '/')[4]
+  )
+  params: {
+    principalId: userAssignedIdentity.properties.principalId
+    roleDefinitionId: 'f1a07417-d97a-45cb-824c-7a7467783830' // Managed Identity Operator
+    principalType: 'ServicePrincipal'
+    identityName: empty(artifactsUserAssignedIdentityResourceId) ? '' : last(split(artifactsUserAssignedIdentityResourceId, '/'))
   }
 }
 

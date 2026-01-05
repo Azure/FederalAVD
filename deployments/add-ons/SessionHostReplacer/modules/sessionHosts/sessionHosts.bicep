@@ -1,131 +1,181 @@
 @description('URI of the storage container holding custom artifacts for session host configuration.')
-param artifactsContainerUri string
+param artifactsContainerUri string = ''
 
 @description('Resource ID of the user-assigned managed identity with access to the artifacts container.')
-param artifactsUserAssignedIdentityResourceId string
+param artifactsUserAssignedIdentityResourceId string = ''
 
+@allowed([
+  'AvailabilitySets'
+  'AvailabilityZones'
+  'None'
+])
 @description('Availability option for session hosts. Valid values: AvailabilitySets, AvailabilityZones, None.')
-param availability string
+param availability string = 'None'
 
 @description('Naming convention for availability sets when availability is set to AvailabilitySets. Use ## as placeholder for the index.')
-param availabilitySetNameConv string
+param availabilitySetNameConv string = ''
 
 @description('Array of availability zones to distribute session hosts across when availability is set to AvailabilityZones.')
-param availabilityZones array
+param availabilityZones array = []
 
 @description('Name of the DSC package used to register session hosts with the AVD host pool.')
 param avdAgentsDSCPackage string
 
 @description('Resource ID of the data collection rule for AVD Insights monitoring.')
-param avdInsightsDataCollectionRulesResourceId string
+param avdInsightsDataCollectionRulesResourceId string = ''
 
 @description('Enable confidential VM OS disk encryption with VM guest state. Only applicable for confidential VMs.')
-param confidentialVMOSDiskEncryption bool
+param confidentialVMOSDiskEncryption bool = false
 
 @description('Resource ID of the Key Vault containing credentials for domain join and VM admin accounts.')
 param credentialsKeyVaultResourceId string
 
 @description('Resource ID of the data collection endpoint for Azure Monitor agent.')
-param dataCollectionEndpointResourceId string
+param dataCollectionEndpointResourceId string = ''
 
 @description('Resource ID of the dedicated host group for session host placement.')
-param dedicatedHostGroupResourceId string
+param dedicatedHostGroupResourceId string = ''
 
 @description('Array of availability zones for the dedicated host group.')
-param dedicatedHostGroupZones array
+param dedicatedHostGroupZones array = []
 
 @description('Resource ID of a specific dedicated host for session host placement.')
-param dedicatedHostResourceId string
+param dedicatedHostResourceId string = ''
 
 @description('Resource ID of the disk encryption set for encrypting managed disks with customer-managed keys.')
-param diskEncryptionSetResourceId string
+param diskEncryptionSetResourceId string = ''
 
+@allowed([
+  0
+  32
+  64
+  128
+  256
+  512
+  1024
+  2048
+])
 @description('Size of the OS disk in GB.')
-param diskSizeGB int
+param diskSizeGB int = 0
 
+@allowed([
+  'Standard_LRS'
+  'StandardSSD_LRS'
+  'Premium_LRS'
+])
 @description('SKU for the managed OS disk. Examples: Premium_LRS, StandardSSD_LRS, Standard_LRS.')
-param diskSku string
+param diskSku string = 'Premium_LRS'
 
 @description('Fully qualified domain name (FQDN) for Active Directory domain join.')
-param domainName string
+param domainName string = ''
 
 @description('Enable accelerated networking on network interfaces for improved network performance.')
-param enableAcceleratedNetworking bool
+param enableAcceleratedNetworking bool = true
 
 @description('Enable encryption at host for additional data encryption on the VM host.')
-param encryptionAtHost bool
+param encryptionAtHost bool = true
 
+@allowed([
+  'profile-containers'
+  'profile-containers', 'office-containers'
+])
 @description('Array of FSLogix file share names. First element is profile-containers, second (if present) is office-containers.')
-param fslogixFileShareNames array
+param fslogixFileShareNames array = [
+  'profile-containers'
+]
 
 @description('Configure FSLogix on session hosts during deployment.')
-param fslogixConfigureSessionHosts bool
+param fslogixConfigureSessionHosts bool = false
 
-@description('Type of FSLogix container. Valid values: ProfileContainer, OfficeContainer, ProfileOfficeContainer.')
-param fslogixContainerType string
+@allowed([
+  'CloudCacheProfileContainer'
+  'CloudCacheProfileOfficeContainer'
+  'ProfileContainer'
+  'ProfileOfficeContainer'
+])
+@description('Type of FSLogix container. Valid values: CloudCacheProfileContainer, CloudCacheProfileOfficeContainer, ProfileContainer, ProfileOfficeContainer.')
+param fslogixContainerType string = 'ProfileContainer'
 
 @description('Array of resource IDs for local Azure NetApp Files volumes used for FSLogix containers.')
-param fslogixLocalNetAppVolumeResourceIds array
+param fslogixLocalNetAppVolumeResourceIds array = []
 
 @description('Array of resource IDs for local storage accounts used for FSLogix containers.')
-param fslogixLocalStorageAccountResourceIds array
+param fslogixLocalStorageAccountResourceIds array = []
 
 @description('Array of Active Directory security groups for FSLogix Office 365 container redirection.')
-param fslogixOSSGroups array
+param fslogixOSSGroups array = []
 
 @description('Array of resource IDs for remote Azure NetApp Files volumes used for FSLogix containers in DR scenarios.')
-param fslogixRemoteNetAppVolumeResourceIds array
+param fslogixRemoteNetAppVolumeResourceIds array = []
 
 @description('Array of resource IDs for remote storage accounts used for FSLogix containers in DR scenarios.')
-param fslogixRemoteStorageAccountResourceIds array
+param fslogixRemoteStorageAccountResourceIds array = []
 
 @description('Size limit in MB for FSLogix containers. 0 = no limit.')
-param fslogixSizeInMBs int
+param fslogixSizeInMBs int = 30720
 
-@description('Storage service type for FSLogix. Valid values: AzureFiles, AzureNetAppFiles.')
-param fslogixStorageService string
+@allowed([
+  'AzureFiles'
+  'AzureNetAppFiles'
+])
+@description('Storage service type for FSLogix.')
+param fslogixStorageService string = 'AzureFiles'
 
 @description('Resource ID of the AVD host pool that session hosts will be registered to.')
 param hostPoolResourceId string
 
-@description('Identity solution for session hosts. Valid values: ActiveDirectoryDomainServices, EntraID, EntraIDIntuneEnrollment.')
+@allowed([
+  'ActiveDirectoryDomainServices'
+  'EntraDomainServices'
+  'EntraId'
+  'EntraKerberos-CloudOnly'
+  'EntraKerberos-Hybrid'
+])
+@description('Identity solution for session hosts. Valid values: ActiveDirectoryDomainServices, EntraDomainServices, EntraId, EntraKerberos-CloudOnly, EntraKerberos-Hybrid.')
 param identitySolution string
 
 @description('Image reference object containing either marketplace image details or compute gallery image version resource ID.')
 param imageReference object
 
 @description('Enable Microsoft Defender for Cloud integrity monitoring on session hosts.')
-param integrityMonitoring bool
+param integrityMonitoring bool = false
 
 @description('Enroll session hosts in Microsoft Intune. Only applicable with EntraIDIntuneEnrollment identity solution.')
-param intuneEnrollment bool
+param intuneEnrollment bool = false
 
 @description('Azure region where session hosts will be deployed.')
-param location string
+param location string = resourceGroup().location
 
 @description('Enable Azure Monitor VM insights on session hosts.')
-param enableMonitoring bool
+param enableMonitoring bool = false
 
 @description('Naming convention pattern for network interfaces.')
-param networkInterfaceNameConv string
+param networkInterfaceNameConv string = ''
 
 @description('Naming convention pattern for OS managed disks.')
-param osDiskNameConv string
+param osDiskNameConv string = ''
 
 @description('Organizational Unit (OU) path in Active Directory for computer objects. Leave empty for default Computers container.')
-param ouPath string
+param ouPath string = ''
 
 @description('Enable secure boot for generation 2 VMs.')
-param secureBootEnabled bool
+param secureBootEnabled bool = true
 
+@allowed([
+  'Standard'
+  'TrustedLaunch'
+  'ConfidentialVM'
+])
 @description('Security type for VMs. Valid values: Standard, TrustedLaunch, ConfidentialVM.')
-param securityType string
+param securityType string = 'TrustedLaunch'
 
 @description('Array of custom script extension configurations for additional session host customization.')
-param sessionHostCustomizations array
+param sessionHostCustomizations array = []
 
+@minValue(1)
+@maxValue(4)
 @description('Number of digits used in the session host name index. Determines how many characters from the end represent the VM number.')
-param sessionHostNameIndexLength int
+param sessionHostNameIndexLength int = 2
 
 @description('Array of session host names to deploy. Names should follow the pattern <prefix><index> where index length matches sessionHostNameIndexLength.')
 param sessionHostNames array
@@ -134,27 +184,29 @@ param sessionHostNames array
 param subnetResourceId string
 
 @description('Tags to apply to deployed resources. Organized by resource type.')
-param tags object
+param tags object = {}
 
 @description('DO NOT MODIFY THIS VALUE! The timeStamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddHHmmss')
 
 @description('Time zone for session hosts. Use Windows time zone format (e.g., Eastern Standard Time, Pacific Standard Time).')
-param timeZone string
+param timeZone string = 'Eastern Standard Time'
 
 @description('Naming convention pattern for virtual machines.')
-param virtualMachineNameConv string
+param virtualMachineNameConv string = ''
 
 @description('Azure VM size for session hosts. Examples: Standard_D4s_v5, Standard_D8s_v5.')
 param virtualMachineSize string
 
 @description('Enable virtual Trusted Platform Module (vTPM) for generation 2 VMs.')
-param vTpmEnabled bool
+param vTpmEnabled bool = true
 
 @description('Resource ID of the data collection rule for VM Insights performance and dependency monitoring.')
-param vmInsightsDataCollectionRulesResourceId string
+param vmInsightsDataCollectionRulesResourceId string = ''
 
 // Variables
+
+var avSetNameConv = empty(availabilitySetNameConv) ? 'as-${substring(sessionHostNames[0], 0, length(sessionHostNames[0])-sessionHostNameIndexLength)}-##' : availabilitySetNameConv
 
 var deploymentSuffix = startsWith(deployment().name, 'Microsoft.Template-') ? substring(deployment().name, 19, 14) : timeStamp
 
@@ -194,6 +246,11 @@ resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
 }
 
+resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(artifactsUserAssignedIdentityResourceId)) {
+  scope: resourceGroup(split(artifactsUserAssignedIdentityResourceId, '/')[2], split(artifactsUserAssignedIdentityResourceId, '/')[4])
+  name: last(split(artifactsUserAssignedIdentityResourceId, '/'))
+}
+
 module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if(fslogixConfigureSessionHosts && (!empty(fslogixLocalNetAppVolumeResourceIds) || !empty(fslogixRemoteNetAppVolumeResourceIds))) {
   name: 'NetAppVolumeFqdns-${deploymentSuffix}'
   params: {
@@ -203,19 +260,11 @@ module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if(fslo
   }
 }
 
-module artifactsUserAssignedIdentity 'modules/getUserAssignedIdentity.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
-  scope: subscription()
-  name: 'ArtifactsUserAssignedIdentity-${deploymentSuffix}'
-  params: {
-    userAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
-  }
-}
-
 module availabilitySets '../../../../sharedModules/resources/compute/availability-set/main.bicep' = [
   for i in range(0, calculatedAvailabilitySetsCount): if (availability == 'AvailabilitySets') {
-    name: '${replace(availabilitySetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))}-${deploymentSuffix}'
+    name: '${replace(avSetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))}-${deploymentSuffix}'
     params: {
-      name: replace(availabilitySetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))
+      name: replace(avSetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))
       platformFaultDomainCount: 2
       platformUpdateDomainCount: 5
       proximityPlacementGroupResourceId: ''
@@ -235,10 +284,10 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
       artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId)
         ? ''
-        : artifactsUserAssignedIdentity!.outputs.clientId
+        : artifactsUAI!.properties.clientId
       availability: availability
       availabilityZones: availabilityZones
-      availabilitySetNameConv: availabilitySetNameConv
+      availabilitySetNameConv: avSetNameConv
       avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
       confidentialVMOSDiskEncryptionType: confidentialVMOSDiskEncryptionType
       dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
@@ -249,8 +298,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       diskEncryptionSetResourceId: diskEncryptionSetResourceId
       diskSizeGB: diskSizeGB
       diskSku: diskSku
-      domainJoinUserPassword: kvCredentials.getSecret('DomainJoinUserPassword')
-      domainJoinUserPrincipalName: kvCredentials.getSecret('DomainJoinUserPrincipalName')
+      domainJoinUserPassword: !empty(domainName) ? kvCredentials.getSecret('DomainJoinUserPassword') : ''
+      domainJoinUserPrincipalName: !empty(domainName) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : ''
       domainName: domainName
       enableAcceleratedNetworking: enableAcceleratedNetworking
       enableMonitoring: enableMonitoring

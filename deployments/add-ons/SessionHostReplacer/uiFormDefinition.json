@@ -488,12 +488,14 @@
 								{
 									"name": "fixSessionHostTags",
 									"type": "Microsoft.Common.CheckBox",
+									"defaultValue": true,
 									"label": "Fix Session Host Tags",
 									"toolTip": "Automatically correct session host tags during execution."
 								},
 								{
 									"name": "includePreExistingSessionHosts",
 									"type": "Microsoft.Common.CheckBox",
+									"defaultValue": true,
 									"label": "Include Pre-Existing Session Hosts",
 									"toolTip": "Include session hosts that existed before this solution was deployed."
 								},
@@ -580,6 +582,7 @@
 								{
 									"name": "enableProgressiveScaleUp",
 									"type": "Microsoft.Common.CheckBox",
+									"defaultValue": true,
 									"label": "Enable Progressive Scale-Up",
 									"toolTip": "Enable percentage-based progressive deployment of session host replacements."
 								},
@@ -591,7 +594,7 @@
 									"toolTip": "Percentage of total needed hosts to deploy in the first run.",
 									"min": 1,
 									"max": 100,
-									"defaultValue": 10,
+									"defaultValue": 20,
 									"showStepMarkers": false,
 									"constraints": {
 										"required": true
@@ -605,7 +608,7 @@
 									"toolTip": "Percentage added after each successful deployment run.",
 									"min": 5,
 									"max": 50,
-									"defaultValue": 20,
+									"defaultValue": 50,
 									"showStepMarkers": false,
 									"constraints": {
 										"required": true
@@ -2445,9 +2448,6 @@
 											"selectedGridLabel": "Selected User Groups",
 											"selectedGridNoRowsMessage": "You must select at least one group"
 										}
-									},
-									"transforms": {
-										"groups": "selectedObjects|[*].{id:id, name:displayName}"
 									}
 								},
 								{
@@ -2899,6 +2899,19 @@
 				"availability": "[if(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), steps('hosts').availability.availability, 'none')]",
 				"availabilityZones": "[if(and(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), equals(steps('hosts').availability.availability, 'AvailabilityZones')), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
+				"artifactsContainerUri": "[if(and(steps('hosts').customScripts.addCustomScripts, not(empty(steps('hosts').customScripts.storageAccount)), not(empty(steps('hosts').customScripts.container))), concat(steps('hosts').customScripts.storageAccount.blobEndpoint, steps('hosts').customScripts.container), '')]",
+				"artifactsUserAssignedIdentityResourceId": "[if(and(steps('hosts').customScripts.addCustomScripts, not(empty(steps('hosts').customScripts.managedIdentity))), steps('hosts').customScripts.managedIdentity.id, '')]",
+				"sessionHostCustomizations": "[if(steps('hosts').customScripts.addCustomScripts, steps('hosts').customScripts.customizations, parse('[]'))]",
+				"fslogixConfigureSessionHosts": "[steps('userProfiles').configureSessionHosts]",
+				"fslogixContainerType": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').fslogixContainerType, 'ProfileContainer')]",
+				"fslogixFileShareNames": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles')), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[\"profile-containers\", \"office-containers\"]'), parse('[\"profile-containers\"]')), parse('[\"profile-containers\"]'))]",
+				"fslogixSizeInMBs": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').sizeInMBs, 30720)]",
+				"fslogixStorageService": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').storageService, 'AzureFiles')]",
+				"fslogixLocalStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingLocalStorageAccounts, parse('[]'))]",
+				"fslogixRemoteStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
+				"fslogixLocalNetAppVolumeResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), steps('userProfiles').azureNetAppFiles.localVolumes, parse(concat('[\"', steps('userProfiles').azureNetAppFiles.localVolumes, '\"]'))), parse('[]'))]",
+				"fslogixRemoteNetAppVolumeResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), coalesce(steps('userProfiles').azureNetAppFiles.remoteVolumes, parse('[]')), if(not(empty(coalesce(steps('userProfiles').azureNetAppFiles.remoteVolumes, ''))), parse(concat('[\"', steps('userProfiles').azureNetAppFiles.remoteVolumes, '\"]')), parse('[]'))), parse('[]'))]",
+				"fslogixOSSGroups": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), not(equals(steps('identity').solution, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))), map(steps('userProfiles').azureFiles.userGroupPickerBlade.selectedObjects, (group) => group.displayName), parse('[]'))]",
 				"enableMonitoring": "[steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring]",
 				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.logAnalyticsWorkspace, '')]",
 				"deployWorkbook": "[if(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook, false)]",

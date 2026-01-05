@@ -44,6 +44,7 @@
         'Get-RunningDeployments'
         'Get-SessionHosts'
         'Get-TemplateSpecVersionResourceId'
+        'Remove-FailedDeploymentArtifacts'
         'Remove-SessionHosts'
         'Remove-EntraDevice'
         'Remove-IntuneDevice'

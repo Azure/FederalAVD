@@ -88,24 +88,10 @@ $runningDeployments = $deploymentsInfo.RunningDeployments
 $failedDeployments = $deploymentsInfo.FailedDeployments
 Write-HostDetailed -Message "Found {0} running deployments and {1} failed deployments" -StringValues $runningDeployments.Count, $failedDeployments.Count -Level Verbose
 
-# Handle failed deployments - mark VMs from failed deployments for deletion if they're in the host pool
+# Clean up failed deployments and orphaned VMs
 if ($failedDeployments.Count -gt 0) {
-    $failedDeploymentVMs = $failedDeployments.SessionHostNames | Select-Object -Unique
-    $sessionHostsFromFailedDeployments = $sessionHostsFiltered | Where-Object { 
-        $vmName = $_.SessionHostName
-        $failedDeploymentVMs | Where-Object { $vmName -like "$_*" }
-    }
-    
-    if ($sessionHostsFromFailedDeployments) {
-        Write-HostDetailed -Message "Found {0} session hosts from failed deployments in the host pool: {1}" -StringValues $sessionHostsFromFailedDeployments.Count, ($sessionHostsFromFailedDeployments.SessionHostName -join ',') -Level Warning
-        Write-HostDetailed -Message "These hosts will be marked for deletion and the failed deployment records should be cleaned up manually or will be handled automatically" -Level Warning
-        
-        # Tag these hosts for deletion by updating their IncludeInAutomation status
-        # They'll be picked up in the normal deletion flow
-        foreach ($sh in $sessionHostsFromFailedDeployments) {
-            Write-HostDetailed -Message "Marking session host {0} from failed deployment for cleanup" -StringValues $sh.SessionHostName -Level Warning
-        }
-    }
+    Write-HostDetailed -Message "Processing {0} failed deployments for cleanup" -StringValues $failedDeployments.Count -Level Host
+    Remove-FailedDeploymentArtifacts -ARMToken $ARMToken -FailedDeployments $failedDeployments -RegisteredSessionHostNames $sessionHostsFiltered.SessionHostName
 }
 
 # Load session host parameters
@@ -125,7 +111,7 @@ if ($null -eq $allowImageVersionRollback) {
 }
 
 # Get number session hosts to deploy
-$hostPoolDecisions = Get-HostPoolDecisions -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -FailedDeployments $failedDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback
+$hostPoolDecisions = Get-HostPoolDecisions -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback
 
 # Check if we're starting a new update cycle and reset progressive scale-up if needed
 if (Read-FunctionAppSetting EnableProgressiveScaleUp) {

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "11911922552084356396"
+      "templateHash": "15725039521399162667"
     }
   },
   "parameters": {
@@ -12940,7 +12940,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "11922344137740289421"
+              "templateHash": "5609797670096240937"
             }
           },
           "parameters": {
@@ -15254,51 +15254,6 @@
               }
             },
             {
-              "condition": "[not(empty(parameters('artifactsUserAssignedIdentityResourceId')))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('ArtifactsUserAssignedIdentity-{0}', parameters('deploymentSuffix'))]",
-              "location": "[deployment().location]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "userAssignedIdentityResourceId": {
-                    "value": "[parameters('artifactsUserAssignedIdentityResourceId')]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "9499094482521677147"
-                    }
-                  },
-                  "parameters": {
-                    "userAssignedIdentityResourceId": {
-                      "type": "string"
-                    }
-                  },
-                  "resources": [],
-                  "outputs": {
-                    "clientId": {
-                      "type": "string",
-                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('userAssignedIdentityResourceId'), '/')[2], split(parameters('userAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('userAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId]"
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('userAssignedIdentityResourceId'), '/')[2], split(parameters('userAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('userAssignedIdentityResourceId'), '/'))), '2018-11-30').principalId]"
-                    }
-                  }
-                }
-              }
-            },
-            {
               "copy": {
                 "name": "availabilitySets",
                 "count": "[length(range(0, parameters('availabilitySetsCount')))]"
@@ -15543,7 +15498,7 @@
                   "artifactsUserAssignedIdentityResourceId": {
                     "value": "[parameters('artifactsUserAssignedIdentityResourceId')]"
                   },
-                  "artifactsUserAssignedIdentityClientId": "[if(empty(parameters('artifactsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('ArtifactsUserAssignedIdentity-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.clientId.value))]",
+                  "artifactsUserAssignedIdentityClientId": "[if(empty(parameters('artifactsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('artifactsUserAssignedIdentityResourceId'), '/')[2], split(parameters('artifactsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('artifactsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
                   "availability": {
                     "value": "[parameters('availability')]"
                   },
@@ -16804,7 +16759,6 @@
                 }
               },
               "dependsOn": [
-                "[subscriptionResourceId('Microsoft.Resources/deployments', format('ArtifactsUserAssignedIdentity-{0}', parameters('deploymentSuffix')))]",
                 "availabilitySets",
                 "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('Customer-Managed-Keys-{0}', parameters('deploymentSuffix')))]",
                 "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess-{0}', parameters('deploymentSuffix')))]",
