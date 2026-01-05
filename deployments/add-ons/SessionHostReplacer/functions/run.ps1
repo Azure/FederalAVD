@@ -152,88 +152,233 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
     Save-DeploymentState -DeploymentState $deploymentState
 }
 
-# Deploy new session hosts
-$deploymentResult = $null
-if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
-    Write-HostDetailed -Message "We will deploy {0} session hosts" -StringValues $hostPoolDecisions.PossibleDeploymentsCount -Level Host
-    # Deploy session hosts - use SessionHostName (hostname from FQDN) not VMName (Azure VM resource name)
-    $existingSessionHostNames = (@($sessionHosts.SessionHostName) + @($hostPoolDecisions.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
-    
-    try {
-        $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames
-        
-        # Log deployment submission immediately for workbook visibility
-        Write-HostDetailed -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName -Level Information
-        
-        # Update deployment state for progressive scale-up tracking
-        if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
-            $deploymentState = Get-DeploymentState
-            
-            # Save deployment info for checking on next run
-            $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
-            $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
-            $deploymentState.LastDeploymentNeeded = $hostPoolDecisions.PossibleDeploymentsCount
-            $deploymentState.LastDeploymentPercentage = if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
-                [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolDecisions.PossibleDeploymentsCount) * 100)
-            }
-            else { 0 }
-            $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
-            
-            Write-HostDetailed "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run." -Level Host
-            
-            # Save state
-            Save-DeploymentState -DeploymentState $deploymentState
-        }
-    }
-    catch {
-        Write-HostDetailed -Level Error "Deployment failed with error: $_"
-        
-        # Update state to reflect immediate failure (submission error) if progressive scale-up is enabled
-        if ([bool]::Parse((Read-FunctionAppSetting EnableProgressiveScaleUp))) {
-            $deploymentState = Get-DeploymentState
-            $deploymentState.ConsecutiveSuccesses = 0
-            $deploymentState.CurrentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
-            $deploymentState.LastStatus = 'Failed'
-            $deploymentState.LastDeploymentName = '' # Clear deployment name since submission failed
-            $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
-            Save-DeploymentState -DeploymentState $deploymentState
-        }
-        
-        throw
-    }
-}
+# Check replacement mode to determine execution order
+$replacementMode = Read-FunctionAppSetting ReplacementMode
+Write-HostDetailed -Message "Replacement Mode: {0}" -StringValues $replacementMode -Level Host
 
-# Delete session hosts
-if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisions.SessionHostsPendingDelete.Count -gt 0) {
-    Write-HostDetailed -Message "We will decommission {0} session hosts from this list: {1}" -StringValues $hostPoolDecisions.SessionHostsPendingDelete.Count, ($hostPoolDecisions.SessionHostsPendingDelete.SessionHostName -join ',') -Level Host
+if ($replacementMode -eq 'DeleteFirst') {
+    # ================================================================================================
+    # DELETE-FIRST MODE: Delete idle hosts first, then deploy replacements
+    # ================================================================================================
+    Write-HostDetailed -Message "Using DELETE-FIRST mode: will delete idle hosts before deploying replacements" -Level Host
     
-    # Decommission session hosts
-    $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
-    $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice
+    # STEP 1: Delete session hosts first
+    $deletedSessionHostNames = @()
+    $deletionResults = $null
+    if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisions.SessionHostsPendingDelete.Count -gt 0) {
+        Write-HostDetailed -Message "We will decommission {0} session hosts from this list: {1}" -StringValues $hostPoolDecisions.SessionHostsPendingDelete.Count, ($hostPoolDecisions.SessionHostsPendingDelete.SessionHostName -join ',') -Level Host
+        
+        # Capture the names of hosts being deleted so we can reuse them
+        $deletedSessionHostNames = $hostPoolDecisions.SessionHostsPendingDelete.SessionHostName
+        Write-HostDetailed -Message "Deleted host names will be available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Host
+        
+        # Decommission session hosts
+        $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
+        $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice
+        
+        # Acquire Graph token if device cleanup is enabled
+        $GraphToken = $null
+        if ($removeEntraDevice -or $removeIntuneDevice) {
+            Try {
+                $graphEndpoint = Get-GraphEndpoint
+                $GraphToken = Get-AccessToken -ResourceUri $graphEndpoint
+                
+                if ([string]::IsNullOrEmpty($GraphToken)) {
+                    Write-HostDetailed "CRITICAL ERROR: Get-AccessToken returned null or empty Graph token but device cleanup is enabled." -Level Error
+                    Write-HostDetailed "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Error
+                    Write-HostDetailed "DeleteFirst mode cannot proceed without device cleanup capability - hostname reuse will fail" -Level Error
+                    throw "Graph token acquisition failed but device cleanup is required in DeleteFirst mode"
+                }
+            }
+            catch {
+                Write-HostDetailed "CRITICAL ERROR: Failed to acquire Graph access token but device cleanup is enabled: $_" -Level Error
+                Write-HostDetailed "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Error
+                Write-HostDetailed "DeleteFirst mode cannot proceed without device cleanup capability - hostname reuse will fail" -Level Error
+                throw "Graph token acquisition failed but device cleanup is required in DeleteFirst mode"
+            }
+        }
+        
+        # Perform deletion
+        $deletionResults = Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
+        
+        # Check deletion results
+        if ($deletionResults.FailedDeletions.Count -gt 0) {
+            Write-HostDetailed -Message "CRITICAL ERROR: {0} session host deletion(s) failed in DeleteFirst mode" -StringValues $deletionResults.FailedDeletions.Count -Level Error
+            foreach ($failure in $deletionResults.FailedDeletions) {
+                Write-HostDetailed -Message "  - {0}: {1}" -StringValues $failure.SessionHostName, $failure.Reason -Level Error
+            }
+            Write-HostDetailed -Message "DeleteFirst mode cannot proceed with deployments - hostname conflicts will occur if we try to reuse failed deletion names" -Level Error
+            Write-HostDetailed -Message "Successful deletions: {0}" -StringValues ($deletionResults.SuccessfulDeletions -join ', ') -Level Host
+            throw "Session host deletion failures in DeleteFirst mode prevent safe hostname reuse"
+        }
+        
+        Write-HostDetailed -Message "Successfully deleted {0} session host(s): {1}" -StringValues $deletionResults.SuccessfulDeletions.Count, ($deletionResults.SuccessfulDeletions -join ', ') -Level Host
+        
+        # Only use successfully deleted names for reuse
+        $deletedSessionHostNames = $deletionResults.SuccessfulDeletions
+    }
     
-    # Acquire Graph token if device cleanup is enabled
-    if ($removeEntraDevice -or $removeIntuneDevice) {
-        Try {
-            $graphEndpoint = Get-GraphEndpoint
-            $GraphToken = Get-AccessToken -ResourceUri $graphEndpoint
+    # STEP 2: Deploy replacement session hosts
+    if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
+        Write-HostDetailed -Message "We will deploy {0} replacement session hosts" -StringValues $hostPoolDecisions.PossibleDeploymentsCount -Level Host
+        
+        # In DeleteFirst mode: exclude deleted host names so they can be reused
+        # Calculate existing names: all current hosts + running deployments - just deleted hosts
+        $currentExistingNames = (@($sessionHosts.SessionHostName) + @($hostPoolDecisions.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
+        $existingSessionHostNames = $currentExistingNames | Where-Object { $_ -notin $deletedSessionHostNames }
+        
+        Write-HostDetailed -Message "Excluded {0} deleted host name(s) from existing list to allow reuse" -StringValues $deletedSessionHostNames.Count -Level Host
+        Write-HostDetailed -Message "Available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Verbose
+        
+        try {
+            $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames -PreferredSessionHostNames $deletedSessionHostNames
             
-            if ([string]::IsNullOrEmpty($GraphToken)) {
-                Write-Warning "Get-AccessToken returned null or empty Graph token. Device cleanup will be skipped."
-                Write-HostDetailed "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Warning
-                $GraphToken = $null
+            # Log deployment submission immediately for workbook visibility
+            Write-HostDetailed -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName -Level Information
+            
+            # Update deployment state for progressive scale-up tracking
+            if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
+                $deploymentState = Get-DeploymentState
+                
+                # Save deployment info for checking on next run
+                $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
+                $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
+                $deploymentState.LastDeploymentNeeded = $hostPoolDecisions.PossibleDeploymentsCount
+                $deploymentState.LastDeploymentPercentage = if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
+                    [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolDecisions.PossibleDeploymentsCount) * 100)
+                }
+                else { 0 }
+                $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
+                
+                Write-HostDetailed "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run." -Level Host
+                
+                # Save state
+                Save-DeploymentState -DeploymentState $deploymentState
             }
         }
         catch {
-            Write-Warning "Failed to acquire Graph access token: $_. Device cleanup will be skipped."
-            Write-HostDetailed "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Warning
-            $GraphToken = $null
+            Write-HostDetailed -Level Error "Deployment failed with error: $_"
+            
+            # Update state to reflect immediate failure (submission error) if progressive scale-up is enabled
+            if ([bool]::Parse((Read-FunctionAppSetting EnableProgressiveScaleUp))) {
+                $deploymentState = Get-DeploymentState
+                $deploymentState.ConsecutiveSuccesses = 0
+                $deploymentState.CurrentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+                $deploymentState.LastStatus = 'Failed'
+                $deploymentState.LastDeploymentName = '' # Clear deployment name since submission failed
+                $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
+                Save-DeploymentState -DeploymentState $deploymentState
+            }
+            
+            throw
         }
     }
-    If ($GraphToken) {
-        Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
+    
+} else {
+    # ================================================================================================
+    # SIDE-BY-SIDE MODE: Deploy new hosts first, then delete old ones
+    # ================================================================================================
+    Write-HostDetailed -Message "Using SIDE-BY-SIDE mode: will deploy new hosts before deleting old ones" -Level Host
+    
+    # STEP 1: Deploy new session hosts first
+    $deploymentResult = $null
+    if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
+        Write-HostDetailed -Message "We will deploy {0} session hosts" -StringValues $hostPoolDecisions.PossibleDeploymentsCount -Level Host
+        # Deploy session hosts - use SessionHostName (hostname from FQDN) not VMName (Azure VM resource name)
+        $existingSessionHostNames = (@($sessionHosts.SessionHostName) + @($hostPoolDecisions.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
+        
+        try {
+            $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames
+            
+            # Log deployment submission immediately for workbook visibility
+            Write-HostDetailed -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName -Level Information
+            
+            # Update deployment state for progressive scale-up tracking
+            if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
+                $deploymentState = Get-DeploymentState
+                
+                # Save deployment info for checking on next run
+                $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
+                $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
+                $deploymentState.LastDeploymentNeeded = $hostPoolDecisions.PossibleDeploymentsCount
+                $deploymentState.LastDeploymentPercentage = if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
+                    [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolDecisions.PossibleDeploymentsCount) * 100)
+                }
+                else { 0 }
+                $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
+                
+                Write-HostDetailed "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run." -Level Host
+                
+                # Save state
+                Save-DeploymentState -DeploymentState $deploymentState
+            }
+        }
+        catch {
+            Write-HostDetailed -Level Error "Deployment failed with error: $_"
+            
+            # Update state to reflect immediate failure (submission error) if progressive scale-up is enabled
+            if ([bool]::Parse((Read-FunctionAppSetting EnableProgressiveScaleUp))) {
+                $deploymentState = Get-DeploymentState
+                $deploymentState.ConsecutiveSuccesses = 0
+                $deploymentState.CurrentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+                $deploymentState.LastStatus = 'Failed'
+                $deploymentState.LastDeploymentName = '' # Clear deployment name since submission failed
+                $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
+                Save-DeploymentState -DeploymentState $deploymentState
+            }
+            
+            throw
+        }
     }
-    Else {
-        Remove-SessionHosts -ARMToken $ARMToken -GraphToken $null -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $false -RemoveIntuneDevice $false
+
+    # STEP 2: Delete session hosts second
+    if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisions.SessionHostsPendingDelete.Count -gt 0) {
+        Write-HostDetailed -Message "We will decommission {0} session hosts from this list: {1}" -StringValues $hostPoolDecisions.SessionHostsPendingDelete.Count, ($hostPoolDecisions.SessionHostsPendingDelete.SessionHostName -join ',') -Level Host
+        
+        # Decommission session hosts
+        $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
+        $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice
+        
+        # Acquire Graph token if device cleanup is enabled
+        if ($removeEntraDevice -or $removeIntuneDevice) {
+            Try {
+                $graphEndpoint = Get-GraphEndpoint
+                $GraphToken = Get-AccessToken -ResourceUri $graphEndpoint
+                
+                if ([string]::IsNullOrEmpty($GraphToken)) {
+                    Write-Warning "Get-AccessToken returned null or empty Graph token. Device cleanup will be skipped."
+                    Write-HostDetailed "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Warning
+                    $GraphToken = $null
+                }
+            }
+            catch {
+                Write-Warning "Failed to acquire Graph access token: $_. Device cleanup will be skipped."
+                Write-HostDetailed "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Warning
+                $GraphToken = $null
+            }
+        }
+        
+        # Perform deletion and log results (SideBySide mode doesn't halt on failures since name reuse isn't critical)
+        $deletionResults = $null
+        If ($GraphToken) {
+            $deletionResults = Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
+        }
+        Else {
+            $deletionResults = Remove-SessionHosts -ARMToken $ARMToken -GraphToken $null -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $false -RemoveIntuneDevice $false
+        }
+        
+        # Log results (but don't halt in SideBySide mode)
+        if ($deletionResults) {
+            if ($deletionResults.FailedDeletions.Count -gt 0) {
+                Write-HostDetailed -Message "Warning: {0} session host deletion(s) failed" -StringValues $deletionResults.FailedDeletions.Count -Level Warning
+                foreach ($failure in $deletionResults.FailedDeletions) {
+                    Write-HostDetailed -Message "  - {0}: {1}" -StringValues $failure.SessionHostName, $failure.Reason -Level Warning
+                }
+            }
+            if ($deletionResults.SuccessfulDeletions.Count -gt 0) {
+                Write-HostDetailed -Message "Successfully deleted {0} session host(s): {1}" -StringValues $deletionResults.SuccessfulDeletions.Count, ($deletionResults.SuccessfulDeletions -join ', ') -Level Host
+            }
+        }
     }
 }
 

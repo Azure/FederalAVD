@@ -100,10 +100,37 @@ param deployWorkbook bool = true
 @description('Optional. The Azure region for the centralized workbook deployment. Defaults to the function app location. The workbook location does not affect its ability to query cross-region Application Insights instances.')
 param workbookLocation string = location
 
-@description('Optional. The grace period in hours after draining before deleting session hosts. Default is 24 hours.')
+@description('Optional. Replacement mode strategy. SideBySide: Adds new hosts before deleting old ones (higher capacity during updates, zero downtime). DeleteFirst: Deletes idle hosts before adding replacements (lower cost, temporary capacity reduction). Default is SideBySide.')
+@allowed([
+  'SideBySide'
+  'DeleteFirst'
+])
+param replacementMode string = 'SideBySide'
+
+@description('Optional. The grace period in hours after draining before deleting session hosts WITH active sessions. Default is 24 hours.')
 @minValue(1)
 @maxValue(168)
 param drainGracePeriodHours int = 24
+
+@description('Optional. Minimum drain time in minutes for session hosts with ZERO sessions before deletion. With hourly scheduling: 0=current run, 1-60=next run (~1hr), 61-120=second run (~2hrs). Values >0 provide safety buffer for API lag, race conditions, and admin intervention. Default is 15 minutes.')
+@minValue(0)
+@maxValue(120)
+param minimumDrainMinutes int = 15
+
+@description('Optional. Minimum percentage of target capacity to maintain during DeleteFirst mode. Prevents over-deletion and maintains service availability. Only applies when replacementMode is DeleteFirst. Default is 80%.')
+@minValue(50)
+@maxValue(100)
+param minimumCapacityPercentage int = 80
+
+@description('Optional. Maximum number of hosts to delete per cycle in DeleteFirst mode. Prevents too-aggressive scale-down and allows gradual replacement. Only applies when replacementMode is DeleteFirst. Default is 5.')
+@minValue(1)
+@maxValue(50)
+param maxDeletionsPerCycle int = 5
+
+@description('Optional. Minimum host index for hostname numbering in SideBySide mode. Useful for starting numbering at a specific value (e.g., 10 instead of 1). Only applies when replacementMode is SideBySide. Default is 1.')
+@minValue(1)
+@maxValue(999)
+param minimumHostIndex int = 1
 
 @description('Required. The target number of session hosts to maintain in the host pool. Set to 0 for auto-detect mode: the function will automatically maintain whatever count exists when a replacement cycle begins, allowing you to manually scale between image updates.')
 @minValue(0)
@@ -749,6 +776,22 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
         value: string(drainGracePeriodHours)
       }
       {
+        name: 'MinimumDrainMinutes'
+        value: string(minimumDrainMinutes)
+      }
+      {
+        name: 'ReplacementMode'
+        value: replacementMode
+      }
+      {
+        name: 'MinimumCapacityPercentage'
+        value: string(minimumCapacityPercentage)
+      }
+      {
+        name: 'MaxDeletionsPerCycle'
+        value: string(maxDeletionsPerCycle)
+      }
+      {
         name: 'EnableProgressiveScaleUp'
         value: string(enableProgressiveScaleUp)
       }
@@ -783,6 +826,10 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
       {
         name: 'MaxDeploymentBatchSize'
         value: string(maxDeploymentBatchSize)
+      }
+      {
+        name: 'MinimumHostIndex'
+        value: string(minimumHostIndex)
       }
       {
         name: 'RemoveEntraDevice'

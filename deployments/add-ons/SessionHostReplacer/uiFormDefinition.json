@@ -440,10 +440,45 @@
 									}
 								},
 								{
+									"name": "replacementModeHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "<u>Replacement Mode Configuration</u>"
+									}
+								},
+								{
+									"name": "replacementModeInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"icon": "Info",
+										"text": "SideBySide: Adds new hosts before deleting old ones (zero downtime, higher cost during updates). DeleteFirst: Deletes idle hosts before adding replacements (lower cost, temporary capacity reduction)."
+									}
+								},
+								{
+									"name": "replacementMode",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Replacement Mode",
+									"toolTip": "Strategy for replacing session hosts during image updates.",
+									"defaultValue": "SideBySide",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "SideBySide (Add then Delete)",
+												"value": "SideBySide"
+											},
+											{
+												"label": "DeleteFirst (Delete then Add)",
+												"value": "DeleteFirst"
+											}
+										]
+									}
+								},
+								{
 									"name": "drainGracePeriodHours",
 									"type": "Microsoft.Common.Slider",
-									"label": "Drain Grace Period (hours)",
-									"toolTip": "Session hosts will remain in drain mode for this duration before deletion.",
+									"label": "Drain Grace Period for Active Sessions (hours)",
+									"toolTip": "Session hosts WITH active sessions will remain in drain mode for this duration before deletion. This protects user sessions.",
 									"min": 1,
 									"max": 168,
 									"defaultValue": 24,
@@ -451,6 +486,47 @@
 									"constraints": {
 										"required": true
 									}
+								},
+								{
+									"name": "minimumDrainMinutes",
+									"type": "Microsoft.Common.Slider",
+									"label": "Minimum Drain Time for Idle Hosts (minutes)",
+									"toolTip": "Session hosts with ZERO sessions require only this minimum drain time before deletion. With hourly scheduling: 0=current run, 1-60=next run (~1hr), 61-120=second run (~2hrs). Values >0 provide safety buffer for API lag and race conditions.",
+									"min": 0,
+									"max": 120,
+									"defaultValue": 15,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "minimumCapacityPercentage",
+									"type": "Microsoft.Common.Slider",
+									"label": "Minimum Capacity Percentage (DeleteFirst mode)",
+									"toolTip": "Minimum percentage of target capacity to maintain during DeleteFirst mode. Prevents over-deletion and maintains service availability. Only applies when replacementMode is DeleteFirst.",
+									"min": 50,
+									"max": 100,
+									"defaultValue": 80,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": true
+									},
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst')]"
+								},
+								{
+									"name": "maxDeletionsPerCycle",
+									"type": "Microsoft.Common.Slider",
+									"label": "Max Deletions Per Cycle (DeleteFirst mode)",
+									"toolTip": "Maximum number of hosts to delete per execution cycle in DeleteFirst mode. Prevents too-aggressive scale-down. Only applies when replacementMode is DeleteFirst.",
+									"min": 1,
+									"max": 50,
+									"defaultValue": 5,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": true
+									},
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst')]"
 								},
 								{
 									"name": "targetSessionHostCount",
@@ -564,6 +640,20 @@
 									"label": "Remove Intune Device Records",
 									"toolTip": "Remove Intune device records when deleting session hosts.",
 									"defaultValue": true
+								},
+								{
+									"name": "minimumHostIndex",
+									"type": "Microsoft.Common.Slider",
+									"visible": true,
+									"label": "Minimum Host Index",
+									"toolTip": "The minimum starting index for hostname numbering. In SideBySide mode, all new hosts start from this number. In DeleteFirst mode, this is used as a fallback when deploying more hosts than were deleted (e.g., 10 to create host10, host11, etc.).",
+									"min": 1,
+									"max": 999,
+									"defaultValue": 1,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": false
+									}
 								},
 								{
 									"name": "progressiveScaleUpHeader",
@@ -2844,7 +2934,12 @@
 				"timerSchedule": "[concat('0 ', string(steps('functionApp').executionSettings.scheduleMinuteOffset), ' ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]" ,
 				"replaceSessionHostOnNewImageVersionDelayDays": "[steps('functionApp').executionSettings.replaceSessionHostOnNewImageVersionDelayDays]",
 				"allowImageVersionRollback": "[steps('functionApp').executionSettings.allowImageVersionRollback]",
+				"replacementMode": "[steps('functionApp').executionSettings.replacementMode]",
 				"drainGracePeriodHours": "[steps('functionApp').executionSettings.drainGracePeriodHours]",
+				"minimumDrainMinutes": "[steps('functionApp').executionSettings.minimumDrainMinutes]",
+				"minimumCapacityPercentage": "[steps('functionApp').executionSettings.minimumCapacityPercentage]",
+				"maxDeletionsPerCycle": "[steps('functionApp').executionSettings.maxDeletionsPerCycle]",
+				"minimumHostIndex": "[steps('functionApp').executionSettings.minimumHostIndex]",
 				"targetSessionHostCount": "[steps('functionApp').executionSettings.targetSessionHostCount]",
 				"maxDeploymentBatchSize": "[steps('functionApp').executionSettings.maxDeploymentBatchSize]",
 				"fixSessionHostTags": "[steps('functionApp').executionSettings.fixSessionHostTags]",

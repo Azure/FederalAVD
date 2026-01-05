@@ -1059,6 +1059,9 @@ function Deploy-SessionHosts {
         [Parameter()]
         [string[]] $ExistingSessionHostNames = @(),
 
+        [Parameter()]
+        [string[]] $PreferredSessionHostNames = @(),
+
         [Parameter(Mandatory = $true)]
         [int] $NewSessionHostsCount,
 
@@ -1082,6 +1085,9 @@ function Deploy-SessionHosts {
 
         [Parameter()]
         [int] $SessionHostNameIndexLength = (Read-FunctionAppSetting SessionHostNameIndexLength),
+
+        [Parameter()]
+        [int] $MinimumHostIndex = (Read-FunctionAppSetting MinimumHostIndex),
 
         [Parameter()]
         [string] $DeploymentPrefix = (Read-FunctionAppSetting DeploymentPrefix),
@@ -1116,15 +1122,33 @@ function Deploy-SessionHosts {
     
     # Calculate Session Host Names
     Write-HostDetailed -Level Host -Message "Existing session host VM names: {0}" -StringValues ($ExistingSessionHostNames -join ',')
-    [array] $sessionHostNames = for ($i = 0; $i -lt $NewSessionHostsCount; $i++) {
-        $shNumber = 1
-        While (("$SessionHostNamePrefix{0:d$SessionHostNameIndexLength}" -f $shNumber) -in $ExistingSessionHostNames) {
-            $shNumber++
-        }
-        $shName = "$SessionHostNamePrefix{0:d$SessionHostNameIndexLength}" -f $shNumber
-        $ExistingSessionHostNames += $shName
-        $shName
+    
+    if ($PreferredSessionHostNames -and $PreferredSessionHostNames.Count -gt 0) {
+        Write-HostDetailed -Level Host -Message "Preferred session host names for reuse: {0}" -StringValues ($PreferredSessionHostNames -join ',')
     }
+    
+    [array] $sessionHostNames = @()
+    [array] $remainingPreferredNames = $PreferredSessionHostNames | Where-Object { $_ -notin $ExistingSessionHostNames }
+    
+    for ($i = 0; $i -lt $NewSessionHostsCount; $i++) {
+        if ($remainingPreferredNames.Count -gt 0) {
+            # Use preferred name first (from deleted hosts)
+            $shName = $remainingPreferredNames[0]
+            $remainingPreferredNames = $remainingPreferredNames | Select-Object -Skip 1
+        }
+        else {
+            # Fall back to gap-filling logic starting from MinimumHostIndex
+            $shNumber = $MinimumHostIndex
+            While (("$SessionHostNamePrefix{0:d$SessionHostNameIndexLength}" -f $shNumber) -in $ExistingSessionHostNames) {
+                $shNumber++
+            }
+            $shName = "$SessionHostNamePrefix{0:d$SessionHostNameIndexLength}" -f $shNumber
+        }
+        
+        $ExistingSessionHostNames += $shName
+        $sessionHostNames += $shName
+    }
+    
     Write-HostDetailed -Message "Creating session host(s) $($sessionHostNames -join ', ')"
 
     # Update Session Host Parameters
@@ -1493,7 +1517,17 @@ function Get-HostPoolDecisions {
         [Parameter()]
         [int] $MaxDeploymentBatchSize = [int]::Parse((Read-FunctionAppSetting MaxDeploymentBatchSize)),
         [Parameter()]
-        [int] $SuccessfulRunsBeforeScaleUp = [int]::Parse((Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp))
+        [int] $SuccessfulRunsBeforeScaleUp = [int]::Parse((Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp)),
+        [Parameter()]
+        [string] $ReplacementMode = (Read-FunctionAppSetting ReplacementMode),
+        [Parameter()]
+        [int] $DrainGracePeriodHours = [int]::Parse((Read-FunctionAppSetting DrainGracePeriodHours)),
+        [Parameter()]
+        [int] $MinimumDrainMinutes = [int]::Parse((Read-FunctionAppSetting MinimumDrainMinutes)),
+        [Parameter()]
+        [int] $MinimumCapacityPercentage = [int]::Parse((Read-FunctionAppSetting MinimumCapacityPercentage)),
+        [Parameter()]
+        [int] $MaxDeletionsPerCycle = [int]::Parse((Read-FunctionAppSetting MaxDeletionsPerCycle))
     )
     
     Write-HostDetailed "We have $($SessionHosts.Count) session hosts (included in Automation)"
@@ -2250,7 +2284,9 @@ function Remove-SessionHosts {
         [Parameter()]
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
         [Parameter()]
-        [int] $DrainGracePeriodHours = (Read-FunctionAppSetting DrainGracePeriodHours),
+        [int] $DrainGracePeriodHours = [int]::Parse((Read-FunctionAppSetting DrainGracePeriodHours)),
+        [Parameter()]
+        [int] $MinimumDrainMinutes = [int]::Parse((Read-FunctionAppSetting MinimumDrainMinutes)),
         [Parameter()]
         [string] $TagPendingDrainTimeStamp = (Read-FunctionAppSetting Tag_PendingDrainTimestamp),
         [Parameter()]
@@ -2260,7 +2296,7 @@ function Remove-SessionHosts {
         [Parameter()]
         [bool] $RemoveIntuneDevice,
         [Parameter()]
-        [string] $ClientId
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
 
     foreach ($sessionHost in $SessionHostsPendingDelete) {
@@ -2268,8 +2304,29 @@ function Remove-SessionHosts {
         $deleteSessionHost = $false
 
         if ($sessionHost.Sessions -eq 0) {
-            Write-HostDetailed -Message "Session host $($sessionHost.FQDN) has no sessions." 
-            $deleteSessionHost = $true
+            Write-HostDetailed -Message "Session host $($sessionHost.FQDN) has no sessions."
+            if (-Not $sessionHost.AllowNewSession) {
+                Write-HostDetailed -Message "Session host $($sessionHost.FQDN) is in drain mode with zero sessions."
+                if ($sessionHost.PendingDrainTimeStamp) {
+                    $elapsedMinutes = ((Get-Date) - $sessionHost.PendingDrainTimeStamp).TotalMinutes
+                    Write-HostDetailed -Message "Session host $($sessionHost.FQDN) has been draining for $([Math]::Round($elapsedMinutes, 1)) minutes (minimum: $MinimumDrainMinutes)"
+                    if ($elapsedMinutes -ge $MinimumDrainMinutes) {
+                        Write-HostDetailed -Message "Session host $($sessionHost.FQDN) has met the minimum drain time for idle hosts."
+                        $deleteSessionHost = $true
+                    }
+                    else {
+                        Write-HostDetailed -Message "Session host $($sessionHost.FQDN) has not yet met the minimum drain time."
+                    }
+                }
+                else {
+                    Write-HostDetailed -Message "Session host $($sessionHost.FQDN) does not have a drain timestamp."
+                    $drainSessionHost = $true
+                }
+            }
+            else {
+                Write-HostDetailed -Message "Session host $($sessionHost.FQDN) is not in drain mode. Turning on drain mode."
+                $drainSessionHost = $true
+            }
         }
         else {
             Write-HostDetailed -Message "Session host $($sessionHost.FQDN) has $($sessionHost.Sessions) sessions." 
@@ -2362,7 +2419,7 @@ function Remove-EntraDevice {
         [Parameter(Mandatory = $true)]
         [string] $Name,
         [Parameter(Mandatory = $false)]
-        [string] $ClientId
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
     
     try {
@@ -2413,7 +2470,7 @@ function Remove-IntuneDevice {
         [Parameter(Mandatory = $true)]
         [string] $Name,
         [Parameter(Mandatory = $false)]
-        [string] $ClientId
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
     
     try {
