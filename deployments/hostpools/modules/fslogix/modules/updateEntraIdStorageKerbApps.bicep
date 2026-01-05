@@ -5,7 +5,8 @@ param privateEndpoint bool
 param userAssignedIdentityResourceId string
 param virtualMachineName string
 
-var graphEndpoint = environment().name == 'AzureCloud' ? 'https://graph.microsoft.com' : environment().name == 'AzureUSGovernment' ? 'https://graph.microsoft.us' : startsWith(environment().name, 'us') ? 'https://graph.${environment().suffixes.storage}' : 'https//dod-graph.microsoft.us'
+// the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.
+var graphEndpoint = environment().name == 'AzureUSGovernment' ? 'https://graph.microsoft.us' : startsWith(environment().name, 'us') ? 'https://graph.${environment().suffixes.storage}' : 'https://graph.microsoft.com'
 
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
   name: last(split(userAssignedIdentityResourceId, '/'))

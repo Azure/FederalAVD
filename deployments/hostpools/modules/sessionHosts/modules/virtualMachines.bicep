@@ -2,7 +2,7 @@ param artifactsContainerUri string
 param artifactsUserAssignedIdentityClientId string
 param artifactsUserAssignedIdentityResourceId string
 param availability string
-param availabilitySetNamePrefix string
+param availabilitySetNameConv string
 param availabilityZones array
 param avdInsightsDataCollectionRulesResourceId string
 param confidentialVMOSDiskEncryptionType string
@@ -191,11 +191,11 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [fo
   }
 }]
 
-resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i in range(0, sessionHostCount): {
+resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [for i in range(0, sessionHostCount): {
   name: replace(virtualMachineNameConv, '###', padLeft((i + sessionHostIndex), vmNameIndexLength, '0'))
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
-  zones: !empty(dedicatedHostResourceId) || !empty(dedicatedHostGroupResourceId) ? dedicatedHostGroupZones : availability == 'availabilityZones' && !empty(availabilityZones) ? [
+  zones: !empty(dedicatedHostResourceId) || !empty(dedicatedHostGroupResourceId) ? dedicatedHostGroupZones : availability == 'AvailabilityZones' && !empty(availabilityZones) ? [
     availabilityZones[(i + sessionHostIndex) % length(availabilityZones)]
   ] : null
   identity: identity
@@ -204,8 +204,13 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
       hibernationEnabled: hibernationEnabled
     }
     availabilitySet: availability == 'AvailabilitySets' ? {
-      id: resourceId('Microsoft.Compute/availabilitySets', '${availabilitySetNamePrefix}-${(i + sessionHostIndex) / 200}')
+      id: resourceId('Microsoft.Compute/availabilitySets', replace(availabilitySetNameConv, '##', padLeft((((i + sessionHostIndex) - 1) / 200) + 1, 2, '0')))
     } : null
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: true
+      }
+    }
     hardwareProfile: {
       vmSize: virtualMachineSize
     }
@@ -267,11 +272,6 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i 
         secureBootEnabled: secureBootEnabled
         vTpmEnabled: vTpmEnabled
       } : null 
-    }
-    diagnosticsProfile: {
-      bootDiagnostics: {
-        enabled: false
-      }
     }
     licenseType: ((imagePublisher == 'MicrosoftWindowsDesktop' || !empty(customImageResourceId)) ? 'Windows_Client' : 'Windows_Server')
   }
@@ -349,12 +349,12 @@ resource extension_IaasAntimalware 'Microsoft.Compute/virtualMachines/extensions
 
 resource extension_AzureMonitorWindowsAgent 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = [for i in range(0, sessionHostCount): if (enableMonitoring) {
   parent: virtualMachine[i]
-  name: 'AzureMonitorAgent'
+  name: 'AzureMonitorWindowsAgent'
   location: location
   properties: {
     publisher: 'Microsoft.Azure.Monitor'
     type: 'AzureMonitorWindowsAgent'
-    typeHandlerVersion: '1.0'
+    typeHandlerVersion: '1.1'
     autoUpgradeMinorVersion: true
     enableAutomaticUpgrade: true
   }

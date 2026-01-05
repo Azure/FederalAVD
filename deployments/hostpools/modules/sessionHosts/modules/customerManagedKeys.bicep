@@ -92,7 +92,7 @@ module confidentialVM_key '../../../../sharedModules/resources/compute/virtual-m
   }
 }
 
-module roleAssignment_ConfVMOrchestrator_ReleaseUser '../../management/modules/key_RBAC.bicep' = if (confidentialVMOSDiskEncryption) {
+module roleAssignment_ConfVMOrchestrator_ReleaseUser '../../../../sharedModules/resources/key-vault/vault/key/rbac.bicep' = if (confidentialVMOSDiskEncryption) {
   name: 'RoleAssignment-ConfVMOrchestrator-ReleaseUser-${deploymentSuffix}'
   scope: resourceGroup(keyVaultResourceGroup)
   params: {
@@ -128,7 +128,7 @@ module diskEncryptionSet '../../../../sharedModules/resources/compute/disk-encry
   ]
 }
 
-module roleAssignment_DiskEncryptionSet_EncryptUser '../../management/modules/key_RBAC.bicep' = {
+module roleAssignment_DiskEncryptionSet_EncryptUser '../../../../sharedModules/resources/key-vault/vault/key/rbac.bicep' = {
   name: 'RA-DiskEncryptionSet-CryptoServiceEncryptionUser-${deploymentSuffix}'
   scope: resourceGroup(keyVaultResourceGroup)
   params: {
@@ -140,7 +140,7 @@ module roleAssignment_DiskEncryptionSet_EncryptUser '../../management/modules/ke
   }
 }
 
-module getDiskEncryptionSetCryptoUserRoleAssignment '../../common/get-RoleAssignments.bicep' = {
+module getDiskEncryptionSetCryptoUserRoleAssignment '../../../../sharedModules/custom/roleAssignments/get-RoleAssignments.bicep' = {
   name: 'Get-DiskEncryptionSet-Crypto-User-RoleAssignment-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
@@ -157,7 +157,7 @@ module getDiskEncryptionSetCryptoUserRoleAssignment '../../common/get-RoleAssign
   ]
 }
 
-module getDiskEncryptionSetCryptoReleaseUserRoleAssignment '../../common/get-RoleAssignments.bicep' = if (confidentialVMOSDiskEncryption) {
+module getDiskEncryptionSetCryptoReleaseUserRoleAssignment '../../../../sharedModules/custom/roleAssignments/get-RoleAssignments.bicep' = if (confidentialVMOSDiskEncryption) {
   name: 'Get-DiskEncryptionSet-CryptoReleaseUser-RoleAssignment-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {

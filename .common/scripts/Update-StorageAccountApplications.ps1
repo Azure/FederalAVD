@@ -30,6 +30,103 @@ $logPath = "C:\Windows\Logs"
 $logFile = Join-Path -Path $logPath -ChildPath "Update-StorageAccountApplications-$(Get-Date -Format 'yyyyMMdd-HHmm').log"
 Start-Transcript -Path $logFile -Force
 
+# Helper function to invoke Graph API with retry logic for DoD endpoints
+function Invoke-GraphApiWithRetry {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $GraphEndpoint,
+        
+        [Parameter(Mandatory = $true)]
+        [string] $AccessToken,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Get', 'Post', 'Patch', 'Delete')]
+        [string] $Method,
+        
+        [Parameter(Mandatory = $true)]
+        [string] $Uri,
+        
+        [Parameter()]
+        [string] $Body,
+        
+        [Parameter()]
+        [hashtable] $Headers = @{}
+    )
+    
+    # Ensure GraphEndpoint doesn't have trailing slash
+    $graphBase = if ($GraphEndpoint[-1] -eq '/') { 
+        $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) 
+    } else { 
+        $GraphEndpoint 
+    }
+    
+    # Setup headers
+    $requestHeaders = $Headers.Clone()
+    $requestHeaders['Authorization'] = "Bearer $AccessToken"
+    if (-not $requestHeaders.ContainsKey('Content-Type')) {
+        $requestHeaders['Content-Type'] = 'application/json'
+    }
+    
+    # List of endpoints to try
+    $endpointsToTry = @($graphBase)
+    
+    # If we're using GCCH endpoint, also try DoD
+    if ($graphBase -eq 'https://graph.microsoft.us') {
+        $endpointsToTry += 'https://dod-graph.microsoft.us'
+    }
+    
+    $lastError = $null
+    foreach ($endpoint in $endpointsToTry) {
+        try {
+            $attemptUri = "$endpoint$Uri"
+            Write-Output "Attempting Graph API call to: $attemptUri"
+            
+            $params = @{
+                Uri     = $attemptUri
+                Method  = $Method
+                Headers = $requestHeaders
+            }
+            
+            if ($Body -and $Method -in @('Post', 'Patch')) {
+                $params['Body'] = $Body
+            }
+            
+            $result = Invoke-RestMethod @params
+            
+            # If we succeeded with a different endpoint than the one provided, log it
+            if ($endpoint -ne $graphBase) {
+                Write-Warning "Graph API call succeeded with alternate endpoint: $endpoint"
+                Write-Warning "Consider updating GraphEndpoint parameter to: $endpoint"
+            }
+            
+            return $result
+        }
+        catch {
+            $lastError = $_
+            $statusCode = $null
+            
+            if ($_.Exception.Response) {
+                $statusCode = [int]$_.Exception.Response.StatusCode
+            }
+            
+            # Retry on authentication/authorization errors (401, 403) or if endpoint not found (404 on base endpoint)
+            if ($statusCode -in @(401, 403, 404) -and $endpoint -ne $endpointsToTry[-1]) {
+                Write-Warning "Graph API call to $endpoint failed with status $statusCode. Trying alternate endpoint..."
+                continue
+            }
+            else {
+                # Don't retry - either not an auth error or we've tried all endpoints
+                Write-Error "Graph API call failed with status $statusCode : $($_.Exception.Message)"
+                throw
+            }
+        }
+    }
+    
+    # If we get here, all endpoints failed
+    Write-Error "All Graph API endpoints failed. Last error: $($lastError.Exception.Message)"
+    throw $lastError
+}
+
 try {
     # Get Graph Access Token using Managed Identity
     $GraphUri = if ($GraphEndpoint[-1] -eq '/') { $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) } else { $GraphEndpoint }
@@ -45,21 +142,15 @@ try {
         throw "Failed to obtain access token from IMDS."
     }
         
-    $graphBase = "$GraphUri/v1.0"
-    $headers = @{
-        Authorization  = "Bearer $AccessToken"
-        "Content-Type" = "application/json"
-    }
-
     # Search for the application by DisplayName
     # Using startswith because 'contains' or 'search' might not be supported on all graph endpoints/objects or require consistency level headers
-    $searchUri = "$graphBase/applications?" + '$filter=' + "startswith(displayName, '$AppDisplayNamePrefix')"
-    Write-Output "Searching for applications: $searchUri"
+    $searchUri = "/v1.0/applications?" + '$filter=' + "startswith(displayName, '$AppDisplayNamePrefix')"
+    Write-Output "Searching for applications with prefix: $AppDisplayNamePrefix"
     try {
         # Add ConsistencyLevel header which is often required for advanced queries
-        $searchHeaders = $headers.Clone()
-        $searchHeaders.Add("ConsistencyLevel", "eventual")
-        $searchResp = Invoke-RestMethod -Method Get -Uri $searchUri -Headers $searchHeaders        
+        $searchHeaders = @{ "ConsistencyLevel" = "eventual" }
+        $searchResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $searchUri -Headers $searchHeaders
+        
         if ($searchResp.value.Count -eq 0) {
             throw "No application found starting with '$AppDisplayNamePrefix'."
         }
@@ -75,7 +166,7 @@ try {
         $appName = $app.displayName
         Write-Output "Processing Application: $appName (ObjectId: $appObjectId)"
         
-        $uri = "$graphBase/applications/$appObjectId"
+        $uri = "/v1.0/applications/$appObjectId"
 
         # 1. Update Tags
         If ($UpdateTag) {
@@ -85,7 +176,7 @@ try {
             $body = @{ tags = $tags } | ConvertTo-Json -Depth 5
 
             try {
-                Invoke-RestMethod -Method Patch -Uri $uri -Headers $headers -Body $body            
+                Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $uri -Body $body
                 Write-Output "Tags updated successfully for $appName."
             }
             catch {
@@ -97,7 +188,7 @@ try {
         if ($PrivateLink) {
             try {
                 # Get current app again to ensure we have latest identifierUris
-                $currentApp = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+                $currentApp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $uri
                 $currentUris = $currentApp.identifierUris
                 $newUris = @($currentUris)
                 $urisChanged = $false
@@ -119,7 +210,7 @@ try {
                 if ($urisChanged) {
                     Write-Output "Adding PrivateLink IdentifierUris..."
                     $uriBody = @{ identifierUris = $newUris } | ConvertTo-Json -Depth 5
-                    Invoke-RestMethod -Method Patch -Uri $uri -Headers $headers -Body $uriBody
+                    Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $uri -Body $uriBody
                     Write-Output "IdentifierUris updated successfully for $appName."
                 }
                 else {
@@ -135,7 +226,7 @@ try {
         try {
             Write-Output "Checking API Permissions for $appName..."
             # Get current app again to ensure we have latest state
-            $currentApp = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $currentApp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $uri
             $requiredResourceAccess = $currentApp.requiredResourceAccess
             
             # Microsoft Graph App ID
@@ -193,7 +284,7 @@ try {
                 $finalResourceAccess = @($otherAccess) + @($graphAccess)
                 
                 $body = @{ requiredResourceAccess = $finalResourceAccess } | ConvertTo-Json -Depth 5
-                Invoke-RestMethod -Method Patch -Uri $uri -Headers $headers -Body $body
+                Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $uri -Body $body
                 Write-Output "API Permissions updated successfully for $appName."
             } else {
                 Write-Output "API Permissions already correct for $appName."
@@ -208,8 +299,8 @@ try {
             Write-Output "Attempting to grant admin consent for openid, profile, User.Read..."
             
             # Get Service Principal for the App
-            $spUri = "$graphBase/servicePrincipals?`$filter=appId eq '$($app.appId)'"
-            $spResp = Invoke-RestMethod -Method Get -Uri $spUri -Headers $headers
+            $spUri = "/v1.0/servicePrincipals?`$filter=appId eq '$($app.appId)'"
+            $spResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $spUri
             if ($spResp.value.Count -eq 0) {
                 Write-Warning "Service Principal not found for AppId: $($app.appId). Cannot grant consent."
             }
@@ -217,13 +308,13 @@ try {
                 $clientServicePrincipalId = $spResp.value[0].id
 
                 # Get Service Principal for Microsoft Graph
-                $graphSpUri = "$graphBase/servicePrincipals?`$filter=appId eq '00000003-0000-0000-c000-000000000000'"
-                $graphSpResp = Invoke-RestMethod -Method Get -Uri $graphSpUri -Headers $headers
+                $graphSpUri = "/v1.0/servicePrincipals?`$filter=appId eq '00000003-0000-0000-c000-000000000000'"
+                $graphSpResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $graphSpUri
                 $graphServicePrincipalId = $graphSpResp.value[0].id
 
                 # Check for existing grant
-                $grantUri = "$graphBase/oauth2PermissionGrants?`$filter=clientId eq '$clientServicePrincipalId' and resourceId eq '$graphServicePrincipalId'"
-                $grantResp = Invoke-RestMethod -Method Get -Uri $grantUri -Headers $headers
+                $grantUri = "/v1.0/oauth2PermissionGrants?`$filter=clientId eq '$clientServicePrincipalId' and resourceId eq '$graphServicePrincipalId'"
+                $grantResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $grantUri
                 
                 $scope = @("openid", "profile", "User.Read")
                 
@@ -239,11 +330,11 @@ try {
                     }
                     
                     if ($newScope -ne $existingScope) {
-                         $updateGrantUri = "$graphBase/oauth2PermissionGrants/$grantId"
+                         $updateGrantUri = "/v1.0/oauth2PermissionGrants/$grantId"
                          $grantBody = @{
                             scope = $newScope
                          } | ConvertTo-Json
-                         Invoke-RestMethod -Method Patch -Uri $updateGrantUri -Headers $headers -Body $grantBody
+                         Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $updateGrantUri -Body $grantBody
                          Write-Output "Admin consent updated for $appName."
                     } else {
                         Write-Output "Admin consent already exists for $appName."
@@ -258,7 +349,7 @@ try {
                         scope = ($scope -join " ")
                     } | ConvertTo-Json
                     
-                    Invoke-RestMethod -Method Post -Uri "$graphBase/oauth2PermissionGrants" -Headers $headers -Body $grantBody
+                    Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Post -Uri "/v1.0/oauth2PermissionGrants" -Body $grantBody
                     Write-Output "Admin consent granted for $appName."
                 }
             }

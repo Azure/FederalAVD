@@ -94,7 +94,7 @@ resource existingVms 'Microsoft.Compute/virtualMachines@2023-03-01' existing = [
   }
 ]
 
-module updateVms 'virtualMachineUpdate.bicep' = [
+module updateVms 'modules/virtualMachineUpdate.bicep' = [
    for (vmName, i) in vmNames: if(!empty(logsUserAssignedIdentityResourceId) || !empty(scriptsUserAssignedIdentityResourceId)) {
     name: 'VirtualMachineUpdate-${vmName}-${timeStamp}'
     scope: resourceGroup(resourceGroupName)
@@ -112,7 +112,7 @@ module updateVms 'virtualMachineUpdate.bicep' = [
   }
 ]
 
-module runCommands 'runCommands.bicep' = [
+module runCommands 'modules/runCommands.bicep' = [
   for (vmName, i) in vmNames: if (!empty(scripts)) {
     name: 'RunCommands-${vmName}-${timeStamp}'
     scope: resourceGroup(resourceGroupName)
@@ -135,7 +135,7 @@ module runCommands 'runCommands.bicep' = [
   }
 ]
 
-module runCommand 'runCommand.bicep' = [
+module runCommand 'modules/runCommand.bicep' = [
   for (vmName, i) in vmNames: if (empty(scripts)) {
     name: 'RunCommand-${vmName}-${timeStamp}'
     scope: resourceGroup(resourceGroupName)

@@ -530,7 +530,7 @@
                             "visible": "[and(not(contains(steps('basics').meApi.transformed.context, 'microsoft.us')), not(contains(steps('basics').meApi.transformed.context, 'microsoft.com')), steps('imageCustomizations').downloadLatestMicrosoftContent)]",
                             "options": {
                                 "style": "Warning",
-                                "text": "This page of the wizard allows you to add predefined and custom defined image customizations. The built-in customizations (i.e., FSLogix, Office, OneDrive, Teams, Virtual Desktop Optimization Tool) require Internet access in order to be able to download the installers from Microsoft. If this is not available, then you must enable the Zero Trust option after completing the prerequisite deployment of Image Management Resources."
+                                "text": "This page of the wizard allows you to add predefined and custom defined image customizations. The built-in customizations (i.e., FSLogix, Office, OneDrive, Teams, Windows Desktop Optimization Tool) require Internet access in order to be able to download the installers from Microsoft. If this is not available, then you must enable the Zero Trust option after completing the prerequisite deployment of Image Management Resources."
                             }
                         },
                         {
@@ -1027,10 +1027,10 @@
                                     "visible": true
                                 },
                                 {
-                                    "name": "installVirtualDesktopOptimizationTool",
+                                    "name": "installWindowsDesktopOptimizationTool",
                                     "type": "Microsoft.Common.CheckBox",
-                                    "label": "Apply Virtual Desktop Optimizations",
-                                    "toolTip": "Select to apply the customizations prescribed in the Virtual Desktop Optimization Tool",
+                                    "label": "Apply Windows Desktop Optimizations",
+                                    "toolTip": "Select to apply the customizations prescribed in the Windows Desktop Optimization Tool",
                                     "visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud'))))]"
                                 },
                                 {
@@ -1140,10 +1140,10 @@
                                                                 "label": "Yes",
                                                                 "value": true
                                                             }
-                                                        ],
+                                                        ],                                                        
+                                                        "defaultValue": "No",
                                                         "required": false
-                                                    },
-                                                    "defaultValue": "No"
+                                                    }                                                    
                                                 }
                                             }
                                         ]
@@ -2058,7 +2058,7 @@
                 "installTeams": "[if(equals(steps('imageSource').offer, 'office-365'), false, steps('imageCustomizations').office.installTeams)]",
                 "teamsCloudType": "[if(steps('imageCustomizations').office.installTeams, steps('imageCustomizations').office.teamsCloudType, 'Commercial')]",
                 "appsToRemove": "[steps('imageCustomizations').customizations.appsToRemove]",
-                "installVirtualDesktopOptimizationTool": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud')))), steps('imageCustomizations').customizations.installVirtualDesktopOptimizationTool, false)]",
+                "installVirtualDesktopOptimizationTool": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud')))), steps('imageCustomizations').customizations.installWindowsDesktopOptimizationTool, false)]",
                 "cleanupDesktop": "[steps('imageCustomizations').customizations.cleanupDesktop]",
                 "installUpdates": "[steps('imageCustomizations').updates.installUpdates]",
                 "updateService": "[steps('imageCustomizations').updates.updateService]",

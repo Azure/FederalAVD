@@ -48,7 +48,7 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
         ]
     source: {
       scriptUri: empty(scriptUri) ? null : scriptUri
-      script: empty(base64ScriptContent) ? null : loadTextContent('Execute-Base64Script.ps1')
+      script: empty(base64ScriptContent) ? null : loadTextContent('../functions/Execute-Base64Script.ps1')
       scriptUriManagedIdentity: empty(scriptsUserAssignedIdentityClientId)
         ? null
         : {

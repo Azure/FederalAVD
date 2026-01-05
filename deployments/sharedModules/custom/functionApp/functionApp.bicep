@@ -1,18 +1,22 @@
 param applicationInsightsName string
 param azureBlobPrivateDnsZoneResourceId string
-param azureFilePrivateDnsZoneResourceId string
 param azureFunctionAppPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
 param azureTablePrivateDnsZoneResourceId string
 param deploymentSuffix string
 param enableApplicationInsights bool
 param encryptionKeyName string
-param encryptionKeyVaultUri string
-param encryptionUserAssignedIdentityResourceId string
+param encryptionKeyVaultResourceId string
 param functionAppDelegatedSubnetResourceId string
 param functionAppName string
 param functionAppAppSettings array
+param functionAppUserAssignedIdentityResourceId string = ''
 param hostPoolResourceId string
+@allowed([
+  'MicrosoftManaged'
+  'CustomerManaged'
+  'CustomerManagedHSM'
+])
 param keyManagementStorageAccounts string
 param location string
 param logAnalyticsWorkspaceResourceId string
@@ -21,11 +25,10 @@ param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
 param privateLinkScopeResourceId string
-param resourceGroupRoleAssignments array = []
+param storageAccountRoleDefinitionIds array = []
 param serverFarmId string
 param storageAccountName string
 param tags object
-
 
 var cloudSuffix = replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')
 // ensure that private endpoint name and nic name are not longer than 80
@@ -33,25 +36,30 @@ var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && private
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
 
-var peVnetId = length(privateEndpointVnetName) < 37
-  ? privateEndpointVnetName
-  : uniqueString(privateEndpointVnetName)
+var peVnetId = length(privateEndpointVnetName) < 37 ? privateEndpointVnetName : uniqueString(privateEndpointVnetName)
 
 var azureStoragePrivateDnsZoneResourceIds = [
   azureBlobPrivateDnsZoneResourceId
-  azureFilePrivateDnsZoneResourceId
   azureQueuePrivateDnsZoneResourceId
   azureTablePrivateDnsZoneResourceId
 ]
 
 var storageSubResources = [
   'blob'
-  'file'
   'queue'
   'table'
 ]
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+resource functionAppUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = if (!empty(functionAppUserAssignedIdentityResourceId)) {
+  name: last(split(functionAppUserAssignedIdentityResourceId, '/'))
+  scope: resourceGroup(
+    split(functionAppUserAssignedIdentityResourceId, '/')[2],
+    split(functionAppUserAssignedIdentityResourceId, '/')[4]
+  )
+}
+
+// Create the Function App Storage Account with Microsoft Managed Keys first
+resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   name: storageAccountName
   location: location
   tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
@@ -61,10 +69,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
   kind: 'StorageV2'
   identity: keyManagementStorageAccounts != 'MicrosoftManaged'
     ? {
-        type: 'UserAssigned'
-        userAssignedIdentities: {
-          '${encryptionUserAssignedIdentityResourceId}': {}
-        }
+        type: 'SystemAssigned'
       }
     : null
   properties: {
@@ -72,31 +77,12 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
     allowBlobPublicAccess: false
     allowCrossTenantReplication: false
     allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
-    allowSharedKeyAccess: false
-    azureFilesIdentityBasedAuthentication: {
-      directoryServiceOptions: 'None'
-    }
-    defaultToOAuthAuthentication: false
+    allowSharedKeyAccess: true
+    defaultToOAuthAuthentication: true
     dnsEndpointType: 'Standard'
     encryption: {
-      identity: keyManagementStorageAccounts != 'MicrosoftManaged'
-        ? {
-            userAssignedIdentity: encryptionUserAssignedIdentityResourceId
-          }
-        : null
-      keySource: keyManagementStorageAccounts != 'MicrosoftManaged' ? 'Microsoft.KeyVault' : 'Microsoft.Storage'
-      keyvaultproperties: keyManagementStorageAccounts != 'MicrosoftManaged'
-        ? {
-            keyvaulturi: encryptionKeyVaultUri
-            keyname: encryptionKeyName
-          }
-        : null
       requireInfrastructureEncryption: true
       services: {
-        file: {
-          keyType: 'Account'
-          enabled: true
-        }
         table: {
           keyType: 'Account'
           enabled: true
@@ -111,7 +97,6 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
         }
       }
     }
-    largeFileSharesState: 'Disabled'
     minimumTlsVersion: 'TLS1_2'
     networkAcls: {
       bypass: 'AzureServices'
@@ -126,11 +111,9 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
     }
     supportsHttpsTrafficOnly: true
   }
-}
-
-resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2021-09-01' = {
-  parent: storageAccount
-  name: 'default'
+  resource blobService 'blobServices' = {
+    name: 'default'
+  }
 }
 
 resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01' = [
@@ -171,7 +154,7 @@ resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01
 ]
 
 resource privateDnsZoneGroups_storage 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-08-01' = [
-  for i in range(0, length(azureStoragePrivateDnsZoneResourceIds) - 1): if(privateEndpoint && !empty(azureStoragePrivateDnsZoneResourceIds[i])) {
+  for i in range(0, length(azureStoragePrivateDnsZoneResourceIds) - 1): if (privateEndpoint && !empty(azureStoragePrivateDnsZoneResourceIds[i])) {
     parent: privateEndpoints_storage[i]
     name: storageAccount.name
     properties: {
@@ -189,7 +172,7 @@ resource privateDnsZoneGroups_storage 'Microsoft.Network/privateEndpoints/privat
 ]
 
 resource diagnosticSetting_storage_blob 'Microsoft.Insights/diagnosticsettings@2017-05-01-preview' = if (enableApplicationInsights) {
-  scope: blobService
+  scope: storageAccount::blobService
   name: '${storageAccountName}-blob-diagnosticSettings'
   properties: {
     logs: [
@@ -209,14 +192,26 @@ resource diagnosticSetting_storage_blob 'Microsoft.Insights/diagnosticsettings@2
   }
 }
 
+module encryptionKey 'encryptionKey.bicep' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
+  name: 'encryptionKey-storageAccount-${deploymentSuffix}'
+  params: {
+    encryptionKeyName: encryptionKeyName
+    hostPoolResourceId: hostPoolResourceId
+    deploymentSuffix: deploymentSuffix
+    keyManagementStorageAccounts: keyManagementStorageAccounts
+    keyVaultResourceId: encryptionKeyVaultResourceId
+    storageAccountPrincipalId: storageAccount.identity.principalId
+  }
+}
+
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (enableApplicationInsights) {
   name: applicationInsightsName
   location: location
   tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Insights/components'] ?? {})
   properties: {
     Application_Type: 'web'
-    publicNetworkAccessForIngestion: privateEndpoint ? 'Disabled' : null
-    publicNetworkAccessForQuery: privateEndpoint ? 'Disabled' : null
+    publicNetworkAccessForIngestion: empty(privateLinkScopeResourceId) ? null : 'Disabled'
+    publicNetworkAccessForQuery: empty(privateLinkScopeResourceId) ? null : 'Disabled'
     WorkspaceResourceId: logAnalyticsWorkspaceResourceId
   }
   kind: 'web'
@@ -239,9 +234,16 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
   location: location
   tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Web/sites'] ?? {})
   kind: 'functionapp'
-  identity: {
-    type: 'SystemAssigned'
-  }
+  identity: !empty(functionAppUserAssignedIdentityResourceId)
+    ? {
+        type: 'UserAssigned'
+        userAssignedIdentities: {
+          '${functionAppUserAssignedIdentityResourceId}': {}
+        }
+      }
+    : {
+        type: 'SystemAssigned'
+      }
   properties: {
     clientAffinityEnabled: false
     httpsOnly: true
@@ -250,14 +252,26 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
     siteConfig: {
       alwaysOn: true
       appSettings: union(
+        empty(functionAppUserAssignedIdentityResourceId)
+          ? []
+          : [
+              {
+                name: 'AzureWebJobsStorage__clientId'
+                value: functionAppUAI!.properties.clientId
+              }
+              {
+                name: 'UserAssignedIdentityClientId'
+                value: functionAppUAI!.properties.clientId
+              }
+            ],
         [
-          {
-            name: 'AzureWebJobsStorage__blobServiceUri'
-            value: 'https://${storageAccount.name}.blob.${environment().suffixes.storage}'
-          }
           {
             name: 'AzureWebJobsStorage__credential'
             value: 'managedidentity'
+          }
+          {
+            name: 'AzureWebJobsStorage__blobServiceUri'
+            value: 'https://${storageAccount.name}.blob.${environment().suffixes.storage}'
           }
           {
             name: 'AzureWebJobsStorage__queueServiceUri'
@@ -284,19 +298,13 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
             value: environment().name
           }
           {
-            name: 'ResourceManagerUrl'
+            name: 'ResourceManagerUri'
             // This workaround is needed because the environment().resourceManager value is missing the trailing slash for some Azure environments
-            value: endsWith(environment().resourceManager, '/')
-              ? environment().resourceManager
-              : '${environment().resourceManager}/'
+            value: environment().resourceManager
           }
           {
             name: 'StorageSuffix'
             value: environment().suffixes.storage
-          }
-          {
-            name: 'SubscriptionId'
-            value: subscription().subscriptionId
           }
           {
             name: 'TenantId'
@@ -320,8 +328,11 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
           'https://functions-staging.${cloudSuffix}'
           'https://functions.${cloudSuffix}'
         ]
+        supportCredentials: false
       }
       ftpsState: 'Disabled'
+      functionAppScaleLimit: 200
+      minimumElasticInstanceCount: 0
       netFrameworkVersion: 'v6.0'
       powerShellVersion: '7.4'
       publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
@@ -384,26 +395,49 @@ resource privateDnsZoneGroup_functionApp 'Microsoft.Network/privateEndpoints/pri
   }
 }
 
-module roleAssignments_resourceGroups '../../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
-  for i in range(0, length(resourceGroupRoleAssignments)): {
-    name: 'set-role-assignment-${i}-${deploymentSuffix}'
-    scope: resourceGroup(resourceGroupRoleAssignments[i].scope)
+// Get principal ID from User-Assigned Identity if provided, otherwise use System-Assigned
+// Get the principal ID of the identity being used (user-assigned if provided, otherwise system-assigned)
+var functionAppPrincipalId = !empty(functionAppUserAssignedIdentityResourceId)
+  ? functionAppUAI!.properties.principalId
+  : functionApp.identity.principalId
+
+// Storage account role assignments - always include Storage Blob Data Contributor and Storage Queue Data Contributor, optionally add others
+var storageAccountRoleDefinitions = union(
+  [
+    'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor (always required)
+    '974c5e8b-45b9-4653-ba55-5f855dd0fb88' // Storage Queue Data Contributor
+  ],
+  storageAccountRoleDefinitionIds
+)
+
+module roleAssignment_storageAccount '../../resources/storage/storage-account/rbac.bicep' = [
+  for roleDefinitionId in storageAccountRoleDefinitions: {
+    name: 'set-role-assignment-storage-${uniqueString(roleDefinitionId)}-${deploymentSuffix}'
     params: {
-      principalId: functionApp.identity.principalId
+      principalIds: [functionAppPrincipalId]
       principalType: 'ServicePrincipal'
-      roleDefinitionId: resourceGroupRoleAssignments[i].roleDefinitionId
+      roleDefinitionId: roleDefinitionId
+      storageAccountResourceId: storageAccount.id
     }
   }
 ]
 
-module roleAssignment_storageAccount '../roleAssignment-storageAccount.bicep' = {
-  name: 'set-role-assignment-storage-${deploymentSuffix}'
+// Update storage account with customer managed key encryption. Force this to end to allow time for RBAC to propagate.
+module updateStorageAccount 'updateStorageAccountKey.bicep' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
+  name: 'update-encryptionKey-storageAccount-${deploymentSuffix}'
   params: {
-    principalIds: [functionApp.identity.principalId]
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b' // Storage Blob Data Owner
-    storageAccountResourceId: storageAccount.id
+    storageAccountName: storageAccount.name
+    storageAccountSku: storageAccount.sku
+    encryptionKeyName: encryptionKey!.outputs.encryptionKeyName
+    keyVaultResourceId: encryptionKeyVaultResourceId
+    location: location
+    storageAccountKind: storageAccount.kind
   }
+  dependsOn: [
+    functionApp
+  ]
 }
 
 output functionAppName string = functionApp.name
+output functionAppPrincipalId string = functionAppPrincipalId
+output applicationInsightsResourceId string = enableApplicationInsights ? applicationInsights.id : ''

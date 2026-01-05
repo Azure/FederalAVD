@@ -45,7 +45,7 @@
 | `appGroupSecurityGroups` | An array of objects that contain the Entra ID DisplayNames and ObjectIds that are assigned to the desktop application group created by this template. If you do not shard storage, then these groups are also granted permissions to the storage accounts. | array (of objects) | [{"DisplayName":"Entra Display Name", "ObjectId": "Entra Object Id"}] | [] |
 | `artifactsContainerUri` | The full URI of the storage account and container that contains any scripts you want to run on each host during deployment. | string | resource id | '' |
 | `artifactsUserAssignedIdentityResourceId` | The resource ID of the managed identity with Storage Blob Data Reader Access to the artifacts storage Account. Required when the cseUris parameter is not empty. | string | resource id | '' |
-| `availability` | Set the desired availability / SLA with a pooled host pool.  The best practice is to deploy to availability Zones for resilency. | string | 'none'<br/>'availabilitySets'<br/>'availabilityZones' | 'availabilityZones' |
+| `availability` | Set the desired availability / SLA with a pooled host pool.  The best practice is to deploy to availability Zones for resilency. | string | 'None'<br/>'AvailabilitySets'<br/>'AvailabilityZones' | 'AvailabilityZones' |
 | `availabilityZones` | The availability zones to use for the virtual machines. | array | | [] |
 | `avdAgentsDSCPackage` | Sets the package name for the Desired State Configuration zip file where the script and installers are located for the AVD Agents. This parameter may need to be updated periodically to ensure you are using the latest version. You can obtain this value by going through the Add new session host flow inside a host pool and showing the template and parameters. This value will be exposed in the parameters. | string | | 'Configuration_1.0.03211.1002.zip' | 
 | `avdPrivateLinkPrivateRoutes` | Determines if Azure Private Link with Azure Virtual Desktop is enabled. Selecting "None" disables AVD Private Link deployment. Selecting one of the other options enables deployment of the required endpoints. See [AVD Private Link Setup](https://learn.microsoft.com/en-us/azure/virtual-desktop/private-link-setup?tabs=portal%2Cportal-2) for more information. | string | 'None'<br/>'HostPool'<br/>'FeedAndHostPool'<br/>'All' | 'None' |
@@ -58,7 +58,7 @@
 | `dedicatedHostResourceId` | The resource Id of a specific Dedicated Host on which to deploy the Virtual Machines. This parameter takes precedence over the `dedicatedHostGroupResourceId` parameter. | string | resource id | '' |
 | `deployDiskAccessPolicy` | Determines if the disk access policy is deployed. | bool | true<br/>false | false |
 | `deployFSLogixStorage` | Determines whether resources to support FSLogix profile storage are deployed. | bool | true<br/>false | false |
-| `deployIncreaseQuota` | Determines if the quota increase request is deployed. | bool | true<br/>false | false |
+| `deployIncreaseQuota` | **Deprecated.** Use the [Storage Quota Manager Add-On](../deployments/add-ons/StorageQuotaManager/readme.md) instead for automatic quota management. | bool | true<br/>false | false |
 | `deployPrivateEndpoints` | Determines if private endpoints are created for all resources. | bool | true<br/>false | false |
 | `deployScalingPlan` | Determines if the scaling plan is deployed to the host pool. | bool | true<br/>false | false |
 | `deploySecretsKeyVault` | Determine if the solution deploys the shared credentals key vault. | bool | true<br/>false | false |

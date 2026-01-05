@@ -5,7 +5,7 @@ param appGroupSecurityGroups array
 param artifactsContainerUri string
 param artifactsUserAssignedIdentityResourceId string
 param availability string
-param availabilitySetNamePrefix string
+param availabilitySetNameConv string
 param availabilitySetsCount int
 param availabilitySetsIndex int
 param availabilityZones array
@@ -64,7 +64,7 @@ param keyExpirationInDays int
 param keyManagementDisks string
 param location string
 param logAnalyticsWorkspaceResourceId string
-param maxResourcesPerTemplateDeployment int
+param maxVMsPerDeployment int
 param privateEndpoint bool
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
@@ -104,14 +104,6 @@ param vmInsightsDataCollectionRulesResourceId string
 
 var backupPolicyName = 'AvdPolicyVm'
 var confidentialVMOSDiskEncryptionType = confidentialVMOSDiskEncryption ? 'DiskWithVMGuestState' : 'VMGuestStateOnly'
-
-// create new arrays that always contain the profile-containers volume as the first element.
-var localNetAppProfileContainerVolumeResourceIds = !empty(fslogixLocalNetAppVolumeResourceIds) ? filter(fslogixLocalNetAppVolumeResourceIds, id => contains(id, fslogixFileShareNames[0])) : []
-var localNetAppOfficeContainerVolumeResourceIds = !empty(fslogixLocalNetAppVolumeResourceIds) && length(fslogixFileShareNames) > 1 ? filter(fslogixLocalNetAppVolumeResourceIds, id => contains(id, fslogixFileShareNames[1])) : []
-var sortedLocalNetAppResourceIds = union(localNetAppProfileContainerVolumeResourceIds, localNetAppOfficeContainerVolumeResourceIds)
-var remoteNetAppProfileContainerVolumeResourceIds = !empty(fslogixRemoteNetAppVolumeResourceIds) ? filter(fslogixRemoteNetAppVolumeResourceIds, id => contains(id, fslogixFileShareNames[0])) : []
-var remoteNetAppOfficeContainerVolumeResourceIds = !empty(fslogixRemoteNetAppVolumeResourceIds) && length(fslogixFileShareNames) > 1 ? filter(fslogixRemoteNetAppVolumeResourceIds, id => !contains(id, fslogixFileShareNames[0])) : []
-var sortedRemoteNetAppResourceIds = union(remoteNetAppProfileContainerVolumeResourceIds, remoteNetAppOfficeContainerVolumeResourceIds)
 
 var backupPrivateDNSZoneResourceIds = [
   azureBackupPrivateDnsZoneResourceId
@@ -215,18 +207,16 @@ module customerManagedKeys 'modules/customerManagedKeys.bicep' =  if (deployment
   }
 }
 
-module artifactsUserAssignedIdentity 'modules/getUserAssignedIdentity.bicep' = if(!empty(artifactsUserAssignedIdentityResourceId)) {
-  name: 'ArtifactsUserAssignedIdentity-${deploymentSuffix}'
-  params: {
-    userAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
-  }
+resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(artifactsUserAssignedIdentityResourceId)) {
+  scope: resourceGroup(split(artifactsUserAssignedIdentityResourceId, '/')[2], split(artifactsUserAssignedIdentityResourceId, '/')[4])
+  name: last(split(artifactsUserAssignedIdentityResourceId, '/'))
 }
 
 module availabilitySets '../../../sharedModules/resources/compute/availability-set/main.bicep' = [for i in range(0, availabilitySetsCount): if (pooledHostPool && availability == 'AvailabilitySets') {
-  name: '${availabilitySetNamePrefix}${padLeft((i + availabilitySetsIndex), 2, '0')}-${deploymentSuffix}'
+  name: '${replace(availabilitySetNameConv, '##', padLeft((i + availabilitySetsIndex) + 1, 2, '0'))}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
-    name: '${availabilitySetNamePrefix}${padLeft((i + availabilitySetsIndex), 2, '0')}'
+    name: replace(availabilitySetNameConv, '##', padLeft((i + availabilitySetsIndex) + 1, 2, '0'))
     platformFaultDomainCount: 2
     platformUpdateDomainCount: 5
     proximityPlacementGroupResourceId: ''
@@ -236,19 +226,15 @@ module availabilitySets '../../../sharedModules/resources/compute/availability-s
   }
 }]
 
-module localNetAppVolumes 'modules/getNetAppVolumeSmbServerFqdn.bicep' = [for i in range(0, length(sortedLocalNetAppResourceIds)): if(!empty(sortedLocalNetAppResourceIds)) {
-  name: 'LocalNetAppVolumes-${i}-${deploymentSuffix}'
+module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if(fslogixConfigureSessionHosts && (!empty(fslogixLocalNetAppVolumeResourceIds) || !empty(fslogixRemoteNetAppVolumeResourceIds))) {
+  name: 'NetAppVolumeFqdns-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupHosts)
   params: {
-    netAppVolumeResourceId: sortedLocalNetAppResourceIds[i]
+    localNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
+    remoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
+    shareNames: fslogixFileShareNames
   }
-}]
-
-module remoteNetAppVolumes 'modules/getNetAppVolumeSmbServerFqdn.bicep' = [for i in range(0, length(sortedRemoteNetAppResourceIds)) : if(!empty(sortedRemoteNetAppResourceIds)) {
-  name: 'RemoteNetAppVolumes-${i}-${deploymentSuffix}'
-  params: {
-    netAppVolumeResourceId: sortedRemoteNetAppResourceIds[i]
-  }
-}]
+}
 
 @batchSize(5)
 module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sessionHostBatchCount): {
@@ -257,10 +243,10 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
   params: {
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
-    artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId) ? '' : artifactsUserAssignedIdentity!.outputs.clientId
+    artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId) ? '' : artifactsUAI!.properties.clientId
     availability: availability
     availabilityZones: availabilityZones
-    availabilitySetNamePrefix: availabilitySetNamePrefix
+    availabilitySetNameConv: availabilitySetNameConv
     avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
     confidentialVMOSDiskEncryptionType: confidentialVMOSDiskEncryptionType
     customImageResourceId: customImageResourceId
@@ -282,9 +268,9 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames
     fslogixOSSGroups: fslogixOSSGroups
-    fslogixLocalNetAppServerFqdns: [for i in range(0, length(sortedLocalNetAppResourceIds)) : localNetAppVolumes[i]!.outputs.smbServerFqdn]
+    fslogixLocalNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.localNetAppVolumeSmbServerFqdns : []
     fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
-    fslogixRemoteNetAppServerFqdns: [for i in range(0, length(sortedRemoteNetAppResourceIds)) : remoteNetAppVolumes[i]!.outputs.smbServerFqdn]
+    fslogixRemoteNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns : []
     fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs    
     fslogixStorageService: fslogixStorageService
@@ -304,8 +290,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     securityDataCollectionRulesResourceId: securityDataCollectionRulesResourceId
     secureBootEnabled: secureBootEnabled
     securityType: securityType
-    sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxResourcesPerTemplateDeployment
-    sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxResourcesPerTemplateDeployment) + sessionHostIndex
+    sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment
+    sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxVMsPerDeployment) + sessionHostIndex
     vmNameIndexLength: vmNameIndexLength
     sessionHostRegistrationDSCUrl: sessionHostRegistrationDSCUrl
     storageSuffix: storageSuffix
@@ -399,8 +385,8 @@ module protectedItems_Vm 'modules/protectedItems.bicep' = [for i in range(1, ses
   params: {
     policyName: backupPolicyName
     recoveryServicesVaultName: deploymentType == 'Complete' ? recoveryServicesVault!.outputs.name : last(split(existingRecoveryServicesVaultResourceId, '/'))
-    sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxResourcesPerTemplateDeployment
-    sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxResourcesPerTemplateDeployment) + sessionHostIndex
+    sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment
+    sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxVMsPerDeployment) + sessionHostIndex
     virtualMachineNamePrefix: virtualMachineNamePrefix
   }
   dependsOn: [

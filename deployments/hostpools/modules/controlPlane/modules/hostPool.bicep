@@ -11,82 +11,20 @@ param privateEndpointNICName string
 param privateEndpointSubnetResourceId string
 param hostPoolMaxSessionLimit int
 param startVmOnConnect bool
-param storageResourceGroup string
 param enableMonitoring bool
 param tags object
 param deploymentSuffix string
 param time string = utcNow('u')
 param hostPoolValidationEnvironment bool
 param virtualMachineTemplate object
-
-var resourceGroupStorage = empty(storageResourceGroup)
-  ? {}
-  : { storageResourceGroup: storageResourceGroup }
-var vmIntuneEnrollment = contains(virtualMachineTemplate.identityType, 'DomainServices')
-  ? {}
-  : { vmIntuneEnrollment: virtualMachineTemplate.intuneEnrollment }
-var vmDomain = empty(virtualMachineTemplate.domain)
-  ? {}
-  : { vmDomain: virtualMachineTemplate.domain }
-var vmOUPath = empty(virtualMachineTemplate.ouPath)
-  ? {}
-  : { vmOUPath: virtualMachineTemplate.ouPath }
-var vmCustomImageId = empty(virtualMachineTemplate.customImageId)
-  ? {}
-  : { vmCustomImageId: virtualMachineTemplate.customImageId }
-var vmImageOffer = empty(virtualMachineTemplate.galleryImageOffer)
-  ? {}
-  : { vmImageOffer: virtualMachineTemplate.galleryImageOffer }
-var vmImagePublisher = empty(virtualMachineTemplate.galleryImagePublisher)
-  ? {}
-  : { vmImagePublisher: virtualMachineTemplate.galleryImagePublisher }
-var vmImageSku = empty(virtualMachineTemplate.galleryImageSku)
-  ? {}
-  : { vmImageSku: virtualMachineTemplate.galleryImageSKU }
-var vmDiskEncryptionSetName = empty(virtualMachineTemplate.diskEncryptionSetName)
-  ? {}
-  : { vmDiskEncryptionSetName: virtualMachineTemplate.diskEncryptionSetName }
-
-var hostPoolVmTemplateTags = union(
-  resourceGroupStorage,
-  {
-    vmResourceGroup: virtualMachineTemplate.resourceGroup
-    vmIdentityType: virtualMachineTemplate.identityType
-    vmNamePrefix: virtualMachineTemplate.namePrefix
-    vmIndexPadding: virtualMachineTemplate.indexPadding
-    vmImageType: virtualMachineTemplate.imageType
-    vmOSDiskType: virtualMachineTemplate.osDiskType
-    vmDiskSizeGB: virtualMachineTemplate.diskSizeGB
-    vmSize: virtualMachineTemplate.vmSize.id
-    vmAvailability: virtualMachineTemplate.availability
-    vmEncryptionAtHost: virtualMachineTemplate.?encryptionAtHost ?? false
-    vmAcceleratedNetworking: virtualMachineTemplate.?acceleratedNetworking ?? false
-    vmHibernate: virtualMachineTemplate.?hibernate ?? false
-    vmSecurityType: virtualMachineTemplate.?securityType ?? 'Standard'
-    vmSecureBoot: virtualMachineTemplate.?secureBoot ?? false
-    vmVirtualTPM: virtualMachineTemplate.?vTPM ?? false
-    vmSubnetId: virtualMachineTemplate.subnetId
-    nameConvResTypeAtEnd: virtualMachineTemplate.nameConvResTypeAtEnd
-  },
-  vmDomain,
-  vmOUPath,
-  vmCustomImageId,
-  vmImageOffer,
-  vmImagePublisher,
-  vmImageSku,
-  vmIntuneEnrollment,
-  vmDiskEncryptionSetName
-)
+param hostPoolCustomTags object
 
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' = {
   name: hostPoolName
   location: location
   tags: union(
-    hostPoolVmTemplateTags,
-    {
-      'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroup().name}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
-    },
-    tags[?'Microsoft.DesktopVirtualization/hostPools'] ?? {}
+    tags[?'Microsoft.DesktopVirtualization/hostPools'] ?? {},
+    hostPoolCustomTags
   )
   properties: {
     hostPoolType: split(hostPoolType, ' ')[0]

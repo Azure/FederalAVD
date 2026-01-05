@@ -15,6 +15,7 @@ param existingFeedWorkspaceResourceId string
 param globalFeedPrivateDnsZoneResourceId string
 param globalFeedPrivateEndpointSubnetResourceId string
 param globalWorkspaceName string
+param hostPoolCustomTags object
 param hostPoolMaxSessionLimit int
 param hostPoolName string
 param hostPoolPrivateEndpointSubnetResourceId string
@@ -36,7 +37,6 @@ param scalingPlanExclusionTag string
 param scalingPlanName string
 param scalingPlanSchedules array
 param startVmOnConnect bool
-param storageResourceGroup string
 param tags object
 param virtualMachinesTimeZone string
 param workspaceFeedPrivateEndpointSubnetResourceId string
@@ -96,6 +96,8 @@ module hostPool 'modules/hostPool.bicep' = {
   name: 'HostPool-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
+    deploymentSuffix: deploymentSuffix
+    hostPoolCustomTags: hostPoolCustomTags
     hostPoolRDPProperties: hostPoolRDPProperties
     hostPoolName: hostPoolName
     hostPoolPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
@@ -111,9 +113,7 @@ module hostPool 'modules/hostPool.bicep' = {
     privateEndpointNICName: hostPoolPrivateEndpointNICName
     privateEndpointSubnetResourceId: hostPoolPrivateEndpointSubnetResourceId
     startVmOnConnect: startVmOnConnect
-    storageResourceGroup: storageResourceGroup
     tags: tags
-    deploymentSuffix: deploymentSuffix
     virtualMachineTemplate: hostPoolVmTemplate
   }
 }

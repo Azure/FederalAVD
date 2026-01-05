@@ -490,7 +490,7 @@ When using Azure NetApp Files (`fslogixStorageService = 'AzureNetAppFiles Standa
 
 **Management Resources (Azure Files Premium only):**
 
-- Function App for automatic quota increase management
+- Function App for automatic quota increase management (see [Storage Quota Manager Add-On](../deployments/add-ons/StorageQuotaManager/readme.md))
 - App Service Plan, Application Insights, and metadata storage account
 
 **Backup Resources (optional):**
@@ -511,6 +511,93 @@ When an appropriate VM size (Nv, Nvv3, Nvv4, or NCasT4_v3 series) is selected, t
   - NvidiaGpuDriverWindows
   - CustomScriptExtension
 
+## Add-Ons
+
+This solution includes optional add-ons that extend the base AVD deployment with advanced lifecycle management and automation capabilities. Add-ons are deployed separately after the main hostpool deployment and can be enabled or disabled independently.
+
+### Storage Quota Manager
+
+Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage to prevent capacity exhaustion.
+
+**Key Features:**
+- Monitors all file shares in a specified storage resource group
+- Smart tiered scaling: 100GB increments for shares <500GB, 500GB increments for larger shares
+- Automatic discovery of storage configuration
+- Configurable timer schedule (default: every 60 minutes)
+- Application Insights integration for monitoring
+- Support for private endpoints and customer-managed encryption
+
+**Use Cases:**
+- Production AVD environments with FSLogix profiles on Azure Files Premium
+- Growing user populations requiring proactive storage capacity management
+- Compliance scenarios requiring automated capacity management
+
+**Documentation:** [Storage Quota Manager Add-On](../deployments/add-ons/StorageQuotaManager/readme.md)
+
+### Session Host Replacer
+
+Automatically replaces session hosts when new images are available with zero-downtime rolling updates.
+
+**Key Features:**
+
+- Image version tracking and automatic updates
+- Automatic capacity management (host pool can temporarily double during replacements)
+- Graceful session draining with configurable grace period (default: 24 hours)
+- Flexible deployment velocity (progressive scale-up with configurable batch size ceiling)
+- Tag-based opt-in model for controlled automation
+- Optional Entra ID and Intune device cleanup
+- Template Spec integration for consistent deployments
+
+**Use Cases:**
+
+- Continuous image updates without manual intervention
+- Maintaining fleet health and security compliance
+- Large-scale AVD deployments requiring automated lifecycle management
+- Organizations with frequent OS and application patching requirements
+
+**Documentation:** [Session Host Replacer Add-On](../deployments/add-ons/SessionHostReplacer/readme.md)
+
+### Run Commands on VMs
+
+Execute one or multiple scripts on selected virtual machines from a resource group using Azure Run Command.
+
+**Key Features:**
+
+- Execute scripts from public URLs or Base64-encoded content
+- Target multiple VMs in a single deployment
+- Support for both PowerShell and shell scripts
+- Built on Azure Run Command for secure execution
+- Minimal permissions required (Virtual Machine Contributor)
+
+**Use Cases:**
+- Batch configuration changes across session hosts
+- Emergency troubleshooting and remediation
+- Software deployment or updates outside of normal imaging process
+- One-time maintenance tasks across multiple VMs
+
+**Documentation:** [Run Commands on VMs Add-On](../deployments/add-ons/RunCommandsOnVms/readme.md)
+
+### Update Storage Account Key on Session Hosts
+
+Update FSLogix storage account keys on session hosts to support Entra ID-only identities with FSLogix and enable regular key rotation for enhanced security.
+
+**Key Features:**
+
+- Updates FSLogix registry configuration with new storage account keys
+- Supports key rotation workflows
+- Targets multiple session hosts in a single deployment
+- Uses Azure Run Command for secure key distribution
+- Compatible with Entra ID-only (cloud-only) identity scenarios
+
+**Use Cases:**
+
+- Regular storage account key rotation for security compliance
+- FSLogix configuration updates in Entra ID-only environments
+- Automated key distribution after manual or automated key rotation
+- Security incident response requiring immediate key rotation
+
+**Documentation:** [Update Storage Account Key on Session Hosts Add-On](../deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md)
+
 ## Resiliency
 
 This solution provides multiple layers of resiliency to ensure high availability and disaster recovery capabilities for your Azure Virtual Desktop environment. These features work together to protect against infrastructure failures, regional outages, and data loss.
@@ -530,10 +617,10 @@ Deploy session hosts across Availability Zones or Availability Sets to provide i
 **Parameter Configuration:**
 
 ```bicep
-availability = 'availabilityZones'         // Deploy across availability zones
+availability = 'AvailabilityZones'         // Deploy across availability zones
 availabilityZones = ['1', '2', '3']        // Use zones 1, 2, and 3
 // OR
-availability = 'availabilitySets'          // Deploy to availability sets
+availability = 'AvailabilitySets'          // Deploy to availability sets
 // OR  
 availability = 'None'                      // No infrastructure redundancy
 ```

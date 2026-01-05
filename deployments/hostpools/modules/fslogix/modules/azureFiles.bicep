@@ -3,27 +3,20 @@ param availability string
 param azureBackupPrivateDnsZoneResourceId string
 param azureBlobPrivateDnsZoneResourceId string
 param azureFilePrivateDnsZoneResourceId string
-param azureFunctionAppPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
-param azureTablePrivateDnsZoneResourceId string
 param deploymentUserAssignedIdentityClientId string
 param deploymentVirtualMachineName string
 @secure()
 param domainJoinUserPassword string
 @secure()
 param domainJoinUserPrincipalName string
+param domainName string
 param fslogixEncryptionKeyNameConv string
 param encryptionKeyVaultUri string
 param encryptionUserAssignedIdentityResourceId string
 param fileShares array
-param functionAppDelegatedSubnetResourceId string
 param hostPoolResourceId string
 param identitySolution string
-param increaseQuota bool
-param increaseQuotaEncryptionKeyName string
-param increaseQuotaApplicationInsightsName string
-param increaseQuotaFunctionAppName string
-param increaseQuotaStorageAccountName string
 param kerberosEncryptionType string
 param keyManagementStorageAccounts string
 param location string
@@ -33,12 +26,10 @@ param privateEndpoint bool
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
-param privateLinkScopeResourceId string
 param recoveryServices bool
 param recoveryServicesVaultName string
 param deploymentResourceGroupName string
 param resourceGroupStorage string
-param serverFarmId string
 param shardingOptions string
 param shareAdminGroups array
 param shareSizeInGB int
@@ -270,7 +261,7 @@ resource storageAccounts_file_diagnosticSettings 'Microsoft.Insights/diagnosticS
 ]
 
 // Assigns the Storage File Data Privileged Contributor role to the Storage Account for admins so they can adjust NTFS permissions if needed.
-module roleAssignmentsAdmins '../../common/roleAssignment-storageAccount.bicep' = [
+module roleAssignmentsAdmins '../../../../sharedModules/resources/storage/storage-account/rbac.bicep' = [
   for i in range(0, storageCount): if (!empty(shareAdminGroups)) {
     name: '${storageAccounts[i].name}-AdminRoleAssignments-${deploymentSuffix}'
     params: {
@@ -304,8 +295,8 @@ module configureADDSAuth 'domainJoin.bicep' = if (identitySolution == 'ActiveDir
     shares
   ]
 }
-
-module configureEntraKerberosWithDomainInfo 'azureFilesEntraKerberosWithDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
+// Configure Entra Kerberos Hybrid with Domain Info if domainName, domainJoinUserPrincipalName and domainJoinUserPassword are provided. If they were, the deployment helper VM is domain joined. If not, then the deployment helper VM is not domain joined and can't run this configuration.
+module configureEntraKerberosWithDomainInfo 'azureFilesEntraKerberosWithDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
   name: 'Configure-Entra-Kerberos-DomainInfo-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
@@ -326,7 +317,7 @@ module configureEntraKerberosWithDomainInfo 'azureFilesEntraKerberosWithDomainIn
   ]
 }
 
-module configureEntraKerberosWithoutDomainInfo 'azureFilesEntraKerberosWithoutDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-CloudOnly' || (identitySolution == 'EntraKerberos-Hybrid' && (empty(domainJoinUserPassword) || empty(domainJoinUserPrincipalName)))) {
+module configureEntraKerberosWithoutDomainInfo 'azureFilesEntraKerberosWithoutDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-CloudOnly' || (identitySolution == 'EntraKerberos-Hybrid' && (empty(domainName) || empty(domainJoinUserPassword) || empty(domainJoinUserPrincipalName)))) {
   name: 'Configure-Entra-Kerberos-${deploymentSuffix}'
   params: {
     defaultSharePermission: defaultSharePermission
@@ -476,67 +467,6 @@ module recoveryServicesVault '../../../../sharedModules/resources/recovery-servi
     ]
     publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.RecoveryServices/vaults'] ?? {})
-  }
-}
-
-module increaseQuotaFunctionApp '../../common/functionApp/functionApp.bicep' = if (storageSku == 'Premium' && increaseQuota) {
-  name: 'IncreaseQuotaFunctionApp-${deploymentSuffix}'
-  params: {
-    location: location
-    applicationInsightsName: increaseQuotaApplicationInsightsName
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
-    azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
-    azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
-    enableApplicationInsights: !empty(logAnalyticsWorkspaceId)
-    functionAppDelegatedSubnetResourceId: functionAppDelegatedSubnetResourceId
-    functionAppAppSettings: [
-      {
-        name: 'FileShareNames'
-        value: string(fileShares)
-      }
-      {
-        name: 'ResourceGroupName'
-        value: resourceGroupStorage
-      }
-    ]
-    encryptionUserAssignedIdentityResourceId: encryptionUserAssignedIdentityResourceId
-    functionAppName: increaseQuotaFunctionAppName
-    hostPoolResourceId: hostPoolResourceId
-    keyManagementStorageAccounts: keyManagementStorageAccounts
-    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceId
-    privateEndpoint: privateEndpoint
-    privateEndpointNameConv: privateEndpointNameConv
-    privateEndpointNICNameConv: privateEndpointNICNameConv
-    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
-    privateLinkScopeResourceId: privateLinkScopeResourceId
-    resourceGroupRoleAssignments: [
-      {
-        roleDefinitionId: '17d1049b-9a84-46fb-8f53-869881c3d3ab' // Storage Account Contributor
-        scope: resourceGroupStorage
-      }
-    ]
-    serverFarmId: serverFarmId
-    storageAccountName: increaseQuotaStorageAccountName
-    tags: tags
-    deploymentSuffix: deploymentSuffix
-    encryptionKeyName: increaseQuotaEncryptionKeyName
-    encryptionKeyVaultUri: encryptionKeyVaultUri
-  }
-}
-
-module increaseQuotaFunction '../../common/functionApp/function.bicep' = if (storageSku == 'Premium' && increaseQuota && storageCount > 0) {
-  name: 'IncreaseQuotaFunction-${deploymentSuffix}'
-  params: {
-    files: {
-      'requirements.psd1': loadTextContent('../../../../../.common/scripts/auto-increase-file-share/requirements.psd1')
-      'run.ps1': loadTextContent('../../../../../.common/scripts/auto-increase-file-share/run.ps1')
-      '../profile.ps1': loadTextContent('../../../../../.common/scripts/auto-increase-file-share/profile.ps1')
-    }
-    functionAppName: increaseQuotaFunctionApp!.outputs.functionAppName
-    functionName: 'auto-increase-file-share-quota'
-    schedule: '0 */15 * * * *'
   }
 }
 

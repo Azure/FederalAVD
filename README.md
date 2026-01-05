@@ -12,6 +12,17 @@ The code and automation capabilities of this repo can be used to deploy these ca
 
 The code is idempotent to allow all resources deployed via this solution to be redeployed without conflicts when the same parameters are used. The [resource organization](docs/design.md) follows CAF guidance and by changing the `identifier` parameter and/or the deployment location of the host pool deployment, you can deploy multiple host pools while sharing many resources to create an enterprise ready AVD solution including regional disaster recovery capabilities. Many of the [common features](docs/features.md) used with AVD have been automated in this solution for your convenience.
 
+## Add-Ons
+
+Optional add-ons extend the base AVD deployment with advanced lifecycle management and automation capabilities:
+
+- **[Storage Quota Manager](deployments/add-ons/StorageQuotaManager/readme.md)** - Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage
+- **[Session Host Replacer](deployments/add-ons/SessionHostReplacer/readme.md)** - Automatically replaces session hosts when new images are available with zero-downtime rolling updates
+- **[Run Commands on VMs](deployments/add-ons/RunCommandsOnVms/readme.md)** - Execute one or multiple scripts on selected virtual machines from a resource group
+- **[Update Storage Account Key on Session Hosts](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md)** - Update FSLogix storage account keys on session hosts to support Entra ID-only identities with FSLogix
+
+For more details, see the [Features - Add-Ons](docs/features.md#add-ons) section.
+
 ## Quick Start
 
 For detailed step by step instructions to deploy the solution components including the prerequisites, see the [Quick Start Guide](docs/quickStart.md).
