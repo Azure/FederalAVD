@@ -1552,8 +1552,6 @@ function Get-HostPoolDecisions {
         [Parameter()]
         [int] $DrainGracePeriodHours = [int]::Parse((Read-FunctionAppSetting DrainGracePeriodHours)),
         [Parameter()]
-        [int] $MinimumDrainMinutes = [int]::Parse((Read-FunctionAppSetting MinimumDrainMinutes)),
-        [Parameter()]
         [int] $MinimumCapacityPercentage = [int]::Parse((Read-FunctionAppSetting MinimumCapacityPercentage)),
         [Parameter()]
         [int] $MaxDeletionsPerCycle = $(
@@ -1769,7 +1767,7 @@ function Get-HostPoolDecisions {
         
         $canDelete = [Math]::Max($canDelete, 0)  # Ensure non-negative
         
-        Write-LogEntry "DeleteFirst mode: Will delete $canDelete hosts (aligned with $canDeploy deployments, current total: $currentTotalHosts, minimum: $minimumAbsoluteHosts at $MinimumCapacityPercentage%, max per cycle: $MaxDeletionsPerCycle)"
+        Write-LogEntry "Delete-First mode: Will delete $canDelete hosts (aligned with $canDeploy deployments, current total: $currentTotalHosts, minimum: $minimumAbsoluteHosts at $MinimumCapacityPercentage%, max per cycle: $MaxDeletionsPerCycle)"
     }
     else {
         # SideBySide mode: Only delete when overpopulated (more hosts than target)
@@ -2366,11 +2364,16 @@ function Remove-SessionHosts {
 
         if ($sessionHost.Sessions -eq 0) {
             Write-LogEntry -Message "Session host $($sessionHost.FQDN) has no sessions." -Level Information
-            if (-Not $sessionHost.AllowNewSession) {
+            
+            # Optimization: If MinimumDrainMinutes = 0, skip draining entirely and delete immediately
+            if ($MinimumDrainMinutes -eq 0) {
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is idle and MinimumDrainMinutes is 0 - deleting immediately without drain period" -Level Information
+                $deleteSessionHost = $true
+            }
+            elseif (-Not $sessionHost.AllowNewSession) {
                 Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode with zero sessions." -Level Information
                 if ($sessionHost.PendingDrainTimeStamp) {
                     $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
-                    Write-LogEntry -Message "Session host $($sessionHost.FQDN) drain timestamp: $($sessionHost.PendingDrainTimeStamp.ToString('o'))" -Level Information
                     Write-LogEntry -Message "Session host $($sessionHost.FQDN) has been draining for $([Math]::Round($elapsedMinutes, 1)) minutes (minimum required: $MinimumDrainMinutes)" -Level Information
                     if ($elapsedMinutes -ge $MinimumDrainMinutes) {
                         Write-LogEntry -Message "Session host $($sessionHost.FQDN) has met the minimum drain time for idle hosts." -Level Information
@@ -2438,17 +2441,29 @@ function Remove-SessionHosts {
                 
                 Write-LogEntry -Message "Successfully tagged $($sessionHost.SessionHostName) with drain timestamp" -Level Information
                 
+                # Update in-memory session host object so timestamp is available for deletion check in same run
+                $sessionHost.PendingDrainTimeStamp = [DateTime]::Parse($drainTimestamp, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+                
+                # Re-evaluate deletion eligibility now that we have a timestamp (allows immediate deletion when MinimumDrainMinutes = 0)
+                if ($sessionHost.Sessions -eq 0) {
+                    $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
+                    if ($elapsedMinutes -ge $MinimumDrainMinutes) {
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) meets minimum drain time ($([Math]::Round($elapsedMinutes, 1)) >= $MinimumDrainMinutes minutes), marking for immediate deletion" -Level Information
+                        $deleteSessionHost = $true
+                    }
+                }
+                
                 if ($TagScalingPlanExclusionTag -ne ' ') {
                     Write-LogEntry -Message "Setting scaling plan exclusion tag on $($sessionHost.SessionHostName)" -Level Verbose
                     $Body = @{
                         properties = @{
-                            tags = @{ $TagScalingPlanExclusionTag = $true }
+                            tags = @{ $TagScalingPlanExclusionTag = 'SessionHostReplacer' }
                         }
                         operation  = 'Merge'
                     }
                     Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri | Out-Null
                     
-                    Write-LogEntry -Message "Successfully set scaling plan exclusion tag" -Level Verbose
+                    Write-LogEntry -Message "Successfully set scaling plan exclusion tag with value: SessionHostReplacer" -Level Verbose
                 }
 
                 Write-LogEntry -Message 'Notifying Users' -Level Verbose
@@ -2522,7 +2537,8 @@ function Remove-EntraDevice {
         
         If ($Device.value -and $Device.value.Count -gt 0) {
             $Id = $Device.value[0].id
-            Write-LogEntry -Message "Removing session host $Name from Entra ID (Device ID: $Id)"
+            Write-LogEntry -Message "Removing session host $Name from Entra ID" -Level Information
+            Write-LogEntry -Message "Device ID: $Id" -Level Verbose
             
             Invoke-GraphApiWithRetry `
                 -GraphEndpoint $GraphEndpoint `
@@ -2573,7 +2589,8 @@ function Remove-IntuneDevice {
         
         If ($Device.value -and $Device.value.Count -gt 0) {
             $Id = $Device.value[0].id
-            Write-LogEntry -Message "Removing session host '$Name' device from Intune (Device ID: $Id)"
+            Write-LogEntry -Message "Removing session host '$Name' device from Intune" -Level Information
+            Write-LogEntry -Message "Device ID: $Id" -Level Verbose
             
             Invoke-GraphApiWithRetry `
                 -GraphEndpoint $GraphEndpoint `

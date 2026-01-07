@@ -1,15 +1,30 @@
 # Input bindings are passed in via param block.
 param($Timer)
 
+# The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
+if ($Timer.IsPastDue) {
+    Write-Host "PowerShell timer is running late!"
+}
+
 # Set host pool name for log prefixing
 Set-HostPoolNameForLogging -HostPoolName (Read-FunctionAppSetting HostPoolName)
 
 Write-LogEntry -Message "SessionHostReplacer function started at {0}" -StringValues (Get-Date -AsUTC -Format 'o')
 
-# The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
-if ($Timer.IsPastDue) {
-    Write-Host "PowerShell timer is running late!"
-}
+# Log configuration settings for workbook visibility
+$replacementMode = Read-FunctionAppSetting ReplacementMode
+$minimumDrainMinutes = Read-FunctionAppSetting MinimumDrainMinutes
+$drainGracePeriodHours = Read-FunctionAppSetting DrainGracePeriodHours
+$minimumCapacityPercentage = Read-FunctionAppSetting MinimumCapacityPercentage
+$maxDeletionsPerCycle = Read-FunctionAppSetting MaxDeletionsPerCycle
+$enableProgressiveScaleUp = Read-FunctionAppSetting EnableProgressiveScaleUp
+$initialDeploymentPercentage = Read-FunctionAppSetting InitialDeploymentPercentage
+$scaleUpIncrementPercentage = Read-FunctionAppSetting ScaleUpIncrementPercentage
+$successfulRunsBeforeScaleUp = Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp
+$maxDeploymentBatchSize = Read-FunctionAppSetting MaxDeploymentBatchSize
+$targetSessionHostCount = Read-FunctionAppSetting TargetSessionHostCount
+
+Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | TargetSessionHostCount: {10}" -StringValues $replacementMode, $minimumDrainMinutes, $drainGracePeriodHours, $minimumCapacityPercentage, $maxDeletionsPerCycle, $enableProgressiveScaleUp, $initialDeploymentPercentage, $scaleUpIncrementPercentage, $successfulRunsBeforeScaleUp, $maxDeploymentBatchSize, $targetSessionHostCount -Level Information
 
 # Acquire ARM access token
 try {
@@ -124,16 +139,35 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
     $isNewCycle = $false
     $resetReason = ""
     
-    # Check if image version changed
-    if ($deploymentState.LastImageVersion -and $deploymentState.LastImageVersion -ne $currentImageVersion) {
+    # Log current state for debugging
+    Write-LogEntry -Message "New cycle detection - Current state: ImageVersion=$currentImageVersion, ToReplace=$totalToReplace, RunningDeployments=$($runningDeployments.Count)" -Level Verbose
+    Write-LogEntry -Message "New cycle detection - Previous state: LastImageVersion=$($deploymentState.LastImageVersion), LastTotalToReplace=$($deploymentState.LastTotalToReplace)" -Level Verbose
+    
+    # Check if image version changed (only if we have a previous version to compare against)
+    if ($deploymentState.LastImageVersion -and $deploymentState.LastImageVersion -ne $currentImageVersion -and $currentImageVersion -ne "N/A") {
         $isNewCycle = $true
         $resetReason = "Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion"
+        Write-LogEntry -Message "New cycle detection - Image version changed detected" -Level Verbose
     }
     
     # Check if we completed the previous cycle (no hosts to replace) and now have new hosts to replace
-    if ($deploymentState.LastTotalToReplace -eq 0 -and $totalToReplace -gt 0) {
+    # Additional safeguards:
+    # - Previous cycle must have been truly complete (LastTotalToReplace was 0)
+    # - No running deployments (we're not still in the middle of the previous cycle)
+    # - No hosts in drain mode (cleanup phase still in progress)
+    # - Must have actually had a previous cycle (LastImageVersion exists)
+    $hostsInDrain = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
+    
+    Write-LogEntry -Message "New cycle detection - Cycle completion check: LastToReplace=$($deploymentState.LastTotalToReplace), CurrentToReplace=$totalToReplace, Deploying=$($runningDeployments.Count), InDrain=$hostsInDrain, HasPrevious=$($null -ne $deploymentState.LastImageVersion)" -Level Verbose
+    
+    if ($deploymentState.LastTotalToReplace -eq 0 -and 
+        $totalToReplace -gt 0 -and 
+        $runningDeployments.Count -eq 0 -and 
+        $hostsInDrain -eq 0 -and
+        $deploymentState.LastImageVersion) {
         $isNewCycle = $true
-        $resetReason = "Starting new update cycle with $totalToReplace hosts to replace (was 0)"
+        $resetReason = "Starting new update cycle with $totalToReplace hosts to replace (previous cycle was complete: 0 to replace, 0 deploying, 0 draining)"
+        Write-LogEntry -Message "New cycle detection - Cycle completion trigger: previous cycle complete, new hosts need replacement" -Level Verbose
     }
     
     # Reset progressive scale-up for new cycle
@@ -208,7 +242,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                 Write-LogEntry "CRITICAL ERROR: Failed to acquire Graph access token but device cleanup is enabled: $_" -Level Error
                 Write-LogEntry "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Error
                 Write-LogEntry "Delete-First mode cannot proceed without device cleanup capability - hostname reuse will fail" -Level Error
-                throw "Graph token acquisition failed but device cleanup is required in DeleteFirst mode"
+                throw "Graph token acquisition failed but device cleanup is required in Delete-First mode"
             }
         }
         
@@ -217,7 +251,7 @@ if ($replacementMode -eq 'DeleteFirst') {
         
         # Check deletion results
         if ($deletionResults.FailedDeletions.Count -gt 0) {
-            Write-LogEntry -Message "CRITICAL ERROR: {0} session host deletion(s) failed in DeleteFirst mode" -StringValues $deletionResults.FailedDeletions.Count -Level Error
+            Write-LogEntry -Message "CRITICAL ERROR: {0} session host deletion(s) failed in Delete-First mode" -StringValues $deletionResults.FailedDeletions.Count -Level Error
             foreach ($failure in $deletionResults.FailedDeletions) {
                 Write-LogEntry -Message "  - {0}: {1}" -StringValues $failure.SessionHostName, $failure.Reason -Level Error
             }
@@ -261,7 +295,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             while ((Get-Date) -lt $timeoutTime -and $vmsToVerify.Count -gt 0) {
                 $checkCount++
                 $elapsedSeconds = [Math]::Round(((Get-Date) - $startTime).TotalSeconds)
-                Write-LogEntry -Message "Verification check {0} at {1}s: Checking {2} remaining VM(s)..." -StringValues $checkCount, $elapsedSeconds, $vmsToVerify.Count -Level Information
+                Write-LogEntry -Message "Verification check {0} at {1}s: Checking {2} remaining VM(s)..." -StringValues $checkCount, $elapsedSeconds, $vmsToVerify.Count -Level Verbose
                 
                 $stillExist = @()
                 foreach ($vm in $vmsToVerify) {
@@ -269,7 +303,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                         $vmCheck = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $vm.Uri -ErrorAction SilentlyContinue
                         
                         if ($null -eq $vmCheck -or $vmCheck.error.code -eq 'ResourceNotFound') {
-                            Write-LogEntry -Message "VM {0} deletion confirmed" -StringValues $vm.Name -Level Information
+                            Write-LogEntry -Message "VM {0} deletion confirmed" -StringValues $vm.Name -Level Verbose
                         }
                         else {
                             $stillExist += $vm
@@ -277,14 +311,14 @@ if ($replacementMode -eq 'DeleteFirst') {
                     }
                     catch {
                         # Exception likely means VM not found, which is what we want
-                        Write-LogEntry -Message "VM {0} deletion confirmed" -StringValues $vm.Name -Level Information
+                        Write-LogEntry -Message "VM {0} deletion confirmed" -StringValues $vm.Name -Level Verbose
                     }
                 }
                 
                 $vmsToVerify = $stillExist
                 
                 if ($vmsToVerify.Count -gt 0 -and (Get-Date) -lt $timeoutTime) {
-                    Write-LogEntry -Message "{0} VM(s) still exist, waiting {1} seconds before next check..." -StringValues $vmsToVerify.Count, $pollIntervalSeconds -Level Information
+                    Write-LogEntry -Message "{0} VM(s) still exist, waiting {1} seconds before next check..." -StringValues $vmsToVerify.Count, $pollIntervalSeconds -Level Verbose
                     Start-Sleep -Seconds $pollIntervalSeconds
                 }
             }
@@ -296,6 +330,12 @@ if ($replacementMode -eq 'DeleteFirst') {
             else {
                 Write-LogEntry -Message "All deleted VMs confirmed removed from Azure" -Level Information
             }
+            
+            # Wait for Entra ID replication after device deletions
+            if ($removeEntraDevice -or $removeIntuneDevice) {
+                Write-LogEntry -Message "Waiting 1 minute for Entra ID to replicate device deletions..." -Level Information
+                Start-Sleep -Seconds 60
+            }
         }
         
         # Only use successfully deleted names for reuse
@@ -304,7 +344,7 @@ if ($replacementMode -eq 'DeleteFirst') {
         # Only deploy as many hosts as were actually deleted (not planned)
         # If hosts were drained but not deleted yet, they're still taking up space
         if ($deletionResults.SuccessfulDeletions.Count -lt $hostPoolDecisions.PossibleDeploymentsCount) {
-            Write-LogEntry -Message "DeleteFirst mode: Reducing deployments from {0} to {1} to match actual successful deletions (some hosts are still draining)" -StringValues $hostPoolDecisions.PossibleDeploymentsCount, $deletionResults.SuccessfulDeletions.Count -Level Warning
+            Write-LogEntry -Message "Delete-First mode: Reducing deployments from {0} to {1} to match actual successful deletions (some hosts are still draining)" -StringValues $hostPoolDecisions.PossibleDeploymentsCount, $deletionResults.SuccessfulDeletions.Count -Level Warning
             $hostPoolDecisions.PossibleDeploymentsCount = $deletionResults.SuccessfulDeletions.Count
         }
     }
@@ -354,8 +394,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                 $deploymentState.LastDeploymentName = '' # Clear deployment name since submission failed
                 $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
                 Save-DeploymentState -DeploymentState $deploymentState
-            }
-            
+            }            
             throw
         }
     }
@@ -410,8 +449,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                 $deploymentState.LastDeploymentName = '' # Clear deployment name since submission failed
                 $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
                 Save-DeploymentState -DeploymentState $deploymentState
-            }
-            
+            }            
             throw
         }
     }
@@ -515,7 +553,77 @@ else {
         -Level Information
 }
 
+# Check if cycle is complete (no hosts to replace, no hosts in drain, no pending deletions, no running deployments)
+# If complete, remove scaling exclusion tags from all hosts
+$cycleComplete = $metricsLog.ToReplace -eq 0 -and $metricsLog.InDrain -eq 0 -and $metricsLog.PendingDelete -eq 0 -and $metricsLog.RunningDeployments -eq 0
+
+if ($cycleComplete) {
+    Write-LogEntry -Message "Update cycle complete - all hosts are up to date. Removing scaling exclusion tags." -Level Information
+    
+    $tagScalingPlanExclusionTag = Read-FunctionAppSetting Tag_ScalingPlanExclusionTag
+    $resourceManagerUri = Get-ResourceManagerUri
+    
+    # Only proceed if a scaling exclusion tag is configured
+    if ($tagScalingPlanExclusionTag -and $tagScalingPlanExclusionTag -ne ' ') {
+        $hostsWithExclusionTag = 0
+        
+        foreach ($sessionHost in $sessionHostsFiltered) {
+            try {
+                # Check if the VM has the exclusion tag by reading current tags
+                $tagsUri = "$resourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                $vmTagsResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $tagsUri
+                
+                $vmTags = @{}
+                if ($vmTagsResponse.properties.tags) {
+                    $vmTagsResponse.properties.tags.PSObject.Properties | ForEach-Object {
+                        $vmTags[$_.Name] = $_.Value
+                    }
+                }
+                
+                # If the exclusion tag exists and has the SessionHostReplacer value (function-set), remove it
+                if ($vmTags.ContainsKey($tagScalingPlanExclusionTag)) {
+                    $tagValue = $vmTags[$tagScalingPlanExclusionTag]
+                    
+                    # Only remove if the tag value is 'SessionHostReplacer' (set by this function)
+                    # This prevents removing admin-set tags which typically have blank values or custom strings
+                    if ($tagValue -eq 'SessionHostReplacer') {
+                        Write-LogEntry -Message "Removing scaling exclusion tag from $($sessionHost.SessionHostName) (value: $tagValue)" -Level Information
+                        
+                        # Remove the tag by setting it to null
+                        $Body = @{
+                            properties = @{
+                                tags = @{ $tagScalingPlanExclusionTag = $null }
+                            }
+                            operation  = 'Merge'
+                        }
+                        
+                        Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                        $hostsWithExclusionTag++
+                        
+                        Write-LogEntry -Message "Successfully removed scaling exclusion tag from $($sessionHost.SessionHostName)" -Level Verbose
+                    }
+                    else {
+                        Write-LogEntry -Message "Skipping removal of scaling exclusion tag from $($sessionHost.SessionHostName) - appears to be admin-set (value: '$tagValue')" -Level Information
+                    }
+                }
+            }
+            catch {
+                Write-LogEntry -Message "Error removing scaling exclusion tag from $($sessionHost.SessionHostName): $($_.Exception.Message)" -Level Warning
+            }
+        }
+        
+        if ($hostsWithExclusionTag -gt 0) {
+            Write-LogEntry -Message "Removed scaling exclusion tags from {0} session host(s)" -StringValues $hostsWithExclusionTag -Level Information
+        }
+        else {
+            Write-LogEntry -Message "No scaling exclusion tags found to remove" -Level Verbose
+        }
+    }
+    else {
+        Write-LogEntry -Message "No scaling exclusion tag configured - skipping tag cleanup" -Level Verbose
+    }
+}
+
 Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | ToDeployNow: {6} | RunningDeployments: {7} | LatestImage: {8}" `
     -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.LatestImageVersion `
     -Level Information
-
