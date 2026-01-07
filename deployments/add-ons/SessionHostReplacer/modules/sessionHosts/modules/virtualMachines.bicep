@@ -680,7 +680,7 @@ resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runC
 
 module postDeploymentScripts 'invokeCustomizations.bicep' = [
   for i in range(0, sessionHostCount): if (!empty(sessionHostCustomizations)) {
-    name: '${virtualMachine[i].name}-Customizations-${deploymentSuffix}'
+    name: 'shr-${virtualMachine[i].name}-customizations-${deploymentSuffix}'
     params: {
       artifactsContainerUri: artifactsContainerUri
       customizations: sessionHostCustomizations
@@ -732,7 +732,7 @@ resource extension_DSC_installAvdAgents 'Microsoft.Compute/virtualMachines/exten
 
 module updateOSDiskNetworkAccess 'getOSDisk.bicep' = [
   for i in range(0, sessionHostCount): {
-    name: '${virtualMachine[i].name}-disable-osDisk-PublicAccess-${deploymentSuffix}'
+    name: 'shr-${virtualMachine[i].name}-disableDiskPublicAccess-${deploymentSuffix}'
     params: {
       diskAccessId: ''
       diskName: virtualMachine[i].properties.storageProfile.osDisk.name

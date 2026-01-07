@@ -91,8 +91,8 @@ param templateSpecName string = ''
 @description('Optional. The version of the Template Spec. Default is 1.0.0.')
 param templateSpecVersion string = '1.0.0'
 
-@description('Optional. Timer schedule for the function app (NCrontab format: {second} {minute} {hour} {day} {month} {day-of-week}). Default runs every hour at minute 0. To stagger across deployments, vary the minute (e.g., "0 5 * * * *" runs at 5 past each hour). For daily execution, use "0 0 2 * * *" for 2:00 AM. Note: Ranges like "0 0-15 * * * *" run EVERY hour in that range (16 times), not once randomly.')
-param timerSchedule string = '0 0 * * * *'
+@description('Optional. Timer schedule for the function app (NCrontab format: {second} {minute} {hour} {day} {month} {day-of-week}). Default runs every 30 minutes starting at minute 0 (runs at :00 and :30). To stagger across deployments, vary the minute (e.g., "0 15,45 * * * *" runs at :15 and :45 past each hour). For half-hourly execution during specific hours, use "0 0,30 8-17 * * 1-5" for 8 AM to 5 PM weekdays. The UI form automatically generates the correct format when you select hours and start minute.')
+param timerSchedule string = '0 0,30 * * * *'
 
 @description('Optional. Whether to deploy the Azure Monitor Workbook dashboard. Set to true for the first deployment or when updating the workbook. Set to false for subsequent deployments in the same subscription to avoid conflicts. Default is true.')
 param deployWorkbook bool = true
@@ -975,6 +975,7 @@ module functionCode '../../sharedModules/custom/functionApp/function.bicep' = {
       'run.ps1': loadTextContent('functions/run.ps1')
       '../profile.ps1': loadTextContent('functions/profile.ps1')
       '../requirements.psd1': loadTextContent('functions/requirements.psd1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.psd1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psd1')
     }

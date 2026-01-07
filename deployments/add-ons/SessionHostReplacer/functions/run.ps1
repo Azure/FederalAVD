@@ -58,6 +58,12 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
                 $deploymentState.ConsecutiveSuccesses++
                 $deploymentState.LastStatus = 'Success'
                 
+                # Clear pending host mappings on successful deployment (no longer needed)
+                if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
+                    Write-LogEntry -Message "Clearing pending host mappings after successful deployment" -Level Verbose
+                    $deploymentState.PendingHostMappings = '{}'
+                }
+                
                 # Calculate next percentage
                 $successfulRunsBeforeScaleUp = [int]::Parse((Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp))
                 $scaleUpIncrementPercentage = [int]::Parse((Read-FunctionAppSetting ScaleUpIncrementPercentage))
@@ -71,11 +77,51 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
                 Write-LogEntry "Previous deployment succeeded. ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), CurrentPercentage: $($deploymentState.CurrentPercentage)%"
             }
             elseif ($previousDeploymentStatus.Failed) {
+                Write-LogEntry "Previous deployment failed. Cleaning up partial resources before redeployment." -Level Warning
+                
+                # Acquire Graph token for device cleanup if enabled
+                $GraphToken = $null
+                $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
+                $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice
+                
+                if ($removeEntraDevice -or $removeIntuneDevice) {
+                    try {
+                        $graphEndpoint = Get-GraphEndpoint
+                        $GraphToken = Get-AccessToken -ResourceUri $graphEndpoint
+                        
+                        if ([string]::IsNullOrEmpty($GraphToken)) {
+                            Write-LogEntry "Warning: Could not acquire Graph token for device cleanup" -Level Warning
+                        }
+                    }
+                    catch {
+                        Write-LogEntry "Warning: Failed to acquire Graph token for device cleanup: $_" -Level Warning
+                    }
+                }
+                
+                # Clean up the failed deployment and its partial resources
+                $failedDeploymentInfo = @([PSCustomObject]@{
+                    DeploymentName = $deploymentState.LastDeploymentName
+                })
+                
+                try {
+                    Remove-FailedDeploymentArtifacts -ARMToken $ARMToken -GraphToken $GraphToken -FailedDeployments $failedDeploymentInfo -RegisteredSessionHostNames $sessionHosts.SessionHostName -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
+                    Write-LogEntry "Completed cleanup of failed deployment artifacts" -Level Information
+                }
+                catch {
+                    Write-LogEntry "Error during failed deployment cleanup: $_" -Level Error
+                }
+                
+                # Clear pending host mappings (starting fresh)
+                if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
+                    Write-LogEntry -Message "Clearing pending host mappings after failed deployment cleanup" -Level Verbose
+                    $deploymentState.PendingHostMappings = '{}'
+                }
+                
                 # Reset on failure
                 $deploymentState.ConsecutiveSuccesses = 0
                 $deploymentState.CurrentPercentage = $initialDeploymentPercentage
                 $deploymentState.LastStatus = 'Failed'                
-                Write-LogEntry "Previous deployment failed. Resetting consecutive successes to 0, CurrentPercentage: $($deploymentState.CurrentPercentage)%" -Level Warning
+                Write-LogEntry "Reset consecutive successes to 0, CurrentPercentage: $($deploymentState.CurrentPercentage)%" -Level Warning
             }
             elseif ($previousDeploymentStatus.Running) {
                 Write-LogEntry "Previous deployment is still running. Will check again on next run." -Level Warning
@@ -201,6 +247,22 @@ if ($replacementMode -eq 'DeleteFirst') {
     $deletedSessionHostNames = @()
     $hostPropertyMapping = @{}
     $deletionResults = $null
+    
+    # Check if there's a pending host mapping from a previous failed deployment
+    if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
+        $deploymentState = Get-DeploymentState
+        if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
+            try {
+                $hostPropertyMapping = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable
+                Write-LogEntry -Message "Loaded {0} pending host mapping(s) from previous run for failed deployment recovery" -StringValues $hostPropertyMapping.Count -Level Information
+            }
+            catch {
+                Write-LogEntry -Message "Failed to parse pending host mappings: $_" -Level Warning
+                $hostPropertyMapping = @{}
+            }
+        }
+    }
+    
     if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisions.SessionHostsPendingDelete.Count -gt 0) {
         Write-LogEntry -Message "We can decommission {0} session hosts from this list: {1}" -StringValues $hostPoolDecisions.SessionHostsPendingDelete.Count, ($hostPoolDecisions.SessionHostsPendingDelete.SessionHostName -join ',')
         
@@ -208,16 +270,32 @@ if ($replacementMode -eq 'DeleteFirst') {
         $deletedSessionHostNames = $hostPoolDecisions.SessionHostsPendingDelete.SessionHostName
         Write-LogEntry -Message "Deleted host names will be available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Verbose
         
-        # Build mapping of hostname to dedicated host properties for reuse
+        # Build mapping of hostname to dedicated host properties for reuse (merge with existing from previous run)
         foreach ($sessionHost in $hostPoolDecisions.SessionHostsPendingDelete) {
             if ($sessionHost.HostId -or $sessionHost.HostGroupId) {
-                $hostPropertyMapping[$sessionHost.SessionHostName] = @{
-                    HostId      = $sessionHost.HostId
-                    HostGroupId = $sessionHost.HostGroupId
-                    Zones       = $sessionHost.Zones
+                # Only add if not already in mapping (preserve previous mappings)
+                if (-not $hostPropertyMapping.ContainsKey($sessionHost.SessionHostName)) {
+                    $hostPropertyMapping[$sessionHost.SessionHostName] = @{
+                        HostId      = $sessionHost.HostId
+                        HostGroupId = $sessionHost.HostGroupId
+                        Zones       = $sessionHost.Zones
+                    }
+                    Write-LogEntry -Message "Captured dedicated host properties for {0}: HostId={1}, HostGroupId={2}, Zones={3}" -StringValues $sessionHost.SessionHostName, $sessionHost.HostId, $sessionHost.HostGroupId, ($sessionHost.Zones -join ', ') -Level Verbose
                 }
-                Write-LogEntry -Message "Captured dedicated host properties for {0}: HostId={1}, HostGroupId={2}, Zones={3}" -StringValues $sessionHost.SessionHostName, $sessionHost.HostId, $sessionHost.HostGroupId, ($sessionHost.Zones -join ', ') -Level Verbose
             }
+        }
+        
+        # Save host property mapping to deployment state BEFORE deletion attempt (for recovery if deletion succeeds but deployment fails)
+        if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
+            $deploymentState = Get-DeploymentState
+            if ($hostPropertyMapping.Count -gt 0) {
+                $deploymentState.PendingHostMappings = ($hostPropertyMapping | ConvertTo-Json -Compress)
+                Write-LogEntry -Message "Saved {0} host property mapping(s) to deployment state before deletion" -StringValues $hostPropertyMapping.Count -Level Verbose
+            }
+            else {
+                $deploymentState.PendingHostMappings = '{}'
+            }
+            Save-DeploymentState -DeploymentState $deploymentState
         }
         
         # Decommission session hosts

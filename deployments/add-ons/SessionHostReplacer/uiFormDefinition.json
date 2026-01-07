@@ -200,7 +200,7 @@
 									"name": "scheduleInfoBox",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
-										"text": "The function will run at the selected hours on the selected days of the week. For example, selecting the times 8 AM, 9 AM, 10 AM, 11 AM, 12 PM, 1 PM, 2 PM, 3 PM, 4 PM, and 5 PM along with Monday-Friday will run the function every hour from 8 AM to 5 PM on weekdays only. The schedule uses the timezone selected in the 'Session Hosts' blade.",
+										"text": "The function will run every 30 minutes during the selected hours on the selected days of the week. For example, selecting 8 AM to 5 PM with Monday-Friday will run the function at :00 and :30 of each hour from 8 AM to 5 PM on weekdays only. Use the Start Minute to offset the schedule (e.g., :15 and :45). The schedule uses the timezone selected in the 'Session Hosts' blade.",
 										"style": "Info"
 									}
 								},
@@ -393,16 +393,16 @@
 									"name": "scheduleStaggeringTextBlock",
 									"type": "Microsoft.Common.TextBlock",
 									"options": {
-										"text": "To prevent multiple function apps from running simultaneously and potentially causing API throttling, you can stagger the execution time by setting different start minutes for each deployment. The function will execute at the specified minute within each scheduled hour."
+										"text": "To prevent multiple function apps from running simultaneously and potentially causing API throttling, you can stagger the execution time by setting different start minutes for each deployment. The function executes twice per hour: at the start minute and 30 minutes later (e.g., :15 and :45 if start minute is 15)."
 									}
 								},
 								{
 									"name": "scheduleMinuteOffset",
 									"type": "Microsoft.Common.Slider",
 									"label": "Start Minute",
-									"toolTip": "The minute within each hour when the function will execute. For example, if set to 15, the function will run at :15 of each scheduled hour (8:15, 9:15, etc.). Set to 0 to run at the top of each hour. Use different values across deployments to stagger execution.",
+									"toolTip": "The function executes twice per hour at this minute and 30 minutes later. For example, if set to 15, the function runs at :15 and :45 of each scheduled hour (8:15, 8:45, 9:15, 9:45, etc.). Set to 0 to run at :00 and :30. Use different values across deployments to stagger execution.",
 									"min": 0,
-									"max": 59,
+									"max": 29,
 									"defaultValue": 15,
 									"showStepMarkers": false,
 									"constraints": {
@@ -2873,7 +2873,7 @@
 				"sessionHostTemplateSpecResourceId": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing'), steps('functionApp').executionSettings.templateSpecResourceSelector.id, '')]",
 				"templateSpecName": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecName, '')]",
 				"templateSpecVersion": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecVersion, '1.0.0')]",
-				"timerSchedule": "[concat('0 ', string(steps('functionApp').executionSettings.scheduleMinuteOffset), ' ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]" ,
+				"timerSchedule": "[concat('0 ', string(steps('functionApp').executionSettings.scheduleMinuteOffset), ',', string(add(steps('functionApp').executionSettings.scheduleMinuteOffset, 30)), ' ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]" ,
 				"replaceSessionHostOnNewImageVersionDelayDays": "[steps('functionApp').executionSettings.replaceSessionHostOnNewImageVersionDelayDays]",
 				"allowImageVersionRollback": "[steps('functionApp').executionSettings.allowImageVersionRollback]",
 				"replacementMode": "[steps('functionApp').executionSettings.replacementMode]",

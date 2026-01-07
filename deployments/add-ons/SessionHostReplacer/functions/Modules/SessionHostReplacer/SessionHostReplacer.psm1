@@ -1,622 +1,8 @@
 # SessionHostReplacer PowerShell Module
 # This module contains all helper functions for AVD Session Host Replacer
 
-#Region Module-Level Variables
-
-# Configuration cache to avoid repeated environment variable reads
-$script:ConfigCache = @{}
-
-# Cached and normalized ResourceManagerUri without trailing slash
-$script:ResourceManagerUri = $null
-
-# Cached and normalized GraphEndpoint without trailing slash
-$script:GraphEndpoint = $null
-
-# Host Pool Name for log message prefixing
-$script:HostPoolNameForLogging = $null
-
-#EndRegion Module-Level Variables
-
-#Region Helper Functions
-
-function Get-ResourceManagerUri {
-    <#
-    .SYNOPSIS
-        Gets the ResourceManagerUri without trailing slash.
-    .DESCRIPTION
-        Retrieves ResourceManagerUri from configuration and ensures it never ends with a trailing slash
-        for consistent URI building across all functions. Value is cached for performance.
-    .EXAMPLE
-        $uri = Get-ResourceManagerUri
-    #>
-    if ($null -eq $script:ResourceManagerUri) {
-        $uri = Read-FunctionAppSetting ResourceManagerUri
-        # Remove trailing slash for consistent URI building
-        $script:ResourceManagerUri = if ($uri -and $uri[-1] -eq '/') { $uri.TrimEnd('/') } else { $uri }
-    }
-    return $script:ResourceManagerUri
-}
-
-function Get-GraphEndpoint {
-    <#
-    .SYNOPSIS
-        Gets the Microsoft Graph endpoint without trailing slash.
-    .DESCRIPTION
-        Retrieves GraphEndpoint from configuration and ensures it never ends with a trailing slash
-        for consistent URI building. Value is cached for performance.
-    .EXAMPLE
-        $endpoint = Get-GraphEndpoint
-    #>
-    if ($null -eq $script:GraphEndpoint) {
-        $endpoint = Read-FunctionAppSetting GraphEndpoint
-        # Remove trailing slash for consistent URI building
-        $script:GraphEndpoint = if ($endpoint -and $endpoint[-1] -eq '/') { $endpoint.TrimEnd('/') } else { $endpoint }
-    }
-    return $script:GraphEndpoint
-}
-
-#EndRegion Helper Functions
-
-#Region Authentication Functions
-
-function Get-AccessToken {
-    <#
-    .SYNOPSIS
-        Retrieves Azure access token using Managed Identity.
-    .DESCRIPTION
-        Acquires an access token for Azure services using the function app's managed identity.
-        Tokens are requested fresh on each call to avoid caching complexity.
-    .PARAMETER ResourceUri
-        The Azure resource endpoint URL (e.g., https://management.azure.com/, https://graph.microsoft.com).
-    .PARAMETER ClientId
-        Optional. The client ID of the user-assigned managed identity. If not specified, uses system-assigned identity.
-    .EXAMPLE
-        $token = Get-AccessToken -ResourceUri 'https://management.azure.com/'
-    .EXAMPLE
-        $token = Get-AccessToken -ResourceUri 'https://graph.microsoft.com' -ClientId 'abc123...'
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string] $ResourceUri,
-        
-        [Parameter(Mandatory = $false)]
-        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
-    )
-    
-    # Determine token type for logging
-    $isARMToken = $ResourceUri -like "*management*"
-    $isGraphToken = $ResourceUri -like "*graph*"
-    $isStorageToken = $ResourceUri -like "*storage*" -or $ResourceUri -like "*.table.*" -or $ResourceUri -like "*.blob.*"
-    
-    # ARM tokens require trailing slash, Graph and Storage tokens should NOT have trailing slash
-    $tokenResourceUri = if ($isARMToken) {
-        # ARM: requires trailing slash
-        $uri = if ($ResourceUri[-1] -ne '/') { "$ResourceUri/" } else { $ResourceUri }
-        Write-Verbose "Requesting ARM token for resource: $uri (with trailing slash)"
-        $uri
-    } else {        
-        # Graph and Storage: NO trailing slash
-        $uri = if ($ResourceUri[-1] -eq '/') { $ResourceUri.TrimEnd('/') } else { $ResourceUri }
-        $tokenType = if ($isGraphToken) { "Graph" } elseif ($isStorageToken) { "Storage" } else { "Other" }
-        Write-Verbose "Requesting $tokenType token for resource: $uri (no trailing slash)"
-        $uri
-    }
-    
-    # Acquire token from managed identity
-    Write-Verbose "Acquiring token from managed identity for resource: $tokenResourceUri"
-    $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $tokenResourceUri + "&client_id=$ClientId" + '&api-version=2019-08-01'
-       
-    # Add cache-busting headers to force fresh token acquisition
-    $headers = @{
-        "X-IDENTITY-HEADER" = $env:IDENTITY_HEADER
-        "Cache-Control" = "no-cache, no-store, must-revalidate"
-        "Pragma" = "no-cache"
-    }
-    
-    $TokenResponse = Invoke-RestMethod -Method Get -Headers $headers -Uri $TokenAuthURI -DisableKeepAlive
-    
-    Write-Verbose "Successfully acquired token for $tokenResourceUri"
-    
-    return $TokenResponse.access_token
-}
-
-#EndRegion Authentication Functions
-
-#Region Configuration Functions
-
-function Read-FunctionAppSetting {
-    <#
-    .SYNOPSIS
-        Retrieves configuration values from Azure Function App Settings with caching.
-    .DESCRIPTION
-        Reads values from environment variables with automatic type conversion and caching
-        to avoid repeated environment variable reads during execution.
-    .PARAMETER ConfigKey
-        The name of the configuration key to retrieve from environment variables.
-    .PARAMETER NoCache
-        Optional. Bypass the cache and read directly from environment variable.
-    .EXAMPLE
-        $hostPoolName = Read-FunctionAppSetting HostPoolName
-    .EXAMPLE
-        $value = Read-FunctionAppSetting 'SomeSetting' -NoCache
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [string] $ConfigKey,
-        
-        [Parameter(Mandatory = $false)]
-        [switch] $NoCache
-    )
-    
-    # Check cache first unless NoCache is specified
-    if (-not $NoCache -and $script:ConfigCache.ContainsKey($ConfigKey)) {
-        Write-Verbose "Using cached value for $ConfigKey"
-        return $script:ConfigCache[$ConfigKey]
-    }
-    
-    # Get the value from environment variable
-    $value = [System.Environment]::GetEnvironmentVariable($ConfigKey)
-    
-    # Return null if value is null or empty
-    if ([string]::IsNullOrWhiteSpace($value)) {
-        $script:ConfigCache[$ConfigKey] = $null
-        return $null
-    }
-    
-    # Convert JSON strings to hashtables for complex configurations
-    if ($value.StartsWith('{')) {
-        try {
-            $parsed = $value | ConvertFrom-Json -AsHashtable -ErrorAction Stop
-            $script:ConfigCache[$ConfigKey] = $parsed
-            return $parsed
-        }
-        catch {
-            Write-Warning "Failed to parse JSON for $ConfigKey : $_"
-            $script:ConfigCache[$ConfigKey] = $value
-            return $value
-        }
-    }
-    
-    # Convert boolean strings to actual boolean values
-    if ($value -eq 'true' -or $value -eq 'True') {
-        $script:ConfigCache[$ConfigKey] = $true
-        return $true
-    }
-    elseif ($value -eq 'false' -or $value -eq 'False') {
-        $script:ConfigCache[$ConfigKey] = $false
-        return $false
-    }
-    
-    # Convert numeric strings to integers where appropriate
-    if ($value -match '^\d+$') {
-        $intValue = [int]$value
-        $script:ConfigCache[$ConfigKey] = $intValue
-        return $intValue
-    }
-    
-    # Cache and return the string value
-    $script:ConfigCache[$ConfigKey] = $value
-    return $value
-}
-
-#EndRegion Configuration Functions
-
-#Region Logging and Error Handling
-
-function Set-HostPoolNameForLogging {
-    <#
-    .SYNOPSIS
-        Sets the host pool name to be used as a prefix in all log messages.
-    .DESCRIPTION
-        This function sets the module-level variable used by Write-LogEntry to prefix all log messages.
-    .PARAMETER HostPoolName
-        The name of the host pool to use as a prefix.
-    .EXAMPLE
-        Set-HostPoolNameForLogging -HostPoolName "vdpool-test-01-use2"
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string] $HostPoolName
-    )
-    
-    $script:HostPoolNameForLogging = $HostPoolName
-}
-
-function Write-LogEntry {
-    <#
-    .SYNOPSIS
-        Enhanced logging function with timestamp and level support.
-    .DESCRIPTION
-        Writes detailed log messages with timestamps and severity levels.
-    .PARAMETER Message
-        The message to log.
-    .PARAMETER Level
-        The severity level (Information, Warning, Error, Host).
-    .PARAMETER StringValues
-        Array of values to format into the message using -f operator.
-    .EXAMPLE
-        Write-LogEntry -Message "Processing {0} items" -StringValues 10 -Level Host
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string] $Message,
-        
-        [Parameter(Mandatory = $false)]
-        [ValidateSet('Information', 'Warning', 'Error', 'Host', 'Verbose')]
-        [string] $Level = 'Information',
-        
-        [Parameter(Mandatory = $false)]
-        [object[]] $StringValues
-    )
-    
-    # Format message with string values if provided
-    if ($StringValues -and $StringValues.Count -gt 0) {
-        try {
-            $formattedMessage = $Message -f $StringValues
-        }
-        catch {
-            $formattedMessage = $Message
-            Write-Warning "Failed to format message with provided string values"
-        }
-    }
-    else {
-        $formattedMessage = $Message
-    }
-    
-    # Add host pool prefix if available
-    $prefix = if ($script:HostPoolNameForLogging) { "[$($script:HostPoolNameForLogging)]" } else { "" }
-    
-    # Add timestamp
-    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    $output = "[$timestamp] [$Level] $prefix $formattedMessage".Trim()
-    
-    # Output based on level
-    switch ($Level) {
-        'Error' {
-            Write-Error $output
-        }
-        'Warning' {
-            Write-Warning $output
-        }
-        'Host' {
-            Write-Host $output
-        }
-        'Verbose' {
-            Write-Verbose $output
-        }
-        default {
-            Write-Information $output -InformationAction Continue
-        }
-    }
-}
-
-function Invoke-AzureRestMethodWithRetry {
-    <#
-    .SYNOPSIS
-        Invokes Azure REST API with automatic retry logic for transient failures.
-    .DESCRIPTION
-        Wraps Invoke-AzureRestMethod with exponential backoff retry for 429 and 5xx errors.
-    .PARAMETER AccessToken
-        Azure access token for authentication.
-    .PARAMETER Method
-        HTTP method (GET, POST, PUT, PATCH, DELETE).
-    .PARAMETER Uri
-        The REST API endpoint URI.
-    .PARAMETER Body
-        Optional request body.
-    .PARAMETER MaxRetries
-        Maximum number of retry attempts (default: 3).
-    .PARAMETER RetryDelaySeconds
-        Initial retry delay in seconds (default: 5).
-    .EXAMPLE
-        Invoke-AzureRestMethodWithRetry -ARMToken $token -Method Get -Uri $uri -MaxRetries 5
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string] $ARMToken,
-        
-        [Parameter(Mandatory = $true)]
-        [ValidateSet('Get', 'Post', 'Put', 'Patch', 'Delete')]
-        [string] $Method,
-        
-        [Parameter(Mandatory = $true)]
-        [string] $Uri,
-        
-        [Parameter()]
-        [string] $Body,
-        
-        [Parameter()]
-        [int] $MaxRetries = 3,
-        
-        [Parameter()]
-        [int] $RetryDelaySeconds = 5
-    )
-    
-    $attempt = 0
-    $success = $false
-    $result = $null
-    
-    while (-not $success -and $attempt -lt $MaxRetries) {
-        $attempt++
-        try {
-            $result = Invoke-AzureRestMethod -ARMToken $ARMToken -Method $Method -Uri $Uri -Body $Body
-            $success = $true
-        }
-        catch {
-            $statusCode = $_.Exception.Response.StatusCode.value__
-            $retryable = $statusCode -in @(429, 500, 502, 503, 504)
-            
-            if ($retryable -and $attempt -lt $MaxRetries) {
-                $delay = $RetryDelaySeconds * [Math]::Pow(2, $attempt - 1)
-                Write-LogEntry "Request failed with status $statusCode. Retrying in $delay seconds (attempt $attempt of $MaxRetries)" -Level Warning
-                Start-Sleep -Seconds $delay
-            }
-            else {
-                Write-LogEntry "Request failed: $_" -Level Error
-                throw $_
-            }
-        }
-    }
-    
-    return $result
-}
-
-#EndRegion Logging and Error Handling
-
-#Region Core Helper Functions
-
-function Invoke-GraphApiWithRetry {
-    <#
-    .SYNOPSIS
-        Invokes Microsoft Graph API with automatic retry for DoD endpoint if GCCH fails.
-    .DESCRIPTION
-        Attempts to call the Graph API with the provided endpoint. If the call fails with
-        authentication/forbidden errors, automatically retries with the DoD Graph endpoint
-        and acquires a fresh token for that endpoint.
-    .PARAMETER GraphEndpoint
-        The initial Graph endpoint to try (e.g., https://graph.microsoft.us).
-    .PARAMETER GraphToken
-        Bearer token for authentication (for the GraphEndpoint).
-    .PARAMETER Method
-        HTTP method (GET, POST, PATCH, DELETE).
-    .PARAMETER Uri
-        The relative URI path (e.g., /v1.0/devices). Will be appended to GraphEndpoint.
-    .PARAMETER Body
-        Optional request body for POST/PATCH operations.
-    .PARAMETER Headers
-        Optional custom headers. Authorization header will be added automatically.
-    .PARAMETER ClientId
-        Optional client ID for user-assigned managed identity (needed to acquire new token for DoD endpoint).
-    .EXAMPLE
-        Invoke-GraphApiWithRetry -GraphEndpoint $env:GraphEndpoint -GraphToken $token -Method Get -Uri "/v1.0/devices?`$filter=displayName eq 'VM01'" -ClientId $clientId
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string] $GraphEndpoint,
-        
-        [Parameter(Mandatory = $true)]
-        [string] $GraphToken,
-        
-        [Parameter(Mandatory = $true)]
-        [ValidateSet('Get', 'Post', 'Patch', 'Delete', 'Put')]
-        [string] $Method,
-        
-        [Parameter(Mandatory = $true)]
-        [string] $Uri,
-        
-        [Parameter()]
-        [string] $Body,
-        
-        [Parameter()]
-        [hashtable] $Headers = @{},
-        
-        [Parameter()]
-        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
-    )
-    
-    # Ensure GraphEndpoint doesn't have trailing slash
-    $graphBase = if ($GraphEndpoint[-1] -eq '/') { 
-        $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) 
-    } else { 
-        $GraphEndpoint 
-    }
-    
-    # Ensure Uri has leading slash
-    $uriPath = if ($Uri[0] -ne '/') { "/$Uri" } else { $Uri }  
-    
-    # List of endpoints to try
-    $endpointsToTry = @(
-        @{ Endpoint = $graphBase; Token = $GraphToken }
-    )
-    
-    # If we're using GCCH endpoint, also try DoD with a fresh token
-    if ($graphBase -eq 'https://graph.microsoft.us') {
-        $endpointsToTry += @{ 
-            Endpoint = 'https://dod-graph.microsoft.us'
-            Token = $null  # Will acquire fresh token if needed
-        }
-    }
-    
-    $lastError = $null
-    foreach ($endpointConfig in $endpointsToTry) {
-        $endpoint = $endpointConfig.Endpoint
-        $token = $endpointConfig.Token
-        
-        # If no token provided for this endpoint, acquire one
-        if (-not $token) {
-            try {
-                $token = Get-AccessToken -ResourceUri $endpoint -ClientId $ClientId
-            }
-            catch {
-                Write-LogEntry "Failed to acquire token for $endpoint : $_" -Level Warning
-                continue
-            }
-        }
-        
-        try {
-            $currentUri = "$endpoint$uriPath"
-            
-            # Setup headers with correct token for this endpoint
-            $requestHeaders = $Headers.Clone()
-            $requestHeaders['Authorization'] = "Bearer $token"
-            if (-not $requestHeaders.ContainsKey('Content-Type')) {
-                $requestHeaders['Content-Type'] = 'application/json'
-            }
-            
-            $params = @{
-                Uri     = $currentUri
-                Method  = $Method
-                Headers = $requestHeaders
-            }
-            
-            if ($Body) {
-                $params['Body'] = $Body
-            }
-            
-            $result = Invoke-RestMethod @params -ErrorAction Stop
-            return $result
-        }
-        catch {
-            $lastError = $_
-            
-            if ($_.Exception.Response) {
-                $statusCode = $_.Exception.Response.StatusCode.value__
-                
-                # Try to get detailed error message from response body
-                try {
-                    $errorStream = $_.Exception.Response.GetResponseStream()
-                    $reader = New-Object System.IO.StreamReader($errorStream)
-                    $errorBody = $reader.ReadToEnd()
-                    $reader.Close()
-                    
-                    if ($errorBody) {
-                        Write-LogEntry "Graph API error response: $errorBody" -Level Error
-                    }
-                }
-                catch {
-                    # Ignore errors reading error stream
-                }
-            }
-            
-            # Retry on authentication/authorization errors (401, 403) or if endpoint not found (404 on base endpoint)
-            if ($statusCode -in @(401, 403, 404) -and $endpoint -ne $endpointsToTry[-1]) {
-                Write-LogEntry "Graph API call to $endpoint failed with status $statusCode. Trying next endpoint..." -Level Warning
-                continue
-            }
-            else {
-                Write-LogEntry "Graph API call failed: $($_.Exception.Message)" -Level Error
-                throw $_
-            }
-        }
-    }
-    
-    # If we get here, all endpoints failed
-    Write-LogEntry "All Graph API endpoints failed. Last error: $($lastError.Exception.Message)" -Level Error
-    throw $lastError
-}
-
-function Invoke-AzureRestMethod {
-    <#
-        .SYNOPSIS
-            Run an Azure REST call with paging support.           
-        .PARAMETER AccessToken
-            An access token generated by Connect-DCMsGraphAsDelegated or Connect-DCMsGraphAsApplication (depending on what permissions you use in Graph).
-        .PARAMETER Method
-            The HTTP method for the Graph call, like GET, POST, PUT, PATCH, DELETE. Default is GET.
-        .PARAMETER Uri
-            The Microsoft Graph URI for the query. Example: https://graph.microsoft.com/v1.0/users/
-        .PARAMETER Body
-            The request body of the Graph call. This is often used with methids like POST, PUT and PATCH. It is not used with GET.
-        .EXAMPLE
-            Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'GET' -Uri 'https://graph.microsoft.com/v1.0/users/'
-    #>
-
-    param (
-        [parameter(Mandatory = $true)]
-        [string]$ARMToken,
-
-        [parameter(Mandatory = $false)]
-        [string]$Method = 'GET',
-
-        [parameter(Mandatory = $true)]
-        [string]$Uri,
-
-        [parameter(Mandatory = $false)]
-        [string]$Body = '',
-
-        [parameter(Mandatory = $false)]
-        [hashtable]$AdditionalHeaders
-    )
-
-    # Check if authentication was successfull.
-    if ($ARMToken) {
-        # Format headers.
-        $HeaderParams = @{
-            'Content-Type'  = "application\json"
-            'Authorization' = "Bearer $ARMToken"
-        }
-        If ($AdditionalHeaders) {
-            $HeaderParams += $AdditionalHeaders
-        }
-
-        # Create an empty array to store the result.
-        $QueryRequest = @()
-        $dataToUpload = @()
-
-        # Run the first query.
-        if ($Method -eq 'GET') {
-            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -ContentType "application/json" -Verbose:$false
-        }
-        else {
-            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -ContentType "application/json" -Body $Body -Verbose:$false
-        }
-        
-        # Check if response is a direct array or has a value property
-        if ($QueryRequest -is [array]) {
-            # Direct array response (e.g., marketplace images API)
-            $dataToUpload += $QueryRequest
-        }
-        elseif ($QueryRequest.value) {
-            # Paged response with value property
-            $dataToUpload += $QueryRequest.value
-        }
-        else {
-            # Single object response
-            $dataToUpload += $QueryRequest
-        }
-
-        # Invoke REST methods and fetch data until there are no pages left.
-        if ($Uri -notlike "*`$top*") {
-            while ($QueryRequest.'@odata.nextLink' -and $QueryRequest.'@odata.nextLink' -is [string]) {
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.'@odata.nextLink' -UseBasicParsing -Method $Method -ContentType "application/json" -Verbose:$false
-                $dataToUpload += $QueryRequest.value
-            }
-            While ($QueryRequest.nextLink -and $QueryRequest.nextLink -is [string]) {
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.nextLink -UseBasicParsing -Method $Method -ContentType "application/json" -Verbose:$false
-                $dataToUpload += $QueryRequest.value
-            }
-            While ($QueryRequest.'$skipToken' -and $QueryRequest.'$skipToken' -is [string] -and $Body -ne '') {
-                $JsonBody = $Body | ConvertFrom-Json
-                $JsonBody | Add-Member -Type NoteProperty -Name '$skipToken' -Value $QueryRequest.'$skipToken' -Force
-                $Body = $JsonBody | ConvertTo-Json -Depth 10
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -Body $Body -ContentType "application/json" -Verbose:$false
-                $dataToUpload += $QueryRequest.value
-            }
-        }
-        $dataToUpload
-    }
-    else {
-        Write-Error "No Access Token"
-    }
-}
-
-#EndRegion Configuration and Utility Functions
+# Import Core utilities module
+Import-Module "$PSScriptRoot\SessionHostReplacer.Core.psm1" -Force
 
 #Region Progressive Scale-Up State Management
 
@@ -795,6 +181,7 @@ function Get-DeploymentState {
                 TargetSessionHostCount   = [int]$entity.TargetSessionHostCount
                 LastImageVersion         = $entity.LastImageVersion
                 LastTotalToReplace       = [int]$entity.LastTotalToReplace
+                PendingHostMappings      = if ($entity.PendingHostMappings) { $entity.PendingHostMappings } else { '{}' }
             }
         }
         catch {
@@ -812,6 +199,7 @@ function Get-DeploymentState {
                     TargetSessionHostCount   = 0
                     LastImageVersion         = ''
                     LastTotalToReplace       = 0
+                    PendingHostMappings      = '{}'
                 }
             }
             else {
@@ -834,6 +222,7 @@ function Get-DeploymentState {
             TargetSessionHostCount   = 0
             LastImageVersion         = ''
             LastTotalToReplace       = 0
+            PendingHostMappings      = '{}'
         }
     }
 }
@@ -928,6 +317,7 @@ function Save-DeploymentState {
             ConsecutiveSuccesses     = $DeploymentState.ConsecutiveSuccesses
             CurrentPercentage        = $DeploymentState.CurrentPercentage
             TargetSessionHostCount   = $DeploymentState.TargetSessionHostCount
+            PendingHostMappings      = if ($DeploymentState.PendingHostMappings) { $DeploymentState.PendingHostMappings } else { '{}' }
         }
         
         # Check if entity exists
@@ -1211,8 +601,8 @@ function Deploy-SessionHosts {
     $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines'][$TagIncludeInAutomation] = $true
     $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines'][$TagDeployTimestamp] = (Get-Date -AsUTC -Format 'o')
     
-    $deploymentTimestamp = Get-Date -AsUTC -Format 'FileDateTime'
-    $deploymentName = "{0}_{1}_Count_{2}_VMs" -f $DeploymentPrefix, $deploymentTimestamp, $sessionHostNames.count
+    $deploymentTimestamp = Get-Date -AsUTC -Format 'yyyyMMddHHmmss'
+    $deploymentName = "{0}_Count_{1}_VMs_{2}" -f $DeploymentPrefix, $sessionHostNames.count, $deploymentTimestamp
     
     Write-LogEntry -Message "Deployment name: $deploymentName"
     Write-LogEntry -Message "Deploying using Template Spec: $sessionHostTemplate"
@@ -2209,19 +1599,31 @@ function Remove-FailedDeploymentArtifacts {
     .PARAMETER ARMToken
         The ARM access token for API calls.
     
+    .PARAMETER GraphToken
+        The Graph access token for device cleanup.
+    
     .PARAMETER FailedDeployments
         Array of failed deployment objects from Get-Deployments.
     
     .PARAMETER RegisteredSessionHostNames
         Array of session host names currently registered in the host pool.
     
+    .PARAMETER RemoveEntraDevice
+        Whether to remove Entra device records.
+    
+    .PARAMETER RemoveIntuneDevice
+        Whether to remove Intune device records.
+    
     .EXAMPLE
-        Remove-FailedDeploymentArtifacts -ARMToken $token -FailedDeployments $failed -RegisteredSessionHostNames $sessionHosts.SessionHostName
+        Remove-FailedDeploymentArtifacts -ARMToken $token -GraphToken $graphToken -FailedDeployments $failed -RegisteredSessionHostNames $sessionHosts.SessionHostName -RemoveEntraDevice $true -RemoveIntuneDevice $true
     #>
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
         [string] $ARMToken,
+        
+        [Parameter()]
+        [string] $GraphToken,
         
         [Parameter(Mandatory = $true)]
         [array] $FailedDeployments,
@@ -2230,13 +1632,19 @@ function Remove-FailedDeploymentArtifacts {
         [array] $RegisteredSessionHostNames = @(),
         
         [Parameter()]
+        [bool] $RemoveEntraDevice = $false,
+        
+        [Parameter()]
+        [bool] $RemoveIntuneDevice = $false,
+        
+        [Parameter()]
         [string] $ResourceManagerUri = (Get-ResourceManagerUri),
         
         [Parameter()]
         [string] $VirtualMachinesSubscriptionId = (Read-FunctionAppSetting VirtualMachinesSubscriptionId),
         
         [Parameter()]
-        [string] $VirtualMachinesResourceGroupName = (Read-FunctionAppSetting VirtualMachinesResourceGroupName)
+        [string] $VirtualMachinesResourceGroupName = (Read-FunctionAppSetting VirtualMachinesResourceGroupName)        
     )
     
     if ($FailedDeployments.Count -eq 0) {
@@ -2256,38 +1664,92 @@ function Remove-FailedDeploymentArtifacts {
     foreach ($deployment in $FailedDeployments) {
         $failedDeploymentNames += $deployment.DeploymentName
         
-        foreach ($vmName in $deployment.SessionHostNames) {
-            # Check if this VM exists in Azure but is NOT registered as a session host
-            $vm = $allVMs | Where-Object { $_.name -eq $vmName }
+        foreach ($sessionHostName in $deployment.SessionHostNames) {
+            # Session host name is like 'avdtest01use201', but actual VM could be:
+            # - avdtest01use201 (no CAF naming)
+            # - vm-avdtest01use201 (CAF prefix)
+            # - avdtest01use201-vm (CAF suffix)
+            # 
+            # Strategy: Find VMs where the session host name is contained in the VM name
             
-            if ($vm) {
-                $isRegistered = $RegisteredSessionHostNames | Where-Object { $_ -like "$vmName*" }
+            $matchingVMs = $allVMs | Where-Object { $_.name -like "*$sessionHostName*" }
+            
+            foreach ($vm in $matchingVMs) {
+                # Check if this VM is registered as a session host
+                $isRegistered = $RegisteredSessionHostNames | Where-Object { $_ -like "$sessionHostName*" }
                 
                 if (-not $isRegistered) {
-                    Write-LogEntry "Found orphaned VM from failed deployment: $vmName (VM exists but not registered as session host)" -Level Warning
+                    Write-LogEntry "Found orphaned VM from failed deployment: $($vm.name) (matches session host name $sessionHostName but not registered)" -Level Warning
                     $orphanedVMs += [PSCustomObject]@{
-                        Name         = $vmName
-                        ResourceId   = $vm.id
+                        Name           = $vm.name
+                        ResourceId     = $vm.id
                         DeploymentName = $deployment.DeploymentName
+                        SessionHostName = $sessionHostName
                     }
                 }
                 else {
-                    Write-LogEntry "VM $vmName from failed deployment is registered as session host - will be handled by normal cleanup flow" -Level Verbose
+                    Write-LogEntry "VM $($vm.name) from failed deployment is registered as session host - will be handled by normal cleanup flow" -Level Verbose
                 }
             }
-            else {
-                Write-LogEntry "VM $vmName from failed deployment does not exist (deployment may have rolled back)" -Level Verbose
+            
+            if ($matchingVMs.Count -eq 0) {
+                Write-LogEntry "No VM found matching session host name $sessionHostName (deployment may have rolled back)" -Level Verbose
             }
         }
     }
     
-    # Delete orphaned VMs
+    # Delete orphaned VMs and their device records
     if ($orphanedVMs.Count -gt 0) {
         Write-LogEntry "Deleting $($orphanedVMs.Count) orphaned VMs from failed deployments"
         
         foreach ($orphanedVM in $orphanedVMs) {
             try {
-                Write-LogEntry "Deleting orphaned VM: $($orphanedVM.Name) (from deployment: $($orphanedVM.DeploymentName))" -Level Warning
+                # Delete Entra device if enabled
+                if ($RemoveEntraDevice -and $GraphToken) {
+                    try {
+                        $graphEndpoint = Get-GraphEndpoint
+                        $deviceUri = "$graphEndpoint/v1.0/devices?`$filter=displayName eq '$($orphanedVM.SessionHostName)'"
+                        $device = Invoke-GraphRestMethod -GraphToken $GraphToken -Method Get -Uri $deviceUri
+                        
+                        if ($device -and $device.Count -gt 0) {
+                            $deviceId = $device[0].id
+                            $deleteDeviceUri = "$graphEndpoint/v1.0/devices/$deviceId"
+                            Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri
+                            Write-LogEntry "Successfully deleted Entra device for orphaned VM: $($orphanedVM.SessionHostName)" -Level Information
+                        }
+                        else {
+                            Write-LogEntry "No Entra device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Verbose
+                        }
+                    }
+                    catch {
+                        Write-LogEntry "Failed to delete Entra device for $($orphanedVM.SessionHostName): $_" -Level Warning
+                    }
+                }
+                
+                # Delete Intune device if enabled
+                if ($RemoveIntuneDevice -and $GraphToken) {
+                    try {
+                        $graphEndpoint = Get-GraphEndpoint
+                        $deviceUri = "$graphEndpoint/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$($orphanedVM.SessionHostName)'"
+                        $device = Invoke-GraphRestMethod -GraphToken $GraphToken -Method Get -Uri $deviceUri
+                        
+                        if ($device -and $device.Count -gt 0) {
+                            $deviceId = $device[0].id
+                            $deleteDeviceUri = "$graphEndpoint/v1.0/deviceManagement/managedDevices/$deviceId"
+                            Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri
+                            Write-LogEntry "Successfully deleted Intune device for orphaned VM: $($orphanedVM.SessionHostName)" -Level Information
+                        }
+                        else {
+                            Write-LogEntry "No Intune device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Verbose
+                        }
+                    }
+                    catch {
+                        Write-LogEntry "Failed to delete Intune device for $($orphanedVM.SessionHostName): $_" -Level Warning
+                    }
+                }
+                
+                # Delete the VM
+                Write-LogEntry "Deleting orphaned VM: $($orphanedVM.Name) (session host: $($orphanedVM.SessionHostName), from deployment: $($orphanedVM.DeploymentName))" -Level Warning
                 $Uri = "$ResourceManagerUri$($orphanedVM.ResourceId)?forceDeletion=true&api-version=2024-07-01"
                 Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
                 Write-LogEntry "Successfully deleted orphaned VM: $($orphanedVM.Name)" -Level Information
@@ -2301,15 +1763,83 @@ function Remove-FailedDeploymentArtifacts {
         Write-LogEntry "No orphaned VMs found from failed deployments" -Level Verbose
     }
     
-    # Clean up failed deployment records from ARM
+    # Clean up failed deployment records from ARM (including nested deployments)
     Write-LogEntry "Cleaning up $($failedDeploymentNames.Count) failed deployment records from ARM history"
     
     foreach ($deploymentName in $failedDeploymentNames) {
         try {
-            Write-LogEntry "Deleting failed deployment record: $deploymentName" -Level Information
+            # Recursively find all nested deployments
+            function Get-NestedDeployments {
+                param(
+                    [string]$DeploymentName,
+                    [string]$ARMToken,
+                    [string]$ResourceManagerUri,
+                    [string]$SubscriptionId,
+                    [string]$ResourceGroupName
+                )
+                
+                $allNested = @()
+                
+                try {
+                    # Get this deployment's details
+                    $Uri = "$ResourceManagerUri/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Resources/deployments/$DeploymentName`?api-version=2021-04-01"
+                    $deployment = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+                    
+                    if ($deployment -and $deployment.properties.dependencies) {
+                        # Extract nested deployment names from dependencies
+                        $nestedNames = $deployment.properties.dependencies | 
+                            Where-Object { $_.resourceType -eq 'Microsoft.Resources/deployments' } |
+                            ForEach-Object { $_.resourceName }
+                        
+                        if ($nestedNames) {
+                            foreach ($nestedName in $nestedNames) {
+                                # Add this nested deployment
+                                $allNested += $nestedName
+                                
+                                # Recursively get its nested deployments
+                                $childNested = Get-NestedDeployments -DeploymentName $nestedName -ARMToken $ARMToken -ResourceManagerUri $ResourceManagerUri -SubscriptionId $SubscriptionId -ResourceGroupName $ResourceGroupName
+                                $allNested += $childNested
+                            }
+                        }
+                    }
+                }
+                catch {
+                    Write-LogEntry "Warning: Could not retrieve nested deployments for $DeploymentName : $_" -Level Warning
+                }
+                
+                return $allNested
+            }
+            
+            # Get all nested deployments recursively
+            $allNestedDeployments = Get-NestedDeployments -DeploymentName $deploymentName -ARMToken $ARMToken -ResourceManagerUri $ResourceManagerUri -SubscriptionId $VirtualMachinesSubscriptionId -ResourceGroupName $VirtualMachinesResourceGroupName
+            
+            if ($allNestedDeployments) {
+                Write-LogEntry "Found $($allNestedDeployments.Count) nested deployment(s) (including recursive nesting) from parent deployment" -Level Information
+                
+                # Delete nested deployments in reverse order (deepest first to avoid dependency issues)
+                [array]::Reverse($allNestedDeployments)
+                
+                foreach ($nestedDeploymentName in $allNestedDeployments) {
+                    try {
+                        Write-LogEntry "Deleting nested deployment record: $nestedDeploymentName" -Level Verbose
+                        $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/providers/Microsoft.Resources/deployments/$nestedDeploymentName`?api-version=2021-04-01"
+                        Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
+                        Write-LogEntry "Successfully deleted nested deployment record: $nestedDeploymentName" -Level Verbose
+                    }
+                    catch {
+                        Write-LogEntry "Failed to delete nested deployment record $nestedDeploymentName`: $_" -Level Warning
+                    }
+                }
+            }
+            else {
+                Write-LogEntry "No nested deployments found for parent deployment" -Level Verbose
+            }
+            
+            # Delete the top-level deployment record last
+            Write-LogEntry "Deleting top-level deployment record: $deploymentName" -Level Information
             $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/providers/Microsoft.Resources/deployments/$deploymentName`?api-version=2021-04-01"
             Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
-            Write-LogEntry "Successfully deleted failed deployment record: $deploymentName" -Level Information
+            Write-LogEntry "Successfully deleted deployment record: $deploymentName" -Level Information
         }
         catch {
             Write-LogEntry "Failed to delete deployment record $deploymentName`: $_" -Level Warning
