@@ -447,31 +447,41 @@
 									}
 								},
 								{
-									"name": "replacementModeInfo",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"icon": "Info",
-										"text": "SideBySide: Adds new hosts before deleting old ones (zero downtime, higher cost during updates). DeleteFirst: Deletes idle hosts before adding replacements (lower cost, temporary capacity reduction)."
-									}
-								},
-								{
 									"name": "replacementMode",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Replacement Mode",
-									"toolTip": "Strategy for replacing session hosts during image updates.",
+									"toolTip": "<b>Replacement Mode Options:</b><br/><br/><b>Side-by-Side (Add then Delete):</b><ul><li>Adds new session hosts before deleting old ones</li><li>Zero downtime during updates</li><li>Higher cost during update cycles (can temporarily double host pool size)</li><li><b>Does NOT support dedicated hosts</b> - dedicated host properties will not be preserved</li><li>Requires sufficient vCPU quota and subnet IP space for both old and new hosts simultaneously</li></ul><br/><b>Delete-First (Delete then Add):</b><ul><li>Deletes idle session hosts before adding replacements</li><li>Lower cost (maintains approximately target capacity throughout)</li><li>Temporary capacity reduction during replacements</li><li><b>Supports dedicated hosts</b> - preserves dedicated host assignments and zones</li><li>Reuses hostnames for seamless transitions</li></ul>",
 									"defaultValue": "SideBySide",
 									"constraints": {
 										"required": true,
 										"allowedValues": [
 											{
-												"label": "SideBySide (Add then Delete)",
+												"label": "Side-by-Side (Add then Delete)",
 												"value": "SideBySide"
 											},
 											{
-												"label": "DeleteFirst (Delete then Add)",
+												"label": "Delete-First (Delete then Add)",
 												"value": "DeleteFirst"
 											}
 										]
+									}
+								},
+								{
+									"name": "sideBySideWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
+									"options": {
+										"style": "Warning",
+										"text": "Side-By-Side mode does NOT support dedicated hosts. Dedicated host properties from existing VMs will not be preserved during replacements. Use Delete-First mode if you require dedicated host support."
+									}
+								},
+								{
+									"name": "sideBySideCapacityWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
+									"options": {
+										"style": "Warning",
+										"text": "Side-By-Side mode can temporarily DOUBLE your host pool size during replacements. Ensure you have sufficient vCPU quota and subnet IP address space to accommodate both old and new session hosts simultaneously."
 									}
 								},
 								{
@@ -504,7 +514,7 @@
 									"name": "minimumCapacityPercentage",
 									"type": "Microsoft.Common.Slider",
 									"label": "Minimum Capacity Percentage (DeleteFirst mode)",
-									"toolTip": "Minimum percentage of target capacity to maintain during DeleteFirst mode. Prevents over-deletion and maintains service availability. Only applies when replacementMode is DeleteFirst.",
+									"toolTip": "Safety floor: minimum percentage of target capacity to maintain during replacements. Deletions are capped to prevent dropping below this threshold. Higher values (e.g., 80%) = more conservative, keeps more hosts running. Lower values (e.g., 50%) = more aggressive, allows faster replacement. This works in conjunction with MaxDeletionsPerCycle to control replacement pace.",
 									"min": 50,
 									"max": 100,
 									"defaultValue": 80,
@@ -517,8 +527,8 @@
 								{
 									"name": "maxDeletionsPerCycle",
 									"type": "Microsoft.Common.Slider",
-									"label": "Max Deletions Per Cycle (DeleteFirst mode)",
-									"toolTip": "Maximum number of hosts to delete per execution cycle in DeleteFirst mode. Prevents too-aggressive scale-down. Only applies when replacementMode is DeleteFirst.",
+									"label": "Maximum Deletions/Deployments Per Cycle",
+									"toolTip": "Maximum number of hosts to delete and deploy per execution cycle. Controls the pace of replacements - DeleteFirst deletes this many idle hosts, then deploys the same number of replacements. Lower values = slower, safer updates.",
 									"min": 1,
 									"max": 50,
 									"defaultValue": 5,
@@ -545,14 +555,15 @@
 									"name": "maxDeploymentBatchSize",
 									"type": "Microsoft.Common.Slider",
 									"label": "Maximum Deployment Batch Size",
-									"toolTip": "Maximum number of hosts to deploy per run (ceiling constraint).",
+									"toolTip": "Maximum number of hosts to deploy per execution cycle. Controls the pace of new deployments - SideBySide adds this many new hosts in parallel before deleting old ones. Lower values = slower rollout, higher values = faster but more resource-intensive.",
 									"min": 1,
 									"max": 1000,
 									"defaultValue": 100,
 									"showStepMarkers": false,
 									"constraints": {
 										"required": true
-									}
+									},
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]"
 								},
 								{
 									"name": "tagManagementHeader",
@@ -644,9 +655,9 @@
 								{
 									"name": "minimumHostIndex",
 									"type": "Microsoft.Common.Slider",
-									"visible": true,
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
 									"label": "Minimum Host Index",
-									"toolTip": "The minimum starting index for hostname numbering. In SideBySide mode, all new hosts start from this number. In DeleteFirst mode, this is used as a fallback when deploying more hosts than were deleted (e.g., 10 to create host10, host11, etc.).",
+									"toolTip": "The minimum starting index for hostname numbering in Side-By-Side mode. All new hosts start from this number (e.g., 10 creates host10, host11, etc.).",
 									"min": 1,
 									"max": 999,
 									"defaultValue": 1,
@@ -1728,75 +1739,6 @@
 							]
 						},
 						{
-							"name": "dedicatedHosts",
-							"type": "Microsoft.Common.Section",
-							"label": "Dedicated Hosts",
-							"elements": [
-								{
-									"name": "dedicatedHostsTextBlock1",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
-									"options": {
-										"text": "Azure Dedicated Host is a service that provides physical servers able to host one or more virtual machines assigned to one Azure subscription. Dedicated hosts are the same physical servers used in our data centers, provided instead as a directly accessible hardware resource.",
-										"link": {
-											"label": "Learn more",
-											"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/dedicated-hosts"
-										}
-									}
-								},
-								{
-									"name": "dedicatedHostsInfobox1",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": true,
-									"options": {
-										"text": "In some environments it is required to have a dedicated Azure Host to isolate Compute. This is most common in IL5 type environments. Selecting this option will ensure the VMs are deployed to pre-existing Dedicated Host(s). Click this box for more information.",
-										"uri": "https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#compute-isolation",
-										"style": "Info"
-									}
-								},
-								{
-									"name": "deployToDedicatedHosts",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Deploy to Dedicated Hosts",
-									"toolTip": "Select this check box to deploy the Virtual Machines to existing dedicated host(s)."
-								},
-								{
-									"name": "dedicatedHostsTextBlock2",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('hosts').dedicatedHosts.deployToDedicatedHosts]",
-									"options": {
-										"text": "Select the dedicated host group and optionally the specific dedicated host below. Leave the dedicated host blank if you want to use automatic host selection.",
-										"link": {
-											"label": "Learn more",
-											"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/dedicated-hosts#manual-vs-automatic-placement"
-										}
-									}
-								},
-								{
-									"name": "hostGroupsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(not(empty(steps('hosts').scope.subscription.id)), steps('hosts').dedicatedHosts.deployToDedicatedHosts)]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/hostGroups?api-version=2023-09-01')]"
-									}
-								},
-								{
-									"name": "dedicatedHostGroup",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Dedicated Host Group",
-									"multiLine": true,
-									"toolTip": "Select the dedicated host group to which the Virtual Machines will be deployed using automatic host selection.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('hosts').dedicatedHosts.hostGroupsApi.value, (hg) => equals(hg.location, steps('hosts').scope.location.name)), (hg) => parse(concat('{\"label\":\"', hg.name, '\",\"description\":\"Resource Group: ', first(skip(split(hg.id, '/'), 4)), ', Availability Zone: ', hg.zones, '\",\"value\":\"', hg.id, '\"}')))]"
-									},
-									"visible": "[steps('hosts').dedicatedHosts.deployToDedicatedHosts]"
-								}
-							],
-							"visible": true
-						},
-						{
 							"name": "specs",
 							"type": "Microsoft.Common.Section",
 							"label": "Capacity and Performance",
@@ -1960,7 +1902,7 @@
 									"visible": "[equals(steps('hosts').availability.availability, 'AvailabilityZones')]"
 								}
 							],
-							"visible": "[equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false)]"
+							"visible": true
 						},
 						{
 							"name": "registration",
@@ -2938,10 +2880,10 @@
 				"drainGracePeriodHours": "[steps('functionApp').executionSettings.drainGracePeriodHours]",
 				"minimumDrainMinutes": "[steps('functionApp').executionSettings.minimumDrainMinutes]",
 				"minimumCapacityPercentage": "[steps('functionApp').executionSettings.minimumCapacityPercentage]",
-				"maxDeletionsPerCycle": "[steps('functionApp').executionSettings.maxDeletionsPerCycle]",
-				"minimumHostIndex": "[steps('functionApp').executionSettings.minimumHostIndex]",
+				"maxDeletionsPerCycle": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst'), steps('functionApp').executionSettings.maxDeletionsPerCycle, 5)]",
+				"minimumHostIndex": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.minimumHostIndex, 1)]",
 				"targetSessionHostCount": "[steps('functionApp').executionSettings.targetSessionHostCount]",
-				"maxDeploymentBatchSize": "[steps('functionApp').executionSettings.maxDeploymentBatchSize]",
+				"maxDeploymentBatchSize": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.maxDeploymentBatchSize, 100)]",
 				"fixSessionHostTags": "[steps('functionApp').executionSettings.fixSessionHostTags]",
 				"includePreExistingSessionHosts": "[steps('functionApp').executionSettings.includePreExistingSessionHosts]",
 				"tagIncludeInAutomation": "[steps('functionApp').executionSettings.tagIncludeInAutomation]",
@@ -2991,8 +2933,8 @@
 				"diskSizeGB": "[steps('hosts').specs.diskSizeGB]",
 				"diskSku": "[steps('hosts').specs.diskSku]",
 				"enableAcceleratedNetworking": "[steps('hosts').specs.enableAcceleratedNetworking]",
-				"availability": "[if(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), steps('hosts').availability.availability, 'none')]",
-				"availabilityZones": "[if(and(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), equals(steps('hosts').availability.availability, 'AvailabilityZones')), steps('hosts').availability.availabilityZones, parse('[]'))]",
+				"availability": "[steps('hosts').availability.availability]",
+				"availabilityZones": "[if(equals(steps('hosts').availability.availability, 'AvailabilityZones'), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
 				"artifactsContainerUri": "[if(and(steps('hosts').customScripts.addCustomScripts, not(empty(steps('hosts').customScripts.storageAccount)), not(empty(steps('hosts').customScripts.container))), concat(steps('hosts').customScripts.storageAccount.blobEndpoint, steps('hosts').customScripts.container), '')]",
 				"artifactsUserAssignedIdentityResourceId": "[if(and(steps('hosts').customScripts.addCustomScripts, not(empty(steps('hosts').customScripts.managedIdentity))), steps('hosts').customScripts.managedIdentity.id, '')]",

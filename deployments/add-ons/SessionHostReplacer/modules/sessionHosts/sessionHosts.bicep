@@ -33,14 +33,14 @@ param credentialsKeyVaultResourceId string
 @description('Resource ID of the data collection endpoint for Azure Monitor agent.')
 param dataCollectionEndpointResourceId string = ''
 
-@description('Resource ID of the dedicated host group for session host placement.')
-param dedicatedHostGroupResourceId string = ''
+@description('Array of resource IDs for dedicated host groups. One per session host, or single value applied to all, or empty string for VMs without assignment.')
+param dedicatedHostGroupResourceIds array = []
 
-@description('Array of availability zones for the dedicated host group.')
-param dedicatedHostGroupZones array = []
+@description('Array of resource IDs for specific dedicated hosts. One per session host, or single value applied to all, or empty string for VMs without assignment.')
+param dedicatedHostResourceIds array = []
 
-@description('Resource ID of a specific dedicated host for session host placement.')
-param dedicatedHostResourceId string = ''
+@description('Array of preferred zones for each session host. One per session host (as array like ["1"]), or empty for VMs without specific zone preference.')
+param preferredZones array = []
 
 @description('Resource ID of the disk encryption set for encrypting managed disks with customer-managed keys.')
 param diskEncryptionSetResourceId string = ''
@@ -291,9 +291,9 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
       confidentialVMOSDiskEncryptionType: confidentialVMOSDiskEncryptionType
       dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
-      dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
-      dedicatedHostGroupZones: dedicatedHostGroupZones
-      dedicatedHostResourceId: dedicatedHostResourceId
+      dedicatedHostGroupResourceIds: dedicatedHostGroupResourceIds
+      dedicatedHostResourceIds: dedicatedHostResourceIds
+      preferredZones: preferredZones
       deploymentSuffix: deploymentSuffix
       diskEncryptionSetResourceId: diskEncryptionSetResourceId
       diskSizeGB: diskSizeGB

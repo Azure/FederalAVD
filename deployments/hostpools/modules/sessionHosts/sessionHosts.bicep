@@ -18,7 +18,6 @@ param confidentialVMOSDiskEncryption bool
 param customImageResourceId string
 param dataCollectionEndpointResourceId string
 param dedicatedHostGroupResourceId string
-param dedicatedHostGroupZones array
 param dedicatedHostResourceId string
 param deployDiskAccessPolicy bool
 param deployDiskAccessResource bool
@@ -110,6 +109,21 @@ var backupPrivateDNSZoneResourceIds = [
   azureBlobPrivateDnsZoneResourceId
   azureQueuePrivateDnsZoneResourceId
 ]
+
+var dedicatedHostGroupName = !empty(dedicatedHostResourceId)
+  ? split(dedicatedHostResourceId, '/')[8]
+  : !empty(dedicatedHostGroupResourceId) ? last(split(dedicatedHostGroupResourceId, '/')) : ''
+var dedicatedHostSub = !empty(dedicatedHostResourceId)
+  ? split(dedicatedHostResourceId, '/')[2]
+  : !empty(dedicatedHostGroupResourceId) ? split(dedicatedHostGroupResourceId, '/')[2] : ''
+var dedicatedHostRG = !empty(dedicatedHostResourceId)
+  ? split(dedicatedHostResourceId, '/')[4]
+  : !empty(dedicatedHostGroupResourceId) ? split(dedicatedHostGroupResourceId, '/')[4] : ''
+
+resource dedicatedHostGroup 'Microsoft.Compute/hostGroups@2024-11-01' existing = if (!empty(dedicatedHostGroupName)) {
+  scope: resourceGroup(dedicatedHostSub, dedicatedHostRG)
+  name: dedicatedHostGroupName
+}
 
 var nonEmptyBackupPrivateDNSZoneResourceIds = filter(backupPrivateDNSZoneResourceIds, zone => !empty(zone))
 
@@ -252,7 +266,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     customImageResourceId: customImageResourceId
     dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
     dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
-    dedicatedHostGroupZones: dedicatedHostGroupZones
+    dedicatedHostGroupZones: !empty(dedicatedHostGroupName) ? dedicatedHostGroup!.zones : []
     dedicatedHostResourceId: dedicatedHostResourceId
     diskAccessId: deploymentType != 'SessionHostsOnly' ? deployDiskAccessResource ? diskAccessResource!.outputs.resourceId : '' : existingDiskAccessResourceId
     diskEncryptionSetResourceId: ( deploymentType != 'SessionHostsOnly' && keyManagementDisks != 'PlatformManaged' ) ? customerManagedKeys!.outputs.diskEncryptionSetResourceId : !empty(existingDiskEncryptionSetResourceId) ? existingDiskEncryptionSetResourceId : ''

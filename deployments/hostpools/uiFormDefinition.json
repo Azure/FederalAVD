@@ -2320,8 +2320,8 @@
 														"required": true,
 														"validations": [
 															{
-																"regex": "^(?![_-])[A-Za-z0-9_-]{1,13}(?<![_-])$",
-																"message": "The value must not contain spaces or end or begin with a dash or underscore."
+																"regex": "^(?![_.-])[A-Za-z0-9_.-]{1,20}(?<![_.-])$",
+																"message": "The value must not contain spaces or end or begin with a dash, underscore, or period."
 															}
 														]
 													}
