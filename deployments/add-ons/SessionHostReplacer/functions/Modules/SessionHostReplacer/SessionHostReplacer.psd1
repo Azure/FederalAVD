@@ -47,9 +47,11 @@
         'Get-TemplateSpecVersionResourceId'
         'Remove-FailedDeploymentArtifacts'
         'Remove-SessionHosts'
+        'Remove-ExpiredShutdownVMs'
         'Remove-EntraDevice'
         'Remove-IntuneDevice'
         'Send-DrainNotification'
+        'Update-HostPoolStatus'
     )
 
     # Cmdlets to export from this module

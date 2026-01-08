@@ -132,6 +132,14 @@ param maxDeletionsPerCycle int = 5
 @maxValue(999)
 param minimumHostIndex int = 1
 
+@description('Optional. Enable shutdown retention for replaced session hosts in SideBySide mode. When enabled, old session hosts are shutdown (deallocated) instead of deleted, allowing for rollback. They are automatically deleted after the retention period expires. Only applies when replacementMode is SideBySide. Default is false.')
+param enableShutdownRetention bool = false
+
+@description('Optional. Number of days to retain shutdown session hosts before automatic deletion in SideBySide mode. Provides rollback window in case issues are discovered with new hosts. Only applies when replacementMode is SideBySide and enableShutdownRetention is true. Default is 3 days.')
+@minValue(1)
+@maxValue(7)
+param shutdownRetentionDays int = 3
+
 @description('Required. The target number of session hosts to maintain in the host pool. Set to 0 for auto-detect mode: the function will automatically maintain whatever count exists when a replacement cycle begins, allowing you to manually scale between image updates.')
 @minValue(0)
 @maxValue(1000)
@@ -151,6 +159,9 @@ param tagDeployTimestamp string = 'AutoReplaceDeployTimestamp'
 
 @description('Optional. Tag name for pending drain timestamp. Default is AutoReplacePendingDrainTimestamp.')
 param tagPendingDrainTimestamp string = 'AutoReplacePendingDrainTimestamp'
+
+@description('Optional. Tag name for shutdown timestamp in SideBySide mode with shutdown retention. Default is AutoReplaceShutdownTimestamp.')
+param tagShutdownTimestamp string = 'AutoReplaceShutdownTimestamp'
 
 @description('Optional. Tag name for scaling plan exclusion. Default is ScalingPlanExclusion.')
 param tagScalingPlanExclusionTag string = 'ScalingPlanExclusion'
@@ -865,6 +876,22 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
             }
           ]
         : [],
+      replacementMode == 'SideBySide'
+        ? [
+            {
+              name: 'EnableShutdownRetention'
+              value: string(enableShutdownRetention)
+            }
+          ]
+        : [],
+      replacementMode == 'SideBySide'
+        ? [
+            {
+              name: 'ShutdownRetentionDays'
+              value: string(shutdownRetentionDays)
+            }
+          ]
+        : [],
       [
         {
           name: 'RemoveEntraDevice'
@@ -923,6 +950,10 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
         {
           name: 'Tag_PendingDrainTimestamp'
           value: tagPendingDrainTimestamp
+        }
+        {
+          name: 'Tag_ShutdownTimestamp'
+          value: tagShutdownTimestamp
         }
         {
           name: 'Tag_ScalingPlanExclusionTag'

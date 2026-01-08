@@ -1873,17 +1873,22 @@ function Remove-SessionHosts {
         [Parameter()]
         [string] $TagPendingDrainTimeStamp = (Read-FunctionAppSetting Tag_PendingDrainTimestamp),
         [Parameter()]
+        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp),
+        [Parameter()]
         [string] $TagScalingPlanExclusionTag = (Read-FunctionAppSetting Tag_ScalingPlanExclusionTag),
         [Parameter()]
         [bool] $RemoveEntraDevice,
         [Parameter()]
         [bool] $RemoveIntuneDevice,
         [Parameter()]
+        [bool] $EnableShutdownRetention = [bool]::Parse((Read-FunctionAppSetting EnableShutdownRetention)),
+        [Parameter()]
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
 
     # Initialize results tracking
     $successfulDeletions = @()
+    $successfulShutdowns = @()
     $failedDeletions = @()
 
     foreach ($sessionHost in $SessionHostsPendingDelete) {
@@ -2006,25 +2011,49 @@ function Remove-SessionHosts {
 
         if ($deleteSessionHost) {
             try {
-                Write-LogEntry -Message "Deleting session host $($SessionHost.SessionHostName)..."
-                if ($GraphToken -and $RemoveEntraDevice) {
-                    Write-LogEntry -Message 'Deleting device from Entra ID' -Level Verbose
-                    Remove-EntraDevice -GraphToken $GraphToken -Name $sessionHost.SessionHostName -ClientId $ClientId
+                # If shutdown retention is enabled, shutdown instead of delete
+                if ($EnableShutdownRetention) {
+                    Write-LogEntry -Message "Shutdown retention enabled - deallocating session host $($sessionHost.SessionHostName) for rollback capability..."
+                    
+                    # Deallocate (shutdown) the VM but leave it in the host pool for rollback
+                    Write-LogEntry -Message "Deallocating VM: $($sessionHost.ResourceId)..." -Level Verbose
+                    $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/deallocate?api-version=2024-07-01"
+                    [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'POST' -Uri $Uri)
+                    
+                    # Tag with shutdown timestamp for later cleanup
+                    $shutdownTimestamp = (Get-Date).ToUniversalTime().ToString('o')
+                    Write-LogEntry -Message "Setting shutdown timestamp tag on $($sessionHost.SessionHostName): $shutdownTimestamp" -Level Verbose
+                    $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                    $Body = @{
+                        properties = @{
+                            tags = @{ $TagShutdownTimestamp = $shutdownTimestamp }
+                        }
+                        operation  = 'Merge'
+                    }
+                    Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri | Out-Null
+                    
+                    # Track successful shutdown
+                    $successfulShutdowns += $sessionHost.SessionHostName
+                    Write-LogEntry -Message "Successfully shutdown session host $($sessionHost.SessionHostName) - will remain in host pool for $([int]::Parse((Read-FunctionAppSetting ShutdownRetentionDays))) days for rollback"
                 }
-                if ($GraphToken -and $RemoveIntuneDevice) {
-                    Write-LogEntry -Message 'Deleting device from Intune' -Level Verbose
-                    Remove-IntuneDevice -GraphToken $GraphToken -Name $sessionHost.SessionHostName -ClientId $ClientId
+                else {
+                    # Standard delete flow
+                    Write-LogEntry -Message "Deleting session host $($SessionHost.SessionHostName)..."
+                    
+                    # Remove from identity directories
+                    Remove-DeviceFromDirectories -DeviceName $sessionHost.SessionHostName -GraphToken $GraphToken -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -ClientId $ClientId
+                    
+                    Write-LogEntry -Message "Removing Session Host from Host Pool $HostPoolName" -Level Verbose
+                    $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$($sessionHost.FQDN)?api-version=2024-04-03"
+                    [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri)            
+                    Write-LogEntry -Message "Deleting VM: $($sessionHost.ResourceId)..." -Level Verbose
+                    $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)?forceDeletion=true&api-version=2024-07-01"
+                    [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'DELETE' -Uri $Uri)
+                    
+                    # Track successful deletion
+                    $successfulDeletions += $sessionHost.SessionHostName
+                    Write-LogEntry -Message "Successfully deleted session host $($sessionHost.SessionHostName)"
                 }
-                Write-LogEntry -Message "Removing Session Host from Host Pool $HostPoolName" -Level Verbose
-                $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$($sessionHost.FQDN)?api-version=2024-04-03"
-                [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri)            
-                Write-LogEntry -Message "Deleting VM: $($sessionHost.ResourceId)..." -Level Verbose
-                $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)?forceDeletion=true&api-version=2024-07-01"
-                [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'DELETE' -Uri $Uri)
-                
-                # Track successful deletion
-                $successfulDeletions += $sessionHost.SessionHostName
-                Write-LogEntry -Message "Successfully deleted session host $($sessionHost.SessionHostName)"
             }
             catch {
                 # Track failed deletion
@@ -2040,7 +2069,72 @@ function Remove-SessionHosts {
     # Return results object
     return [PSCustomObject]@{
         SuccessfulDeletions = $successfulDeletions
+        SuccessfulShutdowns = $successfulShutdowns
         FailedDeletions     = $failedDeletions
+    }
+}
+
+function Remove-DeviceFromDirectories {
+    <#
+    .SYNOPSIS
+    Removes a device from Entra ID and/or Intune based on configuration.
+    
+    .DESCRIPTION
+    Helper function to handle device cleanup from identity directories.
+    Called by both Remove-SessionHosts and Remove-ExpiredShutdownVMs.
+    
+    .PARAMETER DeviceName
+    The name of the device to remove
+    
+    .PARAMETER GraphToken
+    Graph access token for API calls
+    
+    .PARAMETER RemoveEntraDevice
+    Whether to remove from Entra ID
+    
+    .PARAMETER RemoveIntuneDevice
+    Whether to remove from Intune
+    
+    .PARAMETER ClientId
+    Client ID for Graph API calls
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $DeviceName,
+        [Parameter()]
+        [string] $GraphToken,
+        [Parameter()]
+        [bool] $RemoveEntraDevice,
+        [Parameter()]
+        [bool] $RemoveIntuneDevice,
+        [Parameter()]
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+    )
+    
+    if (-not $GraphToken) {
+        Write-LogEntry -Message "No Graph token provided - skipping device cleanup for $DeviceName" -Level Verbose
+        return
+    }
+    
+    if ($RemoveEntraDevice) {
+        Write-LogEntry -Message "Deleting $DeviceName from Entra ID" -Level Verbose
+        try {
+            Remove-EntraDevice -GraphToken $GraphToken -Name $DeviceName -ClientId $ClientId
+        }
+        catch {
+            Write-LogEntry -Message "Failed to remove $DeviceName from Entra ID: $($_.Exception.Message)" -Level Warning
+        }
+    }
+    
+    if ($RemoveIntuneDevice) {
+        Write-LogEntry -Message "Deleting $DeviceName from Intune" -Level Verbose
+        try {
+            Remove-IntuneDevice -GraphToken $GraphToken -Name $DeviceName -ClientId $ClientId
+        }
+        catch {
+            Write-LogEntry -Message "Failed to remove $DeviceName from Intune: $($_.Exception.Message)" -Level Warning
+        }
     }
 }
 
@@ -2148,6 +2242,158 @@ function Remove-IntuneDevice {
     }
 }
 
+function Remove-ExpiredShutdownVMs {
+    <#
+    .SYNOPSIS
+    Removes VMs that have been shutdown for longer than the retention period.
+    
+    .DESCRIPTION
+    Checks for VMs tagged with shutdown timestamp and deletes them if they have exceeded
+    the configured retention period. Also removes associated Entra ID and Intune devices.
+    
+    .PARAMETER ARMToken
+    ARM access token for Azure Resource Manager API calls
+    
+    .PARAMETER GraphToken
+    Graph access token for Entra ID and Intune API calls
+    
+    .PARAMETER ShutdownRetentionDays
+    Number of days to retain shutdown VMs before deletion
+    
+    .OUTPUTS
+    PSCustomObject with counts of cleaned up and retained VMs
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $ARMToken,
+        [Parameter()]
+        [string] $GraphToken,
+        [Parameter()]
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri),
+        [Parameter()]
+        [int] $ShutdownRetentionDays = [int]::Parse((Read-FunctionAppSetting ShutdownRetentionDays)),
+        [Parameter()]
+        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp),
+        [Parameter()]
+        [string] $VirtualMachinesSubscriptionId = (Read-FunctionAppSetting VirtualMachinesSubscriptionId),
+        [Parameter()]
+        [string] $VirtualMachinesResourceGroupName = (Read-FunctionAppSetting VirtualMachinesResourceGroupName),
+        [Parameter()]
+        [string] $HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
+        [Parameter()]
+        [string] $HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
+        [Parameter()]
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
+        [Parameter()]
+        [bool] $RemoveEntraDevice = [bool]::Parse((Read-FunctionAppSetting RemoveEntraDevice)),
+        [Parameter()]
+        [bool] $RemoveIntuneDevice = [bool]::Parse((Read-FunctionAppSetting RemoveIntuneDevice)),
+        [Parameter()]
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+    )
+    
+    Write-LogEntry -Message "Checking for shutdown VMs exceeding retention period of $ShutdownRetentionDays days"
+    
+    # Get all VMs in the resource group with the shutdown timestamp tag
+    $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/resources?`$filter=resourceType eq 'Microsoft.Compute/virtualMachines' and tagName eq '$TagShutdownTimestamp'&api-version=2021-04-01"
+    $shutdownVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+    
+    if (-not $shutdownVMs -or $shutdownVMs.Count -eq 0) {
+        Write-LogEntry -Message "No shutdown VMs found with retention tag" -Level Verbose
+        return [PSCustomObject]@{
+            CleanedUpCount = 0
+            RetainedCount  = 0
+        }
+    }
+    
+    Write-LogEntry -Message "Found $($shutdownVMs.Count) shutdown VM(s) to evaluate"
+    
+    $cleanedUpCount = 0
+    $retainedCount = 0
+    $currentTime = (Get-Date).ToUniversalTime()
+    
+    foreach ($vm in $shutdownVMs) {
+        $vmName = $vm.name
+        $vmId = $vm.id
+        
+        # Get the shutdown timestamp from tags
+        $shutdownTimestampString = $vm.tags.$TagShutdownTimestamp
+        
+        if ([string]::IsNullOrEmpty($shutdownTimestampString)) {
+            Write-LogEntry -Message "VM $vmName has shutdown tag but no timestamp value - skipping" -Level Warning
+            continue
+        }
+        
+        try {
+            $shutdownTime = [DateTime]::Parse($shutdownTimestampString, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+            $age = ($currentTime - $shutdownTime).TotalDays
+            
+            Write-LogEntry -Message "VM $vmName has been shutdown for $([Math]::Round($age, 2)) days (retention: $ShutdownRetentionDays days)" -Level Verbose
+            
+            if ($age -ge $ShutdownRetentionDays) {
+                Write-LogEntry -Message "VM $vmName has exceeded retention period - deleting..."
+                
+                try {
+                    # Remove from host pool first
+                    Write-LogEntry -Message "Removing session host from host pool $HostPoolName" -Level Verbose
+                    # Construct FQDN (session host name in pool is vmName.domain)
+                    # Query the host pool to find the matching session host
+                    $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts?api-version=2024-04-03"
+                    $sessionHostsInPool = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+                    
+                    $matchingHost = $sessionHostsInPool | Where-Object { $_.name -like "*/$vmName" -or $_.properties.resourceId -eq $vmId }
+                    
+                    if ($matchingHost) {
+                        $sessionHostFQDN = $matchingHost.name.Split('/')[-1]
+                        Write-LogEntry -Message "Found session host in pool: $sessionHostFQDN" -Level Verbose
+                        $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$sessionHostFQDN`?api-version=2024-04-03"
+                        [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri)
+                        Write-LogEntry -Message "Removed $vmName from host pool" -Level Verbose
+                    }
+                    else {
+                        Write-LogEntry -Message "Session host $vmName not found in host pool (may have been manually removed)" -Level Verbose
+                    }
+                    
+                    # Remove from identity directories
+                    Remove-DeviceFromDirectories -DeviceName $vmName -GraphToken $GraphToken -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -ClientId $ClientId
+                    
+                    # Delete the VM
+                    Write-LogEntry -Message "Deleting VM: $vmId" -Level Verbose
+                    $Uri = "$ResourceManagerUri$vmId`?forceDeletion=true&api-version=2024-07-01"
+                    [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'DELETE' -Uri $Uri)
+                    
+                    $cleanedUpCount++
+                    Write-LogEntry -Message "Successfully deleted expired shutdown VM $vmName"
+                }
+                catch {
+                    Write-LogEntry -Message "Failed to delete shutdown VM $vmName : $($_.Exception.Message)" -Level Error
+                }
+            }
+            else {
+                $remainingDays = [Math]::Round($ShutdownRetentionDays - $age, 1)
+                Write-LogEntry -Message "VM $vmName will be retained for $remainingDays more day(s)" -Level Verbose
+                $retainedCount++
+            }
+        }
+        catch {
+            Write-LogEntry -Message "Failed to parse shutdown timestamp for VM $vmName : $($_.Exception.Message)" -Level Warning
+        }
+    }
+    
+    if ($cleanedUpCount -gt 0) {
+        Write-LogEntry -Message "Cleanup complete: Deleted $cleanedUpCount expired shutdown VM(s), retained $retainedCount VM(s)"
+    }
+    else {
+        Write-LogEntry -Message "No shutdown VMs exceeded retention period" -Level Verbose
+    }
+    
+    return [PSCustomObject]@{
+        CleanedUpCount = $cleanedUpCount
+        RetainedCount  = $retainedCount
+    }
+}
+
 function Send-DrainNotification {
     [CmdletBinding()]
     param (
@@ -2226,6 +2472,136 @@ function Send-DrainNotification {
     }
     catch {
         Write-LogEntry -Message "Error in Send-DrainNotification: $_" -Level Error
+    }
+}
+
+function Update-HostPoolStatus {
+    <#
+    .SYNOPSIS
+    Updates the host pool with a status tag indicating SessionHostReplacer progress.
+    
+    .DESCRIPTION
+    Creates a composite status tag on the host pool showing overall status and metrics.
+    Format: "Status: X/Y up-to-date | N draining | M shutdown"
+    
+    Status values:
+    - Complete: All hosts up-to-date, no pending work
+    - Updating: Active deployments or deletions in progress
+    - Recovery: Failed deployments detected
+    - Draining: Hosts in drain mode waiting for grace period
+    
+    .PARAMETER ARMToken
+    ARM access token for API calls
+    
+    .PARAMETER SessionHosts
+    Collection of all session hosts in the pool
+    
+    .PARAMETER RunningDeployments
+    Count of active deployments
+    
+    .PARAMETER FailedDeployments
+    Collection of failed deployments
+    
+    .PARAMETER HostsToReplace
+    Count of hosts needing replacement
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $ARMToken,
+        [Parameter()]
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri),
+        [Parameter(Mandatory = $true)]
+        $SessionHosts,
+        [Parameter()]
+        [int] $RunningDeployments = 0,
+        [Parameter()]
+        $FailedDeployments = @(),
+        [Parameter()]
+        [int] $HostsToReplace = 0,
+        [Parameter()]
+        [string] $HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
+        [Parameter()]
+        [string] $HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
+        [Parameter()]
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
+        [Parameter()]
+        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp)
+    )
+    
+    try {
+        # Calculate metrics
+        $totalHosts = $SessionHosts.Count
+        $upToDateHosts = ($SessionHosts | Where-Object { -not $_.NeedsUpdate }).Count
+        $drainingHosts = ($SessionHosts | Where-Object { -not $_.AllowNewSession }).Count
+        
+        # Count shutdown hosts (VMs with shutdown timestamp tag)
+        $shutdownHosts = 0
+        try {
+            $vmSubscriptionId = Read-FunctionAppSetting VirtualMachinesSubscriptionId
+            $vmResourceGroupName = Read-FunctionAppSetting VirtualMachinesResourceGroupName
+            $Uri = "$ResourceManagerUri/subscriptions/$vmSubscriptionId/resourceGroups/$vmResourceGroupName/resources?`$filter=resourceType eq 'Microsoft.Compute/virtualMachines' and tagName eq '$TagShutdownTimestamp'&api-version=2021-04-01"
+            $shutdownVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+            $shutdownHosts = if ($shutdownVMs) { $shutdownVMs.Count } else { 0 }
+        }
+        catch {
+            Write-LogEntry -Message "Could not query shutdown hosts: $($_.Exception.Message)" -Level Verbose
+        }
+        
+        # Determine status
+        $status = if ($FailedDeployments.Count -gt 0) {
+            "Recovery"
+        }
+        elseif ($RunningDeployments -gt 0 -or $HostsToReplace -gt 0) {
+            "Updating"
+        }
+        elseif ($drainingHosts -gt 0) {
+            "Draining"
+        }
+        elseif ($upToDateHosts -eq $totalHosts -and $shutdownHosts -eq 0) {
+            "Complete"
+        }
+        else {
+            "Updating"
+        }
+        
+        # Build composite status string
+        $statusParts = @("$status`: $upToDateHosts/$totalHosts up-to-date")
+        
+        if ($drainingHosts -gt 0) {
+            $statusParts += "$drainingHosts draining"
+        }
+        
+        if ($shutdownHosts -gt 0) {
+            $statusParts += "$shutdownHosts shutdown"
+        }
+        
+        if ($RunningDeployments -gt 0) {
+            $statusParts += "$RunningDeployments deploying"
+        }
+        
+        $statusValue = $statusParts -join " | "
+        
+        Write-LogEntry -Message "Updating host pool status tag: $statusValue" -Level Verbose
+        
+        # Update host pool tags
+        $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+        $Body = @{
+            properties = @{
+                tags = @{ 
+                    'SessionHostReplacerStatus' = $statusValue
+                    'SessionHostReplacerLastRun' = (Get-Date -AsUTC -Format 'o')
+                }
+            }
+            operation  = 'Merge'
+        }
+        
+        Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri | Out-Null
+        
+        Write-LogEntry -Message "Successfully updated host pool status tag"
+    }
+    catch {
+        Write-LogEntry -Message "Failed to update host pool status tag: $($_.Exception.Message)" -Level Warning
     }
 }
 

@@ -43,6 +43,38 @@ catch {
 $sessionHosts = Get-SessionHosts -ARMToken $ARMToken
 Write-LogEntry -Message "Found {0} session hosts" -StringValues $sessionHosts.Count
 
+# Check for and cleanup expired shutdown VMs if shutdown retention is enabled
+$enableShutdownRetention = Read-FunctionAppSetting EnableShutdownRetention
+if ($enableShutdownRetention) {
+    Write-LogEntry -Message "Shutdown retention is enabled - checking for expired shutdown VMs"
+    
+    # Acquire Graph token for device cleanup if enabled
+    $GraphToken = $null
+    $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
+    $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice
+    
+    if ($removeEntraDevice -or $removeIntuneDevice) {
+        try {
+            $graphEndpoint = Get-GraphEndpoint
+            $GraphToken = Get-AccessToken -ResourceUri $graphEndpoint
+            
+            if ([string]::IsNullOrEmpty($GraphToken)) {
+                Write-LogEntry -Message "Warning: Could not acquire Graph token for device cleanup" -Level Warning
+            }
+        }
+        catch {
+            Write-LogEntry -Message "Warning: Failed to acquire Graph token for device cleanup: $_" -Level Warning
+        }
+    }
+    
+    # Cleanup expired shutdown VMs
+    $cleanupResults = Remove-ExpiredShutdownVMs -ARMToken $ARMToken -GraphToken $GraphToken
+    
+    if ($cleanupResults.CleanedUpCount -gt 0) {
+        Write-LogEntry -Message "Cleaned up {0} expired shutdown VM(s)" -StringValues $cleanupResults.CleanedUpCount
+    }
+}
+
 # Check previous deployment status if progressive scale-up is enabled
 $previousDeploymentStatus = $null
 if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
@@ -579,6 +611,9 @@ if ($replacementMode -eq 'DeleteFirst') {
             if ($deletionResults.SuccessfulDeletions.Count -gt 0) {
                 Write-LogEntry -Message "Successfully deleted {0} session host(s): {1}" -StringValues $deletionResults.SuccessfulDeletions.Count, ($deletionResults.SuccessfulDeletions -join ', ')
             }
+            if ($deletionResults.SuccessfulShutdowns.Count -gt 0) {
+                Write-LogEntry -Message "Successfully shutdown {0} session host(s) for retention: {1}" -StringValues $deletionResults.SuccessfulShutdowns.Count, ($deletionResults.SuccessfulShutdowns -join ', ')
+            }
         }
     }
 }
@@ -705,3 +740,16 @@ if ($cycleComplete) {
 Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | ToDeployNow: {6} | RunningDeployments: {7} | LatestImage: {8}" `
     -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.LatestImageVersion `
    
+
+# Update host pool status tag with current state
+try {
+    Update-HostPoolStatus `
+        -ARMToken $ARMToken `
+        -SessionHosts $sessionHostsFiltered `
+        -RunningDeployments $currentlyDeploying `
+        -FailedDeployments $failedDeployments `
+        -HostsToReplace $metricsLog.ToReplace
+}
+catch {
+    Write-LogEntry -Message "Failed to update host pool status tag: $($_.Exception.Message)" -Level Warning
+}
