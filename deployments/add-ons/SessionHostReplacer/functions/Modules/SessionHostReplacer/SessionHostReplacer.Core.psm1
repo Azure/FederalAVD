@@ -243,12 +243,12 @@ function Write-LogEntry {
     #>
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true, Position = 0)]
         [string] $Message,
         
         [Parameter(Mandatory = $false)]
-        [ValidateSet('Information', 'Warning', 'Error', 'Host', 'Verbose')]
-        [string] $Level = 'Information',
+        [ValidateSet('Warning', 'Error', 'Host', 'Verbose')]
+        [string] $Level = 'Host',
         
         [Parameter(Mandatory = $false)]
         [object[]] $StringValues
@@ -271,9 +271,8 @@ function Write-LogEntry {
     # Add host pool prefix if available
     $prefix = if ($script:HostPoolNameForLogging) { "[$($script:HostPoolNameForLogging)]" } else { "" }
     
-    # Add timestamp
-    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    $output = "[$timestamp] [$Level] $prefix $formattedMessage".Trim()
+    # Build output message (Azure Functions already adds timestamp and level)
+    $output = "$prefix $formattedMessage".Trim()
     
     # Output based on level
     switch ($Level) {
@@ -288,9 +287,6 @@ function Write-LogEntry {
         }
         'Verbose' {
             Write-Verbose $output
-        }
-        default {
-            Write-Information $output -InformationAction Continue
         }
     }
 }
@@ -455,11 +451,11 @@ function Invoke-AzureRestMethodWithRetry {
             
             if ($retryable -and $attempt -lt $MaxRetries) {
                 $delay = $RetryDelaySeconds * [Math]::Pow(2, $attempt - 1)
-                Write-LogEntry "Request failed with status $statusCode. Retrying in $delay seconds (attempt $attempt of $MaxRetries)" -Level Warning
+                Write-LogEntry -Message "Request failed with status $statusCode. Retrying in $delay seconds (attempt $attempt of $MaxRetries)" -Level Warning
                 Start-Sleep -Seconds $delay
             }
             else {
-                Write-LogEntry "Request failed: $_" -Level Error
+                Write-LogEntry -Message "Request failed: $_" -Level Error
                 throw $_
             }
         }
@@ -526,7 +522,7 @@ function Invoke-GraphRestMethod {
         
         # If using GCCH endpoint and got auth error, try DoD endpoint
         if ($Uri -like "*graph.microsoft.us*" -and $statusCode -in @(401, 403)) {
-            Write-LogEntry "Graph API call to GCCH failed with status $statusCode. Trying DoD endpoint..." -Level Warning
+            Write-LogEntry -Message "Graph API call to GCCH failed with status $statusCode. Trying DoD endpoint..." -Level Warning
             
             # Replace GCCH endpoint with DoD
             $dodUri = $Uri -replace 'graph\.microsoft\.us', 'dod-graph.microsoft.us'
@@ -542,12 +538,12 @@ function Invoke-GraphRestMethod {
                 return $result
             }
             catch {
-                Write-LogEntry "Graph API call to DoD endpoint also failed: $_" -Level Error
+                Write-LogEntry -Message "Graph API call to DoD endpoint also failed: $_" -Level Error
                 throw $_
             }
         }
         else {
-            Write-LogEntry "Graph API call failed: $_" -Level Error
+            Write-LogEntry -Message "Graph API call failed: $_" -Level Error
             throw $_
         }
     }
@@ -637,7 +633,7 @@ function Invoke-GraphApiWithRetry {
                 $token = Get-AccessToken -ResourceUri $endpoint -ClientId $ClientId
             }
             catch {
-                Write-LogEntry "Failed to acquire token for $endpoint : $_" -Level Warning
+                Write-LogEntry -Message "Failed to acquire token for $endpoint : $_" -Level Warning
                 continue
             }
         }
@@ -679,7 +675,7 @@ function Invoke-GraphApiWithRetry {
                     $reader.Close()
                     
                     if ($errorBody) {
-                        Write-LogEntry "Graph API error response: $errorBody" -Level Error
+                        Write-LogEntry -Message "Graph API error response: $errorBody" -Level Error
                     }
                 }
                 catch {
@@ -689,18 +685,18 @@ function Invoke-GraphApiWithRetry {
             
             # Retry on authentication/authorization errors (401, 403) or if endpoint not found (404 on base endpoint)
             if ($statusCode -in @(401, 403, 404) -and $endpoint -ne $endpointsToTry[-1].Endpoint) {
-                Write-LogEntry "Graph API call to $endpoint failed with status $statusCode. Trying next endpoint..." -Level Warning
+                Write-LogEntry -Message "Graph API call to $endpoint failed with status $statusCode. Trying next endpoint..." -Level Warning
                 continue
             }
             else {
-                Write-LogEntry "Graph API call failed: $($_.Exception.Message)" -Level Error
+                Write-LogEntry -Message "Graph API call failed: $($_.Exception.Message)" -Level Error
                 throw $_
             }
         }
     }
     
     # If we get here, all endpoints failed
-    Write-LogEntry "All Graph API endpoints failed. Last error: $($lastError.Exception.Message)" -Level Error
+    Write-LogEntry -Message "All Graph API endpoints failed. Last error: $($lastError.Exception.Message)" -Level Error
     throw $lastError
 }
 

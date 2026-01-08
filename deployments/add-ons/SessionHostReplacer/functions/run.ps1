@@ -24,7 +24,7 @@ $successfulRunsBeforeScaleUp = Read-FunctionAppSetting SuccessfulRunsBeforeScale
 $maxDeploymentBatchSize = Read-FunctionAppSetting MaxDeploymentBatchSize
 $targetSessionHostCount = Read-FunctionAppSetting TargetSessionHostCount
 
-Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | TargetSessionHostCount: {10}" -StringValues $replacementMode, $minimumDrainMinutes, $drainGracePeriodHours, $minimumCapacityPercentage, $maxDeletionsPerCycle, $enableProgressiveScaleUp, $initialDeploymentPercentage, $scaleUpIncrementPercentage, $successfulRunsBeforeScaleUp, $maxDeploymentBatchSize, $targetSessionHostCount -Level Information
+Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | TargetSessionHostCount: {10}" -StringValues $replacementMode, $minimumDrainMinutes, $drainGracePeriodHours, $minimumCapacityPercentage, $maxDeletionsPerCycle, $enableProgressiveScaleUp, $initialDeploymentPercentage, $scaleUpIncrementPercentage, $successfulRunsBeforeScaleUp, $maxDeploymentBatchSize, $targetSessionHostCount
 
 # Acquire ARM access token
 try {
@@ -74,10 +74,10 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
                     $initialDeploymentPercentage + ($scaleUpMultiplier * $scaleUpIncrementPercentage),
                     100
                 )                
-                Write-LogEntry "Previous deployment succeeded. ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), CurrentPercentage: $($deploymentState.CurrentPercentage)%"
+                Write-LogEntry -Message "Previous deployment succeeded. ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), CurrentPercentage: $($deploymentState.CurrentPercentage)%"
             }
             elseif ($previousDeploymentStatus.Failed) {
-                Write-LogEntry "Previous deployment failed. Cleaning up partial resources before redeployment." -Level Warning
+                Write-LogEntry -Message "Previous deployment failed. Cleaning up partial resources before redeployment." -Level Warning
                 
                 # Acquire Graph token for device cleanup if enabled
                 $GraphToken = $null
@@ -90,11 +90,11 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
                         $GraphToken = Get-AccessToken -ResourceUri $graphEndpoint
                         
                         if ([string]::IsNullOrEmpty($GraphToken)) {
-                            Write-LogEntry "Warning: Could not acquire Graph token for device cleanup" -Level Warning
+                            Write-LogEntry -Message "Warning: Could not acquire Graph token for device cleanup" -Level Warning
                         }
                     }
                     catch {
-                        Write-LogEntry "Warning: Failed to acquire Graph token for device cleanup: $_" -Level Warning
+                        Write-LogEntry -Message "Warning: Failed to acquire Graph token for device cleanup: $_" -Level Warning
                     }
                 }
                 
@@ -105,10 +105,10 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
                 
                 try {
                     Remove-FailedDeploymentArtifacts -ARMToken $ARMToken -GraphToken $GraphToken -FailedDeployments $failedDeploymentInfo -RegisteredSessionHostNames $sessionHosts.SessionHostName -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
-                    Write-LogEntry "Completed cleanup of failed deployment artifacts" -Level Information
+                    Write-LogEntry -Message "Completed cleanup of failed deployment artifacts"
                 }
                 catch {
-                    Write-LogEntry "Error during failed deployment cleanup: $_" -Level Error
+                    Write-LogEntry -Message "Error during failed deployment cleanup: $_" -Level Error
                 }
                 
                 # Clear pending host mappings (starting fresh)
@@ -121,10 +121,10 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
                 $deploymentState.ConsecutiveSuccesses = 0
                 $deploymentState.CurrentPercentage = $initialDeploymentPercentage
                 $deploymentState.LastStatus = 'Failed'                
-                Write-LogEntry "Reset consecutive successes to 0, CurrentPercentage: $($deploymentState.CurrentPercentage)%" -Level Warning
+                Write-LogEntry -Message "Reset consecutive successes to 0, CurrentPercentage: $($deploymentState.CurrentPercentage)%" -Level Warning
             }
             elseif ($previousDeploymentStatus.Running) {
-                Write-LogEntry "Previous deployment is still running. Will check again on next run." -Level Warning
+                Write-LogEntry -Message "Previous deployment is still running. Will check again on next run." -Level Warning
                 # Don't update state yet - wait until it completes
             }
             
@@ -254,7 +254,7 @@ if ($replacementMode -eq 'DeleteFirst') {
         if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
             try {
                 $hostPropertyMapping = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable
-                Write-LogEntry -Message "Loaded {0} pending host mapping(s) from previous run for failed deployment recovery" -StringValues $hostPropertyMapping.Count -Level Information
+                Write-LogEntry -Message "Loaded {0} pending host mapping(s) from previous run for failed deployment recovery" -StringValues $hostPropertyMapping.Count
             }
             catch {
                 Write-LogEntry -Message "Failed to parse pending host mappings: $_" -Level Warning
@@ -310,16 +310,16 @@ if ($replacementMode -eq 'DeleteFirst') {
                 $GraphToken = Get-AccessToken -ResourceUri $graphEndpoint
                 
                 if ([string]::IsNullOrEmpty($GraphToken)) {
-                    Write-LogEntry "CRITICAL ERROR: Get-AccessToken returned null or empty Graph token but device cleanup is enabled." -Level Error
-                    Write-LogEntry "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Error
-                    Write-LogEntry "Delete-First mode cannot proceed without device cleanup capability - hostname reuse will fail" -Level Error
+                    Write-LogEntry -Message "CRITICAL ERROR: Get-AccessToken returned null or empty Graph token but device cleanup is enabled." -Level Error
+                    Write-LogEntry -Message "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Error
+                    Write-LogEntry -Message "Delete-First mode cannot proceed without device cleanup capability - hostname reuse will fail" -Level Error
                     throw "Graph token acquisition failed but device cleanup is required in DeleteFirst mode"
                 }
             }
             catch {
-                Write-LogEntry "CRITICAL ERROR: Failed to acquire Graph access token but device cleanup is enabled: $_" -Level Error
-                Write-LogEntry "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Error
-                Write-LogEntry "Delete-First mode cannot proceed without device cleanup capability - hostname reuse will fail" -Level Error
+                Write-LogEntry -Message "CRITICAL ERROR: Failed to acquire Graph access token but device cleanup is enabled: $_" -Level Error
+                Write-LogEntry -Message "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Error
+                Write-LogEntry -Message "Delete-First mode cannot proceed without device cleanup capability - hostname reuse will fail" -Level Error
                 throw "Graph token acquisition failed but device cleanup is required in Delete-First mode"
             }
         }
@@ -342,7 +342,7 @@ if ($replacementMode -eq 'DeleteFirst') {
         
         # Wait for Azure to complete resource cleanup before reusing names
         if ($deletionResults.SuccessfulDeletions.Count -gt 0) {
-            Write-LogEntry -Message "Verifying deletion completion for {0} VM(s) before reusing names..." -StringValues $deletionResults.SuccessfulDeletions.Count -Level Information
+            Write-LogEntry -Message "Verifying deletion completion for {0} VM(s) before reusing names..." -StringValues $deletionResults.SuccessfulDeletions.Count
             
             $maxWaitMinutes = 5
             $pollIntervalSeconds = 30
@@ -406,12 +406,12 @@ if ($replacementMode -eq 'DeleteFirst') {
                 Write-LogEntry -Message "Warning: {0} VM(s) still exist after {1} minutes - proceeding anyway but deployment may fail: {2}" -StringValues $vmsToVerify.Count, $maxWaitMinutes, $unconfirmedNames -Level Warning
             }
             else {
-                Write-LogEntry -Message "All deleted VMs confirmed removed from Azure" -Level Information
+                Write-LogEntry -Message "All deleted VMs confirmed removed from Azure"
             }
             
             # Wait for Entra ID replication after device deletions
             if ($removeEntraDevice -or $removeIntuneDevice) {
-                Write-LogEntry -Message "Waiting 1 minute for Entra ID to replicate device deletions..." -Level Information
+                Write-LogEntry -Message "Waiting 1 minute for Entra ID to replicate device deletions..."
                 Start-Sleep -Seconds 60
             }
         }
@@ -443,7 +443,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames -PreferredSessionHostNames $deletedSessionHostNames -PreferredHostProperties $hostPropertyMapping
             
             # Log deployment submission immediately for workbook visibility
-            Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName -Level Information
+            Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName
             
             # Update deployment state for progressive scale-up tracking
             if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
@@ -454,7 +454,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                 $deploymentState.LastDeploymentNeeded = $hostPoolDecisions.PossibleDeploymentsCount
                 $deploymentState.LastDeploymentPercentage = if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) { [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolDecisions.PossibleDeploymentsCount) * 100) } else { 0 }
                 $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'                
-                Write-LogEntry "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
+                Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
                 
                 # Save state
                 Save-DeploymentState -DeploymentState $deploymentState
@@ -493,7 +493,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames
             
             # Log deployment submission immediately for workbook visibility
-            Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName -Level Information
+            Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName
             
             # Update deployment state for progressive scale-up tracking
             if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
@@ -509,7 +509,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                 else { 0 }
                 $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
                 
-                Write-LogEntry "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
+                Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
                 
                 # Save state
                 Save-DeploymentState -DeploymentState $deploymentState
@@ -548,13 +548,13 @@ if ($replacementMode -eq 'DeleteFirst') {
                 
                 if ([string]::IsNullOrEmpty($GraphToken)) {
                     Write-Warning "Get-AccessToken returned null or empty Graph token. Device cleanup will be skipped."
-                    Write-LogEntry "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Warning
+                    Write-LogEntry -Message "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Warning
                     $GraphToken = $null
                 }
             }
             catch {
                 Write-Warning "Failed to acquire Graph access token: $_. Device cleanup will be skipped."
-                Write-LogEntry "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Warning
+                Write-LogEntry -Message "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Warning
                 $GraphToken = $null
             }
         }
@@ -619,7 +619,7 @@ if ($latestImageVersion.Definition -like "marketplace:*") {
     $marketplaceParts = $latestImageVersion.Definition -replace "^marketplace:", "" -split "/"
     Write-LogEntry -Message "IMAGE_INFO | Type: Marketplace | Publisher: {0} | Offer: {1} | Sku: {2} | Version: {3}" `
         -StringValues $marketplaceParts[0], $marketplaceParts[1], $marketplaceParts[2], $latestImageVersion.Version `
-        -Level Information
+       
 }
 else {
     # Parse gallery path: /subscriptions/.../resourceGroups/.../providers/Microsoft.Compute/galleries/{galleryName}/images/{imageName}
@@ -628,7 +628,7 @@ else {
     $imageDefinition = $galleryMatch.Groups[2].Value
     Write-LogEntry -Message "IMAGE_INFO | Type: Gallery | Gallery: {0} | ImageDefinition: {1} | Version: {2}" `
         -StringValues $galleryName, $imageDefinition, $latestImageVersion.Version `
-        -Level Information
+       
 }
 
 # Check if cycle is complete (no hosts to replace, no hosts in drain, no pending deletions, no running deployments)
@@ -636,7 +636,7 @@ else {
 $cycleComplete = $metricsLog.ToReplace -eq 0 -and $metricsLog.InDrain -eq 0 -and $metricsLog.PendingDelete -eq 0 -and $metricsLog.RunningDeployments -eq 0
 
 if ($cycleComplete) {
-    Write-LogEntry -Message "Update cycle complete - all hosts are up to date. Removing scaling exclusion tags." -Level Information
+    Write-LogEntry -Message "Update cycle complete - all hosts are up to date. Removing scaling exclusion tags."
     
     $tagScalingPlanExclusionTag = Read-FunctionAppSetting Tag_ScalingPlanExclusionTag
     $resourceManagerUri = Get-ResourceManagerUri
@@ -665,7 +665,7 @@ if ($cycleComplete) {
                     # Only remove if the tag value is 'SessionHostReplacer' (set by this function)
                     # This prevents removing admin-set tags which typically have blank values or custom strings
                     if ($tagValue -eq 'SessionHostReplacer') {
-                        Write-LogEntry -Message "Removing scaling exclusion tag from $($sessionHost.SessionHostName) (value: $tagValue)" -Level Information
+                        Write-LogEntry -Message "Removing scaling exclusion tag from $($sessionHost.SessionHostName) (value: $tagValue)"
                         
                         # Remove the tag by setting it to null
                         $Body = @{
@@ -681,7 +681,7 @@ if ($cycleComplete) {
                         Write-LogEntry -Message "Successfully removed scaling exclusion tag from $($sessionHost.SessionHostName)" -Level Verbose
                     }
                     else {
-                        Write-LogEntry -Message "Skipping removal of scaling exclusion tag from $($sessionHost.SessionHostName) - appears to be admin-set (value: '$tagValue')" -Level Information
+                        Write-LogEntry -Message "Skipping removal of scaling exclusion tag from $($sessionHost.SessionHostName) - appears to be admin-set (value: '$tagValue')"
                     }
                 }
             }
@@ -691,7 +691,7 @@ if ($cycleComplete) {
         }
         
         if ($hostsWithExclusionTag -gt 0) {
-            Write-LogEntry -Message "Removed scaling exclusion tags from {0} session host(s)" -StringValues $hostsWithExclusionTag -Level Information
+            Write-LogEntry -Message "Removed scaling exclusion tags from {0} session host(s)" -StringValues $hostsWithExclusionTag
         }
         else {
             Write-LogEntry -Message "No scaling exclusion tags found to remove" -Level Verbose
@@ -704,4 +704,4 @@ if ($cycleComplete) {
 
 Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | ToDeployNow: {6} | RunningDeployments: {7} | LatestImage: {8}" `
     -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.LatestImageVersion `
-    -Level Information
+   

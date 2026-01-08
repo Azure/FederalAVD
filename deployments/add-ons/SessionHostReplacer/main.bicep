@@ -549,7 +549,6 @@ var paramDomainName = !empty(domainName) ? { domainName: domainName } : {}
 var paramEnableMonitoring = enableMonitoring ? { enableMonitoring: enableMonitoring } : {}
 var paramIntegrityMonitoring = integrityMonitoring ? { integrityMonitoring: integrityMonitoring } : {}
 var paramIntuneEnrollment = intuneEnrollment ? { intuneEnrollment: intuneEnrollment } : {}
-var paramMinimumHostIndex = replacementMode == 'SideBySide' ? { minimumHostIndex: minimumHostIndex } : {}
 var paramOuPath = !empty(ouPath) ? { ouPath: ouPath } : {}
 var paramSessionHostCustomizations = !empty(sessionHostCustomizations) ? { sessionHostCustomizations: sessionHostCustomizations } : {}
 var paramVmInsightsDataCollectionRulesResourceId = !empty(vmInsightsDataCollectionRulesResourceId) ? { vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId } : {}
@@ -613,7 +612,6 @@ var sessionHostParameters = union(
   paramEnableMonitoring,
   paramIntegrityMonitoring,
   paramIntuneEnrollment,
-  paramMinimumHostIndex,
   paramOuPath,
   paramSessionHostCustomizations,
   paramVmInsightsDataCollectionRulesResourceId,

@@ -46,19 +46,19 @@ function Get-LastDeploymentStatus {
     )
 
     if ([string]::IsNullOrEmpty($DeploymentName)) {
-        Write-LogEntry "No previous deployment name provided" -Level Information
+        Write-LogEntry -Message "No previous deployment name provided"
         return $null
     }
 
     try {
         $Uri = "$ResourceManagerUri/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Resources/deployments/$DeploymentName`?api-version=2021-04-01"
-        Write-LogEntry "Checking status of previous deployment: $DeploymentName" -Level Verbose
+        Write-LogEntry -Message "Checking status of previous deployment: $DeploymentName" -Level Verbose
         
         $deployment = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
         
         if ($deployment) {
             $provisioningState = $deployment.properties.provisioningState
-            Write-LogEntry "Previous deployment status: $provisioningState" -Level Verbose
+            Write-LogEntry -Message "Previous deployment status: $provisioningState" -Level Verbose
             
             $result = [PSCustomObject]@{
                 DeploymentName   = $DeploymentName
@@ -71,21 +71,21 @@ function Get-LastDeploymentStatus {
             }
             
             if ($result.Failed) {
-                Write-LogEntry "Previous deployment failed with error: $($result.ErrorMessage)" -Level Error
+                Write-LogEntry -Message "Previous deployment failed with error: $($result.ErrorMessage)" -Level Error
             }
             elseif ($result.Running) {
-                Write-LogEntry "Previous deployment is still running" -Level Warning
+                Write-LogEntry -Message "Previous deployment is still running" -Level Warning
             }
             
             return $result
         }
         else {
-            Write-LogEntry "Previous deployment not found: $DeploymentName" -Level Warning
+            Write-LogEntry -Message "Previous deployment not found: $DeploymentName" -Level Warning
             return $null
         }
     }
     catch {
-        Write-LogEntry "Failed to check previous deployment status: $_" -Level Warning
+        Write-LogEntry -Message "Failed to check previous deployment status: $_" -Level Warning
         return $null
     }
 }
@@ -152,14 +152,14 @@ function Get-DeploymentState {
             $tableExists = $existingTables.value | Where-Object { $_.TableName -eq $tableName }
             
             if (-not $tableExists) {
-                Write-LogEntry "Creating deployment state table '$tableName'" -Level Verbose
+                Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Verbose
                 $createTableBody = @{ TableName = $tableName } | ConvertTo-Json
                 $headers['Content-Type'] = 'application/json'
                 Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Post -Body $createTableBody -ErrorAction Stop | Out-Null
             }
         }
         catch {
-            Write-LogEntry "Error checking/creating table: $_" -Level Warning
+            Write-LogEntry -Message "Error checking/creating table: $_" -Level Warning
         }
         
         # Query entity
@@ -168,7 +168,7 @@ function Get-DeploymentState {
         try {
             $entity = Invoke-RestMethod -Uri $entityUri -Headers $headers -Method Get -ContentType 'application/json' -ErrorAction Stop
             
-            Write-LogEntry "Retrieved deployment state: ConsecutiveSuccesses=$($entity.ConsecutiveSuccesses), CurrentPercentage=$($entity.CurrentPercentage)%" -Level Verbose
+            Write-LogEntry -Message "Retrieved deployment state: ConsecutiveSuccesses=$($entity.ConsecutiveSuccesses), CurrentPercentage=$($entity.CurrentPercentage)%" -Level Verbose
             return [PSCustomObject]@{
                 LastDeploymentName       = $entity.LastDeploymentName
                 LastDeploymentCount      = [int]$entity.LastDeploymentCount
@@ -186,7 +186,7 @@ function Get-DeploymentState {
         }
         catch {
             if ($_.Exception.Response.StatusCode -eq 404) {
-                Write-LogEntry "No deployment state found, initializing new state" -Level Verbose
+                Write-LogEntry -Message "No deployment state found, initializing new state" -Level Verbose
                 return [PSCustomObject]@{
                     LastDeploymentName       = ''
                     LastDeploymentCount      = 0
@@ -208,7 +208,7 @@ function Get-DeploymentState {
         }
     }
     catch {
-        Write-LogEntry "Failed to retrieve deployment state: $_" -Level Error
+        Write-LogEntry -Message "Failed to retrieve deployment state: $_" -Level Error
         # Return default state on error
         return [PSCustomObject]@{
             LastDeploymentName       = ''
@@ -295,13 +295,13 @@ function Save-DeploymentState {
             $tableExists = $existingTables.value | Where-Object { $_.TableName -eq $tableName }
             
             if (-not $tableExists) {
-                Write-LogEntry "Creating deployment state table '$tableName'" -Level Verbose
+                Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Verbose
                 $createTableBody = @{ TableName = $tableName } | ConvertTo-Json
                 Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Post -Body $createTableBody -ErrorAction Stop | Out-Null
             }
         }
         catch {
-            Write-LogEntry "Error checking/creating table: $_" -Level Warning
+            Write-LogEntry -Message "Error checking/creating table: $_" -Level Warning
         }
         
         # Prepare entity data
@@ -348,10 +348,10 @@ function Save-DeploymentState {
             Invoke-RestMethod -Uri $insertUri -Headers $headers -Method Post -Body $body -ErrorAction Stop | Out-Null
         }
         
-        Write-LogEntry "Saved deployment state: Status=$($DeploymentState.LastStatus), ConsecutiveSuccesses=$($DeploymentState.ConsecutiveSuccesses), NextPercentage=$($DeploymentState.CurrentPercentage)%" -Level Verbose
+        Write-LogEntry -Message "Saved deployment state: Status=$($DeploymentState.LastStatus), ConsecutiveSuccesses=$($DeploymentState.ConsecutiveSuccesses), NextPercentage=$($DeploymentState.CurrentPercentage)%" -Level Verbose
     }
     catch {
-        Write-LogEntry "Failed to save deployment state: $_" -Level Error
+        Write-LogEntry -Message "Failed to save deployment state: $_" -Level Error
     }
 }
 
@@ -722,7 +722,7 @@ function Compare-ImageVersion {
     }
     catch {
         # If parsing fails, fall back to string comparison
-        Write-LogEntry "Failed to parse versions as semantic versions, using string comparison: $_" -Level Warning
+        Write-LogEntry -Message "Failed to parse versions as semantic versions, using string comparison: $_" -Level Warning
         if ($Version1 -lt $Version2) { return -1 }
         elseif ($Version1 -gt $Version2) { return 1 }
         else { return 0 }
@@ -765,7 +765,7 @@ function Get-LatestImageVersion {
             $azImageDate = Get-Date -AsUTC
         }
         else {
-            Write-LogEntry "Getting latest version of image publisher: $($ImageReference.publisher), offer: $($ImageReference.offer), sku: $($ImageReference.sku) in region: $($Location)"
+            Write-LogEntry -Message "Getting latest version of image publisher: $($ImageReference.publisher), offer: $($ImageReference.offer), sku: $($ImageReference.sku) in region: $($Location)"
                       
             $Uri = "$ResourceManagerUri/subscriptions/$SubscriptionId/providers/Microsoft.Compute/locations/$Location/publishers/$($ImageReference.publisher)/artifacttypes/vmimage/offers/$($ImageReference.offer)/skus/$($ImageReference.sku)/versions?api-version=2024-07-01"
             
@@ -776,7 +776,7 @@ function Get-LatestImageVersion {
                 throw "No image versions found for publisher: $($ImageReference.publisher), offer: $($ImageReference.offer), sku: $($ImageReference.sku)"
             }
             
-            Write-LogEntry "Found $($Versions.Count) image versions" -Level Information
+            Write-LogEntry -Message "Found $($Versions.Count) image versions"
             
             # Sort versions and get the latest (sort by name as string since version format may have 4 components)
             $latestVersion = $Versions | Sort-Object -Property name -Descending | Select-Object -First 1
@@ -791,7 +791,7 @@ function Get-LatestImageVersion {
                 throw "Could not extract version name from latest image version object"
             }
             
-            Write-LogEntry "Latest version of image is $azImageVersion" -Level Verbose
+            Write-LogEntry -Message "Latest version of image is $azImageVersion" -Level Verbose
 
             if ($azImageVersion -match "\d+\.\d+\.(?<Year>\d{2})(?<Month>\d{2})(?<Day>\d{2})") {
                 $azImageDate = Get-Date -Date ("20{0}-{1}-{2}" -f $Matches.Year, $Matches.Month, $Matches.Day)
@@ -803,7 +803,7 @@ function Get-LatestImageVersion {
         }
     }
     elseif ($ImageReference.id) {
-        Write-LogEntry "Image is from Shared Image Gallery: $($ImageReference.id)"
+        Write-LogEntry -Message "Image is from Shared Image Gallery: $($ImageReference.id)"
         $imageDefinitionResourceIdPattern = '^\/subscriptions\/(?<subscription>[a-z0-9\-]+)\/resourceGroups\/(?<resourceGroup>[^\/]+)\/providers\/Microsoft\.Compute\/galleries\/(?<gallery>[^\/]+)\/images\/(?<image>[^\/]+)$'
         $imageVersionResourceIdPattern = '^\/subscriptions\/(?<subscription>[a-z0-9\-]+)\/resourceGroups\/(?<resourceGroup>[^\/]+)\/providers\/Microsoft\.Compute\/galleries\/(?<gallery>[^\/]+)\/images\/(?<image>[^\/]+)\/versions\/(?<version>[^\/]+)$'
         if ($ImageReference.id -match $imageDefinitionResourceIdPattern) {
@@ -823,7 +823,7 @@ function Get-LatestImageVersion {
                 throw "No image versions found in gallery '$imageGalleryName' for image '$imageDefinitionName'."
             }
             
-            Write-LogEntry "Found $($imageVersions.Count) total image versions in gallery" -Level Verbose
+            Write-LogEntry -Message "Found $($imageVersions.Count) total image versions in gallery" -Level Verbose
             
             # Normalize location for comparison (Azure returns full names like "East US 2")
             $normalizedLocation = $Location -replace '\s', ''
@@ -857,7 +857,7 @@ function Get-LatestImageVersion {
                     throw "No available image versions found (all versions are marked as excluded from latest)."
                 }
                 
-                Write-LogEntry "Selected image version (no published dates available) with resource Id {0}" -StringValues $latestImageVersion.id -Level Warning
+                Write-LogEntry -Message "Selected image version (no published dates available) with resource Id {0}" -StringValues $latestImageVersion.id -Level Warning
                 $azImageVersion = $latestImageVersion.name
                 $azImageDate = Get-Date -AsUTC
             }
@@ -867,10 +867,10 @@ function Get-LatestImageVersion {
                 Sort-Object -Property { [DateTime]$_.properties.publishingProfile.publishedDate } -Descending |
                 Select-Object -First 1
                 
-                Write-LogEntry "Selected image version with resource Id {0} (most recent non-excluded version)" -StringValues $latestImageVersion.id
+                Write-LogEntry -Message "Selected image version with resource Id {0} (most recent non-excluded version)" -StringValues $latestImageVersion.id
                 $azImageVersion = $latestImageVersion.name
                 $azImageDate = [DateTime]$latestImageVersion.properties.publishingProfile.publishedDate
-                Write-LogEntry "Image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
+                Write-LogEntry -Message "Image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
             }
         }
         elseif ($ImageReference.id -match $imageVersionResourceIdPattern ) {
@@ -886,11 +886,11 @@ function Get-LatestImageVersion {
             # Parse published date with null check
             if ($imageVersion.properties.publishingProfile.publishedDate) {
                 $azImageDate = [DateTime]$imageVersion.properties.publishingProfile.publishedDate
-                Write-LogEntry "Image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
+                Write-LogEntry -Message "Image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
             } else {
                 # Fallback to current date if published date not available
                 $azImageDate = Get-Date -AsUTC
-                Write-LogEntry "Image version is {0} (published date not available, using current date)" -StringValues $azImageVersion -Level Warning
+                Write-LogEntry -Message "Image version is {0} (published date not available, using current date)" -StringValues $azImageVersion -Level Warning
             }
         }
         else {
@@ -950,7 +950,7 @@ function Get-HostPoolDecisions {
         )
     )
     
-    Write-LogEntry "We have $($SessionHosts.Count) session hosts (included in Automation)"
+    Write-LogEntry -Message "We have $($SessionHosts.Count) session hosts (included in Automation)"
     
     # Auto-detect target count if not specified (TargetSessionHostCount = 0)
     if ($TargetSessionHostCount -eq 0) {
@@ -961,19 +961,19 @@ function Get-HostPoolDecisions {
             if ($deploymentState.TargetSessionHostCount -gt 0) {
                 # Use previously stored target from ongoing replacement cycle
                 $TargetSessionHostCount = $deploymentState.TargetSessionHostCount
-                Write-LogEntry "Auto-detect mode: Using stored target count of $TargetSessionHostCount from current replacement cycle"
+                Write-LogEntry -Message "Auto-detect mode: Using stored target count of $TargetSessionHostCount from current replacement cycle"
             } else {
                 # First run of a new replacement cycle - store current count as target
                 $TargetSessionHostCount = $SessionHosts.Count
                 $deploymentState.TargetSessionHostCount = $TargetSessionHostCount
                 Save-DeploymentState -DeploymentState $deploymentState -HostPoolName $HostPoolName
-                Write-LogEntry "Auto-detect mode: Detected $TargetSessionHostCount session hosts - storing as target for this replacement cycle"
+                Write-LogEntry -Message "Auto-detect mode: Detected $TargetSessionHostCount session hosts - storing as target for this replacement cycle"
             }
         }
         catch {
             # If state storage fails, fall back to current count (stateless mode)
             $TargetSessionHostCount = $SessionHosts.Count
-            Write-LogEntry "Auto-detect mode: Unable to access deployment state storage. Using current count of $TargetSessionHostCount. Note: Managed identity needs 'Storage Table Data Contributor' role on storage account for persistent target tracking. Error: $_" -Level Warning
+            Write-LogEntry -Message "Auto-detect mode: Unable to access deployment state storage. Using current count of $TargetSessionHostCount. Note: Managed identity needs 'Storage Table Data Contributor' role on storage account for persistent target tracking. Error: $_" -Level Warning
         }
     }
     
@@ -981,13 +981,13 @@ function Get-HostPoolDecisions {
     [array] $sessionHostsOldVersion = @()
     
     $latestImageAge = (New-TimeSpan -Start $LatestImageVersion.Date -End (Get-Date -AsUTC)).TotalDays
-    Write-LogEntry "Latest Image $($LatestImageVersion.Version) is $latestImageAge days old."
+    Write-LogEntry -Message "Latest Image $($LatestImageVersion.Version) is $latestImageAge days old."
     if ($latestImageAge -ge $ReplaceSessionHostOnNewImageVersionDelayDays) {
-            Write-LogEntry "Latest Image age is older than (or equal) New Image Delay value $ReplaceSessionHostOnNewImageVersionDelayDays"
+            Write-LogEntry -Message "Latest Image age is older than (or equal) New Image Delay value $ReplaceSessionHostOnNewImageVersionDelayDays"
             
             # Log each session host's image version for debugging
             foreach ($sh in $sessionHosts) {
-                Write-LogEntry "Session host $($sh.SessionHostName) has image version: $($sh.ImageVersion)" -Level Verbose
+                Write-LogEntry -Message "Session host $($sh.SessionHostName) has image version: $($sh.ImageVersion)" -Level Verbose
             }
             
             # Compare versions with rollback protection
@@ -999,7 +999,7 @@ function Get-HostPoolDecisions {
                     if ($sh.ImageDefinition -and $LatestImageVersion.Definition) {
                         $imageDefinitionChanged = ($sh.ImageDefinition -ne $LatestImageVersion.Definition)
                         if ($imageDefinitionChanged) {
-                            Write-LogEntry "Session host $($sh.SessionHostName) has different image definition - VM: '$($sh.ImageDefinition)', Latest: '$($LatestImageVersion.Definition)'" -Level Verbose
+                            Write-LogEntry -Message "Session host $($sh.SessionHostName) has different image definition - VM: '$($sh.ImageDefinition)', Latest: '$($LatestImageVersion.Definition)'" -Level Verbose
                         }
                     }
                     
@@ -1018,11 +1018,11 @@ function Get-HostPoolDecisions {
                         elseif ($versionComparison -gt 0) {
                             # VM version is NEWER than "latest" - potential rollback scenario
                             if ($AllowImageVersionRollback) {
-                                Write-LogEntry "Session host $($sh.SessionHostName) has NEWER version '$($sh.ImageVersion)' than latest '$($LatestImageVersion.Version)' - will replace (AllowImageVersionRollback=true)" -Level Warning
+                                Write-LogEntry -Message "Session host $($sh.SessionHostName) has NEWER version '$($sh.ImageVersion)' than latest '$($LatestImageVersion.Version)' - will replace (AllowImageVersionRollback=true)" -Level Warning
                                 $sessionHostsOldVersion += $sh
                             }
                             else {
-                                Write-LogEntry "Session host $($sh.SessionHostName) has NEWER version '$($sh.ImageVersion)' than latest '$($LatestImageVersion.Version)' - skipping replacement (AllowImageVersionRollback=false)" -Level Warning
+                                Write-LogEntry -Message "Session host $($sh.SessionHostName) has NEWER version '$($sh.ImageVersion)' than latest '$($LatestImageVersion.Version)' - skipping replacement (AllowImageVersionRollback=false)" -Level Warning
                             }
                         }
                         else {
@@ -1032,14 +1032,14 @@ function Get-HostPoolDecisions {
                 }
             }
             
-            Write-LogEntry "Found $($sessionHostsOldVersion.Count) session hosts to replace due to image version. $($($sessionHostsOldVersion.SessionHostName) -Join ',')"
+            Write-LogEntry -Message "Found $($sessionHostsOldVersion.Count) session hosts to replace due to image version. $($($sessionHostsOldVersion.SessionHostName) -Join ',')"
     }
     else {
         # Latest image version delay not yet met
     }
 
     [array] $sessionHostsToReplace = $sessionHostsOldVersion | Select-Object -Property * -Unique
-    Write-LogEntry "Found $($sessionHostsToReplace.Count) session hosts to replace in total. $($($sessionHostsToReplace.SessionHostName) -join ',')"
+    Write-LogEntry -Message "Found $($sessionHostsToReplace.Count) session hosts to replace in total. $($($sessionHostsToReplace.SessionHostName) -join ',')"
 
     $goodSessionHosts = $SessionHosts | Where-Object { $_.SessionHostName -notin $sessionHostsToReplace.SessionHostName }
     
@@ -1058,12 +1058,12 @@ function Get-HostPoolDecisions {
     }
     
     $sessionHostsCurrentTotal = ([array]$goodSessionHosts.SessionHostName + [array]$runningDeploymentVMNames) | Select-Object -Unique
-    Write-LogEntry "We have $($sessionHostsCurrentTotal.Count) good session hosts including $runningDeploymentVMCount session hosts being deployed"
-    Write-LogEntry "We target having $TargetSessionHostCount session hosts in good shape"
+    Write-LogEntry -Message "We have $($sessionHostsCurrentTotal.Count) good session hosts including $runningDeploymentVMCount session hosts being deployed"
+    Write-LogEntry -Message "We target having $TargetSessionHostCount session hosts in good shape"
     
     # Check if there are any running or recently submitted deployments - if so, don't submit new ones
     if ($runningDeployments -and $runningDeployments.Count -gt 0) {
-        Write-LogEntry "Found $($runningDeployments.Count) running or recently submitted deployment(s). Will not submit new deployments until these complete." -Level Warning
+        Write-LogEntry -Message "Found $($runningDeployments.Count) running or recently submitted deployment(s). Will not submit new deployments until these complete." -Level Warning
         $canDeploy = 0
     }
     else {
@@ -1074,45 +1074,45 @@ function Get-HostPoolDecisions {
             $weNeedToDeploy = $TargetSessionHostCount - $sessionHostsCurrentTotal.Count
             
             if ($weNeedToDeploy -gt 0) {
-                Write-LogEntry "We need to deploy $weNeedToDeploy new session hosts"
+                Write-LogEntry -Message "We need to deploy $weNeedToDeploy new session hosts"
                 $canDeploy = $weNeedToDeploy
-                Write-LogEntry "DeleteFirst mode allows deploying $canDeploy session hosts (will delete first to make room)"
+                Write-LogEntry -Message "DeleteFirst mode allows deploying $canDeploy session hosts (will delete first to make room)"
             }
             else {
                 $canDeploy = 0
-                Write-LogEntry "We have enough session hosts in good shape."
+                Write-LogEntry -Message "We have enough session hosts in good shape."
             }
         }
         else {
             # SideBySide: Use buffer to allow pool to double
             $effectiveBuffer = $TargetSessionHostCount
-            Write-LogEntry "Automatic buffer: $effectiveBuffer session hosts (allows pool to double during rolling updates)"
+            Write-LogEntry -Message "Automatic buffer: $effectiveBuffer session hosts (allows pool to double during rolling updates)"
             
             $canDeployUpTo = $TargetSessionHostCount + $effectiveBuffer - $SessionHosts.count - $runningDeploymentVMCount
             
             if ($canDeployUpTo -ge 0) {
-                Write-LogEntry "We can deploy up to $canDeployUpTo session hosts" 
+                Write-LogEntry -Message "We can deploy up to $canDeployUpTo session hosts" 
                 $weNeedToDeploy = $TargetSessionHostCount - $sessionHostsCurrentTotal.Count
                 
                 if ($weNeedToDeploy -gt 0) {
-                    Write-LogEntry "We need to deploy $weNeedToDeploy new session hosts"
+                    Write-LogEntry -Message "We need to deploy $weNeedToDeploy new session hosts"
                     $canDeploy = if ($weNeedToDeploy -gt $canDeployUpTo) { $canDeployUpTo } else { $weNeedToDeploy }
-                    Write-LogEntry "Buffer allows deploying $canDeploy session hosts"
+                    Write-LogEntry -Message "Buffer allows deploying $canDeploy session hosts"
                 }
                 else {
                     $canDeploy = 0
-                    Write-LogEntry "We have enough session hosts in good shape."
+                    Write-LogEntry -Message "We have enough session hosts in good shape."
                 }
             }
             else {
-                Write-LogEntry "Buffer is full. We can not deploy more session hosts"
+                Write-LogEntry -Message "Buffer is full. We can not deploy more session hosts"
                 $canDeploy = 0
             }
         }
             
         # Apply progressive scale-up to both modes (if enabled)
         if ($EnableProgressiveScaleUp -and $canDeploy -gt 0) {
-            Write-LogEntry "Progressive scale-up is enabled"
+            Write-LogEntry -Message "Progressive scale-up is enabled"
             $deploymentState = Get-DeploymentState
             $currentPercentage = $InitialDeploymentPercentage
             
@@ -1127,7 +1127,7 @@ function Get-HostPoolDecisions {
             $actualDeployCount = [Math]::Min($percentageBasedCount, $batchSizeLimit)
             $actualDeployCount = [Math]::Min($actualDeployCount, $canDeploy)
             
-            Write-LogEntry "Progressive scale-up: Using $currentPercentage% of $canDeploy needed = $actualDeployCount hosts (ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), Max: $batchSizeLimit)"
+            Write-LogEntry -Message "Progressive scale-up: Using $currentPercentage% of $canDeploy needed = $actualDeployCount hosts (ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), Max: $batchSizeLimit)"
             $canDeploy = $actualDeployCount
         }
     }
@@ -1145,19 +1145,19 @@ function Get-HostPoolDecisions {
         $maxSafeDeletions = $currentTotalHosts - $minimumAbsoluteHosts
         
         if ($canDelete -gt $maxSafeDeletions) {
-            Write-LogEntry "DeleteFirst mode: Safety floor triggered - limiting deletions from $canDelete to $maxSafeDeletions to maintain minimum $MinimumCapacityPercentage% capacity ($minimumAbsoluteHosts hosts)" -Level Warning
+            Write-LogEntry -Message "DeleteFirst mode: Safety floor triggered - limiting deletions from $canDelete to $maxSafeDeletions to maintain minimum $MinimumCapacityPercentage% capacity ($minimumAbsoluteHosts hosts)" -Level Warning
             $canDelete = $maxSafeDeletions
         }
         
         # Emergency brake: Respect the MaxDeletionsPerCycle limit
         if ($canDelete -gt $MaxDeletionsPerCycle) {
-            Write-LogEntry "DeleteFirst mode: MaxDeletionsPerCycle limit triggered - capping deletions from $canDelete to $MaxDeletionsPerCycle"
+            Write-LogEntry -Message "DeleteFirst mode: MaxDeletionsPerCycle limit triggered - capping deletions from $canDelete to $MaxDeletionsPerCycle"
             $canDelete = $MaxDeletionsPerCycle
         }
         
         $canDelete = [Math]::Max($canDelete, 0)  # Ensure non-negative
         
-        Write-LogEntry "Delete-First mode: Will delete $canDelete hosts (aligned with $canDeploy deployments, current total: $currentTotalHosts, minimum: $minimumAbsoluteHosts at $MinimumCapacityPercentage%, max per cycle: $MaxDeletionsPerCycle)"
+        Write-LogEntry -Message "Delete-First mode: Will delete $canDelete hosts (aligned with $canDeploy deployments, current total: $currentTotalHosts, minimum: $minimumAbsoluteHosts at $MinimumCapacityPercentage%, max per cycle: $MaxDeletionsPerCycle)"
     }
     else {
         # SideBySide mode: Only delete when overpopulated (more hosts than target)
@@ -1165,24 +1165,24 @@ function Get-HostPoolDecisions {
     }
     
     if ($canDelete -gt 0) {
-        Write-LogEntry "We need to delete $canDelete session hosts"
+        Write-LogEntry -Message "We need to delete $canDelete session hosts"
         if ($canDelete -gt $sessionHostsToReplace.Count) {
-            Write-LogEntry "Host pool is over populated"
+            Write-LogEntry -Message "Host pool is over populated"
             $goodSessionHostsToDeleteCount = $canDelete - $sessionHostsToReplace.Count
-            Write-LogEntry "We will delete $goodSessionHostsToDeleteCount good session hosts"
+            Write-LogEntry -Message "We will delete $goodSessionHostsToDeleteCount good session hosts"
             $selectedGoodHostsTotDelete = [array] ($goodSessionHosts | Sort-Object -Property Session | Select-Object -First $goodSessionHostsToDeleteCount)
-            Write-LogEntry "Selected the following good session hosts to delete: $($($selectedGoodHostsTotDelete.VMName) -join ',')"
+            Write-LogEntry -Message "Selected the following good session hosts to delete: $($($selectedGoodHostsTotDelete.VMName) -join ',')"
         }
         else {
             $selectedGoodHostsTotDelete = @()
-            Write-LogEntry "Host pool is not over populated"
+            Write-LogEntry -Message "Host pool is not over populated"
         }
         $sessionHostsPendingDelete = ($sessionHostsToReplace + $selectedGoodHostsTotDelete) | Select-Object -First $canDelete
         
         # In SideBySide mode, apply progressive scale-up to deletions
         # In DeleteFirst mode, skip this - deletions are already controlled by deployment progressive scale-up (they're aligned 1:1)
         if ($ReplacementMode -ne 'DeleteFirst' -and $EnableProgressiveScaleUp -and $sessionHostsPendingDelete.Count -gt 0) {
-            Write-LogEntry "Progressive scale-up is enabled for deletions"
+            Write-LogEntry -Message "Progressive scale-up is enabled for deletions"
             $deploymentState = Get-DeploymentState
             $currentPercentage = $InitialDeploymentPercentage
             
@@ -1197,17 +1197,17 @@ function Get-HostPoolDecisions {
             $actualDeleteCount = [Math]::Min($percentageBasedCount, $batchSizeLimit)
             $actualDeleteCount = [Math]::Min($actualDeleteCount, $sessionHostsPendingDelete.Count)
             
-            Write-LogEntry "Progressive scale-up for deletions: Using $currentPercentage% of $($sessionHostsPendingDelete.Count) pending = $actualDeleteCount hosts (ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), Max: $batchSizeLimit)"
+            Write-LogEntry -Message "Progressive scale-up for deletions: Using $currentPercentage% of $($sessionHostsPendingDelete.Count) pending = $actualDeleteCount hosts (ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), Max: $batchSizeLimit)"
             $sessionHostsPendingDelete = $sessionHostsPendingDelete | Select-Object -First $actualDeleteCount
         }
         
-        Write-LogEntry "The following Session Hosts are now pending delete: $($($SessionHostsPendingDelete.SessionHostName) -join ',')"
+        Write-LogEntry -Message "The following Session Hosts are now pending delete: $($($SessionHostsPendingDelete.SessionHostName) -join ',')"
     }
     elseif ($sessionHostsToReplace.Count -gt 0) {
-        Write-LogEntry "We need to delete $($sessionHostsToReplace.Count) session hosts but we don't have enough session hosts in the host pool."
+        Write-LogEntry -Message "We need to delete $($sessionHostsToReplace.Count) session hosts but we don't have enough session hosts in the host pool."
     }
     else {
-        Write-LogEntry "We do not need to delete any session hosts"
+        Write-LogEntry -Message "We do not need to delete any session hosts"
     }
     
     # Auto-detect mode: Clear stored target when replacement cycle is complete
@@ -1217,13 +1217,13 @@ function Get-HostPoolDecisions {
         try {
             $deploymentState = Get-DeploymentState -HostPoolName $HostPoolName
             if ($deploymentState.TargetSessionHostCount -gt 0) {
-                Write-LogEntry "Auto-detect mode: All session hosts are up to date - clearing stored target count for next replacement cycle"
+                Write-LogEntry -Message "Auto-detect mode: All session hosts are up to date - clearing stored target count for next replacement cycle"
                 $deploymentState.TargetSessionHostCount = 0
                 Save-DeploymentState -DeploymentState $deploymentState -HostPoolName $HostPoolName
             }
         }
         catch {
-            Write-LogEntry "Auto-detect mode: Unable to clear stored target count - will retry on next run. Error: $_" -Level Warning
+            Write-LogEntry -Message "Auto-detect mode: Unable to clear stored target count - will retry on next run. Error: $_" -Level Warning
         }
     }
 
@@ -1313,7 +1313,7 @@ function Get-Deployments {
         }
         else {
             # Deployment has no parameters - still count it as running to prevent duplicates
-            Write-LogEntry -Message "Running deployment '$($deployment.name)' has no parameters available - treating as running to prevent duplicate deployment" -Level Information
+            Write-LogEntry -Message "Running deployment '$($deployment.name)' has no parameters available - treating as running to prevent duplicate deployment"
             [PSCustomObject]@{
                 DeploymentName   = $deployment.name
                 SessionHostNames = @()
@@ -1334,7 +1334,7 @@ function Get-Deployments {
             }
         }
         else {
-            Write-LogEntry -Message "Failed deployment '$($deployment.name)' has no parameters available" -Level Information
+            Write-LogEntry -Message "Failed deployment '$($deployment.name)' has no parameters available"
             [PSCustomObject]@{
                 DeploymentName   = $deployment.name
                 SessionHostNames = @()
@@ -1648,11 +1648,11 @@ function Remove-FailedDeploymentArtifacts {
     )
     
     if ($FailedDeployments.Count -eq 0) {
-        Write-LogEntry "No failed deployments to clean up" -Level Verbose
+        Write-LogEntry -Message "No failed deployments to clean up" -Level Verbose
         return
     }
     
-    Write-LogEntry "Processing $($FailedDeployments.Count) failed deployments for cleanup"
+    Write-LogEntry -Message "Processing $($FailedDeployments.Count) failed deployments for cleanup"
     
     # Get all VMs in the resource group to check for orphaned VMs
     $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
@@ -1679,7 +1679,7 @@ function Remove-FailedDeploymentArtifacts {
                 $isRegistered = $RegisteredSessionHostNames | Where-Object { $_ -like "$sessionHostName*" }
                 
                 if (-not $isRegistered) {
-                    Write-LogEntry "Found orphaned VM from failed deployment: $($vm.name) (matches session host name $sessionHostName but not registered)" -Level Warning
+                    Write-LogEntry -Message "Found orphaned VM from failed deployment: $($vm.name) (matches session host name $sessionHostName but not registered)" -Level Warning
                     $orphanedVMs += [PSCustomObject]@{
                         Name           = $vm.name
                         ResourceId     = $vm.id
@@ -1688,19 +1688,19 @@ function Remove-FailedDeploymentArtifacts {
                     }
                 }
                 else {
-                    Write-LogEntry "VM $($vm.name) from failed deployment is registered as session host - will be handled by normal cleanup flow" -Level Verbose
+                    Write-LogEntry -Message "VM $($vm.name) from failed deployment is registered as session host - will be handled by normal cleanup flow" -Level Verbose
                 }
             }
             
             if ($matchingVMs.Count -eq 0) {
-                Write-LogEntry "No VM found matching session host name $sessionHostName (deployment may have rolled back)" -Level Verbose
+                Write-LogEntry -Message "No VM found matching session host name $sessionHostName (deployment may have rolled back)" -Level Verbose
             }
         }
     }
     
     # Delete orphaned VMs and their device records
     if ($orphanedVMs.Count -gt 0) {
-        Write-LogEntry "Deleting $($orphanedVMs.Count) orphaned VMs from failed deployments"
+        Write-LogEntry -Message "Deleting $($orphanedVMs.Count) orphaned VMs from failed deployments"
         
         foreach ($orphanedVM in $orphanedVMs) {
             try {
@@ -1715,14 +1715,14 @@ function Remove-FailedDeploymentArtifacts {
                             $deviceId = $device[0].id
                             $deleteDeviceUri = "$graphEndpoint/v1.0/devices/$deviceId"
                             Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri
-                            Write-LogEntry "Successfully deleted Entra device for orphaned VM: $($orphanedVM.SessionHostName)" -Level Information
+                            Write-LogEntry -Message "Successfully deleted Entra device for orphaned VM: $($orphanedVM.SessionHostName)"
                         }
                         else {
-                            Write-LogEntry "No Entra device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Verbose
+                            Write-LogEntry -Message "No Entra device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Verbose
                         }
                     }
                     catch {
-                        Write-LogEntry "Failed to delete Entra device for $($orphanedVM.SessionHostName): $_" -Level Warning
+                        Write-LogEntry -Message "Failed to delete Entra device for $($orphanedVM.SessionHostName): $_" -Level Warning
                     }
                 }
                 
@@ -1737,34 +1737,34 @@ function Remove-FailedDeploymentArtifacts {
                             $deviceId = $device[0].id
                             $deleteDeviceUri = "$graphEndpoint/v1.0/deviceManagement/managedDevices/$deviceId"
                             Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri
-                            Write-LogEntry "Successfully deleted Intune device for orphaned VM: $($orphanedVM.SessionHostName)" -Level Information
+                            Write-LogEntry -Message "Successfully deleted Intune device for orphaned VM: $($orphanedVM.SessionHostName)"
                         }
                         else {
-                            Write-LogEntry "No Intune device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Verbose
+                            Write-LogEntry -Message "No Intune device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Verbose
                         }
                     }
                     catch {
-                        Write-LogEntry "Failed to delete Intune device for $($orphanedVM.SessionHostName): $_" -Level Warning
+                        Write-LogEntry -Message "Failed to delete Intune device for $($orphanedVM.SessionHostName): $_" -Level Warning
                     }
                 }
                 
                 # Delete the VM
-                Write-LogEntry "Deleting orphaned VM: $($orphanedVM.Name) (session host: $($orphanedVM.SessionHostName), from deployment: $($orphanedVM.DeploymentName))" -Level Warning
+                Write-LogEntry -Message "Deleting orphaned VM: $($orphanedVM.Name) (session host: $($orphanedVM.SessionHostName), from deployment: $($orphanedVM.DeploymentName))" -Level Warning
                 $Uri = "$ResourceManagerUri$($orphanedVM.ResourceId)?forceDeletion=true&api-version=2024-07-01"
                 Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
-                Write-LogEntry "Successfully deleted orphaned VM: $($orphanedVM.Name)" -Level Information
+                Write-LogEntry -Message "Successfully deleted orphaned VM: $($orphanedVM.Name)"
             }
             catch {
-                Write-LogEntry "Failed to delete orphaned VM $($orphanedVM.Name): $_" -Level Error
+                Write-LogEntry -Message "Failed to delete orphaned VM $($orphanedVM.Name): $_" -Level Error
             }
         }
     }
     else {
-        Write-LogEntry "No orphaned VMs found from failed deployments" -Level Verbose
+        Write-LogEntry -Message "No orphaned VMs found from failed deployments" -Level Verbose
     }
     
     # Clean up failed deployment records from ARM (including nested deployments)
-    Write-LogEntry "Cleaning up $($failedDeploymentNames.Count) failed deployment records from ARM history"
+    Write-LogEntry -Message "Cleaning up $($failedDeploymentNames.Count) failed deployment records from ARM history"
     
     foreach ($deploymentName in $failedDeploymentNames) {
         try {
@@ -1804,7 +1804,7 @@ function Remove-FailedDeploymentArtifacts {
                     }
                 }
                 catch {
-                    Write-LogEntry "Warning: Could not retrieve nested deployments for $DeploymentName : $_" -Level Warning
+                    Write-LogEntry -Message "Warning: Could not retrieve nested deployments for $DeploymentName : $_" -Level Warning
                 }
                 
                 return $allNested
@@ -1814,39 +1814,39 @@ function Remove-FailedDeploymentArtifacts {
             $allNestedDeployments = Get-NestedDeployments -DeploymentName $deploymentName -ARMToken $ARMToken -ResourceManagerUri $ResourceManagerUri -SubscriptionId $VirtualMachinesSubscriptionId -ResourceGroupName $VirtualMachinesResourceGroupName
             
             if ($allNestedDeployments) {
-                Write-LogEntry "Found $($allNestedDeployments.Count) nested deployment(s) (including recursive nesting) from parent deployment" -Level Information
+                Write-LogEntry -Message "Found $($allNestedDeployments.Count) nested deployment(s) (including recursive nesting) from parent deployment"
                 
                 # Delete nested deployments in reverse order (deepest first to avoid dependency issues)
                 [array]::Reverse($allNestedDeployments)
                 
                 foreach ($nestedDeploymentName in $allNestedDeployments) {
                     try {
-                        Write-LogEntry "Deleting nested deployment record: $nestedDeploymentName" -Level Verbose
+                        Write-LogEntry -Message "Deleting nested deployment record: $nestedDeploymentName" -Level Verbose
                         $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/providers/Microsoft.Resources/deployments/$nestedDeploymentName`?api-version=2021-04-01"
                         Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
-                        Write-LogEntry "Successfully deleted nested deployment record: $nestedDeploymentName" -Level Verbose
+                        Write-LogEntry -Message "Successfully deleted nested deployment record: $nestedDeploymentName" -Level Verbose
                     }
                     catch {
-                        Write-LogEntry "Failed to delete nested deployment record $nestedDeploymentName`: $_" -Level Warning
+                        Write-LogEntry -Message "Failed to delete nested deployment record $nestedDeploymentName`: $_" -Level Warning
                     }
                 }
             }
             else {
-                Write-LogEntry "No nested deployments found for parent deployment" -Level Verbose
+                Write-LogEntry -Message "No nested deployments found for parent deployment" -Level Verbose
             }
             
             # Delete the top-level deployment record last
-            Write-LogEntry "Deleting top-level deployment record: $deploymentName" -Level Information
+            Write-LogEntry -Message "Deleting top-level deployment record: $deploymentName"
             $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/providers/Microsoft.Resources/deployments/$deploymentName`?api-version=2021-04-01"
             Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
-            Write-LogEntry "Successfully deleted deployment record: $deploymentName" -Level Information
+            Write-LogEntry -Message "Successfully deleted deployment record: $deploymentName"
         }
         catch {
-            Write-LogEntry "Failed to delete deployment record $deploymentName`: $_" -Level Warning
+            Write-LogEntry -Message "Failed to delete deployment record $deploymentName`: $_" -Level Warning
         }
     }
     
-    Write-LogEntry "Failed deployment cleanup completed"
+    Write-LogEntry -Message "Failed deployment cleanup completed"
 }
 
 function Remove-SessionHosts {
@@ -1893,46 +1893,46 @@ function Remove-SessionHosts {
         Write-LogEntry -Message "Evaluating session host $($sessionHost.SessionHostName): Sessions=$($sessionHost.Sessions), AllowNewSession=$($sessionHost.AllowNewSession), PendingDrainTimeStamp=$($sessionHost.PendingDrainTimeStamp)" -Level Verbose
 
         if ($sessionHost.Sessions -eq 0) {
-            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has no sessions." -Level Information
+            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has no sessions."
             
             # Optimization: If MinimumDrainMinutes = 0, skip draining entirely and delete immediately
             if ($MinimumDrainMinutes -eq 0) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is idle and MinimumDrainMinutes is 0 - deleting immediately without drain period" -Level Information
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is idle and MinimumDrainMinutes is 0 - deleting immediately without drain period"
                 $deleteSessionHost = $true
             }
             elseif (-Not $sessionHost.AllowNewSession) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode with zero sessions." -Level Information
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode with zero sessions."
                 if ($sessionHost.PendingDrainTimeStamp) {
                     $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
-                    Write-LogEntry -Message "Session host $($sessionHost.FQDN) has been draining for $([Math]::Round($elapsedMinutes, 1)) minutes (minimum required: $MinimumDrainMinutes)" -Level Information
+                    Write-LogEntry -Message "Session host $($sessionHost.FQDN) has been draining for $([Math]::Round($elapsedMinutes, 1)) minutes (minimum required: $MinimumDrainMinutes)"
                     if ($elapsedMinutes -ge $MinimumDrainMinutes) {
-                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) has met the minimum drain time for idle hosts." -Level Information
+                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) has met the minimum drain time for idle hosts."
                         $deleteSessionHost = $true
                     }
                     else {
-                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) has not yet met the minimum drain time." -Level Information
+                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) has not yet met the minimum drain time."
                     }
                 }
                 else {
-                    Write-LogEntry -Message "Session host $($sessionHost.FQDN) does not have a drain timestamp." -Level Information
+                    Write-LogEntry -Message "Session host $($sessionHost.FQDN) does not have a drain timestamp."
                     $drainSessionHost = $true
                 }
             }
             else {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is not in drain mode. Turning on drain mode." -Level Information
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is not in drain mode. Turning on drain mode."
                 $drainSessionHost = $true
             }
         }
         else {
-            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has $($sessionHost.Sessions) sessions." -Level Information 
+            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has $($sessionHost.Sessions) sessions." 
             if (-Not $sessionHost.AllowNewSession) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode." -Level Information
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode."
                 if ($sessionHost.PendingDrainTimeStamp) {
-                    Write-LogEntry -Message "Session Host $($sessionHost.FQDN) drain timestamp is $($sessionHost.PendingDrainTimeStamp)" -Level Information
+                    Write-LogEntry -Message "Session Host $($sessionHost.FQDN) drain timestamp is $($sessionHost.PendingDrainTimeStamp)"
                     $maxDrainGracePeriodDate = $sessionHost.PendingDrainTimeStamp.AddHours($DrainGracePeriodHours)
                     Write-LogEntry -Message "Session Host $($sessionHost.FQDN) can stay in grace period until $($maxDrainGracePeriodDate.ToUniversalTime().ToString('o'))" -Level Verbose 
                     if ($maxDrainGracePeriodDate -lt (Get-Date).ToUniversalTime()) {
-                        Write-LogEntry -Message "Session Host $($sessionHost.FQDN) has exceeded the drain grace period." -Level Information
+                        Write-LogEntry -Message "Session Host $($sessionHost.FQDN) has exceeded the drain grace period."
                         $deleteSessionHost = $true
                     }
                     else {
@@ -1945,21 +1945,21 @@ function Remove-SessionHosts {
                 }
             }
             else {
-                Write-LogEntry -Message "Session host $($sessionHost.Name) in not in drain mode. Turning on drain mode." -Level Information
+                Write-LogEntry -Message "Session host $($sessionHost.Name) in not in drain mode. Turning on drain mode."
                 $drainSessionHost = $true
             }
         }
 
         if ($drainSessionHost) {
             try {
-                Write-LogEntry -Message "Enabling drain mode for session host $($sessionHost.SessionHostName)" -Level Information
+                Write-LogEntry -Message "Enabling drain mode for session host $($sessionHost.SessionHostName)"
                 $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$($sessionHost.FQDN)?api-version=2024-04-03"
                 Invoke-AzureRestMethod -ARMToken $ARMToken -Body (@{properties = @{allowNewSession = $false } } | ConvertTo-Json) -Method 'PATCH' -Uri $Uri | Out-Null
                 
                 Write-LogEntry -Message "Drain mode enabled for $($sessionHost.SessionHostName)" -Level Verbose
                 
                 $drainTimestamp = (Get-Date).ToUniversalTime().ToString('o')
-                Write-LogEntry -Message "Setting drain timestamp tag on $($sessionHost.SessionHostName): $drainTimestamp" -Level Information
+                Write-LogEntry -Message "Setting drain timestamp tag on $($sessionHost.SessionHostName): $drainTimestamp"
                 $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
                 $Body = @{
                     properties = @{
@@ -1969,7 +1969,7 @@ function Remove-SessionHosts {
                 }
                 Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri | Out-Null
                 
-                Write-LogEntry -Message "Successfully tagged $($sessionHost.SessionHostName) with drain timestamp" -Level Information
+                Write-LogEntry -Message "Successfully tagged $($sessionHost.SessionHostName) with drain timestamp"
                 
                 # Update in-memory session host object so timestamp is available for deletion check in same run
                 $sessionHost.PendingDrainTimeStamp = [DateTime]::Parse($drainTimestamp, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
@@ -1978,7 +1978,7 @@ function Remove-SessionHosts {
                 if ($sessionHost.Sessions -eq 0) {
                     $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
                     if ($elapsedMinutes -ge $MinimumDrainMinutes) {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) meets minimum drain time ($([Math]::Round($elapsedMinutes, 1)) >= $MinimumDrainMinutes minutes), marking for immediate deletion" -Level Information
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) meets minimum drain time ($([Math]::Round($elapsedMinutes, 1)) >= $MinimumDrainMinutes minutes), marking for immediate deletion"
                         $deleteSessionHost = $true
                     }
                 }
@@ -2067,7 +2067,7 @@ function Remove-EntraDevice {
         
         If ($Device.value -and $Device.value.Count -gt 0) {
             $Id = $Device.value[0].id
-            Write-LogEntry -Message "Removing session host $Name from Entra ID" -Level Information
+            Write-LogEntry -Message "Removing session host $Name from Entra ID"
             Write-LogEntry -Message "Device ID: $Id" -Level Verbose
             
             Invoke-GraphApiWithRetry `
@@ -2080,14 +2080,14 @@ function Remove-EntraDevice {
             Write-LogEntry -Message "Successfully removed device $Name from Entra ID"
         }
         else {
-            Write-LogEntry -Message "Device $Name not found in Entra ID" -Level Information
+            Write-LogEntry -Message "Device $Name not found in Entra ID"
         }
     }
     catch {
         # Check if error is 404 (device already deleted)
         $is404 = $_.Exception.Response.StatusCode.value__ -eq 404
         if ($is404) {
-            Write-LogEntry -Message "Device $Name not found in Entra ID (404)" -Level Information
+            Write-LogEntry -Message "Device $Name not found in Entra ID (404)"
         }
         else {
             Write-LogEntry -Message "Failed to remove Entra device $Name : $($_.Exception.Message)" -Level Error
@@ -2119,7 +2119,7 @@ function Remove-IntuneDevice {
         
         If ($Device.value -and $Device.value.Count -gt 0) {
             $Id = $Device.value[0].id
-            Write-LogEntry -Message "Removing session host '$Name' device from Intune" -Level Information
+            Write-LogEntry -Message "Removing session host '$Name' device from Intune"
             Write-LogEntry -Message "Device ID: $Id" -Level Verbose
             
             Invoke-GraphApiWithRetry `
@@ -2132,14 +2132,14 @@ function Remove-IntuneDevice {
             Write-LogEntry -Message "Successfully removed device $Name from Intune"
         }
         else {
-            Write-LogEntry -Message "Device $Name not found in Intune" -Level Information
+            Write-LogEntry -Message "Device $Name not found in Intune"
         }
     }
     catch {
         # Check if error is 404 (device not enrolled or already deleted)
         $is404 = $_.Exception.Response.StatusCode.value__ -eq 404
         if ($is404) {
-            Write-LogEntry -Message "Device $Name not found in Intune (404)" -Level Information
+            Write-LogEntry -Message "Device $Name not found in Intune (404)"
         }
         else {
             Write-LogEntry -Message "Failed to remove Intune device $Name : $($_.Exception.Message)" -Level Error
