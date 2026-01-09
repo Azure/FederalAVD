@@ -300,6 +300,7 @@ Write-Log -message "DisableUpdates: $DisableUpdates"
 [bool]$ConfigureFSLogix = [System.Convert]::ToBoolean($ConfigureFSLogix)
 Write-Log -message "ConfigureFSLogix: $ConfigureFSLogix"
 if ($ConfigureFSLogix) {
+    Write-Log -message "IdentitySolution: $IdentitySolution" 
     #Convert CloudCache to Boolean
     $CloudCache = [System.Convert]::ToBoolean($CloudCache)
     Write-Log -message "CloudCache: $CloudCache"
@@ -323,8 +324,7 @@ if ($ConfigureFSLogix) {
     Else {
         [int]$SizeInMBs = 30000
         Write-Log -message "SizeInMBs not specified. Defaulting to: $SizeInMBs"
-    }
-    $IdentitySolution = ConvertFrom-JsonString -JsonString $IdentitySolution -Name 'IdentitySolution'  
+    } 
 }
 
 Write-Log -message "TimeZone: $TimeZone"

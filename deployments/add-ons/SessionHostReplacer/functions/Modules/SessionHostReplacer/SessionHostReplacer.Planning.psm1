@@ -325,7 +325,7 @@ function Get-SessionHostReplacementPlan {
         # Prioritize hosts for deletion: powered-off first, then idle, then draining, then fewest sessions
         # This ensures VMs that are already powered off are replaced before active ones
         $sortedHostsToReplace = $sessionHostsToReplace | Sort-Object -Property @{Expression={-not $_.PoweredOff}; Ascending=$true}, @{Expression={$_.Sessions}; Ascending=$true}, @{Expression={$_.AllowNewSession}; Ascending=$true}, SessionHostName
-        $sessionHostsPendingDelete = ($sortedHostsToReplace + $selectedGoodHostsTotDelete) | Select-Object -First $canDelete
+        $sessionHostsPendingDelete = (@($sortedHostsToReplace) + @($selectedGoodHostsTotDelete)) | Select-Object -First $canDelete
         
         # In SideBySide mode, apply progressive scale-up to deletions
         # In DeleteFirst mode, skip this - deletions are already controlled by deployment progressive scale-up (they're aligned 1:1)
