@@ -1,4 +1,4 @@
-﻿[CmdletBinding(SupportsShouldProcess = $true)]
+﻿﻿[CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [string]$AmdVmSize,
     [string]$NvidiaVmSize,
