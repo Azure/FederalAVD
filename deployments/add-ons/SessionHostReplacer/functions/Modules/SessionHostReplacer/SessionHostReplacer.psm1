@@ -6,90 +6,6 @@ Import-Module "$PSScriptRoot\SessionHostReplacer.Core.psm1" -Force
 
 #Region Progressive Scale-Up State Management
 
-function Get-LastDeploymentStatus {
-    <#
-    .SYNOPSIS
-        Checks the status of the last deployment from the previous function run.
-    .DESCRIPTION
-        Queries Azure Resource Manager to determine if the deployment from the previous
-        run succeeded or failed. This allows the function to track deployment outcomes
-        without polling synchronously, avoiding function timeout issues.
-    .PARAMETER DeploymentName
-        Name of the deployment to check.
-    .PARAMETER ARMToken
-        Azure Resource Manager access token.
-    .PARAMETER ResourceManagerUri
-        Resource Manager URI.
-    .PARAMETER SubscriptionId
-        Subscription ID containing the deployment.
-    .PARAMETER ResourceGroupName
-        Resource group name containing the deployment.
-    .EXAMPLE
-        $status = Get-LastDeploymentStatus -DeploymentName 'shr-abc123-20231230-120000' -ARMToken $token
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string] $DeploymentName,
-
-        [Parameter(Mandatory = $true)]
-        [string] $ARMToken,
-
-        [Parameter()]
-        [string] $ResourceManagerUri = (Get-ResourceManagerUri),
-
-        [Parameter()]
-        [string] $SubscriptionId = (Read-FunctionAppSetting VirtualMachinesSubscriptionId),
-
-        [Parameter()]
-        [string] $ResourceGroupName = (Read-FunctionAppSetting VirtualMachinesResourceGroupName)
-    )
-
-    if ([string]::IsNullOrEmpty($DeploymentName)) {
-        Write-LogEntry -Message "No previous deployment name provided"
-        return $null
-    }
-
-    try {
-        $Uri = "$ResourceManagerUri/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Resources/deployments/$DeploymentName`?api-version=2021-04-01"
-        Write-LogEntry -Message "Checking status of previous deployment: $DeploymentName" -Level Verbose
-        
-        $deployment = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
-        
-        if ($deployment) {
-            $provisioningState = $deployment.properties.provisioningState
-            Write-LogEntry -Message "Previous deployment status: $provisioningState" -Level Verbose
-            
-            $result = [PSCustomObject]@{
-                DeploymentName   = $DeploymentName
-                ProvisioningState = $provisioningState
-                Succeeded        = $provisioningState -eq 'Succeeded'
-                Failed           = $provisioningState -eq 'Failed'
-                Running          = $provisioningState -in @('Running', 'Accepted')
-                ErrorMessage     = $deployment.properties.error.message
-                Timestamp        = $deployment.properties.timestamp
-            }
-            
-            if ($result.Failed) {
-                Write-LogEntry -Message "Previous deployment failed with error: $($result.ErrorMessage)" -Level Error
-            }
-            elseif ($result.Running) {
-                Write-LogEntry -Message "Previous deployment is still running" -Level Warning
-            }
-            
-            return $result
-        }
-        else {
-            Write-LogEntry -Message "Previous deployment not found: $DeploymentName" -Level Warning
-            return $null
-        }
-    }
-    catch {
-        Write-LogEntry -Message "Failed to check previous deployment status: $_" -Level Warning
-        return $null
-    }
-}
-
 function Get-DeploymentState {
     <#
     .SYNOPSIS
@@ -152,7 +68,7 @@ function Get-DeploymentState {
             $tableExists = $existingTables.value | Where-Object { $_.TableName -eq $tableName }
             
             if (-not $tableExists) {
-                Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Verbose
+                Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Trace
                 $createTableBody = @{ TableName = $tableName } | ConvertTo-Json
                 $headers['Content-Type'] = 'application/json'
                 Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Post -Body $createTableBody -ErrorAction Stop | Out-Null
@@ -168,7 +84,7 @@ function Get-DeploymentState {
         try {
             $entity = Invoke-RestMethod -Uri $entityUri -Headers $headers -Method Get -ContentType 'application/json' -ErrorAction Stop
             
-            Write-LogEntry -Message "Retrieved deployment state: ConsecutiveSuccesses=$($entity.ConsecutiveSuccesses), CurrentPercentage=$($entity.CurrentPercentage)%" -Level Verbose
+            Write-LogEntry -Message "Retrieved deployment state: ConsecutiveSuccesses=$($entity.ConsecutiveSuccesses), CurrentPercentage=$($entity.CurrentPercentage)%" -Level Trace
             return [PSCustomObject]@{
                 LastDeploymentName       = $entity.LastDeploymentName
                 LastDeploymentCount      = [int]$entity.LastDeploymentCount
@@ -186,7 +102,7 @@ function Get-DeploymentState {
         }
         catch {
             if ($_.Exception.Response.StatusCode -eq 404) {
-                Write-LogEntry -Message "No deployment state found, initializing new state" -Level Verbose
+                Write-LogEntry -Message "No deployment state found, initializing new state" -Level Trace
                 return [PSCustomObject]@{
                     LastDeploymentName       = ''
                     LastDeploymentCount      = 0
@@ -226,6 +142,91 @@ function Get-DeploymentState {
         }
     }
 }
+
+function Get-LastDeploymentStatus {
+    <#
+    .SYNOPSIS
+        Checks the status of the last deployment from the previous function run.
+    .DESCRIPTION
+        Queries Azure Resource Manager to determine if the deployment from the previous
+        run succeeded or failed. This allows the function to track deployment outcomes
+        without polling synchronously, avoiding function timeout issues.
+    .PARAMETER DeploymentName
+        Name of the deployment to check.
+    .PARAMETER ARMToken
+        Azure Resource Manager access token.
+    .PARAMETER ResourceManagerUri
+        Resource Manager URI.
+    .PARAMETER SubscriptionId
+        Subscription ID containing the deployment.
+    .PARAMETER ResourceGroupName
+        Resource group name containing the deployment.
+    .EXAMPLE
+        $status = Get-LastDeploymentStatus -DeploymentName 'shr-abc123-20231230-120000' -ARMToken $token
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $DeploymentName,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ARMToken,
+
+        [Parameter()]
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri),
+
+        [Parameter()]
+        [string] $SubscriptionId = (Read-FunctionAppSetting VirtualMachinesSubscriptionId),
+
+        [Parameter()]
+        [string] $ResourceGroupName = (Read-FunctionAppSetting VirtualMachinesResourceGroupName)
+    )
+
+    if ([string]::IsNullOrEmpty($DeploymentName)) {
+        Write-LogEntry -Message "No previous deployment name provided"
+        return $null
+    }
+
+    try {
+        $Uri = "$ResourceManagerUri/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Resources/deployments/$DeploymentName`?api-version=2021-04-01"
+        Write-LogEntry -Message "Checking status of previous deployment: $DeploymentName" -Level Trace
+        
+        $deployment = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+        
+        if ($deployment) {
+            $provisioningState = $deployment.properties.provisioningState
+            Write-LogEntry -Message "Previous deployment status: $provisioningState" -Level Trace
+            
+            $result = [PSCustomObject]@{
+                DeploymentName   = $DeploymentName
+                ProvisioningState = $provisioningState
+                Succeeded        = $provisioningState -eq 'Succeeded'
+                Failed           = $provisioningState -eq 'Failed'
+                Running          = $provisioningState -in @('Running', 'Accepted')
+                ErrorMessage     = $deployment.properties.error.message
+                Timestamp        = $deployment.properties.timestamp
+            }
+            
+            if ($result.Failed) {
+                Write-LogEntry -Message "Previous deployment failed with error: $($result.ErrorMessage)" -Level Error
+            }
+            elseif ($result.Running) {
+                Write-LogEntry -Message "Previous deployment is still running" -Level Warning
+            }
+            
+            return $result
+        }
+        else {
+            Write-LogEntry -Message "Previous deployment not found: $DeploymentName" -Level Warning
+            return $null
+        }
+    }
+    catch {
+        Write-LogEntry -Message "Failed to check previous deployment status: $_" -Level Warning
+        return $null
+    }
+}
+
 
 function Save-DeploymentState {
     <#
@@ -295,7 +296,7 @@ function Save-DeploymentState {
             $tableExists = $existingTables.value | Where-Object { $_.TableName -eq $tableName }
             
             if (-not $tableExists) {
-                Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Verbose
+                Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Trace
                 $createTableBody = @{ TableName = $tableName } | ConvertTo-Json
                 Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Post -Body $createTableBody -ErrorAction Stop | Out-Null
             }
@@ -348,7 +349,7 @@ function Save-DeploymentState {
             Invoke-RestMethod -Uri $insertUri -Headers $headers -Method Post -Body $body -ErrorAction Stop | Out-Null
         }
         
-        Write-LogEntry -Message "Saved deployment state: Status=$($DeploymentState.LastStatus), ConsecutiveSuccesses=$($DeploymentState.ConsecutiveSuccesses), NextPercentage=$($DeploymentState.CurrentPercentage)%" -Level Verbose
+        Write-LogEntry -Message "Saved deployment state: Status=$($DeploymentState.LastStatus), ConsecutiveSuccesses=$($DeploymentState.ConsecutiveSuccesses), NextPercentage=$($DeploymentState.CurrentPercentage)%" -Level Trace
     }
     catch {
         Write-LogEntry -Message "Failed to save deployment state: $_" -Level Error
@@ -356,82 +357,6 @@ function Save-DeploymentState {
 }
 
 #EndRegion Progressive Scale-Up State Management
-
-#Region Utility Functions
-
-function ConvertTo-CaseInsensitiveHashtable {
-    <#
-    .SYNOPSIS
-        Converts objects to case-insensitive hashtables.
-    .DESCRIPTION
-        Converts hashtables, PSCustomObjects, OrderedDictionaries, and JSON strings to case-insensitive hashtables.
-    .PARAMETER InputObject
-        The object to convert.
-    .EXAMPLE
-        $params = @{Name='Test'; Value='123'} | ConvertTo-CaseInsensitiveHashtable
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-        $InputObject
-    )
-    
-    process {
-        if ($null -eq $InputObject) {
-            return $null
-        }
-        
-        # If already a hashtable, convert to case-insensitive
-        if ($InputObject -is [hashtable]) {
-            $ciHashtable = New-Object 'System.Collections.Hashtable' -ArgumentList ([System.StringComparer]::OrdinalIgnoreCase)
-            foreach ($key in $InputObject.Keys) {
-                $value = $InputObject[$key]
-                # Recursively convert nested hashtables
-                if ($value -is [hashtable] -or $value -is [PSCustomObject]) {
-                    $ciHashtable[$key] = ConvertTo-CaseInsensitiveHashtable -InputObject $value
-                }
-                else {
-                    $ciHashtable[$key] = $value
-                }
-            }
-            return $ciHashtable
-        }
-        
-        # If PSCustomObject or OrderedDictionary, convert to case-insensitive hashtable
-        if ($InputObject -is [PSCustomObject] -or $InputObject -is [System.Collections.Specialized.OrderedDictionary]) {
-            $ciHashtable = New-Object 'System.Collections.Hashtable' -ArgumentList ([System.StringComparer]::OrdinalIgnoreCase)
-            foreach ($property in $InputObject.PSObject.Properties) {
-                $value = $property.Value
-                # Recursively convert nested objects
-                if ($value -is [hashtable] -or $value -is [PSCustomObject]) {
-                    $ciHashtable[$property.Name] = ConvertTo-CaseInsensitiveHashtable -InputObject $value
-                }
-                else {
-                    $ciHashtable[$property.Name] = $value
-                }
-            }
-            return $ciHashtable
-        }
-        
-        # If JSON string, parse and convert
-        if ($InputObject -is [string]) {
-            try {
-                $parsed = $InputObject | ConvertFrom-Json
-                return ConvertTo-CaseInsensitiveHashtable -InputObject $parsed
-            }
-            catch {
-                Write-Error "Unable to parse string as JSON: $_"
-                return $null
-            }
-        }
-        
-        # Return as-is if cannot convert
-        Write-Warning "InputObject type [$($InputObject.GetType().Name)] cannot be converted to case-insensitive hashtable"
-        return $InputObject
-    }
-}
-
-#EndRegion Utility Functions
 
 #Region Session Host Lifecycle Functions
 
@@ -560,7 +485,7 @@ function Deploy-SessionHosts {
                 $dedicatedHostIds += if ($props.HostId) { $props.HostId } else { '' }
                 $dedicatedHostGroupIds += if ($props.HostGroupId) { $props.HostGroupId } else { '' }
                 $preferredZones += if ($props.Zones) { ,$props.Zones } else { ,@() }
-                Write-LogEntry -Message "Applying dedicated host properties to {0}: HostId={1}, HostGroupId={2}, Zones={3}" -StringValues $vmName, $props.HostId, $props.HostGroupId, ($props.Zones -join ', ') -Level Verbose
+                Write-LogEntry -Message "Applying dedicated host properties to {0}: HostId={1}, HostGroupId={2}, Zones={3}" -StringValues $vmName, $props.HostId, $props.HostGroupId, ($props.Zones -join ', ') -Level Trace
             }
             else {
                 # Use empty string/array for VMs without specific assignments (will use template default)
@@ -577,15 +502,15 @@ function Deploy-SessionHosts {
         
         if ($hasHostIds) {
             $sessionHostParameters['dedicatedHostResourceIds'] = $dedicatedHostIds
-            Write-LogEntry -Message "Set per-VM dedicatedHostResourceIds: {0}" -StringValues ($dedicatedHostIds -join ', ') -Level Verbose
+            Write-LogEntry -Message "Set per-VM dedicatedHostResourceIds: {0}" -StringValues ($dedicatedHostIds -join ', ') -Level Trace
         }
         if ($hasHostGroupIds) {
             $sessionHostParameters['dedicatedHostGroupResourceIds'] = $dedicatedHostGroupIds
-            Write-LogEntry -Message "Set per-VM dedicatedHostGroupResourceIds: {0}" -StringValues ($dedicatedHostGroupIds -join ', ') -Level Verbose
+            Write-LogEntry -Message "Set per-VM dedicatedHostGroupResourceIds: {0}" -StringValues ($dedicatedHostGroupIds -join ', ') -Level Trace
         }
         if ($hasZones) {
             $sessionHostParameters['preferredZones'] = $preferredZones
-            Write-LogEntry -Message "Set per-VM preferredZones: {0}" -StringValues (($preferredZones | ForEach-Object { "[$($_ -join ',')]" }) -join ', ') -Level Verbose
+            Write-LogEntry -Message "Set per-VM preferredZones: {0}" -StringValues (($preferredZones | ForEach-Object { "[$($_ -join ',')]" }) -join ', ') -Level Trace
         }
     }
     
@@ -646,7 +571,7 @@ function Deploy-SessionHosts {
         }
     }
     
-    Write-LogEntry -Message "Deployment submitted successfully. Deployment name: $deploymentName" -Level Verbose
+    Write-LogEntry -Message "Deployment submitted successfully. Deployment name: $deploymentName" -Level Trace
     
     # Return deployment information for state tracking
     # Note: Succeeded is initially null - will be determined on next run
@@ -791,7 +716,7 @@ function Get-LatestImageVersion {
                 throw "Could not extract version name from latest image version object"
             }
             
-            Write-LogEntry -Message "Latest version of image is $azImageVersion" -Level Verbose
+            Write-LogEntry -Message "Latest version of image is $azImageVersion" -Level Trace
 
             if ($azImageVersion -match "\d+\.\d+\.(?<Year>\d{2})(?<Month>\d{2})(?<Day>\d{2})") {
                 $azImageDate = Get-Date -Date ("20{0}-{1}-{2}" -f $Matches.Year, $Matches.Month, $Matches.Day)
@@ -823,7 +748,7 @@ function Get-LatestImageVersion {
                 throw "No image versions found in gallery '$imageGalleryName' for image '$imageDefinitionName'."
             }
             
-            Write-LogEntry -Message "Found $($imageVersions.Count) total image versions in gallery" -Level Verbose
+            Write-LogEntry -Message "Found $($imageVersions.Count) total image versions in gallery" -Level Trace
             
             # Normalize location for comparison (Azure returns full names like "East US 2")
             $normalizedLocation = $Location -replace '\s', ''
@@ -907,7 +832,7 @@ function Get-LatestImageVersion {
     }
 }
 
-function Get-HostPoolDecisions {
+function Get-SessionHostReplacementPlan {
     [CmdletBinding()]
     param (
         [Parameter()]
@@ -987,7 +912,7 @@ function Get-HostPoolDecisions {
             
             # Log each session host's image version for debugging
             foreach ($sh in $sessionHosts) {
-                Write-LogEntry -Message "Session host $($sh.SessionHostName) has image version: $($sh.ImageVersion)" -Level Verbose
+                Write-LogEntry -Message "Session host $($sh.SessionHostName) has image version: $($sh.ImageVersion)" -Level Trace
             }
             
             # Compare versions with rollback protection
@@ -999,7 +924,7 @@ function Get-HostPoolDecisions {
                     if ($sh.ImageDefinition -and $LatestImageVersion.Definition) {
                         $imageDefinitionChanged = ($sh.ImageDefinition -ne $LatestImageVersion.Definition)
                         if ($imageDefinitionChanged) {
-                            Write-LogEntry -Message "Session host $($sh.SessionHostName) has different image definition - VM: '$($sh.ImageDefinition)', Latest: '$($LatestImageVersion.Definition)'" -Level Verbose
+                            Write-LogEntry -Message "Session host $($sh.SessionHostName) has different image definition - VM: '$($sh.ImageDefinition)', Latest: '$($LatestImageVersion.Definition)'" -Level Trace
                         }
                     }
                     
@@ -1035,13 +960,24 @@ function Get-HostPoolDecisions {
             Write-LogEntry -Message "Found $($sessionHostsOldVersion.Count) session hosts to replace due to image version. $($($sessionHostsOldVersion.SessionHostName) -Join ',')"
     }
     else {
-        # Latest image version delay not yet met
+        Write-LogEntry -Message "Latest Image age is less than New Image Delay value $ReplaceSessionHostOnNewImageVersionDelayDays - no session hosts will be replaced based on image version"
     }
 
     [array] $sessionHostsToReplace = $sessionHostsOldVersion | Select-Object -Property * -Unique
     Write-LogEntry -Message "Found $($sessionHostsToReplace.Count) session hosts to replace in total. $($($sessionHostsToReplace.SessionHostName) -join ',')"
 
-    $goodSessionHosts = $SessionHosts | Where-Object { $_.SessionHostName -notin $sessionHostsToReplace.SessionHostName }
+    # Good hosts = not needing replacement AND not shutdown (shutdown VMs are deallocated and unavailable)
+    $goodSessionHosts = $SessionHosts | Where-Object { 
+        $_.SessionHostName -notin $sessionHostsToReplace.SessionHostName -and 
+        -not $_.ShutdownTimestamp 
+    }
+    
+    # Count shutdown hosts for logging
+    $shutdownHostsCount = ($SessionHosts | Where-Object { $_.ShutdownTimestamp }).Count
+    if ($shutdownHostsCount -gt 0) {
+        $shutdownHostNames = ($SessionHosts | Where-Object { $_.ShutdownTimestamp }).SessionHostName -join ','
+        Write-LogEntry -Message "Excluding $shutdownHostsCount shutdown session hosts from available capacity: $shutdownHostNames" -Level Verbose
+    }
     
     # Count running deployment VMs - handle both ARM deployments (with SessionHostNames) and state-tracked deployments (with VirtualCount)
     $runningDeploymentVMCount = 0
@@ -1170,14 +1106,19 @@ function Get-HostPoolDecisions {
             Write-LogEntry -Message "Host pool is over populated"
             $goodSessionHostsToDeleteCount = $canDelete - $sessionHostsToReplace.Count
             Write-LogEntry -Message "We will delete $goodSessionHostsToDeleteCount good session hosts"
-            $selectedGoodHostsTotDelete = [array] ($goodSessionHosts | Sort-Object -Property Session | Select-Object -First $goodSessionHostsToDeleteCount)
+            # Sort by power state (prioritize powered-off VMs), then session count (idle hosts), then drain status, then name
+            $selectedGoodHostsTotDelete = [array] ($goodSessionHosts | Sort-Object -Property @{Expression={-not $_.PoweredOff}; Ascending=$true}, @{Expression={$_.Sessions}; Ascending=$true}, @{Expression={$_.AllowNewSession}; Ascending=$true}, SessionHostName | Select-Object -First $goodSessionHostsToDeleteCount)
             Write-LogEntry -Message "Selected the following good session hosts to delete: $($($selectedGoodHostsTotDelete.VMName) -join ',')"
         }
         else {
             $selectedGoodHostsTotDelete = @()
             Write-LogEntry -Message "Host pool is not over populated"
         }
-        $sessionHostsPendingDelete = ($sessionHostsToReplace + $selectedGoodHostsTotDelete) | Select-Object -First $canDelete
+        
+        # Prioritize hosts for deletion: powered-off first, then idle, then draining, then fewest sessions
+        # This ensures VMs that are already powered off are replaced before active ones
+        $sortedHostsToReplace = $sessionHostsToReplace | Sort-Object -Property @{Expression={-not $_.PoweredOff}; Ascending=$true}, @{Expression={$_.Sessions}; Ascending=$true}, @{Expression={$_.AllowNewSession}; Ascending=$true}, SessionHostName
+        $sessionHostsPendingDelete = ($sortedHostsToReplace + $selectedGoodHostsTotDelete) | Select-Object -First $canDelete
         
         # In SideBySide mode, apply progressive scale-up to deletions
         # In DeleteFirst mode, skip this - deletions are already controlled by deployment progressive scale-up (they're aligned 1:1)
@@ -1267,7 +1208,7 @@ function Get-Deployments {
     $deployments = $deployments | Where-Object { $_.name -like "$DeploymentPrefix*" }
     
     if ($deployments) {
-        Write-LogEntry -Message "Deployment names: $($deployments.name -join ', ')" -Level Verbose
+        Write-LogEntry -Message "Deployment names: $($deployments.name -join ', ')" -Level Trace
     }
     
     # Handle failed deployments - don't block automation, but return info for cleanup
@@ -1284,7 +1225,6 @@ function Get-Deployments {
     }
     
     $runningDeployments = $deployments | Where-Object { $_.properties.provisioningState -eq 'Running' }
-    Write-LogEntry -Message "Found $($runningDeployments.Count) running deployments."
     
     $warningThreshold = (Get-Date -AsUTC).AddHours(-2)
     $longRunningDeployments = $runningDeployments | Where-Object { 
@@ -1303,7 +1243,7 @@ function Get-Deployments {
     $output.RunningDeployments = foreach ($deployment in $runningDeployments) {
         if ($deployment.properties.parameters) {
             $parameters = $deployment.properties.parameters | ConvertTo-CaseInsensitiveHashtable
-            Write-LogEntry -Message "Running deployment '$($deployment.name)' is deploying: $(($parameters['sessionHostNames'].Value -join ','))" -Level Verbose
+            Write-LogEntry -Message "Running deployment '$($deployment.name)' is deploying: $(($parameters['sessionHostNames'].Value -join ','))" -Level Trace
             [PSCustomObject]@{
                 DeploymentName   = $deployment.name
                 SessionHostNames = $parameters['sessionHostNames'].Value
@@ -1367,6 +1307,8 @@ function Get-SessionHosts {
         [Parameter()]
         [string] $TagPendingDrainTimeStamp = (Read-FunctionAppSetting Tag_PendingDrainTimestamp),
         [Parameter()]
+        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp),
+        [Parameter()]
         [switch] $FixSessionHostTags = (Read-FunctionAppSetting FixSessionHostTags),
         [Parameter()]
         [bool] $IncludePreExistingSessionHosts = (Read-FunctionAppSetting IncludePreExistingSessionHosts)
@@ -1386,10 +1328,9 @@ function Get-SessionHosts {
             Status          = $_.properties.status
         }
     }
-    Write-LogEntry -Message "Found $($sessionHosts.Count) session hosts"
     
     $result = foreach ($sh in $sessionHosts) {
-        $Uri = "$ResourceManagerUri$($sh.ResourceId)?api-version=2024-03-01"
+        $Uri = "$ResourceManagerUri$($sh.ResourceId)?`$expand=instanceView&api-version=2024-07-01"
         $vmResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
         
         # Extract properties from nested structure
@@ -1435,13 +1376,15 @@ function Get-SessionHosts {
             Write-LogEntry -Message "Unable to determine VM image version from StorageProfile" -Level Warning
         }
         
-        $Uri = "$ResourceManagerUri$($sh.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
-        $vmTagsResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+        # Extract power state from expanded instanceView (already included in response)
+        $vmPowerState = ($vmResponse.properties.instanceView.statuses | Where-Object { $_.code -like 'PowerState/*' }).code
+        # Normalize to boolean: true if deallocated/stopped, false if running
+        $vmIsPoweredOff = $vmPowerState -like 'PowerState/deallocated' -or $vmPowerState -like 'PowerState/stopped'
         
-        # Convert PSCustomObject tags to hashtable for easier access
+        # Extract tags directly from VM response (no separate API call needed)
         $vmTags = @{}
-        if ($vmTagsResponse.properties.tags) {
-            $vmTagsResponse.properties.tags.PSObject.Properties | ForEach-Object {
+        if ($vmResponse.tags) {
+            $vmResponse.tags.PSObject.Properties | ForEach-Object {
                 $vmTags[$_.Name] = $_.Value
             }
         }
@@ -1453,7 +1396,7 @@ function Get-SessionHosts {
         }
         catch {
             $value = if ($null -eq $vmDeployTimeStamp) { 'null' } else { $vmDeployTimeStamp }
-            Write-LogEntry -Message "VM tag $TagDeployTimestamp with value $value is not a valid date" -Level Verbose
+            Write-LogEntry -Message "VM tag $TagDeployTimestamp with value $value is not a valid date" -Level Trace
             if ($FixSessionHostTags) {
                 $Body = @{
                     properties = @{
@@ -1475,7 +1418,7 @@ function Get-SessionHosts {
         }
         else {
             $value = if ($null -eq $vmIncludeInAutomation) { 'null' } else { $vmIncludeInAutomation }
-            Write-LogEntry -Message "VM tag with $TagIncludeInAutomation value $value is not set to True/False" -Level Verbose
+            Write-LogEntry -Message "VM tag with $TagIncludeInAutomation value $value is not set to True/False" -Level Trace
             if ($FixSessionHostTags) {
                 $Body = @{
                     properties = @{
@@ -1500,6 +1443,19 @@ function Get-SessionHosts {
                 $vmPendingDrainTimeStamp = $null
             }
         }
+        
+        # Get shutdown timestamp tag (for shutdown retention feature)
+        $vmShutdownTimestamp = $vmTags[$TagShutdownTimestamp]
+        if ($null -ne $vmShutdownTimestamp) {
+            try {
+                # Parse as UTC time regardless of timezone indicator
+                $vmShutdownTimestamp = [DateTime]::Parse($vmShutdownTimestamp, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+            }
+            catch {
+                Write-LogEntry -Message "VM tag $TagShutdownTimestamp could not be parsed: '$vmShutdownTimestamp'" -Level Warning
+                $vmShutdownTimestamp = $null
+            }
+        }
 
         $fqdn = $sh.Name -replace ".+\/(.+)", '$1'
         $sessionHostName = $fqdn -replace '\..*$', ''
@@ -1511,6 +1467,8 @@ function Get-SessionHosts {
             DeployTimestamp       = $vmDeployTimeStamp
             IncludeInAutomation   = $vmIncludeInAutomation
             PendingDrainTimeStamp = $vmPendingDrainTimeStamp
+            ShutdownTimestamp     = $vmShutdownTimestamp
+            PoweredOff            = $vmIsPoweredOff
             ImageVersion          = $vmImageVersion
             ImageDefinition       = $vmImageDefinition
             HostId                = $vm.HostId
@@ -1536,12 +1494,12 @@ function Get-TemplateSpecVersionResourceId {
     $Uri = "$ResourceManagerUri$($ResourceId)?api-version=2022-02-01"    
     $response = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
     $azResourceType = $response.type
-    Write-LogEntry -Message "Resource type: $azResourceType" -Level Verbose
+    Write-LogEntry -Message "Resource type: $azResourceType" -Level Trace
     switch ($azResourceType) {
         'Microsoft.Resources/templateSpecs' {
             # List all versions of the template spec
             $Uri = "$ResourceManagerUri$($ResourceId)/versions?api-version=2022-02-01"
-            Write-LogEntry -Message "Calling API: $Uri" -Level Verbose
+            Write-LogEntry -Message "Calling API: $Uri" -Level Trace
             $templateSpecVersionsResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
             
             # Invoke-AzureRestMethod returns an array directly (handles paging internally)
@@ -1558,7 +1516,7 @@ function Get-TemplateSpecVersionResourceId {
                 throw "No versions found for Template Spec: $ResourceId"
             }
             
-            Write-LogEntry -Message "Template Spec has $($templateSpecVersions.count) versions" -Level Verbose
+            Write-LogEntry -Message "Template Spec has $($templateSpecVersions.count) versions" -Level Trace
             
             # Filter versions that have a lastModifiedAt timestamp in systemData and sort by it
             $versionsWithTime = $templateSpecVersions | Where-Object { $_.systemData.lastModifiedAt }
@@ -1648,7 +1606,7 @@ function Remove-FailedDeploymentArtifacts {
     )
     
     if ($FailedDeployments.Count -eq 0) {
-        Write-LogEntry -Message "No failed deployments to clean up" -Level Verbose
+        Write-LogEntry -Message "No failed deployments to clean up" -Level Trace
         return
     }
     
@@ -1688,12 +1646,12 @@ function Remove-FailedDeploymentArtifacts {
                     }
                 }
                 else {
-                    Write-LogEntry -Message "VM $($vm.name) from failed deployment is registered as session host - will be handled by normal cleanup flow" -Level Verbose
+                    Write-LogEntry -Message "VM $($vm.name) from failed deployment is registered as session host - will be handled by normal cleanup flow" -Level Trace
                 }
             }
             
             if ($matchingVMs.Count -eq 0) {
-                Write-LogEntry -Message "No VM found matching session host name $sessionHostName (deployment may have rolled back)" -Level Verbose
+                Write-LogEntry -Message "No VM found matching session host name $sessionHostName (deployment may have rolled back)" -Level Trace
             }
         }
     }
@@ -1718,7 +1676,7 @@ function Remove-FailedDeploymentArtifacts {
                             Write-LogEntry -Message "Successfully deleted Entra device for orphaned VM: $($orphanedVM.SessionHostName)"
                         }
                         else {
-                            Write-LogEntry -Message "No Entra device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Verbose
+                            Write-LogEntry -Message "No Entra device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Trace
                         }
                     }
                     catch {
@@ -1740,7 +1698,7 @@ function Remove-FailedDeploymentArtifacts {
                             Write-LogEntry -Message "Successfully deleted Intune device for orphaned VM: $($orphanedVM.SessionHostName)"
                         }
                         else {
-                            Write-LogEntry -Message "No Intune device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Verbose
+                            Write-LogEntry -Message "No Intune device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Trace
                         }
                     }
                     catch {
@@ -1760,7 +1718,7 @@ function Remove-FailedDeploymentArtifacts {
         }
     }
     else {
-        Write-LogEntry -Message "No orphaned VMs found from failed deployments" -Level Verbose
+        Write-LogEntry -Message "No orphaned VMs found from failed deployments" -Level Trace
     }
     
     # Clean up failed deployment records from ARM (including nested deployments)
@@ -1821,10 +1779,10 @@ function Remove-FailedDeploymentArtifacts {
                 
                 foreach ($nestedDeploymentName in $allNestedDeployments) {
                     try {
-                        Write-LogEntry -Message "Deleting nested deployment record: $nestedDeploymentName" -Level Verbose
+                        Write-LogEntry -Message "Deleting nested deployment record: $nestedDeploymentName" -Level Trace
                         $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/providers/Microsoft.Resources/deployments/$nestedDeploymentName`?api-version=2021-04-01"
                         Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
-                        Write-LogEntry -Message "Successfully deleted nested deployment record: $nestedDeploymentName" -Level Verbose
+                        Write-LogEntry -Message "Successfully deleted nested deployment record: $nestedDeploymentName" -Level Trace
                     }
                     catch {
                         Write-LogEntry -Message "Failed to delete nested deployment record $nestedDeploymentName`: $_" -Level Warning
@@ -1832,7 +1790,7 @@ function Remove-FailedDeploymentArtifacts {
                 }
             }
             else {
-                Write-LogEntry -Message "No nested deployments found for parent deployment" -Level Verbose
+                Write-LogEntry -Message "No nested deployments found for parent deployment" -Level Trace
             }
             
             # Delete the top-level deployment record last
@@ -1871,6 +1829,8 @@ function Remove-SessionHosts {
         [Parameter()]
         [int] $MinimumDrainMinutes = [int]::Parse((Read-FunctionAppSetting MinimumDrainMinutes)),
         [Parameter()]
+        [string] $ReplacementMode = (Read-FunctionAppSetting ReplacementMode),
+        [Parameter()]
         [string] $TagPendingDrainTimeStamp = (Read-FunctionAppSetting Tag_PendingDrainTimestamp),
         [Parameter()]
         [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp),
@@ -1881,7 +1841,10 @@ function Remove-SessionHosts {
         [Parameter()]
         [bool] $RemoveIntuneDevice,
         [Parameter()]
-        [bool] $EnableShutdownRetention = [bool]::Parse((Read-FunctionAppSetting EnableShutdownRetention)),
+        [bool] $EnableShutdownRetention = $(
+            $setting = Read-FunctionAppSetting EnableShutdownRetention
+            if ([string]::IsNullOrEmpty($setting)) { $false } else { [bool]::Parse($setting) }
+        ),
         [Parameter()]
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
@@ -1895,7 +1858,7 @@ function Remove-SessionHosts {
         $drainSessionHost = $false
         $deleteSessionHost = $false
 
-        Write-LogEntry -Message "Evaluating session host $($sessionHost.SessionHostName): Sessions=$($sessionHost.Sessions), AllowNewSession=$($sessionHost.AllowNewSession), PendingDrainTimeStamp=$($sessionHost.PendingDrainTimeStamp)" -Level Verbose
+        Write-LogEntry -Message "Evaluating session host $($sessionHost.SessionHostName): Sessions=$($sessionHost.Sessions), AllowNewSession=$($sessionHost.AllowNewSession), PendingDrainTimeStamp=$($sessionHost.PendingDrainTimeStamp)" -Level Trace
 
         if ($sessionHost.Sessions -eq 0) {
             Write-LogEntry -Message "Session host $($sessionHost.FQDN) has no sessions."
@@ -1907,15 +1870,22 @@ function Remove-SessionHosts {
             }
             elseif (-Not $sessionHost.AllowNewSession) {
                 Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode with zero sessions."
-                if ($sessionHost.PendingDrainTimeStamp) {
-                    $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
-                    Write-LogEntry -Message "Session host $($sessionHost.FQDN) has been draining for $([Math]::Round($elapsedMinutes, 1)) minutes (minimum required: $MinimumDrainMinutes)"
-                    if ($elapsedMinutes -ge $MinimumDrainMinutes) {
-                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) has met the minimum drain time for idle hosts."
+                if ($sessionHost.PendingDrainTimeStamp) {                    
+                    # In SideBySide mode, skip minimum drain time check since new capacity is already deployed
+                    if ($ReplacementMode -eq 'SideBySide') {
                         $deleteSessionHost = $true
                     }
                     else {
-                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) has not yet met the minimum drain time."
+                        $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
+                  
+                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) has been draining for $([Math]::Round($elapsedMinutes, 1)) minutes (minimum required: $MinimumDrainMinutes)"
+                        if ($elapsedMinutes -ge $MinimumDrainMinutes) {
+                            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has met the minimum drain time for idle hosts."
+                            $deleteSessionHost = $true
+                        }
+                        else {
+                            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has not yet met the minimum drain time."
+                        }
                     }
                 }
                 else {
@@ -1935,17 +1905,17 @@ function Remove-SessionHosts {
                 if ($sessionHost.PendingDrainTimeStamp) {
                     Write-LogEntry -Message "Session Host $($sessionHost.FQDN) drain timestamp is $($sessionHost.PendingDrainTimeStamp)"
                     $maxDrainGracePeriodDate = $sessionHost.PendingDrainTimeStamp.AddHours($DrainGracePeriodHours)
-                    Write-LogEntry -Message "Session Host $($sessionHost.FQDN) can stay in grace period until $($maxDrainGracePeriodDate.ToUniversalTime().ToString('o'))" -Level Verbose 
+                    Write-LogEntry -Message "Session Host $($sessionHost.FQDN) can stay in grace period until $($maxDrainGracePeriodDate.ToUniversalTime().ToString('o'))" -Level Trace 
                     if ($maxDrainGracePeriodDate -lt (Get-Date).ToUniversalTime()) {
                         Write-LogEntry -Message "Session Host $($sessionHost.FQDN) has exceeded the drain grace period."
                         $deleteSessionHost = $true
                     }
                     else {
-                        Write-LogEntry -Message "Session Host $($sessionHost.FQDN) has not exceeded the drain grace period." -Level Verbose
+                        Write-LogEntry -Message "Session Host $($sessionHost.FQDN) has not exceeded the drain grace period." -Level Trace
                     }
                 }
                 else {
-                    Write-LogEntry -Message "Session Host $($sessionHost.FQDN) does not have a drain timestamp." -Level Verbose
+                    Write-LogEntry -Message "Session Host $($sessionHost.FQDN) does not have a drain timestamp." -Level Trace
                     $drainSessionHost = $true
                 }
             }
@@ -1961,7 +1931,7 @@ function Remove-SessionHosts {
                 $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$($sessionHost.FQDN)?api-version=2024-04-03"
                 Invoke-AzureRestMethod -ARMToken $ARMToken -Body (@{properties = @{allowNewSession = $false } } | ConvertTo-Json) -Method 'PATCH' -Uri $Uri | Out-Null
                 
-                Write-LogEntry -Message "Drain mode enabled for $($sessionHost.SessionHostName)" -Level Verbose
+                Write-LogEntry -Message "Drain mode enabled for $($sessionHost.SessionHostName)" -Level Trace
                 
                 $drainTimestamp = (Get-Date).ToUniversalTime().ToString('o')
                 Write-LogEntry -Message "Setting drain timestamp tag on $($sessionHost.SessionHostName): $drainTimestamp"
@@ -1979,17 +1949,18 @@ function Remove-SessionHosts {
                 # Update in-memory session host object so timestamp is available for deletion check in same run
                 $sessionHost.PendingDrainTimeStamp = [DateTime]::Parse($drainTimestamp, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
                 
-                # Re-evaluate deletion eligibility now that we have a timestamp (allows immediate deletion when MinimumDrainMinutes = 0)
+                # Re-evaluate deletion eligibility now that we have a timestamp (allows immediate deletion when MinimumDrainMinutes = 0 or SideBySide mode)
                 if ($sessionHost.Sessions -eq 0) {
                     $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
-                    if ($elapsedMinutes -ge $MinimumDrainMinutes) {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) meets minimum drain time ($([Math]::Round($elapsedMinutes, 1)) >= $MinimumDrainMinutes minutes), marking for immediate deletion"
+                    # In SideBySide mode, allow immediate deletion since new capacity is already deployed
+                    if ($ReplacementMode -eq 'SideBySide' -or $elapsedMinutes -ge $MinimumDrainMinutes) {
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) meets deletion criteria ($([Math]::Round($elapsedMinutes, 1)) minutes elapsed, mode: $ReplacementMode), marking for immediate deletion"
                         $deleteSessionHost = $true
                     }
                 }
                 
                 if ($TagScalingPlanExclusionTag -ne ' ') {
-                    Write-LogEntry -Message "Setting scaling plan exclusion tag on $($sessionHost.SessionHostName)" -Level Verbose
+                    Write-LogEntry -Message "Setting scaling plan exclusion tag on $($sessionHost.SessionHostName)" -Level Trace
                     $Body = @{
                         properties = @{
                             tags = @{ $TagScalingPlanExclusionTag = 'SessionHostReplacer' }
@@ -1998,10 +1969,10 @@ function Remove-SessionHosts {
                     }
                     Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri | Out-Null
                     
-                    Write-LogEntry -Message "Successfully set scaling plan exclusion tag with value: SessionHostReplacer" -Level Verbose
+                    Write-LogEntry -Message "Successfully set scaling plan exclusion tag with value: SessionHostReplacer" -Level Trace
                 }
 
-                Write-LogEntry -Message 'Notifying Users' -Level Verbose
+                Write-LogEntry -Message 'Notifying Users' -Level Trace
                 Send-DrainNotification -ARMToken $ARMToken -SessionHostName ($sessionHost.FQDN)
             }
             catch {
@@ -2015,14 +1986,28 @@ function Remove-SessionHosts {
                 if ($EnableShutdownRetention) {
                     Write-LogEntry -Message "Shutdown retention enabled - deallocating session host $($sessionHost.SessionHostName) for rollback capability..."
                     
-                    # Deallocate (shutdown) the VM but leave it in the host pool for rollback
-                    Write-LogEntry -Message "Deallocating VM: $($sessionHost.ResourceId)..." -Level Verbose
-                    $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/deallocate?api-version=2024-07-01"
-                    [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'POST' -Uri $Uri)
+                    # Check current power state before attempting deallocate
+                    Write-LogEntry -Message "Checking power state of VM: $($sessionHost.VMName)..." -Level Trace
+                    $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/instanceView?api-version=2024-07-01"
+                    $instanceView = Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'GET' -Uri $Uri
+                    
+                    # Get power state from instance view (e.g., "PowerState/running", "PowerState/deallocated")
+                    $powerState = ($instanceView.statuses | Where-Object { $_.code -like 'PowerState/*' }).code
+                    Write-LogEntry -Message "Current power state: $powerState" -Level Trace
+                    
+                    # Only deallocate if VM is not already stopped/deallocated
+                    if ($powerState -notlike 'PowerState/deallocated' -and $powerState -notlike 'PowerState/stopped') {
+                        Write-LogEntry -Message "Deallocating VM: $($sessionHost.ResourceId)..." -Level Trace
+                        $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/deallocate?api-version=2024-07-01"
+                        [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'POST' -Uri $Uri)
+                    }
+                    else {
+                        Write-LogEntry -Message "VM is already deallocated/stopped - skipping deallocate operation" -Level Trace
+                    }
                     
                     # Tag with shutdown timestamp for later cleanup
                     $shutdownTimestamp = (Get-Date).ToUniversalTime().ToString('o')
-                    Write-LogEntry -Message "Setting shutdown timestamp tag on $($sessionHost.SessionHostName): $shutdownTimestamp" -Level Verbose
+                    Write-LogEntry -Message "Setting shutdown timestamp tag on $($sessionHost.SessionHostName): $shutdownTimestamp" -Level Trace
                     $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
                     $Body = @{
                         properties = @{
@@ -2043,10 +2028,10 @@ function Remove-SessionHosts {
                     # Remove from identity directories
                     Remove-DeviceFromDirectories -DeviceName $sessionHost.SessionHostName -GraphToken $GraphToken -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -ClientId $ClientId
                     
-                    Write-LogEntry -Message "Removing Session Host from Host Pool $HostPoolName" -Level Verbose
+                    Write-LogEntry -Message "Removing Session Host from Host Pool $HostPoolName" -Level Trace
                     $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$($sessionHost.FQDN)?api-version=2024-04-03"
                     [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri)            
-                    Write-LogEntry -Message "Deleting VM: $($sessionHost.ResourceId)..." -Level Verbose
+                    Write-LogEntry -Message "Deleting VM: $($sessionHost.ResourceId)..." -Level Trace
                     $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)?forceDeletion=true&api-version=2024-07-01"
                     [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'DELETE' -Uri $Uri)
                     
@@ -2113,12 +2098,12 @@ function Remove-DeviceFromDirectories {
     )
     
     if (-not $GraphToken) {
-        Write-LogEntry -Message "No Graph token provided - skipping device cleanup for $DeviceName" -Level Verbose
+        Write-LogEntry -Message "No Graph token provided - skipping device cleanup for $DeviceName" -Level Trace
         return
     }
     
     if ($RemoveEntraDevice) {
-        Write-LogEntry -Message "Deleting $DeviceName from Entra ID" -Level Verbose
+        Write-LogEntry -Message "Deleting $DeviceName from Entra ID" -Level Trace
         try {
             Remove-EntraDevice -GraphToken $GraphToken -Name $DeviceName -ClientId $ClientId
         }
@@ -2128,7 +2113,7 @@ function Remove-DeviceFromDirectories {
     }
     
     if ($RemoveIntuneDevice) {
-        Write-LogEntry -Message "Deleting $DeviceName from Intune" -Level Verbose
+        Write-LogEntry -Message "Deleting $DeviceName from Intune" -Level Trace
         try {
             Remove-IntuneDevice -GraphToken $GraphToken -Name $DeviceName -ClientId $ClientId
         }
@@ -2162,7 +2147,7 @@ function Remove-EntraDevice {
         If ($Device.value -and $Device.value.Count -gt 0) {
             $Id = $Device.value[0].id
             Write-LogEntry -Message "Removing session host $Name from Entra ID"
-            Write-LogEntry -Message "Device ID: $Id" -Level Verbose
+            Write-LogEntry -Message "Device ID: $Id" -Level Trace
             
             Invoke-GraphApiWithRetry `
                 -GraphEndpoint $GraphEndpoint `
@@ -2214,7 +2199,7 @@ function Remove-IntuneDevice {
         If ($Device.value -and $Device.value.Count -gt 0) {
             $Id = $Device.value[0].id
             Write-LogEntry -Message "Removing session host '$Name' device from Intune"
-            Write-LogEntry -Message "Device ID: $Id" -Level Verbose
+            Write-LogEntry -Message "Device ID: $Id" -Level Trace
             
             Invoke-GraphApiWithRetry `
                 -GraphEndpoint $GraphEndpoint `
@@ -2295,12 +2280,15 @@ function Remove-ExpiredShutdownVMs {
     
     Write-LogEntry -Message "Checking for shutdown VMs exceeding retention period of $ShutdownRetentionDays days"
     
-    # Get all VMs in the resource group with the shutdown timestamp tag
-    $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/resources?`$filter=resourceType eq 'Microsoft.Compute/virtualMachines' and tagName eq '$TagShutdownTimestamp'&api-version=2021-04-01"
-    $shutdownVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+    # Get all VMs in the resource group
+    $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/resources?`$filter=resourceType eq 'Microsoft.Compute/virtualMachines'&api-version=2021-04-01"
+    $allVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+    
+    # Filter to VMs with the shutdown timestamp tag
+    $shutdownVMs = $allVMs | Where-Object { $_.tags -and $_.tags.PSObject.Properties.Name -contains $TagShutdownTimestamp }
     
     if (-not $shutdownVMs -or $shutdownVMs.Count -eq 0) {
-        Write-LogEntry -Message "No shutdown VMs found with retention tag" -Level Verbose
+        Write-LogEntry -Message "No shutdown VMs found with retention tag" -Level Trace
         return [PSCustomObject]@{
             CleanedUpCount = 0
             RetainedCount  = 0
@@ -2329,14 +2317,14 @@ function Remove-ExpiredShutdownVMs {
             $shutdownTime = [DateTime]::Parse($shutdownTimestampString, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
             $age = ($currentTime - $shutdownTime).TotalDays
             
-            Write-LogEntry -Message "VM $vmName has been shutdown for $([Math]::Round($age, 2)) days (retention: $ShutdownRetentionDays days)" -Level Verbose
+            Write-LogEntry -Message "VM $vmName has been shutdown for $([Math]::Round($age, 2)) days (retention: $ShutdownRetentionDays days)" -Level Trace
             
             if ($age -ge $ShutdownRetentionDays) {
                 Write-LogEntry -Message "VM $vmName has exceeded retention period - deleting..."
                 
                 try {
                     # Remove from host pool first
-                    Write-LogEntry -Message "Removing session host from host pool $HostPoolName" -Level Verbose
+                    Write-LogEntry -Message "Removing session host from host pool $HostPoolName" -Level Trace
                     # Construct FQDN (session host name in pool is vmName.domain)
                     # Query the host pool to find the matching session host
                     $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts?api-version=2024-04-03"
@@ -2346,20 +2334,20 @@ function Remove-ExpiredShutdownVMs {
                     
                     if ($matchingHost) {
                         $sessionHostFQDN = $matchingHost.name.Split('/')[-1]
-                        Write-LogEntry -Message "Found session host in pool: $sessionHostFQDN" -Level Verbose
+                        Write-LogEntry -Message "Found session host in pool: $sessionHostFQDN" -Level Trace
                         $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$sessionHostFQDN`?api-version=2024-04-03"
                         [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri)
-                        Write-LogEntry -Message "Removed $vmName from host pool" -Level Verbose
+                        Write-LogEntry -Message "Removed $vmName from host pool" -Level Trace
                     }
                     else {
-                        Write-LogEntry -Message "Session host $vmName not found in host pool (may have been manually removed)" -Level Verbose
+                        Write-LogEntry -Message "Session host $vmName not found in host pool (may have been manually removed)" -Level Trace
                     }
                     
                     # Remove from identity directories
                     Remove-DeviceFromDirectories -DeviceName $vmName -GraphToken $GraphToken -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -ClientId $ClientId
                     
                     # Delete the VM
-                    Write-LogEntry -Message "Deleting VM: $vmId" -Level Verbose
+                    Write-LogEntry -Message "Deleting VM: $vmId" -Level Trace
                     $Uri = "$ResourceManagerUri$vmId`?forceDeletion=true&api-version=2024-07-01"
                     [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'DELETE' -Uri $Uri)
                     
@@ -2372,7 +2360,7 @@ function Remove-ExpiredShutdownVMs {
             }
             else {
                 $remainingDays = [Math]::Round($ShutdownRetentionDays - $age, 1)
-                Write-LogEntry -Message "VM $vmName will be retained for $remainingDays more day(s)" -Level Verbose
+                Write-LogEntry -Message "VM $vmName will be retained for $remainingDays more day(s)" -Level Trace
                 $retainedCount++
             }
         }
@@ -2385,7 +2373,7 @@ function Remove-ExpiredShutdownVMs {
         Write-LogEntry -Message "Cleanup complete: Deleted $cleanedUpCount expired shutdown VM(s), retained $retainedCount VM(s)"
     }
     else {
-        Write-LogEntry -Message "No shutdown VMs exceeded retention period" -Level Verbose
+        Write-LogEntry -Message "No shutdown VMs exceeded retention period" -Level Trace
     }
     
     return [PSCustomObject]@{
@@ -2530,22 +2518,27 @@ function Update-HostPoolStatus {
     )
     
     try {
-        # Calculate metrics
+        # Calculate metrics using the same math as the METRICS log
         $totalHosts = $SessionHosts.Count
-        $upToDateHosts = ($SessionHosts | Where-Object { -not $_.NeedsUpdate }).Count
         $drainingHosts = ($SessionHosts | Where-Object { -not $_.AllowNewSession }).Count
+        
+        # Up-to-date hosts = Total hosts - Hosts that need replacement
+        # HostsToReplace already represents hosts with old images that need updating
+        # Running deployments are new hosts not yet in the pool, so not counted in totalHosts
+        $upToDateHosts = $totalHosts - $HostsToReplace
         
         # Count shutdown hosts (VMs with shutdown timestamp tag)
         $shutdownHosts = 0
         try {
             $vmSubscriptionId = Read-FunctionAppSetting VirtualMachinesSubscriptionId
             $vmResourceGroupName = Read-FunctionAppSetting VirtualMachinesResourceGroupName
-            $Uri = "$ResourceManagerUri/subscriptions/$vmSubscriptionId/resourceGroups/$vmResourceGroupName/resources?`$filter=resourceType eq 'Microsoft.Compute/virtualMachines' and tagName eq '$TagShutdownTimestamp'&api-version=2021-04-01"
-            $shutdownVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+            $Uri = "$ResourceManagerUri/subscriptions/$vmSubscriptionId/resourceGroups/$vmResourceGroupName/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
+            $allVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+            $shutdownVMs = $allVMs | Where-Object { $_.tags -and $_.tags.PSObject.Properties.Name -contains $TagShutdownTimestamp }
             $shutdownHosts = if ($shutdownVMs) { $shutdownVMs.Count } else { 0 }
         }
         catch {
-            Write-LogEntry -Message "Could not query shutdown hosts: $($_.Exception.Message)" -Level Verbose
+            Write-LogEntry -Message "Could not query shutdown hosts: $($_.Exception.Message)" -Level Trace
         }
         
         # Determine status
@@ -2582,7 +2575,7 @@ function Update-HostPoolStatus {
         
         $statusValue = $statusParts -join " | "
         
-        Write-LogEntry -Message "Updating host pool status tag: $statusValue" -Level Verbose
+        Write-LogEntry -Message "Updating host pool status tag: $statusValue" -Level Trace
         
         # Update host pool tags
         $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"

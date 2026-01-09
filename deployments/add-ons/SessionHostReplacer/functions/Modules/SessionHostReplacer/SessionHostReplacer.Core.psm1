@@ -20,6 +20,78 @@ $script:HostPoolNameForLogging = $null
 
 #Region Helper Functions
 
+function ConvertTo-CaseInsensitiveHashtable {
+    <#
+    .SYNOPSIS
+        Converts objects to case-insensitive hashtables.
+    .DESCRIPTION
+        Converts hashtables, PSCustomObjects, OrderedDictionaries, and JSON strings to case-insensitive hashtables.
+    .PARAMETER InputObject
+        The object to convert.
+    .EXAMPLE
+        $params = @{Name='Test'; Value='123'} | ConvertTo-CaseInsensitiveHashtable
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        $InputObject
+    )
+    
+    process {
+        if ($null -eq $InputObject) {
+            return $null
+        }
+        
+        # If already a hashtable, convert to case-insensitive
+        if ($InputObject -is [hashtable]) {
+            $ciHashtable = New-Object 'System.Collections.Hashtable' -ArgumentList ([System.StringComparer]::OrdinalIgnoreCase)
+            foreach ($key in $InputObject.Keys) {
+                $value = $InputObject[$key]
+                # Recursively convert nested hashtables
+                if ($value -is [hashtable] -or $value -is [PSCustomObject]) {
+                    $ciHashtable[$key] = ConvertTo-CaseInsensitiveHashtable -InputObject $value
+                }
+                else {
+                    $ciHashtable[$key] = $value
+                }
+            }
+            return $ciHashtable
+        }
+        
+        # If PSCustomObject or OrderedDictionary, convert to case-insensitive hashtable
+        if ($InputObject -is [PSCustomObject] -or $InputObject -is [System.Collections.Specialized.OrderedDictionary]) {
+            $ciHashtable = New-Object 'System.Collections.Hashtable' -ArgumentList ([System.StringComparer]::OrdinalIgnoreCase)
+            foreach ($property in $InputObject.PSObject.Properties) {
+                $value = $property.Value
+                # Recursively convert nested objects
+                if ($value -is [hashtable] -or $value -is [PSCustomObject]) {
+                    $ciHashtable[$property.Name] = ConvertTo-CaseInsensitiveHashtable -InputObject $value
+                }
+                else {
+                    $ciHashtable[$property.Name] = $value
+                }
+            }
+            return $ciHashtable
+        }
+        
+        # If JSON string, parse and convert
+        if ($InputObject -is [string]) {
+            try {
+                $parsed = $InputObject | ConvertFrom-Json
+                return ConvertTo-CaseInsensitiveHashtable -InputObject $parsed
+            }
+            catch {
+                Write-Error "Unable to parse string as JSON: $_"
+                return $null
+            }
+        }
+        
+        # Return as-is if cannot convert
+        Write-Warning "InputObject type [$($InputObject.GetType().Name)] cannot be converted to case-insensitive hashtable"
+        return $InputObject
+    }
+}
+
 function Get-ResourceManagerUri {
     <#
     .SYNOPSIS
@@ -229,13 +301,13 @@ function Set-HostPoolNameForLogging {
 function Write-LogEntry {
     <#
     .SYNOPSIS
-        Enhanced logging function with timestamp and level support.
+        Enhanced logging function with level support.
     .DESCRIPTION
-        Writes detailed log messages with timestamps and severity levels.
+        Writes detailed log messages function app levels.
     .PARAMETER Message
         The message to log.
     .PARAMETER Level
-        The severity level (Information, Warning, Error, Host).
+        The function app monitoring level (Trace, Debug, Information, Warning, Error, Critical).
     .PARAMETER StringValues
         Array of values to format into the message using -f operator.
     .EXAMPLE
@@ -247,8 +319,8 @@ function Write-LogEntry {
         [string] $Message,
         
         [Parameter(Mandatory = $false)]
-        [ValidateSet('Warning', 'Error', 'Host', 'Verbose')]
-        [string] $Level = 'Host',
+        [ValidateSet('Trace', 'Debug', 'Information', 'Warning', 'Error', 'Critical')]
+        [string] $Level = 'Information',
         
         [Parameter(Mandatory = $false)]
         [object[]] $StringValues
@@ -276,17 +348,20 @@ function Write-LogEntry {
     
     # Output based on level
     switch ($Level) {
+        'Trace' {
+            Write-Verbose $output
+        }
+        'Debug' {
+            Write-Debug $output
+        }
         'Error' {
             Write-Error $output
         }
         'Warning' {
             Write-Warning $output
         }
-        'Host' {
-            Write-Host $output
-        }
-        'Verbose' {
-            Write-Verbose $output
+        'Information' {
+            Write-Information $output
         }
     }
 }
@@ -703,4 +778,4 @@ function Invoke-GraphApiWithRetry {
 #EndRegion REST API Helper Functions
 
 # Export functions
-Export-ModuleMember -Function Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Set-HostPoolNameForLogging, Write-LogEntry, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry
+Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Set-HostPoolNameForLogging, Write-LogEntry, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry

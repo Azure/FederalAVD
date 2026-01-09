@@ -41,7 +41,7 @@
         'ConvertTo-CaseInsensitiveHashtable'
         'Deploy-SessionHosts'
         'Get-LatestImageVersion'
-        'Get-HostPoolDecisions'
+        'Get-SessionHostReplacementPlan'
         'Get-Deployments'
         'Get-SessionHosts'
         'Get-TemplateSpecVersionResourceId'

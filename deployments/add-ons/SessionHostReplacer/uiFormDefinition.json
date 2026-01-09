@@ -667,6 +667,56 @@
 									}
 								},
 								{
+									"name": "shutdownRetentionHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
+									"options": {
+										"text": "<u>Shutdown Retention for Rollback</u>"
+									}
+								},
+								{
+									"name": "shutdownRetentionInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
+									"options": {
+										"text": "Enable shutdown retention to deallocate replaced session hosts instead of deleting them immediately. VMs remain in the host pool (in drain mode) for a configurable period, allowing you to power them on for rollback if issues are discovered. After the retention period expires, VMs are automatically removed from the host pool and deleted.",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "enableShutdownRetention",
+									"type": "Microsoft.Common.CheckBox",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
+									"label": "Enable Shutdown Retention",
+									"toolTip": "Deallocate replaced session hosts instead of deleting them immediately, keeping them available for rollback.",
+									"defaultValue": false
+								},
+								{
+									"name": "shutdownRetentionDays",
+									"type": "Microsoft.Common.Slider",
+									"visible": "[and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention)]",
+									"label": "Shutdown Retention Period (Days)",
+									"toolTip": "Number of days to retain shutdown session hosts before automatic deletion. VMs incur only storage costs while deallocated.",
+									"min": 1,
+									"max": 7,
+									"defaultValue": 3,
+									"showStepMarkers": true,
+									"constraints": {
+										"required": false
+									}
+								},
+								{
+									"name": "tagShutdownTimestamp",
+									"type": "Microsoft.Common.TextBox",
+									"visible": "[and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention)]",
+									"label": "Shutdown Timestamp Tag Name",
+									"toolTip": "Tag name used to track when a session host was shutdown for retention period calculation.",
+									"defaultValue": "AutoReplaceShutdownTimestamp",
+									"constraints": {
+										"required": false
+									}
+								},
+								{
 									"name": "progressiveScaleUpHeader",
 									"type": "Microsoft.Common.TextBlock",
 									"options": {
@@ -2882,6 +2932,9 @@
 				"minimumCapacityPercentage": "[steps('functionApp').executionSettings.minimumCapacityPercentage]",
 				"maxDeletionsPerCycle": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst'), steps('functionApp').executionSettings.maxDeletionsPerCycle, 5)]",
 				"minimumHostIndex": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.minimumHostIndex, 1)]",
+				"enableShutdownRetention": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention, false)]",
+				"shutdownRetentionDays": "[if(and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention), steps('functionApp').executionSettings.shutdownRetentionDays, 3)]",
+				"tagShutdownTimestamp": "[if(and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention), steps('functionApp').executionSettings.tagShutdownTimestamp, 'AutoReplaceShutdownTimestamp')]",
 				"targetSessionHostCount": "[steps('functionApp').executionSettings.targetSessionHostCount]",
 				"maxDeploymentBatchSize": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.maxDeploymentBatchSize, 100)]",
 				"fixSessionHostTags": "[steps('functionApp').executionSettings.fixSessionHostTags]",

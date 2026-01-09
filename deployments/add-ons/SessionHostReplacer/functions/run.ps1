@@ -12,6 +12,7 @@ Set-HostPoolNameForLogging -HostPoolName (Read-FunctionAppSetting HostPoolName)
 Write-LogEntry -Message "SessionHostReplacer function started at {0}" -StringValues (Get-Date -AsUTC -Format 'o')
 
 # Log configuration settings for workbook visibility
+$enableShutdownRetention = Read-FunctionAppSetting EnableShutdownRetention
 $replacementMode = Read-FunctionAppSetting ReplacementMode
 $minimumDrainMinutes = Read-FunctionAppSetting MinimumDrainMinutes
 $drainGracePeriodHours = Read-FunctionAppSetting DrainGracePeriodHours
@@ -22,9 +23,29 @@ $initialDeploymentPercentage = Read-FunctionAppSetting InitialDeploymentPercenta
 $scaleUpIncrementPercentage = Read-FunctionAppSetting ScaleUpIncrementPercentage
 $successfulRunsBeforeScaleUp = Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp
 $maxDeploymentBatchSize = Read-FunctionAppSetting MaxDeploymentBatchSize
+$minimumHostIndex = Read-FunctionAppSetting MinimumHostIndex
+$shutdownRetentionDays = Read-FunctionAppSetting ShutdownRetentionDays
 $targetSessionHostCount = Read-FunctionAppSetting TargetSessionHostCount
 
-Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | TargetSessionHostCount: {10}" -StringValues $replacementMode, $minimumDrainMinutes, $drainGracePeriodHours, $minimumCapacityPercentage, $maxDeletionsPerCycle, $enableProgressiveScaleUp, $initialDeploymentPercentage, $scaleUpIncrementPercentage, $successfulRunsBeforeScaleUp, $maxDeploymentBatchSize, $targetSessionHostCount
+# Build settings log with N/A for non-applicable values based on replacement mode
+$settingsLog = @{
+    ReplacementMode = $replacementMode
+    MinimumDrainMinutes = $minimumDrainMinutes
+    DrainGracePeriodHours = $drainGracePeriodHours
+    MinimumCapacityPercent = if ($replacementMode -eq 'DeleteFirst') { $minimumCapacityPercentage } else { 'N/A' }
+    MaxDeletionsPerCycle = if ($replacementMode -eq 'DeleteFirst') { $maxDeletionsPerCycle } else { 'N/A' }
+    EnableProgressiveScaleUp = $enableProgressiveScaleUp
+    InitialDeploymentPercent = if($enableProgressiveScaleUp) { $initialDeploymentPercentage } else { 'N/A' }
+    ScaleUpIncrementPercent = if($enableProgressiveScaleUp) { $scaleUpIncrementPercentage } else { 'N/A' }
+    SuccessfulRunsBeforeScaleUp = if($enableProgressiveScaleUp) { $successfulRunsBeforeScaleUp } else { 'N/A' }
+    MaxDeploymentBatchSize = if ($replacementMode -eq 'SideBySide') { $maxDeploymentBatchSize } else { 'N/A' }
+    MinimumHostIndex = if ($replacementMode -eq 'SideBySide') { $minimumHostIndex } else { 'N/A' }
+    EnableShutdownRetention = if ($replacementMode -eq 'SideBySide') { $enableShutdownRetention } else { 'N/A' }
+    ShutdownRetentionDays = if ($replacementMode -eq 'SideBySide' -and $enableShutdownRetention -eq 'True') { $shutdownRetentionDays } else { 'N/A' }
+    TargetSessionHostCount = if($targetSessionHostCount -eq 0) { 'Auto' } else { $targetSessionHostCount }
+}
+
+Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | MinimumHostIndex: {10} | EnableShutdownRetention: {11} | ShutdownRetentionDays: {12} | TargetSessionHostCount: {13}" -StringValues $settingsLog.ReplacementMode, $settingsLog.MinimumDrainMinutes, $settingsLog.DrainGracePeriodHours, $settingsLog.MinimumCapacityPercent, $settingsLog.MaxDeletionsPerCycle, $settingsLog.EnableProgressiveScaleUp, $settingsLog.InitialDeploymentPercent, $settingsLog.ScaleUpIncrementPercent, $settingsLog.SuccessfulRunsBeforeScaleUp, $settingsLog.MaxDeploymentBatchSize, $settingsLog.MinimumHostIndex, $settingsLog.EnableShutdownRetention, $settingsLog.ShutdownRetentionDays, $settingsLog.TargetSessionHostCount
 
 # Acquire ARM access token
 try {
@@ -44,7 +65,7 @@ $sessionHosts = Get-SessionHosts -ARMToken $ARMToken
 Write-LogEntry -Message "Found {0} session hosts" -StringValues $sessionHosts.Count
 
 # Check for and cleanup expired shutdown VMs if shutdown retention is enabled
-$enableShutdownRetention = Read-FunctionAppSetting EnableShutdownRetention
+
 if ($enableShutdownRetention) {
     Write-LogEntry -Message "Shutdown retention is enabled - checking for expired shutdown VMs"
     
@@ -92,7 +113,7 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
                 
                 # Clear pending host mappings on successful deployment (no longer needed)
                 if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
-                    Write-LogEntry -Message "Clearing pending host mappings after successful deployment" -Level Verbose
+                    Write-LogEntry -Message "Clearing pending host mappings after successful deployment" -Level Trace
                     $deploymentState.PendingHostMappings = '{}'
                 }
                 
@@ -145,7 +166,7 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
                 
                 # Clear pending host mappings (starting fresh)
                 if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
-                    Write-LogEntry -Message "Clearing pending host mappings after failed deployment cleanup" -Level Verbose
+                    Write-LogEntry -Message "Clearing pending host mappings after failed deployment cleanup" -Level Trace
                     $deploymentState.PendingHostMappings = '{}'
                 }
                 
@@ -205,27 +226,27 @@ else {
 }
 
 # Get number session hosts to deploy
-$hostPoolDecisions = Get-HostPoolDecisions -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback
+$hostPoolDecisions = Get-SessionHostReplacementPlan -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback
 
 # Check if we're starting a new update cycle and reset progressive scale-up if needed
 if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
     $deploymentState = Get-DeploymentState
-    $currentImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { "N/A" }
+    $currentImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { 'N/A' }
     $totalToReplace = if ($hostPoolDecisions.TotalSessionHostsToReplace) { $hostPoolDecisions.TotalSessionHostsToReplace } else { 0 }
     
     # Detect if we're starting a new update cycle
     $isNewCycle = $false
-    $resetReason = ""
+    $resetReason = ''
     
     # Log current state for debugging
-    Write-LogEntry -Message "New cycle detection - Current state: ImageVersion=$currentImageVersion, ToReplace=$totalToReplace, RunningDeployments=$($runningDeployments.Count)" -Level Verbose
-    Write-LogEntry -Message "New cycle detection - Previous state: LastImageVersion=$($deploymentState.LastImageVersion), LastTotalToReplace=$($deploymentState.LastTotalToReplace)" -Level Verbose
+    Write-LogEntry -Message "New cycle detection - Current state: ImageVersion=$currentImageVersion, ToReplace=$totalToReplace, RunningDeployments=$($runningDeployments.Count)" -Level Trace
+    Write-LogEntry -Message "New cycle detection - Previous state: LastImageVersion=$($deploymentState.LastImageVersion), LastTotalToReplace=$($deploymentState.LastTotalToReplace)" -Level Trace
     
     # Check if image version changed (only if we have a previous version to compare against)
     if ($deploymentState.LastImageVersion -and $deploymentState.LastImageVersion -ne $currentImageVersion -and $currentImageVersion -ne "N/A") {
         $isNewCycle = $true
         $resetReason = "Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion"
-        Write-LogEntry -Message "New cycle detection - Image version changed detected" -Level Verbose
+        Write-LogEntry -Message "New cycle detection - Image version changed detected" -Level Trace
     }
     
     # Check if we completed the previous cycle (no hosts to replace) and now have new hosts to replace
@@ -236,7 +257,7 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
     # - Must have actually had a previous cycle (LastImageVersion exists)
     $hostsInDrain = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
     
-    Write-LogEntry -Message "New cycle detection - Cycle completion check: LastToReplace=$($deploymentState.LastTotalToReplace), CurrentToReplace=$totalToReplace, Deploying=$($runningDeployments.Count), InDrain=$hostsInDrain, HasPrevious=$($null -ne $deploymentState.LastImageVersion)" -Level Verbose
+    Write-LogEntry -Message "New cycle detection - Cycle completion check: LastToReplace=$($deploymentState.LastTotalToReplace), CurrentToReplace=$totalToReplace, Deploying=$($runningDeployments.Count), InDrain=$hostsInDrain, HasPrevious=$($null -ne $deploymentState.LastImageVersion)" -Level Trace
     
     if ($deploymentState.LastTotalToReplace -eq 0 -and 
         $totalToReplace -gt 0 -and 
@@ -245,7 +266,6 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
         $deploymentState.LastImageVersion) {
         $isNewCycle = $true
         $resetReason = "Starting new update cycle with $totalToReplace hosts to replace (previous cycle was complete: 0 to replace, 0 deploying, 0 draining)"
-        Write-LogEntry -Message "New cycle detection - Cycle completion trigger: previous cycle complete, new hosts need replacement" -Level Verbose
     }
     
     # Reset progressive scale-up for new cycle
@@ -300,7 +320,7 @@ if ($replacementMode -eq 'DeleteFirst') {
         
         # Capture the names and dedicated host properties of hosts being deleted so we can reuse them
         $deletedSessionHostNames = $hostPoolDecisions.SessionHostsPendingDelete.SessionHostName
-        Write-LogEntry -Message "Deleted host names will be available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Verbose
+        Write-LogEntry -Message "Deleted host names will be available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Trace
         
         # Build mapping of hostname to dedicated host properties for reuse (merge with existing from previous run)
         foreach ($sessionHost in $hostPoolDecisions.SessionHostsPendingDelete) {
@@ -312,7 +332,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                         HostGroupId = $sessionHost.HostGroupId
                         Zones       = $sessionHost.Zones
                     }
-                    Write-LogEntry -Message "Captured dedicated host properties for {0}: HostId={1}, HostGroupId={2}, Zones={3}" -StringValues $sessionHost.SessionHostName, $sessionHost.HostId, $sessionHost.HostGroupId, ($sessionHost.Zones -join ', ') -Level Verbose
+                    Write-LogEntry -Message "Captured dedicated host properties for {0}: HostId={1}, HostGroupId={2}, Zones={3}" -StringValues $sessionHost.SessionHostName, $sessionHost.HostId, $sessionHost.HostGroupId, ($sessionHost.Zones -join ', ') -Level Trace
                 }
             }
         }
@@ -322,7 +342,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             $deploymentState = Get-DeploymentState
             if ($hostPropertyMapping.Count -gt 0) {
                 $deploymentState.PendingHostMappings = ($hostPropertyMapping | ConvertTo-Json -Compress)
-                Write-LogEntry -Message "Saved {0} host property mapping(s) to deployment state before deletion" -StringValues $hostPropertyMapping.Count -Level Verbose
+                Write-LogEntry -Message "Saved {0} host property mapping(s) to deployment state before deletion" -StringValues $hostPropertyMapping.Count -Level Trace
             }
             else {
                 $deploymentState.PendingHostMappings = '{}'
@@ -366,7 +386,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                 Write-LogEntry -Message "  - {0}: {1}" -StringValues $failure.SessionHostName, $failure.Reason -Level Error
             }
             Write-LogEntry -Message "Delete-First mode cannot proceed with deployments - hostname conflicts will occur if we try to reuse failed deletion names" -Level Error
-            Write-LogEntry -Message "Successful deletions: {0}" -StringValues ($deletionResults.SuccessfulDeletions -join ', ') -Level Verbose
+            Write-LogEntry -Message "Successful deletions: {0}" -StringValues ($deletionResults.SuccessfulDeletions -join ', ') -Level Trace
             throw "Session host deletion failures in Delete-First mode prevent safe hostname reuse"
         }
         
@@ -405,7 +425,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             while ((Get-Date) -lt $timeoutTime -and $vmsToVerify.Count -gt 0) {
                 $checkCount++
                 $elapsedSeconds = [Math]::Round(((Get-Date) - $startTime).TotalSeconds)
-                Write-LogEntry -Message "Verification check {0} at {1}s: Checking {2} remaining VM(s)..." -StringValues $checkCount, $elapsedSeconds, $vmsToVerify.Count -Level Verbose
+                Write-LogEntry -Message "Verification check {0} at {1}s: Checking {2} remaining VM(s)..." -StringValues $checkCount, $elapsedSeconds, $vmsToVerify.Count -Level Trace
                 
                 $stillExist = @()
                 foreach ($vm in $vmsToVerify) {
@@ -413,7 +433,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                         $vmCheck = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $vm.Uri -ErrorAction SilentlyContinue
                         
                         if ($null -eq $vmCheck -or $vmCheck.error.code -eq 'ResourceNotFound') {
-                            Write-LogEntry -Message "VM {0} deletion confirmed" -StringValues $vm.Name -Level Verbose
+                            Write-LogEntry -Message "VM {0} deletion confirmed" -StringValues $vm.Name -Level Trace
                         }
                         else {
                             $stillExist += $vm
@@ -421,14 +441,14 @@ if ($replacementMode -eq 'DeleteFirst') {
                     }
                     catch {
                         # Exception likely means VM not found, which is what we want
-                        Write-LogEntry -Message "VM {0} deletion confirmed" -StringValues $vm.Name -Level Verbose
+                        Write-LogEntry -Message "VM {0} deletion confirmed" -StringValues $vm.Name -Level Trace
                     }
                 }
                 
                 $vmsToVerify = $stillExist
                 
                 if ($vmsToVerify.Count -gt 0 -and (Get-Date) -lt $timeoutTime) {
-                    Write-LogEntry -Message "{0} VM(s) still exist, waiting {1} seconds before next check..." -StringValues $vmsToVerify.Count, $pollIntervalSeconds -Level Verbose
+                    Write-LogEntry -Message "{0} VM(s) still exist, waiting {1} seconds before next check..." -StringValues $vmsToVerify.Count, $pollIntervalSeconds -Level Trace
                     Start-Sleep -Seconds $pollIntervalSeconds
                 }
             }
@@ -468,8 +488,8 @@ if ($replacementMode -eq 'DeleteFirst') {
         $currentExistingNames = (@($sessionHosts.SessionHostName) + @($hostPoolDecisions.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
         $existingSessionHostNames = $currentExistingNames | Where-Object { $_ -notin $deletedSessionHostNames }
         
-        Write-LogEntry -Message "Excluded {0} deleted host name(s) from existing list to allow reuse" -StringValues $deletedSessionHostNames.Count -Level Verbose
-        Write-LogEntry -Message "Available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Verbose
+        Write-LogEntry -Message "Excluded {0} deleted host name(s) from existing list to allow reuse" -StringValues $deletedSessionHostNames.Count -Level Trace
+        Write-LogEntry -Message "Available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Trace
         
         try {
             $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames -PreferredSessionHostNames $deletedSessionHostNames -PreferredHostProperties $hostPropertyMapping
@@ -566,7 +586,7 @@ if ($replacementMode -eq 'DeleteFirst') {
 
     # STEP 2: Delete session hosts second
     if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisions.SessionHostsPendingDelete.Count -gt 0) {
-        Write-LogEntry -Message "We will decommission {0} session hosts from this list: {1}" -StringValues $hostPoolDecisions.SessionHostsPendingDelete.Count, ($hostPoolDecisions.SessionHostsPendingDelete.SessionHostName -join ',') -Level Verbose
+        Write-LogEntry -Message "We will decommission {0} session hosts from this list: {1}" -StringValues $hostPoolDecisions.SessionHostsPendingDelete.Count, ($hostPoolDecisions.SessionHostsPendingDelete.SessionHostName -join ',') -Level Trace
         
         # Decommission session hosts
         $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
@@ -713,7 +733,7 @@ if ($cycleComplete) {
                         Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
                         $hostsWithExclusionTag++
                         
-                        Write-LogEntry -Message "Successfully removed scaling exclusion tag from $($sessionHost.SessionHostName)" -Level Verbose
+                        Write-LogEntry -Message "Successfully removed scaling exclusion tag from $($sessionHost.SessionHostName)" -Level Trace
                     }
                     else {
                         Write-LogEntry -Message "Skipping removal of scaling exclusion tag from $($sessionHost.SessionHostName) - appears to be admin-set (value: '$tagValue')"
@@ -729,11 +749,11 @@ if ($cycleComplete) {
             Write-LogEntry -Message "Removed scaling exclusion tags from {0} session host(s)" -StringValues $hostsWithExclusionTag
         }
         else {
-            Write-LogEntry -Message "No scaling exclusion tags found to remove" -Level Verbose
+            Write-LogEntry -Message "No scaling exclusion tags found to remove" -Level Trace
         }
     }
     else {
-        Write-LogEntry -Message "No scaling exclusion tag configured - skipping tag cleanup" -Level Verbose
+        Write-LogEntry -Message "No scaling exclusion tag configured - skipping tag cleanup" -Level Trace
     }
 }
 
