@@ -2132,7 +2132,7 @@
 									"type": "Microsoft.Common.TextBox",
 									"label": "AVD Agent DSC Package",
 									"placeholder": "",
-									"defaultValue": "Configuration_1.0.03211.1002.zip",
+									"defaultValue": "Configuration_1.0.03266.1110.zip",
 									"toolTip": "Provide the full URL (or just the file name to use the default storage account for the environment) to the DSC Configuration Package containing the AVD Agents and code to register the virtual machines as session hosts in the environment.",
 									"constraints": {
 										"required": true,

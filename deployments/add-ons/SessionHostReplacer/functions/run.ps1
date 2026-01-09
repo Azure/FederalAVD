@@ -60,8 +60,19 @@ catch {
     throw
 }
 
-# Get session hosts and update tags if needed.
-$sessionHosts = Get-SessionHosts -ARMToken $ARMToken
+# Fetch ALL VMs in the resource group once to avoid redundant queries throughout the run
+# Note: $expand=instanceView requires filters and isn't supported on simple LIST operations
+# Power state will be queried lazily for deletion candidates only
+Write-LogEntry -Message "Fetching all VMs in resource group for caching" -Level Trace
+$virtualMachinesSubscriptionId = Read-FunctionAppSetting VirtualMachinesSubscriptionId
+$virtualMachinesResourceGroupName = Read-FunctionAppSetting VirtualMachinesResourceGroupName
+$resourceManagerUri = Get-ResourceManagerUri
+$Uri = "$resourceManagerUri/subscriptions/$virtualMachinesSubscriptionId/resourceGroups/$virtualMachinesResourceGroupName/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
+$cachedVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+Write-LogEntry -Message "Cached {0} VMs from resource group" -StringValues $cachedVMs.Count -Level Trace
+
+# Get session hosts and update tags if needed (pass cached VMs)
+$sessionHosts = Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs
 Write-LogEntry -Message "Found {0} session hosts" -StringValues $sessionHosts.Count
 
 # Check for and cleanup expired shutdown VMs if shutdown retention is enabled
@@ -89,7 +100,7 @@ if ($enableShutdownRetention) {
     }
     
     # Cleanup expired shutdown VMs
-    $cleanupResults = Remove-ExpiredShutdownVMs -ARMToken $ARMToken -GraphToken $GraphToken
+    $cleanupResults = Remove-ExpiredShutdownVMs -ARMToken $ARMToken -GraphToken $GraphToken -CachedVMs $cachedVMs
     
     if ($cleanupResults.CleanedUpCount -gt 0) {
         Write-LogEntry -Message "Cleaned up {0} expired shutdown VM(s)" -StringValues $cleanupResults.CleanedUpCount
@@ -157,7 +168,7 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
                 })
                 
                 try {
-                    Remove-FailedDeploymentArtifacts -ARMToken $ARMToken -GraphToken $GraphToken -FailedDeployments $failedDeploymentInfo -RegisteredSessionHostNames $sessionHosts.SessionHostName -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
+                    Remove-FailedDeploymentArtifacts -ARMToken $ARMToken -GraphToken $GraphToken -FailedDeployments $failedDeploymentInfo -RegisteredSessionHostNames $sessionHosts.SessionHostName -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice -CachedVMs $cachedVMs
                     Write-LogEntry -Message "Completed cleanup of failed deployment artifacts"
                 }
                 catch {
@@ -205,7 +216,7 @@ Write-LogEntry -Message "Found {0} running deployments and {1} failed deployment
 # Clean up failed deployments and orphaned VMs
 if ($failedDeployments.Count -gt 0) {
     Write-LogEntry -Message "Processing {0} failed deployments for cleanup" -StringValues $failedDeployments.Count
-    Remove-FailedDeploymentArtifacts -ARMToken $ARMToken -FailedDeployments $failedDeployments -RegisteredSessionHostNames $sessionHostsFiltered.SessionHostName
+    Remove-FailedDeploymentArtifacts -ARMToken $ARMToken -FailedDeployments $failedDeployments -RegisteredSessionHostNames $sessionHostsFiltered.SessionHostName -CachedVMs $cachedVMs
 }
 
 # Load session host parameters
@@ -226,13 +237,13 @@ else {
 }
 
 # Get number session hosts to deploy
-$hostPoolDecisions = Get-SessionHostReplacementPlan -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback
+$hostPoolReplacementPlan = Get-SessionHostReplacementPlan -ARMToken $ARMToken -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback
 
 # Check if we're starting a new update cycle and reset progressive scale-up if needed
 if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
     $deploymentState = Get-DeploymentState
     $currentImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { 'N/A' }
-    $totalToReplace = if ($hostPoolDecisions.TotalSessionHostsToReplace) { $hostPoolDecisions.TotalSessionHostsToReplace } else { 0 }
+    $totalToReplace = if ($hostPoolReplacementPlan.TotalSessionHostsToReplace) { $hostPoolReplacementPlan.TotalSessionHostsToReplace } else { 0 }
     
     # Detect if we're starting a new update cycle
     $isNewCycle = $false
@@ -315,15 +326,15 @@ if ($replacementMode -eq 'DeleteFirst') {
         }
     }
     
-    if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisions.SessionHostsPendingDelete.Count -gt 0) {
-        Write-LogEntry -Message "We can decommission {0} session hosts from this list: {1}" -StringValues $hostPoolDecisions.SessionHostsPendingDelete.Count, ($hostPoolDecisions.SessionHostsPendingDelete.SessionHostName -join ',')
+    if ($hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
+        Write-LogEntry -Message "We can decommission {0} session hosts from this list: {1}" -StringValues $hostPoolReplacementPlan.SessionHostsPendingDelete.Count, ($hostPoolReplacementPlan.SessionHostsPendingDelete.SessionHostName -join ',')
         
         # Capture the names and dedicated host properties of hosts being deleted so we can reuse them
-        $deletedSessionHostNames = $hostPoolDecisions.SessionHostsPendingDelete.SessionHostName
+        $deletedSessionHostNames = $hostPoolReplacementPlan.SessionHostsPendingDelete.SessionHostName
         Write-LogEntry -Message "Deleted host names will be available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Trace
         
         # Build mapping of hostname to dedicated host properties for reuse (merge with existing from previous run)
-        foreach ($sessionHost in $hostPoolDecisions.SessionHostsPendingDelete) {
+        foreach ($sessionHost in $hostPoolReplacementPlan.SessionHostsPendingDelete) {
             if ($sessionHost.HostId -or $sessionHost.HostGroupId) {
                 # Only add if not already in mapping (preserve previous mappings)
                 if (-not $hostPropertyMapping.ContainsKey($sessionHost.SessionHostName)) {
@@ -377,7 +388,7 @@ if ($replacementMode -eq 'DeleteFirst') {
         }
         
         # Perform deletion
-        $deletionResults = Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
+        $deletionResults = Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolReplacementPlan.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
         
         # Check deletion results
         if ($deletionResults.FailedDeletions.Count -gt 0) {
@@ -460,12 +471,6 @@ if ($replacementMode -eq 'DeleteFirst') {
             else {
                 Write-LogEntry -Message "All deleted VMs confirmed removed from Azure"
             }
-            
-            # Wait for Entra ID replication after device deletions
-            if ($removeEntraDevice -or $removeIntuneDevice) {
-                Write-LogEntry -Message "Waiting 1 minute for Entra ID to replicate device deletions..."
-                Start-Sleep -Seconds 60
-            }
         }
         
         # Only use successfully deleted names for reuse
@@ -473,26 +478,26 @@ if ($replacementMode -eq 'DeleteFirst') {
         
         # Only deploy as many hosts as were actually deleted (not planned)
         # If hosts were drained but not deleted yet, they're still taking up space
-        if ($deletionResults.SuccessfulDeletions.Count -lt $hostPoolDecisions.PossibleDeploymentsCount) {
-            Write-LogEntry -Message "Delete-First mode: Reducing deployments from {0} to {1} to match actual successful deletions (some hosts are still draining)" -StringValues $hostPoolDecisions.PossibleDeploymentsCount, $deletionResults.SuccessfulDeletions.Count -Level Warning
-            $hostPoolDecisions.PossibleDeploymentsCount = $deletionResults.SuccessfulDeletions.Count
+        if ($deletionResults.SuccessfulDeletions.Count -lt $hostPoolReplacementPlan.PossibleDeploymentsCount) {
+            Write-LogEntry -Message "Delete-First mode: Reducing deployments from {0} to {1} to match actual successful deletions (some hosts are still draining)" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount, $deletionResults.SuccessfulDeletions.Count -Level Warning
+            $hostPoolReplacementPlan.PossibleDeploymentsCount = $deletionResults.SuccessfulDeletions.Count
         }
     }
     
     # STEP 2: Deploy replacement session hosts
-    if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
-        Write-LogEntry -Message "We will deploy {0} replacement session hosts" -StringValues $hostPoolDecisions.PossibleDeploymentsCount
+    if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) {
+        Write-LogEntry -Message "We will deploy {0} replacement session hosts" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount
         
         # In DeleteFirst mode: exclude deleted host names so they can be reused
         # Calculate existing names: all current hosts + running deployments - just deleted hosts
-        $currentExistingNames = (@($sessionHosts.SessionHostName) + @($hostPoolDecisions.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
+        $currentExistingNames = (@($sessionHosts.SessionHostName) + @($hostPoolReplacementPlan.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
         $existingSessionHostNames = $currentExistingNames | Where-Object { $_ -notin $deletedSessionHostNames }
         
         Write-LogEntry -Message "Excluded {0} deleted host name(s) from existing list to allow reuse" -StringValues $deletedSessionHostNames.Count -Level Trace
         Write-LogEntry -Message "Available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Trace
         
         try {
-            $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames -PreferredSessionHostNames $deletedSessionHostNames -PreferredHostProperties $hostPropertyMapping
+            $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames -PreferredSessionHostNames $deletedSessionHostNames -PreferredHostProperties $hostPropertyMapping
             
             # Log deployment submission immediately for workbook visibility
             Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName
@@ -503,8 +508,8 @@ if ($replacementMode -eq 'DeleteFirst') {
                 # Save deployment info for checking on next run
                 $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
                 $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
-                $deploymentState.LastDeploymentNeeded = $hostPoolDecisions.PossibleDeploymentsCount
-                $deploymentState.LastDeploymentPercentage = if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) { [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolDecisions.PossibleDeploymentsCount) * 100) } else { 0 }
+                $deploymentState.LastDeploymentNeeded = $hostPoolReplacementPlan.PossibleDeploymentsCount
+                $deploymentState.LastDeploymentPercentage = if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) { [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolReplacementPlan.PossibleDeploymentsCount) * 100) } else { 0 }
                 $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'                
                 Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
                 
@@ -536,13 +541,13 @@ if ($replacementMode -eq 'DeleteFirst') {
     
     # STEP 1: Deploy new session hosts first
     $deploymentResult = $null
-    if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
-        Write-LogEntry -Message "We will deploy {0} session hosts" -StringValues $hostPoolDecisions.PossibleDeploymentsCount
+    if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) {
+        Write-LogEntry -Message "We will deploy {0} session hosts" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount
         # Deploy session hosts - use SessionHostName (hostname from FQDN) not VMName (Azure VM resource name)
-        $existingSessionHostNames = (@($sessionHosts.SessionHostName) + @($hostPoolDecisions.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
+        $existingSessionHostNames = (@($sessionHosts.SessionHostName) + @($hostPoolReplacementPlan.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
         
         try {
-            $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolDecisions.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames
+            $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames
             
             # Log deployment submission immediately for workbook visibility
             Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName
@@ -554,9 +559,9 @@ if ($replacementMode -eq 'DeleteFirst') {
                 # Save deployment info for checking on next run
                 $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
                 $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
-                $deploymentState.LastDeploymentNeeded = $hostPoolDecisions.PossibleDeploymentsCount
-                $deploymentState.LastDeploymentPercentage = if ($hostPoolDecisions.PossibleDeploymentsCount -gt 0) {
-                    [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolDecisions.PossibleDeploymentsCount) * 100)
+                $deploymentState.LastDeploymentNeeded = $hostPoolReplacementPlan.PossibleDeploymentsCount
+                $deploymentState.LastDeploymentPercentage = if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) {
+                    [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolReplacementPlan.PossibleDeploymentsCount) * 100)
                 }
                 else { 0 }
                 $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
@@ -585,8 +590,8 @@ if ($replacementMode -eq 'DeleteFirst') {
     }
 
     # STEP 2: Delete session hosts second
-    if ($hostPoolDecisions.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolDecisions.SessionHostsPendingDelete.Count -gt 0) {
-        Write-LogEntry -Message "We will decommission {0} session hosts from this list: {1}" -StringValues $hostPoolDecisions.SessionHostsPendingDelete.Count, ($hostPoolDecisions.SessionHostsPendingDelete.SessionHostName -join ',') -Level Trace
+    if ($hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
+        Write-LogEntry -Message "We will decommission {0} session hosts from this list: {1}" -StringValues $hostPoolReplacementPlan.SessionHostsPendingDelete.Count, ($hostPoolReplacementPlan.SessionHostsPendingDelete.SessionHostName -join ',') -Level Trace
         
         # Decommission session hosts
         $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
@@ -614,10 +619,10 @@ if ($replacementMode -eq 'DeleteFirst') {
         # Perform deletion and log results (SideBySide mode doesn't halt on failures since name reuse isn't critical)
         $deletionResults = $null
         If ($GraphToken) {
-            $deletionResults = Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
+            $deletionResults = Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolReplacementPlan.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
         }
         Else {
-            $deletionResults = Remove-SessionHosts -ARMToken $ARMToken -GraphToken $null -SessionHostsPendingDelete $hostPoolDecisions.SessionHostsPendingDelete -RemoveEntraDevice $false -RemoveIntuneDevice $false
+            $deletionResults = Remove-SessionHosts -ARMToken $ARMToken -GraphToken $null -SessionHostsPendingDelete $hostPoolReplacementPlan.SessionHostsPendingDelete -RemoveEntraDevice $false -RemoveIntuneDevice $false
         }
         
         # Log results (but don't halt in SideBySide mode)
@@ -638,15 +643,12 @@ if ($replacementMode -eq 'DeleteFirst') {
     }
 }
 
-# Log completion timestamp for workbook visibility
-Write-LogEntry -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o')
-
 # Log comprehensive metrics for monitoring dashboard (after all operations complete)
 $hostsInDrainMode = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
 
 # Calculate current deployment status accounting for just-submitted deployments
 $currentlyDeploying = $runningDeployments.Count
-$remainingToDeploy = $hostPoolDecisions.PossibleDeploymentsCount
+$remainingToDeploy = $hostPoolReplacementPlan.PossibleDeploymentsCount
 if ($deploymentResult) {
     # A deployment was just submitted this run, so it's now running
     $currentlyDeploying += $deploymentResult.SessionHostCount
@@ -657,11 +659,11 @@ if ($deploymentResult) {
 $metricsLog = @{
     TotalSessionHosts    = $sessionHosts.Count
     EnabledForAutomation = $sessionHostsFiltered.Count
-    TargetCount          = if ($hostPoolDecisions.TargetSessionHostCount) { $hostPoolDecisions.TargetSessionHostCount } else { 0 }
-    ToReplace            = if ($hostPoolDecisions.TotalSessionHostsToReplace) { $hostPoolDecisions.TotalSessionHostsToReplace } else { 0 }
-    ToReplacePercentage  = if ($sessionHostsFiltered.Count -gt 0) { [math]::Round(($hostPoolDecisions.TotalSessionHostsToReplace / $sessionHostsFiltered.Count) * 100, 1) } else { 0 }
+    TargetCount          = if ($hostPoolReplacementPlan.TargetSessionHostCount) { $hostPoolReplacementPlan.TargetSessionHostCount } else { 0 }
+    ToReplace            = if ($hostPoolReplacementPlan.TotalSessionHostsToReplace) { $hostPoolReplacementPlan.TotalSessionHostsToReplace } else { 0 }
+    ToReplacePercentage  = if ($sessionHostsFiltered.Count -gt 0) { [math]::Round(($hostPoolReplacementPlan.TotalSessionHostsToReplace / $sessionHostsFiltered.Count) * 100, 1) } else { 0 }
     InDrain              = $hostsInDrainMode
-    PendingDelete        = $hostPoolDecisions.SessionHostsPendingDelete.Count
+    PendingDelete        = $hostPoolReplacementPlan.SessionHostsPendingDelete.Count
     ToDeployNow          = $remainingToDeploy
     RunningDeployments   = $currentlyDeploying
     LatestImageVersion   = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { "N/A" }
@@ -702,16 +704,8 @@ if ($cycleComplete) {
         
         foreach ($sessionHost in $sessionHostsFiltered) {
             try {
-                # Check if the VM has the exclusion tag by reading current tags
-                $tagsUri = "$resourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
-                $vmTagsResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $tagsUri
-                
-                $vmTags = @{}
-                if ($vmTagsResponse.properties.tags) {
-                    $vmTagsResponse.properties.tags.PSObject.Properties | ForEach-Object {
-                        $vmTags[$_.Name] = $_.Value
-                    }
-                }
+                # Use cached tags from session host object (already fetched in Get-SessionHosts)
+                $vmTags = $sessionHost.Tags
                 
                 # If the exclusion tag exists and has the SessionHostReplacer value (function-set), remove it
                 if ($vmTags.ContainsKey($tagScalingPlanExclusionTag)) {
@@ -723,6 +717,7 @@ if ($cycleComplete) {
                         Write-LogEntry -Message "Removing scaling exclusion tag from $($sessionHost.SessionHostName) (value: $tagValue)"
                         
                         # Remove the tag by setting it to null
+                        $tagsUri = "$resourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
                         $Body = @{
                             properties = @{
                                 tags = @{ $tagScalingPlanExclusionTag = $null }
@@ -768,8 +763,12 @@ try {
         -SessionHosts $sessionHostsFiltered `
         -RunningDeployments $currentlyDeploying `
         -FailedDeployments $failedDeployments `
-        -HostsToReplace $metricsLog.ToReplace
+        -HostsToReplace $metricsLog.ToReplace `
+        -CachedVMs $cachedVMs
 }
 catch {
     Write-LogEntry -Message "Failed to update host pool status tag: $($_.Exception.Message)" -Level Warning
 }
+
+# Log completion timestamp for workbook visibility
+Write-LogEntry -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o')

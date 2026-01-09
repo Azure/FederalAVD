@@ -777,5 +777,66 @@ function Invoke-GraphApiWithRetry {
 
 #EndRegion REST API Helper Functions
 
+#Region VM Helper Functions
+
+function Get-VMPowerStates {
+    <#
+    .SYNOPSIS
+        Queries power state for specific VMs by resource ID.
+    .DESCRIPTION
+        Retrieves instanceView with power state for a list of VM resource IDs.
+        Used for lazy loading to avoid querying all VMs when only deletion candidates need power state.
+    .PARAMETER ARMToken
+        Azure Resource Manager access token.
+    .PARAMETER VMResourceIds
+        Array of VM resource IDs to query.
+    .PARAMETER ResourceManagerUri
+        The Azure Resource Manager endpoint URI.
+    .EXAMPLE
+        $powerStates = Get-VMPowerStates -ARMToken $token -VMResourceIds @('/subscriptions/.../vm1', '/subscriptions/.../vm2')
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $ARMToken,
+        
+        [Parameter(Mandatory = $true)]
+        [array] $VMResourceIds,
+        
+        [Parameter()]
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri)
+    )
+    
+    if ($VMResourceIds.Count -eq 0) {
+        return @{}
+    }
+    
+    Write-LogEntry -Message "Querying power state for $($VMResourceIds.Count) VMs" -Level Trace
+    
+    $powerStates = @{}
+    
+    foreach ($resourceId in $VMResourceIds) {
+        try {
+            $Uri = "$ResourceManagerUri$resourceId/instanceView?api-version=2024-07-01"
+            $instanceView = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+            
+            # Extract power state from statuses
+            $powerStateCode = ($instanceView.statuses | Where-Object { $_.code -like 'PowerState/*' }).code
+            $isPoweredOff = $powerStateCode -like 'PowerState/deallocated' -or $powerStateCode -like 'PowerState/stopped'
+            
+            $powerStates[$resourceId] = $isPoweredOff
+            Write-LogEntry -Message "VM $resourceId power state: $powerStateCode (PoweredOff=$isPoweredOff)" -Level Trace
+        }
+        catch {
+            Write-LogEntry -Message "Failed to get power state for VM $resourceId : $_" -Level Warning
+            $powerStates[$resourceId] = $false  # Assume powered on if query fails
+        }
+    }
+    
+    return $powerStates
+}
+
+#EndRegion VM Helper Functions
+
 # Export functions
-Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Set-HostPoolNameForLogging, Write-LogEntry, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry
+Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Set-HostPoolNameForLogging, Write-LogEntry, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry, Get-VMPowerStates

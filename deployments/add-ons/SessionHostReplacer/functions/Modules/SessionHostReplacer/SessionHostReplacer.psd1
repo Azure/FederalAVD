@@ -25,6 +25,7 @@
 
     # Functions to export from this module
     FunctionsToExport = @(
+        # Core utilities (from SessionHostReplacer.Core.psm1)
         'Get-ResourceManagerUri'
         'Get-GraphEndpoint'
         'Get-AccessToken'
@@ -35,22 +36,38 @@
         'Invoke-AzureRestMethodWithRetry'
         'Invoke-GraphRestMethod'
         'Invoke-GraphApiWithRetry'
+        'ConvertTo-CaseInsensitiveHashtable'
+        'Get-VMPowerStates'
+        
+        # Deployment functions (from SessionHostReplacer.Deployment.psm1)
         'Get-DeploymentState'
         'Get-LastDeploymentStatus'
         'Save-DeploymentState'
-        'ConvertTo-CaseInsensitiveHashtable'
         'Deploy-SessionHosts'
-        'Get-LatestImageVersion'
-        'Get-SessionHostReplacementPlan'
         'Get-Deployments'
-        'Get-SessionHosts'
         'Get-TemplateSpecVersionResourceId'
         'Remove-FailedDeploymentArtifacts'
+        
+        # Image Management functions (from SessionHostReplacer.ImageManagement.psm1)
+        'Compare-ImageVersion'
+        'Get-LatestImageVersion'
+        
+        # Planning functions (from SessionHostReplacer.Planning.psm1)
+        'Get-SessionHostReplacementPlan'
+        'Get-SessionHosts'
+        
+        # Lifecycle functions (from SessionHostReplacer.Lifecycle.psm1)
         'Remove-SessionHosts'
+        'Remove-VirtualMachine'
         'Remove-ExpiredShutdownVMs'
+        'Send-DrainNotification'
+        
+        # Device Cleanup functions (from SessionHostReplacer.DeviceCleanup.psm1)
+        'Remove-DeviceFromDirectories'
         'Remove-EntraDevice'
         'Remove-IntuneDevice'
-        'Send-DrainNotification'
+        
+        # Monitoring functions (from SessionHostReplacer.Monitoring.psm1)
         'Update-HostPoolStatus'
     )
 

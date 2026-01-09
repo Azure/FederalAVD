@@ -366,7 +366,7 @@ param fslogixRemoteNetAppVolumeResourceIds array = []
 param fslogixOSSGroups array = []
 
 @description('Optional. AVD Agents DSC package name or URL.')
-param avdAgentsDSCPackage string = 'Configuration_1.0.03211.1002.zip'
+param avdAgentsDSCPackage string = 'Configuration_1.0.03266.1110.zip'
 
 @description('Optional. Artifacts container URI for custom scripts.')
 param artifactsContainerUri string = ''
@@ -1005,6 +1005,12 @@ module functionCode '../../sharedModules/custom/functionApp/function.bicep' = {
       '../profile.ps1': loadTextContent('functions/profile.ps1')
       '../requirements.psd1': loadTextContent('functions/requirements.psd1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Deployment.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Deployment.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.ImageManagement.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.ImageManagement.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Planning.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Planning.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.DeviceCleanup.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.DeviceCleanup.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Lifecycle.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Lifecycle.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Monitoring.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Monitoring.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.psd1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psd1')
     }
