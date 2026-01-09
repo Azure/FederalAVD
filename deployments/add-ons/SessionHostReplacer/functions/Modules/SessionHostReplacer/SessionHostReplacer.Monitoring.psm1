@@ -93,18 +93,20 @@ function Update-HostPoolStatus {
             Write-LogEntry -Message "Could not query shutdown hosts: $($_.Exception.Message)" -Level Trace
         }
         
-        # Determine status
+        # Determine status (prioritize completion when all hosts are up-to-date)
         $status = if ($FailedDeployments.Count -gt 0) {
             "Recovery"
+        }
+        elseif ($upToDateHosts -eq $totalHosts -and $shutdownHosts -eq 0 -and $RunningDeployments -eq 0 -and $HostsToReplace -eq 0) {
+            # All hosts up-to-date, no shutdown hosts, no deployments, no replacements needed = complete
+            # Draining hosts (manually drained by admin) don't block completion status
+            "Complete"
         }
         elseif ($RunningDeployments -gt 0 -or $HostsToReplace -gt 0) {
             "Updating"
         }
         elseif ($drainingHosts -gt 0) {
             "Draining"
-        }
-        elseif ($upToDateHosts -eq $totalHosts -and $shutdownHosts -eq 0) {
-            "Complete"
         }
         else {
             "Updating"
