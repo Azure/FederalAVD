@@ -109,14 +109,37 @@ function Invoke-GraphApiWithRetry {
                 $statusCode = [int]$_.Exception.Response.StatusCode
             }
             
+            # Try to extract detailed error from Graph API response
+            $errorDetails = ""
+            try {
+                if ($_.Exception.Response) {
+                    $responseStream = $_.Exception.Response.GetResponseStream()
+                    $reader = New-Object System.IO.StreamReader($responseStream)
+                    $responseBody = $reader.ReadToEnd()
+                    $reader.Close()
+                    $responseStream.Close()
+                    
+                    $errorObj = $responseBody | ConvertFrom-Json
+                    if ($errorObj.error) {
+                        $errorDetails = "`n  Error Code: $($errorObj.error.code)`n  Error Message: $($errorObj.error.message)"
+                        if ($errorObj.error.details) {
+                            $errorDetails += "`n  Details: $($errorObj.error.details | ConvertTo-Json -Compress)"
+                        }
+                    }
+                }
+            }
+            catch {
+                # If we can't parse error details, just continue
+            }
+            
             # Retry on authentication/authorization errors (401, 403) or if endpoint not found (404 on base endpoint)
             if ($statusCode -in @(401, 403, 404) -and $endpoint -ne $endpointsToTry[-1]) {
-                Write-Warning "Graph API call to $endpoint failed with status $statusCode. Trying alternate endpoint..."
+                Write-Warning "Graph API call to $endpoint failed with status $statusCode$errorDetails. Trying alternate endpoint..."
                 continue
             }
             else {
                 # Don't retry - either not an auth error or we've tried all endpoints
-                Write-Error "Graph API call failed with status $statusCode : $($_.Exception.Message)"
+                Write-Error "Graph API call failed with status $statusCode : $($_.Exception.Message)$errorDetails"
                 throw
             }
         }
@@ -222,140 +245,123 @@ try {
             }
         }
 
-        # 3. Update Required Resource Access (API Permissions)
+        # 3. Grant Delegated Permissions to Storage Account Enterprise Application
+        # Note: We're NOT adding these to the App Registration's requiredResourceAccess (API Permissions).
+        # We're directly granting delegated permissions to the Enterprise Application via oauth2PermissionGrants.
+        # This keeps the App Registration clean and only shows the permissions on the Enterprise Application.
         try {
-            Write-Output "Checking API Permissions for $appName..."
-            # Get current app again to ensure we have latest state
-            $currentApp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $uri
-            $requiredResourceAccess = $currentApp.requiredResourceAccess
+            Write-Output "============================================"
+            Write-Output "Granting delegated permissions to Enterprise Application for: $appName"
+            Write-Output "App ID: $($app.appId)"
+            Write-Output "============================================"
             
-            # Microsoft Graph App ID
-            $graphAppId = "00000003-0000-0000-c000-000000000000"
-            
-            # Permissions to ensure
-            $permissionsToEnsure = @(
-                @{ Id = "e1fe6dd8-ba31-4d61-89e7-88639da4683d"; Type = "Scope"; Name = "User.Read" },
-                @{ Id = "37f7f235-527c-4136-accd-4a02d197296e"; Type = "Scope"; Name = "openid" },
-                @{ Id = "14dad69e-099b-42c9-810b-d002981feec1"; Type = "Scope"; Name = "profile" }
-            )
-
-            $graphAccess = $null
-            $otherAccess = @()
-
-            if ($requiredResourceAccess) {
-                foreach ($access in $requiredResourceAccess) {
-                    if ($access.resourceAppId -eq $graphAppId) {
-                        $graphAccess = $access
-                    } else {
-                        $otherAccess += $access
-                    }
-                }
-            }
-
-            if ($null -eq $graphAccess) {
-                $graphAccess = @{
-                    resourceAppId = $graphAppId
-                    resourceAccess = @()
-                }
-            }
-
-            $accessChanged = $false
-            $currentAccessList = @()
-            if ($graphAccess.resourceAccess) {
-                $currentAccessList = @($graphAccess.resourceAccess)
-            }
-            
-            $currentAccessIds = $currentAccessList | ForEach-Object { $_.id }
-
-            foreach ($perm in $permissionsToEnsure) {
-                if ($currentAccessIds -notcontains $perm.Id) {
-                    Write-Output "Adding $($perm.Name) permission..."
-                    $currentAccessList += @{
-                        id = $perm.Id
-                        type = $perm.Type
-                    }
-                    $accessChanged = $true
-                }
-            }
-
-            if ($accessChanged) {
-                $graphAccess.resourceAccess = $currentAccessList
-                # Reconstruct the full list
-                $finalResourceAccess = @($otherAccess) + @($graphAccess)
-                
-                $body = @{ requiredResourceAccess = $finalResourceAccess } | ConvertTo-Json -Depth 5
-                Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $uri -Body $body
-                Write-Output "API Permissions updated successfully for $appName."
-            } else {
-                Write-Output "API Permissions already correct for $appName."
-            }
-        }
-        catch {
-            Write-Warning "Failed to update API Permissions for $appName : $($_.Exception.Message)"
-        }
-
-        # 4. Grant Admin Consent
-        try {
-            Write-Output "Attempting to grant admin consent for openid, profile, User.Read..."
-            
-            # Get Service Principal for the App
+            # Get Service Principal for the Storage Account App (Enterprise Application)
             $spUri = "/v1.0/servicePrincipals?`$filter=appId eq '$($app.appId)'"
+            Write-Output "Looking for Service Principal (Enterprise Application) with filter: appId eq '$($app.appId)'"
             $spResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $spUri
+            
             if ($spResp.value.Count -eq 0) {
-                Write-Warning "Service Principal not found for AppId: $($app.appId). Cannot grant consent."
+                Write-Warning "Service Principal (Enterprise Application) not found for AppId: $($app.appId)."
+                Write-Warning "The Enterprise Application must exist before delegated permissions can be granted."
+                Write-Warning "Please verify that the Storage Account has Azure AD authentication enabled and the Enterprise Application exists."
             }
             else {
-                $clientServicePrincipalId = $spResp.value[0].id
+                # This is the Storage Account's Enterprise Application (Service Principal)
+                $storageAccountSP = $spResp.value[0]
+                $storageAccountServicePrincipalId = $storageAccountSP.id
+                $storageAccountSPDisplayName = $storageAccountSP.displayName
+                
+                Write-Output "✓ Found Enterprise Application:"
+                Write-Output "  Display Name: $storageAccountSPDisplayName"
+                Write-Output "  Service Principal ID: $storageAccountServicePrincipalId"
+                Write-Output "  App ID: $($storageAccountSP.appId)"
 
-                # Get Service Principal for Microsoft Graph
+                # Get Service Principal for Microsoft Graph (this is the resource being accessed)
                 $graphSpUri = "/v1.0/servicePrincipals?`$filter=appId eq '00000003-0000-0000-c000-000000000000'"
+                Write-Output "Looking for Microsoft Graph Service Principal..."
                 $graphSpResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $graphSpUri
                 $graphServicePrincipalId = $graphSpResp.value[0].id
+                Write-Output "✓ Found Microsoft Graph Service Principal ID: $graphServicePrincipalId"
 
-                # Check for existing grant
-                $grantUri = "/v1.0/oauth2PermissionGrants?`$filter=clientId eq '$clientServicePrincipalId' and resourceId eq '$graphServicePrincipalId'"
+                # Check for existing delegated permission grant
+                $grantUri = "/v1.0/oauth2PermissionGrants?`$filter=clientId eq '$storageAccountServicePrincipalId' and resourceId eq '$graphServicePrincipalId'"
+                Write-Output "Checking for existing oauth2PermissionGrants..."
                 $grantResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $grantUri
                 
+                # Delegated permissions we want to grant
                 $scope = @("openid", "profile", "User.Read")
+                $scopeString = $scope -join " "
                 
                 if ($grantResp.value.Count -gt 0) {
-                    # Update existing grant
-                    $grantId = $grantResp.value[0].id
-                    $existingScope = $grantResp.value[0].scope                    
+                    # Update existing delegated permission grant
+                    $existingGrant = $grantResp.value[0]
+                    $grantId = $existingGrant.id
+                    $existingScope = $existingGrant.scope
+                    Write-Output "✓ Found existing oauth2PermissionGrant:"
+                    Write-Output "  Grant ID: $grantId"
+                    Write-Output "  Existing Scope: '$existingScope'"
+                    Write-Output "  Consent Type: $($existingGrant.consentType)"
+                    
                     $newScope = $existingScope
+                    $scopeChanged = $false
                     foreach ($s in $scope) {
                         if ($newScope -notmatch "\b$s\b") {
-                            $newScope += " $s"
+                            if ($newScope) { $newScope += " " }
+                            $newScope += $s
+                            $scopeChanged = $true
                         }
                     }
                     
-                    if ($newScope -ne $existingScope) {
+                    if ($scopeChanged) {
                          $updateGrantUri = "/v1.0/oauth2PermissionGrants/$grantId"
                          $grantBody = @{
-                            scope = $newScope
+                            scope = $newScope.Trim()
                          } | ConvertTo-Json
+                         Write-Output "Updating oauth2PermissionGrant with new scope: '$($newScope.Trim())'"
                          Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $updateGrantUri -Body $grantBody
-                         Write-Output "Admin consent updated for $appName."
+                         Write-Output "✓ Successfully updated delegated permissions for Enterprise Application."
+                         Write-Output "  New Scope: '$($newScope.Trim())'"
                     } else {
-                        Write-Output "Admin consent already exists for $appName."
+                        Write-Output "✓ All required delegated permissions already exist."
+                        Write-Output "  Current Scope: '$existingScope'"
                     }
 
                 } else {
-                    # Create new grant
+                    # Create new delegated permission grant
+                    Write-Output "No existing oauth2PermissionGrant found. Creating new grant..."
                     $grantBody = @{
-                        clientId = $clientServicePrincipalId
+                        clientId = $storageAccountServicePrincipalId
                         consentType = "AllPrincipals"
                         resourceId = $graphServicePrincipalId
-                        scope = ($scope -join " ")
+                        scope = $scopeString
                     } | ConvertTo-Json
                     
-                    Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Post -Uri "/v1.0/oauth2PermissionGrants" -Body $grantBody
-                    Write-Output "Admin consent granted for $appName."
+                    Write-Output "Creating oauth2PermissionGrant with:"
+                    Write-Output "  Client (Enterprise App): $storageAccountServicePrincipalId"
+                    Write-Output "  Resource (Microsoft Graph): $graphServicePrincipalId"
+                    Write-Output "  Consent Type: AllPrincipals"
+                    Write-Output "  Scope: '$scopeString'"
+                    
+                    $newGrant = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Post -Uri "/v1.0/oauth2PermissionGrants" -Body $grantBody
+                    Write-Output "✓ Successfully created oauth2PermissionGrant!"
+                    Write-Output "  Grant ID: $($newGrant.id)"
+                    Write-Output ""
+                    Write-Output "To verify in Azure Portal:"
+                    Write-Output "  1. Go to: Enterprise Applications"
+                    Write-Output "  2. Find: $storageAccountSPDisplayName"
+                    Write-Output "  3. Navigate to: Permissions blade"
+                    Write-Output "  4. Look for: Delegated permissions section"
+                    Write-Output "  5. You should see: Microsoft Graph - openid, profile, User.Read"
                 }
+                
+                Write-Output "============================================"
             }
         }
         catch {
-            Write-Warning "Failed to grant admin consent for $appName. Error: $($_.Exception.Message)"
+            Write-Error "Failed to grant delegated permissions for Enterprise Application $appName."
+            Write-Error "Error: $($_.Exception.Message)"
+            Write-Error "Stack Trace: $($_.ScriptStackTrace)"
+            throw
         }
     }
 }
