@@ -65,7 +65,7 @@ function Remove-SessionHosts {
             
             # Optimization: If MinimumDrainMinutes = 0, skip draining entirely and delete immediately
             if ($MinimumDrainMinutes -eq 0) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is idle and MinimumDrainMinutes is 0 - deleting immediately without drain period"
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is idle and MinimumDrainMinutes is 0 - marking for immediate removal without drain period"
                 $deleteSessionHost = $true
             }
             elseif (-Not $sessionHost.AllowNewSession) {

@@ -157,7 +157,7 @@ function Get-SessionHostReplacementPlan {
     $shutdownHostsCount = ($SessionHosts | Where-Object { $_.ShutdownTimestamp }).Count
     if ($shutdownHostsCount -gt 0) {
         $shutdownHostNames = ($SessionHosts | Where-Object { $_.ShutdownTimestamp }).SessionHostName -join ','
-        Write-LogEntry -Message "Excluding $shutdownHostsCount shutdown session hosts from available capacity: $shutdownHostNames" -Level Verbose
+        Write-LogEntry -Message "Excluding $shutdownHostsCount shutdown session hosts from available capacity: $shutdownHostNames" -Level Debug
     }
     
     # Count running deployment VMs - handle both ARM deployments (with SessionHostNames) and state-tracked deployments (with VirtualCount)
@@ -293,8 +293,8 @@ function Get-SessionHostReplacementPlan {
             $powerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds $goodHostResourceIds
             
             # Enrich good hosts with power state
-            foreach ($host in $goodSessionHosts) {
-                $host | Add-Member -NotePropertyName PoweredOff -NotePropertyValue $powerStates[$host.ResourceId] -Force
+            foreach ($sh in $goodSessionHosts) {
+                $sh | Add-Member -NotePropertyName PoweredOff -NotePropertyValue $powerStates[$sh.ResourceId] -Force
             }
             
             # Sort by power state (prioritize powered-off VMs), then session count (idle hosts), then drain status, then name
@@ -312,8 +312,8 @@ function Get-SessionHostReplacementPlan {
         $powerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds $replaceHostResourceIds
         
         # Enrich hosts to replace with power state
-        foreach ($host in $sessionHostsToReplace) {
-            $host | Add-Member -NotePropertyName PoweredOff -NotePropertyValue $powerStates[$host.ResourceId] -Force
+        foreach ($sh in $sessionHostsToReplace) {
+            $sh | Add-Member -NotePropertyName PoweredOff -NotePropertyValue $powerStates[$sh.ResourceId] -Force
         }
         
         # Log power state results for visibility
