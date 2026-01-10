@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.28.1.47646",
-      "templateHash": "6992109606596074278"
+      "templateHash": "3506110592555302683"
     },
     "name": "AVD Session Host Replacer Add-On",
     "description": "Deploys automated session host lifecycle management for Azure Virtual Desktop",
@@ -4891,7 +4891,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.28.1.47646",
-              "templateHash": "3070961799179115256"
+              "templateHash": "8335157720836575591"
             }
           },
           "parameters": {
@@ -5039,7 +5039,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"SETTINGS |\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend ReplacementMode = extract(@\"ReplacementMode: ([A-Za-z]+)\", 1, message)\n| extend MinimumDrainMinutes = extract(@\"MinimumDrainMinutes: (\\d+)\", 1, message)\n| extend DrainGracePeriodHours = extract(@\"DrainGracePeriodHours: (\\d+)\", 1, message)\n| extend MinimumCapacityPercent = extract(@\"MinimumCapacityPercent: (\\d+)\", 1, message)\n| extend MaxDeletionsPerCycle = extract(@\"MaxDeletionsPerCycle: (\\d+)\", 1, message)\n| extend EnableProgressiveScaleUp = extract(@\"EnableProgressiveScaleUp: ([A-Za-z]+)\", 1, message)\n| extend InitialDeploymentPercent = extract(@\"InitialDeploymentPercent: (\\d+)\", 1, message)\n| extend ScaleUpIncrementPercent = extract(@\"ScaleUpIncrementPercent: (\\d+)\", 1, message)\n| extend SuccessfulRunsBeforeScaleUp = extract(@\"SuccessfulRunsBeforeScaleUp: (\\d+)\", 1, message)\n| extend MaxDeploymentBatchSize = extract(@\"MaxDeploymentBatchSize: (\\d+)\", 1, message)\n| extend TargetSessionHostCount = extract(@\"TargetSessionHostCount: (\\d+)\", 1, message)\n| summarize arg_max(timestamp, *) by HostPoolName\n| project \n    ['Host Pool'] = HostPoolName,\n    ['Replacement Mode'] = ReplacementMode,\n    ['Min Drain (min)'] = MinimumDrainMinutes,\n    ['Grace Period (hrs)'] = DrainGracePeriodHours,\n    ['Target Count'] = case(TargetSessionHostCount == \"0\", \"Auto-Detect\", TargetSessionHostCount),\n    ['Progressive Scale-Up'] = case(EnableProgressiveScaleUp == \"True\", strcat(\"✅ Enabled (\", InitialDeploymentPercent, \"% → +\", ScaleUpIncrementPercent, \"% every \", SuccessfulRunsBeforeScaleUp, \" success)\"), \"❌ Disabled\"),\n    ['Max Batch Size'] = MaxDeploymentBatchSize,\n    ['Min Capacity %'] = case(ReplacementMode == \"DeleteFirst\", strcat(MinimumCapacityPercent, \"%\"), \"N/A\"),\n    ['Max Deletions/Cycle'] = case(ReplacementMode == \"DeleteFirst\", MaxDeletionsPerCycle, \"N/A\")",
+                    "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"SETTINGS |\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend ReplacementMode = extract(@\"ReplacementMode: ([A-Za-z]+)\", 1, message)\n| extend MinimumDrainMinutes = extract(@\"MinimumDrainMinutes: (\\d+)\", 1, message)\n| extend DrainGracePeriodHours = extract(@\"DrainGracePeriodHours: (\\d+)\", 1, message)\n| extend MinimumCapacityPercent = extract(@\"MinimumCapacityPercent: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend MaxDeletionsPerCycle = extract(@\"MaxDeletionsPerCycle: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend EnableProgressiveScaleUp = extract(@\"EnableProgressiveScaleUp: ([A-Za-z]+)\", 1, message)\n| extend InitialDeploymentPercent = extract(@\"InitialDeploymentPercent: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend ScaleUpIncrementPercent = extract(@\"ScaleUpIncrementPercent: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend SuccessfulRunsBeforeScaleUp = extract(@\"SuccessfulRunsBeforeScaleUp: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend MaxDeploymentBatchSize = extract(@\"MaxDeploymentBatchSize: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend MinimumHostIndex = extract(@\"MinimumHostIndex: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend EnableShutdownRetention = extract(@\"EnableShutdownRetention: ([A-Za-z\\/]+)\", 1, message)\n| extend ShutdownRetentionDays = extract(@\"ShutdownRetentionDays: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend TargetSessionHostCount = extract(@\"TargetSessionHostCount: ([\\d\\/A-Za-z]+)\", 1, message)\n| summarize arg_max(timestamp, *) by HostPoolName\n| project \n    ['Host Pool'] = HostPoolName,\n    ['Replacement Mode'] = ReplacementMode,\n    ['Min Drain (min)'] = MinimumDrainMinutes,\n    ['Grace Period (hrs)'] = DrainGracePeriodHours,\n    ['Target Count'] = case(TargetSessionHostCount == \"0\" or TargetSessionHostCount == \"Auto\", \"Auto-Detect\", TargetSessionHostCount),\n    ['Progressive Scale-Up'] = case(EnableProgressiveScaleUp == \"True\", strcat(\"✅ Enabled (\", InitialDeploymentPercent, \"% → +\", ScaleUpIncrementPercent, \"% every \", SuccessfulRunsBeforeScaleUp, \" success)\"), \"❌ Disabled\"),\n    ['Min Capacity %'] = case(ReplacementMode == \"DeleteFirst\", strcat(MinimumCapacityPercent, \"%\"), \"N/A\"),\n    ['Max Deletions/Cycle'] = case(ReplacementMode == \"DeleteFirst\", MaxDeletionsPerCycle, \"N/A\"),\n    ['Max Batch Size'] = case(ReplacementMode == \"SideBySide\", MaxDeploymentBatchSize, \"N/A\"),\n    ['Min Host Index'] = case(ReplacementMode == \"SideBySide\", MinimumHostIndex, \"N/A\"),\n    ['Shutdown Retention'] = case(ReplacementMode == \"SideBySide\" and EnableShutdownRetention == \"True\", strcat(\"✅ Enabled (\", ShutdownRetentionDays, \" days)\"), ReplacementMode == \"SideBySide\" and EnableShutdownRetention != \"True\", \"❌ Disabled\", \"N/A\")",
                     "size": 3,
                     "title": "Function App Settings",
                     "timeContext": {
@@ -5086,15 +5086,23 @@
                           "formatter": 0
                         },
                         {
-                          "columnMatch": "Max Batch Size",
-                          "formatter": 0
-                        },
-                        {
                           "columnMatch": "Min Capacity %",
                           "formatter": 0
                         },
                         {
                           "columnMatch": "Max Deletions/Cycle",
+                          "formatter": 0
+                        },
+                        {
+                          "columnMatch": "Max Batch Size",
+                          "formatter": 0
+                        },
+                        {
+                          "columnMatch": "Min Host Index",
+                          "formatter": 0
+                        },
+                        {
+                          "columnMatch": "Shutdown Retention",
                           "formatter": 0
                         }
                       ],

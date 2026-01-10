@@ -67,12 +67,7 @@ function Update-HostPoolStatus {
         $totalHosts = $SessionHosts.Count
         $drainingHosts = ($SessionHosts | Where-Object { -not $_.AllowNewSession }).Count
         
-        # Up-to-date hosts = Total hosts - Hosts that need replacement
-        # HostsToReplace already represents hosts with old images that need updating
-        # Running deployments are new hosts not yet in the pool, so not counted in totalHosts
-        $upToDateHosts = $totalHosts - $HostsToReplace
-        
-        # Count shutdown hosts (VMs with shutdown timestamp tag)
+        # Count shutdown hosts (VMs with shutdown timestamp tag) - these are old hosts awaiting deletion
         $shutdownHosts = 0
         try {
             # Use cached VMs if provided, otherwise fetch
@@ -93,12 +88,20 @@ function Update-HostPoolStatus {
             Write-LogEntry -Message "Could not query shutdown hosts: $($_.Exception.Message)" -Level Trace
         }
         
+        # Up-to-date hosts calculation:
+        # - Start with total hosts in host pool
+        # - Subtract shutdown hosts (old hosts awaiting deletion, not actively serving users)
+        # - Subtract hosts that need replacement (out-of-date active hosts)
+        # Result: Active hosts on the latest image version
+        $activeHosts = $totalHosts - $shutdownHosts
+        $upToDateHosts = $activeHosts - $HostsToReplace
+        
         # Determine status (prioritize completion when all hosts are up-to-date)
         $status = if ($FailedDeployments.Count -gt 0) {
             "Recovery"
         }
-        elseif ($upToDateHosts -eq $totalHosts -and $shutdownHosts -eq 0 -and $RunningDeployments -eq 0 -and $HostsToReplace -eq 0) {
-            # All hosts up-to-date, no shutdown hosts, no deployments, no replacements needed = complete
+        elseif ($upToDateHosts -eq $activeHosts -and $shutdownHosts -eq 0 -and $RunningDeployments -eq 0 -and $HostsToReplace -eq 0) {
+            # All active hosts up-to-date, no shutdown hosts, no deployments, no replacements needed = complete
             # Draining hosts (manually drained by admin) don't block completion status
             "Complete"
         }
@@ -112,8 +115,8 @@ function Update-HostPoolStatus {
             "Updating"
         }
         
-        # Build composite status string
-        $statusParts = @("$status`: $upToDateHosts/$totalHosts up-to-date")
+        # Build composite status string - show active hosts (excluding shutdown) in the ratio
+        $statusParts = @("$status`: $upToDateHosts/$activeHosts up-to-date")
         
         if ($drainingHosts -gt 0) {
             $statusParts += "$drainingHosts draining"
