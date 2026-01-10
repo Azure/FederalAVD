@@ -79,7 +79,6 @@ function Invoke-GraphApiWithRetry {
     foreach ($endpoint in $endpointsToTry) {
         try {
             $attemptUri = "$endpoint$Uri"
-            Write-Output "Attempting Graph API call to: $attemptUri"
             
             $params = @{
                 Uri     = $attemptUri
@@ -154,11 +153,10 @@ try {
     # Get Graph Access Token using Managed Identity
     $GraphUri = if ($GraphEndpoint[-1] -eq '/') { $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) } else { $GraphEndpoint }
     $TokenUri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$GraphUri&client_id=$ClientId"
-    Write-Output "Requesting access token from IMDS: $TokenUri"
+    Write-Output "Requesting access token from IMDS..."
     $Response = Invoke-RestMethod -Headers @{ Metadata = "true" } -Uri $TokenUri
     If ($Response) {
-        Write-Output "Successfully obtained response:"
-        Write-Output $($Response | ConvertTo-Json -Depth 5)
+        Write-Output "Successfully obtained access token"
         $AccessToken = $Response.access_token
     }
     else {
@@ -271,38 +269,39 @@ try {
                 $storageAccountServicePrincipalId = $storageAccountSP.id
                 $storageAccountSPDisplayName = $storageAccountSP.displayName
                 
-                Write-Output "✓ Found Enterprise Application:"
-                Write-Output "  Display Name: $storageAccountSPDisplayName"
-                Write-Output "  Service Principal ID: $storageAccountServicePrincipalId"
-                Write-Output "  App ID: $($storageAccountSP.appId)"
+                Write-Output "Found Enterprise Application: $storageAccountSPDisplayName"
 
                 # Get Service Principal for Microsoft Graph (this is the resource being accessed)
                 $graphSpUri = "/v1.0/servicePrincipals?`$filter=appId eq '00000003-0000-0000-c000-000000000000'"
-                Write-Output "Looking for Microsoft Graph Service Principal..."
                 $graphSpResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $graphSpUri
                 $graphServicePrincipalId = $graphSpResp.value[0].id
-                Write-Output "✓ Found Microsoft Graph Service Principal ID: $graphServicePrincipalId"
 
                 # Check for existing delegated permission grant
-                $grantUri = "/v1.0/oauth2PermissionGrants?`$filter=clientId eq '$storageAccountServicePrincipalId' and resourceId eq '$graphServicePrincipalId'"
-                Write-Output "Checking for existing oauth2PermissionGrants..."
-                $grantResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $grantUri
+                $grantUri = "/v1.0/oauth2PermissionGrants?`$filter=clientId eq '$storageAccountServicePrincipalId'"
+                $allGrantsResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $grantUri
+                
+                # Filter manually for the specific resource
+                # Use Where clause that filters out nulls and validates the objects
+                $matchingGrants = @($allGrantsResp.value | Where-Object { $_ -and $_.resourceId -eq $graphServicePrincipalId -and $_.id })
                 
                 # Delegated permissions we want to grant
                 $scope = @("openid", "profile", "User.Read")
                 $scopeString = $scope -join " "
                 
-                if ($grantResp.value.Count -gt 0) {
+                if ($matchingGrants.Count -gt 0) {
                     # Update existing delegated permission grant
-                    $existingGrant = $grantResp.value[0]
+                    $existingGrant = $matchingGrants[0]
                     $grantId = $existingGrant.id
-                    $existingScope = $existingGrant.scope
-                    Write-Output "✓ Found existing oauth2PermissionGrant:"
-                    Write-Output "  Grant ID: $grantId"
-                    Write-Output "  Existing Scope: '$existingScope'"
-                    Write-Output "  Consent Type: $($existingGrant.consentType)"
+                    $existingScope = if ($existingGrant.scope) { $existingGrant.scope } else { "" }
+                    Write-Output "Found existing oauth2PermissionGrant with scope: '$existingScope'"
                     
-                    $newScope = $existingScope
+                    # Validate grantId before attempting update
+                    if (-not $grantId) {
+                        Write-Error "Grant ID is null or empty. Cannot update grant. Existing grant object: $($existingGrant | ConvertTo-Json -Depth 5)"
+                        throw "Invalid grant object returned from Graph API"
+                    }
+                    
+                    $newScope = if ($existingScope) { $existingScope } else { "" }
                     $scopeChanged = $false
                     foreach ($s in $scope) {
                         if ($newScope -notmatch "\b$s\b") {
@@ -319,16 +318,23 @@ try {
                          } | ConvertTo-Json
                          Write-Output "Updating oauth2PermissionGrant with new scope: '$($newScope.Trim())'"
                          Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $updateGrantUri -Body $grantBody
-                         Write-Output "✓ Successfully updated delegated permissions for Enterprise Application."
-                         Write-Output "  New Scope: '$($newScope.Trim())'"
+                         Write-Output "Successfully updated delegated permissions"
                     } else {
-                        Write-Output "✓ All required delegated permissions already exist."
-                        Write-Output "  Current Scope: '$existingScope'"
+                        Write-Output "All required delegated permissions already exist"
                     }
 
                 } else {
                     # Create new delegated permission grant
-                    Write-Output "No existing oauth2PermissionGrant found. Creating new grant..."
+                    Write-Output "Creating new oauth2PermissionGrant..."
+                    
+                    # Validate required IDs before attempting creation
+                    if (-not $storageAccountServicePrincipalId) {
+                        throw "Storage Account Service Principal ID is null or empty"
+                    }
+                    if (-not $graphServicePrincipalId) {
+                        throw "Microsoft Graph Service Principal ID is null or empty"
+                    }
+                    
                     $grantBody = @{
                         clientId = $storageAccountServicePrincipalId
                         consentType = "AllPrincipals"
@@ -336,22 +342,18 @@ try {
                         scope = $scopeString
                     } | ConvertTo-Json
                     
-                    Write-Output "Creating oauth2PermissionGrant with:"
-                    Write-Output "  Client (Enterprise App): $storageAccountServicePrincipalId"
-                    Write-Output "  Resource (Microsoft Graph): $graphServicePrincipalId"
-                    Write-Output "  Consent Type: AllPrincipals"
-                    Write-Output "  Scope: '$scopeString'"
-                    
-                    $newGrant = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Post -Uri "/v1.0/oauth2PermissionGrants" -Body $grantBody
-                    Write-Output "✓ Successfully created oauth2PermissionGrant!"
-                    Write-Output "  Grant ID: $($newGrant.id)"
-                    Write-Output ""
-                    Write-Output "To verify in Azure Portal:"
-                    Write-Output "  1. Go to: Enterprise Applications"
-                    Write-Output "  2. Find: $storageAccountSPDisplayName"
-                    Write-Output "  3. Navigate to: Permissions blade"
-                    Write-Output "  4. Look for: Delegated permissions section"
-                    Write-Output "  5. You should see: Microsoft Graph - openid, profile, User.Read"
+                    try {
+                        $newGrant = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Post -Uri "/v1.0/oauth2PermissionGrants" -Body $grantBody
+                        Write-Output "Successfully created oauth2PermissionGrant with scope: '$scopeString'"
+                    }
+                    catch {
+                        Write-Error "Failed to create oauth2PermissionGrant via Graph API"
+                        Write-Error "Error details: $($_.Exception.Message)"
+                        if ($_.Exception.Response) {
+                            Write-Error "Response Status: $([int]$_.Exception.Response.StatusCode) - $($_.Exception.Response.StatusDescription)"
+                        }
+                        throw
+                    }
                 }
                 
                 Write-Output "============================================"
