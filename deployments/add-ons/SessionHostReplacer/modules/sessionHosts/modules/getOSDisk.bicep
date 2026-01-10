@@ -9,7 +9,7 @@ resource getDisk 'Microsoft.Compute/disks@2023-10-02' existing = {
 }
 
 module updateDisk 'updateOSDisk.bicep' = {
-  name: 'Update-OSDisk-${vmName}-Stage2-${deploymentSuffix}'
+  name: 'shr-update-osDisk-${vmName}-stage2-${deploymentSuffix}'
   params: {
     diskName: diskName
     creationData: getDisk.properties.creationData

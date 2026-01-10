@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.28.1.47646",
-      "templateHash": "5724588772492933407"
+      "templateHash": "5251367143090527684"
     }
   },
   "parameters": {
@@ -82,25 +82,25 @@
         "description": "Resource ID of the data collection endpoint for Azure Monitor agent."
       }
     },
-    "dedicatedHostGroupResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Resource ID of the dedicated host group for session host placement."
-      }
-    },
-    "dedicatedHostGroupZones": {
+    "dedicatedHostGroupResourceIds": {
       "type": "array",
       "defaultValue": [],
       "metadata": {
-        "description": "Array of availability zones for the dedicated host group."
+        "description": "Array of resource IDs for dedicated host groups. One per session host, or single value applied to all, or empty string for VMs without assignment."
       }
     },
-    "dedicatedHostResourceId": {
-      "type": "string",
-      "defaultValue": "",
+    "dedicatedHostResourceIds": {
+      "type": "array",
+      "defaultValue": [],
       "metadata": {
-        "description": "Resource ID of a specific dedicated host for session host placement."
+        "description": "Array of resource IDs for specific dedicated hosts. One per session host, or single value applied to all, or empty string for VMs without assignment."
+      }
+    },
+    "preferredZones": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Array of preferred zones for each session host. One per session host (as array like [\"1\"]), or empty for VMs without specific zone preference."
       }
     },
     "diskEncryptionSetResourceId": {
@@ -375,13 +375,6 @@
         "description": "Tags to apply to deployed resources. Organized by resource type."
       }
     },
-    "timeStamp": {
-      "type": "string",
-      "defaultValue": "[utcNow('yyyyMMddHHmmss')]",
-      "metadata": {
-        "description": "DO NOT MODIFY THIS VALUE! The timeStamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter."
-      }
-    },
     "timeZone": {
       "type": "string",
       "defaultValue": "Eastern Standard Time",
@@ -426,7 +419,7 @@
       }
     ],
     "avSetNameConv": "[if(empty(parameters('availabilitySetNameConv')), format('as-{0}-##', substring(parameters('sessionHostNames')[0], 0, sub(length(parameters('sessionHostNames')[0]), parameters('sessionHostNameIndexLength')))), parameters('availabilitySetNameConv'))]",
-    "deploymentSuffix": "[if(startsWith(deployment().name, 'Microsoft.Template-'), substring(deployment().name, 19, 14), parameters('timeStamp'))]",
+    "deploymentSuffix": "[substring(deployment().name, sub(length(deployment().name), 14), 14)]",
     "sessionHostRegistrationDSCStorageAccount": "[if(startsWith(environment().name, 'USN'), 'wvdexportalcontainer', 'wvdportalstorageblob')]",
     "sessionHostRegistrationDSCUrl": "[if(startsWith(parameters('avdAgentsDSCPackage'), 'https://'), parameters('avdAgentsDSCPackage'), format('https://{0}.blob.{1}/galleryartifacts/{2}', variables('sessionHostRegistrationDSCStorageAccount'), environment().suffixes.storage, parameters('avdAgentsDSCPackage')))]",
     "confidentialVMOSDiskEncryptionType": "[if(parameters('confidentialVMOSDiskEncryption'), 'DiskWithVMGuestState', 'VMGuestStateOnly')]",
@@ -448,7 +441,7 @@
       "condition": "[and(parameters('fslogixConfigureSessionHosts'), or(not(empty(parameters('fslogixLocalNetAppVolumeResourceIds'))), not(empty(parameters('fslogixRemoteNetAppVolumeResourceIds')))))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2022-09-01",
-      "name": "[format('NetAppVolumeFqdns-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('shr-netAppVolumeFqdns-{0}', variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -522,7 +515,7 @@
       "condition": "[equals(parameters('availability'), 'AvailabilitySets')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2022-09-01",
-      "name": "[format('{0}-{1}', replace(variables('avSetNameConv'), '##', padLeft(add(add(range(0, variables('calculatedAvailabilitySetsCount'))[copyIndex()], variables('calculatedAvailabilitySetsIndex')), 1), 2, '0')), variables('deploymentSuffix'))]",
+      "name": "[format('shr-{0}-{1}', replace(variables('avSetNameConv'), '##', padLeft(add(add(range(0, variables('calculatedAvailabilitySetsCount'))[copyIndex()], variables('calculatedAvailabilitySetsIndex')), 1), 2, '0')), variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -673,7 +666,7 @@
       },
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2022-09-01",
-      "name": "[format('VMs-Batch-{0}-{1}', sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1), variables('deploymentSuffix'))]",
+      "name": "[format('shr-vm-batch-{0}-{1}', range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -705,14 +698,14 @@
           "dataCollectionEndpointResourceId": {
             "value": "[parameters('dataCollectionEndpointResourceId')]"
           },
-          "dedicatedHostGroupResourceId": {
-            "value": "[parameters('dedicatedHostGroupResourceId')]"
+          "dedicatedHostGroupResourceIds": {
+            "value": "[parameters('dedicatedHostGroupResourceIds')]"
           },
-          "dedicatedHostGroupZones": {
-            "value": "[parameters('dedicatedHostGroupZones')]"
+          "dedicatedHostResourceIds": {
+            "value": "[parameters('dedicatedHostResourceIds')]"
           },
-          "dedicatedHostResourceId": {
-            "value": "[parameters('dedicatedHostResourceId')]"
+          "preferredZones": {
+            "value": "[parameters('preferredZones')]"
           },
           "deploymentSuffix": {
             "value": "[variables('deploymentSuffix')]"
@@ -752,11 +745,11 @@
           "fslogixOSSGroups": {
             "value": "[parameters('fslogixOSSGroups')]"
           },
-          "fslogixLocalNetAppServerFqdns": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixLocalNetAppVolumeResourceIds')))), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', variables('deploymentSuffix'))), '2022-09-01').outputs.localNetAppVolumeSmbServerFqdns.value), createObject('value', createArray()))]",
+          "fslogixLocalNetAppServerFqdns": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixLocalNetAppVolumeResourceIds')))), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('shr-netAppVolumeFqdns-{0}', variables('deploymentSuffix'))), '2022-09-01').outputs.localNetAppVolumeSmbServerFqdns.value), createObject('value', createArray()))]",
           "fslogixLocalStorageAccountResourceIds": {
             "value": "[parameters('fslogixLocalStorageAccountResourceIds')]"
           },
-          "fslogixRemoteNetAppServerFqdns": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixRemoteNetAppVolumeResourceIds')))), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', variables('deploymentSuffix'))), '2022-09-01').outputs.remoteNetAppVolumeSmbServerFqdns.value), createObject('value', createArray()))]",
+          "fslogixRemoteNetAppServerFqdns": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixRemoteNetAppVolumeResourceIds')))), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('shr-netAppVolumeFqdns-{0}', variables('deploymentSuffix'))), '2022-09-01').outputs.remoteNetAppVolumeSmbServerFqdns.value), createObject('value', createArray()))]",
           "fslogixRemoteStorageAccountResourceIds": {
             "value": "[parameters('fslogixRemoteStorageAccountResourceIds')]"
           },
@@ -854,7 +847,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.28.1.47646",
-              "templateHash": "6025614113154324259"
+              "templateHash": "5953236343688573572"
             }
           },
           "parameters": {
@@ -885,14 +878,14 @@
             "dataCollectionEndpointResourceId": {
               "type": "string"
             },
-            "dedicatedHostGroupResourceId": {
-              "type": "string"
-            },
-            "dedicatedHostGroupZones": {
+            "dedicatedHostGroupResourceIds": {
               "type": "array"
             },
-            "dedicatedHostResourceId": {
-              "type": "string"
+            "dedicatedHostResourceIds": {
+              "type": "array"
+            },
+            "preferredZones": {
+              "type": "array"
             },
             "diskEncryptionSetResourceId": {
               "type": "string"
@@ -1159,7 +1152,7 @@
               "name": "[if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex()]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[copyIndex()]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[copyIndex()]]))]",
               "location": "[parameters('location')]",
               "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))]",
-              "zones": "[if(or(not(empty(parameters('dedicatedHostResourceId'))), not(empty(parameters('dedicatedHostGroupResourceId')))), parameters('dedicatedHostGroupZones'), if(and(equals(parameters('availability'), 'AvailabilityZones'), not(empty(parameters('availabilityZones')))), createArray(parameters('availabilityZones')[mod(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), length(parameters('availabilityZones')))]), null()))]",
+              "zones": "[if(and(and(not(empty(parameters('preferredZones'))), less(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('preferredZones')))), not(empty(parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]]))), parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]], if(and(equals(parameters('availability'), 'AvailabilityZones'), not(empty(parameters('availabilityZones')))), createArray(parameters('availabilityZones')[mod(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), length(parameters('availabilityZones')))]), null()))]",
               "identity": "[variables('identity')]",
               "properties": {
                 "availabilitySet": "[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(div(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), 200), 1), 2, '0')))), null())]",
@@ -1171,8 +1164,8 @@
                 "hardwareProfile": {
                   "vmSize": "[parameters('virtualMachineSize')]"
                 },
-                "host": "[if(not(empty(parameters('dedicatedHostResourceId'))), createObject('id', parameters('dedicatedHostResourceId')), null())]",
-                "hostGroup": "[if(and(not(empty(parameters('dedicatedHostGroupResourceId'))), empty(parameters('dedicatedHostResourceId'))), createObject('id', parameters('dedicatedHostGroupResourceId')), null())]",
+                "host": "[if(and(and(not(empty(parameters('dedicatedHostResourceIds'))), less(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('dedicatedHostResourceIds')))), not(empty(parameters('dedicatedHostResourceIds')[range(0, variables('sessionHostCount'))[copyIndex()]]))), createObject('id', parameters('dedicatedHostResourceIds')[range(0, variables('sessionHostCount'))[copyIndex()]]), null())]",
+                "hostGroup": "[if(and(and(and(not(empty(parameters('dedicatedHostGroupResourceIds'))), less(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('dedicatedHostGroupResourceIds')))), not(empty(parameters('dedicatedHostGroupResourceIds')[range(0, variables('sessionHostCount'))[copyIndex()]]))), or(or(empty(parameters('dedicatedHostResourceIds')), greaterOrEquals(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('dedicatedHostResourceIds')))), empty(parameters('dedicatedHostResourceIds')[range(0, variables('sessionHostCount'))[copyIndex()]]))), createObject('id', parameters('dedicatedHostGroupResourceIds')[range(0, variables('sessionHostCount'))[copyIndex()]]), null())]",
                 "storageProfile": {
                   "imageReference": "[parameters('imageReference')]",
                   "osDisk": {
@@ -1621,7 +1614,7 @@
               "condition": "[not(empty(parameters('sessionHostCustomizations')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2022-09-01",
-              "name": "[format('{0}-Customizations-{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), parameters('deploymentSuffix'))]",
+              "name": "[format('shr-{0}-customizations-{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -1745,7 +1738,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2022-09-01",
-              "name": "[format('{0}-disable-osDisk-PublicAccess-{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), parameters('deploymentSuffix'))]",
+              "name": "[format('shr-{0}-disableDiskPublicAccess-{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -1775,7 +1768,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.28.1.47646",
-                      "templateHash": "7755680603214976461"
+                      "templateHash": "2973508975051768049"
                     }
                   },
                   "parameters": {
@@ -1799,7 +1792,7 @@
                     {
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2022-09-01",
-                      "name": "[format('Update-OSDisk-{0}-Stage2-{1}', parameters('vmName'), parameters('deploymentSuffix'))]",
+                      "name": "[format('shr-update-osDisk-{0}-stage2-{1}', parameters('vmName'), parameters('deploymentSuffix'))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -1874,7 +1867,7 @@
       },
       "dependsOn": [
         "availabilitySets",
-        "[resourceId('Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', variables('deploymentSuffix')))]"
+        "[resourceId('Microsoft.Resources/deployments', format('shr-netAppVolumeFqdns-{0}', variables('deploymentSuffix')))]"
       ]
     }
   ]

@@ -167,8 +167,8 @@
 								{
 									"name": "templateSpecName",
 									"type": "Microsoft.Common.TextBox",
-									"label": "Template Spec Name",
-									"toolTip": "Name for the new template spec. Leave empty for auto-generated name.",
+									"label": "Custom Template Spec Name",
+									"toolTip": "Custom Name for the new template spec. Leave empty for auto-generated name.",
 									"visible": "[equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new')]",
 									"constraints": {
 										"required": false,
@@ -190,18 +190,26 @@
 									}
 								},
 								{
-									"name": "scheduleTextBlock",
+									"name": "scheduleHeader",
 									"type": "Microsoft.Common.TextBlock",
 									"options": {
-										"text": "Configure the execution schedule and session host lifecycle management settings."
+										"text": "<u>Schedule</u>"
 									}
 								},
 								{
 									"name": "scheduleInfoBox",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
-										"text": "The function will run at the selected hours on the selected days of the week. For example, selecting the times 8 AM, 9 AM, 10 AM, 11 AM, 12 PM, 1 PM, 2 PM, 3 PM, 4 PM, and 5 PM along with Monday-Friday will run the function every hour from 8 AM to 5 PM on weekdays only. The schedule uses the timezone selected in the 'Session Hosts' blade.",
+										"text": "The function will run every 30 minutes during the selected hours on the selected days of the week. For example, selecting 8 AM to 5 PM with Monday-Friday will run the function at :00 and :30 of each hour from 8 AM to 5 PM on weekdays only. Use the Start Minute to offset the schedule (e.g., :15 and :45). The schedule uses the timezone selected in the 'Session Hosts' blade.",
 										"style": "Info"
+									}
+								},
+								{
+									"name": "scheduleBestPracticesInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"text": "<b>Best Practices:</b>\n\n<b>Off-Peak Hours:</b> Schedule replacements during off-peak hours (typically overnight or early morning, e.g., 12 AM - 6 AM) when Azure Virtual Desktop Scaling Plans have already powered off most VMs for cost savings. The Session Host Replacer prioritizes powered-off VMs for replacement, resulting in zero user impact and optimal cost efficiency.\n\n<b>Staggering Multiple Deployments:</b> If managing multiple host pools, stagger the execution time by setting different start minutes for each deployment to prevent simultaneous runs and avoid API throttling. The function executes twice per hour: at the start minute and 30 minutes later (e.g., :15 and :45 if start minute is 15).",
+										"style": "Success"
 									}
 								},
 								{
@@ -390,23 +398,31 @@
 									}
 								},
 								{
-									"name": "scheduleStaggeringTextBlock",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "To prevent multiple function apps from running simultaneously and potentially causing API throttling, you can stagger the execution time by setting different start minutes for each deployment. The function will execute at the specified minute within each scheduled hour."
-									}
-								},
-								{
 									"name": "scheduleMinuteOffset",
 									"type": "Microsoft.Common.Slider",
 									"label": "Start Minute",
-									"toolTip": "The minute within each hour when the function will execute. For example, if set to 15, the function will run at :15 of each scheduled hour (8:15, 9:15, etc.). Set to 0 to run at the top of each hour. Use different values across deployments to stagger execution.",
+									"toolTip": "The function executes twice per hour at this minute and 30 minutes later. For example, if set to 15, the function runs at :15 and :45 of each scheduled hour (8:15, 8:45, 9:15, 9:45, etc.). Set to 0 to run at :00 and :30. Use different values across deployments to stagger execution.",
 									"min": 0,
-									"max": 59,
-									"defaultValue": 15,
+									"max": 29,
+									"defaultValue": 0,
 									"showStepMarkers": false,
 									"constraints": {
 										"required": true
+									}
+								},
+								{
+									"name": "lifecyleManagementTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "<u>Lifecycle Settings</u>"
+									}
+								},
+								{
+									"name": "lifecycleManagementInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"text": "<b>Lifecycle Management Overview</b><br/><br/>Configure how session hosts are automatically replaced when new image versions are available:<br/><br/><b>1. Image Update Triggers:</b><ul><li><b>New Image Version Delay</b> - Optional waiting period after image publication before triggering replacements (useful for testing)</li><li><b>Image Version Rollback Protection</b> - Prevents accidental downgrades to older images</li></ul><br/><b>2. Replacement Strategy:</b><ul><li><b>Side-by-Side Mode</b> - Adds new hosts before deleting old ones (zero downtime, higher temporary cost, no dedicated host support)</li><li><b>Delete-First Mode</b> - Deletes idle hosts then adds replacements (lower cost, preserves dedicated hosts and zones, temporary capacity reduction)</li></ul><br/><b>3. Session Protection:</b><ul><li><b>Drain Grace Period</b> - How long hosts with active sessions remain available before forced deletion</li><li><b>Minimum Drain Time</b> (Delete-First only) - Safety buffer for idle hosts before deletion (prevents race conditions)</li></ul><br/><b>4. Capacity & Pace Controls:</b><ul><li><b>Availability Safety Floor</b> (Delete-First only) - Percentage-based safety limit ensures pool never drops below minimum availability (e.g., 50% of 100 = always keep ≥50 VMs)</li><li><b>Blast Radius Limit</b> (Delete-First only) - Absolute per-cycle cap limits impact regardless of headroom (e.g., max 50 VMs/cycle even with 200 VM headroom)</li><li><b>Target Count</b> - Desired number of session hosts (0 = auto-detect and maintain current count)</li><li><b>Max Deployment Batch Size</b> (Side-by-Side only) - Controls deployment pace in Side-by-Side mode</li><li><b>Minimum Host Index</b> (Side-by-Side only) - Starting number for hostname sequencing</li></ul><br/><b>5. Advanced Features:</b><ul><li><b>Progressive Scale-Up</b> - Gradually increases deployment percentage to catch issues early (applies on top of other limits)</li><li><b>Shutdown Retention</b> (Side-by-Side only) - Deallocates replaced hosts instead of deleting for quick rollback capability</li></ul>",
+										"style": "Info"
 									}
 								},
 								{
@@ -420,7 +436,7 @@
 									"name": "replaceSessionHostOnNewImageVersionDelayDays",
 									"type": "Microsoft.Common.Slider",
 									"label": "New Image Version Delay (days)",
-									"toolTip": "Number of days to wait after a new image is published before triggering replacements.",
+									"toolTip": "Number of days to wait after a new image is published before triggering replacements. This allows for ringed deployments and testing before widespread replacements occur. Set to 0 for immediate replacements upon new image detection.",
 									"min": 0,
 									"max": 30,
 									"defaultValue": 0,
@@ -440,10 +456,48 @@
 									}
 								},
 								{
+									"name": "replacementMode",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Replacement Mode",
+									"toolTip": "<b>Replacement Mode Options:</b><br/><br/><b>Side-by-Side (Add then Delete):</b><ul><li>Adds new session hosts before deleting old ones</li><li>Zero downtime during updates</li><li>Higher cost during update cycles (can temporarily double host pool size)</li><li><b>Does NOT support dedicated hosts</b> - dedicated host properties will not be preserved</li><li>Requires sufficient vCPU quota and subnet IP space for both old and new hosts simultaneously</li></ul><br/><b>Delete-First (Delete then Add):</b><ul><li>Deletes idle session hosts before adding replacements</li><li>Lower cost (maintains approximately target capacity throughout)</li><li>Temporary capacity reduction during replacements</li><li><b>Supports dedicated hosts</b> - preserves dedicated host assignments and zones</li><li>Reuses hostnames for seamless transitions</li></ul>",
+									"defaultValue": "SideBySide",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "Side-by-Side (Add then Delete)",
+												"value": "SideBySide"
+											},
+											{
+												"label": "Delete-First (Delete then Add)",
+												"value": "DeleteFirst"
+											}
+										]
+									}
+								},
+								{
+									"name": "sideBySideWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
+									"options": {
+										"style": "Warning",
+										"text": "Side-By-Side mode does NOT support dedicated hosts. Dedicated host properties from existing VMs will not be preserved during replacements. Use Delete-First mode if you require dedicated host support."
+									}
+								},
+								{
+									"name": "sideBySideCapacityWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
+									"options": {
+										"style": "Warning",
+										"text": "Side-By-Side mode can temporarily DOUBLE your host pool size during replacements. Ensure you have sufficient vCPU quota and subnet IP address space to accommodate both old and new session hosts simultaneously."
+									}
+								},
+								{
 									"name": "drainGracePeriodHours",
 									"type": "Microsoft.Common.Slider",
-									"label": "Drain Grace Period (hours)",
-									"toolTip": "Session hosts will remain in drain mode for this duration before deletion.",
+									"label": "Drain Grace Period for Active Sessions (hours)",
+									"toolTip": "Session hosts WITH active sessions will remain in drain mode for this duration before shutdown or deletion. This protects user sessions.",
 									"min": 1,
 									"max": 168,
 									"defaultValue": 24,
@@ -451,6 +505,48 @@
 									"constraints": {
 										"required": true
 									}
+								},
+								{
+									"name": "minimumDrainMinutes",
+									"type": "Microsoft.Common.Slider",
+									"label": "Minimum Drain Time for Idle Hosts (minutes)",
+									"toolTip": "Session hosts with ZERO sessions require only this minimum drain time before deletion. With hourly scheduling: 0=current run, 1-60=next run (~1hr), 61-120=second run (~2hrs). Values >0 provide safety buffer for API lag and race conditions.",
+									"min": 0,
+									"max": 120,
+									"defaultValue": 15,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": true
+									},
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst')]"
+								},
+								{
+									"name": "minimumCapacityPercentage",
+									"type": "Microsoft.Common.Slider",
+									"label": "Availability Safety Floor (%)",
+									"toolTip": "<b>Availability Safety Floor:</b> Prevents pool capacity from dropping below this percentage during replacements, ensuring minimum availability. Most relevant as replacement progresses and pool size decreases.<br/><br/><b>Example:</b> With 100 target VMs and 50% floor, pool will never drop below 50 VMs.<br/><br/><b>Guidance:</b> 80% = very conservative (only 20% headroom), 50% = balanced (allows more aggressive replacement). Works with 'Blast Radius Limit' - this prevents dropping too low, that limits pace.",
+									"min": 50,
+									"max": 100,
+									"defaultValue": 50,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": true
+									},
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst')]"
+								},
+								{
+									"name": "maxDeletionsPerCycle",
+									"type": "Microsoft.Common.Slider",
+									"label": "Blast Radius Limit (VMs per cycle)",
+									"toolTip": "<b>Blast Radius Limit:</b> Caps the absolute number of VMs deleted/deployed per cycle, regardless of available headroom above the safety floor. Limits impact if issues occur during replacement.<br/><br/><b>Example:</b> With 500 target VMs and 50% floor (250 minimum), you have 250 VM headroom. Setting this to 50 means max 50 deleted per cycle despite having 250 of headroom.<br/><br/><b>Guidance:</b> Small pools (< 100 VMs): 20-50. Large pools (> 200 VMs): 50-100. Lower = slower/safer, higher = faster replacement. Works with Progressive Scale-Up which further limits initial cycles.",
+									"min": 1,
+									"max": 1000,
+									"defaultValue": 50,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": true
+									},
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst')]"
 								},
 								{
 									"name": "targetSessionHostCount",
@@ -466,104 +562,41 @@
 									}
 								},
 								{
+									"name": "sideBySideBufferInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
+									"options": {
+										"text": "<b>Automatic Capacity Buffer:</b> Side-by-Side mode automatically allows your pool to grow up to 2× the target count during replacements. Example: 100 target VMs → up to 200 total VMs temporarily (100 old + 100 new). Ensure you have sufficient vCPU quota and subnet IP address space for double your target capacity. The pool returns to target size after old hosts are deleted.",
+										"style": "Info"
+									}
+								},
+								{
 									"name": "maxDeploymentBatchSize",
 									"type": "Microsoft.Common.Slider",
-									"label": "Maximum Deployment Batch Size",
-									"toolTip": "Maximum number of hosts to deploy per run (ceiling constraint).",
+									"label": "Deployment Batch Size Ceiling",
+									"toolTip": "<b>Deployment Ceiling:</b> Maximum number of VMs that can be deployed in a single cycle, but actual deployments are controlled by Progressive Scale-Up which starts conservatively and increases gradually.<br/><br/><b>How it works:</b> With Progressive Scale-Up enabled (default), initial cycles deploy a small percentage (e.g., 20%), then gradually increase (50%, 80%, 100%) after successful runs. This ceiling prevents deploying more than this limit even at 100%.<br/><br/><b>Example:</b> 100 target VMs, ceiling set to 100, Progressive Scale-Up at 20%: Cycle 1 deploys ~20 VMs (not 100), then 40 VMs, then 64 VMs, then up to 100 VM ceiling.<br/><br/><b>Guidance:</b> Set to maximum you're comfortable deploying simultaneously. Progressive Scale-Up provides safety for initial cycles.",
 									"min": 1,
 									"max": 1000,
 									"defaultValue": 100,
 									"showStepMarkers": false,
 									"constraints": {
 										"required": true
-									}
+									},
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]"
 								},
 								{
-									"name": "tagManagementHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "<u>Tag Management</u>"
-									}
-								},
-								{
-									"name": "fixSessionHostTags",
-									"type": "Microsoft.Common.CheckBox",
-									"defaultValue": true,
-									"label": "Fix Session Host Tags",
-									"toolTip": "Automatically correct session host tags during execution."
-								},
-								{
-									"name": "includePreExistingSessionHosts",
-									"type": "Microsoft.Common.CheckBox",
-									"defaultValue": true,
-									"label": "Include Pre-Existing Session Hosts",
-									"toolTip": "Include session hosts that existed before this solution was deployed."
-								},
-								{
-									"name": "tagIncludeInAutomation",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Include in Automation Tag Name",
-									"defaultValue": "IncludeInAutoReplace",
+									"name": "minimumHostIndex",
+									"type": "Microsoft.Common.Slider",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
+									"label": "Minimum Host Index",
+									"toolTip": "The minimum starting index for hostname numbering in Side-By-Side mode. All new hosts start from this number (e.g., 10 creates host10, host11, etc.).",
+									"min": 1,
+									"max": 999,
+									"defaultValue": 1,
+									"showStepMarkers": false,
 									"constraints": {
-										"required": true
+										"required": false
 									}
-								},
-								{
-									"name": "tagDeployTimestamp",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Deploy Timestamp Tag Name",
-									"defaultValue": "AutoReplaceDeployTimestamp",
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "tagPendingDrainTimestamp",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Pending Drain Timestamp Tag Name",
-									"defaultValue": "AutoReplacePendingDrainTimestamp",
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "tagScalingPlanExclusionTag",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Scaling Plan Exclusion Tag Name",
-									"defaultValue": "ScalingPlanExclusion",
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "deviceCleanupHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "<u>Device Cleanup</u>"
-									}
-								},
-								{
-									"name": "deviceCleanupInfoBox",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"text": "<b>Device Cleanup Automation Overview</b><br/><br/>Device cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. <b>This is especially important when session hosts are Entra ID-joined</b> (i.e., not joined to Active Directory Domain Services or Entra Domain Services) to prevent accumulation of orphaned device records.<br/><br/><b>Required Permissions:</b><br/>This feature requires a User-Assigned Managed Identity with the following Microsoft Graph API permissions:<ul><li><b>'Directory.ReadWrite.All'</b> - Required for Entra ID device deletion</li><li><b>'DeviceManagementManagedDevices.ReadWrite.All'</b> - Required for Intune device deletion</li></ul><b>Important Note:</b> <i>Device.ReadWrite.All</i> does NOT allow device deletion despite its name. You must use <i>Directory.ReadWrite.All</i> for Entra ID device cleanup.<br/><br/>Ensure these permissions are granted to the user-assigned managed identity before deployment.<br/><br/><b>Important:</b> If you enable either cleanup option below, you <b>must select a pre-existing User-Assigned Managed Identity</b> in the Infrastructure section that has been granted the appropriate Microsoft Graph API permissions.<br/><br/><b>Air-Gapped Cloud Limitations:</b><br/>Intune is not currently available in Air-Gapped Clouds such as <b>Azure Government Secret</b> and <b>Azure Government Top Secret</b>. In these environments, the Intune Device Cleanup option will be automatically disabled, and the 'DeviceManagementManagedDevices.ReadWrite.All' permission is not required.",
-										"style": "Info",
-										"uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
-									}
-								},
-								{
-									"name": "removeEntraDevice",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Remove Entra ID Device Records",
-									"toolTip": "Remove Entra ID device records when deleting session hosts.",
-									"defaultValue": true
-								},
-								{
-									"name": "removeIntuneDevice",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Remove Intune Device Records",
-									"toolTip": "Remove Intune device records when deleting session hosts.",
-									"defaultValue": true
 								},
 								{
 									"name": "progressiveScaleUpHeader",
@@ -627,23 +660,143 @@
 									"constraints": {
 										"required": true
 									}
-								}
-							]
-						},
-						{
-							"name": "infrastructure",
-							"type": "Microsoft.Common.Section",
-							"label": "Infrastructure",
-							"elements": [
+								},
 								{
-									"name": "infrastructureInfoBox",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice)]",
+									"name": "shutdownRetentionHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
 									"options": {
-										"text": "Device cleanup automation requires a User-Assigned Managed Identity with the following Microsoft Graph API permissions:<ul><li><b>'Directory.ReadWrite.All'</b> - Required for Entra ID device deletion</li><li><b>'DeviceManagementManagedDevices.ReadWrite.All'</b> - Required for Intune device deletion</li></ul>Note: <i>Device.ReadWrite.All</i> does NOT allow device deletion despite its name. You must use <i>Directory.ReadWrite.All</i> for Entra ID device cleanup.",
+										"text": "<u>Shutdown Retention for Rollback</u>"
+									}
+								},
+								{
+									"name": "shutdownRetentionInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
+									"options": {
+										"text": "Enable shutdown retention to deallocate replaced session hosts instead of deleting them immediately. VMs remain in the host pool (in drain mode) for a configurable period, allowing you to power them on for rollback if issues are discovered. After the retention period expires, VMs are automatically removed from the host pool and deleted.",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "enableShutdownRetention",
+									"type": "Microsoft.Common.CheckBox",
+									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
+									"label": "Enable Shutdown Retention",
+									"toolTip": "Deallocate replaced session hosts instead of deleting them immediately, keeping them available for rollback.",
+									"defaultValue": false
+								},
+								{
+									"name": "shutdownRetentionDays",
+									"type": "Microsoft.Common.Slider",
+									"visible": "[and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention)]",
+									"label": "Shutdown Retention Period (Days)",
+									"toolTip": "Number of days to retain shutdown session hosts before automatic deletion. VMs incur only storage costs while deallocated.",
+									"min": 1,
+									"max": 7,
+									"defaultValue": 3,
+									"showStepMarkers": true,
+									"constraints": {
+										"required": false
+									}
+								},
+								{
+									"name": "tagManagementHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "<u>Tag Management</u>"
+									}
+								},
+								{
+									"name": "fixSessionHostTags",
+									"type": "Microsoft.Common.CheckBox",
+									"defaultValue": true,
+									"label": "Fix Session Host Tags",
+									"toolTip": "Automatically correct session host tags during execution."
+								},
+								{
+									"name": "includePreExistingSessionHosts",
+									"type": "Microsoft.Common.CheckBox",
+									"defaultValue": true,
+									"label": "Include Pre-Existing Session Hosts",
+									"toolTip": "Include session hosts that existed before this solution was deployed."
+								},
+								{
+									"name": "tagIncludeInAutomation",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Include in Automation Tag Name",
+									"defaultValue": "IncludeInAutoReplace",
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "tagDeployTimestamp",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Deploy Timestamp Tag Name",
+									"defaultValue": "AutoReplaceDeployTimestamp",
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "tagPendingDrainTimestamp",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Pending Drain Timestamp Tag Name",
+									"defaultValue": "AutoReplacePendingDrainTimestamp",
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "tagScalingPlanExclusionTag",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Scaling Plan Exclusion Tag Name",
+									"defaultValue": "ScalingPlanExclusion",
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "tagShutdownTimestamp",
+									"type": "Microsoft.Common.TextBox",
+									"visible": "[and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention)]",
+									"label": "Shutdown Timestamp Tag Name",
+									"toolTip": "Tag name used to track when a session host was shutdown for retention period calculation.",
+									"defaultValue": "AutoReplaceShutdownTimestamp",
+									"constraints": {
+										"required": false
+									}
+								},
+								{
+									"name": "deviceCleanupHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "<u>Device Cleanup</u>"
+									}
+								},
+								{
+									"name": "deviceCleanupInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"text": "<b>Device Cleanup Automation Overview</b><br/><br/>Device cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. <b>This is especially important when session hosts are Entra ID-joined</b> (i.e., not joined to Active Directory Domain Services or Entra Domain Services) to prevent accumulation of orphaned device records.<br/><br/><b>Required Permissions:</b><br/>This feature requires a User-Assigned Managed Identity with the following Microsoft Graph API permissions:<ul><li><b>'Directory.ReadWrite.All'</b> - Required for Entra ID device deletion</li><li><b>'DeviceManagementManagedDevices.ReadWrite.All'</b> - Required for Intune device deletion</li></ul><b>Important Note:</b> <i>Device.ReadWrite.All</i> does NOT allow device deletion despite its name. You must use <i>Directory.ReadWrite.All</i> for Entra ID device cleanup.<br/><br/>Ensure these permissions are granted to the user-assigned managed identity before deployment.<br/><br/><b>Important:</b> If you enable either cleanup option below, you <b>must select a pre-existing User-Assigned Managed Identity</b> in the Infrastructure section that has been granted the appropriate Microsoft Graph API permissions.<br/><br/><b>Air-Gapped Cloud Limitations:</b><br/>Intune is not currently available in Air-Gapped Clouds such as <b>Azure Government Secret</b> and <b>Azure Government Top Secret</b>. In these environments, the Intune Device Cleanup option will be automatically disabled, and the 'DeviceManagementManagedDevices.ReadWrite.All' permission is not required.",
 										"style": "Info",
 										"uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
 									}
+								},
+								{
+									"name": "removeEntraDevice",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Remove Entra ID Device Records",
+									"toolTip": "Remove Entra ID device records when deleting session hosts.",
+									"defaultValue": true
+								},
+								{
+									"name": "removeIntuneDevice",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Remove Intune Device Records",
+									"toolTip": "Remove Intune device records when deleting session hosts.",
+									"defaultValue": true
 								},
 								{
 									"name": "sessionHostReplacerUserAssignedIdentity",
@@ -655,7 +808,14 @@
 									"constraints": {
 										"required": "[or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice)]"
 									}
-								},
+								}
+							]
+						},
+						{
+							"name": "infrastructure",
+							"type": "Microsoft.Common.Section",
+							"label": "Infrastructure",
+							"elements": [						
 								{
 									"name": "useExistingHostingPlan",
 									"type": "Microsoft.Common.CheckBox",
@@ -1638,75 +1798,6 @@
 							]
 						},
 						{
-							"name": "dedicatedHosts",
-							"type": "Microsoft.Common.Section",
-							"label": "Dedicated Hosts",
-							"elements": [
-								{
-									"name": "dedicatedHostsTextBlock1",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
-									"options": {
-										"text": "Azure Dedicated Host is a service that provides physical servers able to host one or more virtual machines assigned to one Azure subscription. Dedicated hosts are the same physical servers used in our data centers, provided instead as a directly accessible hardware resource.",
-										"link": {
-											"label": "Learn more",
-											"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/dedicated-hosts"
-										}
-									}
-								},
-								{
-									"name": "dedicatedHostsInfobox1",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": true,
-									"options": {
-										"text": "In some environments it is required to have a dedicated Azure Host to isolate Compute. This is most common in IL5 type environments. Selecting this option will ensure the VMs are deployed to pre-existing Dedicated Host(s). Click this box for more information.",
-										"uri": "https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#compute-isolation",
-										"style": "Info"
-									}
-								},
-								{
-									"name": "deployToDedicatedHosts",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Deploy to Dedicated Hosts",
-									"toolTip": "Select this check box to deploy the Virtual Machines to existing dedicated host(s)."
-								},
-								{
-									"name": "dedicatedHostsTextBlock2",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('hosts').dedicatedHosts.deployToDedicatedHosts]",
-									"options": {
-										"text": "Select the dedicated host group and optionally the specific dedicated host below. Leave the dedicated host blank if you want to use automatic host selection.",
-										"link": {
-											"label": "Learn more",
-											"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/dedicated-hosts#manual-vs-automatic-placement"
-										}
-									}
-								},
-								{
-									"name": "hostGroupsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(not(empty(steps('hosts').scope.subscription.id)), steps('hosts').dedicatedHosts.deployToDedicatedHosts)]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/hostGroups?api-version=2023-09-01')]"
-									}
-								},
-								{
-									"name": "dedicatedHostGroup",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Dedicated Host Group",
-									"multiLine": true,
-									"toolTip": "Select the dedicated host group to which the Virtual Machines will be deployed using automatic host selection.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('hosts').dedicatedHosts.hostGroupsApi.value, (hg) => equals(hg.location, steps('hosts').scope.location.name)), (hg) => parse(concat('{\"label\":\"', hg.name, '\",\"description\":\"Resource Group: ', first(skip(split(hg.id, '/'), 4)), ', Availability Zone: ', hg.zones, '\",\"value\":\"', hg.id, '\"}')))]"
-									},
-									"visible": "[steps('hosts').dedicatedHosts.deployToDedicatedHosts]"
-								}
-							],
-							"visible": true
-						},
-						{
 							"name": "specs",
 							"type": "Microsoft.Common.Section",
 							"label": "Capacity and Performance",
@@ -1870,7 +1961,7 @@
 									"visible": "[equals(steps('hosts').availability.availability, 'AvailabilityZones')]"
 								}
 							],
-							"visible": "[equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false)]"
+							"visible": true
 						},
 						{
 							"name": "registration",
@@ -1882,7 +1973,7 @@
 									"type": "Microsoft.Common.TextBox",
 									"label": "AVD Agent DSC Package",
 									"placeholder": "",
-									"defaultValue": "Configuration_1.0.03211.1002.zip",
+									"defaultValue": "Configuration_1.0.03266.1110.zip",
 									"toolTip": "Provide the full URL (or just the file name to use the default storage account for the environment) to the DSC Configuration Package containing the AVD Agents and code to register the virtual machines as session hosts in the environment.",
 									"constraints": {
 										"required": true,
@@ -2841,12 +2932,20 @@
 				"sessionHostTemplateSpecResourceId": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing'), steps('functionApp').executionSettings.templateSpecResourceSelector.id, '')]",
 				"templateSpecName": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecName, '')]",
 				"templateSpecVersion": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecVersion, '1.0.0')]",
-				"timerSchedule": "[concat('0 ', string(steps('functionApp').executionSettings.scheduleMinuteOffset), ' ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]" ,
+				"timerSchedule": "[concat('0 ', string(steps('functionApp').executionSettings.scheduleMinuteOffset), ',', string(add(steps('functionApp').executionSettings.scheduleMinuteOffset, 30)), ' ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]",
 				"replaceSessionHostOnNewImageVersionDelayDays": "[steps('functionApp').executionSettings.replaceSessionHostOnNewImageVersionDelayDays]",
 				"allowImageVersionRollback": "[steps('functionApp').executionSettings.allowImageVersionRollback]",
+				"replacementMode": "[steps('functionApp').executionSettings.replacementMode]",
 				"drainGracePeriodHours": "[steps('functionApp').executionSettings.drainGracePeriodHours]",
+				"minimumDrainMinutes": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst'), steps('functionApp').executionSettings.minimumDrainMinutes, 0)]",
+				"minimumCapacityPercentage": "[steps('functionApp').executionSettings.minimumCapacityPercentage]",
+				"maxDeletionsPerCycle": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst'), steps('functionApp').executionSettings.maxDeletionsPerCycle, 5)]",
+				"minimumHostIndex": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.minimumHostIndex, 1)]",
+				"enableShutdownRetention": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention, false)]",
+				"shutdownRetentionDays": "[if(and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention), steps('functionApp').executionSettings.shutdownRetentionDays, 3)]",
+				"tagShutdownTimestamp": "[if(and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention), steps('functionApp').executionSettings.tagShutdownTimestamp, 'AutoReplaceShutdownTimestamp')]",
 				"targetSessionHostCount": "[steps('functionApp').executionSettings.targetSessionHostCount]",
-				"maxDeploymentBatchSize": "[steps('functionApp').executionSettings.maxDeploymentBatchSize]",
+				"maxDeploymentBatchSize": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.maxDeploymentBatchSize, 100)]",
 				"fixSessionHostTags": "[steps('functionApp').executionSettings.fixSessionHostTags]",
 				"includePreExistingSessionHosts": "[steps('functionApp').executionSettings.includePreExistingSessionHosts]",
 				"tagIncludeInAutomation": "[steps('functionApp').executionSettings.tagIncludeInAutomation]",
@@ -2859,7 +2958,7 @@
 				"initialDeploymentPercentage": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.initialDeploymentPercentage, 10)]",
 				"scaleUpIncrementPercentage": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.scaleUpIncrementPercentage, 20)]",
 				"successfulRunsBeforeScaleUp": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.successfulRunsBeforeScaleUp, 1)]",
-				"sessionHostReplacerUserAssignedIdentityResourceId": "[if(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), steps('functionApp').infrastructure.sessionHostReplacerUserAssignedIdentity.id, '')]",
+				"sessionHostReplacerUserAssignedIdentityResourceId": "[if(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), steps('functionApp').executionSettings.sessionHostReplacerUserAssignedIdentity.id, '')]",
 				"appServicePlanResourceId": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, steps('functionApp').infrastructure.appServicePlan, '')]",
 				"appServicePlanSku": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.planSku, 'PremiumV3_P0v3')]",
 				"zoneRedundant": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.zoneRedundant, false)]",
@@ -2896,8 +2995,8 @@
 				"diskSizeGB": "[steps('hosts').specs.diskSizeGB]",
 				"diskSku": "[steps('hosts').specs.diskSku]",
 				"enableAcceleratedNetworking": "[steps('hosts').specs.enableAcceleratedNetworking]",
-				"availability": "[if(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), steps('hosts').availability.availability, 'none')]",
-				"availabilityZones": "[if(and(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), equals(steps('hosts').availability.availability, 'AvailabilityZones')), steps('hosts').availability.availabilityZones, parse('[]'))]",
+				"availability": "[steps('hosts').availability.availability]",
+				"availabilityZones": "[if(equals(steps('hosts').availability.availability, 'AvailabilityZones'), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
 				"artifactsContainerUri": "[if(and(steps('hosts').customScripts.addCustomScripts, not(empty(steps('hosts').customScripts.storageAccount)), not(empty(steps('hosts').customScripts.container))), concat(steps('hosts').customScripts.storageAccount.blobEndpoint, steps('hosts').customScripts.container), '')]",
 				"artifactsUserAssignedIdentityResourceId": "[if(and(steps('hosts').customScripts.addCustomScripts, not(empty(steps('hosts').customScripts.managedIdentity))), steps('hosts').customScripts.managedIdentity.id, '')]",

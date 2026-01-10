@@ -42,7 +42,7 @@
             "name": "HostPool",
             "type": 2,
             "isRequired": true,
-            "query": "traces\n| where timestamp > ago(30d)\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| distinct HostPoolName\n| order by HostPoolName asc\n| project value = HostPoolName, label = HostPoolName, selected = false\n| union (datatable(value:string, label:string, selected:bool) [\n    \"*\", \"All Host Pools\", true\n])",
+            "query": "traces\n| where timestamp > ago(30d)\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where HostPoolName !in ('bool', 'string', 'int', 'object', 'array')\n| distinct HostPoolName\n| order by HostPoolName asc\n| project value = HostPoolName, label = HostPoolName, selected = false\n| union (datatable(value:string, label:string, selected:bool) [\n    \"*\", \"All Host Pools\", true\n])",
             "crossComponentResources": [
               "{ApplicationInsights}"
             ],
@@ -105,7 +105,91 @@
     {
       "type": 1,
       "content": {
-        "json": "### 📊 Key Performance Indicators"
+        "json": "### ⚙️ Configuration Settings"
+      },
+      "name": "config-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"SETTINGS |\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend ReplacementMode = extract(@\"ReplacementMode: ([A-Za-z]+)\", 1, message)\n| extend MinimumDrainMinutes = extract(@\"MinimumDrainMinutes: (\\d+)\", 1, message)\n| extend DrainGracePeriodHours = extract(@\"DrainGracePeriodHours: (\\d+)\", 1, message)\n| extend MinimumCapacityPercent = extract(@\"MinimumCapacityPercent: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend MaxDeletionsPerCycle = extract(@\"MaxDeletionsPerCycle: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend EnableProgressiveScaleUp = extract(@\"EnableProgressiveScaleUp: ([A-Za-z]+)\", 1, message)\n| extend InitialDeploymentPercent = extract(@\"InitialDeploymentPercent: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend ScaleUpIncrementPercent = extract(@\"ScaleUpIncrementPercent: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend SuccessfulRunsBeforeScaleUp = extract(@\"SuccessfulRunsBeforeScaleUp: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend MaxDeploymentBatchSize = extract(@\"MaxDeploymentBatchSize: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend MinimumHostIndex = extract(@\"MinimumHostIndex: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend EnableShutdownRetention = extract(@\"EnableShutdownRetention: ([A-Za-z\\/]+)\", 1, message)\n| extend ShutdownRetentionDays = extract(@\"ShutdownRetentionDays: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend TargetSessionHostCount = extract(@\"TargetSessionHostCount: ([\\d\\/A-Za-z]+)\", 1, message)\n| summarize arg_max(timestamp, *) by HostPoolName\n| project \n    ['Host Pool'] = HostPoolName,\n    ['Replacement Mode'] = ReplacementMode,\n    ['Min Drain (min)'] = MinimumDrainMinutes,\n    ['Grace Period (hrs)'] = DrainGracePeriodHours,\n    ['Target Count'] = case(TargetSessionHostCount == \"0\" or TargetSessionHostCount == \"Auto\", \"Auto-Detect\", TargetSessionHostCount),\n    ['Progressive Scale-Up'] = case(EnableProgressiveScaleUp == \"True\", strcat(\"✅ Enabled (\", InitialDeploymentPercent, \"% → +\", ScaleUpIncrementPercent, \"% every \", SuccessfulRunsBeforeScaleUp, \" success)\"), \"❌ Disabled\"),\n    ['Min Capacity %'] = case(ReplacementMode == \"DeleteFirst\", strcat(MinimumCapacityPercent, \"%\"), \"N/A\"),\n    ['Max Deletions/Cycle'] = case(ReplacementMode == \"DeleteFirst\", MaxDeletionsPerCycle, \"N/A\"),\n    ['Max Batch Size'] = case(ReplacementMode == \"SideBySide\", MaxDeploymentBatchSize, \"N/A\"),\n    ['Min Host Index'] = case(ReplacementMode == \"SideBySide\", MinimumHostIndex, \"N/A\"),\n    ['Shutdown Retention'] = case(ReplacementMode == \"SideBySide\" and EnableShutdownRetention == \"True\", strcat(\"✅ Enabled (\", ShutdownRetentionDays, \" days)\"), ReplacementMode == \"SideBySide\" and EnableShutdownRetention != \"True\", \"❌ Disabled\", \"N/A\")",
+        "size": 3,
+        "title": "Function App Settings",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": [
+          "{ApplicationInsights}"
+        ],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Replacement Mode",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "DeleteFirst",
+                    "representation": "blue",
+                    "text": "🔄 DeleteFirst"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "SideBySide",
+                    "representation": "green",
+                    "text": "➕ SideBySide"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "gray",
+                    "text": "{0}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "Progressive Scale-Up",
+              "formatter": 0
+            },
+            {
+              "columnMatch": "Min Capacity %",
+              "formatter": 0
+            },
+            {
+              "columnMatch": "Max Deletions/Cycle",
+              "formatter": 0
+            },
+            {
+              "columnMatch": "Max Batch Size",
+              "formatter": 0
+            },
+            {
+              "columnMatch": "Min Host Index",
+              "formatter": 0
+            },
+            {
+              "columnMatch": "Shutdown Retention",
+              "formatter": 0
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "100",
+      "name": "config-table"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n### 📊 Key Performance Indicators"
       },
       "name": "kpi-header"
     },
@@ -244,7 +328,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\nlet results = traces\n| where timestamp > ago(7d)\n| where message contains \"SCHEDULE\" and message contains \"completed\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| summarize LastRun = max(timestamp) by HostPoolName\n| extend MinutesSinceLastRun = datetime_diff('minute', now(), LastRun)\n| extend Status = case(\n    MinutesSinceLastRun > 90, \"⚠️ Delayed\",\n    MinutesSinceLastRun > 65, \"🟡 Due Soon\",\n    \"🟢 On Schedule\"\n)\n| project HostPool = HostPoolName, ['Last Execution'] = LastRun, ['Minutes Ago'] = MinutesSinceLastRun, Status;\nresults\n| union (datatable(HostPool:string, ['Last Execution']:datetime, ['Minutes Ago']:long, Status:string) ['No Data', datetime(null), 0, 'ℹ️ No Data'])\n| where HostPool != 'No Data' or toscalar(results | count) == 0\n| order by HostPool asc",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet results = traces\n| where timestamp > ago(7d)\n| where message contains \"SCHEDULE\" and message contains \"completed\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| summarize LastRun = max(timestamp) by HostPoolName\n| extend MinutesSinceLastRun = datetime_diff('minute', now(), LastRun)\n| extend Status = case(\n    MinutesSinceLastRun > 45, \"⚠️ Delayed\",\n    MinutesSinceLastRun > 35, \"🟡 Due Soon\",\n    \"🟢 On Schedule\"\n)\n| project HostPool = HostPoolName, ['Last Execution'] = LastRun, ['Minutes Ago'] = MinutesSinceLastRun, Status;\nresults\n| union (datatable(HostPool:string, ['Last Execution']:datetime, ['Minutes Ago']:long, Status:string) ['No Data', datetime(null), 0, 'ℹ️ No Data'])\n| where HostPool != 'No Data' or toscalar(results | count) == 0\n| order by HostPool asc",
         "size": 0,
         "title": "Recent Execution History",
         "timeContext": {

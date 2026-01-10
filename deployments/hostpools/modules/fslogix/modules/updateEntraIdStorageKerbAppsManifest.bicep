@@ -18,7 +18,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-11-01' existing 
 }
 
 resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
-  name: 'Update-Storage-Account-Applications'
+  name: 'Update-Storage-Account-Application-Manifest'
   location: location
   parent: virtualMachine
   properties: {
@@ -41,16 +41,12 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
         value: string(privateEndpoint)
       }
       {
-        name: 'TenantId'
-        value: subscription().tenantId
-      }
-      {
         name: 'EnableCloudGroupSids'
         value: string(enableCloudGroupSids)
       }      
     ]
     source: {
-      script: loadTextContent('../../../../../.common/scripts/Update-StorageAccountApplications.ps1')
+      script: loadTextContent('../../../../../.common/scripts/Update-StorageAccountApplicationManifest.ps1')
     }
     timeoutInSeconds: 300
     treatFailureAsDeploymentFailure: true

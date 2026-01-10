@@ -33,14 +33,14 @@ param credentialsKeyVaultResourceId string
 @description('Resource ID of the data collection endpoint for Azure Monitor agent.')
 param dataCollectionEndpointResourceId string = ''
 
-@description('Resource ID of the dedicated host group for session host placement.')
-param dedicatedHostGroupResourceId string = ''
+@description('Array of resource IDs for dedicated host groups. One per session host, or single value applied to all, or empty string for VMs without assignment.')
+param dedicatedHostGroupResourceIds array = []
 
-@description('Array of availability zones for the dedicated host group.')
-param dedicatedHostGroupZones array = []
+@description('Array of resource IDs for specific dedicated hosts. One per session host, or single value applied to all, or empty string for VMs without assignment.')
+param dedicatedHostResourceIds array = []
 
-@description('Resource ID of a specific dedicated host for session host placement.')
-param dedicatedHostResourceId string = ''
+@description('Array of preferred zones for each session host. One per session host (as array like ["1"]), or empty for VMs without specific zone preference.')
+param preferredZones array = []
 
 @description('Resource ID of the disk encryption set for encrypting managed disks with customer-managed keys.')
 param diskEncryptionSetResourceId string = ''
@@ -186,9 +186,6 @@ param subnetResourceId string
 @description('Tags to apply to deployed resources. Organized by resource type.')
 param tags object = {}
 
-@description('DO NOT MODIFY THIS VALUE! The timeStamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
-param timeStamp string = utcNow('yyyyMMddHHmmss')
-
 @description('Time zone for session hosts. Use Windows time zone format (e.g., Eastern Standard Time, Pacific Standard Time).')
 param timeZone string = 'Eastern Standard Time'
 
@@ -208,7 +205,7 @@ param vmInsightsDataCollectionRulesResourceId string = ''
 
 var avSetNameConv = empty(availabilitySetNameConv) ? 'as-${substring(sessionHostNames[0], 0, length(sessionHostNames[0])-sessionHostNameIndexLength)}-##' : availabilitySetNameConv
 
-var deploymentSuffix = startsWith(deployment().name, 'Microsoft.Template-') ? substring(deployment().name, 19, 14) : timeStamp
+var deploymentSuffix = substring(deployment().name, length(deployment().name) - 14, 14)
 
 var sessionHostRegistrationDSCStorageAccount = startsWith(environment().name, 'USN')
   ? 'wvdexportalcontainer'
@@ -252,7 +249,7 @@ resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-
 }
 
 module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if(fslogixConfigureSessionHosts && (!empty(fslogixLocalNetAppVolumeResourceIds) || !empty(fslogixRemoteNetAppVolumeResourceIds))) {
-  name: 'NetAppVolumeFqdns-${deploymentSuffix}'
+  name: 'shr-netAppVolumeFqdns-${deploymentSuffix}'
   params: {
     localNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
     remoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
@@ -262,7 +259,7 @@ module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if(fslo
 
 module availabilitySets '../../../../sharedModules/resources/compute/availability-set/main.bicep' = [
   for i in range(0, calculatedAvailabilitySetsCount): if (availability == 'AvailabilitySets') {
-    name: '${replace(avSetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))}-${deploymentSuffix}'
+    name: 'shr-${replace(avSetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))}-${deploymentSuffix}'
     params: {
       name: replace(avSetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))
       platformFaultDomainCount: 2
@@ -278,7 +275,7 @@ module availabilitySets '../../../../sharedModules/resources/compute/availabilit
 @batchSize(5)
 module virtualMachines 'modules/virtualMachines.bicep' = [
   for i in range(1, sessionHostBatchCount): {
-    name: 'VMs-Batch-${i-1}-${deploymentSuffix}'
+    name: 'shr-vm-batch-${i}-${deploymentSuffix}'
     params: {
       artifactsContainerUri: artifactsContainerUri
       artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
@@ -291,9 +288,9 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
       confidentialVMOSDiskEncryptionType: confidentialVMOSDiskEncryptionType
       dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
-      dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
-      dedicatedHostGroupZones: dedicatedHostGroupZones
-      dedicatedHostResourceId: dedicatedHostResourceId
+      dedicatedHostGroupResourceIds: dedicatedHostGroupResourceIds
+      dedicatedHostResourceIds: dedicatedHostResourceIds
+      preferredZones: preferredZones
       deploymentSuffix: deploymentSuffix
       diskEncryptionSetResourceId: diskEncryptionSetResourceId
       diskSizeGB: diskSizeGB

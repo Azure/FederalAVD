@@ -91,8 +91,8 @@ param templateSpecName string = ''
 @description('Optional. The version of the Template Spec. Default is 1.0.0.')
 param templateSpecVersion string = '1.0.0'
 
-@description('Optional. Timer schedule for the function app (NCrontab format: {second} {minute} {hour} {day} {month} {day-of-week}). Default runs every hour at minute 0. To stagger across deployments, vary the minute (e.g., "0 5 * * * *" runs at 5 past each hour). For daily execution, use "0 0 2 * * *" for 2:00 AM. Note: Ranges like "0 0-15 * * * *" run EVERY hour in that range (16 times), not once randomly.')
-param timerSchedule string = '0 0 * * * *'
+@description('Optional. Timer schedule for the function app (NCrontab format: {second} {minute} {hour} {day} {month} {day-of-week}). Default runs every 30 minutes starting at minute 0 (runs at :00 and :30). To stagger across deployments, vary the minute (e.g., "0 15,45 * * * *" runs at :15 and :45 past each hour). For half-hourly execution during specific hours, use "0 0,30 8-17 * * 1-5" for 8 AM to 5 PM weekdays. The UI form automatically generates the correct format when you select hours and start minute.')
+param timerSchedule string = '0 0,30 * * * *'
 
 @description('Optional. Whether to deploy the Azure Monitor Workbook dashboard. Set to true for the first deployment or when updating the workbook. Set to false for subsequent deployments in the same subscription to avoid conflicts. Default is true.')
 param deployWorkbook bool = true
@@ -100,10 +100,45 @@ param deployWorkbook bool = true
 @description('Optional. The Azure region for the centralized workbook deployment. Defaults to the function app location. The workbook location does not affect its ability to query cross-region Application Insights instances.')
 param workbookLocation string = location
 
-@description('Optional. The grace period in hours after draining before deleting session hosts. Default is 24 hours.')
+@description('Optional. Replacement mode strategy. SideBySide: Adds new hosts before deleting old ones (higher capacity during updates, zero downtime). DeleteFirst: Deletes idle hosts before adding replacements (lower cost, temporary capacity reduction). Default is SideBySide.')
+@allowed([
+  'SideBySide'
+  'DeleteFirst'
+])
+param replacementMode string = 'SideBySide'
+
+@description('Optional. The grace period in hours after draining before deleting session hosts WITH active sessions. Default is 24 hours.')
 @minValue(1)
 @maxValue(168)
 param drainGracePeriodHours int = 24
+
+@description('Optional. Minimum drain time in minutes for session hosts with ZERO sessions before deletion. With hourly scheduling: 0=current run, 1-60=next run (~1hr), 61-120=second run (~2hrs). Values >0 provide safety buffer for API lag, race conditions, and admin intervention. Default is 15 minutes.')
+@minValue(0)
+@maxValue(120)
+param minimumDrainMinutes int = 15
+
+@description('Optional. Safety floor: minimum percentage of target capacity to maintain during DeleteFirst mode. Deletions are capped to prevent dropping below this threshold. Higher values = more conservative (e.g., 80% keeps more hosts running), lower values = more aggressive (e.g., 50% allows faster replacement). Only applies when replacementMode is DeleteFirst. Default is 80%.')
+@minValue(50)
+@maxValue(100)
+param minimumCapacityPercentage int = 80
+
+@description('Optional. Maximum number of hosts to delete and deploy per cycle in DeleteFirst mode. Controls the pace of replacements - function deletes this many idle hosts, then deploys the same number of replacements. Lower values = slower, safer updates. Only applies when replacementMode is DeleteFirst. Default is 5.')
+@minValue(1)
+@maxValue(50)
+param maxDeletionsPerCycle int = 5
+
+@description('Optional. Minimum host index for hostname numbering in SideBySide mode. Useful for starting numbering at a specific value (e.g., 10 instead of 1). Only applies when replacementMode is SideBySide. Default is 1.')
+@minValue(1)
+@maxValue(999)
+param minimumHostIndex int = 1
+
+@description('Optional. Enable shutdown retention for replaced session hosts in SideBySide mode. When enabled, old session hosts are shutdown (deallocated) instead of deleted, allowing for rollback. They are automatically deleted after the retention period expires. Only applies when replacementMode is SideBySide. Default is false.')
+param enableShutdownRetention bool = false
+
+@description('Optional. Number of days to retain shutdown session hosts before automatic deletion in SideBySide mode. Provides rollback window in case issues are discovered with new hosts. Only applies when replacementMode is SideBySide and enableShutdownRetention is true. Default is 3 days.')
+@minValue(1)
+@maxValue(7)
+param shutdownRetentionDays int = 3
 
 @description('Required. The target number of session hosts to maintain in the host pool. Set to 0 for auto-detect mode: the function will automatically maintain whatever count exists when a replacement cycle begins, allowing you to manually scale between image updates.')
 @minValue(0)
@@ -124,6 +159,9 @@ param tagDeployTimestamp string = 'AutoReplaceDeployTimestamp'
 
 @description('Optional. Tag name for pending drain timestamp. Default is AutoReplacePendingDrainTimestamp.')
 param tagPendingDrainTimestamp string = 'AutoReplacePendingDrainTimestamp'
+
+@description('Optional. Tag name for shutdown timestamp in SideBySide mode with shutdown retention. Default is AutoReplaceShutdownTimestamp.')
+param tagShutdownTimestamp string = 'AutoReplaceShutdownTimestamp'
 
 @description('Optional. Tag name for scaling plan exclusion. Default is ScalingPlanExclusion.')
 param tagScalingPlanExclusionTag string = 'ScalingPlanExclusion'
@@ -147,7 +185,7 @@ param initialDeploymentPercentage int = 20
 @maxValue(50)
 param scaleUpIncrementPercentage int = 50
 
-@description('Optional. Maximum number of hosts to deploy per run (ceiling constraint). Prevents deploying more than this number even if percentage calculation is higher. Default is 10.')
+@description('Optional. Maximum number of hosts to deploy per run in SideBySide mode. Controls the pace of new deployments - function adds this many new hosts in parallel before deleting old ones. Lower values = slower rollout, higher values = faster but more resource-intensive. Only applies when replacementMode is SideBySide. Default is 100.')
 @minValue(1)
 @maxValue(1000)
 param maxDeploymentBatchSize int = 100
@@ -273,15 +311,6 @@ param enableAcceleratedNetworking bool = true
 @description('Optional. Enable monitoring with Azure Monitor Agent.')
 param enableMonitoring bool = false
 
-@description('Optional. Dedicated host resource ID.')
-param dedicatedHostResourceId string = ''
-
-@description('Optional. Dedicated host group resource ID.')
-param dedicatedHostGroupResourceId string = ''
-
-@description('Optional. Dedicated host group zones.')
-param dedicatedHostGroupZones array = []
-
 @description('Optional. Existing disk encryption set resource ID.')
 param diskEncryptionSetResourceId string = ''
 
@@ -337,7 +366,7 @@ param fslogixRemoteNetAppVolumeResourceIds array = []
 param fslogixOSSGroups array = []
 
 @description('Optional. AVD Agents DSC package name or URL.')
-param avdAgentsDSCPackage string = 'Configuration_1.0.03211.1002.zip'
+param avdAgentsDSCPackage string = 'Configuration_1.0.03266.1110.zip'
 
 @description('Optional. Artifacts container URI for custom scripts.')
 param artifactsContainerUri string = ''
@@ -519,68 +548,95 @@ var computeGalleryResourceId = !empty(customImageResourceId)
   ? join(take(split(customImageResourceId, '/'), 9), '/')
   : ''
 
+// Conditional Session Host Parameters
+var paramArtifactsContainerUri = !empty(artifactsContainerUri) ? { artifactsContainerUri: artifactsContainerUri } : {}
+var paramArtifactsUserAssignedIdentityResourceId = !empty(artifactsUserAssignedIdentityResourceId) ? { artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId } : {}
+var paramAvailabilityZones = !empty(availabilityZones) ? { availabilityZones: availabilityZones } : {}
+var paramAvdInsightsDataCollectionRulesResourceId = !empty(avdInsightsDataCollectionRulesResourceId) ? { avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId } : {}
+var paramConfidentialVMOSDiskEncryption = confidentialVMOSDiskEncryption ? { confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption } : {}
+var paramDataCollectionEndpointResourceId = !empty(dataCollectionEndpointResourceId) ? { dataCollectionEndpointResourceId: dataCollectionEndpointResourceId } : {}
+var paramDiskEncryptionSetResourceId = !empty(diskEncryptionSetResourceId) ? { diskEncryptionSetResourceId: diskEncryptionSetResourceId } : {}
+var paramDomainName = !empty(domainName) ? { domainName: domainName } : {}
+var paramEnableMonitoring = enableMonitoring ? { enableMonitoring: enableMonitoring } : {}
+var paramIntegrityMonitoring = integrityMonitoring ? { integrityMonitoring: integrityMonitoring } : {}
+var paramIntuneEnrollment = intuneEnrollment ? { intuneEnrollment: intuneEnrollment } : {}
+var paramOuPath = !empty(ouPath) ? { ouPath: ouPath } : {}
+var paramSessionHostCustomizations = !empty(sessionHostCustomizations) ? { sessionHostCustomizations: sessionHostCustomizations } : {}
+var paramVmInsightsDataCollectionRulesResourceId = !empty(vmInsightsDataCollectionRulesResourceId) ? { vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId } : {}
+
+// FSLogix conditional parameters
+var paramFslogixConfigureSessionHosts = fslogixConfigureSessionHosts ? { fslogixConfigureSessionHosts: fslogixConfigureSessionHosts } : {}
+var paramFslogixContainerType = fslogixConfigureSessionHosts ? { fslogixContainerType: fslogixContainerType } : {}
+var paramFslogixFileShareNames = fslogixConfigureSessionHosts && !empty(fslogixFileShareNames) ? { fslogixFileShareNames: fslogixFileShareNames } : {}
+var paramFslogixLocalNetAppVolumeResourceIds = fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds) ? { fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds } : {}
+var paramFslogixLocalStorageAccountResourceIds = fslogixConfigureSessionHosts && !empty(fslogixLocalStorageAccountResourceIds) ? { fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds } : {}
+var paramFslogixOSSGroups = fslogixConfigureSessionHosts && !empty(fslogixOSSGroups) ? { fslogixOSSGroups: fslogixOSSGroups } : {}
+var paramFslogixRemoteNetAppVolumeResourceIds = fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds) ? { fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds } : {}
+var paramFslogixRemoteStorageAccountResourceIds = fslogixConfigureSessionHosts && !empty(fslogixRemoteStorageAccountResourceIds) ? { fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds } : {}
+var paramFslogixSizeInMBs = fslogixConfigureSessionHosts ? { fslogixSizeInMBs: fslogixSizeInMBs } : {}
+var paramFslogixStorageService = fslogixConfigureSessionHosts ? { fslogixStorageService: fslogixStorageService } : {}
+
 // Session Host Parameters - Passed to Template Spec Deployment
 // These parameters are passed to the function app which will use them when deploying new session hosts
-var sessionHostParameters = {
-  artifactsContainerUri: artifactsContainerUri
-  artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
-  availability: availability
-  availabilitySetNameConv: availabilitySetNameConv
-  availabilityZones: availabilityZones
-  avdAgentsDSCPackage: avdAgentsDSCPackage
-  avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
-  confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
-  credentialsKeyVaultResourceId: credentialsKeyVaultResourceId
-  dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
-  dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
-  dedicatedHostGroupZones: dedicatedHostGroupZones
-  dedicatedHostResourceId: dedicatedHostResourceId
-  diskEncryptionSetResourceId: diskEncryptionSetResourceId
-  diskSizeGB: diskSizeGB
-  diskSku: diskSku
-  domainName: domainName
-  enableAcceleratedNetworking: enableAcceleratedNetworking
-  encryptionAtHost: encryptionAtHost
-  fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
-  fslogixContainerType: fslogixContainerType
-  fslogixFileShareNames: fslogixFileShareNames
-  fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
-  fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
-  fslogixOSSGroups: fslogixOSSGroups
-  fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
-  fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
-  fslogixSizeInMBs: fslogixSizeInMBs
-  fslogixStorageService: fslogixStorageService
-  hostPoolResourceId: hostPoolResourceId
-  identitySolution: identitySolution
-  imageReference: empty(customImageResourceId)
-    ? {
-        publisher: imagePublisher
-        offer: imageOffer
-        sku: imageSku
-      }
-    : {
-        id: customImageResourceId
-      }
-  integrityMonitoring: integrityMonitoring
-  intuneEnrollment: intuneEnrollment
-  location: virtualMachineResourceGroupLocation
-  enableMonitoring: enableMonitoring
-  networkInterfaceNameConv: networkInterfaceNameConv
-  osDiskNameConv: diskNameConv
-  ouPath: ouPath
-  secureBootEnabled: secureBootEnabled
-  securityType: securityType
-  sessionHostCustomizations: sessionHostCustomizations
-  sessionHostNameIndexLength: sessionHostNameIndexLength
-  subnetResourceId: virtualMachineSubnetResourceId
-  tags: tags
-  timeZone: timeZone
-  virtualMachineNameConv: virtualMachineNameConv
-  virtualMachineSize: virtualMachineSize
-  vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId
-  vTpmEnabled: vTpmEnabled
-}
+var sessionHostParameters = union(
+  {
+    availability: availability
+    availabilitySetNameConv: availabilitySetNameConv
+    avdAgentsDSCPackage: avdAgentsDSCPackage
+    credentialsKeyVaultResourceId: credentialsKeyVaultResourceId
+    diskSizeGB: diskSizeGB
+    diskSku: diskSku
+    enableAcceleratedNetworking: enableAcceleratedNetworking
+    encryptionAtHost: encryptionAtHost
+    hostPoolResourceId: hostPoolResourceId
+    identitySolution: identitySolution
+    imageReference: empty(customImageResourceId)
+      ? {
+          publisher: imagePublisher
+          offer: imageOffer
+          sku: imageSku
+        }
+      : {
+          id: customImageResourceId
+        }
+    location: virtualMachineResourceGroupLocation
+    networkInterfaceNameConv: networkInterfaceNameConv
+    osDiskNameConv: diskNameConv
+    secureBootEnabled: secureBootEnabled
+    securityType: securityType
+    sessionHostNameIndexLength: sessionHostNameIndexLength
+    subnetResourceId: virtualMachineSubnetResourceId
+    tags: tags
+    timeZone: timeZone
+    virtualMachineNameConv: virtualMachineNameConv
+    virtualMachineSize: virtualMachineSize
+    vTpmEnabled: vTpmEnabled
+  },
+  paramArtifactsContainerUri,
+  paramArtifactsUserAssignedIdentityResourceId,
+  paramAvailabilityZones,
+  paramAvdInsightsDataCollectionRulesResourceId,
+  paramConfidentialVMOSDiskEncryption,
+  paramDataCollectionEndpointResourceId,
+  paramDiskEncryptionSetResourceId,
+  paramDomainName,
+  paramEnableMonitoring,
+  paramIntegrityMonitoring,
+  paramIntuneEnrollment,
+  paramOuPath,
+  paramSessionHostCustomizations,
+  paramVmInsightsDataCollectionRulesResourceId,
+  paramFslogixConfigureSessionHosts,
+  paramFslogixContainerType,
+  paramFslogixFileShareNames,
+  paramFslogixLocalNetAppVolumeResourceIds,
+  paramFslogixLocalStorageAccountResourceIds,
+  paramFslogixOSSGroups,
+  paramFslogixRemoteNetAppVolumeResourceIds,
+  paramFslogixRemoteStorageAccountResourceIds,
+  paramFslogixSizeInMBs,
+  paramFslogixStorageService
+)
 
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: last(split(sessionHostReplacerUserAssignedIdentityResourceId, '/'))
@@ -739,132 +795,188 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)
     encryptionKeyName: encryptionKeyName
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
-    functionAppAppSettings: [
-      {
-        name: 'DeploymentPrefix'
-        value: 'shr-${uniqueStringHosts}'
-      }
-      {
-        name: 'DrainGracePeriodHours'
-        value: string(drainGracePeriodHours)
-      }
-      {
-        name: 'EnableProgressiveScaleUp'
-        value: string(enableProgressiveScaleUp)
-      }
-      {
-        name: 'FixSessionHostTags'
-        value: string(fixSessionHostTags)
-      }
-      {
-        name: 'GraphEndpoint'
-        value: graphEndpoint
-      }
-      {
-        name: 'HostPoolName'
-        value: hostPoolName
-      }
-      {
-        name: 'HostPoolResourceGroupName'
-        value: hostPoolResourceGroupName
-      }
-      {
-        name: 'HostPoolSubscriptionId'
-        value: hostPoolSubscriptionId
-      }
-      {
-        name: 'IncludePreExistingSessionHosts'
-        value: string(includePreExistingSessionHosts)
-      }
-      {
-        name: 'InitialDeploymentPercentage'
-        value: string(initialDeploymentPercentage)
-      }
-      {
-        name: 'MaxDeploymentBatchSize'
-        value: string(maxDeploymentBatchSize)
-      }
-      {
-        name: 'RemoveEntraDevice'
-        value: string(removeEntraDevice)
-      }
-      {
-        name: 'RemoveIntuneDevice'
-        value: string(removeIntuneDevice)
-      }
-      {
-        name: 'ReplaceSessionHostOnNewImageVersionDelayDays'
-        value: string(replaceSessionHostOnNewImageVersionDelayDays)
-      }
-      {
-        name: 'AllowImageVersionRollback'
-        value: string(allowImageVersionRollback)
-      }
-      {
-        name: 'ScaleUpIncrementPercentage'
-        value: string(scaleUpIncrementPercentage)
-      }
-      {
-        name: 'SessionHostNameIndexLength'
-        value: string(sessionHostNameIndexLength)
-      }
-      {
-        name: 'SessionHostNamePrefix'
-        value: sessionHostNamePrefix
-      }
-      {
-        name: 'SessionHostParameters'
-        value: string(sessionHostParameters)
-      }
-      {
-        name: 'SessionHostTemplate'
-        value: !empty(sessionHostTemplateSpecResourceId)
-          ? sessionHostTemplateSpecResourceId
-          : templateSpec!.outputs.templateSpecResourceId
-      }
-      {
-        name: 'SubscriptionId'
-        value: subscription().subscriptionId
-      }
-      {
-        name: 'SuccessfulRunsBeforeScaleUp'
-        value: string(successfulRunsBeforeScaleUp)
-      }
-      {
-        name: 'Tag_DeployTimestamp'
-        value: tagDeployTimestamp
-      }
-      {
-        name: 'Tag_IncludeInAutomation'
-        value: tagIncludeInAutomation
-      }
-      {
-        name: 'Tag_PendingDrainTimestamp'
-        value: tagPendingDrainTimestamp
-      }
-      {
-        name: 'Tag_ScalingPlanExclusionTag'
-        value: tagScalingPlanExclusionTag
-      }
-      {
-
-        name: 'TargetSessionHostCount'
-        value: string(targetSessionHostCount)
-      }
-
-      {
-        name: 'VirtualMachinesResourceGroupName'
-        value: virtualMachinesResourceGroupName
-      }
-      {
-        name: 'VirtualMachinesSubscriptionId'
-        value: virtualMachinesSubscriptionId
-      }
-      {
-        name: 'WEBSITE_TIME_ZONE'
-        value: timeZone
-      }
-    ]
+    functionAppAppSettings: union(
+      [
+        {
+          name: 'DeploymentPrefix'
+          value: 'shr-${uniqueStringHosts}'
+        }
+        {
+          name: 'DrainGracePeriodHours'
+          value: string(drainGracePeriodHours)
+        }
+        {
+          name: 'MinimumDrainMinutes'
+          value: string(minimumDrainMinutes)
+        }
+        {
+          name: 'ReplacementMode'
+          value: replacementMode
+        }
+        {
+          name: 'MinimumCapacityPercentage'
+          value: string(minimumCapacityPercentage)
+        }
+      ],
+      replacementMode == 'DeleteFirst'
+        ? [
+            {
+              name: 'MaxDeletionsPerCycle'
+              value: string(maxDeletionsPerCycle)
+            }
+          ]
+        : [],
+      [
+        {
+          name: 'EnableProgressiveScaleUp'
+          value: string(enableProgressiveScaleUp)
+        }
+        {
+          name: 'FixSessionHostTags'
+          value: string(fixSessionHostTags)
+        }
+        {
+          name: 'GraphEndpoint'
+          value: graphEndpoint
+        }
+        {
+          name: 'HostPoolName'
+          value: hostPoolName
+        }
+        {
+          name: 'HostPoolResourceGroupName'
+          value: hostPoolResourceGroupName
+        }
+        {
+          name: 'HostPoolSubscriptionId'
+          value: hostPoolSubscriptionId
+        }
+        {
+          name: 'IncludePreExistingSessionHosts'
+          value: string(includePreExistingSessionHosts)
+        }
+        {
+          name: 'InitialDeploymentPercentage'
+          value: string(initialDeploymentPercentage)
+        }
+      ],
+      replacementMode == 'SideBySide'
+        ? [
+            {
+              name: 'MaxDeploymentBatchSize'
+              value: string(maxDeploymentBatchSize)
+            }
+          ]
+        : [],
+      replacementMode == 'SideBySide'
+        ? [
+            {
+              name: 'MinimumHostIndex'
+              value: string(minimumHostIndex)
+            }
+          ]
+        : [],
+      replacementMode == 'SideBySide'
+        ? [
+            {
+              name: 'EnableShutdownRetention'
+              value: string(enableShutdownRetention)
+            }
+          ]
+        : [],
+      replacementMode == 'SideBySide'
+        ? [
+            {
+              name: 'ShutdownRetentionDays'
+              value: string(shutdownRetentionDays)
+            }
+          ]
+        : [],
+      [
+        {
+          name: 'RemoveEntraDevice'
+          value: string(removeEntraDevice)
+        }
+        {
+          name: 'RemoveIntuneDevice'
+          value: string(removeIntuneDevice)
+        }
+        {
+          name: 'ReplaceSessionHostOnNewImageVersionDelayDays'
+          value: string(replaceSessionHostOnNewImageVersionDelayDays)
+        }
+        {
+          name: 'AllowImageVersionRollback'
+          value: string(allowImageVersionRollback)
+        }
+        {
+          name: 'ScaleUpIncrementPercentage'
+          value: string(scaleUpIncrementPercentage)
+        }
+        {
+          name: 'SessionHostNameIndexLength'
+          value: string(sessionHostNameIndexLength)
+        }
+        {
+          name: 'SessionHostNamePrefix'
+          value: sessionHostNamePrefix
+        }
+        {
+          name: 'SessionHostParameters'
+          value: string(sessionHostParameters)
+        }
+        {
+          name: 'SessionHostTemplate'
+          value: !empty(sessionHostTemplateSpecResourceId)
+            ? sessionHostTemplateSpecResourceId
+            : templateSpec!.outputs.templateSpecResourceId
+        }
+        {
+          name: 'SubscriptionId'
+          value: subscription().subscriptionId
+        }
+        {
+          name: 'SuccessfulRunsBeforeScaleUp'
+          value: string(successfulRunsBeforeScaleUp)
+        }
+        {
+          name: 'Tag_DeployTimestamp'
+          value: tagDeployTimestamp
+        }
+        {
+          name: 'Tag_IncludeInAutomation'
+          value: tagIncludeInAutomation
+        }
+        {
+          name: 'Tag_PendingDrainTimestamp'
+          value: tagPendingDrainTimestamp
+        }
+        {
+          name: 'Tag_ShutdownTimestamp'
+          value: tagShutdownTimestamp
+        }
+        {
+          name: 'Tag_ScalingPlanExclusionTag'
+          value: tagScalingPlanExclusionTag
+        }
+        {
+          name: 'TargetSessionHostCount'
+          value: string(targetSessionHostCount)
+        }
+        {
+          name: 'VirtualMachinesResourceGroupName'
+          value: virtualMachinesResourceGroupName
+        }
+        {
+          name: 'VirtualMachinesSubscriptionId'
+          value: virtualMachinesSubscriptionId
+        }
+        {
+          name: 'WEBSITE_TIME_ZONE'
+          value: timeZone
+        }
+      ]
+    )
     functionAppDelegatedSubnetResourceId: functionAppDelegatedSubnetResourceId
     functionAppName: functionAppName
     functionAppUserAssignedIdentityResourceId: sessionHostReplacerUserAssignedIdentityResourceId
@@ -892,6 +1004,13 @@ module functionCode '../../sharedModules/custom/functionApp/function.bicep' = {
       'run.ps1': loadTextContent('functions/run.ps1')
       '../profile.ps1': loadTextContent('functions/profile.ps1')
       '../requirements.psd1': loadTextContent('functions/requirements.psd1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Deployment.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Deployment.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.ImageManagement.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.ImageManagement.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Planning.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Planning.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.DeviceCleanup.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.DeviceCleanup.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Lifecycle.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Lifecycle.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Monitoring.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Monitoring.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.psd1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psd1')
     }

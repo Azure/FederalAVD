@@ -331,7 +331,7 @@ param imageSku string = 'win11-24h2-avd-m365'
 param customImageResourceId string = ''
 
 @description('Optional. The DSC package name or full Url used by the PowerShell DSC extension to install the AVD Agent and register the virtual machine as a Session Host.')
-param avdAgentsDSCPackage string = 'Configuration_1.0.03211.1002.zip'
+param avdAgentsDSCPackage string = 'Configuration_1.0.03266.1110.zip'
 
 @description('Optional. Instruct the AVD Agent Installation script to automatically download the latest agent version during installation.zip.')
 param useAgentDownloadEndpoint bool = false
@@ -687,15 +687,6 @@ var hostPoolVmTemplate = deploymentType != 'SessionHostsOnly'
   : {}
 
 // Conditional Host Resource Group Tags
-var vmIntuneEnrollment = contains(identitySolution, 'DomainServices') ? {} : { vmIntuneEnrollment: intuneEnrollment }
-var vmDomain = contains(identitySolution, 'DomainServices') && !empty(domainName) ? { vmDomain: domainName } : {}
-var vmOU = contains(identitySolution, 'DomainServices') && !empty(vmOUPath) ? { vmOUPath: vmOUPath } : {}
-var vmCustomImageId = empty(customImageResourceId) ? {} : { vmCustomImageId: customImageResourceId }
-var vmImageOffer = !empty(customImageResourceId) || empty(imageOffer) ? {} : { vmImageOffer: imageOffer }
-var vmImagePublisher = !empty(customImageResourceId) || empty(imagePublisher)
-  ? {}
-  : { vmImagePublisher: imagePublisher }
-var vmImageSku = !empty(customImageResourceId) || empty(imageSku) ? {} : { vmImageSku: imageSku }
 var diskEncryptionSetName = confidentialVMOSDiskEncryption
         ? resourceNames.outputs.diskEncryptionSetNames.confidentialVMs
         : startsWith(keyManagementDisks, 'CustomerManaged')
@@ -703,9 +694,6 @@ var diskEncryptionSetName = confidentialVMOSDiskEncryption
             : contains(keyManagementDisks, 'PlatformManagedAndCustomerManaged')
                 ? resourceNames.outputs.diskEncryptionSetNames.platformAndCustomerManaged
                 : null
-var vmDiskEncryptionSetName = empty(diskEncryptionSetName)
-  ? {}
-  : { vmDiskEncryptionSetName: diskEncryptionSetName }
 
 var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
   ? { fslLocalStorageAccountNames: string(map(fslogix!.outputs.storageAccountResourceIds, id => last(split(id, '/')))) }
@@ -734,7 +722,7 @@ var fslRemoteNetAppVolumeResourceIds = !empty(fslogixExistingRemoteNetAppVolumeR
   ? { fslRemoteNetAppVolumeResourceIds: string(fslogixExistingRemoteNetAppVolumeResourceIds) }
   : {}
 
-// FSLogix tags for hosts resource group
+// FSLogix configuration tags for hosts resource group
 var fslogixConfigurationTags = fslogixConfigureSessionHosts
   ? union(
       { fslContainerType: fslogixContainerType },
@@ -749,6 +737,20 @@ var fslogixConfigurationTags = fslogixConfigureSessionHosts
     )
   : {}
      
+var vmIntuneEnrollment = contains(identitySolution, 'DomainServices') ? {} : { vmIntuneEnrollment: intuneEnrollment }
+var vmDomain = contains(identitySolution, 'DomainServices') && !empty(domainName) ? { vmDomain: domainName } : {}
+var vmOU = contains(identitySolution, 'DomainServices') && !empty(vmOUPath) ? { vmOUPath: vmOUPath } : {}
+var vmCustomImageId = empty(customImageResourceId) ? {} : { vmCustomImageId: customImageResourceId }
+var vmImageOffer = !empty(customImageResourceId) || empty(imageOffer) ? {} : { vmImageOffer: imageOffer }
+var vmImagePublisher = !empty(customImageResourceId) || empty(imagePublisher)
+  ? {}
+  : { vmImagePublisher: imagePublisher }
+var vmImageSku = !empty(customImageResourceId) || empty(imageSku) ? {} : { vmImageSku: imageSku }
+var vmDiskEncryptionSetName = empty(diskEncryptionSetName)
+  ? {}
+  : { vmDiskEncryptionSetName: diskEncryptionSetName }
+
+// VM configuration tags for hosts resource group
 var vmConfigurationTags = union(
   {
     vmIdentityType: identitySolution
@@ -872,16 +874,6 @@ var deployDiskAccessResource = contains(hostPoolType, 'Personal') && recoverySer
   ? true
   : false
 
-var dedicatedHostGroupName = !empty(dedicatedHostResourceId)
-  ? split(dedicatedHostResourceId, '/')[8]
-  : !empty(dedicatedHostGroupResourceId) ? last(split(dedicatedHostGroupResourceId, '/')) : ''
-var dedicatedHostSub = !empty(dedicatedHostResourceId)
-  ? split(dedicatedHostResourceId, '/')[2]
-  : !empty(dedicatedHostGroupResourceId) ? split(dedicatedHostGroupResourceId, '/')[2] : ''
-var dedicatedHostRG = !empty(dedicatedHostResourceId)
-  ? split(dedicatedHostResourceId, '/')[4]
-  : !empty(dedicatedHostGroupResourceId) ? split(dedicatedHostGroupResourceId, '/')[4] : ''
-
 // Custom Tags for Host Pool
 var hostsResourceGroupIdTag = {
   hostsResourceGroupId: '/subscriptions/${hostsSubscription}/resourceGroups/${resourceNames.outputs.resourceGroupHosts}'
@@ -909,13 +901,6 @@ var encryptionKeyVaultUri = contains(keyManagementStorageAccounts, 'Customer') |
       ? management!.outputs.encryptionKeyVaultUri
       : (empty(existingEncryptionKeyVaultResourceId) ? '' : kvEncryption!.properties.vaultUri))
   : ''
-
-// Existing Resources
-
-resource dedicatedHostGroup 'Microsoft.Compute/hostGroups@2024-11-01' existing = if (!empty(dedicatedHostGroupName)) {
-  scope: resourceGroup(dedicatedHostSub, dedicatedHostRG)
-  name: dedicatedHostGroupName
-}
 
 // Existing Session Host Virtual Network location
 resource vmVirtualNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existing = {
@@ -1358,7 +1343,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
           : existingDataCollectionEndpointResourceId)
       : ''
     dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
-    dedicatedHostGroupZones: !empty(dedicatedHostGroupName) ? dedicatedHostGroup!.zones : []
     dedicatedHostResourceId: dedicatedHostResourceId
     deployDiskAccessPolicy: deployDiskAccessPolicy
     deployDiskAccessResource: deployDiskAccessResource

@@ -4,22 +4,93 @@
 
 ## Overview
 
-The Session Host Replacer is an automated Azure Function that manages the lifecycle of Azure Virtual Desktop session hosts. It monitors session host age and image versions, automatically draining and replacing outdated VMs to maintain fleet health, security compliance, and image currency.
+The Session Host Replacer is an automated Azure Function that manages the lifecycle of Azure Virtual Desktop session hosts. It monitors session host image versions and automatically drains and replaces outdated VMs to maintain fleet health, security compliance, and image currency.
 
 **Key Features:**
-- Automated age-based replacement (configurable threshold, default: 45 days)
-- Image version tracking with automatic updates
-- Graceful session draining with configurable grace period (default: 24 hours)
-- Progressive scale-up for gradual rollouts
-- Tag-based opt-in model
-- Optional Entra ID and Intune device cleanup
-- Template Spec integration
+- **Flexible replacement strategies**: SideBySide (zero-downtime) or DeleteFirst (cost-optimized)
+- **Image version tracking** with automatic updates
+- **Graceful session draining** with configurable grace periods (default: 24 hours)
+- **Minimum drain time** safety buffer for zero-session hosts (default: 15 minutes)
+- **Progressive scale-up** for gradual, validated rollouts
+- **Shutdown retention** for rollback capability (SideBySide mode)
+- **Auto-detect target count** for dynamic scaling plan compatibility
+- **Tag-based opt-in** model with automatic tag healing
+- **Device cleanup** (Entra ID + Intune) with automatic hostname reuse
+- **Template Spec integration** for consistent deployments
+- **Comprehensive monitoring** with pre-built Azure Monitor Workbook dashboard
+- **Multi-cloud support** (Commercial, GCC High, DoD, China; US Secret/Top Secret)
+
+## Replacement Modes
+
+### SideBySide Mode (Default)
+- **Zero downtime**: New hosts added before old ones removed
+- **Host pool temporarily doubles** during replacement cycles
+- **Shutdown retention option**: Keep old hosts powered off for rollback
+- **Auto-detect target count**: Compatible with dynamic scaling plans
+- **Best for**: Production environments with SLA requirements
+
+### DeleteFirst Mode
+- **Cost optimized**: No host pool doubling, pays only for needed capacity
+- **Temporary capacity reduction**: Deletes idle hosts before deploying replacements
+- **Hostname reuse**: Leverages deleted names for new hosts
+- **Dedicated host preservation**: Maintains host group assignments
+- **Device cleanup required**: Graph API permissions mandatory
+- **Best for**: Cost-sensitive environments, resource constraints (IPs/quotas), dedicated hosts
+
+See the [complete mode comparison](../deployments/add-ons/SessionHostReplacer/readme.md#replacement-modes) for detailed decision guidance.
 
 ## Quick Start
 
 For detailed deployment instructions, prerequisites, and configuration options, refer to the complete add-on documentation:
 
 **[Session Host Replacer Add-On - Complete Documentation](../deployments/add-ons/SessionHostReplacer/readme.md)**
+
+## Key Capabilities
+
+### Progressive Scale-Up
+Gradual deployment rollouts that start with small percentages and increase after successful deployments:
+- Configurable initial percentage (e.g., 10% of needed hosts)
+- Incremental scale-up after consecutive successes
+- Automatic reset on failures or new image versions
+- Works in both SideBySide and DeleteFirst modes
+
+### Shutdown Retention (SideBySide Mode)
+Rollback capability by retaining old session hosts in shutdown state:
+- Configurable retention period (1-7 days)
+- Automatic cleanup after retention expires
+- Enables quick rollback if issues discovered with new image
+- No additional cost (deallocated VMs only incur disk storage costs)
+
+### Auto-Detect Target Count (SideBySide Mode)
+Automatically maintains the current host count at replacement cycle start:
+- Perfect for environments using dynamic scaling plans
+- Adapts to manual scaling adjustments between image updates
+- Function captures initial count when first outdated host detected
+- Maintained throughout entire replacement cycle
+
+### Ringed Rollout Support
+Delay replacement after new image detection for validation:
+- Configurable delay (0-30 days)
+- Validate new image in production before fleet-wide rollout
+- Similar to Windows Update ring strategy
+- Enables gradual exposure of new images
+
+### Device Cleanup & Hostname Reuse
+Automatic cleanup of stale device records with intelligent hostname reuse:
+- Removes Entra ID and Intune device records
+- **DeleteFirst mode**: Reuses hostnames from deleted hosts (prevents name exhaustion)
+- **DeleteFirst mode**: Preserves dedicated host assignments
+- Automatic verification of resource cleanup before reuse
+
+### Comprehensive Monitoring
+Pre-built Azure Monitor Workbook dashboard:
+- Real-time replacement cycle progress
+- Progressive scale-up status tracking
+- Deployment success/failure trends
+- Host pool health metrics
+- Image version adoption timeline
+- Error and warning alerts
+- Cross-region support (single dashboard for all regions)
 
 ## Migration from Integrated Feature
 
@@ -28,6 +99,8 @@ If you were previously using the Session Host Replacer as an integrated hostpool
 - Easier updates and maintenance
 - Support for multiple hostpools
 - Enhanced configuration flexibility
+- New replacement modes (DeleteFirst)
+- New features (shutdown retention, progressive scale-up, auto-detect)
 
 ---
 
