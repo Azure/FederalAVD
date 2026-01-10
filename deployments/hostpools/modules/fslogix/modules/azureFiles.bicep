@@ -334,6 +334,27 @@ module configureEntraKerberosWithoutDomainInfo 'azureFilesEntraKerberosWithoutDo
   ]
 }
 
+// PHASE 1: Update application manifest with privatelink FQDNs and tags
+// This must happen BEFORE NTFS permissions are set so authentication works through private endpoints
+module updateStorageApplicationsManifest 'updateEntraIdStorageKerbAppsManifest.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+  name: 'Update-Storage-App-Manifest-${deploymentSuffix}'
+  scope: resourceGroup(deploymentResourceGroupName)
+  params: {
+    appDisplayNamePrefix: '[Storage Account] ${storageAccountNamePrefix}'
+    enableCloudGroupSids: identitySolution == 'EntraKerberos-CloudOnly' ? true : false
+    location: location
+    privateEndpoint: privateEndpoint
+    userAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
+    virtualMachineName: deploymentVirtualMachineName
+  }
+  dependsOn: [
+    privateEndpoints
+    shares
+    configureEntraKerberosWithDomainInfo
+    configureEntraKerberosWithoutDomainInfo
+  ]
+}
+
 module SetNTFSPermissions 'setNTFSPermissionsAzureFiles.bicep' = {
   name: 'Set-NTFS-Permissions-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
@@ -354,25 +375,22 @@ module SetNTFSPermissions 'setNTFSPermissionsAzureFiles.bicep' = {
     configureEntraKerberosWithDomainInfo
     configureEntraKerberosWithoutDomainInfo
     configureADDSAuth
+    updateStorageApplicationsManifest
   ]
 }
 
-module updateStorageApplications 'updateEntraIdStorageKerbApps.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
-  name: 'Update-Storage-Applications-${deploymentSuffix}'
+// PHASE 2: Grant admin consent to storage account applications
+// This must happen AFTER NTFS permissions are set
+module grantStorageApplicationsConsent 'grantEntraIdStorageKerbAppsConsent.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+  name: 'Grant-Storage-App-Consent-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     appDisplayNamePrefix: '[Storage Account] ${storageAccountNamePrefix}'
-    enableCloudGroupSids: identitySolution == 'EntraKerberos-CloudOnly' ? true : false
     location: location
-    privateEndpoint: privateEndpoint
     userAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
     virtualMachineName: deploymentVirtualMachineName
   }
   dependsOn: [
-    privateEndpoints
-    shares
-    configureEntraKerberosWithDomainInfo
-    configureEntraKerberosWithoutDomainInfo
     SetNTFSPermissions
   ]
 }

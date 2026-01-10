@@ -12,9 +12,6 @@ param (
     [Parameter(Mandatory = $false)]
     [string]$PrivateEndpoint = "false",
 
-    [Parameter(Mandatory = $true)]
-    [string]$TenantId,
-
     [Parameter(Mandatory = $false)]
     [string]$EnableCloudGroupSids = "false"
 )
@@ -27,7 +24,7 @@ $UpdateTag = [System.Convert]::ToBoolean($EnableCloudGroupSids)
 
 # Setup Logging
 $logPath = "C:\Windows\Logs"
-$logFile = Join-Path -Path $logPath -ChildPath "Update-StorageAccountApplications-$(Get-Date -Format 'yyyyMMdd-HHmm').log"
+$logFile = Join-Path -Path $logPath -ChildPath "Update-StorageAccountApplicationManifest-$(Get-Date -Format 'yyyyMMdd-HHmm').log"
 Start-Transcript -Path $logFile -Force
 
 # Helper function to invoke Graph API with retry logic for DoD endpoints
@@ -150,6 +147,11 @@ function Invoke-GraphApiWithRetry {
 }
 
 try {
+    Write-Output "============================================"
+    Write-Output "PHASE 1: Update Storage Account Application Manifest"
+    Write-Output "This updates tags and identifier URIs for privatelink FQDN support"
+    Write-Output "============================================"
+    
     # Get Graph Access Token using Managed Identity
     $GraphUri = if ($GraphEndpoint[-1] -eq '/') { $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) } else { $GraphEndpoint }
     $TokenUri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$GraphUri&client_id=$ClientId"
@@ -164,11 +166,9 @@ try {
     }
         
     # Search for the application by DisplayName
-    # Using startswith because 'contains' or 'search' might not be supported on all graph endpoints/objects or require consistency level headers
     $searchUri = "/v1.0/applications?" + '$filter=' + "startswith(displayName, '$AppDisplayNamePrefix')"
     Write-Output "Searching for applications with prefix: $AppDisplayNamePrefix"
     try {
-        # Add ConsistencyLevel header which is often required for advanced queries
         $searchHeaders = @{ "ConsistencyLevel" = "eventual" }
         $searchResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $searchUri -Headers $searchHeaders
         
@@ -191,9 +191,8 @@ try {
 
         # 1. Update Tags
         If ($UpdateTag) {
+            Write-Output "Updating tags with kdc_enable_cloud_group_sids..."
             $tags = @("kdc_enable_cloud_group_sids")
-  
-
             $body = @{ tags = $tags } | ConvertTo-Json -Depth 5
 
             try {
@@ -202,17 +201,24 @@ try {
             }
             catch {
                 Write-Error ("Failed to update tags for $appName : " + $_.Exception.Message)
+                throw
             }
         }
         
         # 2. Update IdentifierUris for PrivateLink
         if ($PrivateLink) {
+            Write-Output "Updating IdentifierUris for PrivateLink FQDN support..."
             try {
                 # Get current app again to ensure we have latest identifierUris
                 $currentApp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $uri
                 $currentUris = $currentApp.identifierUris
                 $newUris = @($currentUris)
                 $urisChanged = $false
+
+                Write-Output "Current IdentifierUris:"
+                foreach ($existingUri in $currentUris) {
+                    Write-Output "  - $existingUri"
+                }
 
                 foreach ($identifierUri in $currentUris) {
                     # Check for standard file endpoint pattern (works across clouds: windows.net, usgovcloudapi.net, etc.)
@@ -222,6 +228,7 @@ try {
                         
                         # Add to list if not already present (preserving existing URIs)
                         if ($newUris -notcontains $privateLinkUri) {
+                            Write-Output "  Adding PrivateLink URI: $privateLinkUri"
                             $newUris += $privateLinkUri
                             $urisChanged = $true
                         }
@@ -229,10 +236,13 @@ try {
                 }
 
                 if ($urisChanged) {
-                    Write-Output "Adding PrivateLink IdentifierUris..."
                     $uriBody = @{ identifierUris = $newUris } | ConvertTo-Json -Depth 5
                     Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $uri -Body $uriBody
                     Write-Output "IdentifierUris updated successfully for $appName."
+                    Write-Output "New IdentifierUris:"
+                    foreach ($newUri in $newUris) {
+                        Write-Output "  - $newUri"
+                    }
                 }
                 else {
                     Write-Output "PrivateLink IdentifierUris already present or not applicable for $appName."
@@ -240,135 +250,18 @@ try {
             }
             catch {
                 Write-Error ("Failed to update IdentifierUris for $appName : " + $_.Exception.Message)
+                throw
             }
-        }
-
-        # 3. Grant Delegated Permissions to Storage Account Enterprise Application
-        # Note: We're NOT adding these to the App Registration's requiredResourceAccess (API Permissions).
-        # We're directly granting delegated permissions to the Enterprise Application via oauth2PermissionGrants.
-        # This keeps the App Registration clean and only shows the permissions on the Enterprise Application.
-        try {
-            Write-Output "============================================"
-            Write-Output "Granting delegated permissions to Enterprise Application for: $appName"
-            Write-Output "App ID: $($app.appId)"
-            Write-Output "============================================"
-            
-            # Get Service Principal for the Storage Account App (Enterprise Application)
-            $spUri = "/v1.0/servicePrincipals?`$filter=appId eq '$($app.appId)'"
-            Write-Output "Looking for Service Principal (Enterprise Application) with filter: appId eq '$($app.appId)'"
-            $spResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $spUri
-            
-            if ($spResp.value.Count -eq 0) {
-                Write-Warning "Service Principal (Enterprise Application) not found for AppId: $($app.appId)."
-                Write-Warning "The Enterprise Application must exist before delegated permissions can be granted."
-                Write-Warning "Please verify that the Storage Account has Azure AD authentication enabled and the Enterprise Application exists."
-            }
-            else {
-                # This is the Storage Account's Enterprise Application (Service Principal)
-                $storageAccountSP = $spResp.value[0]
-                $storageAccountServicePrincipalId = $storageAccountSP.id
-                $storageAccountSPDisplayName = $storageAccountSP.displayName
-                
-                Write-Output "Found Enterprise Application: $storageAccountSPDisplayName"
-
-                # Get Service Principal for Microsoft Graph (this is the resource being accessed)
-                $graphSpUri = "/v1.0/servicePrincipals?`$filter=appId eq '00000003-0000-0000-c000-000000000000'"
-                $graphSpResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $graphSpUri
-                $graphServicePrincipalId = $graphSpResp.value[0].id
-
-                # Check for existing delegated permission grant
-                $grantUri = "/v1.0/oauth2PermissionGrants?`$filter=clientId eq '$storageAccountServicePrincipalId'"
-                $allGrantsResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $grantUri
-                
-                # Filter manually for the specific resource
-                # Use Where clause that filters out nulls and validates the objects
-                $matchingGrants = @($allGrantsResp.value | Where-Object { $_ -and $_.resourceId -eq $graphServicePrincipalId -and $_.id })
-                
-                # Delegated permissions we want to grant
-                $scope = @("openid", "profile", "User.Read")
-                $scopeString = $scope -join " "
-                
-                if ($matchingGrants.Count -gt 0) {
-                    # Update existing delegated permission grant
-                    $existingGrant = $matchingGrants[0]
-                    $grantId = $existingGrant.id
-                    $existingScope = if ($existingGrant.scope) { $existingGrant.scope } else { "" }
-                    Write-Output "Found existing oauth2PermissionGrant with scope: '$existingScope'"
-                    
-                    # Validate grantId before attempting update
-                    if (-not $grantId) {
-                        Write-Error "Grant ID is null or empty. Cannot update grant. Existing grant object: $($existingGrant | ConvertTo-Json -Depth 5)"
-                        throw "Invalid grant object returned from Graph API"
-                    }
-                    
-                    $newScope = if ($existingScope) { $existingScope } else { "" }
-                    $scopeChanged = $false
-                    foreach ($s in $scope) {
-                        if ($newScope -notmatch "\b$s\b") {
-                            if ($newScope) { $newScope += " " }
-                            $newScope += $s
-                            $scopeChanged = $true
-                        }
-                    }
-                    
-                    if ($scopeChanged) {
-                         $updateGrantUri = "/v1.0/oauth2PermissionGrants/$grantId"
-                         $grantBody = @{
-                            scope = $newScope.Trim()
-                         } | ConvertTo-Json
-                         Write-Output "Updating oauth2PermissionGrant with new scope: '$($newScope.Trim())'"
-                         Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $updateGrantUri -Body $grantBody
-                         Write-Output "Successfully updated delegated permissions"
-                    } else {
-                        Write-Output "All required delegated permissions already exist"
-                    }
-
-                } else {
-                    # Create new delegated permission grant
-                    Write-Output "Creating new oauth2PermissionGrant..."
-                    
-                    # Validate required IDs before attempting creation
-                    if (-not $storageAccountServicePrincipalId) {
-                        throw "Storage Account Service Principal ID is null or empty"
-                    }
-                    if (-not $graphServicePrincipalId) {
-                        throw "Microsoft Graph Service Principal ID is null or empty"
-                    }
-                    
-                    $grantBody = @{
-                        clientId = $storageAccountServicePrincipalId
-                        consentType = "AllPrincipals"
-                        resourceId = $graphServicePrincipalId
-                        scope = $scopeString
-                    } | ConvertTo-Json
-                    
-                    try {
-                        $newGrant = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Post -Uri "/v1.0/oauth2PermissionGrants" -Body $grantBody
-                        Write-Output "Successfully created oauth2PermissionGrant with scope: '$scopeString'"
-                    }
-                    catch {
-                        Write-Error "Failed to create oauth2PermissionGrant via Graph API"
-                        Write-Error "Error details: $($_.Exception.Message)"
-                        if ($_.Exception.Response) {
-                            Write-Error "Response Status: $([int]$_.Exception.Response.StatusCode) - $($_.Exception.Response.StatusDescription)"
-                        }
-                        throw
-                    }
-                }
-                
-                Write-Output "============================================"
-            }
-        }
-        catch {
-            Write-Error "Failed to grant delegated permissions for Enterprise Application $appName."
-            Write-Error "Error: $($_.Exception.Message)"
-            Write-Error "Stack Trace: $($_.ScriptStackTrace)"
-            throw
         }
     }
+    
+    Write-Output "============================================"
+    Write-Output "PHASE 1 COMPLETE: Manifest updated successfully"
+    Write-Output "Storage account applications can now authenticate via privatelink endpoints"
+    Write-Output "============================================"
 }
 catch {
-    Write-Error $_.Exception.Message
+    Write-Error "PHASE 1 FAILED: $($_.Exception.Message)"
     throw $_
 }
 finally {
