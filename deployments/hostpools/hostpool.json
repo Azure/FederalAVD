@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.28.1.47646",
-      "templateHash": "13040223060480301951"
+      "templateHash": "455628332824293495"
     }
   },
   "parameters": {
@@ -542,7 +542,7 @@
     },
     "avdAgentsDSCPackage": {
       "type": "string",
-      "defaultValue": "Configuration_1.0.03266.1110.zip",
+      "defaultValue": "Configuration_1.0.03211.1002.zip",
       "metadata": {
         "description": "Optional. The DSC package name or full Url used by the PowerShell DSC extension to install the AVD Agent and register the virtual machine as a Session Host."
       }
@@ -1039,8 +1039,6 @@
     "createDeploymentVm": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), or(or(or(parameters('deployFSLogixStorage'), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption')), not(empty(parameters('desktopFriendlyName')))))]",
     "deployManagementResources": "[and(equals(parameters('deploymentType'), 'Complete'), or(or(or(parameters('deploySecretsKeyVault'), contains(parameters('keyManagementStorageAccounts'), 'CustomerManaged')), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption')))]",
     "hostPoolVmTemplate": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('namePrefix', parameters('virtualMachineNamePrefix'), 'hibernate', parameters('hibernationEnabled'), 'osDiskType', parameters('diskSku'), 'diskSizeGB', parameters('diskSizeGB'), 'securityType', parameters('securityType'), 'secureBoot', parameters('secureBootEnabled'), 'vTPM', parameters('vTpmEnabled'), 'vmInfrastructureType', 'Cloud', 'virtualProcessorCount', if(equals(parameters('vCPUs'), 0), null(), parameters('vCPUs')), 'memoryGB', if(equals(parameters('memoryGB'), 0), null(), parameters('memoryGB')), 'minimumMemoryGB', if(equals(parameters('memoryGB'), 0), null(), parameters('memoryGB')), 'dynamicMemoryConfig', false()), createObject())]",
-    "fslRemoteStorageAccountNames": "[if(not(empty(parameters('fslogixExistingRemoteStorageAccountResourceIds'))), createObject('fslRemoteStorageAccountNames', string(map(parameters('fslogixExistingRemoteStorageAccountResourceIds'), lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())]",
-    "fslRemoteNetAppVolumeResourceIds": "[if(not(empty(parameters('fslogixExistingRemoteNetAppVolumeResourceIds'))), createObject('fslRemoteNetAppVolumeResourceIds', string(parameters('fslogixExistingRemoteNetAppVolumeResourceIds'))), createObject())]",
     "vmIntuneEnrollment": "[if(contains(parameters('identitySolution'), 'DomainServices'), createObject(), createObject('vmIntuneEnrollment', parameters('intuneEnrollment')))]",
     "vmDomain": "[if(and(contains(parameters('identitySolution'), 'DomainServices'), not(empty(parameters('domainName')))), createObject('vmDomain', parameters('domainName')), createObject())]",
     "vmOU": "[if(and(contains(parameters('identitySolution'), 'DomainServices'), not(empty(parameters('vmOUPath')))), createObject('vmOUPath', parameters('vmOUPath')), createObject())]",
@@ -1048,6 +1046,8 @@
     "vmImageOffer": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imageOffer'))), createObject(), createObject('vmImageOffer', parameters('imageOffer')))]",
     "vmImagePublisher": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imagePublisher'))), createObject(), createObject('vmImagePublisher', parameters('imagePublisher')))]",
     "vmImageSku": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imageSku'))), createObject(), createObject('vmImageSku', parameters('imageSku')))]",
+    "fslRemoteStorageAccountNames": "[if(not(empty(parameters('fslogixExistingRemoteStorageAccountResourceIds'))), createObject('fslRemoteStorageAccountNames', string(map(parameters('fslogixExistingRemoteStorageAccountResourceIds'), lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())]",
+    "fslRemoteNetAppVolumeResourceIds": "[if(not(empty(parameters('fslogixExistingRemoteNetAppVolumeResourceIds'))), createObject('fslRemoteNetAppVolumeResourceIds', string(parameters('fslogixExistingRemoteNetAppVolumeResourceIds'))), createObject())]",
     "scalingPlanSchedules": "[if(parameters('deployScalingPlan'), createArray(createObject('rampUpStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]))), 'peakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]))), 'rampDownStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]))), 'offPeakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]))), 'name', 'weekdays_schedule', 'daysOfWeek', createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 'rampUpLoadBalancingAlgorithm', parameters('scalingPlanRampUpSchedule').loadBalancingAlgorithm, 'rampUpMinimumHostsPct', parameters('scalingPlanRampUpSchedule').minimumHostsPct, 'rampUpCapacityThresholdPct', parameters('scalingPlanRampUpSchedule').capacityThresholdPct, 'peakLoadBalancingAlgorithm', parameters('scalingPlanPeakSchedule').loadBalancingAlgorithm, 'rampDownLoadBalancingAlgorithm', parameters('scalingPlanRampDownSchedule').loadBalancingAlgorithm, 'rampDownMinimumHostsPct', parameters('scalingPlanRampDownSchedule').minimumHostsPct, 'rampDownCapacityThresholdPct', parameters('scalingPlanRampDownSchedule').capacityThresholdPct, 'rampDownForceLogoffUsers', parameters('scalingPlanForceLogoff'), 'rampDownWaitTimeMinutes', parameters('scalingPlanMinsBeforeLogoff'), 'rampDownNotificationMessage', if(parameters('scalingPlanForceLogoff'), format('You will be logged off in {0} minutes. Make sure to save your work.', parameters('scalingPlanMinsBeforeLogoff')), null()), 'rampDownStopHostsWhen', 'ZeroSessions', 'offPeakLoadBalancingAlgorithm', parameters('scalingPlanOffPeakSchedule').loadBalancingAlgorithm)), createArray())]",
     "exclusionTag": "[if(and(not(empty(parameters('scalingPlanExclusionTag'))), parameters('deployScalingPlan')), createObject('Microsoft.Compute/virtualMachines', createObject(format('{0}', parameters('scalingPlanExclusionTag')), '')), createObject())]",
     "hostTags": "[if(not(empty(variables('exclusionTag'))), union(parameters('tags'), variables('exclusionTag')), parameters('tags'))]",
@@ -1062,7 +1062,10 @@
     "availabilitySetsCount": "[length(range(variables('beginAvSetRange'), add(sub(variables('endAvSetRange'), variables('beginAvSetRange')), 1)))]",
     "sessionHostRegistrationDSCStorageAccount": "[if(startsWith(environment().name, 'USN'), 'wvdexportalcontainer', 'wvdportalstorageblob')]",
     "sessionHostRegistrationDSCUrl": "[if(startsWith(parameters('avdAgentsDSCPackage'), 'https://'), parameters('avdAgentsDSCPackage'), format('https://{0}.blob.{1}/galleryartifacts/{2}', variables('sessionHostRegistrationDSCStorageAccount'), environment().suffixes.storage, parameters('avdAgentsDSCPackage')))]",
-    "deployDiskAccessResource": "[if(and(and(contains(parameters('hostPoolType'), 'Personal'), parameters('recoveryServices')), parameters('deployPrivateEndpoints')), true(), false())]"
+    "deployDiskAccessResource": "[if(and(and(contains(parameters('hostPoolType'), 'Personal'), parameters('recoveryServices')), parameters('deployPrivateEndpoints')), true(), false())]",
+    "dedicatedHostGroupName": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[8], if(not(empty(parameters('dedicatedHostGroupResourceId'))), last(split(parameters('dedicatedHostGroupResourceId'), '/')), ''))]",
+    "dedicatedHostSub": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[2], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[2], ''))]",
+    "dedicatedHostRG": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[4], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[4], ''))]"
   },
   "resources": [
     {
@@ -12727,6 +12730,7 @@
           "dedicatedHostGroupResourceId": {
             "value": "[parameters('dedicatedHostGroupResourceId')]"
           },
+          "dedicatedHostGroupZones": "[if(not(empty(variables('dedicatedHostGroupName'))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('dedicatedHostSub'), variables('dedicatedHostRG')), 'Microsoft.Compute/hostGroups', variables('dedicatedHostGroupName')), '2024-11-01', 'full').zones), createObject('value', createArray()))]",
           "dedicatedHostResourceId": {
             "value": "[parameters('dedicatedHostResourceId')]"
           },
@@ -12936,7 +12940,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.28.1.47646",
-              "templateHash": "5070034831980559974"
+              "templateHash": "10555997842308069925"
             }
           },
           "parameters": {
@@ -12993,6 +12997,9 @@
             },
             "dedicatedHostGroupResourceId": {
               "type": "string"
+            },
+            "dedicatedHostGroupZones": {
+              "type": "array"
             },
             "dedicatedHostResourceId": {
               "type": "string"
@@ -13237,9 +13244,6 @@
               "[parameters('azureBlobPrivateDnsZoneResourceId')]",
               "[parameters('azureQueuePrivateDnsZoneResourceId')]"
             ],
-            "dedicatedHostGroupName": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[8], if(not(empty(parameters('dedicatedHostGroupResourceId'))), last(split(parameters('dedicatedHostGroupResourceId'), '/')), ''))]",
-            "dedicatedHostSub": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[2], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[2], ''))]",
-            "dedicatedHostRG": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[4], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[4], ''))]",
             "nonEmptyBackupPrivateDNSZoneResourceIds": "[filter(variables('backupPrivateDNSZoneResourceIds'), lambda('zone', not(empty(lambdaVariables('zone')))))]"
           },
           "resources": [
@@ -15519,7 +15523,9 @@
                   "dedicatedHostGroupResourceId": {
                     "value": "[parameters('dedicatedHostGroupResourceId')]"
                   },
-                  "dedicatedHostGroupZones": "[if(not(empty(variables('dedicatedHostGroupName'))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('dedicatedHostSub'), variables('dedicatedHostRG')), 'Microsoft.Compute/hostGroups', variables('dedicatedHostGroupName')), '2024-11-01', 'full').zones), createObject('value', createArray()))]",
+                  "dedicatedHostGroupZones": {
+                    "value": "[parameters('dedicatedHostGroupZones')]"
+                  },
                   "dedicatedHostResourceId": {
                     "value": "[parameters('dedicatedHostResourceId')]"
                   },
