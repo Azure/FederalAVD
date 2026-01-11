@@ -812,7 +812,7 @@
 									"type": "Microsoft.Common.TextBox",
 									"label": "Tag to exclude hosts from Scaling",
 									"placeholder": "",
-									"defaultValue": "ExcludeFromScaling",
+									"defaultValue": "ScalingPlanExclusion",
 									"toolTip": "Use only allowed characters",
 									"constraints": {
 										"required": true,

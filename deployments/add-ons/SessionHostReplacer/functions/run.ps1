@@ -71,12 +71,7 @@ $Uri = "$resourceManagerUri/subscriptions/$virtualMachinesSubscriptionId/resourc
 $cachedVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
 Write-LogEntry -Message "Cached {0} VMs from resource group" -StringValues $cachedVMs.Count -Level Trace
 
-# Get session hosts and update tags if needed (pass cached VMs)
-$sessionHosts = Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs
-Write-LogEntry -Message "Found {0} session hosts" -StringValues $sessionHosts.Count
-
-# Check for and cleanup expired shutdown VMs if shutdown retention is enabled
-
+# Check for and cleanup expired shutdown VMs BEFORE fetching session hosts (so the list is already clean)
 if ($enableShutdownRetention) {
     Write-LogEntry -Message "Shutdown retention is enabled - checking for expired shutdown VMs"
     
@@ -104,8 +99,19 @@ if ($enableShutdownRetention) {
     
     if ($cleanupResults.CleanedUpCount -gt 0) {
         Write-LogEntry -Message "Cleaned up {0} expired shutdown VM(s)" -StringValues $cleanupResults.CleanedUpCount
+        
+        # Remove deleted VMs from cache (more efficient than re-querying all VMs)
+        if ($cleanupResults.DeletedVMNames -and $cleanupResults.DeletedVMNames.Count -gt 0) {
+            Write-LogEntry -Message "Removing {0} deleted VM(s) from cache" -StringValues $cleanupResults.DeletedVMNames.Count -Level Trace
+            $cachedVMs = $cachedVMs | Where-Object { $_.name -notin $cleanupResults.DeletedVMNames }
+            Write-LogEntry -Message "Cache updated: {0} VMs remaining" -StringValues $cachedVMs.Count -Level Trace
+        }
     }
 }
+
+# Get session hosts and update tags if needed (pass cached VMs)
+$sessionHosts = Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs
+Write-LogEntry -Message "Found {0} session hosts" -StringValues $sessionHosts.Count
 
 # Check previous deployment status if progressive scale-up is enabled
 $previousDeploymentStatus = $null
@@ -206,6 +212,41 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
 # Filter to Session hosts that are included in auto replace
 $sessionHostsFiltered = $sessionHosts | Where-Object { $_.IncludeInAutomation }
 Write-LogEntry -Message "Filtered to {0} session hosts enabled for automatic replacement: {1}" -StringValues $sessionHostsFiltered.Count, ($sessionHostsFiltered.SessionHostName -join ',')
+
+# Further filter out VMs that are already in shutdown retention (to avoid redundant shutdown operations)
+if ($enableShutdownRetention) {
+    $shutdownRetentionTag = Read-FunctionAppSetting Tag_ShutdownTimestamp
+    $hostsInShutdownRetention = @()
+    
+    Write-LogEntry -Message "Checking for session hosts already in shutdown retention using tag: $shutdownRetentionTag" -Level Trace
+    
+    foreach ($sessionHost in $sessionHostsFiltered) {
+        $vmName = $sessionHost.ResourceId.Split('/')[-1]
+        $vm = $cachedVMs | Where-Object { $_.name -eq $vmName } | Select-Object -First 1
+        
+        if ($vm) {
+            $hasRetentionTag = $vm.tags -and ($vm.tags.PSObject.Properties.Name -contains $shutdownRetentionTag)
+            Write-LogEntry -Message "VM ${vmName}: Has tags=$($null -ne $vm.tags), Has retention tag=$hasRetentionTag" -Level Trace
+            
+            if ($hasRetentionTag) {
+                $hostsInShutdownRetention += $sessionHost
+                Write-LogEntry -Message "VM $vmName is in shutdown retention - will exclude from replacement processing" -Level Trace
+            }
+        }
+        else {
+            Write-LogEntry -Message "VM $vmName not found in cached VMs" -Level Trace
+        }
+    }
+    
+    if ($hostsInShutdownRetention.Count -gt 0) {
+        $shutdownRetentionNames = $hostsInShutdownRetention.SessionHostName -join ', '
+        Write-LogEntry -Message "Excluding {0} session host(s) already in shutdown retention from replacement processing: {1}" -StringValues $hostsInShutdownRetention.Count, $shutdownRetentionNames
+        $sessionHostsFiltered = $sessionHostsFiltered | Where-Object { $_.SessionHostName -notin $hostsInShutdownRetention.SessionHostName }
+    }
+    else {
+        Write-LogEntry -Message "No session hosts found in shutdown retention" -Level Trace
+    }
+}
 
 # Get running and failed deployments
 $deploymentsInfo = Get-Deployments -ARMToken $ARMToken
@@ -656,6 +697,9 @@ if ($deploymentResult) {
     $remainingToDeploy = [Math]::Max(0, $remainingToDeploy - $deploymentResult.SessionHostCount)
 }
 
+# Count VMs in shutdown retention for metrics (use count from earlier calculation to avoid stale cache issues)
+$shutdownRetentionCount = if ($enableShutdownRetention -and $hostsInShutdownRetention) { $hostsInShutdownRetention.Count } else { 0 }
+
 $metricsLog = @{
     TotalSessionHosts    = $sessionHosts.Count
     EnabledForAutomation = $sessionHostsFiltered.Count
@@ -664,6 +708,7 @@ $metricsLog = @{
     ToReplacePercentage  = if ($sessionHostsFiltered.Count -gt 0) { [math]::Round(($hostPoolReplacementPlan.TotalSessionHostsToReplace / $sessionHostsFiltered.Count) * 100, 1) } else { 0 }
     InDrain              = $hostsInDrainMode
     PendingDelete        = $hostPoolReplacementPlan.SessionHostsPendingDelete.Count
+    ShutdownRetention    = $shutdownRetentionCount
     ToDeployNow          = $remainingToDeploy
     RunningDeployments   = $currentlyDeploying
     LatestImageVersion   = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { "N/A" }
@@ -675,8 +720,7 @@ if ($latestImageVersion.Definition -like "marketplace:*") {
     # Parse marketplace identifier: "marketplace:publisher/offer/sku"
     $marketplaceParts = $latestImageVersion.Definition -replace "^marketplace:", "" -split "/"
     Write-LogEntry -Message "IMAGE_INFO | Type: Marketplace | Publisher: {0} | Offer: {1} | Sku: {2} | Version: {3}" `
-        -StringValues $marketplaceParts[0], $marketplaceParts[1], $marketplaceParts[2], $latestImageVersion.Version `
-       
+        -StringValues $marketplaceParts[0], $marketplaceParts[1], $marketplaceParts[2], $latestImageVersion.Version
 }
 else {
     # Parse gallery path: /subscriptions/.../resourceGroups/.../providers/Microsoft.Compute/galleries/{galleryName}/images/{imageName}
@@ -684,19 +728,31 @@ else {
     $galleryName = $galleryMatch.Groups[1].Value
     $imageDefinition = $galleryMatch.Groups[2].Value
     Write-LogEntry -Message "IMAGE_INFO | Type: Gallery | Gallery: {0} | ImageDefinition: {1} | Version: {2}" `
-        -StringValues $galleryName, $imageDefinition, $latestImageVersion.Version `
-       
+        -StringValues $galleryName, $imageDefinition, $latestImageVersion.Version
 }
 
 # Check if cycle is complete (no hosts to replace, no hosts in drain, no pending deletions, no running deployments)
-# If complete, remove scaling exclusion tags from all hosts
+# If complete, remove scaling exclusion tags from all hosts (EXCEPT shutdown retention VMs)
 $cycleComplete = $metricsLog.ToReplace -eq 0 -and $metricsLog.InDrain -eq 0 -and $metricsLog.PendingDelete -eq 0 -and $metricsLog.RunningDeployments -eq 0
 
 if ($cycleComplete) {
-    Write-LogEntry -Message "Update cycle complete - all hosts are up to date. Removing scaling exclusion tags."
+    Write-LogEntry -Message "Update cycle complete - all hosts are up to date. Removing scaling exclusion tags (preserving tags on shutdown retention VMs)."
     
     $tagScalingPlanExclusionTag = Read-FunctionAppSetting Tag_ScalingPlanExclusionTag
     $resourceManagerUri = Get-ResourceManagerUri
+    
+    # Get list of VMs currently in shutdown retention (deallocated with retention tag)
+    $shutdownRetentionVMs = @()
+    if ($enableShutdownRetention) {
+        $shutdownRetentionTag = Read-FunctionAppSetting Tag_ShutdownTimestamp
+        foreach ($vm in $cachedVMs) {
+            if ($vm.tags -and ($vm.tags.PSObject.Properties.Name -contains $shutdownRetentionTag)) {
+                $vmName = $vm.name
+                $shutdownRetentionVMs += $vmName
+                Write-LogEntry -Message "VM $vmName has shutdown retention tag - will preserve scaling exclusion tag" -Level Trace
+            }
+        }
+    }
     
     # Only proceed if a scaling exclusion tag is configured
     if ($tagScalingPlanExclusionTag -and $tagScalingPlanExclusionTag -ne ' ') {
@@ -704,6 +760,15 @@ if ($cycleComplete) {
         
         foreach ($sessionHost in $sessionHostsFiltered) {
             try {
+                # Get VM name from session host
+                $vmName = $sessionHost.ResourceId.Split('/')[-1]
+                
+                # Skip if this VM is in shutdown retention
+                if ($shutdownRetentionVMs -contains $vmName) {
+                    Write-LogEntry -Message "Preserving scaling exclusion tag on shutdown retention VM: $vmName" -Level Trace
+                    continue
+                }
+                
                 # Use cached tags from session host object (already fetched in Get-SessionHosts)
                 $vmTags = $sessionHost.Tags
                 
@@ -752,9 +817,8 @@ if ($cycleComplete) {
     }
 }
 
-Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | ToDeployNow: {6} | RunningDeployments: {7} | LatestImage: {8}" `
-    -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.LatestImageVersion `
-   
+Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | PendingDelete: {6} | ShutdownRetention: {7} | ToDeployNow: {8} | RunningDeployments: {9} | LatestImage: {10}" `
+    -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.PendingDelete, $metricsLog.ShutdownRetention, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.LatestImageVersion
 
 # Update host pool status tag with current state
 try {

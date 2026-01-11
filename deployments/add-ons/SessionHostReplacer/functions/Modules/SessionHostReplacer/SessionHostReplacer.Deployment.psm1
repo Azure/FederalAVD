@@ -418,7 +418,10 @@ function Deploy-SessionHosts {
         [string] $TagIncludeInAutomation = (Read-FunctionAppSetting Tag_IncludeInAutomation),
 
         [Parameter()]
-        [string] $TagDeployTimestamp = (Read-FunctionAppSetting Tag_DeployTimestamp)
+        [string] $TagDeployTimestamp = (Read-FunctionAppSetting Tag_DeployTimestamp),
+
+        [Parameter()]
+        [string] $TagScalingPlanExclusionTag = (Read-FunctionAppSetting Tag_ScalingPlanExclusionTag)
     )
 
     Write-LogEntry -Message "Generating new token for the host pool $HostPoolName in Resource Group $HostPoolResourceGroupName"
@@ -525,6 +528,12 @@ function Deploy-SessionHosts {
     # Add automation tags to VM resource type
     $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines'][$TagIncludeInAutomation] = $true
     $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines'][$TagDeployTimestamp] = (Get-Date -AsUTC -Format 'o')
+    
+    # Add scaling exclusion tag to protect newly deployed VMs from scaling plan shutdown during registration
+    if ($TagScalingPlanExclusionTag -and $TagScalingPlanExclusionTag -ne ' ') {
+        $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines'][$TagScalingPlanExclusionTag] = 'SessionHostReplacer'
+        Write-LogEntry -Message "Setting scaling exclusion tag on newly deployed VMs to prevent scaling plan interference" -Level Trace
+    }
     
     $deploymentTimestamp = Get-Date -AsUTC -Format 'yyyyMMddHHmmss'
     $deploymentName = "{0}_Count_{1}_VMs_{2}" -f $DeploymentPrefix, $sessionHostNames.count, $deploymentTimestamp

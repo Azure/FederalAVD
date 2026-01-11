@@ -205,13 +205,21 @@ function Remove-SessionHosts {
                         Write-LogEntry -Message "VM is already deallocated/stopped - skipping deallocate operation" -Level Trace
                     }
                     
-                    # Tag with shutdown timestamp for later cleanup
+                    # Tag with shutdown timestamp for later cleanup and ensure scaling exclusion tag is present
                     $shutdownTimestamp = (Get-Date).ToUniversalTime().ToString('o')
                     Write-LogEntry -Message "Setting shutdown timestamp tag on $($sessionHost.SessionHostName): $shutdownTimestamp" -Level Trace
                     $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                    
+                    # Build tags to apply: shutdown timestamp + scaling exclusion tag (if configured)
+                    $tagsToApply = @{ $TagShutdownTimestamp = $shutdownTimestamp }
+                    if ($TagScalingPlanExclusionTag -and $TagScalingPlanExclusionTag -ne ' ') {
+                        $tagsToApply[$TagScalingPlanExclusionTag] = 'SessionHostReplacer'
+                        Write-LogEntry -Message "Ensuring scaling exclusion tag is set on shutdown retention VM: $($sessionHost.SessionHostName)" -Level Trace
+                    }
+                    
                     $Body = @{
                         properties = @{
-                            tags = @{ $TagShutdownTimestamp = $shutdownTimestamp }
+                            tags = $tagsToApply
                         }
                         operation  = 'Merge'
                     }
@@ -340,8 +348,17 @@ function Remove-VirtualMachine {
         Write-LogEntry -Message "Removed $VMName from host pool" -Level Trace
     }
     
+    # Extract hostname from FQDN for device cleanup (Entra ID/Intune use hostname, not VM resource name)
+    $deviceName = if (-not [string]::IsNullOrEmpty($FQDN)) {
+        $FQDN.Split('.')[0]  # Get hostname from FQDN (e.g., "avdtest29use207" from "avdtest29use207.domain.com")
+    } else {
+        $VMName  # Fallback to VM name if FQDN not available
+    }
+    
+    Write-LogEntry -Message "Using device name '$deviceName' for Entra ID/Intune cleanup" -Level Trace
+    
     # Remove from identity directories
-    Remove-DeviceFromDirectories -DeviceName $VMName -GraphToken $GraphToken -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -ClientId $ClientId
+    Remove-DeviceFromDirectories -DeviceName $deviceName -GraphToken $GraphToken -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -ClientId $ClientId
     
     # Delete the VM
     Write-LogEntry -Message "Deleting VM: $VMId" -Level Trace
@@ -431,6 +448,7 @@ function Remove-ExpiredShutdownVMs {
     
     $cleanedUpCount = 0
     $retainedCount = 0
+    $deletedVMNames = @()
     $currentTime = (Get-Date).ToUniversalTime()
     
     foreach ($vm in $shutdownVMs) {
@@ -469,6 +487,7 @@ function Remove-ExpiredShutdownVMs {
                         -ClientId $ClientId
                     
                     $cleanedUpCount++
+                    $deletedVMNames += $vmName
                 }
                 catch {
                     Write-LogEntry -Message "Failed to delete shutdown VM $vmName : $($_.Exception.Message)" -Level Error
@@ -489,12 +508,13 @@ function Remove-ExpiredShutdownVMs {
         Write-LogEntry -Message "Cleanup complete: Deleted $cleanedUpCount expired shutdown VM(s), retained $retainedCount VM(s)"
     }
     else {
-        Write-LogEntry -Message "No shutdown VMs exceeded retention period" -Level Trace
+        Write-LogEntry -Message "No shutdown VMs exceeded retention period"
     }
     
     return [PSCustomObject]@{
-        CleanedUpCount = $cleanedUpCount
-        RetainedCount  = $retainedCount
+        CleanedUpCount  = $cleanedUpCount
+        RetainedCount   = $retainedCount
+        DeletedVMNames  = $deletedVMNames
     }
 }
 
