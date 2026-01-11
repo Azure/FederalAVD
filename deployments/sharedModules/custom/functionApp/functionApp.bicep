@@ -210,8 +210,10 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (en
   tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Insights/components'] ?? {})
   properties: {
     Application_Type: 'web'
-    publicNetworkAccessForIngestion: empty(privateLinkScopeResourceId) ? null : 'Disabled'
-    publicNetworkAccessForQuery: empty(privateLinkScopeResourceId) ? null : 'Disabled'
+    // Enable public ingestion when no Private Link Scope is configured
+    // Disable when Private Link Scope exists to force traffic through private endpoint
+    publicNetworkAccessForIngestion: empty(privateLinkScopeResourceId) ? 'Enabled' : 'Disabled'
+    publicNetworkAccessForQuery: empty(privateLinkScopeResourceId) ? 'Enabled' : 'Disabled'
     WorkspaceResourceId: logAnalyticsWorkspaceResourceId
   }
   kind: 'web'

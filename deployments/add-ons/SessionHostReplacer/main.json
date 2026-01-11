@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.28.1.47646",
-      "templateHash": "3785740159768794390"
+      "templateHash": "7513477055033146318"
     },
     "name": "AVD Session Host Replacer Add-On",
     "description": "Deploys automated session host lifecycle management for Azure Virtual Desktop",
@@ -3807,7 +3807,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.28.1.47646",
-              "templateHash": "12358023376194160253"
+              "templateHash": "13577994043567721025"
             }
           },
           "parameters": {
@@ -4063,8 +4063,8 @@
               "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/components'), createObject()))]",
               "properties": {
                 "Application_Type": "web",
-                "publicNetworkAccessForIngestion": "[if(empty(parameters('privateLinkScopeResourceId')), null(), 'Disabled')]",
-                "publicNetworkAccessForQuery": "[if(empty(parameters('privateLinkScopeResourceId')), null(), 'Disabled')]",
+                "publicNetworkAccessForIngestion": "[if(empty(parameters('privateLinkScopeResourceId')), 'Enabled', 'Disabled')]",
+                "publicNetworkAccessForQuery": "[if(empty(parameters('privateLinkScopeResourceId')), 'Enabled', 'Disabled')]",
                 "WorkspaceResourceId": "[parameters('logAnalyticsWorkspaceResourceId')]"
               },
               "kind": "web"
