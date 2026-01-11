@@ -183,7 +183,7 @@ param initialDeploymentPercentage int = 20
 @description('Optional. Percentage increment added after each successful deployment run. Used when progressive scale-up is enabled. Default is 20%.')
 @minValue(5)
 @maxValue(50)
-param scaleUpIncrementPercentage int = 50
+param scaleUpIncrementPercentage int = 40
 
 @description('Optional. Maximum number of hosts to deploy per run in SideBySide mode. Controls the pace of new deployments - function adds this many new hosts in parallel before deleting old ones. Lower values = slower rollout, higher values = faster but more resource-intensive. Only applies when replacementMode is SideBySide. Default is 100.')
 @minValue(1)

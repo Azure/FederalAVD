@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.28.1.47646",
-      "templateHash": "7513477055033146318"
+      "templateHash": "17787431925308165119"
     },
     "name": "AVD Session Host Replacer Add-On",
     "description": "Deploys automated session host lifecycle management for Azure Virtual Desktop",
@@ -342,7 +342,7 @@
     },
     "scaleUpIncrementPercentage": {
       "type": "int",
-      "defaultValue": 50,
+      "defaultValue": 40,
       "minValue": 5,
       "maxValue": 50,
       "metadata": {

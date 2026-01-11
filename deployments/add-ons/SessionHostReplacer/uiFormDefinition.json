@@ -527,7 +527,7 @@
 									"toolTip": "<b>Availability Safety Floor:</b> Prevents pool capacity from dropping below this percentage during replacements, ensuring minimum availability. Most relevant as replacement progresses and pool size decreases.<br/><br/><b>Example:</b> With 100 target VMs and 50% floor, pool will never drop below 50 VMs.<br/><br/><b>Guidance:</b> 80% = very conservative (only 20% headroom), 50% = balanced (allows more aggressive replacement). Works with 'Blast Radius Limit' - this prevents dropping too low, that limits pace.",
 									"min": 50,
 									"max": 100,
-									"defaultValue": 50,
+									"defaultValue": 80,
 									"showStepMarkers": false,
 									"constraints": {
 										"required": true
@@ -540,8 +540,8 @@
 									"label": "Blast Radius Limit (VMs per cycle)",
 									"toolTip": "<b>Blast Radius Limit:</b> Caps the absolute number of VMs deleted/deployed per cycle, regardless of available headroom above the safety floor. Limits impact if issues occur during replacement.<br/><br/><b>Example:</b> With 500 target VMs and 50% floor (250 minimum), you have 250 VM headroom. Setting this to 50 means max 50 deleted per cycle despite having 250 of headroom.<br/><br/><b>Guidance:</b> Small pools (< 100 VMs): 20-50. Large pools (> 200 VMs): 50-100. Lower = slower/safer, higher = faster replacement. Works with Progressive Scale-Up which further limits initial cycles.",
 									"min": 1,
-									"max": 1000,
-									"defaultValue": 50,
+									"max": 50,
+									"defaultValue": 5,
 									"showStepMarkers": false,
 									"constraints": {
 										"required": true
@@ -641,7 +641,7 @@
 									"toolTip": "Percentage added after each successful deployment run.",
 									"min": 5,
 									"max": 50,
-									"defaultValue": 50,
+									"defaultValue": 40,
 									"showStepMarkers": false,
 									"constraints": {
 										"required": true

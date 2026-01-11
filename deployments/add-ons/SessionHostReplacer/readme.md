@@ -607,7 +607,7 @@ When `enableProgressiveScaleUp` is enabled, deployments start small and graduall
 
 **Configuration**:
 - `initialDeploymentPercentage`: Starting batch size (e.g., 20%)
-- `scaleUpIncrementPercentage`: Amount to increase after successes (e.g., 50%)
+- `scaleUpIncrementPercentage`: Amount to increase after successes (e.g., 40%)
 - `successfulRunsBeforeScaleUp`: Consecutive successes needed to scale up (default: 1)
 
 **Behavior**:
@@ -663,7 +663,7 @@ When `enableProgressiveScaleUp` is enabled, deployments start small and graduall
 |---------|---------|-------------|
 | `enableProgressiveScaleUp` | `false` | Enable percentage-based gradual deployment scale-up. Starts small and increases after consecutive successes |
 | `initialDeploymentPercentage` | `20` | Starting batch size as percentage of total needed hosts (1-100%). Used when progressive scale-up is enabled |
-| `scaleUpIncrementPercentage` | `50` | Percentage increase added after successful deployment runs (5-50%). Progressive increments until reaching 100% |
+| `scaleUpIncrementPercentage` | `40` | Percentage increase added after successful deployment runs (5-50%). Progressive increments until reaching 100% |
 | `successfulRunsBeforeScaleUp` | `1` | Consecutive successful runs required before increasing percentage (1-5). More successes = more conservative |
 
 ### Image Version & Rollout Parameters
