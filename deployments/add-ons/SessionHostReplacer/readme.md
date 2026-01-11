@@ -461,7 +461,7 @@ Session hosts use these tags for automation:
 | `AutoReplaceDeployTimestamp` | Birth timestamp for tracking | `2024-12-01T10:00:00Z` | At deployment |
 | `AutoReplacePendingDrainTimestamp` | When draining started | `2024-12-15T14:30:00Z` | When placed in drain mode |
 | `AutoReplaceShutdownTimestamp` | When host was shutdown (SideBySide with retention) | `2024-12-20T16:00:00Z` | When shutdown for retention |
-| `ScalingPlanExclusion` | Exclude from scaling | `SessionHostReplacer` | During drain mode (removed when cycle complete) |
+| `ScalingPlanExclusion` | Exclude from scaling | `SessionHostReplacer` | Set at deployment, during drain mode, and shutdown retention. Removed when cycle completes (or when new hosts are active in SideBySide+retention mode) |
 
 ## Process Flows
 
@@ -683,7 +683,7 @@ When `enableProgressiveScaleUp` is enabled, deployments start small and graduall
 | `tagDeployTimestamp` | `AutoReplaceDeployTimestamp` | Tag name for deployment timestamp (ISO 8601 format) |
 | `tagPendingDrainTimestamp` | `AutoReplacePendingDrainTimestamp` | Tag name for drain start timestamp |
 | `tagShutdownTimestamp` | `AutoReplaceShutdownTimestamp` | Tag name for shutdown timestamp (SideBySide with retention) |
-| `tagScalingPlanExclusionTag` | `ScalingPlanExclusion` | Tag name for excluding hosts from scaling plans during drain. Automatically removed when cycle completes |
+| `tagScalingPlanExclusionTag` | `ScalingPlanExclusion` | Tag name for excluding hosts from scaling plans. Applied to newly deployed hosts, hosts in drain, and shutdown retention VMs. Removed when cycle completes (or when new capacity is active in SideBySide+retention) |
 
 ### Device Cleanup Parameters
 
@@ -1290,6 +1290,7 @@ The Session Host Replacer includes a pre-built Azure Monitor Workbook that provi
   - Hosts pending replacement
   - Hosts in drain mode
   - Hosts pending deletion
+  - Hosts in shutdown retention (SideBySide mode)
 
 - **🎯 Host Pool Consistency**
   - Hosts by image version
@@ -1312,8 +1313,9 @@ The Session Host Replacer includes a pre-built Azure Monitor Workbook that provi
 - **🗑️ Deletion Activity**
   - Host deletion operations
   - Device cleanup (Entra ID + Intune)
-  - Shutdown retention tracking (SideBySide mode)
-  - Expired shutdown VM cleanup
+  - Shutdown retention tracking (deallocated VMs awaiting rollback or expiration)
+  - Expired shutdown VM cleanup (automatic after retention period)
+  - Scaling plan exclusion management (protects retention VMs, allows scaling of new hosts)
 
 - **⚙️ Configuration Summary**
   - Current replacement mode
