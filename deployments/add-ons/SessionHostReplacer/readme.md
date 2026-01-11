@@ -54,7 +54,7 @@ The Session Host Replacer monitors AVD session hosts and automatically replaces 
 
 - **Zero Trust Networking**: Private endpoints and VNet integration
 - **Customer-Managed Encryption**: CMK support for function storage
-- **Multi-Cloud**: Commercial, GCC High, DoD environments
+- **Multi-Cloud**: Commercial, GCC, GCC High, DoD, US Government Secret, and US Government Top Secret environments
 - **Comprehensive Monitoring**: Application Insights integration with pre-built dashboard
 - **Template Spec Integration**: Consistent deployments with versioning
 - **Real-Time Visibility**: Azure Monitor Workbook dashboard for deployment tracking and host pool health
@@ -170,7 +170,7 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 ### Azure Resources Required
 
 1. **Azure Function App** (PowerShell 7.4)
-   - **New Deployment**: Creates Premium Windows plan (P1v3) with zone redundancy option
+   - **New Deployment**: Creates Premium Windows plan (P0v3) with zone redundancy option
    - **Existing Plan**: Must be one of the following:
      - **Premium v3 Windows Plans**: P0v3, P1v3, P2v3, P3v3 (P0v3 recommended for cost savings)
      - **Elastic Premium Plans**: EP1, EP2, EP3
