@@ -1,2 +1,0 @@
-$HostPoolName = ''
-$HostPoolResourceGroup = ''
