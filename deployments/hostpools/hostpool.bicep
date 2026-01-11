@@ -1318,7 +1318,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
   name: 'Session-Hosts-${deploymentSuffix}'
   scope: subscription(hostsSubscription)
   params: {
-    appGroupSecurityGroups: deploymentType == 'Complete' ? map(appGroupSecurityGroups, group => group.id) : []
+    appGroupSecurityGroups: deploymentType != 'SessionHostsOnly' ? map(appGroupSecurityGroups, group => group.id) : []
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     avdInsightsDataCollectionRulesResourceId: enableMonitoring

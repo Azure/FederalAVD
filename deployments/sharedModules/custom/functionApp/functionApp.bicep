@@ -231,7 +231,7 @@ module updatePrivateLinkScope '../privateLinkScopes/get-PrivateLinkScope.bicep' 
   }
 }
 
-resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
+resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
   name: functionAppName
   location: location
   tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Web/sites'] ?? {})
@@ -340,9 +340,14 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
       publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
       use32BitWorkerProcess: false
     }
+    outboundVnetRouting: empty(functionAppDelegatedSubnetResourceId) ? null : {
+      allTraffic: empty(privateLinkScopeResourceId) ? false : true
+      applicationTraffic: empty(privateLinkScopeResourceId) ? false : true
+      backupRestoreTraffic: true
+      contentShareTraffic: true
+      imagePullTraffic: true
+    }
     virtualNetworkSubnetId: !empty(functionAppDelegatedSubnetResourceId) ? functionAppDelegatedSubnetResourceId : null
-    vnetContentShareEnabled: false
-    vnetRouteAllEnabled: !empty(functionAppDelegatedSubnetResourceId) ? true : false
   }
 }
 

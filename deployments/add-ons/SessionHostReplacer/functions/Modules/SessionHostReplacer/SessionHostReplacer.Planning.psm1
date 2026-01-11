@@ -546,27 +546,9 @@ function Get-SessionHosts {
             $vmIncludeInAutomation = $IncludePreExistingSessionHosts
         }
         
-        # Tag newly deployed VMs with scaling exclusion tag to prevent scaling plan from shutting them down during registration
-        # Only set if: 1) Tag is configured, 2) VM doesn't have it yet, 3) VM is not already in shutdown retention
-        if ($TagScalingPlanExclusionTag -and $TagScalingPlanExclusionTag -ne ' ' -and -not $vmTags.ContainsKey($TagScalingPlanExclusionTag) -and -not $vmTags.ContainsKey($TagShutdownTimestamp)) {
-            Write-LogEntry -Message "Setting scaling exclusion tag on newly deployed VM: $($vm.Name)" -Level Trace
-            $tagsUri = "$ResourceManagerUri$($sh.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
-            $Body = @{
-                properties = @{
-                    tags = @{ $TagScalingPlanExclusionTag = 'SessionHostReplacer' }
-                }
-                operation  = 'Merge'
-            }
-            try {
-                $null = Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 10) -Method PATCH -Uri $tagsUri
-                Write-LogEntry -Message "Successfully tagged newly deployed VM $($vm.Name) with scaling exclusion tag" -Level Trace
-                # Update in-memory tags so the value is available for this run
-                $vmTags[$TagScalingPlanExclusionTag] = 'SessionHostReplacer'
-            }
-            catch {
-                Write-LogEntry -Message "Failed to set scaling exclusion tag on $($vm.Name): $($_.Exception.Message)" -Level Warning
-            }
-        }
+        # Note: Scaling exclusion tag is automatically set during VM deployment (Deploy-SessionHosts)
+        # No need to backfill here - only newly deployed VMs should have the tag
+        # Tag will be removed when replacement cycle completes or after successful registration
         
         # Get drain timestamp tag
         $vmPendingDrainTimeStamp = $vmTags[$TagPendingDrainTimeStamp]

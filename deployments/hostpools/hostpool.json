@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.28.1.47646",
-      "templateHash": "9157607344318565322"
+      "templateHash": "8430308964598108811"
     }
   },
   "parameters": {
@@ -12767,7 +12767,7 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "appGroupSecurityGroups": "[if(equals(parameters('deploymentType'), 'Complete'), createObject('value', map(parameters('appGroupSecurityGroups'), lambda('group', lambdaVariables('group').id))), createObject('value', createArray()))]",
+          "appGroupSecurityGroups": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', map(parameters('appGroupSecurityGroups'), lambda('group', lambdaVariables('group').id))), createObject('value', createArray()))]",
           "artifactsContainerUri": {
             "value": "[parameters('artifactsContainerUri')]"
           },

@@ -20,11 +20,11 @@ var filesWithFunctionJson = union(files, {
   'function.json': replace(functionJson, '<schedule>', schedule)
 })
 */
-resource functionApp 'Microsoft.Web/sites@2020-12-01' existing = {
+resource functionApp 'Microsoft.Web/sites@2024-11-01' existing = {
   name: functionAppName
 }
 
-resource function 'Microsoft.Web/sites/functions@2020-12-01' = {
+resource function 'Microsoft.Web/sites/functions@2024-11-01' = {
   parent: functionApp
   name: functionName
   properties: {
