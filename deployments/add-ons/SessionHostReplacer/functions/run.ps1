@@ -735,8 +735,17 @@ else {
 # If complete, remove scaling exclusion tags from all hosts (EXCEPT shutdown retention VMs)
 $cycleComplete = $metricsLog.ToReplace -eq 0 -and $metricsLog.InDrain -eq 0 -and $metricsLog.PendingDelete -eq 0 -and $metricsLog.RunningDeployments -eq 0
 
-if ($cycleComplete) {
-    Write-LogEntry -Message "Update cycle complete - all hosts are up to date. Removing scaling exclusion tags (preserving tags on shutdown retention VMs)."
+# In SideBySide mode with shutdown retention: also remove tags from new hosts if old hosts are in retention (even if cycle not fully complete)
+# This allows scaling plan to manage new capacity while old hosts remain protected during retention period
+$sideBySideRetentionTransition = $replacementMode -eq 'SideBySide' -and $enableShutdownRetention -and $shutdownRetentionCount -gt 0 -and $metricsLog.ToReplace -eq 0 -and $metricsLog.RunningDeployments -eq 0
+
+if ($cycleComplete -or $sideBySideRetentionTransition) {
+    if ($cycleComplete) {
+        Write-LogEntry -Message "Update cycle complete - all hosts are up to date. Removing scaling exclusion tags (preserving tags on shutdown retention VMs)."
+    }
+    else {
+        Write-LogEntry -Message "SideBySide mode with shutdown retention - removing scaling exclusion tags from new active hosts (preserving tags on shutdown retention VMs)."
+    }
     
     $tagScalingPlanExclusionTag = Read-FunctionAppSetting Tag_ScalingPlanExclusionTag
     $resourceManagerUri = Get-ResourceManagerUri
