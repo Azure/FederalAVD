@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.28.1.47646",
-      "templateHash": "17390507171554179920"
+      "templateHash": "3078531492510396364"
     },
     "name": "AVD Session Host Replacer Add-On",
     "description": "Deploys automated session host lifecycle management for Azure Virtual Desktop",
@@ -3807,7 +3807,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.28.1.47646",
-              "templateHash": "15336609475087609483"
+              "templateHash": "16390078651004036072"
             }
           },
           "parameters": {
@@ -3961,11 +3961,11 @@
                 "minimumTlsVersion": "TLS1_2",
                 "networkAcls": {
                   "bypass": "AzureServices",
-                  "virtualNetworkRules": [],
+                  "virtualNetworkRules": "[if(and(not(empty(parameters('functionAppDelegatedSubnetResourceId'))), parameters('privateEndpoint')), createArray(createObject('id', parameters('functionAppDelegatedSubnetResourceId'), 'action', 'Allow')), createArray())]",
                   "ipRules": [],
                   "defaultAction": "[if(parameters('privateEndpoint'), 'Deny', 'Allow')]"
                 },
-                "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', 'Enabled')]",
+                "publicNetworkAccess": "[if(and(parameters('privateEndpoint'), not(empty(parameters('privateLinkScopeResourceId')))), 'Disabled', 'Enabled')]",
                 "sasPolicy": {
                   "expirationAction": "Log",
                   "sasExpirationPeriod": "180.00:00:00"
@@ -4080,7 +4080,7 @@
               "properties": {
                 "clientAffinityEnabled": false,
                 "httpsOnly": true,
-                "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', null())]",
+                "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', 'Enabled')]",
                 "serverFarmId": "[parameters('serverFarmId')]",
                 "siteConfig": {
                   "alwaysOn": true,
@@ -4099,10 +4099,15 @@
                   "minimumElasticInstanceCount": 0,
                   "netFrameworkVersion": "v6.0",
                   "powerShellVersion": "7.4",
-                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', 'Enabled')]",
+                  "ipSecurityRestrictions": "[if(parameters('privateEndpoint'), createArray(createObject('ipAddress', 'AzureCloud', 'action', 'Allow', 'tag', 'ServiceTag', 'priority', 100, 'name', 'AzureCloud'), createObject('ipAddress', 'Any', 'action', 'Deny', 'priority', 2147483647, 'name', 'Deny all', 'description', 'Deny all access')), null())]",
+                  "ipSecurityRestrictionsDefaultAction": "[if(parameters('privateEndpoint'), 'Deny', null())]",
+                  "scmIpSecurityRestrictions": "[if(parameters('privateEndpoint'), createArray(createObject('ipAddress', 'Any', 'action', 'Deny', 'priority', 2147483647, 'name', 'Deny all', 'description', 'Deny all access')), null())]",
+                  "scmIpSecurityRestrictionsDefaultAction": "[if(parameters('privateEndpoint'), 'Deny', null())]",
+                  "scmIpSecurityRestrictionsUseMain": "[if(parameters('privateEndpoint'), true(), null())]",
+                  "publicNetworkAccess": "Enabled",
                   "use32BitWorkerProcess": false
                 },
-                "outboundVnetRouting": "[if(empty(parameters('functionAppDelegatedSubnetResourceId')), null(), createObject('allTraffic', not(empty(parameters('privateLinkScopeResourceId'))), 'applicationTraffic', true(), 'backupRestoreTraffic', true(), 'contentShareTraffic', true(), 'imagePullTraffic', true()))]",
+                "outboundVnetRouting": "[if(empty(parameters('functionAppDelegatedSubnetResourceId')), null(), createObject('allTraffic', if(not(empty(parameters('privateLinkScopeResourceId'))), true(), false()), 'applicationTraffic', if(not(empty(parameters('privateLinkScopeResourceId'))), true(), false())))]",
                 "virtualNetworkSubnetId": "[if(not(empty(parameters('functionAppDelegatedSubnetResourceId'))), parameters('functionAppDelegatedSubnetResourceId'), null())]"
               },
               "dependsOn": [

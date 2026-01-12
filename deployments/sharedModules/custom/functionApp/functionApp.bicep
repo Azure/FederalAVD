@@ -100,11 +100,16 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     minimumTlsVersion: 'TLS1_2'
     networkAcls: {
       bypass: 'AzureServices'
-      virtualNetworkRules: []
+      virtualNetworkRules: !empty(functionAppDelegatedSubnetResourceId) && privateEndpoint ? [
+        {
+          id: functionAppDelegatedSubnetResourceId
+          action: 'Allow'
+        }
+      ] : []
       ipRules: []
       defaultAction: privateEndpoint ? 'Deny' : 'Allow'
     }
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: privateEndpoint && !empty(privateLinkScopeResourceId) ? 'Disabled' : 'Enabled'
     sasPolicy: {
       expirationAction: 'Log'
       sasExpirationPeriod: '180.00:00:00'
@@ -249,7 +254,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
   properties: {
     clientAffinityEnabled: false
     httpsOnly: true
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : null
+    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     serverFarmId: serverFarmId
     siteConfig: {
       alwaysOn: true
@@ -337,16 +342,43 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       minimumElasticInstanceCount: 0
       netFrameworkVersion: 'v6.0'
       powerShellVersion: '7.4'
-      publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+      ipSecurityRestrictions: privateEndpoint ? [
+        {
+          ipAddress: 'AzureCloud'
+          action: 'Allow'
+          tag: 'ServiceTag'
+          priority: 100
+          name: 'AzureCloud'
+        }
+        {
+          ipAddress: 'Any'
+          action: 'Deny'
+          priority: 2147483647
+          name: 'Deny all'
+          description: 'Deny all access'
+        }
+      ] : null
+      ipSecurityRestrictionsDefaultAction: privateEndpoint ? 'Deny' : null
+      scmIpSecurityRestrictions: privateEndpoint ? [
+        {
+          ipAddress: 'Any'
+          action: 'Deny'
+          priority: 2147483647
+          name: 'Deny all'
+          description: 'Deny all access'
+        }
+      ] : null
+      scmIpSecurityRestrictionsDefaultAction: privateEndpoint ? 'Deny' : null
+      scmIpSecurityRestrictionsUseMain: privateEndpoint ? true : null
+      publicNetworkAccess: 'Enabled'
       use32BitWorkerProcess: false
     }
-    outboundVnetRouting: empty(functionAppDelegatedSubnetResourceId) ? null : {
-      allTraffic: !empty(privateLinkScopeResourceId)
-      applicationTraffic: true  // Always route application traffic through VNet when VNet integration is enabled
-      backupRestoreTraffic: true
-      contentShareTraffic: true
-      imagePullTraffic: true
-    }
+    outboundVnetRouting: empty(functionAppDelegatedSubnetResourceId)
+      ? null
+      : {
+          allTraffic: !empty(privateLinkScopeResourceId) ? true : false
+          applicationTraffic: !empty(privateLinkScopeResourceId) ? true : false
+        }
     virtualNetworkSubnetId: !empty(functionAppDelegatedSubnetResourceId) ? functionAppDelegatedSubnetResourceId : null
   }
 }
