@@ -1,10 +1,12 @@
 param applicationInsightsName string
 param azureBlobPrivateDnsZoneResourceId string
 param azureFunctionAppPrivateDnsZoneResourceId string
-param azureQueuePrivateDnsZoneResourceId string
-param azureTablePrivateDnsZoneResourceId string
+param azureQueuePrivateDnsZoneResourceId string = ''
+param azureTablePrivateDnsZoneResourceId string = ''
 param deploymentSuffix string
 param enableApplicationInsights bool
+param enableQueueStorage bool = true
+param enableTableStorage bool = true
 param encryptionKeyName string
 param encryptionKeyVaultResourceId string
 param functionAppDelegatedSubnetResourceId string
@@ -38,17 +40,18 @@ var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && private
 
 var peVnetId = length(privateEndpointVnetName) < 37 ? privateEndpointVnetName : uniqueString(privateEndpointVnetName)
 
-var azureStoragePrivateDnsZoneResourceIds = [
-  azureBlobPrivateDnsZoneResourceId
-  azureQueuePrivateDnsZoneResourceId
-  azureTablePrivateDnsZoneResourceId
-]
+// Build arrays dynamically based on which storage types are enabled
+var storageSubResources = union(
+  ['blob'], // Always required
+  enableQueueStorage ? ['queue'] : [],
+  enableTableStorage ? ['table'] : []
+)
 
-var storageSubResources = [
-  'blob'
-  'queue'
-  'table'
-]
+var azureStoragePrivateDnsZoneResourceIds = union(
+  [azureBlobPrivateDnsZoneResourceId], // Always required
+  enableQueueStorage && !empty(azureQueuePrivateDnsZoneResourceId) ? [azureQueuePrivateDnsZoneResourceId] : [],
+  enableTableStorage && !empty(azureTablePrivateDnsZoneResourceId) ? [azureTablePrivateDnsZoneResourceId] : []
+)
 
 resource functionAppUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = if (!empty(functionAppUserAssignedIdentityResourceId)) {
   name: last(split(functionAppUserAssignedIdentityResourceId, '/'))
@@ -82,34 +85,39 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     dnsEndpointType: 'Standard'
     encryption: {
       requireInfrastructureEncryption: true
-      services: {
-        table: {
-          keyType: 'Account'
-          enabled: true
-        }
-        queue: {
-          keyType: 'Account'
-          enabled: true
-        }
-        blob: {
-          keyType: 'Account'
-          enabled: true
-        }
-      }
+      services: union(
+        {
+          blob: {
+            keyType: 'Account'
+            enabled: true
+          }
+        },
+        enableQueueStorage
+          ? {
+              queue: {
+                keyType: 'Account'
+                enabled: true
+              }
+            }
+          : {},
+        enableTableStorage
+          ? {
+              table: {
+                keyType: 'Account'
+                enabled: true
+              }
+            }
+          : {}
+      )
     }
     minimumTlsVersion: 'TLS1_2'
     networkAcls: {
       bypass: 'AzureServices'
-      virtualNetworkRules: !empty(functionAppDelegatedSubnetResourceId) && privateEndpoint ? [
-        {
-          id: functionAppDelegatedSubnetResourceId
-          action: 'Allow'
-        }
-      ] : []
+      virtualNetworkRules: []
       ipRules: []
       defaultAction: privateEndpoint ? 'Deny' : 'Allow'
     }
-    publicNetworkAccess: privateEndpoint && !empty(privateLinkScopeResourceId) ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     sasPolicy: {
       expirationAction: 'Log'
       sasExpirationPeriod: '180.00:00:00'
@@ -159,7 +167,7 @@ resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01
 ]
 
 resource privateDnsZoneGroups_storage 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-08-01' = [
-  for i in range(0, length(azureStoragePrivateDnsZoneResourceIds) - 1): if (privateEndpoint && !empty(azureStoragePrivateDnsZoneResourceIds[i])) {
+  for i in range(0, length(azureStoragePrivateDnsZoneResourceIds)): if (privateEndpoint && !empty(azureStoragePrivateDnsZoneResourceIds[i])) {
     parent: privateEndpoints_storage[i]
     name: storageAccount.name
     properties: {
@@ -280,14 +288,24 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
             name: 'AzureWebJobsStorage__blobServiceUri'
             value: 'https://${storageAccount.name}.blob.${environment().suffixes.storage}'
           }
-          {
-            name: 'AzureWebJobsStorage__queueServiceUri'
-            value: 'https://${storageAccount.name}.queue.${environment().suffixes.storage}'
-          }
-          {
-            name: 'AzureWebJobsStorage__tableServiceUri'
-            value: 'https://${storageAccount.name}.table.${environment().suffixes.storage}'
-          }
+        ],
+        enableQueueStorage
+          ? [
+              {
+                name: 'AzureWebJobsStorage__queueServiceUri'
+                value: 'https://${storageAccount.name}.queue.${environment().suffixes.storage}'
+              }
+            ]
+          : [],
+        enableTableStorage
+          ? [
+              {
+                name: 'AzureWebJobsStorage__tableServiceUri'
+                value: 'https://${storageAccount.name}.table.${environment().suffixes.storage}'
+              }
+            ]
+          : [],
+        [
           {
             name: 'FUNCTIONS_EXTENSION_VERSION'
             value: '~4'
@@ -376,8 +394,8 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
     outboundVnetRouting: empty(functionAppDelegatedSubnetResourceId)
       ? null
       : {
-          allTraffic: !empty(privateLinkScopeResourceId) ? true : false
-          applicationTraffic: !empty(privateLinkScopeResourceId) ? true : false
+          allTraffic: true
+          applicationTraffic: true
         }
     virtualNetworkSubnetId: !empty(functionAppDelegatedSubnetResourceId) ? functionAppDelegatedSubnetResourceId : null
   }

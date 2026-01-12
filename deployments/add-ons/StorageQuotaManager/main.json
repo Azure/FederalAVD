@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.39.26.7824",
-      "templateHash": "13323176410788367735"
+      "version": "0.28.1.47646",
+      "templateHash": "7288505779861021225"
     },
     "name": "FSLogix Storage Quota Manager Add-On",
     "description": "Automated quota management for FSLogix Azure Files Premium file shares",
@@ -69,14 +69,6 @@
       }
     },
     "azureFunctionAppPrivateDnsZoneResourceId": {
-      "type": "string",
-      "defaultValue": ""
-    },
-    "azureQueuePrivateDnsZoneResourceId": {
-      "type": "string",
-      "defaultValue": ""
-    },
-    "azureTablePrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": ""
     },
@@ -417,6 +409,7 @@
       "templateSpecs": "ts",
       "userAssignedIdentities": "uai",
       "virtualMachines": "vm",
+      "workbooks": "wb",
       "workspaces": "vdws",
       "imageDefinitions": "vmid"
     },
@@ -456,7 +449,7 @@
     {
       "condition": "[empty(parameters('appServicePlanResourceId'))]",
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "[format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -495,8 +488,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "9030062954926391490"
+              "version": "0.28.1.47646",
+              "templateHash": "18231076559505431791"
             }
           },
           "parameters": {
@@ -577,7 +570,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "[format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -594,17 +587,17 @@
           "azureFunctionAppPrivateDnsZoneResourceId": {
             "value": "[parameters('azureFunctionAppPrivateDnsZoneResourceId')]"
           },
-          "azureQueuePrivateDnsZoneResourceId": {
-            "value": "[parameters('azureQueuePrivateDnsZoneResourceId')]"
-          },
-          "azureTablePrivateDnsZoneResourceId": {
-            "value": "[parameters('azureTablePrivateDnsZoneResourceId')]"
-          },
           "deploymentSuffix": {
             "value": "[variables('deploymentSuffix')]"
           },
           "enableApplicationInsights": {
             "value": "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]"
+          },
+          "enableQueueStorage": {
+            "value": false
+          },
+          "enableTableStorage": {
+            "value": false
           },
           "encryptionKeyName": {
             "value": "[variables('encryptionKeyName')]"
@@ -657,7 +650,7 @@
           "privateLinkScopeResourceId": {
             "value": "[parameters('privateLinkScopeResourceId')]"
           },
-          "serverFarmId": "[if(empty(parameters('appServicePlanResourceId')), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostingPlanId.value), createObject('value', parameters('appServicePlanResourceId')))]",
+          "serverFarmId": "[if(empty(parameters('appServicePlanResourceId')), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))), '2022-09-01').outputs.hostingPlanId.value), createObject('value', parameters('appServicePlanResourceId')))]",
           "storageAccountName": {
             "value": "[variables('storageAccountName')]"
           },
@@ -671,8 +664,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "4427339056392458847"
+              "version": "0.28.1.47646",
+              "templateHash": "8390566786548239410"
             }
           },
           "parameters": {
@@ -686,16 +679,26 @@
               "type": "string"
             },
             "azureQueuePrivateDnsZoneResourceId": {
-              "type": "string"
+              "type": "string",
+              "defaultValue": ""
             },
             "azureTablePrivateDnsZoneResourceId": {
-              "type": "string"
+              "type": "string",
+              "defaultValue": ""
             },
             "deploymentSuffix": {
               "type": "string"
             },
             "enableApplicationInsights": {
               "type": "bool"
+            },
+            "enableQueueStorage": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "enableTableStorage": {
+              "type": "bool",
+              "defaultValue": true
             },
             "encryptionKeyName": {
               "type": "string"
@@ -766,16 +769,8 @@
             "cloudSuffix": "[replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')]",
             "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
             "peVnetId": "[if(less(length(variables('privateEndpointVnetName')), 37), variables('privateEndpointVnetName'), uniqueString(variables('privateEndpointVnetName')))]",
-            "azureStoragePrivateDnsZoneResourceIds": [
-              "[parameters('azureBlobPrivateDnsZoneResourceId')]",
-              "[parameters('azureQueuePrivateDnsZoneResourceId')]",
-              "[parameters('azureTablePrivateDnsZoneResourceId')]"
-            ],
-            "storageSubResources": [
-              "blob",
-              "queue",
-              "table"
-            ],
+            "storageSubResources": "[union(createArray('blob'), if(parameters('enableQueueStorage'), createArray('queue'), createArray()), if(parameters('enableTableStorage'), createArray('table'), createArray()))]",
+            "azureStoragePrivateDnsZoneResourceIds": "[union(createArray(parameters('azureBlobPrivateDnsZoneResourceId')), if(and(parameters('enableQueueStorage'), not(empty(parameters('azureQueuePrivateDnsZoneResourceId')))), createArray(parameters('azureQueuePrivateDnsZoneResourceId')), createArray()), if(and(parameters('enableTableStorage'), not(empty(parameters('azureTablePrivateDnsZoneResourceId')))), createArray(parameters('azureTablePrivateDnsZoneResourceId')), createArray()))]",
             "storageAccountRoleDefinitions": "[union(createArray('ba92f5b4-2d11-453d-a403-e96b0029c9fe', '974c5e8b-45b9-4653-ba55-5f855dd0fb88'), parameters('storageAccountRoleDefinitionIds'))]"
           },
           "resources": [
@@ -808,20 +803,7 @@
                 "dnsEndpointType": "Standard",
                 "encryption": {
                   "requireInfrastructureEncryption": true,
-                  "services": {
-                    "table": {
-                      "keyType": "Account",
-                      "enabled": true
-                    },
-                    "queue": {
-                      "keyType": "Account",
-                      "enabled": true
-                    },
-                    "blob": {
-                      "keyType": "Account",
-                      "enabled": true
-                    }
-                  }
+                  "services": "[union(createObject('blob', createObject('keyType', 'Account', 'enabled', true())), if(parameters('enableQueueStorage'), createObject('queue', createObject('keyType', 'Account', 'enabled', true())), createObject()), if(parameters('enableTableStorage'), createObject('table', createObject('keyType', 'Account', 'enabled', true())), createObject()))]"
                 },
                 "minimumTlsVersion": "TLS1_2",
                 "networkAcls": {
@@ -873,30 +855,30 @@
             {
               "copy": {
                 "name": "privateDnsZoneGroups_storage",
-                "count": "[length(range(0, sub(length(variables('azureStoragePrivateDnsZoneResourceIds')), 1)))]"
+                "count": "[length(range(0, length(variables('azureStoragePrivateDnsZoneResourceIds'))))]"
               },
-              "condition": "[and(parameters('privateEndpoint'), not(empty(variables('azureStoragePrivateDnsZoneResourceIds')[range(0, sub(length(variables('azureStoragePrivateDnsZoneResourceIds')), 1))[copyIndex()]])))]",
+              "condition": "[and(parameters('privateEndpoint'), not(empty(variables('azureStoragePrivateDnsZoneResourceIds')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]])))]",
               "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
               "apiVersion": "2021-08-01",
-              "name": "[format('{0}/{1}', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, sub(length(variables('azureStoragePrivateDnsZoneResourceIds')), 1))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')), parameters('storageAccountName'))]",
+              "name": "[format('{0}/{1}', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')), parameters('storageAccountName'))]",
               "properties": {
                 "privateDnsZoneConfigs": [
                   {
                     "name": "ipconfig1",
                     "properties": {
-                      "privateDnsZoneId": "[variables('azureStoragePrivateDnsZoneResourceIds')[range(0, sub(length(variables('azureStoragePrivateDnsZoneResourceIds')), 1))[copyIndex()]]]"
+                      "privateDnsZoneId": "[variables('azureStoragePrivateDnsZoneResourceIds')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]]]"
                     }
                   }
                 ]
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Network/privateEndpoints', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, sub(length(variables('azureStoragePrivateDnsZoneResourceIds')), 1))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')))]",
+                "[resourceId('Microsoft.Network/privateEndpoints', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
               ]
             },
             {
               "condition": "[parameters('enableApplicationInsights')]",
-              "type": "microsoft.insights/diagnosticSettings",
+              "type": "Microsoft.Insights/diagnosticSettings",
               "apiVersion": "2017-05-01-preview",
               "scope": "[format('Microsoft.Storage/storageAccounts/{0}/blobServices/{1}', parameters('storageAccountName'), 'default')]",
               "name": "[format('{0}-blob-diagnosticSettings', parameters('storageAccountName'))]",
@@ -928,15 +910,15 @@
               "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/components'), createObject()))]",
               "properties": {
                 "Application_Type": "web",
-                "publicNetworkAccessForIngestion": "[if(empty(parameters('privateLinkScopeResourceId')), null(), 'Disabled')]",
-                "publicNetworkAccessForQuery": "[if(empty(parameters('privateLinkScopeResourceId')), null(), 'Disabled')]",
+                "publicNetworkAccessForIngestion": "[if(empty(parameters('privateLinkScopeResourceId')), 'Enabled', 'Disabled')]",
+                "publicNetworkAccessForQuery": "[if(empty(parameters('privateLinkScopeResourceId')), 'Enabled', 'Disabled')]",
                 "WorkspaceResourceId": "[parameters('logAnalyticsWorkspaceResourceId')]"
               },
               "kind": "web"
             },
             {
               "type": "Microsoft.Web/sites",
-              "apiVersion": "2023-01-01",
+              "apiVersion": "2024-11-01",
               "name": "[parameters('functionAppName')]",
               "location": "[parameters('location')]",
               "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Web/sites'), createObject()))]",
@@ -945,11 +927,11 @@
               "properties": {
                 "clientAffinityEnabled": false,
                 "httpsOnly": true,
-                "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', null())]",
+                "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', 'Enabled')]",
                 "serverFarmId": "[parameters('serverFarmId')]",
                 "siteConfig": {
                   "alwaysOn": true,
-                  "appSettings": "[union(if(empty(parameters('functionAppUserAssignedIdentityResourceId')), createArray(), createArray(createObject('name', 'AzureWebJobsStorage__clientId', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').clientId), createObject('name', 'UserAssignedIdentityClientId', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').clientId))), createArray(createObject('name', 'AzureWebJobsStorage__credential', 'value', 'managedidentity'), createObject('name', 'AzureWebJobsStorage__blobServiceUri', 'value', format('https://{0}.blob.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'AzureWebJobsStorage__queueServiceUri', 'value', format('https://{0}.queue.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'AzureWebJobsStorage__tableServiceUri', 'value', format('https://{0}.table.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_LOAD_USER_PROFILE', 'value', '1'), createObject('name', 'EnvironmentName', 'value', environment().name), createObject('name', 'ResourceManagerUri', 'value', environment().resourceManager), createObject('name', 'StorageSuffix', 'value', environment().suffixes.storage), createObject('name', 'TenantId', 'value', subscription().tenantId)), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString)), createArray()), parameters('functionAppAppSettings'))]",
+                  "appSettings": "[union(if(empty(parameters('functionAppUserAssignedIdentityResourceId')), createArray(), createArray(createObject('name', 'AzureWebJobsStorage__clientId', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').clientId), createObject('name', 'UserAssignedIdentityClientId', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').clientId))), createArray(createObject('name', 'AzureWebJobsStorage__credential', 'value', 'managedidentity'), createObject('name', 'AzureWebJobsStorage__blobServiceUri', 'value', format('https://{0}.blob.{1}', parameters('storageAccountName'), environment().suffixes.storage))), if(parameters('enableQueueStorage'), createArray(createObject('name', 'AzureWebJobsStorage__queueServiceUri', 'value', format('https://{0}.queue.{1}', parameters('storageAccountName'), environment().suffixes.storage))), createArray()), if(parameters('enableTableStorage'), createArray(createObject('name', 'AzureWebJobsStorage__tableServiceUri', 'value', format('https://{0}.table.{1}', parameters('storageAccountName'), environment().suffixes.storage))), createArray()), createArray(createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_LOAD_USER_PROFILE', 'value', '1'), createObject('name', 'EnvironmentName', 'value', environment().name), createObject('name', 'ResourceManagerUri', 'value', environment().resourceManager), createObject('name', 'StorageSuffix', 'value', environment().suffixes.storage), createObject('name', 'TenantId', 'value', subscription().tenantId)), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString)), createArray()), parameters('functionAppAppSettings'))]",
                   "cors": {
                     "allowedOrigins": [
                       "[format('{0}', environment().portal)]",
@@ -964,12 +946,16 @@
                   "minimumElasticInstanceCount": 0,
                   "netFrameworkVersion": "v6.0",
                   "powerShellVersion": "7.4",
-                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', 'Enabled')]",
+                  "ipSecurityRestrictions": "[if(parameters('privateEndpoint'), createArray(createObject('ipAddress', 'AzureCloud', 'action', 'Allow', 'tag', 'ServiceTag', 'priority', 100, 'name', 'AzureCloud'), createObject('ipAddress', 'Any', 'action', 'Deny', 'priority', 2147483647, 'name', 'Deny all', 'description', 'Deny all access')), null())]",
+                  "ipSecurityRestrictionsDefaultAction": "[if(parameters('privateEndpoint'), 'Deny', null())]",
+                  "scmIpSecurityRestrictions": "[if(parameters('privateEndpoint'), createArray(createObject('ipAddress', 'Any', 'action', 'Deny', 'priority', 2147483647, 'name', 'Deny all', 'description', 'Deny all access')), null())]",
+                  "scmIpSecurityRestrictionsDefaultAction": "[if(parameters('privateEndpoint'), 'Deny', null())]",
+                  "scmIpSecurityRestrictionsUseMain": "[if(parameters('privateEndpoint'), true(), null())]",
+                  "publicNetworkAccess": "Enabled",
                   "use32BitWorkerProcess": false
                 },
-                "virtualNetworkSubnetId": "[if(not(empty(parameters('functionAppDelegatedSubnetResourceId'))), parameters('functionAppDelegatedSubnetResourceId'), null())]",
-                "vnetContentShareEnabled": false,
-                "vnetRouteAllEnabled": "[if(not(empty(parameters('functionAppDelegatedSubnetResourceId'))), true(), false())]"
+                "outboundVnetRouting": "[if(empty(parameters('functionAppDelegatedSubnetResourceId')), null(), createObject('allTraffic', true(), 'applicationTraffic', true()))]",
+                "virtualNetworkSubnetId": "[if(not(empty(parameters('functionAppDelegatedSubnetResourceId'))), parameters('functionAppDelegatedSubnetResourceId'), null())]"
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]",
@@ -1026,7 +1012,7 @@
             {
               "condition": "[not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))]",
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
+              "apiVersion": "2022-09-01",
               "name": "[format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1059,8 +1045,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "10336362930989115154"
+                      "version": "0.28.1.47646",
+                      "templateHash": "2043052037770518992"
                     }
                   },
                   "parameters": {
@@ -1095,7 +1081,7 @@
                   "resources": [
                     {
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2025-04-01",
+                      "apiVersion": "2022-09-01",
                       "name": "[format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))]",
                       "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
@@ -1155,8 +1141,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "3718319161044008822"
+                              "version": "0.28.1.47646",
+                              "templateHash": "8398901908014324283"
                             }
                           },
                           "parameters": {
@@ -1248,7 +1234,7 @@
                     },
                     {
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2025-04-01",
+                      "apiVersion": "2022-09-01",
                       "name": "[format('RA-Encryption-Key-{0}', parameters('deploymentSuffix'))]",
                       "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
@@ -1280,8 +1266,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "10428209994367129507"
+                              "version": "0.28.1.47646",
+                              "templateHash": "8104715795554389976"
                             }
                           },
                           "parameters": {
@@ -1327,7 +1313,7 @@
                   "outputs": {
                     "encryptionKeyName": {
                       "type": "string",
-                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSubscriptionId'), variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.name.value]"
+                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSubscriptionId'), variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))), '2022-09-01').outputs.name.value]"
                     }
                   }
                 }
@@ -1339,7 +1325,7 @@
             {
               "condition": "[and(parameters('enableApplicationInsights'), not(empty(parameters('privateLinkScopeResourceId'))))]",
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
+              "apiVersion": "2022-09-01",
               "name": "[format('PrivateLlinkScope-{0}', parameters('deploymentSuffix'))]",
               "subscriptionId": "[subscription().subscriptionId]",
               "location": "[resourceGroup().location]",
@@ -1367,8 +1353,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "17290229534485454366"
+                      "version": "0.28.1.47646",
+                      "templateHash": "4515691925478189048"
                     }
                   },
                   "parameters": {
@@ -1385,7 +1371,7 @@
                   "resources": [
                     {
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2025-04-01",
+                      "apiVersion": "2022-09-01",
                       "name": "[format('addScopedResources-{0}', parameters('deploymentSuffix'))]",
                       "subscriptionId": "[split(parameters('privateLinkScopeResourceId'), '/')[2]]",
                       "resourceGroup": "[split(parameters('privateLinkScopeResourceId'), '/')[4]]",
@@ -1408,8 +1394,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "5758136482480486201"
+                              "version": "0.28.1.47646",
+                              "templateHash": "12577270777795559658"
                             }
                           },
                           "parameters": {
@@ -1450,7 +1436,7 @@
                 "count": "[length(variables('storageAccountRoleDefinitions'))]"
               },
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
+              "apiVersion": "2022-09-01",
               "name": "[format('set-role-assignment-storage-{0}-{1}', uniqueString(variables('storageAccountRoleDefinitions')[copyIndex()]), parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1460,7 +1446,7 @@
                 "parameters": {
                   "principalIds": {
                     "value": [
-                      "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').principalId, reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId)]"
+                      "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').principalId, reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2024-11-01', 'full').identity.principalId)]"
                     ]
                   },
                   "principalType": {
@@ -1479,8 +1465,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "11571141747549419835"
+                      "version": "0.28.1.47646",
+                      "templateHash": "10820102896439698845"
                     }
                   },
                   "parameters": {
@@ -1524,7 +1510,7 @@
             {
               "condition": "[not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))]",
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
+              "apiVersion": "2022-09-01",
               "name": "[format('update-encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1539,7 +1525,7 @@
                     "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').sku]"
                   },
                   "encryptionKeyName": {
-                    "value": "[reference(resourceId('Microsoft.Resources/deployments', format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyName.value]"
+                    "value": "[reference(resourceId('Microsoft.Resources/deployments', format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))), '2022-09-01').outputs.encryptionKeyName.value]"
                   },
                   "keyVaultResourceId": {
                     "value": "[parameters('encryptionKeyVaultResourceId')]"
@@ -1557,8 +1543,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "12429090756099729016"
+                      "version": "0.28.1.47646",
+                      "templateHash": "7778406767453046382"
                     }
                   },
                   "parameters": {
@@ -1624,7 +1610,11 @@
             },
             "functionAppPrincipalId": {
               "type": "string",
-              "value": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').principalId, reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId)]"
+              "value": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').principalId, reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2024-11-01', 'full').identity.principalId)]"
+            },
+            "applicationInsightsResourceId": {
+              "type": "string",
+              "value": "[if(parameters('enableApplicationInsights'), resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '')]"
             }
           }
         }
@@ -1635,7 +1625,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "[format('RA-StorageAccounts-{0}', variables('deploymentSuffix'))]",
       "subscriptionId": "[variables('storageSubscriptionId')]",
       "resourceGroup": "[variables('storageResourceGroupName')]",
@@ -1646,7 +1636,7 @@
         "mode": "Incremental",
         "parameters": {
           "principalId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.functionAppPrincipalId.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))), '2022-09-01').outputs.functionAppPrincipalId.value]"
           },
           "principalType": {
             "value": "ServicePrincipal"
@@ -1664,15 +1654,15 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "17889000177953870600"
+              "version": "0.28.1.47646",
+              "templateHash": "17978097117336440184"
             }
           },
           "parameters": {
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "Required. You can provide either the role definition GUID or its fully qualified ID in the following format: \\'/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11\\'.\nYou can find the GUIDs in the ID column on the table at https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles.\n"
+                "description": "Required. You can provide either the role definition GUID or its fully qualified ID in the following format: \\'/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11\\'.\r\nYou can find the GUIDs in the ID column on the table at https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles.\r\n"
               }
             },
             "principalId": {
@@ -1740,7 +1730,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "[format('StorageQuotaFunction-{0}', variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1756,7 +1746,7 @@
             }
           },
           "functionAppName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.functionAppName.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))), '2022-09-01').outputs.functionAppName.value]"
           },
           "functionName": {
             "value": "auto-increase-file-share-quota"
@@ -1771,8 +1761,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "17588884351474844819"
+              "version": "0.28.1.47646",
+              "templateHash": "3702414373047912817"
             }
           },
           "parameters": {
@@ -1792,7 +1782,7 @@
           "resources": [
             {
               "type": "Microsoft.Web/sites/functions",
-              "apiVersion": "2020-12-01",
+              "apiVersion": "2024-11-01",
               "name": "[format('{0}/{1}', parameters('functionAppName'), parameters('functionName'))]",
               "properties": {
                 "config": {

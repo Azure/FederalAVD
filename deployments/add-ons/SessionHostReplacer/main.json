@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.28.1.47646",
-      "templateHash": "3078531492510396364"
+      "templateHash": "13755130762860554694"
     },
     "name": "AVD Session Host Replacer Add-On",
     "description": "Deploys automated session host lifecycle management for Azure Virtual Desktop",
@@ -88,10 +88,6 @@
       }
     },
     "azureFunctionAppPrivateDnsZoneResourceId": {
-      "type": "string",
-      "defaultValue": ""
-    },
-    "azureQueuePrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": ""
     },
@@ -3733,9 +3729,6 @@
           "azureFunctionAppPrivateDnsZoneResourceId": {
             "value": "[parameters('azureFunctionAppPrivateDnsZoneResourceId')]"
           },
-          "azureQueuePrivateDnsZoneResourceId": {
-            "value": "[parameters('azureQueuePrivateDnsZoneResourceId')]"
-          },
           "azureTablePrivateDnsZoneResourceId": {
             "value": "[parameters('azureTablePrivateDnsZoneResourceId')]"
           },
@@ -3744,6 +3737,12 @@
           },
           "enableApplicationInsights": {
             "value": "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]"
+          },
+          "enableQueueStorage": {
+            "value": false
+          },
+          "enableTableStorage": {
+            "value": true
           },
           "encryptionKeyName": {
             "value": "[variables('encryptionKeyName')]"
@@ -3807,7 +3806,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.28.1.47646",
-              "templateHash": "16390078651004036072"
+              "templateHash": "8390566786548239410"
             }
           },
           "parameters": {
@@ -3821,16 +3820,26 @@
               "type": "string"
             },
             "azureQueuePrivateDnsZoneResourceId": {
-              "type": "string"
+              "type": "string",
+              "defaultValue": ""
             },
             "azureTablePrivateDnsZoneResourceId": {
-              "type": "string"
+              "type": "string",
+              "defaultValue": ""
             },
             "deploymentSuffix": {
               "type": "string"
             },
             "enableApplicationInsights": {
               "type": "bool"
+            },
+            "enableQueueStorage": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "enableTableStorage": {
+              "type": "bool",
+              "defaultValue": true
             },
             "encryptionKeyName": {
               "type": "string"
@@ -3901,16 +3910,8 @@
             "cloudSuffix": "[replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')]",
             "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
             "peVnetId": "[if(less(length(variables('privateEndpointVnetName')), 37), variables('privateEndpointVnetName'), uniqueString(variables('privateEndpointVnetName')))]",
-            "azureStoragePrivateDnsZoneResourceIds": [
-              "[parameters('azureBlobPrivateDnsZoneResourceId')]",
-              "[parameters('azureQueuePrivateDnsZoneResourceId')]",
-              "[parameters('azureTablePrivateDnsZoneResourceId')]"
-            ],
-            "storageSubResources": [
-              "blob",
-              "queue",
-              "table"
-            ],
+            "storageSubResources": "[union(createArray('blob'), if(parameters('enableQueueStorage'), createArray('queue'), createArray()), if(parameters('enableTableStorage'), createArray('table'), createArray()))]",
+            "azureStoragePrivateDnsZoneResourceIds": "[union(createArray(parameters('azureBlobPrivateDnsZoneResourceId')), if(and(parameters('enableQueueStorage'), not(empty(parameters('azureQueuePrivateDnsZoneResourceId')))), createArray(parameters('azureQueuePrivateDnsZoneResourceId')), createArray()), if(and(parameters('enableTableStorage'), not(empty(parameters('azureTablePrivateDnsZoneResourceId')))), createArray(parameters('azureTablePrivateDnsZoneResourceId')), createArray()))]",
             "storageAccountRoleDefinitions": "[union(createArray('ba92f5b4-2d11-453d-a403-e96b0029c9fe', '974c5e8b-45b9-4653-ba55-5f855dd0fb88'), parameters('storageAccountRoleDefinitionIds'))]"
           },
           "resources": [
@@ -3943,29 +3944,16 @@
                 "dnsEndpointType": "Standard",
                 "encryption": {
                   "requireInfrastructureEncryption": true,
-                  "services": {
-                    "table": {
-                      "keyType": "Account",
-                      "enabled": true
-                    },
-                    "queue": {
-                      "keyType": "Account",
-                      "enabled": true
-                    },
-                    "blob": {
-                      "keyType": "Account",
-                      "enabled": true
-                    }
-                  }
+                  "services": "[union(createObject('blob', createObject('keyType', 'Account', 'enabled', true())), if(parameters('enableQueueStorage'), createObject('queue', createObject('keyType', 'Account', 'enabled', true())), createObject()), if(parameters('enableTableStorage'), createObject('table', createObject('keyType', 'Account', 'enabled', true())), createObject()))]"
                 },
                 "minimumTlsVersion": "TLS1_2",
                 "networkAcls": {
                   "bypass": "AzureServices",
-                  "virtualNetworkRules": "[if(and(not(empty(parameters('functionAppDelegatedSubnetResourceId'))), parameters('privateEndpoint')), createArray(createObject('id', parameters('functionAppDelegatedSubnetResourceId'), 'action', 'Allow')), createArray())]",
+                  "virtualNetworkRules": [],
                   "ipRules": [],
                   "defaultAction": "[if(parameters('privateEndpoint'), 'Deny', 'Allow')]"
                 },
-                "publicNetworkAccess": "[if(and(parameters('privateEndpoint'), not(empty(parameters('privateLinkScopeResourceId')))), 'Disabled', 'Enabled')]",
+                "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', 'Enabled')]",
                 "sasPolicy": {
                   "expirationAction": "Log",
                   "sasExpirationPeriod": "180.00:00:00"
@@ -4008,24 +3996,24 @@
             {
               "copy": {
                 "name": "privateDnsZoneGroups_storage",
-                "count": "[length(range(0, sub(length(variables('azureStoragePrivateDnsZoneResourceIds')), 1)))]"
+                "count": "[length(range(0, length(variables('azureStoragePrivateDnsZoneResourceIds'))))]"
               },
-              "condition": "[and(parameters('privateEndpoint'), not(empty(variables('azureStoragePrivateDnsZoneResourceIds')[range(0, sub(length(variables('azureStoragePrivateDnsZoneResourceIds')), 1))[copyIndex()]])))]",
+              "condition": "[and(parameters('privateEndpoint'), not(empty(variables('azureStoragePrivateDnsZoneResourceIds')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]])))]",
               "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
               "apiVersion": "2021-08-01",
-              "name": "[format('{0}/{1}', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, sub(length(variables('azureStoragePrivateDnsZoneResourceIds')), 1))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')), parameters('storageAccountName'))]",
+              "name": "[format('{0}/{1}', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')), parameters('storageAccountName'))]",
               "properties": {
                 "privateDnsZoneConfigs": [
                   {
                     "name": "ipconfig1",
                     "properties": {
-                      "privateDnsZoneId": "[variables('azureStoragePrivateDnsZoneResourceIds')[range(0, sub(length(variables('azureStoragePrivateDnsZoneResourceIds')), 1))[copyIndex()]]]"
+                      "privateDnsZoneId": "[variables('azureStoragePrivateDnsZoneResourceIds')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]]]"
                     }
                   }
                 ]
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Network/privateEndpoints', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, sub(length(variables('azureStoragePrivateDnsZoneResourceIds')), 1))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')))]",
+                "[resourceId('Microsoft.Network/privateEndpoints', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
               ]
             },
@@ -4084,7 +4072,7 @@
                 "serverFarmId": "[parameters('serverFarmId')]",
                 "siteConfig": {
                   "alwaysOn": true,
-                  "appSettings": "[union(if(empty(parameters('functionAppUserAssignedIdentityResourceId')), createArray(), createArray(createObject('name', 'AzureWebJobsStorage__clientId', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').clientId), createObject('name', 'UserAssignedIdentityClientId', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').clientId))), createArray(createObject('name', 'AzureWebJobsStorage__credential', 'value', 'managedidentity'), createObject('name', 'AzureWebJobsStorage__blobServiceUri', 'value', format('https://{0}.blob.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'AzureWebJobsStorage__queueServiceUri', 'value', format('https://{0}.queue.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'AzureWebJobsStorage__tableServiceUri', 'value', format('https://{0}.table.{1}', parameters('storageAccountName'), environment().suffixes.storage)), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_LOAD_USER_PROFILE', 'value', '1'), createObject('name', 'EnvironmentName', 'value', environment().name), createObject('name', 'ResourceManagerUri', 'value', environment().resourceManager), createObject('name', 'StorageSuffix', 'value', environment().suffixes.storage), createObject('name', 'TenantId', 'value', subscription().tenantId)), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString)), createArray()), parameters('functionAppAppSettings'))]",
+                  "appSettings": "[union(if(empty(parameters('functionAppUserAssignedIdentityResourceId')), createArray(), createArray(createObject('name', 'AzureWebJobsStorage__clientId', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').clientId), createObject('name', 'UserAssignedIdentityClientId', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').clientId))), createArray(createObject('name', 'AzureWebJobsStorage__credential', 'value', 'managedidentity'), createObject('name', 'AzureWebJobsStorage__blobServiceUri', 'value', format('https://{0}.blob.{1}', parameters('storageAccountName'), environment().suffixes.storage))), if(parameters('enableQueueStorage'), createArray(createObject('name', 'AzureWebJobsStorage__queueServiceUri', 'value', format('https://{0}.queue.{1}', parameters('storageAccountName'), environment().suffixes.storage))), createArray()), if(parameters('enableTableStorage'), createArray(createObject('name', 'AzureWebJobsStorage__tableServiceUri', 'value', format('https://{0}.table.{1}', parameters('storageAccountName'), environment().suffixes.storage))), createArray()), createArray(createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_LOAD_USER_PROFILE', 'value', '1'), createObject('name', 'EnvironmentName', 'value', environment().name), createObject('name', 'ResourceManagerUri', 'value', environment().resourceManager), createObject('name', 'StorageSuffix', 'value', environment().suffixes.storage), createObject('name', 'TenantId', 'value', subscription().tenantId)), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString)), createArray()), parameters('functionAppAppSettings'))]",
                   "cors": {
                     "allowedOrigins": [
                       "[format('{0}', environment().portal)]",
@@ -4107,7 +4095,7 @@
                   "publicNetworkAccess": "Enabled",
                   "use32BitWorkerProcess": false
                 },
-                "outboundVnetRouting": "[if(empty(parameters('functionAppDelegatedSubnetResourceId')), null(), createObject('allTraffic', if(not(empty(parameters('privateLinkScopeResourceId'))), true(), false()), 'applicationTraffic', if(not(empty(parameters('privateLinkScopeResourceId'))), true(), false())))]",
+                "outboundVnetRouting": "[if(empty(parameters('functionAppDelegatedSubnetResourceId')), null(), createObject('allTraffic', true(), 'applicationTraffic', true()))]",
                 "virtualNetworkSubnetId": "[if(not(empty(parameters('functionAppDelegatedSubnetResourceId'))), parameters('functionAppDelegatedSubnetResourceId'), null())]"
               },
               "dependsOn": [

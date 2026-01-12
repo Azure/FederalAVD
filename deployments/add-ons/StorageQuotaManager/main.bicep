@@ -41,8 +41,6 @@ param functionAppDelegatedSubnetResourceId string = ''
 @description('Optional. Private DNS Zone resource IDs. Required if privateEndpoint is true.')
 param azureBlobPrivateDnsZoneResourceId string = ''
 param azureFunctionAppPrivateDnsZoneResourceId string = ''
-param azureQueuePrivateDnsZoneResourceId string = ''
-param azureTablePrivateDnsZoneResourceId string = ''
 
 @description('Optional. The resource ID of the Key Vault for encryption. Required if keyManagementStorageAccounts is set to Customer.')
 param encryptionKeyVaultResourceId string = ''
@@ -207,10 +205,10 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     applicationInsightsName: appInsightsName
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
-    azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
     deploymentSuffix: deploymentSuffix
     enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)
+    enableQueueStorage: false
+    enableTableStorage: false
     encryptionKeyName: encryptionKeyName
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
     functionAppAppSettings: [
