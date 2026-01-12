@@ -69,12 +69,14 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 **Best for**: Zero-downtime requirements, production environments, large host pools
 
 **How it works**:
+
 - Deploys new session hosts **before** deleting old ones
 - Host pool temporarily doubles in size during replacement cycles
 - New hosts are added, users naturally migrate, then old hosts are removed
 - No capacity reduction at any point
 
 **Characteristics**:
+
 - ✅ **Zero downtime** - users always have available capacity
 - ✅ **Maximum safety** - new hosts validated before old ones removed
 - ✅ **Shutdown retention option** - keep old hosts powered off for rollback
@@ -84,6 +86,7 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 - ❌ **Requires capacity headroom** - subnet, quotas, dedicated hosts must support 2x size
 
 **Configuration parameters**:
+
 - `replacementMode`: `SideBySide`
 - `targetSessionHostCount`: 0 (auto-detect) or specific number
 - `maxDeploymentBatchSize`: Maximum deployments per run (default: 100)
@@ -92,6 +95,7 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 - `shutdownRetentionDays`: Days to retain shutdown hosts (default: 3)
 
 **Use cases**:
+
 - Production environments with strict SLA requirements
 - Large host pools where cost of temporary doubling is acceptable
 - Environments requiring rollback capability
@@ -102,12 +106,14 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 **Best for**: Cost optimization, resource-constrained environments, smaller host pools
 
 **How it works**:
+
 - Deletes idle old session hosts **first**, then deploys replacements
 - Maintains minimum capacity percentage during replacements
 - Reuses hostnames and dedicated host assignments from deleted hosts
 - Gradual replacement controlled by max deletions per cycle
 
 **Characteristics**:
+
 - ✅ **Cost optimized** - no host pool doubling, pays only for needed capacity
 - ✅ **Resource efficient** - lower IP address and quota consumption
 - ✅ **Hostname reuse** - leverages deleted names for new hosts
@@ -117,6 +123,7 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 - ❌ **Slower rollouts** - limited by max deletions per cycle
 
 **Configuration parameters**:
+
 - `replacementMode`: `DeleteFirst`
 - `targetSessionHostCount`: Specific number (auto-detect not supported)
 - `maxDeletionsPerCycle`: Maximum hosts to replace per run (default: 5)
@@ -125,6 +132,7 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 - `removeIntuneDevice`: Must be `true` for hostname reuse
 
 **Use cases**:
+
 - Dev/test environments with relaxed availability requirements
 - Cost-sensitive deployments where temporary doubling is prohibitive
 - Resource-constrained environments (limited IPs, quotas, or dedicated hosts)
@@ -152,6 +160,7 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 ### Choosing the Right Mode
 
 **Choose SideBySide if**:
+
 - Zero downtime is a hard requirement
 - You have sufficient subnet IP space and Azure quotas
 - Cost of temporary doubling is acceptable
@@ -159,6 +168,7 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 - You're using dynamic scaling plans (auto-detect target count)
 
 **Choose DeleteFirst if**:
+
 - Cost optimization is the priority
 - Subnet IP space or quotas are constrained
 - You're using dedicated hosts and need to preserve assignments
@@ -243,9 +253,7 @@ For more information, see [Template Specs | Microsoft Learn](https://learn.micro
    .\New-TemplateSpecs.ps1 -ResourceGroupName "rg-avd-management-use2" -Location "eastus2" -CreateAddOns $true
    ```
 
-This creates a template spec named **sessionHostReplacer** with a custom UI form in the specified resource group that you can deploy directly from the portal. A screenshot of the UI is included below.
-
-![Deploy Template Spec](../../../docs/images/sessionHostReplacerUI.png)
+This creates a template spec named **sessionHostReplacer** with a custom UI form in the specified resource group that you can deploy directly from the portal.
 
 ### 2. Deploy Infrastructure
 
@@ -266,6 +274,10 @@ The custom UI form provides a guided experience with tooltips and validation:
    - **Monitoring**: Application Insights, Log Analytics workspace
    - **Networking**: VNet integration, private endpoints (optional)
 5. Review and click **Create**
+
+Here is a screen shot of the form:
+
+![Deploy Template Spec](../../../docs/images/sessionHostReplacerUI.png)
 
 The form automatically validates inputs and provides helpful descriptions for each parameter.
 
