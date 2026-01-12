@@ -243,7 +243,9 @@ For more information, see [Template Specs | Microsoft Learn](https://learn.micro
    .\New-TemplateSpecs.ps1 -ResourceGroupName "rg-avd-management-use2" -Location "eastus2" -CreateAddOns $true
    ```
 
-This creates a template spec named **sessionHostReplacer** with a custom UI form in the specified resource group.
+This creates a template spec named **sessionHostReplacer** with a custom UI form in the specified resource group that you can deploy directly from the portal. A screenshot of the UI is included below.
+
+![Deploy Template Spec](../../../docs/images/sessionHostReplacerUI.png)
 
 ### 2. Deploy Infrastructure
 
@@ -428,13 +430,17 @@ The Session Host Replacer operates in **Image-Version-Based Replacement** mode:
 The `targetSessionHostCount` parameter defines your desired host pool size with two modes:
 
 #### Explicit Count Mode
+
 Set to a specific number (e.g., 100) to maintain that exact count throughout replacement cycles:
+
 - Function always tries to maintain this specific number
 - Does not adapt to manual scaling changes
 - Best for static host pools with predictable capacity needs
 
 #### Auto-Detect Mode (Recommended)
+
 Set to `0` to automatically maintain the current count when replacement cycles begin:
+
 - Function captures initial count when first outdated host is detected
 - This count is maintained throughout the entire replacement cycle
 - After all hosts are replaced, the next cycle captures the new current count
@@ -442,6 +448,7 @@ Set to `0` to automatically maintain the current count when replacement cycles b
 - **Manual scaling compatible**: Make temporary adjustments between image updates
 
 **Example scenario with auto-detect**:
+
 1. Scaling plan maintains 50 hosts during normal operations
 2. New image version is detected
 3. Function captures "50" as target for this replacement cycle
@@ -606,11 +613,13 @@ Session hosts use these tags for automation:
 When `enableProgressiveScaleUp` is enabled, deployments start small and gradually increase:
 
 **Configuration**:
+
 - `initialDeploymentPercentage`: Starting batch size (e.g., 20%)
 - `scaleUpIncrementPercentage`: Amount to increase after successes (e.g., 40%)
 - `successfulRunsBeforeScaleUp`: Consecutive successes needed to scale up (default: 1)
 
 **Behavior**:
+
 - **New cycle starts**: Reset to initial percentage (e.g., 20%)
 - **Cycle detected by**: Image version change OR completion of previous cycle (0 hosts to replace, 0 deploying, 0 draining)
 - **After successful deployment**: Increment consecutive success counter
@@ -619,6 +628,7 @@ When `enableProgressiveScaleUp` is enabled, deployments start small and graduall
 - **After failure**: Reset to initial percentage and clear success counter
 
 **Example** (100 hosts to replace, 20% initial, 50% increment, 1 success required):
+
 1. **Run 1**: Deploy 20 hosts (20% of 100) → Success
 2. **Run 2**: Deploy 70 hosts (70% = 20% + 50%) → Success
 3. **Run 3**: Deploy 100 hosts (100% = capped at max, would be 120%) → Remaining 10 deployed
