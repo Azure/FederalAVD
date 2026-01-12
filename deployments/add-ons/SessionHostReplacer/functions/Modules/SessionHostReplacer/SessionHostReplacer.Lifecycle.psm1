@@ -153,9 +153,20 @@ function Remove-SessionHosts {
                 if ($sessionHost.Sessions -eq 0) {
                     $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
                     # In SideBySide mode, allow immediate deletion since new capacity is already deployed
-                    if ($ReplacementMode -eq 'SideBySide' -or $elapsedMinutes -ge $MinimumDrainMinutes) {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) meets deletion criteria ($([Math]::Round($elapsedMinutes, 1)) minutes elapsed, mode: $ReplacementMode), marking for immediate deletion"
+                    if ($ReplacementMode -eq 'SideBySide') {
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) is in SideBySide mode - marking for immediate deletion (new capacity already deployed)"
                         $deleteSessionHost = $true
+                    }
+                    elseif ($MinimumDrainMinutes -eq 0) {
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) has MinimumDrainMinutes=0 - marking for immediate deletion"
+                        $deleteSessionHost = $true
+                    }
+                    elseif ($elapsedMinutes -ge $MinimumDrainMinutes) {
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) meets deletion criteria ($([Math]::Round($elapsedMinutes, 1)) minutes elapsed >= $MinimumDrainMinutes required) - marking for deletion"
+                        $deleteSessionHost = $true
+                    }
+                    else {
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) must wait $([Math]::Round($MinimumDrainMinutes - $elapsedMinutes, 1)) more minutes before deletion (minimum drain time: $MinimumDrainMinutes minutes)"
                     }
                 }
                 

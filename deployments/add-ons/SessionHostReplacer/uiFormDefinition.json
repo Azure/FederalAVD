@@ -823,12 +823,25 @@
 									"toolTip": "Select an existing App Service Plan instead of creating a new one."
 								},
 								{
+									"name": "appServicePlanSubscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "App Service Plan Subscription",
+									"placeholder": "",
+									"defaultValue": "[steps('basics').scope.subscription.displayName]",
+									"toolTip": "Select the subscription that contains your app service plan.",
+									"constraints": {
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+										"required": true
+									},
+									"visible": "[steps('functionApp').infrastructure.useExistingHostingPlan]"
+								},
+								{
 									"name": "serverFarmsApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(not(empty(steps('basics').scope.subscription)), steps('functionApp').infrastructure.useExistingHostingPlan)]",
+									"condition": "[and(not(empty(steps('functionApp').infrastructure.appServicePlanSubscription)), steps('functionApp').infrastructure.useExistingHostingPlan)]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2024-11-01')]"
+										"path": "[concat(steps('functionApp').infrastructure.appServicePlanSubscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2024-11-01')]"
 									}
 								},
 								{
