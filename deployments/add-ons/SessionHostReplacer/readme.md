@@ -177,38 +177,149 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 
 ## Prerequisites
 
-### Azure Resources Required
+### Required Before Deployment
 
-1. **Azure Function App** (PowerShell 7.4)
-   - **New Deployment**: Creates Premium Windows plan (P0v3) with zone redundancy option
-   - **Existing Plan**: Must be one of the following:
-     - **Premium v3 Windows Plans**: P0v3, P1v3, P2v3, P3v3 (P0v3 recommended for cost savings)
-     - **Elastic Premium Plans**: EP1, EP2, EP3
-     - **Premium v2 Plans**: P1v2, P2v2, P3v2
-   - ❌ **Not Compatible**: Consumption plans, Linux plans, or Standard/Basic tiers
-   - **Required Features**:
-     - Always On (enabled by deployment)
-     - VNet Integration support (if using private endpoints)
-     - PowerShell 7.4 runtime
-   - 💡 **Cost Tip**: P0v3 is the most cost-effective option and fully supports all required features
+#### 1. User-Assigned Managed Identity
 
-2. **User-Assigned Managed Identity** with permissions:
-   - **Azure RBAC:** (Automatically granted during deployment)
-     - `Desktop Virtualization Contributor` on Host Pool
-     - `Contributor` on Session Host Resource Group
-     - `Reader` on Image Gallery/Marketplace
-   - **Microsoft Graph API:** (Must be done via script)
-     - `Device.ReadWrite.All` - For Entra ID device deletion
-     - `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
+Create a user-assigned managed identity that will be used by the Function App. This identity needs both Azure RBAC permissions and Microsoft Graph API permissions.
 
-3. **Template Spec**
-4. **Application Insights** (recommended for monitoring)
-5. **Storage Account** (Function App requirement)
+**Azure RBAC Permissions** (automatically granted during deployment):
 
-### Software
+- `Desktop Virtualization Contributor` on Host Pool
+- `Contributor` on Session Host Resource Group  
+- `Reader` on Image Gallery/Marketplace
 
-1. PowerShell 7.2+
-2. Microsoft Graph Module
+**Microsoft Graph API Permissions** (must be granted manually before deployment):
+
+- `Device.ReadWrite.All` - For Entra ID device deletion
+- `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
+
+> **Important:** Graph API permissions must be configured **before** deploying the Function App, especially if using DeleteFirst mode which requires device cleanup for hostname reuse.
+
+#### 2. Grant Graph API Permissions to Managed Identity
+
+**Why This Is Required:**
+
+- The Function App needs to clean up stale device registrations in Entra ID and Intune
+- This enables hostname reuse (required for DeleteFirst mode, optional for SideBySide)
+- Service principals/managed identities require **Application Permissions** (not delegated permissions)
+
+**Steps to Grant Permissions:**
+
+1. Navigate to the SessionHostReplacer directory:
+
+   ```powershell
+   cd deployments/add-ons/SessionHostReplacer
+   ```
+
+2. Run the permission script with your managed identity's Object ID:
+
+   **For Commercial Azure:**
+
+   ```powershell
+   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id>
+   ```
+
+   **For Azure Government (GCC High):**
+
+   ```powershell
+   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id> -Environment USGov
+   ```
+
+   **For Azure Government (DoD):**
+
+   ```powershell
+   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id> -Environment USGovDoD
+   ```
+
+   > **Note:** For US Secret and Top Secret clouds, you must first update the graph endpoint placeholders in the script using the reference links provided in the script comments.
+
+3. **Verify the permissions were granted:**
+
+   ```powershell
+   # Check permissions in Azure AD
+   Connect-MgGraph -Scopes "Application.Read.All"
+   $mi = Get-MgServicePrincipal -ServicePrincipalId <object-id>
+   $assignments = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $mi.Id
+   $graph = Get-MgServicePrincipal -Filter "displayName eq 'Microsoft Graph'"
+
+   $assignments | Where-Object { $_.ResourceId -eq $graph.Id } | ForEach-Object {
+       $role = $graph.AppRoles | Where-Object { $_.Id -eq $_.AppRoleId }
+       [PSCustomObject]@{
+           Permission = $role.Value
+           GrantedAt = $_.CreatedDateTime
+       }
+   }
+   ```
+
+   You should see:
+   - `Device.ReadWrite.All`
+   - `DeviceManagementManagedDevices.ReadWrite.All`
+
+**Understanding Graph API Permissions:**
+
+For service principals and managed identities calling Graph API:
+
+- ✅ **Application Permissions (App Roles)** - Required, appear in token's `roles` claim
+- ✅ `Device.ReadWrite.All` IS sufficient for device deletion when used by service principals
+
+**Manual Permission Grant (if script fails):**
+
+```powershell
+# Connect with required scopes
+Connect-MgGraph -Scopes "Application.Read.All","AppRoleAssignment.ReadWrite.All"
+
+# Get managed identity and Graph service principals
+$mi = Get-MgServicePrincipal -ServicePrincipalId <managed-identity-object-id>
+$graph = Get-MgServicePrincipal -Filter "displayName eq 'Microsoft Graph'"
+
+# Grant Device.ReadWrite.All
+$roleId = "1138cb37-bd11-4084-a2b7-9f71582aeddb"
+New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $mi.Id `
+    -PrincipalId $mi.Id -ResourceId $graph.Id -AppRoleId $roleId
+
+# Grant DeviceManagementManagedDevices.ReadWrite.All
+$roleId = "243333ab-4d21-40cb-a475-36241daa0842"
+New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $mi.Id `
+    -PrincipalId $mi.Id -ResourceId $graph.Id -AppRoleId $roleId
+```
+
+#### 3. Azure Function App Requirements
+
+The deployment creates or uses an existing Function App:
+
+- **New Deployment**: Creates Premium Windows plan (P0v3) with zone redundancy option
+- **Existing Plan**: Must be one of the following:
+  - **Premium v3 Windows Plans**: P0v3, P1v3, P2v3, P3v3 (P0v3 recommended for cost savings)
+  - **Elastic Premium Plans**: EP1, EP2, EP3
+  - **Premium v2 Plans**: P1v2, P2v2, P3v2
+- ❌ **Not Compatible**: Consumption plans, Linux plans, or Standard/Basic tiers
+- **Required Features**:
+  - Always On (enabled by deployment)
+  - VNet Integration support (if using private endpoints)
+  - PowerShell 7.4 runtime
+- 💡 **Cost Tip**: P0v3 is the most cost-effective option and fully supports all required features
+
+#### 4. Other Required Resources
+
+1. **Template Spec** (optional but recommended for portal-based deployments)
+2. **Application Insights** (recommended for monitoring)
+3. **Storage Account** (automatically created by deployment for Function App internal use)
+
+### Software Requirements
+
+1. **PowerShell 7.4+**
+2. **Microsoft Graph PowerShell Module** (for granting permissions)
+
+   ```powershell
+   Install-Module Microsoft.Graph -Scope CurrentUser
+   ```
+
+3. **Azure PowerShell Module** (for deployment)
+
+   ```powershell
+   Install-Module Az -Scope CurrentUser
+   ```
 
 ## Deployment
 
@@ -304,36 +415,79 @@ New-AzResourceGroupDeployment -ResourceGroupName $params.resourceGroupName `
     -TemplateParameterObject $params
 ```
 
-### 3. Grant Graph API Permissions
+### 3. Restart Function App (Required After Graph Permission Grant)
 
-Run the included permission script:
+After the function app is deployed, the managed identity needs to pick up the Graph API permissions you granted earlier:
+
+1. **Stop** the Function App completely
+2. Wait **2-3 minutes** for Azure AD token cache to clear
+3. **Start** the Function App
+4. Verify permissions appear in Application Insights logs
+
+> **Why this is necessary:** Function Apps cache Azure AD tokens. Restarting ensures the new Graph API permissions are included in fresh tokens.
+
+### 4. Tag Session Hosts for Automation
+
+Session hosts must be tagged to opt-in to automatic replacement:
 
 ```powershell
-cd deployments/add-ons/SessionHostReplacer
+$vmName = "avdvm-001"
+$resourceGroup = "rg-avd-sessionhosts"
 
-# For Commercial Azure
-.\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id>
-
-# For GCC High
-.\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id> -Environment USGov
-
-# For DoD
-.\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id> -Environment USGovDoD
+Update-AzTag -ResourceId "/subscriptions/.../resourceGroups/$resourceGroup/providers/Microsoft.Compute/virtualMachines/$vmName" `
+    -Operation Merge `
+    -Tag @{
+        "IncludeInAutoReplace" = "true"
+        "AutoReplaceDeployTimestamp" = (Get-Date).ToString("o")
+    }
 ```
 
-> **Note:** For US Secret and Top Secret clouds, you must update the graph endpoint placeholders in the script from the reference links provided.
+> **Tip:** You can also set these tags in your session host deployment template to automatically opt in new hosts.
 
-**Important:** After granting permissions:
+## Configuration
 
-1. Wait 5-10 minutes for Azure AD propagation
-2. Stop the Function App completely
-3. Wait 2-3 minutes
-4. Start the Function App
-5. Verify permissions appear in token (check logs)
+### Function Timer Schedule
 
-### 4. Configure Function App Settings
+The Session Host Replacer runs on a configurable timer schedule. **By default, it runs every 30 minutes.**
 
-Required settings (automatically configured during deployment):
+**To customize the schedule**, modify the timer trigger in the function configuration:
+
+1. Navigate to the Function App in Azure Portal
+2. Go to **Functions** → **session-host-replacer** → **Integration**
+3. Click on the **Timer** trigger
+4. Modify the **Schedule** using NCRONTAB format
+
+**Common Schedule Examples:**
+
+| Schedule | NCRONTAB Expression | Description |
+| :------- | :------------------ | :---------- |
+| Every 30 minutes | `0 */30 * * * *` | Default - runs 48 times per day |
+| Every hour | `0 0 * * * *` | Runs at the top of every hour |
+| Every 2 hours | `0 0 */2 * * *` | Runs every 2 hours |
+| Business hours only | `0 0 8-17 * * *` | Runs hourly between 8 AM - 5 PM |
+| Off-peak hours | `0 0 0-6,18-23 * * *` | Runs hourly during midnight-6 AM and 6 PM-11 PM |
+| Nightly only | `0 0 2 * * *` | Runs once daily at 2 AM |
+| Weekdays only | `0 0 * * * 1-5` | Runs hourly on Monday-Friday |
+
+**NCRONTAB Format Reference:**
+
+```
+{second} {minute} {hour} {day} {month} {day-of-week}
+
+Examples:
+0 30 9-17 * * *     - Every 30 minutes between 9 AM and 5 PM
+0 0 20 * * *        - Every day at 8 PM
+0 0 */4 * * *       - Every 4 hours
+0 0 1 * * 0         - Every Sunday at 1 AM
+```
+
+> **💡 Best Practice for Production:** Consider running the function during off-peak hours to minimize impact on active users. For example, `0 0 1-6 * * *` runs hourly between 1 AM and 6 AM.
+
+> **⚠️ Important:** The function execution time does not affect deployment timing. Even if the function runs during business hours, the drain grace period (default: 24 hours) ensures users are not disrupted until their sessions naturally end.
+
+### Application Settings
+
+The following settings are automatically configured during deployment but can be adjusted in the Function App's **Configuration** blade:
 
 ```json
 {
@@ -353,77 +507,7 @@ Required settings (automatically configured during deployment):
 }
 ```
 
-### 5. Tag Session Hosts
-
-Session hosts must be tagged to opt-in:
-
-```powershell
-$vmName = "avdvm-001"
-$resourceGroup = "rg-avd-sessionhosts"
-
-Update-AzTag -ResourceId "/subscriptions/.../resourceGroups/$resourceGroup/providers/Microsoft.Compute/virtualMachines/$vmName" `
-    -Operation Merge `
-    -Tag @{
-        "IncludeInAutoReplace" = "true"
-        "AutoReplaceDeployTimestamp" = (Get-Date).ToString("o")
-    }
-```
-
-## Permissions Setup
-
-### Understanding Permission Requirements
-
-**For Graph API calls by service principals/managed identities:**
-
-- ✅ **Application Permissions** (App Roles) - Required in token's `roles` claim
-- ❌ **Directory Roles** - Do NOT work for API calls by service principals (e.g., Cloud Device Administrator is NOT needed)
-
-**Required Permissions:**
-
-1. **Device.ReadWrite.All** (1138cb37-bd11-4084-a2b7-9f71582aeddb)
-   - Purpose: Delete devices from Entra ID
-   - Note: This permission IS sufficient for device deletion when used by service principals
-
-2. **DeviceManagementManagedDevices.ReadWrite.All** (243333ab-4d21-40cb-a475-36241daa0842)
-   - Purpose: Delete devices from Intune
-
-### Manual Permission Grant (if script fails)
-
-```powershell
-# Connect with required scopes
-Connect-MgGraph -Scopes "Application.Read.All","AppRoleAssignment.ReadWrite.All"
-
-# Get managed identity and Graph service principals
-$mi = Get-MgServicePrincipal -ServicePrincipalId <managed-identity-object-id>
-$graph = Get-MgServicePrincipal -Filter "displayName eq 'Microsoft Graph'"
-
-# Grant Device.ReadWrite.All
-$roleId = "1138cb37-bd11-4084-a2b7-9f71582aeddb"
-New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $mi.Id `
-    -PrincipalId $mi.Id -ResourceId $graph.Id -AppRoleId $roleId
-
-# Grant DeviceManagementManagedDevices.ReadWrite.All
-$roleId = "243333ab-4d21-40cb-a475-36241daa0842"
-New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $mi.Id `
-    -PrincipalId $mi.Id -ResourceId $graph.Id -AppRoleId $roleId
-```
-
-### Verify Permissions
-
-```powershell
-# Check permissions in Azure AD
-$mi = Get-MgServicePrincipal -ServicePrincipalId <object-id>
-$assignments = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $mi.Id
-$graph = Get-MgServicePrincipal -Filter "displayName eq 'Microsoft Graph'"
-
-$assignments | Where-Object { $_.ResourceId -eq $graph.Id } | ForEach-Object {
-    $role = $graph.AppRoles | Where-Object { $_.Id -eq $_.AppRoleId }
-    [PSCustomObject]@{
-        Permission = $role.Value
-        GrantedAt = $_.CreatedDateTime
-    }
-}
-```
+> **Note:** Most settings should not be changed after deployment. If you need to adjust configuration, redeploy the function app with updated parameters.
 
 ## How It Works
 
@@ -721,6 +805,7 @@ When `enableProgressiveScaleUp` is enabled, deployments start small and graduall
 | `timerSchedule` | `0 0,30 * * * *` | NCrontab format: `{second} {minute} {hour} {day} {month} {day-of-week}`. Default runs every 30 minutes at :00 and :30. Stagger across deployments by varying minutes |
 
 **Timer Schedule Examples**:
+
 - `0 0,30 * * * *` - Every 30 minutes (at :00 and :30 past each hour)
 - `0 15,45 * * * *` - Every 30 minutes starting at :15 (runs at :15 and :45)
 - `0 0 * * * *` - Every hour on the hour
@@ -963,19 +1048,22 @@ traces
 The function automatically polls for deletion completion (up to 5 minutes). If this happens:
 
 1. Check if deletion verification completed:
+
 ```kusto
 traces
 | where message contains "VM" and message contains "deletion confirmed"
 | order by timestamp desc
 ```
 
-2. If verification timed out, manually verify VM deletion:
+1. If verification timed out, manually verify VM deletion:
+
 ```powershell
 Get-AzVM -ResourceGroupName "rg-sessionhosts" -Name "vm-oldhost-001"
 # Should return 'ResourceNotFound' error
 ```
 
-3. If VM still exists, deletion may have failed. Check deployment state:
+1. If VM still exists, deletion may have failed. Check deployment state:
+
 ```kusto
 traces
 | where message contains "CRITICAL ERROR" or message contains "deletion failures"
