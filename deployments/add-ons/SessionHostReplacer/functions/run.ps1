@@ -790,13 +790,13 @@ if ($cycleComplete -or $sideBySideRetentionTransition) {
                     if ($tagValue -eq 'SessionHostReplacer') {
                         Write-LogEntry -Message "Removing scaling exclusion tag from $($sessionHost.SessionHostName) (value: $tagValue)"
                         
-                        # Remove the tag by setting it to null
+                        # Remove the tag using Delete operation
                         $tagsUri = "$resourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
                         $Body = @{
+                            operation  = 'Delete'
                             properties = @{
-                                tags = @{ $tagScalingPlanExclusionTag = $null }
+                                tags = @{ $tagScalingPlanExclusionTag = '' }
                             }
-                            operation  = 'Merge'
                         }
                         
                         Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null

@@ -341,8 +341,8 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       use32BitWorkerProcess: false
     }
     outboundVnetRouting: empty(functionAppDelegatedSubnetResourceId) ? null : {
-      allTraffic: empty(privateLinkScopeResourceId) ? false : true
-      applicationTraffic: empty(privateLinkScopeResourceId) ? false : true
+      allTraffic: !empty(privateLinkScopeResourceId)
+      applicationTraffic: true  // Always route application traffic through VNet when VNet integration is enabled
       backupRestoreTraffic: true
       contentShareTraffic: true
       imagePullTraffic: true
