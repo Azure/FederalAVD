@@ -197,7 +197,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| extend Enabled = toint(extract(@\"Enabled:\\s*(\\d+)\", 1, message))\n| extend Target = toint(extract(@\"Target:\\s*(\\d+)\", 1, message))\n| extend ToReplace = toint(extract(@\"ToReplace:\\s*(\\d+)\", 1, message))\n| extend InDrain = toint(extract(@\"InDrain:\\s*(\\d+)\", 1, message))\n| extend PendingDelete = toint(extract(@\"PendingDelete:\\s*(\\d+)\", 1, message))\n| extend ShutdownRetention = toint(extract(@\"ShutdownRetention:\\s*(\\d+)\", 1, message))\n| extend ToDeployNow = toint(extract(@\"ToDeployNow:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName\n| project \n    Column1 = 'Total Hosts', Value1 = Total,\n    Column2 = 'Enabled', Value2 = Enabled,\n    Column3 = 'Target', Value3 = Target,\n    Column4 = 'To Replace', Value4 = ToReplace,\n    Column5 = 'In Drain', Value5 = InDrain,\n    Column6 = 'Pending Delete', Value6 = PendingDelete,\n    Column7 = 'Shutdown Retention', Value7 = ShutdownRetention,\n    Column8 = 'To Deploy', Value8 = ToDeployNow\n| mv-expand Column = pack_array(Column1, Column2, Column3, Column4, Column5, Column6, Column7, Column8), Value = pack_array(Value1, Value2, Value3, Value4, Value5, Value6, Value7, Value8)\n| project Column = tostring(Column), Value = toint(Value)",
+        "query": "let hostPoolFilter = '{HostPool}';\nlet deployingFromRunning = toscalar(\n    traces\n    | where timestamp {TimeRange}\n    | extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n    | where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n    | where message contains \"running deployments\" and message contains \"Found\"\n    | extend RunningCount = toint(extract(@\"Found (\\d+) running deployments\", 1, message))\n    | where isnotempty(RunningCount)\n    | summarize arg_max(timestamp, *) by HostPoolName\n    | summarize sum(RunningCount)\n);\nlet deployingFromSubmitted = toscalar(\n    traces\n    | where timestamp > ago(2h)\n    | extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n    | where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n    | where message contains \"Deployment submitted:\"\n    | extend VMCount = toint(extract(@\"Deployment submitted: (\\d+) VMs\", 1, message))\n    | where isnotempty(VMCount)\n    | summarize arg_max(timestamp, *)\n    | project VMCount\n);\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| extend Enabled = toint(extract(@\"Enabled:\\s*(\\d+)\", 1, message))\n| extend Target = toint(extract(@\"Target:\\s*(\\d+)\", 1, message))\n| extend ToReplace = toint(extract(@\"ToReplace:\\s*(\\d+)\", 1, message))\n| extend InDrain = toint(extract(@\"InDrain:\\s*(\\d+)\", 1, message))\n| extend PendingDelete = toint(extract(@\"PendingDelete:\\s*(\\d+)\", 1, message))\n| extend ShutdownRetention = toint(extract(@\"ShutdownRetention:\\s*(\\d+)\", 1, message))\n| extend ToDeployNow = toint(extract(@\"ToDeployNow:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend Deploying = toint(coalesce(deployingFromRunning, 0) + coalesce(deployingFromSubmitted, 0))\n| project \n    Column1 = 'Total Hosts', Value1 = Total,\n    Column2 = 'Enabled', Value2 = Enabled,\n    Column3 = 'Target', Value3 = Target,\n    Column4 = 'To Replace', Value4 = ToReplace,\n    Column5 = 'In Drain', Value5 = InDrain,\n    Column6 = 'Pending Delete', Value6 = PendingDelete,\n    Column7 = 'Shutdown Retention', Value7 = ShutdownRetention,\n    Column8 = 'To Deploy', Value8 = ToDeployNow,\n    Column9 = 'Currently Deploying', Value9 = Deploying\n| mv-expand Column = pack_array(Column1, Column2, Column3, Column4, Column5, Column6, Column7, Column8, Column9), Value = pack_array(Value1, Value2, Value3, Value4, Value5, Value6, Value7, Value8, Value9)\n| project Column = tostring(Column), Value = toint(Value)",
         "size": 4,
         "title": "Current Status",
         "timeContext": {
@@ -236,86 +236,6 @@
       },
       "customWidth": "100",
       "name": "kpi-tiles"
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\nlet deployingFromRunning = toscalar(\n    traces\n    | where timestamp {TimeRange}\n    | extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n    | where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n    | where message contains \"running deployments\" and message contains \"Found\"\n    | extend RunningCount = toint(extract(@\"Found (\\d+) running deployments\", 1, message))\n    | where isnotempty(RunningCount)\n    | summarize arg_max(timestamp, *) by HostPoolName\n    | summarize sum(RunningCount)\n);\nlet deployingFromSubmitted = toscalar(\n    traces\n    | where timestamp > ago(2h)\n    | extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n    | where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n    | where message contains \"Deployment submitted:\"\n    | extend VMCount = toint(extract(@\"Deployment submitted: (\\d+) VMs\", 1, message))\n    | where isnotempty(VMCount)\n    | summarize arg_max(timestamp, *)\n    | project VMCount\n);\nprint Column = 'Currently Deploying', Value = toint(coalesce(deployingFromRunning, 0) + coalesce(deployingFromSubmitted, 0))",
-        "size": 4,
-        "title": "🚀 Active Deployments",
-        "timeContext": {
-          "durationMs": 0
-        },
-        "timeContextFromParameter": "TimeRange",
-        "crossComponentResources": ["{ApplicationInsights}"],
-        "queryType": 0,
-        "resourceType": "microsoft.insights/components",
-        "visualization": "tiles",
-        "tileSettings": {
-          "titleContent": {
-            "columnMatch": "Column",
-            "formatter": 1
-          },
-          "leftContent": {
-            "columnMatch": "Value",
-            "formatter": 12,
-            "formatOptions": {
-              "palette": "blue"
-            },
-            "numberFormat": {
-              "unit": 17,
-              "options": {
-                "style": "decimal",
-                "useGrouping": false
-              }
-            }
-          },
-          "showBorder": true
-        }
-      },
-      "customWidth": "25",
-      "name": "deploying-tile"
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\nlet failedCount = toscalar(\n    traces\n    | where timestamp {TimeRange}\n    | extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n    | where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n    | where message contains \"failed deployments\" and message contains \"Found\"\n    | extend FailedCount = toint(extract(@\"Found (\\d+) failed deployments\", 1, message))\n    | where isnotempty(FailedCount)\n    | summarize arg_max(timestamp, *) by HostPoolName\n    | summarize sum(FailedCount)\n);\nprint Column = 'Failed Deployments', Value = toint(failedCount)",
-        "size": 4,
-        "title": "⚠️ Deployment Health",
-        "timeContext": {
-          "durationMs": 0
-        },
-        "timeContextFromParameter": "TimeRange",
-        "crossComponentResources": ["{ApplicationInsights}"],
-        "queryType": 0,
-        "resourceType": "microsoft.insights/components",
-        "visualization": "tiles",
-        "tileSettings": {
-          "titleContent": {
-            "columnMatch": "Column",
-            "formatter": 1
-          },
-          "leftContent": {
-            "columnMatch": "Value",
-            "formatter": 12,
-            "formatOptions": {
-              "palette": "redBright"
-            },
-            "numberFormat": {
-              "unit": 17,
-              "options": {
-                "style": "decimal",
-                "useGrouping": false
-              }
-            }
-          },
-          "showBorder": true
-        }
-      },
-      "customWidth": "25",
-      "name": "failed-deployments-tile"
     },
     {
       "type": 1,
@@ -384,9 +304,9 @@
     {
       "type": 1,
       "content": {
-        "json": "### 🖼️ Image Information"
+        "json": "### 🎯 Host Pool Consistency"
       },
-      "name": "image-header"
+      "name": "consistency-header"
     },
     {
       "type": 3,
@@ -439,20 +359,14 @@
           ]
         }
       },
+      "customWidth": "60",
       "name": "image-table"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "### 🎯 Host Pool Consistency"
-      },
-      "name": "consistency-header"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| extend ToReplace = toint(extract(@\"ToReplace:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend OnLatestImage = Total - ToReplace, NeedsReplacement = ToReplace\n| project Status = pack_array(\"On Latest Image\", \"Needs Replacement\"), Count = pack_array(OnLatestImage, NeedsReplacement)\n| mv-expand Status, Count\n| project Status = tostring(Status), Count = toint(Count)\n| render piechart",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| extend ToReplace = toint(extract(@\"ToReplace:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend OnLatestImage = Total - ToReplace\n| extend PercentGood = round(todouble(OnLatestImage) / todouble(Total) * 100.0, 2)\n| project ['Host Pool'] = HostPoolName, ['On Latest Image'] = OnLatestImage, ['Needs Replacement'] = ToReplace, ['% Compliant'] = PercentGood\n| order by ['Host Pool'] asc",
         "size": 0,
         "title": "Image Version Compliance",
         "timeContext": {
@@ -466,35 +380,59 @@
         "gridSettings": {
           "formatters": [
             {
-              "columnMatch": "HostCount",
+              "columnMatch": "On Latest Image",
               "formatter": 4,
               "formatOptions": {
-                "palette": "blue"
+                "palette": "green"
+              }
+            },
+            {
+              "columnMatch": "Needs Replacement",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            },
+            {
+              "columnMatch": "% Compliant",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  {
+                    "operator": "<",
+                    "thresholdValue": "25",
+                    "representation": "redBright",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "<",
+                    "thresholdValue": "75",
+                    "representation": "yellow",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "green",
+                    "text": "{0}{1}"
+                  }
+                ]
+              },
+              "numberFormat": {
+                "unit": 1,
+                "options": {
+                  "style": "decimal",
+                  "minimumFractionDigits": 2,
+                  "maximumFractionDigits": 2
+                }
               }
             }
           ]
         }
       },
-      "customWidth": "50",
+      "customWidth": "40",
       "name": "consistency-table"
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where (message contains \"Previous deployment\" and (message contains \"succeeded\" or message contains \"failed\")) or (message contains \"Deployment submitted successfully\")\n| extend Status = case(\n    message contains \"succeeded\" or message contains \"submitted successfully\", \"Success\",\n    message contains \"failed\", \"Failed\",\n    \"Unknown\")\n| summarize Count = count() by Status\n| render piechart",
-        "size": 0,
-        "title": "Deployment Success Rate",
-        "timeContext": {
-          "durationMs": 0
-        },
-        "timeContextFromParameter": "TimeRange",
-        "crossComponentResources": ["{ApplicationInsights}"],
-        "queryType": 0,
-        "resourceType": "microsoft.insights/components"
-      },
-      "customWidth": "50",
-      "name": "consistency-pie"
     },
     {
       "type": 1,
@@ -520,6 +458,24 @@
       },
       "customWidth": "50",
       "name": "deployment-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where (message contains \"Previous deployment\" and (message contains \"succeeded\" or message contains \"failed\")) or (message contains \"Deployment submitted successfully\")\n| extend Status = case(\n    message contains \"succeeded\" or message contains \"submitted successfully\", \"Success\",\n    message contains \"failed\", \"Failed\",\n    \"Unknown\")\n| summarize Count = count() by Status\n| render piechart",
+        "size": 0,
+        "title": "Deployment Success Rate",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": ["{ApplicationInsights}"],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "customWidth": "50",
+      "name": "consistency-pie"
     },
     {
       "type": 3,
@@ -633,7 +589,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"failed deployment\" or message contains \"Failed deployment\"\n| project timestamp, HostPoolName, Message = message\n| order by timestamp desc\n| take 20\n| union (print timestamp = now(), HostPoolName = 'N/A', Message = '✅ No failed deployments in selected time range')\n| order by timestamp desc\n| take 20",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| where message contains \"failed deployment\" or message contains \"Failed deployment\"\n| where message !contains \"Found 0\"\n| project timestamp, HostPoolName, Message = message\n| order by timestamp desc\n| take 20\n| union (print timestamp = now(), HostPoolName = 'N/A', Message = '✅ No failed deployments in selected time range')\n| order by timestamp desc\n| take 20",
         "size": 0,
         "title": "Recent Failed Deployment Activity",
         "timeContext": {
@@ -786,19 +742,32 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName, bin(timestamp, 1h)\n| summarize avg(Total) by bin(timestamp, 1h)\n| render timechart",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| extend TimeBin = bin(timestamp, 1h)\n| summarize arg_max(timestamp, Total) by HostPoolName, TimeBin\n| summarize ['Total Hosts'] = sum(Total) by TimeBin\n| project TimeBin, ['Total Hosts']\n| render timechart",
         "size": 0,
-        "title": "Average Host Pool Size Over Time",
+        "title": "Total Host Pool Size Over Time",
         "timeContext": {
           "durationMs": 0
         },
         "timeContextFromParameter": "TimeRange",
         "crossComponentResources": ["{ApplicationInsights}"],
         "queryType": 0,
-        "resourceType": "microsoft.insights/components"
+        "resourceType": "microsoft.insights/components",
+        "chartSettings": {
+          "showLegend": true,
+          "showDataPoints": false,
+          "ySettings": {
+            "numberFormatSettings": {
+              "unit": 0,
+              "options": {
+                "style": "decimal",
+                "useGrouping": true
+              }
+            }
+          }
+        }
       },
       "customWidth": "50",
-      "name": "pool-size-chart"
+      "name": "hostpool-size-chart"
     },
     {
       "type": 1,

@@ -8,6 +8,250 @@ Import-Module "$PSScriptRoot\SessionHostReplacer.ImageManagement.psm1" -Force
 
 #Region Session Host Planning
 
+function Get-ScalingPlanCurrentTarget {
+    <#
+    .SYNOPSIS
+    Queries the scaling plan associated with a host pool and determines the current capacity target percentage based on active schedules.
+    
+    .DESCRIPTION
+    This function retrieves the scaling plan configuration for a host pool and evaluates the current schedule
+    to determine what capacity percentage is currently targeted. This can be used as a dynamic minimum capacity
+    floor for replacement operations, allowing more aggressive replacements during off-peak hours and more
+    conservative behavior during peak hours.
+    
+    .PARAMETER ARMToken
+    ARM access token for Azure API calls
+    
+    .PARAMETER HostPoolResourceId
+    Full resource ID of the host pool
+    
+    .PARAMETER CurrentDateTime
+    Current date/time in UTC (defaults to Get-Date -AsUTC). Used for schedule evaluation.
+    
+    .RETURNS
+    PSCustomObject with properties:
+    - CapacityPercentage: Current target capacity percentage (0-100), or $null if no scaling plan found
+    - ScalingPlanName: Name of the scaling plan, or $null if not found
+    - ScheduleName: Name of the active schedule, or $null if not in a scheduled period
+    - Phase: Current phase (RampUp, Peak, RampDown, OffPeak), or $null if not in a scheduled period
+    - Source: 'ScalingPlan' if from active schedule, 'LoadBalancing' if from load balancing config, or $null
+    
+    .EXAMPLE
+    $scalingTarget = Get-ScalingPlanCurrentTarget -ARMToken $token -HostPoolResourceId $hostPoolId
+    if ($scalingTarget.CapacityPercentage) {
+        Write-Host "Current scaling plan target: $($scalingTarget.CapacityPercentage)%"
+    }
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $ARMToken,
+        [Parameter(Mandatory = $true)]
+        [string] $HostPoolResourceId,
+        [Parameter()]
+        [datetime] $CurrentDateTime = (Get-Date -AsUTC),
+        [Parameter()]
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri)
+    )
+    
+    try {
+        Write-LogEntry -Message "Querying scaling plan assigned to host pool" -Level Trace
+        
+        # Query scaling plans assigned to this host pool - returns scaling plan details directly
+        $scalingPlansUri = "$ResourceManagerUri$HostPoolResourceId/scalingPlans?api-version=2024-04-03"
+        $scalingPlansResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $scalingPlansUri
+        
+        if (-not $scalingPlansResponse -or $scalingPlansResponse.Count -eq 0) {
+            Write-LogEntry -Message "No scaling plan assigned to this host pool" -Level Trace
+            return [PSCustomObject]@{
+                CapacityPercentage = $null
+                ScalingPlanName = $null
+                ScheduleName = $null
+                Phase = $null
+                Source = $null
+            }
+        }
+        
+        # Get the first (should be only one) scaling plan
+        $scalingPlan = $scalingPlansResponse[0]
+        $scalingPlanName = $scalingPlan.name
+        
+        Write-LogEntry -Message "Found scaling plan: $scalingPlanName" -Level Trace
+        
+        # Get current day of week and time for schedule matching
+        $currentDayOfWeek = $CurrentDateTime.DayOfWeek.ToString()
+        $currentTimeSpan = $CurrentDateTime.TimeOfDay
+        
+        Write-LogEntry -Message "Evaluating schedules for: $currentDayOfWeek at $($currentTimeSpan.ToString('hh\:mm'))" -Level Trace
+        
+        # Evaluate schedules to find active one
+        $schedules = $scalingPlan.properties.schedules
+        $activeSchedule = $null
+        $activePhase = $null
+        $capacityPercentage = $null
+        
+        foreach ($schedule in $schedules) {
+            # Check if current day is in schedule's days of week
+            if ($schedule.daysOfWeek -notcontains $currentDayOfWeek) {
+                continue
+            }
+            
+            Write-LogEntry -Message "Checking schedule: $($schedule.name)" -Level Trace
+            
+            # Determine which phase we're in based on time
+            # Phases: RampUp -> Peak -> RampDown -> OffPeak (wraps to next day's RampUp)
+            # Times are returned as objects with hour/minute properties, not strings
+            $rampUpStart = New-TimeSpan -Hours $schedule.rampUpStartTime.hour -Minutes $schedule.rampUpStartTime.minute
+            $peakStart = New-TimeSpan -Hours $schedule.peakStartTime.hour -Minutes $schedule.peakStartTime.minute
+            $rampDownStart = New-TimeSpan -Hours $schedule.rampDownStartTime.hour -Minutes $schedule.rampDownStartTime.minute
+            $offPeakStart = New-TimeSpan -Hours $schedule.offPeakStartTime.hour -Minutes $schedule.offPeakStartTime.minute
+            
+            # Determine current phase and capacity
+            if ($currentTimeSpan -ge $rampUpStart -and $currentTimeSpan -lt $peakStart) {
+                $activePhase = 'RampUp'
+                # During ramp-up, target is minimum healthy host percentage
+                $capacityPercentage = $schedule.rampUpMinimumHostsPct
+            }
+            elseif ($currentTimeSpan -ge $peakStart -and $currentTimeSpan -lt $rampDownStart) {
+                $activePhase = 'Peak'
+                # During peak, maintain same conservative floor as ramp-up (highest usage period)
+                $capacityPercentage = $schedule.rampUpMinimumHostsPct
+            }
+            elseif ($currentTimeSpan -ge $rampDownStart -and $currentTimeSpan -lt $offPeakStart) {
+                $activePhase = 'RampDown'
+                # During ramp-down, target is minimum healthy host percentage
+                $capacityPercentage = $schedule.rampDownMinimumHostsPct
+            }
+            elseif ($currentTimeSpan -ge $offPeakStart -or $currentTimeSpan -lt $rampUpStart) {
+                $activePhase = 'OffPeak'
+                # During off-peak, use same floor as ramp-down (lowest usage period)
+                $capacityPercentage = $schedule.rampDownMinimumHostsPct
+            }
+            
+            # SAFETY: Look-ahead check to prevent capacity issues near phase transitions
+            # If we're within 30 minutes of transitioning to a higher-capacity phase, use that phase's percentage instead
+            # This prevents starting aggressive deletions right before scaling plan needs to add capacity
+            # 30-minute window accounts for: deletion verification (~5 min) + deployment time (~20 min) + buffer
+            $lookAheadMinutes = 30
+            $lookAheadTime = $currentTimeSpan.Add([TimeSpan]::FromMinutes($lookAheadMinutes))
+            $nextPhaseCapacity = $null
+            $nextPhaseName = $null
+            
+            # Check if look-ahead time crosses into a different phase
+            if ($activePhase -eq 'OffPeak' -and $lookAheadTime -ge $rampUpStart) {
+                # We're in OffPeak but about to transition to RampUp
+                $nextPhaseCapacity = $schedule.rampUpMinimumHostsPct
+                $nextPhaseName = 'RampUp'
+            }
+            elseif ($activePhase -eq 'RampUp' -and $lookAheadTime -ge $peakStart) {
+                # We're in RampUp but about to transition to Peak (same capacity, no action needed)
+                $nextPhaseCapacity = $schedule.rampUpMinimumHostsPct
+                $nextPhaseName = 'Peak'
+            }
+            elseif ($activePhase -eq 'Peak' -and $lookAheadTime -ge $rampDownStart) {
+                # We're in Peak but about to transition to RampDown (lower capacity, okay to use current)
+                # No adjustment needed - we're moving to lower capacity requirement
+            }
+            elseif ($activePhase -eq 'RampDown' -and $lookAheadTime -ge $offPeakStart) {
+                # We're in RampDown but about to transition to OffPeak (same capacity, no action needed)
+                # No adjustment needed - same capacity requirement
+            }
+            
+            # Apply more conservative (higher) percentage if next phase requires more capacity
+            if ($nextPhaseCapacity -and $nextPhaseCapacity -gt $capacityPercentage) {
+                Write-LogEntry -Message "Safety look-ahead: Transitioning from $activePhase to $nextPhaseName in <$lookAheadMinutes min. Using more conservative $nextPhaseCapacity% instead of $capacityPercentage%" -Level Warning
+                $capacityPercentage = $nextPhaseCapacity
+                $activePhase = "$activePhase->$nextPhaseName (look-ahead)"
+            }
+            
+            if ($activePhase) {
+                $activeSchedule = $schedule
+                Write-LogEntry -Message "Active schedule found: $($schedule.name), Phase: $activePhase, Target capacity: $capacityPercentage%" -Level Trace
+                break
+            }
+        }
+        
+        if ($activeSchedule -and $capacityPercentage) {
+            return [PSCustomObject]@{
+                CapacityPercentage = $capacityPercentage
+                ScalingPlanName = $scalingPlanName
+                ScheduleName = $activeSchedule.name
+                Phase = $activePhase
+                Source = 'ScalingPlan'
+            }
+        }
+        else {
+            # No schedule found for current day - find most recent scheduled day and use its ramp-down percentage
+            Write-LogEntry -Message "No schedule found for $currentDayOfWeek - searching for most recent scheduled day" -Level Trace
+            
+            # Day of week ordering: Sunday=0, Monday=1, ..., Saturday=6
+            $dayOrder = @{
+                'Sunday' = 0
+                'Monday' = 1
+                'Tuesday' = 2
+                'Wednesday' = 3
+                'Thursday' = 4
+                'Friday' = 5
+                'Saturday' = 6
+            }
+            
+            $currentDayIndex = $dayOrder[$currentDayOfWeek]
+            $fallbackCapacityPct = $null
+            $fallbackScheduleName = $null
+            
+            # Search backwards through days to find most recent scheduled day
+            for ($i = 1; $i -le 7; $i++) {
+                $checkDayIndex = ($currentDayIndex - $i + 7) % 7
+                $checkDayName = $dayOrder.GetEnumerator() | Where-Object { $_.Value -eq $checkDayIndex } | Select-Object -ExpandProperty Key
+                
+                # Check if any schedule covers this day
+                foreach ($schedule in $schedules) {
+                    if ($schedule.daysOfWeek -contains $checkDayName) {
+                        $fallbackCapacityPct = $schedule.rampDownMinimumHostsPct
+                        $fallbackScheduleName = $schedule.name
+                        Write-LogEntry -Message "Found most recent scheduled day: $checkDayName (schedule: $fallbackScheduleName, using rampDown: $fallbackCapacityPct%)" -Level Trace
+                        break
+                    }
+                }
+                
+                if ($fallbackCapacityPct) {
+                    break
+                }
+            }
+            
+            if ($fallbackCapacityPct) {
+                return [PSCustomObject]@{
+                    CapacityPercentage = $fallbackCapacityPct
+                    ScalingPlanName = $scalingPlanName
+                    ScheduleName = "$fallbackScheduleName (fallback)"
+                    Phase = 'OffPeak (no schedule)'
+                    Source = 'ScalingPlan'
+                }
+            }
+            else {
+                Write-LogEntry -Message "No schedules found in scaling plan at all" -Level Warning
+                return [PSCustomObject]@{
+                    CapacityPercentage = $null
+                    ScalingPlanName = $scalingPlanName
+                    ScheduleName = $null
+                    Phase = $null
+                    Source = $null
+                }
+            }
+        }
+    }
+    catch {
+        Write-LogEntry -Message "Error querying scaling plan: $($_.Exception.Message)" -Level Warning
+        return [PSCustomObject]@{
+            CapacityPercentage = $null
+            ScalingPlanName = $null
+            ScheduleName = $null
+            Phase = $null
+            Source = $null
+        }
+    }
+}
+
 function Get-SessionHostReplacementPlan {
     [CmdletBinding()]
     param (
@@ -147,7 +391,6 @@ function Get-SessionHostReplacementPlan {
     }
 
     [array] $sessionHostsToReplace = $sessionHostsOldVersion | Select-Object -Property * -Unique
-    Write-LogEntry -Message "Found $($sessionHostsToReplace.Count) session hosts to replace in total. $($($sessionHostsToReplace.SessionHostName) -join ',')"
 
     # Good hosts = not needing replacement AND not shutdown (shutdown VMs are deallocated and unavailable)
     $goodSessionHosts = $SessionHosts | Where-Object { 
@@ -287,24 +530,30 @@ function Get-SessionHostReplacementPlan {
             Write-LogEntry -Message "Using static minimum capacity from configuration: $effectiveMinimumCapacityPct%"
         }
         
-        # Safety floor: Never allow deletions that would drop AVAILABLE capacity below effective minimum
-        # IMPORTANT: Draining hosts (AllowNewSession = false) cannot accept new sessions, so they don't count toward available capacity
-        # This prevents a scenario where we have many draining hosts but insufficient capacity for new user connections
-        $minimumAbsoluteHosts = [Math]::Ceiling($TargetSessionHostCount * ($effectiveMinimumCapacityPct / 100.0))
+        # Safety floor: Ensure that after deletion, we maintain minimum capacity relative to target
+        # The minimum is calculated as a percentage of the TARGET pool size
+        # After deletion, remaining hosts must meet: RemainingTotal >= Ceiling(Target * MinPct)
         
-        # Count only hosts that can accept new sessions (not in drain mode)
+        # Count hosts by drain status
         $availableHostsCount = ($SessionHosts | Where-Object { $_.AllowNewSession }).Count
         $drainingHostsCount = ($SessionHosts | Where-Object { -not $_.AllowNewSession }).Count
+        $totalHostsCount = $SessionHosts.Count
         
-        # Calculate max safe deletions based on AVAILABLE (non-draining) capacity
-        $maxSafeDeletions = $availableHostsCount - $minimumAbsoluteHosts
+        # Calculate minimum required hosts based on target (starting pool size)
+        $minimumAbsoluteHosts = [Math]::Ceiling($TargetSessionHostCount * ($effectiveMinimumCapacityPct / 100.0))
         
         if ($drainingHostsCount -gt 0) {
-            Write-LogEntry -Message "DeleteFirst mode: $drainingHostsCount host(s) currently draining (not accepting new sessions), excluding from available capacity calculation" -Level Trace
+            Write-LogEntry -Message "DeleteFirst mode: $drainingHostsCount host(s) currently draining (not accepting new sessions), $availableHostsCount available, $totalHostsCount total" -Level Trace
         }
         
+        # Calculate max safe deletions:
+        # After deletion: (TotalHosts - N) will remain
+        # Requirement: (TotalHosts - N) >= MinimumAbsoluteHosts
+        # Therefore: N <= TotalHosts - MinimumAbsoluteHosts
+        $maxSafeDeletions = $totalHostsCount - $minimumAbsoluteHosts
+        
         if ($canDelete -gt $maxSafeDeletions) {
-            Write-LogEntry -Message "DeleteFirst mode: Safety floor triggered - limiting deletions from $canDelete to $maxSafeDeletions to maintain minimum $effectiveMinimumCapacityPct% AVAILABLE capacity ($minimumAbsoluteHosts hosts, currently $availableHostsCount available, $drainingHostsCount draining) [Source: $capacitySource]" -Level Warning
+            Write-LogEntry -Message "DeleteFirst mode: Safety floor triggered - limiting deletions from $canDelete to $maxSafeDeletions to maintain minimum $effectiveMinimumCapacityPct% capacity (need $minimumAbsoluteHosts hosts, currently $totalHostsCount total, after deletion would have $($totalHostsCount - $canDelete)) [Source: $capacitySource]" -Level Warning
             $canDelete = $maxSafeDeletions
         }
         
@@ -640,276 +889,6 @@ function Get-SessionHosts {
         [PSCustomObject]$hostOutput
     }
     return $result
-}
-
-function Get-ScalingPlanCurrentTarget {
-    <#
-    .SYNOPSIS
-    Queries the scaling plan associated with a host pool and determines the current capacity target percentage based on active schedules.
-    
-    .DESCRIPTION
-    This function retrieves the scaling plan configuration for a host pool and evaluates the current schedule
-    to determine what capacity percentage is currently targeted. This can be used as a dynamic minimum capacity
-    floor for replacement operations, allowing more aggressive replacements during off-peak hours and more
-    conservative behavior during peak hours.
-    
-    .PARAMETER ARMToken
-    ARM access token for Azure API calls
-    
-    .PARAMETER HostPoolResourceId
-    Full resource ID of the host pool
-    
-    .PARAMETER CurrentDateTime
-    Current date/time in UTC (defaults to Get-Date -AsUTC). Used for schedule evaluation.
-    
-    .RETURNS
-    PSCustomObject with properties:
-    - CapacityPercentage: Current target capacity percentage (0-100), or $null if no scaling plan found
-    - ScalingPlanName: Name of the scaling plan, or $null if not found
-    - ScheduleName: Name of the active schedule, or $null if not in a scheduled period
-    - Phase: Current phase (RampUp, Peak, RampDown, OffPeak), or $null if not in a scheduled period
-    - Source: 'ScalingPlan' if from active schedule, 'LoadBalancing' if from load balancing config, or $null
-    
-    .EXAMPLE
-    $scalingTarget = Get-ScalingPlanCurrentTarget -ARMToken $token -HostPoolResourceId $hostPoolId
-    if ($scalingTarget.CapacityPercentage) {
-        Write-Host "Current scaling plan target: $($scalingTarget.CapacityPercentage)%"
-    }
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string] $ARMToken,
-        [Parameter(Mandatory = $true)]
-        [string] $HostPoolResourceId,
-        [Parameter()]
-        [datetime] $CurrentDateTime = (Get-Date -AsUTC),
-        [Parameter()]
-        [string] $ResourceManagerUri = (Get-ResourceManagerUri)
-    )
-    
-    try {
-        Write-LogEntry -Message "Querying scaling plan configuration for host pool" -Level Trace
-        
-        # Query scaling plan pool references (assignments) for this host pool
-        $scalingPlanRefsUri = "$ResourceManagerUri$HostPoolResourceId/scalingPlanPoolReferences?api-version=2024-04-03"
-        $scalingPlanRefs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $scalingPlanRefsUri
-        
-        if (-not $scalingPlanRefs -or $scalingPlanRefs.Count -eq 0) {
-            Write-LogEntry -Message "No scaling plan assigned to this host pool" -Level Trace
-            return [PSCustomObject]@{
-                CapacityPercentage = $null
-                ScalingPlanName = $null
-                ScheduleName = $null
-                Phase = $null
-                Source = $null
-            }
-        }
-        
-        # Get the first (should be only one) scaling plan reference
-        $scalingPlanRef = $scalingPlanRefs[0]
-        $scalingPlanId = $scalingPlanRef.properties.scalingPlanReference.id
-        
-        if (-not $scalingPlanId) {
-            Write-LogEntry -Message "Scaling plan reference found but no ID present" -Level Warning
-            return [PSCustomObject]@{
-                CapacityPercentage = $null
-                ScalingPlanName = $null
-                ScheduleName = $null
-                Phase = $null
-                Source = $null
-            }
-        }
-        
-        # Query the scaling plan details
-        $scalingPlanUri = "$ResourceManagerUri$scalingPlanId`?api-version=2024-04-03"
-        $scalingPlan = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $scalingPlanUri
-        
-        if (-not $scalingPlan) {
-            Write-LogEntry -Message "Failed to retrieve scaling plan details" -Level Warning
-            return [PSCustomObject]@{
-                CapacityPercentage = $null
-                ScalingPlanName = $null
-                ScheduleName = $null
-                Phase = $null
-                Source = $null
-            }
-        }
-        
-        $scalingPlanName = $scalingPlan.name
-        Write-LogEntry -Message "Found scaling plan: $scalingPlanName" -Level Trace
-        
-        # Get current day of week and time for schedule matching
-        $currentDayOfWeek = $CurrentDateTime.DayOfWeek.ToString()
-        $currentTimeSpan = $CurrentDateTime.TimeOfDay
-        
-        Write-LogEntry -Message "Evaluating schedules for: $currentDayOfWeek at $($currentTimeSpan.ToString('hh\:mm'))" -Level Trace
-        
-        # Evaluate schedules to find active one
-        $schedules = $scalingPlan.properties.schedules
-        $activeSchedule = $null
-        $activePhase = $null
-        $capacityPercentage = $null
-        
-        foreach ($schedule in $schedules) {
-            # Check if current day is in schedule's days of week
-            if ($schedule.daysOfWeek -notcontains $currentDayOfWeek) {
-                continue
-            }
-            
-            Write-LogEntry -Message "Checking schedule: $($schedule.name)" -Level Trace
-            
-            # Determine which phase we're in based on time
-            # Phases: RampUp -> Peak -> RampDown -> OffPeak (wraps to next day's RampUp)
-            $rampUpStart = [TimeSpan]::Parse($schedule.rampUpStartTime.time)
-            $peakStart = [TimeSpan]::Parse($schedule.peakStartTime.time)
-            $rampDownStart = [TimeSpan]::Parse($schedule.rampDownStartTime.time)
-            $offPeakStart = [TimeSpan]::Parse($schedule.offPeakStartTime.time)
-            
-            # Determine current phase and capacity
-            if ($currentTimeSpan -ge $rampUpStart -and $currentTimeSpan -lt $peakStart) {
-                $activePhase = 'RampUp'
-                # During ramp-up, target is minimum healthy host percentage
-                $capacityPercentage = $schedule.rampUpMinimumHostsPct
-            }
-            elseif ($currentTimeSpan -ge $peakStart -and $currentTimeSpan -lt $rampDownStart) {
-                $activePhase = 'Peak'
-                # During peak, maintain same conservative floor as ramp-up (highest usage period)
-                $capacityPercentage = $schedule.rampUpMinimumHostsPct
-            }
-            elseif ($currentTimeSpan -ge $rampDownStart -and $currentTimeSpan -lt $offPeakStart) {
-                $activePhase = 'RampDown'
-                # During ramp-down, target is minimum healthy host percentage
-                $capacityPercentage = $schedule.rampDownMinimumHostsPct
-            }
-            elseif ($currentTimeSpan -ge $offPeakStart -or $currentTimeSpan -lt $rampUpStart) {
-                $activePhase = 'OffPeak'
-                # During off-peak, use same floor as ramp-down (lowest usage period)
-                $capacityPercentage = $schedule.rampDownMinimumHostsPct
-            }
-            
-            # SAFETY: Look-ahead check to prevent capacity issues near phase transitions
-            # If we're within 30 minutes of transitioning to a higher-capacity phase, use that phase's percentage instead
-            # This prevents starting aggressive deletions right before scaling plan needs to add capacity
-            # 30-minute window accounts for: deletion verification (~5 min) + deployment time (~20 min) + buffer
-            $lookAheadMinutes = 30
-            $lookAheadTime = $currentTimeSpan.Add([TimeSpan]::FromMinutes($lookAheadMinutes))
-            $nextPhaseCapacity = $null
-            $nextPhaseName = $null
-            
-            # Check if look-ahead time crosses into a different phase
-            if ($activePhase -eq 'OffPeak' -and $lookAheadTime -ge $rampUpStart) {
-                # We're in OffPeak but about to transition to RampUp
-                $nextPhaseCapacity = $schedule.rampUpMinimumHostsPct
-                $nextPhaseName = 'RampUp'
-            }
-            elseif ($activePhase -eq 'RampUp' -and $lookAheadTime -ge $peakStart) {
-                # We're in RampUp but about to transition to Peak (same capacity, no action needed)
-                $nextPhaseCapacity = $schedule.rampUpMinimumHostsPct
-                $nextPhaseName = 'Peak'
-            }
-            elseif ($activePhase -eq 'Peak' -and $lookAheadTime -ge $rampDownStart) {
-                # We're in Peak but about to transition to RampDown (lower capacity, okay to use current)
-                # No adjustment needed - we're moving to lower capacity requirement
-            }
-            elseif ($activePhase -eq 'RampDown' -and $lookAheadTime -ge $offPeakStart) {
-                # We're in RampDown but about to transition to OffPeak (same capacity, no action needed)
-                # No adjustment needed - same capacity requirement
-            }
-            
-            # Apply more conservative (higher) percentage if next phase requires more capacity
-            if ($nextPhaseCapacity -and $nextPhaseCapacity -gt $capacityPercentage) {
-                Write-LogEntry -Message "Safety look-ahead: Transitioning from $activePhase to $nextPhaseName in <$lookAheadMinutes min. Using more conservative $nextPhaseCapacity% instead of $capacityPercentage%" -Level Warning
-                $capacityPercentage = $nextPhaseCapacity
-                $activePhase = "$activePhase->$nextPhaseName (look-ahead)"
-            }
-            
-            if ($activePhase) {
-                $activeSchedule = $schedule
-                Write-LogEntry -Message "Active schedule found: $($schedule.name), Phase: $activePhase, Target capacity: $capacityPercentage%" -Level Trace
-                break
-            }
-        }
-        
-        if ($activeSchedule -and $capacityPercentage) {
-            return [PSCustomObject]@{
-                CapacityPercentage = $capacityPercentage
-                ScalingPlanName = $scalingPlanName
-                ScheduleName = $activeSchedule.name
-                Phase = $activePhase
-                Source = 'ScalingPlan'
-            }
-        }
-        else {
-            # No schedule found for current day - find most recent scheduled day and use its ramp-down percentage
-            Write-LogEntry -Message "No schedule found for $currentDayOfWeek - searching for most recent scheduled day" -Level Trace
-            
-            # Day of week ordering: Sunday=0, Monday=1, ..., Saturday=6
-            $dayOrder = @{
-                'Sunday' = 0
-                'Monday' = 1
-                'Tuesday' = 2
-                'Wednesday' = 3
-                'Thursday' = 4
-                'Friday' = 5
-                'Saturday' = 6
-            }
-            
-            $currentDayIndex = $dayOrder[$currentDayOfWeek]
-            $fallbackCapacityPct = $null
-            $fallbackScheduleName = $null
-            
-            # Search backwards through days to find most recent scheduled day
-            for ($i = 1; $i -le 7; $i++) {
-                $checkDayIndex = ($currentDayIndex - $i + 7) % 7
-                $checkDayName = $dayOrder.GetEnumerator() | Where-Object { $_.Value -eq $checkDayIndex } | Select-Object -ExpandProperty Key
-                
-                # Check if any schedule covers this day
-                foreach ($schedule in $schedules) {
-                    if ($schedule.daysOfWeek -contains $checkDayName) {
-                        $fallbackCapacityPct = $schedule.rampDownMinimumHostsPct
-                        $fallbackScheduleName = $schedule.name
-                        Write-LogEntry -Message "Found most recent scheduled day: $checkDayName (schedule: $fallbackScheduleName, using rampDown: $fallbackCapacityPct%)" -Level Trace
-                        break
-                    }
-                }
-                
-                if ($fallbackCapacityPct) {
-                    break
-                }
-            }
-            
-            if ($fallbackCapacityPct) {
-                return [PSCustomObject]@{
-                    CapacityPercentage = $fallbackCapacityPct
-                    ScalingPlanName = $scalingPlanName
-                    ScheduleName = "$fallbackScheduleName (fallback)"
-                    Phase = 'OffPeak (no schedule)'
-                    Source = 'ScalingPlan'
-                }
-            }
-            else {
-                Write-LogEntry -Message "No schedules found in scaling plan at all" -Level Warning
-                return [PSCustomObject]@{
-                    CapacityPercentage = $null
-                    ScalingPlanName = $scalingPlanName
-                    ScheduleName = $null
-                    Phase = $null
-                    Source = $null
-                }
-            }
-        }
-    }
-    catch {
-        Write-LogEntry -Message "Error querying scaling plan: $($_.Exception.Message)" -Level Warning
-        return [PSCustomObject]@{
-            CapacityPercentage = $null
-            ScalingPlanName = $null
-            ScheduleName = $null
-            Phase = $null
-            Source = $null
-        }
-    }
 }
 
 #EndRegion Session Host Planning
