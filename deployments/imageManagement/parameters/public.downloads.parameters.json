@@ -218,7 +218,7 @@
     },
     "DoDSTIGGPOPackage": {
         "Description": "Optional: DoD STIG GPO Package - Keep it updated! Used for applying STIGs via LGPO.",
-        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_July_2025.zip",
+        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip",
         "WebSiteUrl": "",
         "SearchString": "",
         "APIUrl": "",
