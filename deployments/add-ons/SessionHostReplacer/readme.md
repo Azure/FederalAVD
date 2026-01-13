@@ -27,6 +27,7 @@ The Session Host Replacer monitors AVD session hosts and automatically replaces 
 - **Flexible Replacement Strategies**: Choose between SideBySide (zero-downtime) or DeleteFirst (cost-optimized) modes
 - **Zero-downtime rolling updates** with automatic capacity management (SideBySide mode)
 - **Cost-optimized replacements** with controlled capacity reduction (DeleteFirst mode)
+- **Dynamic capacity from scaling plans**: Automatic adjustment of safety floors based on scaling plan schedules (DeleteFirst mode)
 - **Zero-touch image updates** with automatic version tracking
 - **Graceful user session handling** with configurable grace periods
 - **Progressive scale-up** for gradual, validated rollouts
@@ -185,7 +186,8 @@ Create a user-assigned managed identity that will be used by the Function App. T
 
 **Azure RBAC Permissions** (automatically granted during deployment):
 
-- `Desktop Virtualization Contributor` on Host Pool
+- `Desktop Virtualization Contributor` on Host Pool Resource Group
+- `Reader` on Host Pool Subscription (for scaling plan queries)
 - `Contributor` on Session Host Resource Group  
 - `Reader` on Image Gallery/Marketplace
 
@@ -761,7 +763,53 @@ When `enableProgressiveScaleUp` is enabled, deployments start small and graduall
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `maxDeletionsPerCycle` | `5` | Maximum hosts to delete and deploy per cycle (1-50). Controls replacement pace - function deletes this many, then deploys same count |
-| `minimumCapacityPercentage` | `80` | Safety floor: minimum percentage of target capacity to maintain (50-100%). Deletions capped to prevent dropping below threshold. Higher = more conservative, lower = more aggressive |
+| `minimumCapacityPercentage` | `80` | Safety floor: minimum percentage of target capacity to maintain (50-100%). Deletions capped to prevent dropping below threshold. Higher = more conservative, lower = more aggressive. **Note**: Automatically overridden by scaling plan schedules when available (see Dynamic Capacity below) |
+
+#### Dynamic Capacity from Scaling Plans
+
+**DeleteFirst mode only**: When a scaling plan is assigned to the host pool, the `minimumCapacityPercentage` is automatically and dynamically adjusted based on the active schedule phase:
+
+**How it works**:
+- Function queries the scaling plan on each run
+- Determines current phase (RampUp, Peak, RampDown, OffPeak)
+- Applies **phase-aware capacity strategy**:
+  - **RampUp & Peak**: Uses configured `minimumCapacityPercentage` as a safety floor (whichever is higher: config or scaling plan)
+  - **RampDown & OffPeak**: Uses scaling plan percentage directly (allows aggressive replacements when users aren't expected)
+- Falls back to static `minimumCapacityPercentage` if no scaling plan found
+
+**Example scenario**:
+- Your scaling plan: 90% (Peak), 80% (RampDown), 50% (OffPeak), 60% (RampUp)
+- Your configured `minimumCapacityPercentage`: 70%
+- **Effective capacity**:
+  - **Peak**: 90% (scaling plan higher than config)
+  - **RampUp**: 70% (config floor enforced)
+  - **RampDown**: 80% (scaling plan used directly)
+  - **OffPeak**: 50% (scaling plan used directly - aggressive replacements allowed)
+
+**Benefits**:
+- ✅ **Intelligent timing**: Aligns replacements with business usage patterns
+- ✅ **Faster off-peak updates**: Aggressive during low-usage windows (can go below configured minimum)
+- ✅ **Peak protection**: Never goes below your configured minimum during business hours
+- ✅ **Respects scaling intent**: Trusts that your scaling plan's off-peak percentages are appropriate
+- ✅ **Automatic**: No manual coordination needed
+- ✅ **Transparent**: Logs show which capacity source and phase logic is being used
+
+**Safety features**:
+- **Phase-aware floor**: Configured minimum acts as safety floor during RampUp/Peak phases only
+- **30-minute look-ahead**: Prevents starting aggressive deletions within 30 minutes of transitioning to RampUp/Peak phase
+- **Example**: Run at 5:45 AM during OffPeak → detects 6:00 AM RampUp transition → enforces configured minimum floor to ensure capacity is ready before users arrive
+
+**Logging examples**:
+```
+Peak/RampUp phase: Using configured minimum (70%) as floor. Scaling plan: 60%, Effective: 70%
+RampDown/OffPeak phase: Using scaling plan target directly. Effective capacity: 50%
+Dynamic capacity from scaling plan (Schedule: Weekday, Phase: OffPeak): 50% -> effective: 50%
+```
+
+**Requirements**:
+- Scaling plan must be assigned to the host pool
+- Schedule must be configured with `rampUpMinimumHostsPct` and `rampDownMinimumHostsPct` values
+- No additional configuration needed - feature is automatic when scaling plan is detected
 
 ### Progressive Scale-Up Parameters
 

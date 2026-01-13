@@ -92,7 +92,7 @@ var diagnosticsLogs = contains(diagnosticLogCategoriesToEnable, 'allLogs') ? [
   }
 ] : diagnosticsLogsSpecified
 
-resource scalingPlan 'Microsoft.DesktopVirtualization/scalingPlans@2022-09-09' = {
+resource scalingPlan 'Microsoft.DesktopVirtualization/scalingPlans@2024-04-03' = {
   name: name
   location: location
   tags: tags[?'Microsoft.DesktopVirtualization/scalingPlans'] ?? {}

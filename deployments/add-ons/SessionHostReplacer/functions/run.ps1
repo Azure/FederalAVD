@@ -32,7 +32,7 @@ $settingsLog = @{
     ReplacementMode = $replacementMode
     MinimumDrainMinutes = $minimumDrainMinutes
     DrainGracePeriodHours = $drainGracePeriodHours
-    MinimumCapacityPercent = if ($replacementMode -eq 'DeleteFirst') { $minimumCapacityPercentage } else { 'N/A' }
+    MinimumCapacityPercent = if ($replacementMode -eq 'DeleteFirst') { "$minimumCapacityPercentage (static)" } else { 'N/A' }
     MaxDeletionsPerCycle = if ($replacementMode -eq 'DeleteFirst') { $maxDeletionsPerCycle } else { 'N/A' }
     EnableProgressiveScaleUp = $enableProgressiveScaleUp
     InitialDeploymentPercent = if($enableProgressiveScaleUp) { $initialDeploymentPercentage } else { 'N/A' }
@@ -43,9 +43,10 @@ $settingsLog = @{
     EnableShutdownRetention = if ($replacementMode -eq 'SideBySide') { $enableShutdownRetention } else { 'N/A' }
     ShutdownRetentionDays = if ($replacementMode -eq 'SideBySide' -and $enableShutdownRetention -eq 'True') { $shutdownRetentionDays } else { 'N/A' }
     TargetSessionHostCount = if($targetSessionHostCount -eq 0) { 'Auto' } else { $targetSessionHostCount }
+    DynamicCapacityEnabled = if ($replacementMode -eq 'DeleteFirst') { 'Yes' } else { 'N/A' }
 }
 
-Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | MinimumHostIndex: {10} | EnableShutdownRetention: {11} | ShutdownRetentionDays: {12} | TargetSessionHostCount: {13}" -StringValues $settingsLog.ReplacementMode, $settingsLog.MinimumDrainMinutes, $settingsLog.DrainGracePeriodHours, $settingsLog.MinimumCapacityPercent, $settingsLog.MaxDeletionsPerCycle, $settingsLog.EnableProgressiveScaleUp, $settingsLog.InitialDeploymentPercent, $settingsLog.ScaleUpIncrementPercent, $settingsLog.SuccessfulRunsBeforeScaleUp, $settingsLog.MaxDeploymentBatchSize, $settingsLog.MinimumHostIndex, $settingsLog.EnableShutdownRetention, $settingsLog.ShutdownRetentionDays, $settingsLog.TargetSessionHostCount
+Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | MinimumHostIndex: {10} | EnableShutdownRetention: {11} | ShutdownRetentionDays: {12} | TargetSessionHostCount: {13} | DynamicCapacity: {14}" -StringValues $settingsLog.ReplacementMode, $settingsLog.MinimumDrainMinutes, $settingsLog.DrainGracePeriodHours, $settingsLog.MinimumCapacityPercent, $settingsLog.MaxDeletionsPerCycle, $settingsLog.EnableProgressiveScaleUp, $settingsLog.InitialDeploymentPercent, $settingsLog.ScaleUpIncrementPercent, $settingsLog.SuccessfulRunsBeforeScaleUp, $settingsLog.MaxDeploymentBatchSize, $settingsLog.MinimumHostIndex, $settingsLog.EnableShutdownRetention, $settingsLog.ShutdownRetentionDays, $settingsLog.TargetSessionHostCount, $settingsLog.DynamicCapacityEnabled
 
 # Acquire ARM access token
 try {
@@ -277,8 +278,33 @@ else {
     $allowImageVersionRollback = [bool]::Parse($allowImageVersionRollback)
 }
 
+# Query scaling plan for dynamic minimum capacity (DeleteFirst mode only)
+$scalingPlanTarget = $null
+if ($replacementMode -eq 'DeleteFirst') {
+    try {
+        $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
+        $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
+        $hostPoolName = Read-FunctionAppSetting HostPoolName
+        $hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
+        
+        Write-LogEntry -Message "DeleteFirst mode: Querying scaling plan for dynamic minimum capacity target"
+        $scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId
+        
+        if ($scalingPlanTarget -and $scalingPlanTarget.CapacityPercentage) {
+            Write-LogEntry -Message "Dynamic capacity from scaling plan: $($scalingPlanTarget.CapacityPercentage)% (Plan: $($scalingPlanTarget.ScalingPlanName), Schedule: $($scalingPlanTarget.ScheduleName), Phase: $($scalingPlanTarget.Phase))"
+        }
+        else {
+            Write-LogEntry -Message "No active scaling plan schedule found - will use static MinimumCapacityPercentage setting"
+        }
+    }
+    catch {
+        Write-LogEntry -Message "Failed to query scaling plan (will use static capacity): $($_.Exception.Message)" -Level Warning
+        $scalingPlanTarget = $null
+    }
+}
+
 # Get number session hosts to deploy
-$hostPoolReplacementPlan = Get-SessionHostReplacementPlan -ARMToken $ARMToken -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback
+$hostPoolReplacementPlan = Get-SessionHostReplacementPlan -ARMToken $ARMToken -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback -ScalingPlanTarget $scalingPlanTarget
 
 # Check if we're starting a new update cycle and reset progressive scale-up if needed
 if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
