@@ -731,6 +731,17 @@ module roleAssignmentVirtualMachinesSubscription '../../sharedModules/resources/
   }
 }
 
+module roleAssignmentHostPoolSubscription '../../sharedModules/resources/authorization/role-assignment/subscription/main.bicep' = {
+  name: 'RoleAssign-Sub-Reader-${deploymentSuffix}'
+  scope: subscription(hostPoolSubscriptionId)
+  params: {
+    principalId: userAssignedIdentity.properties.principalId
+    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader - needed to read scaling plans that may be in different resource groups
+    subscriptionId: hostPoolSubscriptionId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 module roleAssignmentsRGs '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
   for rgRole in roleAssignmentsResourceGroups: {
     name: 'RoleAssign-${last(split(rgRole.resourceGroupId, '/'))}-${rgRole.roleDescription}-${deploymentSuffix}'

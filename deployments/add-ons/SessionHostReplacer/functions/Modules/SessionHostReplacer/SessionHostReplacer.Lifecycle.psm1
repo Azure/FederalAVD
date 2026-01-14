@@ -7,6 +7,156 @@ Import-Module "$PSScriptRoot\SessionHostReplacer.DeviceCleanup.psm1" -Force
 
 #Region Session Host Lifecycle
 
+function Remove-ExpiredShutdownVMs {
+    <#
+    .SYNOPSIS
+    Removes VMs that have been shutdown for longer than the retention period.
+    
+    .DESCRIPTION
+    Checks for VMs tagged with shutdown timestamp and deletes them if they have exceeded
+    the configured retention period. Also removes associated Entra ID and Intune devices.
+    
+    .PARAMETER ARMToken
+    ARM access token for Azure Resource Manager API calls
+    
+    .PARAMETER GraphToken
+    Graph access token for Entra ID and Intune API calls
+    
+    .PARAMETER ShutdownRetentionDays
+    Number of days to retain shutdown VMs before deletion
+    
+    .OUTPUTS
+    PSCustomObject with counts of cleaned up and retained VMs
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $ARMToken,
+        [Parameter()]
+        [string] $GraphToken,
+        [Parameter()]
+        [array] $CachedVMs,
+        [Parameter()]
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri),
+        [Parameter()]
+        [int] $ShutdownRetentionDays = [int]::Parse((Read-FunctionAppSetting ShutdownRetentionDays)),
+        [Parameter()]
+        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp),
+        [Parameter()]
+        [string] $VirtualMachinesSubscriptionId = (Read-FunctionAppSetting VirtualMachinesSubscriptionId),
+        [Parameter()]
+        [string] $VirtualMachinesResourceGroupName = (Read-FunctionAppSetting VirtualMachinesResourceGroupName),
+        [Parameter()]
+        [string] $HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
+        [Parameter()]
+        [string] $HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
+        [Parameter()]
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
+        [Parameter()]
+        [bool] $RemoveEntraDevice = [bool]::Parse((Read-FunctionAppSetting RemoveEntraDevice)),
+        [Parameter()]
+        [bool] $RemoveIntuneDevice = [bool]::Parse((Read-FunctionAppSetting RemoveIntuneDevice)),
+        [Parameter()]
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+    )
+    
+    Write-LogEntry -Message "Checking for shutdown VMs exceeding retention period of $ShutdownRetentionDays days"
+    
+    # Use cached VMs if provided, otherwise fetch
+    if ($CachedVMs -and $CachedVMs.Count -gt 0) {
+        Write-LogEntry -Message "Using cached VM data for shutdown retention check" -Level Trace
+        $allVMs = $CachedVMs
+    }
+    else {
+        $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/resources?`$filter=resourceType eq 'Microsoft.Compute/virtualMachines'&api-version=2021-04-01"
+        $allVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+    }
+    
+    # Filter to VMs with the shutdown timestamp tag
+    $shutdownVMs = $allVMs | Where-Object { $_.tags -and $_.tags.PSObject.Properties.Name -contains $TagShutdownTimestamp }
+    
+    if (-not $shutdownVMs -or $shutdownVMs.Count -eq 0) {
+        Write-LogEntry -Message "No shutdown VMs found with retention tag" -Level Trace
+        return [PSCustomObject]@{
+            CleanedUpCount = 0
+            RetainedCount  = 0
+        }
+    }
+    
+    Write-LogEntry -Message "Found $($shutdownVMs.Count) shutdown VM(s) to evaluate"
+    
+    $cleanedUpCount = 0
+    $retainedCount = 0
+    $deletedVMNames = @()
+    $currentTime = (Get-Date).ToUniversalTime()
+    
+    foreach ($vm in $shutdownVMs) {
+        $vmName = $vm.name
+        $vmId = $vm.id
+        
+        # Get the shutdown timestamp from tags
+        $shutdownTimestampString = $vm.tags.$TagShutdownTimestamp
+        
+        if ([string]::IsNullOrEmpty($shutdownTimestampString)) {
+            Write-LogEntry -Message "VM $vmName has shutdown tag but no timestamp value - skipping" -Level Warning
+            continue
+        }
+        
+        try {
+            $shutdownTime = [DateTime]::Parse($shutdownTimestampString, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+            $age = ($currentTime - $shutdownTime).TotalDays
+            
+            Write-LogEntry -Message "VM $vmName has been shutdown for $([Math]::Round($age, 2)) days (retention: $ShutdownRetentionDays days)" -Level Trace
+            
+            if ($age -ge $ShutdownRetentionDays) {
+                Write-LogEntry -Message "VM $vmName has exceeded retention period - deleting..."
+                
+                try {
+                    # Use helper function to delete VM and clean up resources
+                    Remove-VirtualMachine `
+                        -VMName $vmName `
+                        -VMId $vmId `
+                        -ARMToken $ARMToken `
+                        -GraphToken $GraphToken `
+                        -RemoveEntraDevice $RemoveEntraDevice `
+                        -RemoveIntuneDevice $RemoveIntuneDevice `
+                        -HostPoolSubscriptionId $HostPoolSubscriptionId `
+                        -HostPoolResourceGroupName $HostPoolResourceGroupName `
+                        -HostPoolName $HostPoolName `
+                        -ClientId $ClientId
+                    
+                    $cleanedUpCount++
+                    $deletedVMNames += $vmName
+                }
+                catch {
+                    Write-LogEntry -Message "Failed to delete shutdown VM $vmName : $($_.Exception.Message)" -Level Error
+                }
+            }
+            else {
+                $remainingDays = [Math]::Round($ShutdownRetentionDays - $age, 1)
+                Write-LogEntry -Message "VM $vmName will be retained for $remainingDays more day(s)" -Level Trace
+                $retainedCount++
+            }
+        }
+        catch {
+            Write-LogEntry -Message "Failed to parse shutdown timestamp for VM $vmName : $($_.Exception.Message)" -Level Warning
+        }
+    }
+    
+    if ($cleanedUpCount -gt 0) {
+        Write-LogEntry -Message "Cleanup complete: Deleted $cleanedUpCount expired shutdown VM(s), retained $retainedCount VM(s)"
+    }
+    else {
+        Write-LogEntry -Message "No shutdown VMs exceeded retention period"
+    }
+    
+    return [PSCustomObject]@{
+        CleanedUpCount  = $cleanedUpCount
+        RetainedCount   = $retainedCount
+        DeletedVMNames  = $deletedVMNames
+    }
+}
+
 function Remove-SessionHosts {
     [CmdletBinding()]
     param (
@@ -73,6 +223,11 @@ function Remove-SessionHosts {
                 if ($sessionHost.PendingDrainTimeStamp) {                    
                     # In SideBySide mode, skip minimum drain time check since new capacity is already deployed
                     if ($ReplacementMode -eq 'SideBySide') {
+                        $deleteSessionHost = $true
+                    }
+                    # If VM is powered off, skip minimum drain time check - no race condition possible
+                    elseif ($sessionHost.PoweredOff) {
+                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) is powered off - skipping minimum drain time check (no race condition possible)"
                         $deleteSessionHost = $true
                     }
                     else {
@@ -377,156 +532,6 @@ function Remove-VirtualMachine {
     [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'DELETE' -Uri $Uri)
     
     Write-LogEntry -Message "Successfully deleted VM $VMName"
-}
-
-function Remove-ExpiredShutdownVMs {
-    <#
-    .SYNOPSIS
-    Removes VMs that have been shutdown for longer than the retention period.
-    
-    .DESCRIPTION
-    Checks for VMs tagged with shutdown timestamp and deletes them if they have exceeded
-    the configured retention period. Also removes associated Entra ID and Intune devices.
-    
-    .PARAMETER ARMToken
-    ARM access token for Azure Resource Manager API calls
-    
-    .PARAMETER GraphToken
-    Graph access token for Entra ID and Intune API calls
-    
-    .PARAMETER ShutdownRetentionDays
-    Number of days to retain shutdown VMs before deletion
-    
-    .OUTPUTS
-    PSCustomObject with counts of cleaned up and retained VMs
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string] $ARMToken,
-        [Parameter()]
-        [string] $GraphToken,
-        [Parameter()]
-        [array] $CachedVMs,
-        [Parameter()]
-        [string] $ResourceManagerUri = (Get-ResourceManagerUri),
-        [Parameter()]
-        [int] $ShutdownRetentionDays = [int]::Parse((Read-FunctionAppSetting ShutdownRetentionDays)),
-        [Parameter()]
-        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp),
-        [Parameter()]
-        [string] $VirtualMachinesSubscriptionId = (Read-FunctionAppSetting VirtualMachinesSubscriptionId),
-        [Parameter()]
-        [string] $VirtualMachinesResourceGroupName = (Read-FunctionAppSetting VirtualMachinesResourceGroupName),
-        [Parameter()]
-        [string] $HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
-        [Parameter()]
-        [string] $HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
-        [Parameter()]
-        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
-        [Parameter()]
-        [bool] $RemoveEntraDevice = [bool]::Parse((Read-FunctionAppSetting RemoveEntraDevice)),
-        [Parameter()]
-        [bool] $RemoveIntuneDevice = [bool]::Parse((Read-FunctionAppSetting RemoveIntuneDevice)),
-        [Parameter()]
-        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
-    )
-    
-    Write-LogEntry -Message "Checking for shutdown VMs exceeding retention period of $ShutdownRetentionDays days"
-    
-    # Use cached VMs if provided, otherwise fetch
-    if ($CachedVMs -and $CachedVMs.Count -gt 0) {
-        Write-LogEntry -Message "Using cached VM data for shutdown retention check" -Level Trace
-        $allVMs = $CachedVMs
-    }
-    else {
-        $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/resources?`$filter=resourceType eq 'Microsoft.Compute/virtualMachines'&api-version=2021-04-01"
-        $allVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
-    }
-    
-    # Filter to VMs with the shutdown timestamp tag
-    $shutdownVMs = $allVMs | Where-Object { $_.tags -and $_.tags.PSObject.Properties.Name -contains $TagShutdownTimestamp }
-    
-    if (-not $shutdownVMs -or $shutdownVMs.Count -eq 0) {
-        Write-LogEntry -Message "No shutdown VMs found with retention tag" -Level Trace
-        return [PSCustomObject]@{
-            CleanedUpCount = 0
-            RetainedCount  = 0
-        }
-    }
-    
-    Write-LogEntry -Message "Found $($shutdownVMs.Count) shutdown VM(s) to evaluate"
-    
-    $cleanedUpCount = 0
-    $retainedCount = 0
-    $deletedVMNames = @()
-    $currentTime = (Get-Date).ToUniversalTime()
-    
-    foreach ($vm in $shutdownVMs) {
-        $vmName = $vm.name
-        $vmId = $vm.id
-        
-        # Get the shutdown timestamp from tags
-        $shutdownTimestampString = $vm.tags.$TagShutdownTimestamp
-        
-        if ([string]::IsNullOrEmpty($shutdownTimestampString)) {
-            Write-LogEntry -Message "VM $vmName has shutdown tag but no timestamp value - skipping" -Level Warning
-            continue
-        }
-        
-        try {
-            $shutdownTime = [DateTime]::Parse($shutdownTimestampString, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
-            $age = ($currentTime - $shutdownTime).TotalDays
-            
-            Write-LogEntry -Message "VM $vmName has been shutdown for $([Math]::Round($age, 2)) days (retention: $ShutdownRetentionDays days)" -Level Trace
-            
-            if ($age -ge $ShutdownRetentionDays) {
-                Write-LogEntry -Message "VM $vmName has exceeded retention period - deleting..."
-                
-                try {
-                    # Use helper function to delete VM and clean up resources
-                    Remove-VirtualMachine `
-                        -VMName $vmName `
-                        -VMId $vmId `
-                        -ARMToken $ARMToken `
-                        -GraphToken $GraphToken `
-                        -RemoveEntraDevice $RemoveEntraDevice `
-                        -RemoveIntuneDevice $RemoveIntuneDevice `
-                        -HostPoolSubscriptionId $HostPoolSubscriptionId `
-                        -HostPoolResourceGroupName $HostPoolResourceGroupName `
-                        -HostPoolName $HostPoolName `
-                        -ClientId $ClientId
-                    
-                    $cleanedUpCount++
-                    $deletedVMNames += $vmName
-                }
-                catch {
-                    Write-LogEntry -Message "Failed to delete shutdown VM $vmName : $($_.Exception.Message)" -Level Error
-                }
-            }
-            else {
-                $remainingDays = [Math]::Round($ShutdownRetentionDays - $age, 1)
-                Write-LogEntry -Message "VM $vmName will be retained for $remainingDays more day(s)" -Level Trace
-                $retainedCount++
-            }
-        }
-        catch {
-            Write-LogEntry -Message "Failed to parse shutdown timestamp for VM $vmName : $($_.Exception.Message)" -Level Warning
-        }
-    }
-    
-    if ($cleanedUpCount -gt 0) {
-        Write-LogEntry -Message "Cleanup complete: Deleted $cleanedUpCount expired shutdown VM(s), retained $retainedCount VM(s)"
-    }
-    else {
-        Write-LogEntry -Message "No shutdown VMs exceeded retention period"
-    }
-    
-    return [PSCustomObject]@{
-        CleanedUpCount  = $cleanedUpCount
-        RetainedCount   = $retainedCount
-        DeletedVMNames  = $deletedVMNames
-    }
 }
 
 function Send-DrainNotification {

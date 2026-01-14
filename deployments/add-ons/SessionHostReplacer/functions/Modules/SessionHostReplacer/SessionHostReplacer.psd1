@@ -55,6 +55,7 @@
         # Planning functions (from SessionHostReplacer.Planning.psm1)
         'Get-SessionHostReplacementPlan'
         'Get-SessionHosts'
+        'Get-ScalingPlanCurrentTarget'
         
         # Lifecycle functions (from SessionHostReplacer.Lifecycle.psm1)
         'Remove-SessionHosts'
