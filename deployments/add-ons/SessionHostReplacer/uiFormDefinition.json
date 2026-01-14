@@ -779,7 +779,7 @@
 									"name": "deviceCleanupInfoBox",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
-										"text": "<b>Device Cleanup Automation Overview</b><br/><br/>Device cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. <b>This is especially important when session hosts are Entra ID-joined</b> (i.e., not joined to Active Directory Domain Services or Entra Domain Services) to prevent accumulation of orphaned device records.<br/><br/><b>Required Permissions:</b><br/>This feature requires a User-Assigned Managed Identity with the following Microsoft Graph API permissions:<ul><li><b>'Directory.ReadWrite.All'</b> - Required for Entra ID device deletion</li><li><b>'DeviceManagementManagedDevices.ReadWrite.All'</b> - Required for Intune device deletion</li></ul><b>Important Note:</b> <i>Device.ReadWrite.All</i> does NOT allow device deletion despite its name. You must use <i>Directory.ReadWrite.All</i> for Entra ID device cleanup.<br/><br/>Ensure these permissions are granted to the user-assigned managed identity before deployment.<br/><br/><b>Important:</b> If you enable either cleanup option below, you <b>must select a pre-existing User-Assigned Managed Identity</b> in the Infrastructure section that has been granted the appropriate Microsoft Graph API permissions.<br/><br/><b>Air-Gapped Cloud Limitations:</b><br/>Intune is not currently available in Air-Gapped Clouds such as <b>Azure Government Secret</b> and <b>Azure Government Top Secret</b>. In these environments, the Intune Device Cleanup option will be automatically disabled, and the 'DeviceManagementManagedDevices.ReadWrite.All' permission is not required.",
+										"text": "<b>Device Cleanup Automation Overview</b><br/><br/>Device cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. <b>This is especially important when session hosts are Entra ID-joined</b> (i.e., not joined to Active Directory Domain Services or Entra Domain Services) to prevent accumulation of orphaned device records.<br/><br/><b>Required Microsoft Graph API Permissions:</b><br/>The function app's managed identity requires the following permissions:<ul><li><b>'Device.ReadWrite.All'</b> - Required for Entra ID device deletion</li><li><b>'DeviceManagementManagedDevices.ReadWrite.All'</b> - Required for Intune device deletion</li></ul><br/><br/><b>Air-Gapped Cloud Limitations:</b><br/>Intune is not currently available in Air-Gapped Clouds such as <b>Azure Government Secret</b> and <b>Azure Government Top Secret</b>. In these environments, the Intune Device Cleanup option will be automatically disabled.",
 										"style": "Info",
 										"uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
 									}
@@ -799,14 +799,55 @@
 									"defaultValue": true
 								},
 								{
+									"name": "identityTypeHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice)]",
+									"options": {
+										"text": "<u>Function App Managed Identity</u>"
+									}
+								},
+								{
+									"name": "identityTypeInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice)]",
+									"options": {
+										"text": "Choose the type of managed identity the function app will use for authentication. <b>System-Assigned</b> is simpler (created automatically), while <b>User-Assigned</b> allows pre-granting Graph permissions before deployment (required for immediate device cleanup in DeleteFirst mode).",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "identityType",
+									"type": "Microsoft.Common.DropDown",
+									"visible": "[or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice)]",
+									"label": "Managed Identity Type",
+									"multiLine": true,
+									"defaultValue": "System-Assigned",
+									"toolTip": "Select the type of managed identity for the function app. System-Assigned is automatically created during deployment. User-Assigned must be pre-created with Graph API permissions already granted.",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "System-Assigned (Automatic)",
+												"value": "SystemAssigned",
+												"description": "Function app creates and manages its own identity. Grant Graph API permissions after deployment and restart the function app."
+											},
+											{
+												"label": "User-Assigned (Pre-configured)",
+												"value": "UserAssigned",
+												"description": "Use a pre-existing user-assigned managed identity with Graph API permissions already granted. Required for DeleteFirst mode with immediate device cleanup."
+											}
+										]
+									}
+								},
+								{
 									"name": "sessionHostReplacerUserAssignedIdentity",
 									"type": "Microsoft.Solutions.ResourceSelector",
-									"visible": "[or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice)]",
-									"label": "User-Assigned Managed Identity for Device Cleanup",
-									"toolTip": "Select the User-Assigned Managed Identity with the required Microsoft Graph API permissions.",
+									"visible": "[and(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), equals(steps('functionApp').executionSettings.identityType, 'UserAssigned'))]",
+									"label": "User-Assigned Managed Identity",
+									"toolTip": "Select the pre-existing User-Assigned Managed Identity that has been granted the required Microsoft Graph API permissions (Device.ReadWrite.All and/or DeviceManagementManagedDevices.ReadWrite.All).",
 									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
 									"constraints": {
-										"required": "[or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice)]"
+										"required": "[and(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), equals(steps('functionApp').executionSettings.identityType, 'UserAssigned'))]"
 									}
 								}
 							]
@@ -2958,7 +2999,7 @@
 				"initialDeploymentPercentage": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.initialDeploymentPercentage, 10)]",
 				"scaleUpIncrementPercentage": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.scaleUpIncrementPercentage, 20)]",
 				"successfulRunsBeforeScaleUp": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.successfulRunsBeforeScaleUp, 1)]",
-				"sessionHostReplacerUserAssignedIdentityResourceId": "[if(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), steps('functionApp').executionSettings.sessionHostReplacerUserAssignedIdentity.id, '')]",
+				"sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), equals(steps('functionApp').executionSettings.identityType, 'UserAssigned')), steps('functionApp').executionSettings.sessionHostReplacerUserAssignedIdentity.id, '')]",
 				"appServicePlanResourceId": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, steps('functionApp').infrastructure.appServicePlan, '')]",
 				"appServicePlanSku": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.planSku, 'PremiumV3_P0v3')]",
 				"zoneRedundant": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.zoneRedundant, false)]",

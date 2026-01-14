@@ -180,23 +180,37 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 
 ### Required Before Deployment
 
-#### 1. User-Assigned Managed Identity
+#### 1. Managed Identity for Function App
 
-Create a user-assigned managed identity that will be used by the Function App. This identity needs both Azure RBAC permissions and Microsoft Graph API permissions.
+The Session Host Replacer Function App supports two identity options:
 
-**Azure RBAC Permissions** (automatically granted during deployment):
+##### Option A: System-Assigned Managed Identity
+
+- **Automatically created** during deployment
+- **Simpler setup** - no pre-created identity needed
+- **Best for**: Environments without device cleanup requirements or a small number of host pools
+- **Limitation**: Graph permissions must be granted before the first schedule run. They must also be granted for each function app/host pool.
+
+##### Option B: User-Assigned Managed Identity
+
+- **Pre-created** before deployment
+- **Required for**: Device cleanup with hostname reuse in DeleteFirst mode (Graph permissions must exist before first run)
+- **Best for**: Environments with a large number of host pools
+- **Benefit**: Graph permissions can be granted before deployment
+
+**Azure RBAC Permissions** (automatically granted during deployment for either identity type):
 
 - `Desktop Virtualization Contributor` on Host Pool Resource Group
 - `Reader` on Host Pool Subscription (for scaling plan queries)
 - `Contributor` on Session Host Resource Group  
 - `Reader` on Image Gallery/Marketplace
 
-**Microsoft Graph API Permissions** (must be granted manually before deployment):
+**Microsoft Graph API Permissions** (must be granted manually):
 
 - `Device.ReadWrite.All` - For Entra ID device deletion
 - `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
 
-> **Important:** Graph API permissions must be configured **before** deploying the Function App, especially if using DeleteFirst mode which requires device cleanup for hostname reuse.
+> **Important for DeleteFirst Mode:** Graph API permissions must be configured **before** the first function execution if using device cleanup for hostname reuse. Use a User-Assigned Managed Identity to grant permissions before deployment, or grant them to the System-Assigned Identity after deployment and stop the function app for about an hour before the first run to allow time for the permissions to propagate.
 
 #### 2. Grant Graph API Permissions to Managed Identity
 
@@ -206,37 +220,58 @@ Create a user-assigned managed identity that will be used by the Function App. T
 - This enables hostname reuse (required for DeleteFirst mode, optional for SideBySide)
 - Service principals/managed identities require **Application Permissions** (not delegated permissions)
 
+**When to Grant Permissions:**
+
+- **User-Assigned Identity**: Grant permissions **before** deployment
+- **System-Assigned Identity**: Grant permissions **after** deployment (the identity is created during deployment)
+
 **Steps to Grant Permissions:**
 
-1. Navigate to the SessionHostReplacer directory:
+1. **Get the Managed Identity Object ID**:
+
+   For User-Assigned Identity:
+
+   ```powershell
+   $uai = Get-AzUserAssignedIdentity -ResourceGroupName "<rg-name>" -Name "<identity-name>"
+   $objectId = $uai.PrincipalId
+   ```
+
+   For System-Assigned Identity (after deployment):
+
+   ```powershell
+   $functionApp = Get-AzWebApp -ResourceGroupName "<rg-name>" -Name "<function-app-name>"
+   $objectId = $functionApp.Identity.PrincipalId
+   ```
+
+2. Navigate to the SessionHostReplacer directory:
 
    ```powershell
    cd deployments/add-ons/SessionHostReplacer
    ```
 
-2. Run the permission script with your managed identity's Object ID:
+3. Run the permission script with your managed identity's Object ID:
 
    **For Commercial Azure:**
 
    ```powershell
-   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id>
+   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId $objectId
    ```
 
    **For Azure Government (GCC High):**
 
    ```powershell
-   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id> -Environment USGov
+   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId $objectId -Environment USGov
    ```
 
    **For Azure Government (DoD):**
 
    ```powershell
-   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id> -Environment USGovDoD
+   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId $objectId -Environment USGovDoD
    ```
 
    > **Note:** For US Secret and Top Secret clouds, you must first update the graph endpoint placeholders in the script using the reference links provided in the script comments.
 
-3. **Verify the permissions were granted:**
+4. **Verify the permissions were granted:**
 
    ```powershell
    # Check permissions in Azure AD
@@ -383,7 +418,7 @@ The custom UI form provides a guided experience with tooltips and validation:
    - **Basics**: Resource group, location, naming prefix
    - **Host Pool Configuration**: Host pool resource ID, target session host count
    - **Image Version Settings**: Optional delay before replacement after new image detection
-   - **Identity & Permissions**: User-assigned managed identity
+   - **Device Cleanup**: Optional - select user-assigned managed identity if device cleanup is enabled
    - **Monitoring**: Application Insights, Log Analytics workspace
    - **Networking**: VNet integration, private endpoints (optional)
 5. Review and click **Create**
@@ -402,7 +437,8 @@ $params = @{
     resourceGroupName = "rg-avd-management-use2"
     location = "eastus2"
     hostPoolResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.DesktopVirtualization/hostpools/hp-prod"
-    userAssignedIdentityResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/mi-sessionhostreplacer"
+    # Optional: Only required if device cleanup is needed from first run (DeleteFirst mode)
+    sessionHostReplacerUserAssignedIdentityResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/mi-sessionhostreplacer"
     # ... other parameters
 }
 
@@ -419,7 +455,7 @@ New-AzResourceGroupDeployment -ResourceGroupName $params.resourceGroupName `
 
 ### 3. Restart Function App (Required After Graph Permission Grant)
 
-After the function app is deployed, the managed identity needs to pick up the Graph API permissions you granted earlier:
+If you granted Graph API permissions **after** deployment (e.g., using system-assigned identity), the managed identity needs to pick up the new permissions:
 
 1. **Stop** the Function App completely
 2. Wait **2-3 minutes** for Azure AD token cache to clear
@@ -427,6 +463,8 @@ After the function app is deployed, the managed identity needs to pick up the Gr
 4. Verify permissions appear in Application Insights logs
 
 > **Why this is necessary:** Function Apps cache Azure AD tokens. Restarting ensures the new Graph API permissions are included in fresh tokens.
+> 
+> **Note:** This step is only required if you granted Graph permissions after deployment. If using a user-assigned identity with pre-granted permissions, this step can be skipped.
 
 ### 4. Tag Session Hosts for Automation
 

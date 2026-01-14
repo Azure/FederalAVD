@@ -23,8 +23,8 @@ param tags object = {}
 // security, encryption, and monitoring capabilities.
 // ================================================================================================
 
-@description('Required. The resource ID of the User-Assigned Managed Identity with Microsoft Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All).')
-param sessionHostReplacerUserAssignedIdentityResourceId string
+@description('Optional. The resource ID of the User-Assigned Managed Identity with Microsoft Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All). If not provided, the function app will use its system-assigned managed identity.')
+param sessionHostReplacerUserAssignedIdentityResourceId string = ''
 
 @description('Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed.')
 param appServicePlanResourceId string = ''
@@ -637,7 +637,7 @@ var sessionHostParameters = union(
   paramFslogixStorageService
 )
 
-resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = if (!empty(sessionHostReplacerUserAssignedIdentityResourceId)) {
   name: last(split(sessionHostReplacerUserAssignedIdentityResourceId, '/'))
   scope: resourceGroup(
     split(sessionHostReplacerUserAssignedIdentityResourceId, '/')[2],
@@ -713,7 +713,7 @@ module roleAssignmentsKeyVault '../../sharedModules/resources/key-vault/vault/rb
   name: 'RoleAssign-KeyVault-KVCont-${deploymentSuffix}'
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
   params: {
-    principalId: userAssignedIdentity.properties.principalId
+    principalId: functionApp.outputs.functionAppPrincipalId
     roleDefinitionId: 'f25e0fa2-a7c8-4377-a976-54943a77a395' // Key Vault Contributor
     keyVaultName: last(split(credentialsKeyVaultResourceId, '/'))
     principalType: 'ServicePrincipal'
@@ -724,7 +724,7 @@ module roleAssignmentVirtualMachinesSubscription '../../sharedModules/resources/
   name: 'RoleAssign-Sub-VirtMachCont-${deploymentSuffix}'
   scope: subscription(virtualMachinesSubscriptionId)
   params: {
-    principalId: userAssignedIdentity.properties.principalId
+    principalId: functionApp.outputs.functionAppPrincipalId
     roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
     subscriptionId: virtualMachinesSubscriptionId
     principalType: 'ServicePrincipal'
@@ -735,7 +735,7 @@ module roleAssignmentHostPoolSubscription '../../sharedModules/resources/authori
   name: 'RoleAssign-Sub-Reader-${deploymentSuffix}'
   scope: subscription(hostPoolSubscriptionId)
   params: {
-    principalId: userAssignedIdentity.properties.principalId
+    principalId: functionApp.outputs.functionAppPrincipalId
     roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader - needed to read scaling plans that may be in different resource groups
     subscriptionId: hostPoolSubscriptionId
     principalType: 'ServicePrincipal'
@@ -747,7 +747,7 @@ module roleAssignmentsRGs '../../sharedModules/resources/authorization/role-assi
     name: 'RoleAssign-${last(split(rgRole.resourceGroupId, '/'))}-${rgRole.roleDescription}-${deploymentSuffix}'
     scope: resourceGroup(split(rgRole.resourceGroupId, '/')[2], split(rgRole.resourceGroupId, '/')[4])
     params: {
-      principalId: userAssignedIdentity.properties.principalId
+      principalId: functionApp.outputs.functionAppPrincipalId
       roleDefinitionId: rgRole.roleDefinitionId
       resourceGroupName: last(split(rgRole.resourceGroupId, '/'))
       principalType: 'ServicePrincipal'
@@ -758,7 +758,7 @@ module roleAssignmentsRGs '../../sharedModules/resources/authorization/role-assi
 module roleAssignmentTemplateSpec '../../sharedModules/resources/resources/templateSpecs/rbac.bicep' = {
   name: 'RoleAssign-TemplateSpec-Reader-${deploymentSuffix}'
   params: {
-    principalId: userAssignedIdentity.properties.principalId
+    principalId: functionApp.outputs.functionAppPrincipalId
     roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
     principalType: 'ServicePrincipal'
     templateSpecResourceId: !empty(sessionHostTemplateSpecResourceId)
@@ -771,7 +771,7 @@ module roleAssignmentComputeGallery '../../sharedModules/resources/compute/galle
   name: 'RoleAssign-ComputeGallery-Reader-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
-    principalId: userAssignedIdentity.properties.principalId
+    principalId: functionApp.outputs.functionAppPrincipalId
     roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
     galleryName: empty(computeGalleryResourceId) ? '' : last(split(computeGalleryResourceId, '/'))
     principalType: 'ServicePrincipal'
@@ -785,7 +785,7 @@ module roleAssignmentUaiArtifacts '../../sharedModules/resources/managed-identit
     split(artifactsUserAssignedIdentityResourceId, '/')[4]
   )
   params: {
-    principalId: userAssignedIdentity.properties.principalId
+    principalId: functionApp.outputs.functionAppPrincipalId
     roleDefinitionId: 'f1a07417-d97a-45cb-824c-7a7467783830' // Managed Identity Operator
     principalType: 'ServicePrincipal'
     identityName: empty(artifactsUserAssignedIdentityResourceId) ? '' : last(split(artifactsUserAssignedIdentityResourceId, '/'))
@@ -1047,6 +1047,12 @@ module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty
 
 @description('The name of the deployed function app.')
 output functionAppName string = functionApp.outputs.functionAppName
+
+@description('The principal ID of the identity used by the function app (either user-assigned or system-assigned).')
+output functionAppPrincipalId string = functionApp.outputs.functionAppPrincipalId
+
+@description('The type of managed identity used by the function app.')
+output identityType string = !empty(sessionHostReplacerUserAssignedIdentityResourceId) ? 'UserAssigned' : 'SystemAssigned'
 
 @description('The resource ID of the monitoring workbook.')
 output workbookId string = (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId))

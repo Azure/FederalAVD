@@ -138,15 +138,25 @@ function Get-AccessToken {
         Retrieves Azure access token using Managed Identity.
     .DESCRIPTION
         Acquires an access token for Azure services using the function app's managed identity.
+        Supports both system-assigned and user-assigned managed identities.
+        - If ClientId is provided (or UserAssignedIdentityClientId setting is configured), uses user-assigned identity
+        - If ClientId is null/empty, uses system-assigned identity
         Tokens are requested fresh on each call to avoid caching complexity.
     .PARAMETER ResourceUri
         The Azure resource endpoint URL (e.g., https://management.azure.com/, https://graph.microsoft.com).
     .PARAMETER ClientId
-        Optional. The client ID of the user-assigned managed identity. If not specified, uses system-assigned identity.
+        Optional. The client ID of the user-assigned managed identity. 
+        If not specified, attempts to read from UserAssignedIdentityClientId app setting.
+        If still null/empty, uses system-assigned managed identity.
     .EXAMPLE
-        $token = Get-AccessToken -ResourceUri 'https://management.azure.com/'
+        # Use system-assigned managed identity
+        $token = Get-AccessToken -ResourceUri 'https://management.azure.com/' -ClientId ''
     .EXAMPLE
+        # Use user-assigned managed identity with explicit ClientId
         $token = Get-AccessToken -ResourceUri 'https://graph.microsoft.com' -ClientId 'abc123...'
+    .EXAMPLE
+        # Use user-assigned managed identity from app settings (default behavior)
+        $token = Get-AccessToken -ResourceUri 'https://management.azure.com/'
     #>
     [CmdletBinding()]
     param (
@@ -177,8 +187,16 @@ function Get-AccessToken {
     }
     
     # Acquire token from managed identity
-    Write-Verbose "Acquiring token from managed identity for resource: $tokenResourceUri"
-    $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $tokenResourceUri + "&client_id=$ClientId" + '&api-version=2019-08-01'
+    # Build token URI - only include client_id parameter for user-assigned identity
+    if ([string]::IsNullOrEmpty($ClientId)) {
+        # System-assigned managed identity
+        Write-Verbose "Acquiring token using system-assigned managed identity for resource: $tokenResourceUri"
+        $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $tokenResourceUri + '&api-version=2019-08-01'
+    } else {
+        # User-assigned managed identity
+        Write-Verbose "Acquiring token using user-assigned managed identity (ClientId: $ClientId) for resource: $tokenResourceUri"
+        $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $tokenResourceUri + "&client_id=$ClientId" + '&api-version=2019-08-01'
+    }
        
     # Add cache-busting headers to force fresh token acquisition
     $headers = @{
