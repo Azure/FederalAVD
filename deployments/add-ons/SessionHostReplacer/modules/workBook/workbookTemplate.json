@@ -366,7 +366,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| extend ToReplace = toint(extract(@\"ToReplace:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend OnLatestImage = Total - ToReplace\n| extend PercentGood = round(todouble(OnLatestImage) / todouble(Total) * 100.0, 2)\n| project ['Host Pool'] = HostPoolName, ['On Latest Image'] = OnLatestImage, ['Needs Replacement'] = ToReplace, ['% Compliant'] = PercentGood\n| order by ['Host Pool'] asc",
+        "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([a-z0-9\\-]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| extend Enabled = toint(extract(@\"Enabled:\\s*(\\d+)\", 1, message))\n| extend ShutdownRetention = toint(extract(@\"ShutdownRetention:\\s*(\\d+)\", 1, message))\n| extend ToReplace = toint(extract(@\"ToReplace:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend ActiveHosts = Total - coalesce(ShutdownRetention, 0)\n| extend OnLatestImage = ActiveHosts - ToReplace\n| extend PercentGood = round(todouble(OnLatestImage) / todouble(ActiveHosts) * 100.0, 2)\n| project ['Host Pool'] = HostPoolName, ['On Latest Image'] = OnLatestImage, ['Needs Replacement'] = ToReplace, ['% Compliant'] = PercentGood\n| order by ['Host Pool'] asc",
         "size": 0,
         "title": "Image Version Compliance",
         "timeContext": {
@@ -755,6 +755,7 @@
         "chartSettings": {
           "showLegend": true,
           "showDataPoints": false,
+          "showMetrics": false,
           "ySettings": {
             "numberFormatSettings": {
               "unit": 0,
