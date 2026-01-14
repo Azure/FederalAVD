@@ -80,7 +80,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     allowBlobPublicAccess: false
     allowCrossTenantReplication: false
     allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
-    allowSharedKeyAccess: true
+    allowSharedKeyAccess: false
     defaultToOAuthAuthentication: true
     dnsEndpointType: 'Standard'
     encryption: {
@@ -488,6 +488,7 @@ module updateStorageAccount 'updateStorageAccountKey.bicep' = if (keyManagementS
     encryptionKeyName: encryptionKey!.outputs.encryptionKeyName
     keyVaultResourceId: encryptionKeyVaultResourceId
     location: location
+    privateEndpoint: privateEndpoint
     storageAccountKind: storageAccount.kind
   }
   dependsOn: [

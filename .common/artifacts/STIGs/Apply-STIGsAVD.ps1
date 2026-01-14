@@ -716,6 +716,10 @@ If ($output) {
     Start-Process -FilePatch 'netsh.exe' -ArgumentList 'interface portproxy delete' -Wait -NoNewWindow
 }
 
+# WIN11-00-000145 Data Execution Prevention must be set to OptOut
+Write-Log-Message "WIN11-00-000145: Setting Data Execution Prevention (DEP) policy to OptOut."
+$null = cmd /c bcdedit.exe /set nx OptOut 2>&1
+    
 # WN11-00-000125 Remove Copilot if Found
 Write-Log -Message "SRG-OS-000096-GPOS-00050: Removing Microsoft Copilot if installed."
 Get-AppxPackage -AllUsers *CoPilot* | Remove-AppxPackage -AllUsers

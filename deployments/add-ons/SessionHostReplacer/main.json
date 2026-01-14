@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "6736696577252586824"
+      "templateHash": "4816835669102626649"
     },
     "name": "AVD Session Host Replacer Add-On",
     "description": "Deploys automated session host lifecycle management for Azure Virtual Desktop",
@@ -3976,7 +3976,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "5557801907233722125"
+              "templateHash": "2779780511932636623"
             }
           },
           "parameters": {
@@ -4109,7 +4109,7 @@
                 "allowBlobPublicAccess": false,
                 "allowCrossTenantReplication": false,
                 "allowedCopyScope": "[if(parameters('privateEndpoint'), 'PrivateLink', 'AAD')]",
-                "allowSharedKeyAccess": true,
+                "allowSharedKeyAccess": false,
                 "defaultToOAuthAuthentication": true,
                 "dnsEndpointType": "Standard",
                 "encryption": {
@@ -4844,6 +4844,9 @@
                   "location": {
                     "value": "[parameters('location')]"
                   },
+                  "privateEndpoint": {
+                    "value": "[parameters('privateEndpoint')]"
+                  },
                   "storageAccountKind": {
                     "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').kind]"
                   }
@@ -4855,7 +4858,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "12429090756099729016"
+                      "templateHash": "11043443996803527891"
                     }
                   },
                   "parameters": {
@@ -4864,6 +4867,9 @@
                     },
                     "location": {
                       "type": "string"
+                    },
+                    "privateEndpoint": {
+                      "type": "bool"
                     },
                     "storageAccountKind": {
                       "type": "string"
@@ -4895,12 +4901,29 @@
                         "type": "SystemAssigned"
                       },
                       "properties": {
+                        "allowBlobPublicAccess": false,
+                        "allowedCopyScope": "[if(parameters('privateEndpoint'), 'PrivateLink', 'AAD')]",
+                        "allowCrossTenantReplication": false,
+                        "allowSharedKeyAccess": false,
                         "encryption": {
                           "keySource": "Microsoft.KeyVault",
                           "keyvaultproperties": {
                             "keyname": "[parameters('encryptionKeyName')]",
                             "keyvaulturi": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSubscriptionId'), variables('keyVaultResourceGroup')), 'Microsoft.KeyVault/vaults', variables('keyVaultName')), '2024-11-01').vaultUri]"
-                          }
+                          },
+                          "requireInfrastructureEncryption": true
+                        },
+                        "minimumTlsVersion": "TLS1_2",
+                        "networkAcls": {
+                          "bypass": "AzureServices",
+                          "virtualNetworkRules": [],
+                          "ipRules": [],
+                          "defaultAction": "[if(parameters('privateEndpoint'), 'Deny', 'Allow')]"
+                        },
+                        "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', 'Enabled')]",
+                        "sasPolicy": {
+                          "expirationAction": "Log",
+                          "sasExpirationPeriod": "180.00:00:00"
                         }
                       }
                     }

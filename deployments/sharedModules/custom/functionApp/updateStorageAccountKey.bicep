@@ -1,5 +1,6 @@
 param keyVaultResourceId string
 param location string
+param privateEndpoint bool
 param storageAccountKind string
 param storageAccountName string
 param storageAccountSku object
@@ -26,12 +27,29 @@ resource StorageAccountUpdate 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     type: 'SystemAssigned'
   }
   properties: {
+    allowBlobPublicAccess: false
+    allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
+    allowCrossTenantReplication: false
+    allowSharedKeyAccess: false
     encryption: {
       keySource: 'Microsoft.KeyVault'
       keyvaultproperties: {
         keyname: encryptionKeyName
         keyvaulturi: keyVault.properties.vaultUri
-      }     
+      }
+      requireInfrastructureEncryption: true     
+    }
+    minimumTlsVersion: 'TLS1_2'
+    networkAcls: {
+      bypass: 'AzureServices'
+      virtualNetworkRules: []
+      ipRules: []
+      defaultAction: privateEndpoint ? 'Deny' : 'Allow'
+    }
+    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    sasPolicy: {
+      expirationAction: 'Log'
+      sasExpirationPeriod: '180.00:00:00'
     }
   }
 }

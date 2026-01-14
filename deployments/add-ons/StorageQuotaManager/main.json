@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.28.1.47646",
-      "templateHash": "7288505779861021225"
+      "version": "0.39.26.7824",
+      "templateHash": "1698318900087434254"
     },
     "name": "FSLogix Storage Quota Manager Add-On",
     "description": "Automated quota management for FSLogix Azure Files Premium file shares",
@@ -449,7 +449,7 @@
     {
       "condition": "[empty(parameters('appServicePlanResourceId'))]",
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "[format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -488,8 +488,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.28.1.47646",
-              "templateHash": "18231076559505431791"
+              "version": "0.39.26.7824",
+              "templateHash": "9030062954926391490"
             }
           },
           "parameters": {
@@ -570,7 +570,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "[format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -650,7 +650,7 @@
           "privateLinkScopeResourceId": {
             "value": "[parameters('privateLinkScopeResourceId')]"
           },
-          "serverFarmId": "[if(empty(parameters('appServicePlanResourceId')), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))), '2022-09-01').outputs.hostingPlanId.value), createObject('value', parameters('appServicePlanResourceId')))]",
+          "serverFarmId": "[if(empty(parameters('appServicePlanResourceId')), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostingPlanId.value), createObject('value', parameters('appServicePlanResourceId')))]",
           "storageAccountName": {
             "value": "[variables('storageAccountName')]"
           },
@@ -664,8 +664,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.28.1.47646",
-              "templateHash": "8390566786548239410"
+              "version": "0.39.26.7824",
+              "templateHash": "2779780511932636623"
             }
           },
           "parameters": {
@@ -798,7 +798,7 @@
                 "allowBlobPublicAccess": false,
                 "allowCrossTenantReplication": false,
                 "allowedCopyScope": "[if(parameters('privateEndpoint'), 'PrivateLink', 'AAD')]",
-                "allowSharedKeyAccess": true,
+                "allowSharedKeyAccess": false,
                 "defaultToOAuthAuthentication": true,
                 "dnsEndpointType": "Standard",
                 "encryption": {
@@ -878,7 +878,7 @@
             },
             {
               "condition": "[parameters('enableApplicationInsights')]",
-              "type": "Microsoft.Insights/diagnosticSettings",
+              "type": "microsoft.insights/diagnosticSettings",
               "apiVersion": "2017-05-01-preview",
               "scope": "[format('Microsoft.Storage/storageAccounts/{0}/blobServices/{1}', parameters('storageAccountName'), 'default')]",
               "name": "[format('{0}-blob-diagnosticSettings', parameters('storageAccountName'))]",
@@ -1012,7 +1012,7 @@
             {
               "condition": "[not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))]",
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
+              "apiVersion": "2025-04-01",
               "name": "[format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1045,8 +1045,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.28.1.47646",
-                      "templateHash": "2043052037770518992"
+                      "version": "0.39.26.7824",
+                      "templateHash": "10336362930989115154"
                     }
                   },
                   "parameters": {
@@ -1081,7 +1081,7 @@
                   "resources": [
                     {
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2022-09-01",
+                      "apiVersion": "2025-04-01",
                       "name": "[format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))]",
                       "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
@@ -1141,8 +1141,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.28.1.47646",
-                              "templateHash": "8398901908014324283"
+                              "version": "0.39.26.7824",
+                              "templateHash": "3718319161044008822"
                             }
                           },
                           "parameters": {
@@ -1234,7 +1234,7 @@
                     },
                     {
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2022-09-01",
+                      "apiVersion": "2025-04-01",
                       "name": "[format('RA-Encryption-Key-{0}', parameters('deploymentSuffix'))]",
                       "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
@@ -1266,8 +1266,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.28.1.47646",
-                              "templateHash": "8104715795554389976"
+                              "version": "0.39.26.7824",
+                              "templateHash": "10428209994367129507"
                             }
                           },
                           "parameters": {
@@ -1313,7 +1313,7 @@
                   "outputs": {
                     "encryptionKeyName": {
                       "type": "string",
-                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSubscriptionId'), variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))), '2022-09-01').outputs.name.value]"
+                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSubscriptionId'), variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.name.value]"
                     }
                   }
                 }
@@ -1325,7 +1325,7 @@
             {
               "condition": "[and(parameters('enableApplicationInsights'), not(empty(parameters('privateLinkScopeResourceId'))))]",
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
+              "apiVersion": "2025-04-01",
               "name": "[format('PrivateLlinkScope-{0}', parameters('deploymentSuffix'))]",
               "subscriptionId": "[subscription().subscriptionId]",
               "location": "[resourceGroup().location]",
@@ -1353,8 +1353,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.28.1.47646",
-                      "templateHash": "4515691925478189048"
+                      "version": "0.39.26.7824",
+                      "templateHash": "17290229534485454366"
                     }
                   },
                   "parameters": {
@@ -1371,7 +1371,7 @@
                   "resources": [
                     {
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2022-09-01",
+                      "apiVersion": "2025-04-01",
                       "name": "[format('addScopedResources-{0}', parameters('deploymentSuffix'))]",
                       "subscriptionId": "[split(parameters('privateLinkScopeResourceId'), '/')[2]]",
                       "resourceGroup": "[split(parameters('privateLinkScopeResourceId'), '/')[4]]",
@@ -1394,8 +1394,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.28.1.47646",
-                              "templateHash": "12577270777795559658"
+                              "version": "0.39.26.7824",
+                              "templateHash": "5758136482480486201"
                             }
                           },
                           "parameters": {
@@ -1436,7 +1436,7 @@
                 "count": "[length(variables('storageAccountRoleDefinitions'))]"
               },
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
+              "apiVersion": "2025-04-01",
               "name": "[format('set-role-assignment-storage-{0}-{1}', uniqueString(variables('storageAccountRoleDefinitions')[copyIndex()]), parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1465,8 +1465,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.28.1.47646",
-                      "templateHash": "10820102896439698845"
+                      "version": "0.39.26.7824",
+                      "templateHash": "11571141747549419835"
                     }
                   },
                   "parameters": {
@@ -1510,7 +1510,7 @@
             {
               "condition": "[not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))]",
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
+              "apiVersion": "2025-04-01",
               "name": "[format('update-encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1525,13 +1525,16 @@
                     "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').sku]"
                   },
                   "encryptionKeyName": {
-                    "value": "[reference(resourceId('Microsoft.Resources/deployments', format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))), '2022-09-01').outputs.encryptionKeyName.value]"
+                    "value": "[reference(resourceId('Microsoft.Resources/deployments', format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyName.value]"
                   },
                   "keyVaultResourceId": {
                     "value": "[parameters('encryptionKeyVaultResourceId')]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
+                  },
+                  "privateEndpoint": {
+                    "value": "[parameters('privateEndpoint')]"
                   },
                   "storageAccountKind": {
                     "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').kind]"
@@ -1543,8 +1546,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.28.1.47646",
-                      "templateHash": "7778406767453046382"
+                      "version": "0.39.26.7824",
+                      "templateHash": "11043443996803527891"
                     }
                   },
                   "parameters": {
@@ -1553,6 +1556,9 @@
                     },
                     "location": {
                       "type": "string"
+                    },
+                    "privateEndpoint": {
+                      "type": "bool"
                     },
                     "storageAccountKind": {
                       "type": "string"
@@ -1584,12 +1590,29 @@
                         "type": "SystemAssigned"
                       },
                       "properties": {
+                        "allowBlobPublicAccess": false,
+                        "allowedCopyScope": "[if(parameters('privateEndpoint'), 'PrivateLink', 'AAD')]",
+                        "allowCrossTenantReplication": false,
+                        "allowSharedKeyAccess": false,
                         "encryption": {
                           "keySource": "Microsoft.KeyVault",
                           "keyvaultproperties": {
                             "keyname": "[parameters('encryptionKeyName')]",
                             "keyvaulturi": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSubscriptionId'), variables('keyVaultResourceGroup')), 'Microsoft.KeyVault/vaults', variables('keyVaultName')), '2024-11-01').vaultUri]"
-                          }
+                          },
+                          "requireInfrastructureEncryption": true
+                        },
+                        "minimumTlsVersion": "TLS1_2",
+                        "networkAcls": {
+                          "bypass": "AzureServices",
+                          "virtualNetworkRules": [],
+                          "ipRules": [],
+                          "defaultAction": "[if(parameters('privateEndpoint'), 'Deny', 'Allow')]"
+                        },
+                        "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', 'Enabled')]",
+                        "sasPolicy": {
+                          "expirationAction": "Log",
+                          "sasExpirationPeriod": "180.00:00:00"
                         }
                       }
                     }
@@ -1625,7 +1648,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "[format('RA-StorageAccounts-{0}', variables('deploymentSuffix'))]",
       "subscriptionId": "[variables('storageSubscriptionId')]",
       "resourceGroup": "[variables('storageResourceGroupName')]",
@@ -1636,7 +1659,7 @@
         "mode": "Incremental",
         "parameters": {
           "principalId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))), '2022-09-01').outputs.functionAppPrincipalId.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.functionAppPrincipalId.value]"
           },
           "principalType": {
             "value": "ServicePrincipal"
@@ -1654,15 +1677,15 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.28.1.47646",
-              "templateHash": "17978097117336440184"
+              "version": "0.39.26.7824",
+              "templateHash": "17889000177953870600"
             }
           },
           "parameters": {
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "Required. You can provide either the role definition GUID or its fully qualified ID in the following format: \\'/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11\\'.\r\nYou can find the GUIDs in the ID column on the table at https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles.\r\n"
+                "description": "Required. You can provide either the role definition GUID or its fully qualified ID in the following format: \\'/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11\\'.\nYou can find the GUIDs in the ID column on the table at https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles.\n"
               }
             },
             "principalId": {
@@ -1730,7 +1753,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "[format('StorageQuotaFunction-{0}', variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1746,7 +1769,7 @@
             }
           },
           "functionAppName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))), '2022-09-01').outputs.functionAppName.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.functionAppName.value]"
           },
           "functionName": {
             "value": "auto-increase-file-share-quota"
@@ -1761,8 +1784,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.28.1.47646",
-              "templateHash": "3702414373047912817"
+              "version": "0.39.26.7824",
+              "templateHash": "5366415417088853"
             }
           },
           "parameters": {
