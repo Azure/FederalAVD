@@ -201,8 +201,6 @@ function Get-AccessToken {
     # Add cache-busting headers to force fresh token acquisition
     $headers = @{
         "X-IDENTITY-HEADER" = $env:IDENTITY_HEADER
-        "Cache-Control" = "no-cache, no-store, must-revalidate"
-        "Pragma" = "no-cache"
     }
     
     $TokenResponse = Invoke-RestMethod -Method Get -Headers $headers -Uri $TokenAuthURI -DisableKeepAlive
@@ -427,7 +425,7 @@ function Invoke-AzureRestMethod {
     if ($ARMToken) {
         # Format headers.
         $HeaderParams = @{
-            'Content-Type'  = "application\json"
+            'Content-Type'  = "application/json"
             'Authorization' = "Bearer $ARMToken"
         }
         If ($AdditionalHeaders) {
@@ -440,10 +438,10 @@ function Invoke-AzureRestMethod {
 
         # Run the first query.
         if ($Method -eq 'GET') {
-            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -ContentType "application/json" -Verbose:$false
+            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -Method $Method -Verbose:$false
         }
         else {
-            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -ContentType "application/json" -Body $Body -Verbose:$false
+            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -Method $Method -Body $Body -Verbose:$false
         }
         
         # Check if response is a direct array or has a value property
@@ -463,18 +461,18 @@ function Invoke-AzureRestMethod {
         # Invoke REST methods and fetch data until there are no pages left.
         if ($Uri -notlike "*`$top*") {
             while ($QueryRequest.'@odata.nextLink' -and $QueryRequest.'@odata.nextLink' -is [string]) {
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.'@odata.nextLink' -UseBasicParsing -Method $Method -ContentType "application/json" -Verbose:$false
+                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.'@odata.nextLink' -Method $Method -Verbose:$false
                 $dataToUpload += $QueryRequest.value
             }
             While ($QueryRequest.nextLink -and $QueryRequest.nextLink -is [string]) {
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.nextLink -UseBasicParsing -Method $Method -ContentType "application/json" -Verbose:$false
+                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.nextLink -Method $Method -Verbose:$false
                 $dataToUpload += $QueryRequest.value
             }
             While ($QueryRequest.'$skipToken' -and $QueryRequest.'$skipToken' -is [string] -and $Body -ne '') {
                 $JsonBody = $Body | ConvertFrom-Json
                 $JsonBody | Add-Member -Type NoteProperty -Name '$skipToken' -Value $QueryRequest.'$skipToken' -Force
                 $Body = $JsonBody | ConvertTo-Json -Depth 10
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -Body $Body -ContentType "application/json" -Verbose:$false
+                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -Method $Method -Body $Body -Verbose:$false
                 $dataToUpload += $QueryRequest.value
             }
         }
