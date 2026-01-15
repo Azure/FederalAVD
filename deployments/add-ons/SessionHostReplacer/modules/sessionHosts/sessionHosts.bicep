@@ -75,15 +75,6 @@ param enableAcceleratedNetworking bool = true
 @description('Enable encryption at host for additional data encryption on the VM host.')
 param encryptionAtHost bool = true
 
-@allowed([
-  'profile-containers'
-  'profile-containers', 'office-containers'
-])
-@description('Array of FSLogix file share names. First element is profile-containers, second (if present) is office-containers.')
-param fslogixFileShareNames array = [
-  'profile-containers'
-]
-
 @description('Configure FSLogix on session hosts during deployment.')
 param fslogixConfigureSessionHosts bool = false
 
@@ -205,7 +196,7 @@ param vmInsightsDataCollectionRulesResourceId string = ''
 
 var avSetNameConv = empty(availabilitySetNameConv) ? 'as-${substring(sessionHostNames[0], 0, length(sessionHostNames[0])-sessionHostNameIndexLength)}-##' : availabilitySetNameConv
 
-var deploymentSuffix = substring(deployment().name, length(deployment().name) - 14, 14)
+var deploymentSuffix = uniqueString(deployment().name)
 
 var sessionHostRegistrationDSCStorageAccount = startsWith(environment().name, 'USN')
   ? 'wvdexportalcontainer'
@@ -236,6 +227,8 @@ var beginAvSetRange = minVmNumber / maxAvSetMembers
 var endAvSetRange = maxVmNumber / maxAvSetMembers
 var calculatedAvailabilitySetsCount = endAvSetRange - beginAvSetRange + 1
 var calculatedAvailabilitySetsIndex = beginAvSetRange
+
+var fslogixFileShareNames = contains(fslogixContainerType, 'Office') ? ['profile-containers', 'office-containers'] : ['profile-containers']
 
 // Existing Key Vault for secrets
 resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = {

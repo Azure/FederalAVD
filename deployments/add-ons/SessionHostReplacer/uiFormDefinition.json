@@ -3043,7 +3043,6 @@
 				"sessionHostCustomizations": "[if(steps('hosts').customScripts.addCustomScripts, steps('hosts').customScripts.customizations, parse('[]'))]",
 				"fslogixConfigureSessionHosts": "[steps('userProfiles').configureSessionHosts]",
 				"fslogixContainerType": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').fslogixContainerType, 'ProfileContainer')]",
-				"fslogixFileShareNames": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles')), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[\"profile-containers\", \"office-containers\"]'), parse('[\"profile-containers\"]')), parse('[\"profile-containers\"]'))]",
 				"fslogixSizeInMBs": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').sizeInMBs, 30720)]",
 				"fslogixStorageService": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').storageService, 'AzureFiles')]",
 				"fslogixLocalStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingLocalStorageAccounts, parse('[]'))]",

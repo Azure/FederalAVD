@@ -282,7 +282,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [for i 
   name: empty(virtualMachineNameConv) ? sessionHostNames[i] : replace(replace(virtualMachineNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
-  zones: !empty(preferredZones) && i < length(preferredZones) && !empty(preferredZones[i]) ? preferredZones[i] : availability == 'AvailabilityZones' && !empty(availabilityZones) ? [
+  zones: !empty(preferredZones) && i < length(preferredZones) && !empty(preferredZones[i]) ? [preferredZones[i]] : availability == 'AvailabilityZones' && !empty(availabilityZones) ? [
     availabilityZones[(vmNumbers[i] - 1) % length(availabilityZones)]
   ] : null
   identity: identity

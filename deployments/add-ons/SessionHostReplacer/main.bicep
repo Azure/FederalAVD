@@ -336,9 +336,6 @@ param fslogixConfigureSessionHosts bool = false
 ])
 param fslogixContainerType string = 'ProfileContainer'
 
-@description('Optional. FSLogix file share names.')
-param fslogixFileShareNames array = ['profile-containers']
-
 @description('Optional. FSLogix container size in MBs.')
 param fslogixSizeInMBs int = 30720
 
@@ -566,7 +563,6 @@ var paramVmInsightsDataCollectionRulesResourceId = !empty(vmInsightsDataCollecti
 // FSLogix conditional parameters
 var paramFslogixConfigureSessionHosts = fslogixConfigureSessionHosts ? { fslogixConfigureSessionHosts: fslogixConfigureSessionHosts } : {}
 var paramFslogixContainerType = fslogixConfigureSessionHosts ? { fslogixContainerType: fslogixContainerType } : {}
-var paramFslogixFileShareNames = fslogixConfigureSessionHosts && !empty(fslogixFileShareNames) ? { fslogixFileShareNames: fslogixFileShareNames } : {}
 var paramFslogixLocalNetAppVolumeResourceIds = fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds) ? { fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds } : {}
 var paramFslogixLocalStorageAccountResourceIds = fslogixConfigureSessionHosts && !empty(fslogixLocalStorageAccountResourceIds) ? { fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds } : {}
 var paramFslogixOSSGroups = fslogixConfigureSessionHosts && !empty(fslogixOSSGroups) ? { fslogixOSSGroups: fslogixOSSGroups } : {}
@@ -627,7 +623,6 @@ var sessionHostParameters = union(
   paramVmInsightsDataCollectionRulesResourceId,
   paramFslogixConfigureSessionHosts,
   paramFslogixContainerType,
-  paramFslogixFileShareNames,
   paramFslogixLocalNetAppVolumeResourceIds,
   paramFslogixLocalStorageAccountResourceIds,
   paramFslogixOSSGroups,
