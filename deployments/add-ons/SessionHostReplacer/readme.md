@@ -1533,6 +1533,8 @@ The Session Host Replacer includes a pre-built Azure Monitor Workbook that provi
   - Deployment success rate
   - Image version adoption timeline
 
+![Workbook](../../../docs/images/SessionHostReplacerWorkbook.png)
+
 **Customization:**
 
 The workbook is fully customizable. You can:
