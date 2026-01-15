@@ -129,13 +129,15 @@ var fslogixLocalOfficeSharesPrefixMatch = !empty(fslogixLocalDedupedSANames) && 
 var fslogixLocalProfileSharesPrefixMatch = !empty(fslogixLocalDedupedSANames)
   ? ['\\\\${fslogixLocalDedupedSANames[0]}??.file.${storageSuffix}\\${profileShareName}${vhdxPath}']
   : []
-var fslogixLocalOfficeSharesNoMatch = !empty(officeShareName)
-  ? map(fslogixLocalStorageAccountNames, name => ['\\\\${name}??.file.${storageSuffix}\\${officeShareName}${vhdxPath}'])
+var fslogixLocalOfficeSharesNoMatch = !empty(fslogixLocalStorageAccountNames) && !empty(officeShareName)
+  ? map(fslogixLocalStorageAccountNames, name => '\\\\${name}.file.${storageSuffix}\\${officeShareName}${vhdxPath}')
   : []
-var fslogixLocalProfileSharesNoMatch = map(
-  fslogixLocalStorageAccountNames,
-  name => ['\\\\${name}.file.${storageSuffix}}\\${profileShareName}${vhdxPath}']
-)
+var fslogixLocalProfileSharesNoMatch = !empty(fslogixLocalStorageAccountNames)
+  ? map(
+      fslogixLocalStorageAccountNames,
+      name => '\\\\${name}.file.${storageSuffix}\\${profileShareName}${vhdxPath}'
+    )
+  : []
 var fslogixLocalOfficeVHDXs = fslogixLocalMatchPrefix
   ? fslogixLocalOfficeSharesPrefixMatch
   : fslogixLocalOfficeSharesNoMatch
@@ -154,13 +156,13 @@ var fslogixRemoteProfileSharesPrefixMatch = !empty(fslogixRemoteDedupedSANames)
 var fslogixRemoteOfficeSharesNoMatch = !empty(fslogixRemoteStorageAccountNames) && !empty(officeShareName)
   ? map(
       fslogixRemoteStorageAccountNames,
-      name => ['\\\\${name}??.file.${storageSuffix}\\${officeShareName}${vhdxPath}']
+      name => '\\\\${name}.file.${storageSuffix}\\${officeShareName}${vhdxPath}'
     )
   : []
 var fslogixRemoteProfileSharesNoMatch = !empty(fslogixRemoteStorageAccountNames)
   ? map(
       fslogixRemoteStorageAccountNames,
-      name => ['\\\\${name}.file.${storageSuffix}}\\${profileShareName}${vhdxPath}']
+      name => '\\\\${name}.file.${storageSuffix}\\${profileShareName}${vhdxPath}'
     )
   : []
 var fslogixRemoteOfficeVHDXs = fslogixRemoteMatchPrefix
