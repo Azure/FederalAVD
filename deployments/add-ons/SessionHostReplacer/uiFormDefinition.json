@@ -1958,6 +1958,13 @@
 									"visible": "[and(bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported)))]"
 								},
 								{
+									"name": "enableIPv6",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable IPv6",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmIPv6), false, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmIPv6))]",
+									"toolTip": "Enables IPv6 support on the network interface."
+								},
+								{
 									"name": "hibernationEnabled",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Hibernation",
@@ -3035,6 +3042,7 @@
 				"diskSizeGB": "[steps('hosts').specs.diskSizeGB]",
 				"diskSku": "[steps('hosts').specs.diskSku]",
 				"enableAcceleratedNetworking": "[steps('hosts').specs.enableAcceleratedNetworking]",
+				"enableIPv6": "[steps('hosts').specs.enableIPv6]",
 				"availability": "[steps('hosts').availability.availability]",
 				"availabilityZones": "[if(equals(steps('hosts').availability.availability, 'AvailabilityZones'), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",

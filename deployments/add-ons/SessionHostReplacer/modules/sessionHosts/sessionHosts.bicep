@@ -72,6 +72,9 @@ param domainName string = ''
 @description('Enable accelerated networking on network interfaces for improved network performance.')
 param enableAcceleratedNetworking bool = true
 
+@description('Enable IPv6 on network interfaces.')
+param enableIPv6 bool = false
+
 @description('Enable encryption at host for additional data encryption on the VM host.')
 param encryptionAtHost bool = true
 
@@ -292,6 +295,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       domainJoinUserPrincipalName: !empty(domainName) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : ''
       domainName: domainName
       enableAcceleratedNetworking: enableAcceleratedNetworking
+      enableIPv6: enableIPv6
       enableMonitoring: enableMonitoring
       encryptionAtHost: encryptionAtHost
       fslogixConfigureSessionHosts: fslogixConfigureSessionHosts

@@ -153,6 +153,13 @@
         "description": "Enable accelerated networking on network interfaces for improved network performance."
       }
     },
+    "enableIPv6": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable IPv6 support on the network interface."
+      }
+    },
     "encryptionAtHost": {
       "type": "bool",
       "defaultValue": true,
@@ -714,6 +721,9 @@
           "enableAcceleratedNetworking": {
             "value": "[parameters('enableAcceleratedNetworking')]"
           },
+          "enableIPv6": {
+            "value": "[parameters('enableIPv6')]"
+          },
           "enableMonitoring": {
             "value": "[parameters('enableMonitoring')]"
           },
@@ -893,6 +903,9 @@
               "type": "string"
             },
             "enableAcceleratedNetworking": {
+              "type": "bool"
+            },
+            "enableIPv6": {
               "type": "bool"
             },
             "enableMonitoring": {
@@ -1112,19 +1125,7 @@
               "location": "[parameters('location')]",
               "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/networkInterfaces'), createObject()))]",
               "properties": {
-                "ipConfigurations": [
-                  {
-                    "name": "ipconfig",
-                    "properties": {
-                      "privateIPAllocationMethod": "Dynamic",
-                      "subnet": {
-                        "id": "[parameters('subnetResourceId')]"
-                      },
-                      "primary": true,
-                      "privateIPAddressVersion": "IPv4"
-                    }
-                  }
-                ],
+                "ipConfigurations": "[concat(createArray(createObject('name', 'ipv4config', 'properties', createObject('privateIPAllocationMethod', 'Dynamic', 'subnet', createObject('id', parameters('subnetResourceId')), 'primary', true(), 'privateIPAddressVersion', 'IPv4'))), if(parameters('enableIPv6'), createArray(createObject('name', 'ipv6config', 'properties', createObject('privateIPAllocationMethod', 'Dynamic', 'subnet', createObject('id', parameters('subnetResourceId')), 'primary', false(), 'privateIPAddressVersion', 'IPv6'))), createArray()))]",
                 "enableAcceleratedNetworking": "[parameters('enableAcceleratedNetworking')]",
                 "enableIPForwarding": false
               }

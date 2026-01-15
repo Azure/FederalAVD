@@ -304,6 +304,9 @@ param memoryGB int = 0
 @description('Optional. Determines whether or not to enable accelerated networking for the session host VMs.')
 param enableAcceleratedNetworking bool = true
 
+@description('Optional. Determines whether or not to enable IPv6 for the session host VMs.')
+param enableIPv6 bool = false
+
 @description('Optional. Determines whether or not to enable hibernation for the session host VMs.')
 param hibernationEnabled bool = false
 
@@ -765,6 +768,7 @@ var vmConfigurationTags = union(
       : availability == 'AvailabilitySets' ? 'Availability Sets' : 'No infrastructure redundancy required'
     vmEncryptionAtHost: encryptionAtHost
     vmAcceleratedNetworking: enableAcceleratedNetworking
+    vmIPv6: enableIPv6
     vmHibernate: hibernationEnabled
     vmSecurityType: securityType
     vmSecureBoot: secureBootEnabled
@@ -1370,6 +1374,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
       : ''
     domainName: domainName
     enableAcceleratedNetworking: enableAcceleratedNetworking
+    enableIPv6: enableIPv6
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
     encryptionKeyName: confidentialVMOSDiskEncryption

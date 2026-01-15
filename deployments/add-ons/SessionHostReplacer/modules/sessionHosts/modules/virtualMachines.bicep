@@ -19,6 +19,7 @@ param domainJoinUserPassword string
 param domainJoinUserPrincipalName string
 param domainName string
 param enableAcceleratedNetworking bool
+param enableIPv6 bool
 param enableMonitoring bool
 param encryptionAtHost bool
 param fslogixConfigureSessionHosts bool
@@ -259,9 +260,9 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [
     location: location
     tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/networkInterfaces'] ?? {})
     properties: {
-      ipConfigurations: [
+      ipConfigurations: union([
         {
-          name: 'ipconfig'
+          name: 'ipv4config'
           properties: {
             privateIPAllocationMethod: 'Dynamic'
             subnet: {
@@ -271,7 +272,20 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [
             privateIPAddressVersion: 'IPv4'
           }
         }
-      ]
+      ],
+      enableIPv6 ? [
+        {
+          name: 'ipv6config'
+          properties: {
+            privateIPAllocationMethod: 'Dynamic'
+            subnet: {
+              id: subnetResourceId
+            }
+            primary: false
+            privateIPAddressVersion: 'IPv6'
+          }
+        }
+      ] : [])
       enableAcceleratedNetworking: enableAcceleratedNetworking
       enableIPForwarding: false
     }

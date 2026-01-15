@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "9487406084608834587"
+      "templateHash": "5658880651850996437"
     }
   },
   "parameters": {
@@ -484,6 +484,13 @@
       "defaultValue": true,
       "metadata": {
         "description": "Optional. Determines whether or not to enable accelerated networking for the session host VMs."
+      }
+    },
+    "enableIPv6": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Determines whether or not to enable IPv6 for the session host VMs."
       }
     },
     "hibernationEnabled": {
@@ -2060,7 +2067,7 @@
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupHosts.value]"
           },
           "tags": {
-            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), union(createObject('vmIdentityType', parameters('identitySolution'), 'vmNamePrefix', parameters('virtualMachineNamePrefix'), 'vmIndexPadding', parameters('vmNameIndexLength'), 'vmImageType', if(empty(parameters('customImageResourceId')), 'Gallery', 'CustomImage'), 'vmOSDiskType', parameters('diskSku'), 'vmDiskSizeGB', parameters('diskSizeGB'), 'vmSize', parameters('virtualMachineSize'), 'vmAvailability', if(equals(parameters('availability'), 'AvailabilityZones'), 'Availability Zones', if(equals(parameters('availability'), 'AvailabilitySets'), 'Availability Sets', 'No infrastructure redundancy required')), 'vmEncryptionAtHost', parameters('encryptionAtHost'), 'vmAcceleratedNetworking', parameters('enableAcceleratedNetworking'), 'vmHibernate', parameters('hibernationEnabled'), 'vmSecurityType', parameters('securityType'), 'vmSecureBoot', parameters('secureBootEnabled'), 'vmVirtualTPM', parameters('vTpmEnabled'), 'vmSubnetId', parameters('virtualMachineSubnetResourceId')), variables('vmDomain'), variables('vmOU'), variables('vmCustomImageId'), variables('vmImageOffer'), variables('vmImagePublisher'), variables('vmImageSku'), variables('vmIntuneEnrollment'), if(empty(if(parameters('confidentialVMOSDiskEncryption'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.confidentialVMs, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.customerManaged, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.platformAndCustomerManaged, null())))), createObject(), createObject('vmDiskEncryptionSetName', if(parameters('confidentialVMOSDiskEncryption'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.confidentialVMs, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.customerManaged, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.platformAndCustomerManaged, null())))))), if(parameters('fslogixConfigureSessionHosts'), union(createObject('fslContainerType', parameters('fslogixContainerType')), createObject('fslContainerSizeInMBs', parameters('fslogixSizeInMBs')), createObject('fslStorageService', split(parameters('fslogixStorageService'), '')[0]), createObject('fslFileShareNames', string(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.fslogixFileShareNames.value[parameters('fslogixContainerType')])), createObject('fslSharding', parameters('fslogixShardOptions')), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), createObject('fslLocalStorageAccountNames', string(map(reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value, lambda('id', last(split(lambdaVariables('id'), '/')))))), if(not(empty(parameters('fslogixExistingLocalStorageAccountResourceIds'))), createObject('fslLocalStorageAccountNames', string(map(parameters('fslogixExistingLocalStorageAccountResourceIds'), lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())), variables('fslRemoteStorageAccountNames'), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureNetAppFiles')), createObject('fslLocalNetAppVolumeResourceIds', string(reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppVolumeResourceIds.value)), if(not(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject('fslLocalNetAppVolumeResourceIds', string(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject())), variables('fslRemoteNetAppVolumeResourceIds')), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupControlPlane.value, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolName.value)))]"
+            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), union(createObject('vmIdentityType', parameters('identitySolution'), 'vmNamePrefix', parameters('virtualMachineNamePrefix'), 'vmIndexPadding', parameters('vmNameIndexLength'), 'vmImageType', if(empty(parameters('customImageResourceId')), 'Gallery', 'CustomImage'), 'vmOSDiskType', parameters('diskSku'), 'vmDiskSizeGB', parameters('diskSizeGB'), 'vmSize', parameters('virtualMachineSize'), 'vmAvailability', if(equals(parameters('availability'), 'AvailabilityZones'), 'Availability Zones', if(equals(parameters('availability'), 'AvailabilitySets'), 'Availability Sets', 'No infrastructure redundancy required')), 'vmEncryptionAtHost', parameters('encryptionAtHost'), 'vmAcceleratedNetworking', parameters('enableAcceleratedNetworking'), 'vmIPv6', parameters('enableIPv6'), 'vmHibernate', parameters('hibernationEnabled'), 'vmSecurityType', parameters('securityType'), 'vmSecureBoot', parameters('secureBootEnabled'), 'vmVirtualTPM', parameters('vTpmEnabled'), 'vmSubnetId', parameters('virtualMachineSubnetResourceId')), variables('vmDomain'), variables('vmOU'), variables('vmCustomImageId'), variables('vmImageOffer'), variables('vmImagePublisher'), variables('vmImageSku'), variables('vmIntuneEnrollment'), if(empty(if(parameters('confidentialVMOSDiskEncryption'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.confidentialVMs, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.customerManaged, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.platformAndCustomerManaged, null())))), createObject(), createObject('vmDiskEncryptionSetName', if(parameters('confidentialVMOSDiskEncryption'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.confidentialVMs, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.customerManaged, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNames.value.platformAndCustomerManaged, null())))))), if(parameters('fslogixConfigureSessionHosts'), union(createObject('fslContainerType', parameters('fslogixContainerType')), createObject('fslContainerSizeInMBs', parameters('fslogixSizeInMBs')), createObject('fslStorageService', split(parameters('fslogixStorageService'), '')[0]), createObject('fslFileShareNames', string(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.fslogixFileShareNames.value[parameters('fslogixContainerType')])), createObject('fslSharding', parameters('fslogixShardOptions')), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), createObject('fslLocalStorageAccountNames', string(map(reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value, lambda('id', last(split(lambdaVariables('id'), '/')))))), if(not(empty(parameters('fslogixExistingLocalStorageAccountResourceIds'))), createObject('fslLocalStorageAccountNames', string(map(parameters('fslogixExistingLocalStorageAccountResourceIds'), lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())), variables('fslRemoteStorageAccountNames'), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureNetAppFiles')), createObject('fslLocalNetAppVolumeResourceIds', string(reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppVolumeResourceIds.value)), if(not(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject('fslLocalNetAppVolumeResourceIds', string(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject())), variables('fslRemoteNetAppVolumeResourceIds')), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupControlPlane.value, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolName.value)))]"
           }
         },
         "template": {
@@ -12849,6 +12856,9 @@
           "enableAcceleratedNetworking": {
             "value": "[parameters('enableAcceleratedNetworking')]"
           },
+          "enableIPv6": {
+            "value": "[parameters('enableIPv6')]"
+          },
           "enableMonitoring": {
             "value": "[parameters('enableMonitoring')]"
           },
@@ -13021,7 +13031,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "5476096773708159071"
+              "templateHash": "4582496068506826414"
             }
           },
           "parameters": {
@@ -13119,6 +13129,9 @@
               "type": "string"
             },
             "enableAcceleratedNetworking": {
+              "type": "bool"
+            },
+            "enableIPv6": {
               "type": "bool"
             },
             "encryptionAtHost": {
@@ -15628,6 +15641,9 @@
                   "enableAcceleratedNetworking": {
                     "value": "[parameters('enableAcceleratedNetworking')]"
                   },
+                  "enableIPv6": {
+                    "value": "[parameters('enableIPv6')]"
+                  },
                   "enableMonitoring": {
                     "value": "[parameters('enableMonitoring')]"
                   },
@@ -15761,7 +15777,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "8880964910904617081"
+                      "templateHash": "851551678156015900"
                     }
                   },
                   "parameters": {
@@ -15826,6 +15842,9 @@
                       "type": "string"
                     },
                     "enableAcceleratedNetworking": {
+                      "type": "bool"
+                    },
+                    "enableIPv6": {
                       "type": "bool"
                     },
                     "enableMonitoring": {
@@ -16053,19 +16072,7 @@
                       "location": "[parameters('location')]",
                       "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/networkInterfaces'), createObject()))]",
                       "properties": {
-                        "ipConfigurations": [
-                          {
-                            "name": "ipconfig",
-                            "properties": {
-                              "privateIPAllocationMethod": "Dynamic",
-                              "subnet": {
-                                "id": "[parameters('subnetResourceId')]"
-                              },
-                              "primary": true,
-                              "privateIPAddressVersion": "IPv4"
-                            }
-                          }
-                        ],
+                        "ipConfigurations": "[union(createArray(createObject('name', 'ipv4config', 'properties', createObject('privateIPAllocationMethod', 'Dynamic', 'subnet', createObject('id', parameters('subnetResourceId')), 'primary', true(), 'privateIPAddressVersion', 'IPv4'))), if(parameters('enableIPv6'), createArray(createObject('name', 'ipv6config', 'properties', createObject('privateIPAllocationMethod', 'Dynamic', 'subnet', createObject('id', parameters('subnetResourceId')), 'primary', false(), 'privateIPAddressVersion', 'IPv6'))), createArray()))]",
                         "enableAcceleratedNetworking": "[parameters('enableAcceleratedNetworking')]",
                         "enableIPForwarding": false
                       }
