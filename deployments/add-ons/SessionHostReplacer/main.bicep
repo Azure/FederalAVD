@@ -307,6 +307,9 @@ param diskSku string = 'Premium_LRS'
 @description('Optional. Enable accelerated networking.')
 param enableAcceleratedNetworking bool = true
 
+@description('Optional. Enable IPv6 dynamic private IP on session hosts.')
+param enableIPv6 bool = false
+
 @description('Optional. Enable monitoring with Azure Monitor Agent.')
 param enableMonitoring bool = false
 
@@ -582,6 +585,7 @@ var sessionHostParameters = union(
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     enableAcceleratedNetworking: enableAcceleratedNetworking
+    enableIPv6: enableIPv6
     encryptionAtHost: encryptionAtHost
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
