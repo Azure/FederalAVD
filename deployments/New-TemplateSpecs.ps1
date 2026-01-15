@@ -28,16 +28,10 @@ $resourceAbbreviations = Get-Content -Path $resourceAbbreviationsPath -Raw | Con
 
 # Determine cloud environment and get location abbreviation
 $cloud = $Context.Environment.Name
-$locationsEnvProperty = if ($cloud -like 'AzureUSGovernment*') { 'other' } else { $cloud }
+$locationsEnvProperty = if ($cloud -like 'US*') { 'other' } else { $cloud }
 $locationProperty = $locations.$locationsEnvProperty
 
-# Get location abbreviation - handle US Government cloud by removing 'usgov' prefix
-$normalizedLocation = if ($cloud -like 'AzureUSGovernment*') { 
-    $Location -replace '^usgov', '' 
-} else { 
-    $Location 
-}
-$locationAbbr = $locationProperty.$normalizedLocation.abbreviation
+$locationAbbr = $locationProperty.$Location.abbreviation
 
 if ($null -eq $locationAbbr) {
     Write-Warning "Could not find abbreviation for location '$Location'. Using full location name."
