@@ -637,14 +637,6 @@ var sessionHostParameters = union(
   paramFslogixStorageService
 )
 
-resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = if (!empty(sessionHostReplacerUserAssignedIdentityResourceId)) {
-  name: last(split(sessionHostReplacerUserAssignedIdentityResourceId, '/'))
-  scope: resourceGroup(
-    split(sessionHostReplacerUserAssignedIdentityResourceId, '/')[2],
-    split(sessionHostReplacerUserAssignedIdentityResourceId, '/')[4]
-  )
-}
-
 // Conditional Template Spec for Session Host Deployment
 module templateSpec 'modules/sessionHostTemplateSpec.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
   name: 'SessionHostTemplateSpec-${deploymentSuffix}'
