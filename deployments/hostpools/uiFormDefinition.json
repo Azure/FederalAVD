@@ -1450,6 +1450,13 @@
 										"required": true,
 										"allowedValues": "[map(steps('hosts').network.subnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]"
 									}
+								},
+								{
+									"name": "enableIPv6",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable IPv6",
+									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIPv6)), false, bool(steps('basics').hostsRGProps.tags.vmIPv6))]",
+									"toolTip": "Enables IPv6 support on the network interface."
 								}
 							]
 						},
@@ -2074,14 +2081,7 @@
 									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking)), true, bool(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking))]",
 									"toolTip": "Enables low latency and high throughput on the network interface.",
 									"visible": "[and(bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported)))]"
-								},
-								{
-									"name": "enableIPv6",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable IPv6",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIPv6)), false, bool(steps('basics').hostsRGProps.tags.vmIPv6))]",
-									"toolTip": "Enables IPv6 support on the network interface."
-								},
+								},								
 								{
 									"name": "hibernationEnabled",
 									"type": "Microsoft.Common.CheckBox",
@@ -4500,6 +4500,7 @@
 				"vmNameIndexLength": "[steps('hosts').naming.indexPadding]",
 				"sessionHostCount": "[steps('hosts').specs.count]",
 				"virtualMachineSubnetResourceId": "[steps('hosts').network.subnet.id]",
+				"enableIPv6": "[steps('hosts').network.enableIPv6]",
 				"imageOffer": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.offer, '')]",
 				"imagePublisher": "[if(equals(steps('hosts').image.source, 'marketplace'), 'MicrosoftWindowsDesktop', '')]",
 				"imageSku": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.sku, '')]",
@@ -4522,7 +4523,6 @@
 				"memoryGB": "[first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (cap) => equals(cap.name, 'MemoryGB')), (cap) => cap.value))]",
 				"availabilityZones": "[if(and(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), equals(steps('hosts').availability.availability, 'AvailabilityZones')), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"enableAcceleratedNetworking": "[if(and(bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported))), steps('hosts').specs.enableAcceleratedNetworking, false)]",
-				"enableIPv6": "[steps('hosts').specs.enableIPv6]",
 				"hibernationEnabled": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'HibernationSupported')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported))), steps('hosts').specs.hibernationEnabled, false)]",
 				"avdAgentsDSCPackage": "[steps('hosts').registration.avdAgentsDSCPackage]",
 				"useAgentDownloadEndpoint": "[steps('hosts').registration.useAgentDownloadEndpoint]",
