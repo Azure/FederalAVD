@@ -173,39 +173,36 @@ function Get-AccessToken {
     $isStorageToken = $ResourceUri -like "*storage*" -or $ResourceUri -like "*.table.*" -or $ResourceUri -like "*.blob.*"
     
     # ARM tokens require trailing slash, Graph and Storage tokens should NOT have trailing slash
-    $tokenResourceUri = if ($isARMToken) {
+    if ($isARMToken) {
         # ARM: requires trailing slash
-        $uri = if ($ResourceUri[-1] -ne '/') { "$ResourceUri/" } else { $ResourceUri }
-        Write-Verbose "Requesting ARM token for resource: $uri (with trailing slash)"
-        $uri
-    } else {        
+        $tokenResourceUri = if ($ResourceUri[-1] -ne '/') { "$ResourceUri/" } else { $ResourceUri }
+        Write-Verbose "Requesting ARM token for resource: $tokenResourceUri (with trailing slash)"
+    }
+    else {        
         # Graph and Storage: NO trailing slash
-        $uri = if ($ResourceUri[-1] -eq '/') { $ResourceUri.TrimEnd('/') } else { $ResourceUri }
+        $tokenResourceUri = if ($ResourceUri[-1] -eq '/') { $ResourceUri.TrimEnd('/') } else { $ResourceUri }
         $tokenType = if ($isGraphToken) { "Graph" } elseif ($isStorageToken) { "Storage" } else { "Other" }
-        Write-Verbose "Requesting $tokenType token for resource: $uri (no trailing slash)"
-        $uri
+        Write-Verbose "Requesting $tokenType token for resource: $tokenResourceUri (no trailing slash)"
     }
     
     # Acquire token from managed identity
-    # Build token URI - only include client_id parameter for user-assigned identity
+    # Build token URI - only include clientid parameter for user-assigned identity
     if ([string]::IsNullOrEmpty($ClientId)) {
         # System-assigned managed identity
         Write-Verbose "Acquiring token using system-assigned managed identity for resource: $tokenResourceUri"
-        $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $tokenResourceUri + '&api-version=2019-08-01'
-    } else {
+        $TokenAuthURI = $env:MSI_ENDPOINT + '?resource=' + $tokenResourceUri + '&api-version=2017-09-01'
+    }
+    else {
         # User-assigned managed identity
         Write-Verbose "Acquiring token using user-assigned managed identity (ClientId: $ClientId) for resource: $tokenResourceUri"
-        $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $tokenResourceUri + "&client_id=$ClientId" + '&api-version=2019-08-01'
+        $TokenAuthURI = $env:MSI_ENDPOINT + '?resource=' + $tokenResourceUri + "&clientid=$ClientId" + '&api-version=2019-08-01'
     }
        
-    # Add cache-busting headers to force fresh token acquisition
     $headers = @{
-        "X-IDENTITY-HEADER" = $env:IDENTITY_HEADER
-        "Cache-Control" = "no-cache, no-store, must-revalidate"
-        "Pragma" = "no-cache"
+        Secret = $env:MSI_SECRET
     }
     
-    $TokenResponse = Invoke-RestMethod -Method Get -Headers $headers -Uri $TokenAuthURI -DisableKeepAlive
+    $TokenResponse = Invoke-RestMethod -Method Get -Headers $headers -Uri $TokenAuthURI 4>$Null
     
     Write-Verbose "Successfully acquired token for $tokenResourceUri"
     
@@ -440,10 +437,10 @@ function Invoke-AzureRestMethod {
 
         # Run the first query.
         if ($Method -eq 'GET') {
-            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -ContentType "application/json" -Verbose:$false
+            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -ContentType "application/json" 4>$Null
         }
         else {
-            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -ContentType "application/json" -Body $Body -Verbose:$false
+            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -ContentType "application/json" -Body $Body 4>$Null
         }
         
         # Check if response is a direct array or has a value property
@@ -463,18 +460,18 @@ function Invoke-AzureRestMethod {
         # Invoke REST methods and fetch data until there are no pages left.
         if ($Uri -notlike "*`$top*") {
             while ($QueryRequest.'@odata.nextLink' -and $QueryRequest.'@odata.nextLink' -is [string]) {
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.'@odata.nextLink' -UseBasicParsing -Method $Method -ContentType "application/json" -Verbose:$false
+                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.'@odata.nextLink' -UseBasicParsing -Method $Method -ContentType "application/json" 4>$Null
                 $dataToUpload += $QueryRequest.value
             }
             While ($QueryRequest.nextLink -and $QueryRequest.nextLink -is [string]) {
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.nextLink -UseBasicParsing -Method $Method -ContentType "application/json" -Verbose:$false
+                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.nextLink -UseBasicParsing -Method $Method -ContentType "application/json" 4>$Null
                 $dataToUpload += $QueryRequest.value
             }
             While ($QueryRequest.'$skipToken' -and $QueryRequest.'$skipToken' -is [string] -and $Body -ne '') {
                 $JsonBody = $Body | ConvertFrom-Json
                 $JsonBody | Add-Member -Type NoteProperty -Name '$skipToken' -Value $QueryRequest.'$skipToken' -Force
                 $Body = $JsonBody | ConvertTo-Json -Depth 10
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -Body $Body -ContentType "application/json" -Verbose:$false
+                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -UseBasicParsing -Method $Method -Body $Body -ContentType "application/json" 4>$Null
                 $dataToUpload += $QueryRequest.value
             }
         }
@@ -695,7 +692,8 @@ function Invoke-GraphApiWithRetry {
     # Ensure GraphEndpoint doesn't have trailing slash
     $graphBase = if ($GraphEndpoint[-1] -eq '/') { 
         $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) 
-    } else { 
+    }
+    else { 
         $GraphEndpoint 
     }
     
@@ -711,7 +709,7 @@ function Invoke-GraphApiWithRetry {
     if ($graphBase -eq 'https://graph.microsoft.us') {
         $endpointsToTry += @{ 
             Endpoint = 'https://dod-graph.microsoft.us'
-            Token = $null  # Will acquire fresh token if needed
+            Token    = $null  # Will acquire fresh token if needed
         }
     }
     
