@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "1200558236601575070"
+      "templateHash": "17412190720140109749"
     },
     "name": "AVD Session Host Replacer Add-On",
     "description": "Deploys automated session host lifecycle management for Azure Virtual Desktop",
@@ -1120,7 +1120,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "7851872888458899088"
+              "templateHash": "14784264974262983227"
             }
           },
           "parameters": {
@@ -2213,8 +2213,8 @@
                         "amdVmSize": "[[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), 'as_v4'), endsWith(parameters('virtualMachineSize'), '_V710_v5')))]",
                         "nvidiaVmSize": "[[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), '_v3'), endsWith(parameters('virtualMachineSize'), '_A10_v5')))]",
                         "sessionHostCount": "[[length(parameters('sessionHostNames'))]",
-                        "profileShareName": "[[variables('fslogixFileShareNames')[0]]",
-                        "officeShareName": "[[if(greater(length(variables('fslogixFileShareNames')), 1), variables('fslogixFileShareNames')[1], '')]",
+                        "profileShareName": "[[parameters('fslogixFileShareNames')[0]]",
+                        "officeShareName": "[[if(greater(length(parameters('fslogixFileShareNames')), 1), parameters('fslogixFileShareNames')[1], '')]",
                         "fslogixLocalNetAppProfileShare": "[[if(not(empty(parameters('fslogixLocalNetAppServerFqdns'))), format('\\\\{0}\\{1}', parameters('fslogixLocalNetAppServerFqdns')[0], variables('profileShareName')), '')]",
                         "fslogixLocalNetAppOfficeShare": "[[if(greater(length(parameters('fslogixLocalNetAppServerFqdns')), 1), format('\\\\{0}\\{1}', parameters('fslogixLocalNetAppServerFqdns')[1], variables('officeShareName')), '')]",
                         "fslogixRemoteNetAppProfileShare": "[[if(not(empty(parameters('fslogixRemoteNetAppServerFqdns'))), format('\\\\{0}\\{1}', parameters('fslogixRemoteNetAppServerFqdns')[0], variables('profileShareName')), '')]",
@@ -2261,7 +2261,7 @@
                           },
                           "type": "Microsoft.Network/networkInterfaces",
                           "apiVersion": "2020-05-01",
-                          "name": "[[if(empty(parameters('networkInterfaceNameConv')), format('nic-{0}', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex()]]), replace(replace(parameters('networkInterfaceNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[copyIndex()]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[copyIndex()]]))]",
+                          "name": "[[if(empty(parameters('networkInterfaceNameConv')), format('nic-{0}', parameters('sessionHostNames')[copyIndex()]), replace(replace(parameters('networkInterfaceNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()]))]",
                           "location": "[[parameters('location')]",
                           "tags": "[[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/networkInterfaces'), createObject()))]",
                           "properties": {
@@ -2277,13 +2277,13 @@
                           },
                           "type": "Microsoft.Compute/virtualMachines",
                           "apiVersion": "2024-03-01",
-                          "name": "[[if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex()]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[copyIndex()]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[copyIndex()]]))]",
+                          "name": "[[if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()]))]",
                           "location": "[[parameters('location')]",
                           "tags": "[[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))]",
-                          "zones": "[[if(and(and(not(empty(parameters('preferredZones'))), less(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('preferredZones')))), not(empty(parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]]))), createArray(parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]][0]), if(and(equals(parameters('availability'), 'AvailabilityZones'), not(empty(parameters('availabilityZones')))), createArray(parameters('availabilityZones')[mod(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), length(parameters('availabilityZones')))]), null()))]",
+                          "zones": "[[if(and(and(not(empty(parameters('preferredZones'))), less(copyIndex(), length(parameters('preferredZones')))), not(empty(parameters('preferredZones')[copyIndex()]))), createArray(parameters('preferredZones')[copyIndex()]), if(and(equals(parameters('availability'), 'AvailabilityZones'), not(empty(parameters('availabilityZones')))), createArray(parameters('availabilityZones')[mod(sub(variables('vmNumbers')[copyIndex()], 1), length(parameters('availabilityZones')))]), null()))]",
                           "identity": "[[variables('identity')]",
                           "properties": {
-                            "availabilitySet": "[[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(div(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), 200), 1), 2, '0')))), null())]",
+                            "availabilitySet": "[[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(div(sub(variables('vmNumbers')[copyIndex()], 1), 200), 1), 2, '0')))), null())]",
                             "diagnosticsProfile": {
                               "bootDiagnostics": {
                                 "enabled": true
@@ -2292,13 +2292,13 @@
                             "hardwareProfile": {
                               "vmSize": "[[parameters('virtualMachineSize')]"
                             },
-                            "host": "[[if(and(and(not(empty(parameters('dedicatedHostResourceIds'))), less(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('dedicatedHostResourceIds')))), not(empty(parameters('dedicatedHostResourceIds')[range(0, variables('sessionHostCount'))[copyIndex()]]))), createObject('id', parameters('dedicatedHostResourceIds')[range(0, variables('sessionHostCount'))[copyIndex()]]), null())]",
-                            "hostGroup": "[[if(and(and(and(not(empty(parameters('dedicatedHostGroupResourceIds'))), less(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('dedicatedHostGroupResourceIds')))), not(empty(parameters('dedicatedHostGroupResourceIds')[range(0, variables('sessionHostCount'))[copyIndex()]]))), or(or(empty(parameters('dedicatedHostResourceIds')), greaterOrEquals(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('dedicatedHostResourceIds')))), empty(parameters('dedicatedHostResourceIds')[range(0, variables('sessionHostCount'))[copyIndex()]]))), createObject('id', parameters('dedicatedHostGroupResourceIds')[range(0, variables('sessionHostCount'))[copyIndex()]]), null())]",
+                            "host": "[[if(and(and(not(empty(parameters('dedicatedHostResourceIds'))), less(copyIndex(), length(parameters('dedicatedHostResourceIds')))), not(empty(parameters('dedicatedHostResourceIds')[copyIndex()]))), createObject('id', parameters('dedicatedHostResourceIds')[copyIndex()]), null())]",
+                            "hostGroup": "[[if(and(and(and(not(empty(parameters('dedicatedHostGroupResourceIds'))), less(copyIndex(), length(parameters('dedicatedHostGroupResourceIds')))), not(empty(parameters('dedicatedHostGroupResourceIds')[copyIndex()]))), or(or(empty(parameters('dedicatedHostResourceIds')), greaterOrEquals(copyIndex(), length(parameters('dedicatedHostResourceIds')))), empty(parameters('dedicatedHostResourceIds')[copyIndex()]))), createObject('id', parameters('dedicatedHostGroupResourceIds')[copyIndex()]), null())]",
                             "storageProfile": {
                               "imageReference": "[[parameters('imageReference')]",
                               "osDisk": {
                                 "diskSizeGB": "[[if(not(equals(parameters('diskSizeGB'), 0)), parameters('diskSizeGB'), null())]",
-                                "name": "[[if(empty(parameters('osDiskNameConv')), null(), replace(replace(parameters('osDiskNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[copyIndex()]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[copyIndex()]]))]",
+                                "name": "[[if(empty(parameters('osDiskNameConv')), null(), replace(replace(parameters('osDiskNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()]))]",
                                 "osType": "Windows",
                                 "createOption": "FromImage",
                                 "caching": "ReadWrite",
@@ -2312,7 +2312,7 @@
                               "dataDisks": []
                             },
                             "osProfile": {
-                              "computerName": "[[parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex()]]]",
+                              "computerName": "[[parameters('sessionHostNames')[copyIndex()]]",
                               "adminUsername": "[[parameters('virtualMachineAdminUserName')]",
                               "adminPassword": "[[parameters('virtualMachineAdminPassword')]",
                               "windowsConfiguration": {
@@ -2325,7 +2325,7 @@
                             "networkProfile": {
                               "networkInterfaces": [
                                 {
-                                  "id": "[[resourceId('Microsoft.Network/networkInterfaces', if(empty(parameters('networkInterfaceNameConv')), format('nic-{0}', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), replace(replace(parameters('networkInterfaceNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]",
+                                  "id": "[[resourceId('Microsoft.Network/networkInterfaces', if(empty(parameters('networkInterfaceNameConv')), format('nic-{0}', parameters('sessionHostNames')[copyIndex()]), replace(replace(parameters('networkInterfaceNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]",
                                   "properties": {
                                     "deleteOption": "Delete"
                                   }
@@ -2351,7 +2351,7 @@
                           "condition": "[[contains(parameters('identitySolution'), 'DomainServices')]",
                           "type": "Microsoft.Compute/virtualMachines/extensions",
                           "apiVersion": "2021-03-01",
-                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), 'JsonADDomainExtension')]",
+                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])), 'JsonADDomainExtension')]",
                           "location": "[[parameters('location')]",
                           "properties": {
                             "forceUpdateTag": "[[parameters('deploymentSuffix')]",
@@ -2371,7 +2371,7 @@
                             }
                           },
                           "dependsOn": [
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2382,7 +2382,7 @@
                           "condition": "[[or(startsWith(parameters('identitySolution'), 'EntraKerberos'), equals(parameters('identitySolution'), 'EntraId'))]",
                           "type": "Microsoft.Compute/virtualMachines/extensions",
                           "apiVersion": "2021-03-01",
-                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), 'AADLoginForWindows')]",
+                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])), 'AADLoginForWindows')]",
                           "location": "[[parameters('location')]",
                           "properties": {
                             "publisher": "Microsoft.Azure.ActiveDirectory",
@@ -2392,7 +2392,7 @@
                             "settings": "[[if(parameters('intuneEnrollment'), createObject('mdmId', '0000000a-0000-0000-c000-000000000000'), null())]"
                           },
                           "dependsOn": [
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2403,7 +2403,7 @@
                           "condition": "[[not(startsWith(environment().name, 'USN'))]",
                           "type": "Microsoft.Compute/virtualMachines/extensions",
                           "apiVersion": "2021-03-01",
-                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), 'IaaSAntimalware')]",
+                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])), 'IaaSAntimalware')]",
                           "location": "[[parameters('location')]",
                           "properties": {
                             "publisher": "Microsoft.Azure.Security",
@@ -2427,7 +2427,7 @@
                           "dependsOn": [
                             "extension_AADLoginForWindows",
                             "extension_JsonADDomainExtension",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2438,7 +2438,7 @@
                           "condition": "[[parameters('enableMonitoring')]",
                           "type": "Microsoft.Compute/virtualMachines/extensions",
                           "apiVersion": "2023-03-01",
-                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), 'AzureMonitorWindowsAgent')]",
+                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])), 'AzureMonitorWindowsAgent')]",
                           "location": "[[parameters('location')]",
                           "properties": {
                             "publisher": "Microsoft.Azure.Monitor",
@@ -2451,7 +2451,7 @@
                             "extension_AADLoginForWindows",
                             "extension_IaasAntimalware",
                             "extension_JsonADDomainExtension",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2462,7 +2462,7 @@
                           "condition": "[[and(parameters('enableMonitoring'), not(empty(parameters('dataCollectionEndpointResourceId'))))]",
                           "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                           "apiVersion": "2022-06-01",
-                          "scope": "[[format('Microsoft.Compute/virtualMachines/{0}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]",
+                          "scope": "[[format('Microsoft.Compute/virtualMachines/{0}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]",
                           "name": "configurationAccessEndpoint",
                           "properties": {
                             "dataCollectionEndpointId": "[[parameters('dataCollectionEndpointResourceId')]",
@@ -2470,7 +2470,7 @@
                           },
                           "dependsOn": [
                             "extension_AzureMonitorWindowsAgent",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2481,16 +2481,16 @@
                           "condition": "[[and(parameters('enableMonitoring'), not(empty(parameters('avdInsightsDataCollectionRulesResourceId'))))]",
                           "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                           "apiVersion": "2022-06-01",
-                          "scope": "[[format('Microsoft.Compute/virtualMachines/{0}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]",
-                          "name": "[[format('{0}-avdInsights-data-coll-rule-assoc', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]",
+                          "scope": "[[format('Microsoft.Compute/virtualMachines/{0}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]",
+                          "name": "[[format('{0}-avdInsights-data-coll-rule-assoc', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]",
                           "properties": {
                             "dataCollectionRuleId": "[[parameters('avdInsightsDataCollectionRulesResourceId')]",
                             "description": "AVD Insights data collection rule association"
                           },
                           "dependsOn": [
                             "extension_AzureMonitorWindowsAgent",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]",
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2501,16 +2501,16 @@
                           "condition": "[[and(parameters('enableMonitoring'), not(empty(parameters('vmInsightsDataCollectionRulesResourceId'))))]",
                           "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                           "apiVersion": "2022-06-01",
-                          "scope": "[[format('Microsoft.Compute/virtualMachines/{0}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]",
-                          "name": "[[format('{0}-vmInsights-data-coll-rule-assoc', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]",
+                          "scope": "[[format('Microsoft.Compute/virtualMachines/{0}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]",
+                          "name": "[[format('{0}-vmInsights-data-coll-rule-assoc', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]",
                           "properties": {
                             "dataCollectionRuleId": "[[parameters('vmInsightsDataCollectionRulesResourceId')]",
                             "description": "VM Insights data collection rule association"
                           },
                           "dependsOn": [
                             "extension_AzureMonitorWindowsAgent",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]",
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2521,7 +2521,7 @@
                           "condition": "[[parameters('integrityMonitoring')]",
                           "type": "Microsoft.Compute/virtualMachines/extensions",
                           "apiVersion": "2023-09-01",
-                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), 'GuestAttestation')]",
+                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])), 'GuestAttestation')]",
                           "location": "[[parameters('location')]",
                           "properties": {
                             "publisher": "Microsoft.Azure.Security.WindowsAttestation",
@@ -2548,7 +2548,7 @@
                             "extension_AzureMonitorWindowsAgent",
                             "extension_IaasAntimalware",
                             "extension_JsonADDomainExtension",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2559,7 +2559,7 @@
                           "condition": "[[variables('amdVmSize')]",
                           "type": "Microsoft.Compute/virtualMachines/extensions",
                           "apiVersion": "2021-03-01",
-                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), 'AmdGpuDriverWindows')]",
+                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])), 'AmdGpuDriverWindows')]",
                           "location": "[[parameters('location')]",
                           "properties": {
                             "publisher": "Microsoft.HpcCompute",
@@ -2573,7 +2573,7 @@
                             "extension_AzureMonitorWindowsAgent",
                             "extension_IaasAntimalware",
                             "extension_JsonADDomainExtension",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2584,7 +2584,7 @@
                           "condition": "[[variables('nvidiaVmSize')]",
                           "type": "Microsoft.Compute/virtualMachines/extensions",
                           "apiVersion": "2021-03-01",
-                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), 'NvidiaGpuDriverWindows')]",
+                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])), 'NvidiaGpuDriverWindows')]",
                           "location": "[[parameters('location')]",
                           "properties": {
                             "publisher": "Microsoft.HpcCompute",
@@ -2597,7 +2597,7 @@
                             "extension_AADLoginForWindows",
                             "extension_AzureMonitorWindowsAgent",
                             "extension_JsonADDomainExtension",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2607,7 +2607,7 @@
                           },
                           "type": "Microsoft.Compute/virtualMachines/runCommands",
                           "apiVersion": "2023-09-01",
-                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), 'configureSessionHost')]",
+                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])), 'configureSessionHost')]",
                           "location": "[[parameters('location')]",
                           "properties": {
                             "parameters": [
@@ -2657,7 +2657,7 @@
                               },
                               {
                                 "name": "Shares",
-                                "value": "[[string(variables('fslogixFileShareNames'))]"
+                                "value": "[[string(parameters('fslogixFileShareNames'))]"
                               },
                               {
                                 "name": "SizeInMBs",
@@ -2691,7 +2691,7 @@
                             "extension_IaasAntimalware",
                             "extension_JsonADDomainExtension",
                             "extension_NvidiaGpuDriverWindows",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2701,7 +2701,7 @@
                           },
                           "type": "Microsoft.Compute/virtualMachines/extensions",
                           "apiVersion": "2021-03-01",
-                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), 'AVDAgentInstallandConfig')]",
+                          "name": "[[format('{0}/{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])), 'AVDAgentInstallandConfig')]",
                           "location": "[[parameters('location')]",
                           "properties": {
                             "publisher": "Microsoft.Powershell",
@@ -2731,7 +2731,7 @@
                           "dependsOn": [
                             "postDeploymentScripts",
                             "runCommand_ConfigureSessionHost",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2742,7 +2742,7 @@
                           "condition": "[[not(empty(parameters('sessionHostCustomizations')))]",
                           "type": "Microsoft.Resources/deployments",
                           "apiVersion": "2022-09-01",
-                          "name": "[[format('shr-{0}-customizations-{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), parameters('deploymentSuffix'))]",
+                          "name": "[[format('shr-{0}-customizations-{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])), parameters('deploymentSuffix'))]",
                           "properties": {
                             "expressionEvaluationOptions": {
                               "scope": "inner"
@@ -2759,7 +2759,7 @@
                                 "value": "[[parameters('artifactsUserAssignedIdentityClientId')]"
                               },
                               "virtualMachineName": {
-                                "value": "[[if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]))]"
+                                "value": "[[if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()]))]"
                               }
                             },
                             "template": {
@@ -2855,8 +2855,8 @@
                           },
                           "dependsOn": [
                             "runCommand_ConfigureSessionHost",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]",
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         },
                         {
@@ -2866,7 +2866,7 @@
                           },
                           "type": "Microsoft.Resources/deployments",
                           "apiVersion": "2022-09-01",
-                          "name": "[[format('shr-{0}-disableDiskPublicAccess-{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])), parameters('deploymentSuffix'))]",
+                          "name": "[[format('shr-{0}-disableDiskPublicAccess-{1}', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])), parameters('deploymentSuffix'))]",
                           "properties": {
                             "expressionEvaluationOptions": {
                               "scope": "inner"
@@ -2877,7 +2877,7 @@
                                 "value": ""
                               },
                               "diskName": {
-                                "value": "[[reference(resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]))), '2024-03-01').storageProfile.osDisk.name]"
+                                "value": "[[reference(resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()]))), '2024-03-01').storageProfile.osDisk.name]"
                               },
                               "location": {
                                 "value": "[[parameters('location')]"
@@ -2886,7 +2886,7 @@
                                 "value": "[[parameters('deploymentSuffix')]"
                               },
                               "vmName": {
-                                "value": "[[if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]))]"
+                                "value": "[[if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()]))]"
                               }
                             },
                             "template": {
@@ -2985,9 +2985,9 @@
                             }
                           },
                           "dependsOn": [
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])))]"
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]",
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]",
+                            "[[resourceId('Microsoft.Compute/virtualMachines', if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[copyIndex()], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[copyIndex()]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[copyIndex()])))]"
                           ]
                         }
                       ]
