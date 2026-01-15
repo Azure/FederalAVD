@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "14265713993313558763"
+      "templateHash": "1200558236601575070"
     },
     "name": "AVD Session Host Replacer Add-On",
     "description": "Deploys automated session host lifecycle management for Azure Virtual Desktop",
@@ -1120,7 +1120,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "14120664639880628164"
+              "templateHash": "7851872888458899088"
             }
           },
           "parameters": {
@@ -1293,25 +1293,18 @@
                     "description": "Enable accelerated networking on network interfaces for improved network performance."
                   }
                 },
+                "enableIPv6": {
+                  "type": "bool",
+                  "defaultValue": false,
+                  "metadata": {
+                    "description": "Enable IPv6 support on the network interface."
+                  }
+                },
                 "encryptionAtHost": {
                   "type": "bool",
                   "defaultValue": true,
                   "metadata": {
                     "description": "Enable encryption at host for additional data encryption on the VM host."
-                  }
-                },
-                "fslogixFileShareNames": {
-                  "type": "array",
-                  "defaultValue": [
-                    "profile-containers"
-                  ],
-                  "allowedValues": [
-                    "profile-containers",
-                    "profile-containers",
-                    "office-containers"
-                  ],
-                  "metadata": {
-                    "description": "Array of FSLogix file share names. First element is profile-containers, second (if present) is office-containers."
                   }
                 },
                 "fslogixConfigureSessionHosts": {
@@ -1574,7 +1567,8 @@
                 "beginAvSetRange": "[[div(variables('minVmNumber'), variables('maxAvSetMembers'))]",
                 "endAvSetRange": "[[div(variables('maxVmNumber'), variables('maxAvSetMembers'))]",
                 "calculatedAvailabilitySetsCount": "[[add(sub(variables('endAvSetRange'), variables('beginAvSetRange')), 1)]",
-                "calculatedAvailabilitySetsIndex": "[[variables('beginAvSetRange')]"
+                "calculatedAvailabilitySetsIndex": "[[variables('beginAvSetRange')]",
+                "fslogixFileShareNames": "[[if(contains(parameters('fslogixContainerType'), 'Office'), createArray('profile-containers', 'office-containers'), createArray('profile-containers'))]"
               },
               "resources": [
                 {
@@ -1595,7 +1589,7 @@
                         "value": "[[parameters('fslogixRemoteNetAppVolumeResourceIds')]"
                       },
                       "shareNames": {
-                        "value": "[[parameters('fslogixFileShareNames')]"
+                        "value": "[[variables('fslogixFileShareNames')]"
                       }
                     },
                     "template": {
@@ -1867,6 +1861,9 @@
                       "enableAcceleratedNetworking": {
                         "value": "[[parameters('enableAcceleratedNetworking')]"
                       },
+                      "enableIPv6": {
+                        "value": "[[parameters('enableIPv6')]"
+                      },
                       "enableMonitoring": {
                         "value": "[[parameters('enableMonitoring')]"
                       },
@@ -1880,7 +1877,7 @@
                         "value": "[[parameters('fslogixContainerType')]"
                       },
                       "fslogixFileShareNames": {
-                        "value": "[[parameters('fslogixFileShareNames')]"
+                        "value": "[[variables('fslogixFileShareNames')]"
                       },
                       "fslogixOSSGroups": {
                         "value": "[[parameters('fslogixOSSGroups')]"
@@ -2048,6 +2045,9 @@
                         "enableAcceleratedNetworking": {
                           "type": "bool"
                         },
+                        "enableIPv6": {
+                          "type": "bool"
+                        },
                         "enableMonitoring": {
                           "type": "bool"
                         },
@@ -2213,8 +2213,8 @@
                         "amdVmSize": "[[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), 'as_v4'), endsWith(parameters('virtualMachineSize'), '_V710_v5')))]",
                         "nvidiaVmSize": "[[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), '_v3'), endsWith(parameters('virtualMachineSize'), '_A10_v5')))]",
                         "sessionHostCount": "[[length(parameters('sessionHostNames'))]",
-                        "profileShareName": "[[parameters('fslogixFileShareNames')[0]]",
-                        "officeShareName": "[[if(greater(length(parameters('fslogixFileShareNames')), 1), parameters('fslogixFileShareNames')[1], '')]",
+                        "profileShareName": "[[variables('fslogixFileShareNames')[0]]",
+                        "officeShareName": "[[if(greater(length(variables('fslogixFileShareNames')), 1), variables('fslogixFileShareNames')[1], '')]",
                         "fslogixLocalNetAppProfileShare": "[[if(not(empty(parameters('fslogixLocalNetAppServerFqdns'))), format('\\\\{0}\\{1}', parameters('fslogixLocalNetAppServerFqdns')[0], variables('profileShareName')), '')]",
                         "fslogixLocalNetAppOfficeShare": "[[if(greater(length(parameters('fslogixLocalNetAppServerFqdns')), 1), format('\\\\{0}\\{1}', parameters('fslogixLocalNetAppServerFqdns')[1], variables('officeShareName')), '')]",
                         "fslogixRemoteNetAppProfileShare": "[[if(not(empty(parameters('fslogixRemoteNetAppServerFqdns'))), format('\\\\{0}\\{1}', parameters('fslogixRemoteNetAppServerFqdns')[0], variables('profileShareName')), '')]",
@@ -2265,19 +2265,7 @@
                           "location": "[[parameters('location')]",
                           "tags": "[[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/networkInterfaces'), createObject()))]",
                           "properties": {
-                            "ipConfigurations": [
-                              {
-                                "name": "ipconfig",
-                                "properties": {
-                                  "privateIPAllocationMethod": "Dynamic",
-                                  "subnet": {
-                                    "id": "[[parameters('subnetResourceId')]"
-                                  },
-                                  "primary": true,
-                                  "privateIPAddressVersion": "IPv4"
-                                }
-                              }
-                            ],
+                            "ipConfigurations": "[[concat(createArray(createObject('name', 'ipv4config', 'properties', createObject('privateIPAllocationMethod', 'Dynamic', 'subnet', createObject('id', parameters('subnetResourceId')), 'primary', true(), 'privateIPAddressVersion', 'IPv4'))), if(parameters('enableIPv6'), createArray(createObject('name', 'ipv6config', 'properties', createObject('privateIPAllocationMethod', 'Dynamic', 'subnet', createObject('id', parameters('subnetResourceId')), 'primary', false(), 'privateIPAddressVersion', 'IPv6'))), createArray()))]",
                             "enableAcceleratedNetworking": "[[parameters('enableAcceleratedNetworking')]",
                             "enableIPForwarding": false
                           }
@@ -2292,7 +2280,7 @@
                           "name": "[[if(empty(parameters('virtualMachineNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex()]], replace(replace(parameters('virtualMachineNameConv'), '###', variables('vmIndexStrings')[range(0, variables('sessionHostCount'))[copyIndex()]]), 'VMNAMEPREFIX', variables('vmPrefixStrings')[range(0, variables('sessionHostCount'))[copyIndex()]]))]",
                           "location": "[[parameters('location')]",
                           "tags": "[[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))]",
-                          "zones": "[[if(and(and(not(empty(parameters('preferredZones'))), less(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('preferredZones')))), not(empty(parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]]))), parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]], if(and(equals(parameters('availability'), 'AvailabilityZones'), not(empty(parameters('availabilityZones')))), createArray(parameters('availabilityZones')[mod(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), length(parameters('availabilityZones')))]), null()))]",
+                          "zones": "[[if(and(and(not(empty(parameters('preferredZones'))), less(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('preferredZones')))), not(empty(parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]]))), createArray(parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]][0]), if(and(equals(parameters('availability'), 'AvailabilityZones'), not(empty(parameters('availabilityZones')))), createArray(parameters('availabilityZones')[mod(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), length(parameters('availabilityZones')))]), null()))]",
                           "identity": "[[variables('identity')]",
                           "properties": {
                             "availabilitySet": "[[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(div(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), 200), 1), 2, '0')))), null())]",
@@ -2669,7 +2657,7 @@
                               },
                               {
                                 "name": "Shares",
-                                "value": "[[string(parameters('fslogixFileShareNames'))]"
+                                "value": "[[string(variables('fslogixFileShareNames'))]"
                               },
                               {
                                 "name": "SizeInMBs",
