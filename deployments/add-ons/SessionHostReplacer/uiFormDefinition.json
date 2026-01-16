@@ -2049,7 +2049,7 @@
 									"name": "intune",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Intune Enrollment",
-									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment), false, bool(steps('basics').hostsRGProps.tags.vmIntuneEnrollment))]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntuneEnrollment), false, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntuneEnrollment))]",
 									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting this checkbox.",
 									"visible": "[not(contains(steps('identity').solution, 'DomainServices'))]"
 								}
