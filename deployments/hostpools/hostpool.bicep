@@ -1393,10 +1393,10 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames
-    fslogixLocalStorageAccountResourceIds: deploymentType == 'Complete' && deployFSLogixStorage
+    fslogixLocalStorageAccountResourceIds: deploymentType != 'SessionHostsOnly' && deployFSLogixStorage
       ? fslogix!.outputs.storageAccountResourceIds
       : fslogixExistingLocalStorageAccountResourceIds
-    fslogixLocalNetAppVolumeResourceIds: deploymentType == 'Complete' && deployFSLogixStorage
+    fslogixLocalNetAppVolumeResourceIds: deploymentType != 'SessionHostsOnly' && deployFSLogixStorage
       ? fslogix!.outputs.netAppVolumeResourceIds
       : fslogixExistingLocalNetAppVolumeResourceIds
     fslogixOSSGroups: fslogixShardOptions == 'ShardOSS' ? map(fslogixUserGroups, group => group.name) : []

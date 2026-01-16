@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "6951870683987941570"
+      "templateHash": "5762390100646698135"
     }
   },
   "parameters": {
@@ -12896,8 +12896,8 @@
           "fslogixFileShareNames": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.fslogixFileShareNames.value[parameters('fslogixContainerType')]]"
           },
-          "fslogixLocalStorageAccountResourceIds": "[if(and(equals(parameters('deploymentType'), 'Complete'), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value), createObject('value', parameters('fslogixExistingLocalStorageAccountResourceIds')))]",
-          "fslogixLocalNetAppVolumeResourceIds": "[if(and(equals(parameters('deploymentType'), 'Complete'), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppVolumeResourceIds.value), createObject('value', parameters('fslogixExistingLocalNetAppVolumeResourceIds')))]",
+          "fslogixLocalStorageAccountResourceIds": "[if(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value), createObject('value', parameters('fslogixExistingLocalStorageAccountResourceIds')))]",
+          "fslogixLocalNetAppVolumeResourceIds": "[if(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppVolumeResourceIds.value), createObject('value', parameters('fslogixExistingLocalNetAppVolumeResourceIds')))]",
           "fslogixOSSGroups": "[if(equals(parameters('fslogixShardOptions'), 'ShardOSS'), createObject('value', map(parameters('fslogixUserGroups'), lambda('group', lambdaVariables('group').name))), createObject('value', createArray()))]",
           "fslogixRemoteNetAppVolumeResourceIds": {
             "value": "[parameters('fslogixExistingRemoteNetAppVolumeResourceIds')]"
