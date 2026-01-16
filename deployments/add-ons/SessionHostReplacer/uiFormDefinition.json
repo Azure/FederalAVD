@@ -1543,7 +1543,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable IPv6",
 									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmIPv6), false, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmIPv6))]",
-									"toolTip": "Enables IPv6 support on the network interface."
+									"toolTip": "Enables IPv6 support on the network interface. This is an edge case scenario and is not recommended for most deployments. WARNING: Without specific route table entries configured for IPv6 traffic, outbound communication will not work properly."
 								}
 							]
 						},
@@ -2042,7 +2042,7 @@
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
 										"style": "Warning",
-										"text": "[if(contains(steps('identity').solution, 'DomainServices'), 'Windows Defender Antimalware configuration is not available in Azure Secret or Azure Top Secret cloud environments.', 'Intune Enrollment and Windows Defender Antimalware configuration are not available in Azure Secret or Azure Top Secret cloud environments.')]"
+										"text": "Intune Enrollment is not available in Azure Secret or Azure Top Secret cloud environments."
 									}
 								},
 								{
@@ -2052,13 +2052,6 @@
 									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment), false, bool(steps('basics').hostsRGProps.tags.vmIntuneEnrollment))]",
 									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting this checkbox.",
 									"visible": "[not(contains(steps('identity').solution, 'DomainServices'))]"
-								},
-								{
-									"name": "configureIaaSAntimalware",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Configure Windows Defender Antimalware",
-									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmAVConfig), false, bool(steps('basics').hostsRGProps.tags.vmAVConfig))]",
-									"toolTip": "Configures Windows Defender Antimalware settings on the virtual machines via the IaaSAntimalware VM extension. This includes real-time protection, scheduled scans, and FSLogix profile exclusions."
 								}
 							]							
 						},
@@ -3030,7 +3023,6 @@
 				"sessionHostNameIndexLength": "[steps('hosts').naming.indexPadding]",
 				"virtualMachineSubnetResourceId": "[steps('hosts').network.subnet.id]",
 				"enableIPv6": "[steps('hosts').network.enableIPv6]",
-				"configureIaaSAntimalware": "[steps('hosts').management.configureIaaSAntimalware]",
 				"imagePublisher": "[if(equals(steps('hosts').image.source, 'marketplace'), 'MicrosoftWindowsDesktop', '')]",
 				"imageOffer": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.offer, '')]",
 				"imageSku": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.sku, '')]",

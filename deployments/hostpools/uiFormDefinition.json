@@ -1456,7 +1456,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable IPv6",
 									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIPv6)), false, bool(steps('basics').hostsRGProps.tags.vmIPv6))]",
-									"toolTip": "Enables IPv6 support on the network interface."
+									"toolTip": "Enables IPv6 support on the network interface. This is an edge case scenario and is not recommended for most deployments.</br></br><b>WARNING:</b> Without specific route table entries configured for IPv6 traffic, outbound communication will not work properly."
 								}
 							]
 						},
@@ -2166,7 +2166,7 @@
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
 										"style": "Warning",
-										"text": "[if(contains(steps('identity').solution, 'DomainServices'), 'Windows Defender Antimalware configuration is not available in Azure Secret or Azure Top Secret cloud environments.', 'Intune Enrollment and Windows Defender Antimalware configuration are not available in Azure Secret or Azure Top Secret cloud environments.')]"
+										"text": "Intune Enrollment is not available in Azure Secret or Azure Top Secret cloud environments."
 									}
 								},
 								{
@@ -2176,14 +2176,7 @@
 									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment)), false, bool(steps('basics').hostsRGProps.tags.vmIntuneEnrollment))]",
 									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting this checkbox.",
 									"visible": "[not(contains(steps('identity').solution, 'DomainServices'))]"
-								},
-								{
-									"name": "configureIaaSAntimalware",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Configure Windows Defender Antimalware",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmAVConfig)), true, bool(steps('basics').hostsRGProps.tags.vmAVConfig))]",
-									"toolTip": "Configures Windows Defender Antimalware settings on the virtual machines via the IaaSAntimalware VM extension. This includes real-time protection, scheduled scans, and FSLogix profile exclusions."
-								}
+								}								
 							]							
 						},
 						{
@@ -4529,7 +4522,6 @@
 				"avdAgentsDSCPackage": "[steps('hosts').registration.avdAgentsDSCPackage]",
 				"useAgentDownloadEndpoint": "[steps('hosts').registration.useAgentDownloadEndpoint]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
-				"configureIaaSAntimalware": "[steps('hosts').management.configureIaaSAntimalware]",
 				"artifactsContainerUri": "[if(steps('hosts').customScripts.addCustomScripts, if(and(not(empty(steps('hosts').customScripts.storageAccount)), not(empty(steps('hosts').customScripts.container))), concat(steps('hosts').customScripts.storageAccount.blobEndpoint, steps('hosts').customScripts.container), ''), '')]",
 				"artifactsUserAssignedIdentityResourceId": "[if(steps('hosts').customScripts.addCustomScripts, if(not(empty(steps('hosts').customScripts.managedIdentity)), steps('hosts').customScripts.managedIdentity.id, ''), '')]",
 				"sessionHostCustomizations": "[if(steps('hosts').customScripts.addCustomScripts, steps('hosts').customScripts.customizations, parse('[]'))]",

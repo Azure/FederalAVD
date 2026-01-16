@@ -70,6 +70,7 @@
 | `domainJoinUserPassword` | The password of the privileged account to domain join the AVD session hosts to your domain | string (secure) | | '' |
 | `domainName` | The name of the domain that provides ADDS to the AVD session hosts and is synchronized with Azure AD. Required when `identitySolution` contains 'DomainServices'. | string | | '' |
 | `enableAcceleratedNetworking` | Determines whether or not to enable accelerated networking on the session host vms. | bool | true<br/>false | true | 
+| `enableIPv6` | Determines whether or not to enable IPv6 on the network interfaces of the session host VMs. This is an edge case scenario and is not recommended for most deployments. **WARNING:** Without specific route table entries configured for IPv6 traffic, outbound communication will not work properly. | bool | true<br/>false | false |
 | `enableMonitoring` | Deploys the required monitoring resources to enable AVD and VM Insights. | bool | true<br/>false | true |
 | `encryptionAtHost` | Encryption at host encrypts temporary disks and ephemeral OS disks with platform-managed keys, OS and data disk caches with the key specified in the "keyManagementDisksAndStorage" parameter, and flows encrypted to the Storage service. | bool | true<br/>false | true |
 | `existingAVDInsightsDataCollectionRuleResourceId` | The resource Id of the AVD Insights data collection rule to use when `deploymentType` = 'SessionHostsOnly'. | string | resourceId | '' |
@@ -112,6 +113,7 @@
 | `imageOffer` | Offer for the virtual machine image. Required if `customImageResourceId` is not specified. | string | valid marketplace offer | 'office-365' |
 | `imagePublisher` | Publisher for the virtual machine image. Required if `customImageResourceId` is not specified. | string | valid marketplace publisher | 'MicrosoftWindowsDesktop' |
 | `imageSku` | SKU for the virtual machine image. Required if `customImageResourceId` is not specified. | string | valid marketplace sku | 'win11-24h2-avd-m365' |
+| `identifier` | A short identifier (1-10 characters) used in the naming convention for all resources deployed by this solution. This is typically a business unit identifier or other short code that helps organize resources. | string | 1-10 characters | '' |
 | `index` | A string of integers from 00 to 99. This parameter is designed to uniquely identify host pools when sharding of the host pool is necessary. | string | 0-99 | '' |
 | `integrityMonitoring` | Integrity monitoring enables cryptographic attestation and verification of VM boot integrity along with monitoring alerts if the VM didn't boot because attestation failed with the defined baseline. | bool | true<br/>false | true |
 | `intuneEnrollment` | Determines if the virtual machines are enrolled in Intune when they are Entra ID Joined. Used when `identitySolution` = 'EntraId' or 'EntraKerberos-Hybrid' or 'EntraKerberos-CloudOnly'. | bool | true<br/>false | false |
@@ -141,7 +143,7 @@
 | `sessionHostIndex` | The starting index for the session hosts. | int | | 1 |
 | `startVmOnConnect` | Determines if the VM is started when a user connects. | bool | true<br/>false | true |
 | `tags` | The tags to apply to all resources deployed by this template. | object | | {} |
-| `useAgentDownloadEndpoint` | Determines if the agent download endpoint is used. | bool | true<br/>false | false |
+| `useAgentDownloadEndpoint` | Determines if the agent download endpoint is used for AVD agent installation instead of the built-in agents in the DSC package. Enable this option if your environment requires downloading the latest agents from Microsoft endpoints. | bool | true<br/>false | false |
 | `vCPUs` | The number of virtual CPUs presented by the virtual machines. Used to create the vmTemplate property and tags on the host pool when `deploymentType` = 'Complete'. Not set if left at default. | int | | 0 |
 | `vTpmEnabled` | Virtual Trusted Platform Module (vTPM) is TPM2.0 compliant and validates your VM boot integrity apart from securely storing keys and secrets. | bool | true<br/>false | true |
 | `virtualMachineSize` | The size of the virtual machine deployed by this solution. | string | valid size | 'Standard_D4ads_v5' |

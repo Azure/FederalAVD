@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "10644715457738146451"
+      "templateHash": "700001674286550858"
     }
   },
   "parameters": {
@@ -158,13 +158,6 @@
       "defaultValue": false,
       "metadata": {
         "description": "Enable IPv6 on network interfaces."
-      }
-    },
-    "configureIaaSAntimalware": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Configure Windows Defender Antimalware extension on session hosts."
       }
     },
     "encryptionAtHost": {
@@ -731,9 +724,6 @@
           "enableIPv6": {
             "value": "[parameters('enableIPv6')]"
           },
-          "configureIaaSAntimalware": {
-            "value": "[parameters('configureIaaSAntimalware')]"
-          },
           "enableMonitoring": {
             "value": "[parameters('enableMonitoring')]"
           },
@@ -854,7 +844,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "7703679183021205766"
+              "templateHash": "9280561068325280161"
             }
           },
           "parameters": {
@@ -916,9 +906,6 @@
               "type": "bool"
             },
             "enableIPv6": {
-              "type": "bool"
-            },
-            "configureIaaSAntimalware": {
               "type": "bool"
             },
             "enableMonitoring": {
@@ -1051,26 +1038,6 @@
                 "input": "[last(split(parameters('fslogixRemoteStorageAccountResourceIds')[copyIndex('fslogixRemoteStorageAccountNames')], '/'))]"
               },
               {
-                "name": "fslogixLocalSANameMinus2",
-                "count": "[length(variables('fslogixLocalStorageAccountNames'))]",
-                "input": "[take(variables('fslogixLocalStorageAccountNames')[copyIndex('fslogixLocalSANameMinus2')], sub(length(variables('fslogixLocalStorageAccountNames')[copyIndex('fslogixLocalSANameMinus2')]), 2))]"
-              },
-              {
-                "name": "fslogixRemoteSANameMinus2",
-                "count": "[length(variables('fslogixRemoteStorageAccountNames'))]",
-                "input": "[take(variables('fslogixRemoteStorageAccountNames')[copyIndex('fslogixRemoteSANameMinus2')], sub(length(variables('fslogixRemoteStorageAccountNames')[copyIndex('fslogixRemoteSANameMinus2')]), 2))]"
-              },
-              {
-                "name": "fslogixExclusionsOfficeArray",
-                "count": "[length(variables('fslogixOfficeVHDXs'))]",
-                "input": "[format('{0};{1}.lock;{2}.meta;{3}.metadata', variables('fslogixOfficeVHDXs')[copyIndex('fslogixExclusionsOfficeArray')], variables('fslogixOfficeVHDXs')[copyIndex('fslogixExclusionsOfficeArray')], variables('fslogixOfficeVHDXs')[copyIndex('fslogixExclusionsOfficeArray')], variables('fslogixOfficeVHDXs')[copyIndex('fslogixExclusionsOfficeArray')])]"
-              },
-              {
-                "name": "fslogixExclusionProfileArray",
-                "count": "[length(variables('fslogixProfileVHDXs'))]",
-                "input": "[format('{0};{1}.lock;{2}.meta;{3}.metadata', variables('fslogixProfileVHDXs')[copyIndex('fslogixExclusionProfileArray')], variables('fslogixProfileVHDXs')[copyIndex('fslogixExclusionProfileArray')], variables('fslogixProfileVHDXs')[copyIndex('fslogixExclusionProfileArray')], variables('fslogixProfileVHDXs')[copyIndex('fslogixExclusionProfileArray')])]"
-              },
-              {
                 "name": "networkInterfaceNames",
                 "count": "[length(range(0, variables('sessionHostCount')))]",
                 "input": "[if(empty(parameters('networkInterfaceNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('networkInterfaceNames')]], replace(parameters('networkInterfaceNameConv'), 'SHNAME', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('networkInterfaceNames')]]))]"
@@ -1091,42 +1058,6 @@
             "amdVmSize": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), 'as_v4'), endsWith(parameters('virtualMachineSize'), '_V710_v5')))]",
             "nvidiaVmSize": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), '_v3'), endsWith(parameters('virtualMachineSize'), '_A10_v5')))]",
             "sessionHostCount": "[length(parameters('sessionHostNames'))]",
-            "profileShareName": "[parameters('fslogixFileShareNames')[0]]",
-            "officeShareName": "[if(greater(length(parameters('fslogixFileShareNames')), 1), parameters('fslogixFileShareNames')[1], '')]",
-            "fslogixLocalNetAppProfileShare": "[if(not(empty(parameters('fslogixLocalNetAppServerFqdns'))), format('\\\\{0}\\{1}', parameters('fslogixLocalNetAppServerFqdns')[0], variables('profileShareName')), '')]",
-            "fslogixLocalNetAppOfficeShare": "[if(greater(length(parameters('fslogixLocalNetAppServerFqdns')), 1), format('\\\\{0}\\{1}', parameters('fslogixLocalNetAppServerFqdns')[1], variables('officeShareName')), '')]",
-            "fslogixRemoteNetAppProfileShare": "[if(not(empty(parameters('fslogixRemoteNetAppServerFqdns'))), format('\\\\{0}\\{1}', parameters('fslogixRemoteNetAppServerFqdns')[0], variables('profileShareName')), '')]",
-            "fslogixRemoteNetAppOfficeShare": "[if(greater(length(parameters('fslogixRemoteNetAppServerFqdns')), 1), format('\\\\{0}\\{1}', parameters('fslogixRemoteNetAppServerFqdns')[1], variables('officeShareName')), '')]",
-            "vhdxPath": "\\*\\*.VHDX",
-            "fslogixExclusionsCloudCache": "[if(contains(parameters('fslogixContainerType'), 'CloudCache'), '%ProgramData%\\FSLogix\\Cache\\*;%ProgramData%\\FSLogix\\Proxy\\*', '')]",
-            "fslogixLocalDedupedSANames": "[union(variables('fslogixLocalSANameMinus2'), variables('fslogixLocalSANameMinus2'))]",
-            "fslogixLocalMatchPrefix": "[if(equals(length(variables('fslogixLocalDedupedSANames')), 1), true(), false())]",
-            "fslogixLocalOfficeSharesPrefixMatch": "[if(and(not(empty(variables('fslogixLocalDedupedSANames'))), not(empty(variables('officeShareName')))), createArray(format('\\\\{0}??.file.{1}\\{2}{3}', variables('fslogixLocalDedupedSANames')[0], variables('storageSuffix'), variables('officeShareName'), variables('vhdxPath'))), createArray())]",
-            "fslogixLocalProfileSharesPrefixMatch": "[if(not(empty(variables('fslogixLocalDedupedSANames'))), createArray(format('\\\\{0}??.file.{1}\\{2}{3}', variables('fslogixLocalDedupedSANames')[0], variables('storageSuffix'), variables('profileShareName'), variables('vhdxPath'))), createArray())]",
-            "fslogixLocalOfficeSharesNoMatch": "[if(and(not(empty(variables('fslogixLocalStorageAccountNames'))), not(empty(variables('officeShareName')))), map(variables('fslogixLocalStorageAccountNames'), lambda('name', format('\\\\{0}.file.{1}\\{2}{3}', lambdaVariables('name'), variables('storageSuffix'), variables('officeShareName'), variables('vhdxPath')))), createArray())]",
-            "fslogixLocalProfileSharesNoMatch": "[if(not(empty(variables('fslogixLocalStorageAccountNames'))), map(variables('fslogixLocalStorageAccountNames'), lambda('name', format('\\\\{0}.file.{1}\\{2}{3}', lambdaVariables('name'), variables('storageSuffix'), variables('profileShareName'), variables('vhdxPath')))), createArray())]",
-            "fslogixLocalOfficeVHDXs": "[if(variables('fslogixLocalMatchPrefix'), variables('fslogixLocalOfficeSharesPrefixMatch'), variables('fslogixLocalOfficeSharesNoMatch'))]",
-            "fslogixLocalProfileVHDXs": "[if(variables('fslogixLocalMatchPrefix'), variables('fslogixLocalProfileSharesPrefixMatch'), variables('fslogixLocalProfileSharesNoMatch'))]",
-            "fslogixRemoteDedupedSANames": "[union(variables('fslogixRemoteSANameMinus2'), variables('fslogixRemoteSANameMinus2'))]",
-            "fslogixRemoteMatchPrefix": "[if(equals(length(variables('fslogixRemoteDedupedSANames')), 1), true(), false())]",
-            "fslogixRemoteOfficeSharesPrefixMatch": "[if(and(not(empty(variables('fslogixRemoteDedupedSANames'))), not(empty(variables('officeShareName')))), createArray(format('\\\\{0}??.file.{1}\\{2}{3}', variables('fslogixRemoteDedupedSANames')[0], variables('storageSuffix'), variables('officeShareName'), variables('vhdxPath'))), createArray())]",
-            "fslogixRemoteProfileSharesPrefixMatch": "[if(not(empty(variables('fslogixRemoteDedupedSANames'))), createArray(format('\\\\{0}??.file.{1}\\{2}{3}', variables('fslogixRemoteDedupedSANames')[0], variables('storageSuffix'), variables('profileShareName'), variables('vhdxPath'))), createArray())]",
-            "fslogixRemoteOfficeSharesNoMatch": "[if(and(not(empty(variables('fslogixRemoteStorageAccountNames'))), not(empty(variables('officeShareName')))), map(variables('fslogixRemoteStorageAccountNames'), lambda('name', format('\\\\{0}.file.{1}\\{2}{3}', lambdaVariables('name'), variables('storageSuffix'), variables('officeShareName'), variables('vhdxPath')))), createArray())]",
-            "fslogixRemoteProfileSharesNoMatch": "[if(not(empty(variables('fslogixRemoteStorageAccountNames'))), map(variables('fslogixRemoteStorageAccountNames'), lambda('name', format('\\\\{0}.file.{1}\\{2}{3}', lambdaVariables('name'), variables('storageSuffix'), variables('profileShareName'), variables('vhdxPath')))), createArray())]",
-            "fslogixRemoteOfficeVHDXs": "[if(variables('fslogixRemoteMatchPrefix'), variables('fslogixRemoteOfficeSharesPrefixMatch'), variables('fslogixRemoteOfficeSharesNoMatch'))]",
-            "fslogixRemoteProfileVHDXs": "[if(variables('fslogixRemoteMatchPrefix'), variables('fslogixRemoteProfileSharesPrefixMatch'), variables('fslogixRemoteProfileSharesNoMatch'))]",
-            "fslogixOfficeVHDXs": "[if(equals(parameters('fslogixStorageService'), 'AzureFiles'), union(variables('fslogixLocalOfficeVHDXs'), variables('fslogixRemoteOfficeVHDXs')), if(empty(variables('fslogixLocalNetAppOfficeShare')), createArray(), if(empty(variables('fslogixRemoteNetAppOfficeShare')), createArray(format('{0}{1}', variables('fslogixLocalNetAppOfficeShare'), variables('vhdxPath'))), createArray(format('{0}{1}', variables('fslogixLocalNetAppOfficeShare'), variables('vhdxPath')), format('{0}{1}', variables('fslogixRemoteNetAppOfficeShare'), variables('vhdxPath'))))))]",
-            "fslogixProfileVHDXs": "[if(equals(parameters('fslogixStorageService'), 'AzureFiles'), union(variables('fslogixLocalProfileVHDXs'), variables('fslogixRemoteProfileVHDXs')), if(empty(variables('fslogixLocalNetAppProfileShare')), createArray(), if(empty(variables('fslogixRemoteNetAppProfileShare')), createArray(format('{0}{1}', variables('fslogixRemoteNetAppProfileShare'), variables('vhdxPath'))), createArray(format('{0}{1}', variables('fslogixLocalNetAppProfileShare'), variables('vhdxPath')), format('{0}{1}', variables('fslogixRemoteNetAppProfileShare'), variables('vhdxPath'))))))]",
-            "fslogixExclusionsOfficeString": "[if(contains(parameters('fslogixContainerType'), 'Office'), join(variables('fslogixExclusionsOfficeArray'), ';'), '')]",
-            "fslogixExclusionsProfileString": "[join(variables('fslogixExclusionProfileArray'), ';')]",
-            "fslogixExclusionsArray": [
-              "[format('$TEMP%{0}', variables('vhdxPath'))]",
-              "[format('%WinDir%\\TEMP{0}', variables('vhdxPath'))]",
-              "[variables('fslogixExclusionsCloudCache')]",
-              "[variables('fslogixExclusionsProfileString')]",
-              "[variables('fslogixExclusionsOfficeString')]"
-            ],
-            "fslogixPathExclusions": "[join(filter(variables('fslogixExclusionsArray'), lambda('exclusion', not(empty(lambdaVariables('exclusion'))))), ';')]",
             "identityType": "[if(if(or(not(contains(parameters('identitySolution'), 'DomainServices')), parameters('enableMonitoring')), true(), false()), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'SystemAssigned, UserAssigned', 'SystemAssigned'), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'UserAssigned', 'None'))]",
             "userAssignedIdentities": "[if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), createObject(format('{0}', parameters('artifactsUserAssignedIdentityResourceId')), createObject()), createObject())]",
             "identity": "[if(not(equals(variables('identityType'), 'None')), createObject('type', variables('identityType'), 'userAssignedIdentities', if(not(empty(variables('userAssignedIdentities'))), variables('userAssignedIdentities'), null())), null())]"
@@ -1275,41 +1206,6 @@
             },
             {
               "copy": {
-                "name": "extension_IaasAntimalware",
-                "count": "[length(range(0, variables('sessionHostCount')))]"
-              },
-              "condition": "[parameters('configureIaaSAntimalware')]",
-              "type": "Microsoft.Compute/virtualMachines/extensions",
-              "apiVersion": "2021-03-01",
-              "name": "[format('{0}/{1}', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], 'IaaSAntimalware')]",
-              "location": "[parameters('location')]",
-              "properties": {
-                "publisher": "Microsoft.Azure.Security",
-                "type": "IaaSAntimalware",
-                "typeHandlerVersion": "1.3",
-                "autoUpgradeMinorVersion": true,
-                "settings": {
-                  "AntimalwareEnabled": true,
-                  "RealtimeProtectionEnabled": "true",
-                  "ScheduledScanSettings": {
-                    "isEnabled": "true",
-                    "day": "7",
-                    "time": "120",
-                    "scanType": "Quick"
-                  },
-                  "Exclusions": {
-                    "Paths": "[variables('fslogixPathExclusions')]"
-                  }
-                }
-              },
-              "dependsOn": [
-                "extension_AADLoginForWindows",
-                "extension_JsonADDomainExtension",
-                "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]"
-              ]
-            },
-            {
-              "copy": {
                 "name": "extension_AzureMonitorWindowsAgent",
                 "count": "[length(range(0, variables('sessionHostCount')))]"
               },
@@ -1327,7 +1223,6 @@
               },
               "dependsOn": [
                 "extension_AADLoginForWindows",
-                "extension_IaasAntimalware",
                 "extension_JsonADDomainExtension",
                 "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]"
               ]
@@ -1422,7 +1317,6 @@
               "dependsOn": [
                 "extension_AADLoginForWindows",
                 "extension_AzureMonitorWindowsAgent",
-                "extension_IaasAntimalware",
                 "extension_JsonADDomainExtension",
                 "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]"
               ]
@@ -1447,7 +1341,6 @@
               "dependsOn": [
                 "extension_AADLoginForWindows",
                 "extension_AzureMonitorWindowsAgent",
-                "extension_IaasAntimalware",
                 "extension_JsonADDomainExtension",
                 "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]"
               ]
@@ -1564,7 +1457,6 @@
                 "extension_AmdGpuDriverWindows",
                 "extension_AzureMonitorWindowsAgent",
                 "extension_GuestAttestation",
-                "extension_IaasAntimalware",
                 "extension_JsonADDomainExtension",
                 "extension_NvidiaGpuDriverWindows",
                 "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]"

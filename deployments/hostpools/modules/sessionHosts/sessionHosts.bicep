@@ -15,7 +15,6 @@ param azureBlobPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string
 param confidentialVMOrchestratorObjectId string
 param confidentialVMOSDiskEncryption bool
-param configureIaaSAntimalware bool
 param customImageResourceId string
 param dataCollectionEndpointResourceId string
 param dedicatedHostGroupResourceId string
@@ -265,7 +264,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     availabilitySetNameConv: availabilitySetNameConv
     avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
     confidentialVMOSDiskEncryptionType: confidentialVMOSDiskEncryptionType
-    configureIaaSAntimalware: configureIaaSAntimalware
+
     customImageResourceId: customImageResourceId
     dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
     dedicatedHostGroupResourceId: dedicatedHostGroupResourceId

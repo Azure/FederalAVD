@@ -310,9 +310,6 @@ param enableAcceleratedNetworking bool = true
 @description('Optional. Enable IPv6 dynamic private IP on session hosts.')
 param enableIPv6 bool = false
 
-@description('Optional. Configure Windows Defender Antimalware extension on session hosts.')
-param configureIaaSAntimalware bool = false
-
 @description('Optional. Enable monitoring with Azure Monitor Agent.')
 param enableMonitoring bool = false
 
@@ -589,7 +586,6 @@ var sessionHostParameters = union(
     diskSku: diskSku
     enableAcceleratedNetworking: enableAcceleratedNetworking
     enableIPv6: enableIPv6
-    configureIaaSAntimalware: configureIaaSAntimalware
     encryptionAtHost: encryptionAtHost
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution

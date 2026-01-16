@@ -54,9 +54,6 @@ param identitySolution string
 @description('Optional. Determines if Entra Joined Virtual Machines automatically enroll in intune.')
 param intuneEnrollment bool = false
 
-@description('Optional. Configure IaaS Antimalware extension on the AVD session hosts.')
-param configureIaaSAntimalware bool = false
-
 @secure()
 @description('Conditional. Local administrator password for the AVD session hosts')
 param virtualMachineAdminPassword string = ''
@@ -307,7 +304,7 @@ param memoryGB int = 0
 @description('Optional. Determines whether or not to enable accelerated networking for the session host VMs.')
 param enableAcceleratedNetworking bool = true
 
-@description('Optional. Determines whether or not to enable IPv6 for the session host VMs.')
+@description('Optional. Determines whether or not to enable IPv6 for the session host VMs. This is an edge case scenario and is not recommended for most deployments. WARNING: Without specific route table entries configured for IPv6 traffic, outbound communication will not work properly.')
 param enableIPv6 bool = false
 
 @description('Optional. Determines whether or not to enable hibernation for the session host VMs.')
@@ -759,7 +756,6 @@ var vmDiskEncryptionSetName = empty(diskEncryptionSetName)
 // VM configuration tags for hosts resource group
 var vmConfigurationTags = union(
   {
-    vmAVConfig: configureIaaSAntimalware
     vmIdentityType: identitySolution
     vmNamePrefix: virtualMachineNamePrefix
     vmIndexPadding: vmNameIndexLength
@@ -1344,7 +1340,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
-    configureIaaSAntimalware: configureIaaSAntimalware
     customImageResourceId: customImageResourceId
     dataCollectionEndpointResourceId: enableMonitoring
       ? (deploymentType == 'Complete'
