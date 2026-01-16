@@ -6,6 +6,7 @@ param availabilitySetNameConv string
 param availabilityZones array
 param avdInsightsDataCollectionRulesResourceId string
 param confidentialVMOSDiskEncryptionType string
+param configureIaaSAntimalware bool
 param customImageResourceId string
 param dataCollectionEndpointResourceId string
 param dedicatedHostGroupResourceId string
@@ -457,7 +458,7 @@ resource extension_AADLoginForWindows 'Microsoft.Compute/virtualMachines/extensi
 ]
 
 resource extension_IaasAntimalware 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
-  for i in range(0, sessionHostCount): if (!startsWith(environment().name, 'USN')) {
+  for i in range(0, sessionHostCount): if (configureIaaSAntimalware) {
     parent: virtualMachine[i]
     name: 'IaaSAntimalware'
     location: location

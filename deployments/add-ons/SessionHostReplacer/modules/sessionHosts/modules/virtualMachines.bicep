@@ -20,6 +20,7 @@ param domainJoinUserPrincipalName string
 param domainName string
 param enableAcceleratedNetworking bool
 param enableIPv6 bool
+param configureIaaSAntimalware bool
 param enableMonitoring bool
 param encryptionAtHost bool
 param fslogixConfigureSessionHosts bool
@@ -81,12 +82,6 @@ var vmNumbers = [
     sessionHostNameIndexLength
   ))
 ]
-
-// Extract padded index strings from VM names for use in naming conventions (e.g., 'avdhost001' -> '001')
-var vmIndexStrings = [
-  for name in sessionHostNames: substring(name, length(name) - sessionHostNameIndexLength, sessionHostNameIndexLength)
-]
-var vmPrefixStrings = [for name in sessionHostNames: substring(name, 0, length(name) - sessionHostNameIndexLength)]
 
 var profileShareName = fslogixFileShareNames[0]
 var officeShareName = length(fslogixFileShareNames) > 1 ? fslogixFileShareNames[1] : ''
@@ -232,6 +227,15 @@ var identity = identityType != 'None'
     }
   : null
 
+// Network Interface names once to avoid complex array access in resource loop
+var networkInterfaceNames = [for i in range(0, sessionHostCount): empty(networkInterfaceNameConv) ? sessionHostNames[i] : replace(networkInterfaceNameConv, 'SHNAME', sessionHostNames[i])]
+
+// Compute VM names once to avoid complex array access in resource loop
+var virtualMachineNames = [for i in range(0, sessionHostCount): empty(virtualMachineNameConv) ? sessionHostNames[i] : replace(virtualMachineNameConv, 'SHNAME', sessionHostNames[i])]
+
+// Compute OS disk names once to avoid complex array access in resource loop
+var osDiskNames = [for i in range(0, sessionHostCount): empty(osDiskNameConv) ? null : replace(osDiskNameConv, 'SHNAME', sessionHostNames[i])]
+
 // call on the host pool to get the registration token
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
   name: last(split(hostPoolResourceId, '/'))
@@ -256,9 +260,7 @@ resource remoteStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' ex
 
 resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [
   for i in range(0, sessionHostCount): {
-    name: empty(networkInterfaceNameConv)
-      ? 'nic-${sessionHostNames[i]}'
-      : replace(replace(networkInterfaceNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
+    name: networkInterfaceNames[i]
     location: location
     tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/networkInterfaces'] ?? {})
     properties: {
@@ -295,7 +297,7 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [
 ]
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [for i in range(0, sessionHostCount): {
-  name: empty(virtualMachineNameConv) ? sessionHostNames[i] : replace(replace(virtualMachineNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
+  name: virtualMachineNames[i]
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
   zones: !empty(preferredZones) && i < length(preferredZones) && !empty(preferredZones[i]) ? [preferredZones[i]] : availability == 'AvailabilityZones' && !empty(availabilityZones) ? [
@@ -324,7 +326,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [for i 
       imageReference: imageReference
       osDisk: {
         diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
-        name: empty(osDiskNameConv) ? null : replace(replace(osDiskNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
+        name: osDiskNames[i]
         osType: 'Windows'
         createOption: 'FromImage'
         caching: 'ReadWrite'
@@ -425,7 +427,7 @@ resource extension_AADLoginForWindows 'Microsoft.Compute/virtualMachines/extensi
 ]
 
 resource extension_IaasAntimalware 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
-  for i in range(0, sessionHostCount): if (!startsWith(environment().name, 'USN')) {
+  for i in range(0, sessionHostCount): if (configureIaaSAntimalware) {
     parent: virtualMachine[i]
     name: 'IaaSAntimalware'
     location: location
@@ -492,7 +494,7 @@ resource dataCollectionEndpointAssociation 'Microsoft.Insights/dataCollectionRul
 resource avdInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
   for i in range(0, sessionHostCount): if (enableMonitoring && !empty(avdInsightsDataCollectionRulesResourceId)) {
     scope: virtualMachine[i]
-    name: '${virtualMachine[i].name}-avdInsights-data-coll-rule-assoc'
+    name: '${sessionHostNames[i]}-avdInsights-data-coll-rule-assoc'
     properties: {
       dataCollectionRuleId: avdInsightsDataCollectionRulesResourceId
       description: 'AVD Insights data collection rule association'
@@ -506,7 +508,7 @@ resource avdInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollec
 resource vmInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
   for i in range(0, sessionHostCount): if (enableMonitoring && !empty(vmInsightsDataCollectionRulesResourceId)) {
     scope: virtualMachine[i]
-    name: '${virtualMachine[i].name}-vmInsights-data-coll-rule-assoc'
+    name: '${sessionHostNames[i]}-vmInsights-data-coll-rule-assoc'
     properties: {
       dataCollectionRuleId: vmInsightsDataCollectionRulesResourceId
       description: 'VM Insights data collection rule association'

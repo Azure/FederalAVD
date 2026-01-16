@@ -310,6 +310,9 @@ param enableAcceleratedNetworking bool = true
 @description('Optional. Enable IPv6 dynamic private IP on session hosts.')
 param enableIPv6 bool = false
 
+@description('Optional. Configure Windows Defender Antimalware extension on session hosts.')
+param configureIaaSAntimalware bool = false
+
 @description('Optional. Enable monitoring with Azure Monitor Agent.')
 param enableMonitoring bool = false
 
@@ -530,14 +533,14 @@ var availabilitySetNameConv = nameConvReversed
     )
   : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '')}-##'
 var virtualMachineNameConv = nameConvReversed
-  ? 'VMNAMEPREFIX###-${resourceAbbreviations.virtualMachines}'
-  : '${resourceAbbreviations.virtualMachines}-VMNAMEPREFIX###'
+  ? 'SHNAME-${resourceAbbreviations.virtualMachines}'
+  : '${resourceAbbreviations.virtualMachines}-SHNAME'
 var diskNameConv = nameConvReversed
-  ? 'VMNAMEPREFIX###-${resourceAbbreviations.osdisks}'
-  : '${resourceAbbreviations.osdisks}-VMNAMEPREFIX###'
+  ? 'SHNAME-${resourceAbbreviations.osdisks}'
+  : '${resourceAbbreviations.osdisks}-SHNAME'
 var networkInterfaceNameConv = nameConvReversed
-  ? 'VMNAMEPREFIX###-${resourceAbbreviations.networkInterfaces}'
-  : '${resourceAbbreviations.networkInterfaces}-VMNAMEPREFIX###'
+  ? 'SHNAME-${resourceAbbreviations.networkInterfaces}'
+  : '${resourceAbbreviations.networkInterfaces}-SHNAME'
 
 // Extract compute gallery resource ID from custom image resource ID
 // Image definition format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}
@@ -586,6 +589,7 @@ var sessionHostParameters = union(
     diskSku: diskSku
     enableAcceleratedNetworking: enableAcceleratedNetworking
     enableIPv6: enableIPv6
+    configureIaaSAntimalware: configureIaaSAntimalware
     encryptionAtHost: encryptionAtHost
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution

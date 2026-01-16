@@ -2162,27 +2162,29 @@
 							"label": "Management",
 							"elements": [
 								{
-									"name": "intune",
-									"type": "Microsoft.Common.OptionsGroup",
-									"label": "Intune Enrollment",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment)), 'No', if(equals(steps('basics').hostsRGProps.tags.vmIntuneEnrollment, 'true'), 'Yes', 'No'))]",
-									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting Yes.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Yes",
-												"value": true
-											},
-											{
-												"label": "No",
-												"value": false
-											}
-										]
+									"name": "AirGappedCloudWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Warning",
+										"text": "[if(contains(steps('identity').solution, 'DomainServices'), 'Windows Defender Antimalware configuration is not available in Azure Secret or Azure Top Secret cloud environments.', 'Intune Enrollment and Windows Defender Antimalware configuration are not available in Azure Secret or Azure Top Secret cloud environments.')]"
 									}
+								},
+								{
+									"name": "intune",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Intune Enrollment",
+									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment)), false, bool(steps('basics').hostsRGProps.tags.vmIntuneEnrollment))]",
+									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting this checkbox.",
+									"visible": "[not(contains(steps('identity').solution, 'DomainServices'))]"
+								},
+								{
+									"name": "configureIaaSAntimalware",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Configure Windows Defender Antimalware",
+									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmAVConfig)), true, bool(steps('basics').hostsRGProps.tags.vmAVConfig))]",
+									"toolTip": "Configures Windows Defender Antimalware settings on the virtual machines via the IaaSAntimalware VM extension. This includes real-time protection, scheduled scans, and FSLogix profile exclusions."
 								}
-							],
-							"visible": "[not(contains(steps('identity').solution, 'DomainServices'))]"
+							]							
 						},
 						{
 							"name": "customScripts",
@@ -4527,6 +4529,7 @@
 				"avdAgentsDSCPackage": "[steps('hosts').registration.avdAgentsDSCPackage]",
 				"useAgentDownloadEndpoint": "[steps('hosts').registration.useAgentDownloadEndpoint]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
+				"configureIaaSAntimalware": "[steps('hosts').management.configureIaaSAntimalware]",
 				"artifactsContainerUri": "[if(steps('hosts').customScripts.addCustomScripts, if(and(not(empty(steps('hosts').customScripts.storageAccount)), not(empty(steps('hosts').customScripts.container))), concat(steps('hosts').customScripts.storageAccount.blobEndpoint, steps('hosts').customScripts.container), ''), '')]",
 				"artifactsUserAssignedIdentityResourceId": "[if(steps('hosts').customScripts.addCustomScripts, if(not(empty(steps('hosts').customScripts.managedIdentity)), steps('hosts').customScripts.managedIdentity.id, ''), '')]",
 				"sessionHostCustomizations": "[if(steps('hosts').customScripts.addCustomScripts, steps('hosts').customScripts.customizations, parse('[]'))]",

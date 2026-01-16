@@ -54,6 +54,9 @@ param identitySolution string
 @description('Optional. Determines if Entra Joined Virtual Machines automatically enroll in intune.')
 param intuneEnrollment bool = false
 
+@description('Optional. Configure IaaS Antimalware extension on the AVD session hosts.')
+param configureIaaSAntimalware bool = false
+
 @secure()
 @description('Conditional. Local administrator password for the AVD session hosts')
 param virtualMachineAdminPassword string = ''
@@ -756,6 +759,7 @@ var vmDiskEncryptionSetName = empty(diskEncryptionSetName)
 // VM configuration tags for hosts resource group
 var vmConfigurationTags = union(
   {
+    vmAVConfig: configureIaaSAntimalware
     vmIdentityType: identitySolution
     vmNamePrefix: virtualMachineNamePrefix
     vmIndexPadding: vmNameIndexLength
@@ -1340,6 +1344,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
+    configureIaaSAntimalware: configureIaaSAntimalware
     customImageResourceId: customImageResourceId
     dataCollectionEndpointResourceId: enableMonitoring
       ? (deploymentType == 'Complete'
