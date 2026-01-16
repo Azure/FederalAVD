@@ -19,6 +19,7 @@ param domainJoinUserPassword string
 param domainJoinUserPrincipalName string
 param domainName string
 param enableAcceleratedNetworking bool
+param enableIPv6 bool
 param enableMonitoring bool
 param encryptionAtHost bool
 param fslogixConfigureSessionHosts bool
@@ -81,29 +82,6 @@ var vmNumbers = [
   ))
 ]
 
-// Extract padded index strings from VM names for use in naming conventions (e.g., 'avdhost001' -> '001')
-var vmIndexStrings = [
-  for name in sessionHostNames: substring(name, length(name) - sessionHostNameIndexLength, sessionHostNameIndexLength)
-]
-var vmPrefixStrings = [for name in sessionHostNames: substring(name, 0, length(name) - sessionHostNameIndexLength)]
-
-var profileShareName = fslogixFileShareNames[0]
-var officeShareName = length(fslogixFileShareNames) > 1 ? fslogixFileShareNames[1] : ''
-
-// NetApp Volumes
-var fslogixLocalNetAppProfileShare = !empty(fslogixLocalNetAppServerFqdns)
-  ? '\\\\${fslogixLocalNetAppServerFqdns[0]}\\${profileShareName}'
-  : ''
-var fslogixLocalNetAppOfficeShare = length(fslogixLocalNetAppServerFqdns) > 1
-  ? '\\\\${fslogixLocalNetAppServerFqdns[1]}\\${officeShareName}'
-  : ''
-var fslogixRemoteNetAppProfileShare = !empty(fslogixRemoteNetAppServerFqdns)
-  ? '\\\\${fslogixRemoteNetAppServerFqdns[0]}\\${profileShareName}'
-  : ''
-var fslogixRemoteNetAppOfficeShare = length(fslogixRemoteNetAppServerFqdns) > 1
-  ? '\\\\${fslogixRemoteNetAppServerFqdns[1]}\\${officeShareName}'
-  : ''
-
 // Storage Accounts
 var fslogixLocalStorageAccountNames = [for id in fslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
 var fslogixRemoteStorageAccountNames = [for id in fslogixRemoteStorageAccountResourceIds: last(split(id, '/'))]
@@ -123,95 +101,6 @@ var fslogixRemoteSAKey2 = identitySolution == 'EntraId' && length(fslogixRemoteS
   : []
 var fslogixRemoteStorageAccountKeys = union(fslogixRemoteAKey1, fslogixRemoteSAKey2)
 
-// Dynamic parameters for the Anti-Malware Extension
-var vhdxPath = '\\*\\*.VHDX'
-var fslogixExclusionsCloudCache = contains(fslogixContainerType, 'CloudCache')
-  ? '%ProgramData%\\FSLogix\\Cache\\*;%ProgramData%\\FSLogix\\Proxy\\*'
-  : ''
-var fslogixLocalSANameMinus2 = [for name in fslogixLocalStorageAccountNames: take(name, length(name) - 2)]
-var fslogixLocalDedupedSANames = union(fslogixLocalSANameMinus2, fslogixLocalSANameMinus2)
-var fslogixLocalMatchPrefix = length(fslogixLocalDedupedSANames) == 1 ? true : false
-var fslogixLocalOfficeSharesPrefixMatch = !empty(fslogixLocalDedupedSANames) && !empty(officeShareName)
-  ? ['\\\\${fslogixLocalDedupedSANames[0]}??.file.${storageSuffix}\\${officeShareName}${vhdxPath}']
-  : []
-var fslogixLocalProfileSharesPrefixMatch = !empty(fslogixLocalDedupedSANames)
-  ? ['\\\\${fslogixLocalDedupedSANames[0]}??.file.${storageSuffix}\\${profileShareName}${vhdxPath}']
-  : []
-var fslogixLocalOfficeSharesNoMatch = !empty(officeShareName)
-  ? map(fslogixLocalStorageAccountNames, name => ['\\\\${name}??.file.${storageSuffix}\\${officeShareName}${vhdxPath}'])
-  : []
-var fslogixLocalProfileSharesNoMatch = map(
-  fslogixLocalStorageAccountNames,
-  name => ['\\\\${name}.file.${storageSuffix}}\\${profileShareName}${vhdxPath}']
-)
-var fslogixLocalOfficeVHDXs = fslogixLocalMatchPrefix
-  ? fslogixLocalOfficeSharesPrefixMatch
-  : fslogixLocalOfficeSharesNoMatch
-var fslogixLocalProfileVHDXs = fslogixLocalMatchPrefix
-  ? fslogixLocalProfileSharesPrefixMatch
-  : fslogixLocalProfileSharesNoMatch
-var fslogixRemoteSANameMinus2 = [for name in fslogixRemoteStorageAccountNames: take(name, length(name) - 2)]
-var fslogixRemoteDedupedSANames = union(fslogixRemoteSANameMinus2, fslogixRemoteSANameMinus2)
-var fslogixRemoteMatchPrefix = length(fslogixRemoteDedupedSANames) == 1 ? true : false
-var fslogixRemoteOfficeSharesPrefixMatch = !empty(fslogixRemoteDedupedSANames) && !empty(officeShareName)
-  ? ['\\\\${fslogixRemoteDedupedSANames[0]}??.file.${storageSuffix}\\${officeShareName}${vhdxPath}']
-  : []
-var fslogixRemoteProfileSharesPrefixMatch = !empty(fslogixRemoteDedupedSANames)
-  ? ['\\\\${fslogixRemoteDedupedSANames[0]}??.file.${storageSuffix}\\${profileShareName}${vhdxPath}']
-  : []
-var fslogixRemoteOfficeSharesNoMatch = !empty(fslogixRemoteStorageAccountNames) && !empty(officeShareName)
-  ? map(
-      fslogixRemoteStorageAccountNames,
-      name => ['\\\\${name}??.file.${storageSuffix}\\${officeShareName}${vhdxPath}']
-    )
-  : []
-var fslogixRemoteProfileSharesNoMatch = !empty(fslogixRemoteStorageAccountNames)
-  ? map(
-      fslogixRemoteStorageAccountNames,
-      name => ['\\\\${name}.file.${storageSuffix}}\\${profileShareName}${vhdxPath}']
-    )
-  : []
-var fslogixRemoteOfficeVHDXs = fslogixRemoteMatchPrefix
-  ? fslogixRemoteOfficeSharesPrefixMatch
-  : fslogixRemoteOfficeSharesNoMatch
-var fslogixRemoteProfileVHDXs = fslogixRemoteMatchPrefix
-  ? fslogixRemoteProfileSharesPrefixMatch
-  : fslogixRemoteProfileSharesNoMatch
-var fslogixOfficeVHDXs = fslogixStorageService == 'AzureFiles'
-  ? union(fslogixLocalOfficeVHDXs, fslogixRemoteOfficeVHDXs)
-  : (empty(fslogixLocalNetAppOfficeShare)
-      ? []
-      : (empty(fslogixRemoteNetAppOfficeShare)
-          ? ['${fslogixLocalNetAppOfficeShare}${vhdxPath}']
-          : ['${fslogixLocalNetAppOfficeShare}${vhdxPath}', '${fslogixRemoteNetAppOfficeShare}${vhdxPath}']))
-var fslogixProfileVHDXs = fslogixStorageService == 'AzureFiles'
-  ? union(fslogixLocalProfileVHDXs, fslogixRemoteProfileVHDXs)
-  : (empty(fslogixLocalNetAppProfileShare)
-      ? []
-      : (empty(fslogixRemoteNetAppProfileShare)
-          ? ['${fslogixRemoteNetAppProfileShare}${vhdxPath}']
-          : ['${fslogixLocalNetAppProfileShare}${vhdxPath}', '${fslogixRemoteNetAppProfileShare}${vhdxPath}']))
-var fslogixExclusionsOfficeArray = [
-  for Path in fslogixOfficeVHDXs: '${Path};${Path}.lock;${Path}.meta;${Path}.metadata'
-]
-var fslogixExclusionProfileArray = [
-  for Path in fslogixProfileVHDXs: '${Path};${Path}.lock;${Path}.meta;${Path}.metadata'
-]
-var fslogixExclusionsOfficeString = contains(fslogixContainerType, 'Office')
-  ? join(fslogixExclusionsOfficeArray, ';')
-  : ''
-var fslogixExclusionsProfileString = join(fslogixExclusionProfileArray, ';')
-
-var fslogixExclusionsArray = [
-  '$TEMP%${vhdxPath}'
-  '%WinDir%\\TEMP${vhdxPath}'
-  fslogixExclusionsCloudCache
-  fslogixExclusionsProfileString
-  fslogixExclusionsOfficeString
-]
-
-var fslogixPathExclusions = join(filter(fslogixExclusionsArray, exclusion => !empty(exclusion)), ';')
-
 var identityType = (!contains(identitySolution, 'DomainServices') || enableMonitoring ? true : false)
   ? (!empty(artifactsUserAssignedIdentityResourceId) ? 'SystemAssigned, UserAssigned' : 'SystemAssigned')
   : (!empty(artifactsUserAssignedIdentityResourceId) ? 'UserAssigned' : 'None')
@@ -228,6 +117,15 @@ var identity = identityType != 'None'
       userAssignedIdentities: !empty(userAssignedIdentities) ? userAssignedIdentities : null
     }
   : null
+
+// Network Interface names once to avoid complex array access in resource loop
+var networkInterfaceNames = [for i in range(0, sessionHostCount): empty(networkInterfaceNameConv) ? sessionHostNames[i] : replace(networkInterfaceNameConv, 'SHNAME', sessionHostNames[i])]
+
+// Compute VM names once to avoid complex array access in resource loop
+var virtualMachineNames = [for i in range(0, sessionHostCount): empty(virtualMachineNameConv) ? sessionHostNames[i] : replace(virtualMachineNameConv, 'SHNAME', sessionHostNames[i])]
+
+// Compute OS disk names once to avoid complex array access in resource loop
+var osDiskNames = [for i in range(0, sessionHostCount): empty(osDiskNameConv) ? null : replace(osDiskNameConv, 'SHNAME', sessionHostNames[i])]
 
 // call on the host pool to get the registration token
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
@@ -253,15 +151,13 @@ resource remoteStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' ex
 
 resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [
   for i in range(0, sessionHostCount): {
-    name: empty(networkInterfaceNameConv)
-      ? 'nic-${sessionHostNames[i]}'
-      : replace(replace(networkInterfaceNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
+    name: networkInterfaceNames[i]
     location: location
     tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/networkInterfaces'] ?? {})
     properties: {
-      ipConfigurations: [
+      ipConfigurations: union([
         {
-          name: 'ipconfig'
+          name: 'ipv4config'
           properties: {
             privateIPAllocationMethod: 'Dynamic'
             subnet: {
@@ -271,7 +167,20 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [
             privateIPAddressVersion: 'IPv4'
           }
         }
-      ]
+      ],
+      enableIPv6 ? [
+        {
+          name: 'ipv6config'
+          properties: {
+            privateIPAllocationMethod: 'Dynamic'
+            subnet: {
+              id: subnetResourceId
+            }
+            primary: false
+            privateIPAddressVersion: 'IPv6'
+          }
+        }
+      ] : [])
       enableAcceleratedNetworking: enableAcceleratedNetworking
       enableIPForwarding: false
     }
@@ -279,10 +188,10 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [
 ]
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [for i in range(0, sessionHostCount): {
-  name: empty(virtualMachineNameConv) ? sessionHostNames[i] : replace(replace(virtualMachineNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
+  name: virtualMachineNames[i]
   location: location
   tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
-  zones: !empty(preferredZones) && i < length(preferredZones) && !empty(preferredZones[i]) ? preferredZones[i] : availability == 'AvailabilityZones' && !empty(availabilityZones) ? [
+  zones: !empty(preferredZones) && i < length(preferredZones) && !empty(preferredZones[i]) ? [preferredZones[i]] : availability == 'AvailabilityZones' && !empty(availabilityZones) ? [
     availabilityZones[(vmNumbers[i] - 1) % length(availabilityZones)]
   ] : null
   identity: identity
@@ -308,7 +217,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [for i 
       imageReference: imageReference
       osDisk: {
         diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
-        name: empty(osDiskNameConv) ? null : replace(replace(osDiskNameConv, '###', vmIndexStrings[i]), 'VMNAMEPREFIX', vmPrefixStrings[i])
+        name: osDiskNames[i]
         osType: 'Windows'
         createOption: 'FromImage'
         caching: 'ReadWrite'
@@ -408,37 +317,6 @@ resource extension_AADLoginForWindows 'Microsoft.Compute/virtualMachines/extensi
   }
 ]
 
-resource extension_IaasAntimalware 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
-  for i in range(0, sessionHostCount): if (!startsWith(environment().name, 'USN')) {
-    parent: virtualMachine[i]
-    name: 'IaaSAntimalware'
-    location: location
-    properties: {
-      publisher: 'Microsoft.Azure.Security'
-      type: 'IaaSAntimalware'
-      typeHandlerVersion: '1.3'
-      autoUpgradeMinorVersion: true
-      settings: {
-        AntimalwareEnabled: true
-        RealtimeProtectionEnabled: 'true'
-        ScheduledScanSettings: {
-          isEnabled: 'true'
-          day: '7' // Day of the week for scheduled scan (1-Sunday, 2-Monday, ..., 7-Saturday)
-          time: '120' // When to perform the scheduled scan, measured in minutes from midnight (0-1440). For example: 0 = 12AM, 60 = 1AM, 120 = 2AM.
-          scanType: 'Quick' //Indicates whether scheduled scan setting type is set to Quick or Full (default is Quick)
-        }
-        Exclusions: {
-          Paths: fslogixPathExclusions
-        }
-      }
-    }
-    dependsOn: [
-      extension_AADLoginForWindows
-      extension_JsonADDomainExtension
-    ]
-  }
-]
-
 resource extension_AzureMonitorWindowsAgent 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = [
   for i in range(0, sessionHostCount): if (enableMonitoring) {
     parent: virtualMachine[i]
@@ -454,7 +332,6 @@ resource extension_AzureMonitorWindowsAgent 'Microsoft.Compute/virtualMachines/e
     dependsOn: [
       extension_AADLoginForWindows
       extension_JsonADDomainExtension
-      extension_IaasAntimalware
     ]
   }
 ]
@@ -476,7 +353,7 @@ resource dataCollectionEndpointAssociation 'Microsoft.Insights/dataCollectionRul
 resource avdInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
   for i in range(0, sessionHostCount): if (enableMonitoring && !empty(avdInsightsDataCollectionRulesResourceId)) {
     scope: virtualMachine[i]
-    name: '${virtualMachine[i].name}-avdInsights-data-coll-rule-assoc'
+    name: '${sessionHostNames[i]}-avdInsights-data-coll-rule-assoc'
     properties: {
       dataCollectionRuleId: avdInsightsDataCollectionRulesResourceId
       description: 'AVD Insights data collection rule association'
@@ -490,7 +367,7 @@ resource avdInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollec
 resource vmInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
   for i in range(0, sessionHostCount): if (enableMonitoring && !empty(vmInsightsDataCollectionRulesResourceId)) {
     scope: virtualMachine[i]
-    name: '${virtualMachine[i].name}-vmInsights-data-coll-rule-assoc'
+    name: '${sessionHostNames[i]}-vmInsights-data-coll-rule-assoc'
     properties: {
       dataCollectionRuleId: vmInsightsDataCollectionRulesResourceId
       description: 'VM Insights data collection rule association'
@@ -529,7 +406,6 @@ resource extension_GuestAttestation 'Microsoft.Compute/virtualMachines/extension
     dependsOn: [
       extension_AADLoginForWindows
       extension_JsonADDomainExtension
-      extension_IaasAntimalware
       extension_AzureMonitorWindowsAgent
     ]
   }
@@ -550,7 +426,6 @@ resource extension_AmdGpuDriverWindows 'Microsoft.Compute/virtualMachines/extens
     dependsOn: [
       extension_AADLoginForWindows
       extension_JsonADDomainExtension
-      extension_IaasAntimalware
       extension_AzureMonitorWindowsAgent
     ]
   }
@@ -671,7 +546,6 @@ resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runC
       extension_JsonADDomainExtension
       extension_AmdGpuDriverWindows
       extension_NvidiaGpuDriverWindows
-      extension_IaasAntimalware
       extension_AzureMonitorWindowsAgent
       extension_GuestAttestation
     ]

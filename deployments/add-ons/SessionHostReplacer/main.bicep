@@ -307,6 +307,9 @@ param diskSku string = 'Premium_LRS'
 @description('Optional. Enable accelerated networking.')
 param enableAcceleratedNetworking bool = true
 
+@description('Optional. Enable IPv6 dynamic private IP on session hosts.')
+param enableIPv6 bool = false
+
 @description('Optional. Enable monitoring with Azure Monitor Agent.')
 param enableMonitoring bool = false
 
@@ -335,9 +338,6 @@ param fslogixConfigureSessionHosts bool = false
   'ProfileContainer OfficeContainer CloudCache'
 ])
 param fslogixContainerType string = 'ProfileContainer'
-
-@description('Optional. FSLogix file share names.')
-param fslogixFileShareNames array = ['profile-containers']
 
 @description('Optional. FSLogix container size in MBs.')
 param fslogixSizeInMBs int = 30720
@@ -530,14 +530,14 @@ var availabilitySetNameConv = nameConvReversed
     )
   : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '')}-##'
 var virtualMachineNameConv = nameConvReversed
-  ? 'VMNAMEPREFIX###-${resourceAbbreviations.virtualMachines}'
-  : '${resourceAbbreviations.virtualMachines}-VMNAMEPREFIX###'
+  ? 'SHNAME-${resourceAbbreviations.virtualMachines}'
+  : '${resourceAbbreviations.virtualMachines}-SHNAME'
 var diskNameConv = nameConvReversed
-  ? 'VMNAMEPREFIX###-${resourceAbbreviations.osdisks}'
-  : '${resourceAbbreviations.osdisks}-VMNAMEPREFIX###'
+  ? 'SHNAME-${resourceAbbreviations.osdisks}'
+  : '${resourceAbbreviations.osdisks}-SHNAME'
 var networkInterfaceNameConv = nameConvReversed
-  ? 'VMNAMEPREFIX###-${resourceAbbreviations.networkInterfaces}'
-  : '${resourceAbbreviations.networkInterfaces}-VMNAMEPREFIX###'
+  ? 'SHNAME-${resourceAbbreviations.networkInterfaces}'
+  : '${resourceAbbreviations.networkInterfaces}-SHNAME'
 
 // Extract compute gallery resource ID from custom image resource ID
 // Image definition format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}
@@ -566,7 +566,6 @@ var paramVmInsightsDataCollectionRulesResourceId = !empty(vmInsightsDataCollecti
 // FSLogix conditional parameters
 var paramFslogixConfigureSessionHosts = fslogixConfigureSessionHosts ? { fslogixConfigureSessionHosts: fslogixConfigureSessionHosts } : {}
 var paramFslogixContainerType = fslogixConfigureSessionHosts ? { fslogixContainerType: fslogixContainerType } : {}
-var paramFslogixFileShareNames = fslogixConfigureSessionHosts && !empty(fslogixFileShareNames) ? { fslogixFileShareNames: fslogixFileShareNames } : {}
 var paramFslogixLocalNetAppVolumeResourceIds = fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds) ? { fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds } : {}
 var paramFslogixLocalStorageAccountResourceIds = fslogixConfigureSessionHosts && !empty(fslogixLocalStorageAccountResourceIds) ? { fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds } : {}
 var paramFslogixOSSGroups = fslogixConfigureSessionHosts && !empty(fslogixOSSGroups) ? { fslogixOSSGroups: fslogixOSSGroups } : {}
@@ -586,6 +585,7 @@ var sessionHostParameters = union(
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     enableAcceleratedNetworking: enableAcceleratedNetworking
+    enableIPv6: enableIPv6
     encryptionAtHost: encryptionAtHost
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
@@ -627,7 +627,6 @@ var sessionHostParameters = union(
   paramVmInsightsDataCollectionRulesResourceId,
   paramFslogixConfigureSessionHosts,
   paramFslogixContainerType,
-  paramFslogixFileShareNames,
   paramFslogixLocalNetAppVolumeResourceIds,
   paramFslogixLocalStorageAccountResourceIds,
   paramFslogixOSSGroups,

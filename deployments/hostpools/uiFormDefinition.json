@@ -1450,6 +1450,13 @@
 										"required": true,
 										"allowedValues": "[map(steps('hosts').network.subnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]"
 									}
+								},
+								{
+									"name": "enableIPv6",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable IPv6",
+									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIPv6)), false, bool(steps('basics').hostsRGProps.tags.vmIPv6))]",
+									"toolTip": "Enables IPv6 support on the network interface. This is an edge case scenario and is not recommended for most deployments.</br></br><b>WARNING:</b> Without specific route table entries configured for IPv6 traffic, outbound communication will not work properly."
 								}
 							]
 						},
@@ -2074,7 +2081,7 @@
 									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking)), true, bool(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking))]",
 									"toolTip": "Enables low latency and high throughput on the network interface.",
 									"visible": "[and(bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported)))]"
-								},
+								},								
 								{
 									"name": "hibernationEnabled",
 									"type": "Microsoft.Common.CheckBox",
@@ -2155,27 +2162,22 @@
 							"label": "Management",
 							"elements": [
 								{
-									"name": "intune",
-									"type": "Microsoft.Common.OptionsGroup",
-									"label": "Intune Enrollment",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment)), 'No', if(equals(steps('basics').hostsRGProps.tags.vmIntuneEnrollment, 'true'), 'Yes', 'No'))]",
-									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting Yes.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Yes",
-												"value": true
-											},
-											{
-												"label": "No",
-												"value": false
-											}
-										]
+									"name": "AirGappedCloudWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Warning",
+										"text": "Intune Enrollment is not available in Azure Secret or Azure Top Secret cloud environments."
 									}
-								}
-							],
-							"visible": "[not(contains(steps('identity').solution, 'DomainServices'))]"
+								},
+								{
+									"name": "intune",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Intune Enrollment",
+									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment)), false, bool(steps('basics').hostsRGProps.tags.vmIntuneEnrollment))]",
+									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting this checkbox.",
+									"visible": "[not(contains(steps('identity').solution, 'DomainServices'))]"
+								}								
+							]							
 						},
 						{
 							"name": "customScripts",
@@ -4493,6 +4495,7 @@
 				"vmNameIndexLength": "[steps('hosts').naming.indexPadding]",
 				"sessionHostCount": "[steps('hosts').specs.count]",
 				"virtualMachineSubnetResourceId": "[steps('hosts').network.subnet.id]",
+				"enableIPv6": "[steps('hosts').network.enableIPv6]",
 				"imageOffer": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.offer, '')]",
 				"imagePublisher": "[if(equals(steps('hosts').image.source, 'marketplace'), 'MicrosoftWindowsDesktop', '')]",
 				"imageSku": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.sku, '')]",

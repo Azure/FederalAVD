@@ -34,6 +34,7 @@ param diskSku string
 param divisionRemainderValue int
 param domainName string
 param enableAcceleratedNetworking bool
+param enableIPv6 bool
 param encryptionAtHost bool
 param encryptionKeyName string
 param encryptionKeyVaultResourceId string
@@ -263,6 +264,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     availabilitySetNameConv: availabilitySetNameConv
     avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
     confidentialVMOSDiskEncryptionType: confidentialVMOSDiskEncryptionType
+
     customImageResourceId: customImageResourceId
     dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
     dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
@@ -276,6 +278,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
     enableAcceleratedNetworking: enableAcceleratedNetworking
+    enableIPv6: enableIPv6
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
