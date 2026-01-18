@@ -1056,7 +1056,7 @@
 								{
 									"name": "virtualNetworksApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('basics').scope.subscription))]",
+									"condition": "[not(empty(steps('basics').scope.subscription.id))]",
 									"request": {
 										"method": "GET",
 										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
@@ -1076,7 +1076,7 @@
 								},
 								{
 									"name": "subnetsApi",
-									"condition": "[not(empty(steps('functionApp').infrastructure.virtualNetwork))]",
+									"condition": "[not(empty(steps('functionApp').infrastructure.virtualNetwork.id))]",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
@@ -1299,7 +1299,7 @@
 									"type": "Microsoft.Solutions.ResourceSelector",
 									"label": "Select Keyvault containing workload secrets",
 									"resourceType": "Microsoft.KeyVault/vaults",
-									"toolTip": "Select Keyvault which contains the domain join secrets",
+									"toolTip": "Select Keyvault which contains the virtual machine secrets",
 									"constraints": {
 										"required": true
 									}
@@ -1345,7 +1345,7 @@
 									"multiLine": true,
 									"toolTip": "Select the resource group containing the session host VMs. For greenfield deployments from this solution, resource groups are automatically tagged. For brownfield deployments, any resource group in the selected subscription can be chosen.",
 									"constraints": {
-										"allowedValues": "[map(steps('hosts').scope.resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, if(and(not(empty(rg.tags)), not(empty(rg.tags.cm-resource-parent))), concat(', hostPool: ', last(split(rg.tags.cm-resource-parent, '/'))), ''), '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
+										"allowedValues": "[map(steps('hosts').scope.resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
 										"required": true
 									}
 								},
@@ -1881,7 +1881,7 @@
 									"name": "diskEncryptionSetResourceGroup",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Disk Encryption Set Resource Group",
-									"defaultValue": "[steps('hosts').scope.resourceGroup.name]",
+									"defaultValue": "[if(empty(steps('hosts').scope.resourceGroup), '', steps('hosts').scope.resourceGroup.name)]",
 									"multiLine": true,
 									"toolTip": "Select the resource group containing the disk encryption set.",
 									"constraints": {
