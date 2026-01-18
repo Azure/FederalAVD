@@ -986,12 +986,24 @@
 									}
 								},
 								{
+									"name": "keyVaultSubscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Key Vault Subscription",
+									"defaultValue": "[steps('basics').scope.subscription.displayName]",
+									"toolTip": "Select the subscription containing the Key Vault with customer-managed encryption keys. For brownfield deployments, this allows selecting Key Vaults from centralized security subscriptions.",
+									"constraints": {
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+										"required": true
+									},
+									"visible": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]"
+								},
+								{
 									"name": "keyVaultsApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(not(empty(steps('basics').scope.subscription)), contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'))]",
+									"condition": "[and(not(empty(steps('functionApp').infrastructure.keyVaultSubscription.id)), contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'))]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
+										"path": "[concat(steps('functionApp').infrastructure.keyVaultSubscription.id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
 									}
 								},
 								{
@@ -1331,8 +1343,9 @@
 									"label": "Virtual Machine Resource Group",
 									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId), '', last(split(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId, '/')))]",
 									"multiLine": true,
+									"toolTip": "Select the resource group containing the session host VMs. For greenfield deployments from this solution, resource groups are automatically tagged. For brownfield deployments, any resource group in the selected subscription can be chosen.",
 									"constraints": {
-										"allowedValues": "[map(filter(filter(steps('hosts').scope.resourceGroupsApi.value, (rg) => and(contains(rg.name, 'hosts'), not(empty(rg.tags)))), (rg) => not(empty(rg.tags.cm-resource-parent))), (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"hostPool: ', last(split(rg.tags.cm-resource-parent, '/')), '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
+										"allowedValues": "[map(steps('hosts').scope.resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, if(and(not(empty(rg.tags)), not(empty(rg.tags.cm-resource-parent))), concat(', hostPool: ', last(split(rg.tags.cm-resource-parent, '/'))), ''), '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
 										"required": true
 									}
 								},
@@ -1844,12 +1857,46 @@
 									"toolTip": "Enables a zero trust configuration on the session host disks."
 								},
 								{
+									"name": "diskEncryptionSetSubscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Disk Encryption Set Subscription",
+									"defaultValue": "[steps('hosts').scope.subscription.displayName]",
+									"toolTip": "Select the subscription containing the disk encryption set. For brownfield deployments without tags, you can select any subscription.",
+									"constraints": {
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+										"required": true
+									},
+									"visible": "[and(steps('hosts').diskEncryption.selectDiskEncryptionSet, empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName))]"
+								},
+								{
+									"name": "diskEncryptionSetResourceGroupsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(steps('hosts').diskEncryption.selectDiskEncryptionSet, empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName), not(empty(steps('hosts').diskEncryption.diskEncryptionSetSubscription.id)))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('hosts').diskEncryption.diskEncryptionSetSubscription.id, '/resourcegroups?api-version=2021-04-01')]"
+									}
+								},
+								{
+									"name": "diskEncryptionSetResourceGroup",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Disk Encryption Set Resource Group",
+									"defaultValue": "[steps('hosts').scope.resourceGroup.name]",
+									"multiLine": true,
+									"toolTip": "Select the resource group containing the disk encryption set.",
+									"constraints": {
+										"allowedValues": "[map(steps('hosts').diskEncryption.diskEncryptionSetResourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
+										"required": true
+									},
+									"visible": "[and(steps('hosts').diskEncryption.selectDiskEncryptionSet, empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName))]"
+								},
+								{
 									"name": "diskEncryptionSetsApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"condition": "[and(not(empty(steps('hosts').scope.resourceGroup)), steps('hosts').diskEncryption.selectDiskEncryptionSet)]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02')]",
+										"path": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName), concat(steps('hosts').diskEncryption.diskEncryptionSetResourceGroup.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02'), concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02'))]",
 										"transforms": {
 											"list": "value|[*].{label:name, value:id}"
 										}
