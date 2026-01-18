@@ -664,11 +664,11 @@ Session hosts use these tags for automation:
                │  (24h default)       │
                └────┬─────────────────┘
                     │
-          ┌─────────▼──────────────┐
-          │  Lazy Power State      │
-          │  Query (only when      │
-          │  deletion eligible)    │
-          └─────────┬──────────────┘
+               ┌─────────▼────────────┐
+               │  Lazy Power State    │
+               │  Query (only when    │
+               │  deletion eligible)  │
+               └────┬─────────────────┘
                     │
                ┌────▼─────────────────┐
                │  Shutdown or Delete  │
@@ -751,11 +751,11 @@ Session hosts use these tags for automation:
                │  (24h for active, 15min for zero sessions)    │
                └────┬──────────────────────────────────────────┘
                     │
-          ┌─────────▼──────────────┐
-          │  Lazy Power State      │
-          │  Query (only when      │
-          │  deletion eligible)    │
-          └─────────┬──────────────┘
+               ┌────▼─────────────────────┐
+               │  Lazy Power State        │
+               │  Query (only when        │
+               │  deletion eligible)      │
+               └────┬─────────────────────┘
                     │
                ┌────▼─────────────────────┐
                │  Delete Session Hosts    │
