@@ -1355,7 +1355,7 @@
 									"name": "virtualMachineNamePrefix",
 									"type": "Microsoft.Common.TextBox",
 									"label": "Virtual Machine Name Prefix",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmNamePrefix)), toLower(concat('avd', steps('basics').naming.identifier, if(empty(steps('basics').naming.index), '', concat('-', steps('basics').naming.index)))), steps('basics').hostsRGProps.tags.vmNamePrefix)]",
+									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmNamePrefix)), toLower(concat('avd', steps('basics').naming.identifier, if(empty(steps('basics').naming.index), '', concat('-', if(equals(length(steps('basics').naming.index), 1), concat('0', steps('basics').naming.index), steps('basics').naming.index))))), steps('basics').hostsRGProps.tags.vmNamePrefix)]",
 									"toolTip": "Provide a Virtual Machine name prefix consisting of alphanumeric and dashes up to 12 characters long. A three character numeric suffix will be appended to the name padded with zeros (0).",
 									"constraints": {
 										"required": true,
@@ -1643,7 +1643,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Integrity Monitoring",
 									"toolTip": "Integrity monitoring enables cryptographic attestation and verification of VM boot integrity along with monitoring alerts if the VM didn't boot because attestation failed with the defined baseline.",
-									"defaultValue": true,
+									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIntegrityMonitoring)), true, bool(steps('basics').hostsRGProps.tags.vmIntegrityMonitoring))]",
 									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
 								}
 							]
@@ -3737,17 +3737,6 @@
 									"visible": true,
 									"label": "Configure Centralized Security Monitoring for Session Hosts",
 									"toolTip": "Creates a Data Collection Rule Association to use the Azure Monitoring Agent for collecting data in a centralized workspace."
-								},
-								{
-									"name": "securityDataCollectionRule",
-									"type": "Microsoft.Solutions.ResourceSelector",
-									"label": "Security Monitoring Data Collection Rule",
-									"visible": "[steps('management').monitoring.enableCentralMonitoring]",
-									"resourceType": "Microsoft.Insights/dataCollectionRules",
-									"toolTip": "Select the Data Collection Rule used for collecting security data for Sentinel or Defender for Cloud. This is required to create the Data Collection Rule Association",
-									"constraints": {
-										"required": true
-									}
 								}
 							]
 						}
@@ -4503,6 +4492,7 @@
 				"securityType": "[steps('hosts').security.securityType]",
 				"secureBootEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.secureBootEnabled)]",
 				"vTpmEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
+				"integrityMonitoring": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.integrityMonitoring)]",
 				"encryptionAtHost": "[steps('hosts').diskEncryption.encryptionAtHost]",
 				"existingDiskEncryptionSetResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('hosts').diskEncryption.selectDiskEncryptionSet), steps('hosts').diskEncryption.existingDiskEncryptionSet, '')]",
 				"keyManagementDisks": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('hosts').diskEncryption.keyManagement, 'PlatformManaged')]",
@@ -4560,7 +4550,6 @@
 				"existingAVDInsightsDataCollectionRuleResourceId": "[if(and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring), steps('management').monitoring.avdInsightsDataCollectionRule, '')]",
 				"existingVMInsightsDataCollectionRuleResourceId": "[if(and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring), steps('management').monitoring.vmInsightsDataCollectionRule, '')]",
 				"existingDataCollectionEndpointResourceId": "[if(and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring), steps('management').monitoring.dataCollectionEndpoint, '')]",
-				"securityDataCollectionRulesResourceId": "[if(steps('management').monitoring.enableCentralMonitoring, steps('management').monitoring.securityDataCollectionRule.id, '')]",
 				"deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
 				"keyVaultPrivateEndpointSubnetResourceId": "[if(and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.keyVaultsSubnet.id, '')]",
 				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",

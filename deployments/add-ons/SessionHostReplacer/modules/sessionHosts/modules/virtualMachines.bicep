@@ -59,16 +59,10 @@ param virtualMachineNameConv string
 param virtualMachineSize string
 param vmInsightsDataCollectionRulesResourceId string
 param vTpmEnabled bool
+param hasAmdGpu bool
+param hasNvidiaGpu bool
 
 var storageSuffix = environment().suffixes.storage
-var amdVmSize = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(
-  virtualMachineSize,
-  '_V710_v5'
-))
-var nvidiaVmSize = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, '_v3') || endsWith(
-  virtualMachineSize,
-  '_A10_v5'
-))
 
 // Calculate session host count from the array length
 var sessionHostCount = length(sessionHostNames)
@@ -412,7 +406,7 @@ resource extension_GuestAttestation 'Microsoft.Compute/virtualMachines/extension
 ]
 
 resource extension_AmdGpuDriverWindows 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
-  for i in range(0, sessionHostCount): if (amdVmSize) {
+  for i in range(0, sessionHostCount): if (hasAmdGpu) {
     parent: virtualMachine[i]
     name: 'AmdGpuDriverWindows'
     location: location
@@ -432,7 +426,7 @@ resource extension_AmdGpuDriverWindows 'Microsoft.Compute/virtualMachines/extens
 ]
 
 resource extension_NvidiaGpuDriverWindows 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
-  for i in range(0, sessionHostCount): if (nvidiaVmSize) {
+  for i in range(0, sessionHostCount): if (hasNvidiaGpu) {
     parent: virtualMachine[i]
     name: 'NvidiaGpuDriverWindows'
     location: location
@@ -460,11 +454,11 @@ resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runC
       parameters: [
         {
           name: 'AmdVmSize'
-          value: amdVmSize ? 'true' : 'false'
+          value: hasAmdGpu ? 'true' : 'false'
         }
         {
           name: 'NvidiaVmSize'
-          value: nvidiaVmSize ? 'true' : 'false'
+          value: hasNvidiaGpu ? 'true' : 'false'
         }
         {
           name: 'DisableUpdates'

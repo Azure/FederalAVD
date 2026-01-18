@@ -278,33 +278,281 @@ else {
     $allowImageVersionRollback = [bool]::Parse($allowImageVersionRollback)
 }
 
-# Query scaling plan for dynamic minimum capacity (DeleteFirst mode only)
-$scalingPlanTarget = $null
-if ($replacementMode -eq 'DeleteFirst') {
-    try {
-        $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
-        $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
-        $hostPoolName = Read-FunctionAppSetting HostPoolName
-        $hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
+# OPTIMIZATION: Lightweight pre-check to determine if host pool is up to date
+# This avoids expensive operations (scaling plan query, full replacement plan calculation) when no work is needed
+Write-LogEntry -Message "Performing lightweight up-to-date check" -Level Trace
+
+$isUpToDate = $false
+$replaceSessionHostOnNewImageVersionDelayDays = [int]::Parse((Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersionDelayDays))
+$latestImageAge = (New-TimeSpan -Start $latestImageVersion.Date -End (Get-Date -AsUTC)).TotalDays
+
+# Check if there are any running or failed deployments
+if ($runningDeployments.Count -eq 0 -and $failedDeployments.Count -eq 0) {
+    
+    # Check if image is old enough to trigger replacements
+    if ($latestImageAge -ge $replaceSessionHostOnNewImageVersionDelayDays) {
         
-        Write-LogEntry -Message "DeleteFirst mode: Querying scaling plan for dynamic minimum capacity target"
-        $scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId
+        # Quick version comparison - check if all hosts are on latest version
+        $hostsNeedingReplacement = 0
+        foreach ($sh in $sessionHostsFiltered) {
+            if ($sh.ImageVersion -ne $latestImageVersion.Version) {
+                # Check if image definition changed (not a rollback scenario)
+                $imageDefinitionChanged = $false
+                if ($sh.ImageDefinition -and $latestImageVersion.Definition) {
+                    $imageDefinitionChanged = ($sh.ImageDefinition -ne $latestImageVersion.Definition)
+                }
+                
+                if ($imageDefinitionChanged) {
+                    # Image definition changed - needs replacement
+                    $hostsNeedingReplacement++
+                    break  # Found at least one, no need to check more
+                }
+                else {
+                    # Same image definition, check version comparison
+                    $versionComparison = Compare-ImageVersion -Version1 $sh.ImageVersion -Version2 $latestImageVersion.Version
+                    
+                    if ($versionComparison -lt 0) {
+                        # VM version is older - needs replacement
+                        $hostsNeedingReplacement++
+                        break  # Found at least one, no need to check more
+                    }
+                    elseif ($versionComparison -gt 0 -and $allowImageVersionRollback) {
+                        # VM version is newer but rollback is allowed - needs replacement
+                        $hostsNeedingReplacement++
+                        break  # Found at least one, no need to check more
+                    }
+                }
+            }
+        }
         
-        if ($scalingPlanTarget -and $scalingPlanTarget.CapacityPercentage) {
-            Write-LogEntry -Message "Dynamic capacity from scaling plan: $($scalingPlanTarget.CapacityPercentage)% (Plan: $($scalingPlanTarget.ScalingPlanName), Schedule: $($scalingPlanTarget.ScheduleName), Phase: $($scalingPlanTarget.Phase))"
+        if ($hostsNeedingReplacement -eq 0) {
+            $isUpToDate = $true
+            Write-LogEntry -Message "Lightweight check: All session hosts are on latest image version $($latestImageVersion.Version)" -Level Trace
         }
         else {
-            Write-LogEntry -Message "No active scaling plan schedule found - will use static MinimumCapacityPercentage setting"
+            Write-LogEntry -Message "Lightweight check: Found hosts needing replacement - proceeding with full replacement plan" -Level Trace
         }
     }
-    catch {
-        Write-LogEntry -Message "Failed to query scaling plan (will use static capacity): $($_.Exception.Message)" -Level Warning
-        $scalingPlanTarget = $null
+    else {
+        # Image is too new - no replacements will be triggered
+        $isUpToDate = $true
+        Write-LogEntry -Message "Lightweight check: Latest image is only $([Math]::Round($latestImageAge, 1)) days old (delay: $replaceSessionHostOnNewImageVersionDelayDays days) - no replacements needed" -Level Trace
     }
 }
+else {
+    Write-LogEntry -Message "Lightweight check: Found $($runningDeployments.Count) running and $($failedDeployments.Count) failed deployments - proceeding with full processing" -Level Trace
+}
 
-# Get number session hosts to deploy
-$hostPoolReplacementPlan = Get-SessionHostReplacementPlan -ARMToken $ARMToken -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback -ScalingPlanTarget $scalingPlanTarget
+# If up to date, skip expensive operations and go straight to early exit path
+if ($isUpToDate) {
+    Write-LogEntry -Message "Host pool is UP TO DATE - skipping replacement plan calculation and scaling plan query"
+    
+    # Create a minimal replacement plan for early exit logic
+    $hostPoolReplacementPlan = [PSCustomObject]@{
+        PossibleDeploymentsCount       = 0
+        PossibleSessionHostDeleteCount = 0
+        SessionHostsPendingDelete      = @()
+        ExistingSessionHostNames       = $sessionHostsFiltered.SessionHostName
+        TargetSessionHostCount         = $sessionHostsFiltered.Count
+        TotalSessionHostsToReplace     = 0
+    }
+    
+    # Skip scaling plan query (not needed when up to date)
+    $scalingPlanTarget = $null
+}
+else {
+    # Host pool needs work - run full replacement plan calculation
+    Write-LogEntry -Message "Host pool requires updates - running full replacement plan calculation"
+    
+    # Query scaling plan for dynamic minimum capacity (DeleteFirst mode only)
+    # This is ONLY needed when we're actually going to delete hosts
+    $scalingPlanTarget = $null
+    if ($replacementMode -eq 'DeleteFirst') {
+        try {
+            $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
+            $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
+            $hostPoolName = Read-FunctionAppSetting HostPoolName
+            $hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
+            
+            Write-LogEntry -Message "DeleteFirst mode: Querying scaling plan for dynamic minimum capacity target"
+            $scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId
+            
+            if ($scalingPlanTarget -and $scalingPlanTarget.CapacityPercentage) {
+                Write-LogEntry -Message "Dynamic capacity from scaling plan: $($scalingPlanTarget.CapacityPercentage)% (Plan: $($scalingPlanTarget.ScalingPlanName), Schedule: $($scalingPlanTarget.ScheduleName), Phase: $($scalingPlanTarget.Phase))"
+            }
+            else {
+                Write-LogEntry -Message "No active scaling plan schedule found - will use static MinimumCapacityPercentage setting"
+            }
+        }
+        catch {
+            Write-LogEntry -Message "Failed to query scaling plan (will use static capacity): $($_.Exception.Message)" -Level Warning
+            $scalingPlanTarget = $null
+        }
+    }
+    
+    # Get full replacement plan with all calculations
+    $hostPoolReplacementPlan = Get-SessionHostReplacementPlan -ARMToken $ARMToken -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback -ScalingPlanTarget $scalingPlanTarget
+}
+
+# EARLY EXIT: Check if host pool is up to date (nothing to do)
+if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and 
+    $hostPoolReplacementPlan.PossibleDeploymentsCount -eq 0 -and 
+    $hostPoolReplacementPlan.PossibleSessionHostDeleteCount -eq 0 -and
+    $runningDeployments.Count -eq 0 -and
+    $failedDeployments.Count -eq 0) {
+    
+    Write-LogEntry -Message "Host pool is UP TO DATE - all session hosts are on the latest image version and no work is needed."
+    
+    # CRITICAL: Check if scaling exclusion tags need to be removed before exiting
+    # This handles the case where tags were set in a previous run but the cycle just completed
+    $hostsInDrainMode = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
+    $shutdownRetentionCount = if ($enableShutdownRetention -and $hostsInShutdownRetention) { $hostsInShutdownRetention.Count } else { 0 }
+    
+    # Check if cycle is truly complete (no hosts in drain mode)
+    $cycleComplete = $hostsInDrainMode -eq 0
+    
+    # In SideBySide mode with shutdown retention: also remove tags from new hosts if old hosts are in retention
+    $sideBySideRetentionTransition = $replacementMode -eq 'SideBySide' -and $enableShutdownRetention -and $shutdownRetentionCount -gt 0
+    
+    if ($cycleComplete -or $sideBySideRetentionTransition) {
+        if ($cycleComplete) {
+            Write-LogEntry -Message "Update cycle complete - removing scaling exclusion tags (preserving tags on shutdown retention VMs)."
+        }
+        else {
+            Write-LogEntry -Message "SideBySide mode with shutdown retention - removing scaling exclusion tags from new active hosts."
+        }
+        
+        $tagScalingPlanExclusionTag = Read-FunctionAppSetting Tag_ScalingPlanExclusionTag
+        $resourceManagerUri = Get-ResourceManagerUri
+        
+        # Get list of VMs currently in shutdown retention
+        $shutdownRetentionVMs = @()
+        if ($enableShutdownRetention) {
+            $shutdownRetentionTag = Read-FunctionAppSetting Tag_ShutdownTimestamp
+            foreach ($vm in $cachedVMs) {
+                if ($vm.tags -and ($vm.tags.PSObject.Properties.Name -contains $shutdownRetentionTag)) {
+                    $shutdownRetentionVMs += $vm.name
+                }
+            }
+        }
+        
+        # Only proceed if a scaling exclusion tag is configured
+        if ($tagScalingPlanExclusionTag -and $tagScalingPlanExclusionTag -ne ' ') {
+            $hostsWithExclusionTag = 0
+            
+            foreach ($sessionHost in $sessionHostsFiltered) {
+                try {
+                    $vmName = $sessionHost.ResourceId.Split('/')[-1]
+                    
+                    # Skip if this VM is in shutdown retention
+                    if ($shutdownRetentionVMs -contains $vmName) {
+                        Write-LogEntry -Message "Preserving scaling exclusion tag on shutdown retention VM: $vmName" -Level Trace
+                        continue
+                    }
+                    
+                    # Check if exclusion tag exists with SessionHostReplacer value
+                    $vmTags = $sessionHost.Tags
+                    if ($vmTags.ContainsKey($tagScalingPlanExclusionTag) -and $vmTags[$tagScalingPlanExclusionTag] -eq 'SessionHostReplacer') {
+                        Write-LogEntry -Message "Removing scaling exclusion tag from $($sessionHost.SessionHostName)" -Level Trace
+                        
+                        $tagsUri = "$resourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                        $Body = @{
+                            operation  = 'Delete'
+                            properties = @{
+                                tags = @{ $tagScalingPlanExclusionTag = '' }
+                            }
+                        }
+                        
+                        Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                        $hostsWithExclusionTag++
+                    }
+                }
+                catch {
+                    Write-LogEntry -Message "Error removing scaling exclusion tag from $($sessionHost.SessionHostName): $($_.Exception.Message)" -Level Warning
+                }
+            }
+            
+            if ($hostsWithExclusionTag -gt 0) {
+                Write-LogEntry -Message "Removed scaling exclusion tags from {0} session host(s)" -StringValues $hostsWithExclusionTag
+            }
+        }
+    }
+    
+    # Log basic metrics for monitoring dashboard
+    $metricsLog = @{
+        TotalSessionHosts       = $sessionHosts.Count
+        EnabledForAutomation    = $sessionHostsFiltered.Count
+        TargetCount             = if ($hostPoolReplacementPlan.TargetSessionHostCount) { $hostPoolReplacementPlan.TargetSessionHostCount } else { 0 }
+        ToReplace               = 0
+        ToReplacePercentage     = 0
+        InDrain                 = $hostsInDrainMode
+        PendingDelete           = 0
+        ShutdownRetention       = $shutdownRetentionCount
+        ToDeployNow             = 0
+        RunningDeployments      = 0
+        LatestImageVersion      = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { "N/A" }
+        LatestImageDate         = $latestImageVersion.Date
+        Status                  = if ($cycleComplete) { "UpToDate" } else { "Draining" }
+    }
+    
+    # Log image metadata for workbook visibility
+    if ($latestImageVersion.Definition -like "marketplace:*") {
+        $marketplaceParts = $latestImageVersion.Definition -replace "^marketplace:", "" -split "/"
+        Write-LogEntry -Message "IMAGE_INFO | Type: Marketplace | Publisher: {0} | Offer: {1} | Sku: {2} | Version: {3}" `
+            -StringValues $marketplaceParts[0], $marketplaceParts[1], $marketplaceParts[2], $latestImageVersion.Version
+    }
+    else {
+        $galleryMatch = [regex]::Match($latestImageVersion.Definition, "/galleries/([^/]+)/images/([^/]+)")
+        $galleryName = $galleryMatch.Groups[1].Value
+        $imageDefinition = $galleryMatch.Groups[2].Value
+        Write-LogEntry -Message "IMAGE_INFO | Type: Gallery | Gallery: {0} | ImageDefinition: {1} | Version: {2}" `
+            -StringValues $galleryName, $imageDefinition, $latestImageVersion.Version
+    }
+    
+    Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | PendingDelete: {6} | ShutdownRetention: {7} | ToDeployNow: {8} | RunningDeployments: {9} | LatestImage: {10} | Status: {11}" `
+        -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.PendingDelete, $metricsLog.ShutdownRetention, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.LatestImageVersion, $metricsLog.Status
+    
+    # Update host pool status tag with current state
+    try {
+        Update-HostPoolStatus `
+            -ARMToken $ARMToken `
+            -SessionHosts $sessionHostsFiltered `
+            -RunningDeployments 0 `
+            -FailedDeployments @() `
+            -HostsToReplace 0 `
+            -CachedVMs $cachedVMs
+    }
+    catch {
+        Write-LogEntry -Message "Failed to update host pool status tag: $($_.Exception.Message)" -Level Warning
+    }
+    
+    # Log completion timestamp for workbook visibility
+    Write-LogEntry -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o')
+    Write-LogEntry -Message "SessionHostReplacer function completed - host pool is up to date"
+    
+    return
+}
+
+# Host pool needs work - continue with normal processing
+Write-LogEntry -Message "Host pool requires updates - proceeding with replacement operations"
+
+# Check availability of new session hosts (hosts already on the latest image version)
+# This provides metrics for monitoring and is used as a safety check before removing old hosts
+# ONLY run this check if there are actually hosts to replace - otherwise shutdown hosts trigger false positives
+if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -gt 0) {
+    $newHostAvailability = Test-NewSessionHostsAvailable -ARMToken $ARMToken -SessionHosts $sessionHosts -LatestImageVersion $latestImageVersion
+}
+else {
+    # No hosts need replacement - skip availability check
+    Write-LogEntry -Message "Skipping new host availability check - no hosts need replacement" -Level Trace
+    $newHostAvailability = [PSCustomObject]@{
+        TotalNewHosts = 0
+        AvailableCount = 0
+        AvailablePercentage = 0
+        SafeToProceed = $true  # Always safe when no replacements needed
+        Message = "No replacement needed"
+    }
+}
 
 # Check if we're starting a new update cycle and reset progressive scale-up if needed
 if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
@@ -393,6 +641,19 @@ if ($replacementMode -eq 'DeleteFirst') {
         }
     }
     
+    # SAFETY CHECK: Verify any previously deployed new hosts are available before deleting more old capacity
+    # This prevents cascading capacity loss if previous deployments created VMs that didn't register properly
+    if (-not $newHostAvailability.SafeToProceed -and $newHostAvailability.TotalNewHosts -gt 0) {
+        Write-LogEntry -Message "SAFETY CHECK FAILED: {0}" -StringValues $newHostAvailability.Message -Level Warning
+        Write-LogEntry -Message "Halting DeleteFirst mode - will not delete old hosts until existing new hosts become available" -Level Warning
+        Write-LogEntry -Message "This prevents further capacity loss when previous deployments have hosts that aren't accessible" -Level Warning
+        # Skip the entire delete/deploy cycle - exit DeleteFirst flow
+    }
+    else {
+        if ($newHostAvailability.TotalNewHosts -gt 0) {
+            Write-LogEntry -Message "SAFETY CHECK PASSED: {0}" -StringValues $newHostAvailability.Message
+        }
+
     if ($hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
         Write-LogEntry -Message "We can decommission {0} session hosts from this list: {1}" -StringValues $hostPoolReplacementPlan.SessionHostsPendingDelete.Count, ($hostPoolReplacementPlan.SessionHostsPendingDelete.SessionHostName -join ',')
         
@@ -600,6 +861,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             throw
         }
     }
+    } # End of safety check else block
 } else {
     # ================================================================================================
     # SIDE-BY-SIDE MODE: Deploy new hosts first, then delete old ones
@@ -656,8 +918,19 @@ if ($replacementMode -eq 'DeleteFirst') {
         }
     }
 
-    # STEP 2: Delete session hosts second
-    if ($hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
+    # STEP 2: Verify new session hosts are available before removing old ones (safety check)
+    # This prevents capacity loss if newly deployed hosts fail to register or pass health checks
+    if (-not $newHostAvailability.SafeToProceed -and $newHostAvailability.TotalNewHosts -gt 0) {
+        Write-LogEntry -Message "SAFETY CHECK FAILED: {0}" -StringValues $newHostAvailability.Message -Level Warning
+        Write-LogEntry -Message "Skipping old host removal to preserve capacity until new hosts become available" -Level Warning
+        # Don't proceed with deletion - exit the SideBySide flow here
+    }
+    elseif ($newHostAvailability.TotalNewHosts -gt 0) {
+        Write-LogEntry -Message "SAFETY CHECK PASSED: {0}" -StringValues $newHostAvailability.Message
+    }
+
+    # STEP 3: Delete session hosts (only if safety check passed or no new hosts to verify)
+    if (($newHostAvailability.SafeToProceed -or $newHostAvailability.TotalNewHosts -eq 0) -and $hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
         Write-LogEntry -Message "We will decommission {0} session hosts from this list: {1}" -StringValues $hostPoolReplacementPlan.SessionHostsPendingDelete.Count, ($hostPoolReplacementPlan.SessionHostsPendingDelete.SessionHostName -join ',') -Level Trace
         
         # Decommission session hosts
@@ -727,18 +1000,22 @@ if ($deploymentResult) {
 $shutdownRetentionCount = if ($enableShutdownRetention -and $hostsInShutdownRetention) { $hostsInShutdownRetention.Count } else { 0 }
 
 $metricsLog = @{
-    TotalSessionHosts    = $sessionHosts.Count
-    EnabledForAutomation = $sessionHostsFiltered.Count
-    TargetCount          = if ($hostPoolReplacementPlan.TargetSessionHostCount) { $hostPoolReplacementPlan.TargetSessionHostCount } else { 0 }
-    ToReplace            = if ($hostPoolReplacementPlan.TotalSessionHostsToReplace) { $hostPoolReplacementPlan.TotalSessionHostsToReplace } else { 0 }
-    ToReplacePercentage  = if ($sessionHostsFiltered.Count -gt 0) { [math]::Round(($hostPoolReplacementPlan.TotalSessionHostsToReplace / $sessionHostsFiltered.Count) * 100, 1) } else { 0 }
-    InDrain              = $hostsInDrainMode
-    PendingDelete        = $hostPoolReplacementPlan.SessionHostsPendingDelete.Count
-    ShutdownRetention    = $shutdownRetentionCount
-    ToDeployNow          = $remainingToDeploy
-    RunningDeployments   = $currentlyDeploying
-    LatestImageVersion   = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { "N/A" }
-    LatestImageDate      = $latestImageVersion.Date
+    TotalSessionHosts       = $sessionHosts.Count
+    EnabledForAutomation    = $sessionHostsFiltered.Count
+    TargetCount             = if ($hostPoolReplacementPlan.TargetSessionHostCount) { $hostPoolReplacementPlan.TargetSessionHostCount } else { 0 }
+    ToReplace               = if ($hostPoolReplacementPlan.TotalSessionHostsToReplace) { $hostPoolReplacementPlan.TotalSessionHostsToReplace } else { 0 }
+    ToReplacePercentage     = if ($sessionHostsFiltered.Count -gt 0) { [math]::Round(($hostPoolReplacementPlan.TotalSessionHostsToReplace / $sessionHostsFiltered.Count) * 100, 1) } else { 0 }
+    InDrain                 = $hostsInDrainMode
+    PendingDelete           = $hostPoolReplacementPlan.SessionHostsPendingDelete.Count
+    ShutdownRetention       = $shutdownRetentionCount
+    ToDeployNow             = $remainingToDeploy
+    RunningDeployments      = $currentlyDeploying
+    NewHostsTotal           = $newHostAvailability.TotalNewHosts
+    NewHostsAvailable       = $newHostAvailability.AvailableCount
+    NewHostsAvailablePct    = $newHostAvailability.AvailablePercentage
+    NewHostsSafeToProceed   = $newHostAvailability.SafeToProceed
+    LatestImageVersion      = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { "N/A" }
+    LatestImageDate         = $latestImageVersion.Date
 }
 
 # Log image metadata for workbook visibility
@@ -852,8 +1129,8 @@ if ($cycleComplete -or $sideBySideRetentionTransition) {
     }
 }
 
-Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | PendingDelete: {6} | ShutdownRetention: {7} | ToDeployNow: {8} | RunningDeployments: {9} | LatestImage: {10}" `
-    -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.PendingDelete, $metricsLog.ShutdownRetention, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.LatestImageVersion
+Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | PendingDelete: {6} | ShutdownRetention: {7} | ToDeployNow: {8} | RunningDeployments: {9} | NewHosts: {10}/{11} ({12}%) Available | LatestImage: {13}" `
+    -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.PendingDelete, $metricsLog.ShutdownRetention, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.NewHostsAvailable, $metricsLog.NewHostsTotal, $metricsLog.NewHostsAvailablePct, $metricsLog.LatestImageVersion
 
 # Update host pool status tag with current state
 try {

@@ -117,14 +117,14 @@ param drainGracePeriodHours int = 24
 param minimumDrainMinutes int = 15
 
 @description('Optional. Safety floor: minimum percentage of target capacity to maintain during DeleteFirst mode. Deletions are capped to prevent dropping below this threshold. Higher values = more conservative (e.g., 80% keeps more hosts running), lower values = more aggressive (e.g., 50% allows faster replacement). Only applies when replacementMode is DeleteFirst. Default is 80%.')
-@minValue(50)
+@minValue(20)
 @maxValue(100)
 param minimumCapacityPercentage int = 80
 
 @description('Optional. Maximum number of hosts to delete and deploy per cycle in DeleteFirst mode. Controls the pace of replacements - function deletes this many idle hosts, then deploys the same number of replacements. Lower values = slower, safer updates. Only applies when replacementMode is DeleteFirst. Default is 5.')
 @minValue(1)
-@maxValue(50)
-param maxDeletionsPerCycle int = 5
+@maxValue(100)
+param maxDeletionsPerCycle int = 50
 
 @description('Optional. Minimum host index for hostname numbering in SideBySide mode. Useful for starting numbering at a specific value (e.g., 10 instead of 1). Only applies when replacementMode is SideBySide. Default is 1.')
 @minValue(1)

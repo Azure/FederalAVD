@@ -31,12 +31,13 @@ param diskEncryptionSetNames object
 param diskAccessName string
 param diskSizeGB int
 param diskSku string
-param divisionRemainderValue int
 param domainName string
 param enableAcceleratedNetworking bool
 param enableIPv6 bool
 param encryptionAtHost bool
 param encryptionKeyName string
+param hasAmdGpu bool
+param hasNvidiaGpu bool
 param encryptionKeyVaultResourceId string
 param encryptionKeyVaultUri string
 param existingDiskAccessResourceId string
@@ -64,7 +65,6 @@ param keyExpirationInDays int
 param keyManagementDisks string
 param location string
 param logAnalyticsWorkspaceResourceId string
-param maxVMsPerDeployment int
 param privateEndpoint bool
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
@@ -79,9 +79,8 @@ param recoveryServicesVaultName string
 param resourceGroupDeployment string
 param resourceGroupHosts string
 param secureBootEnabled bool
-param securityDataCollectionRulesResourceId string
 param securityType string
-param sessionHostBatchCount int
+param sessionHostCount int
 param sessionHostCustomizations array
 param sessionHostRegistrationDSCUrl string
 param sessionHostIndex int
@@ -104,6 +103,20 @@ param vmInsightsDataCollectionRulesResourceId string
 
 var backupPolicyName = 'AvdPolicyVm'
 var confidentialVMOSDiskEncryptionType = confidentialVMOSDiskEncryption ? 'DiskWithVMGuestState' : 'VMGuestStateOnly'
+
+// Batching logic: Dynamically calculate max VMs per batch based on resources per VM
+// Empirically measured: 915 resources / 61 VMs = 15 with monitoring, so base = 11 without monitoring
+var baseResourcesPerVM = 11 // NIC, VM, Domain/AAD Extension, DSC Extension, Run Command, updateOSDisk modules(2), diskUpdate, plus 3 unidentified
+var monitoringResourcesPerVM = enableMonitoring ? 4 : 0 // Azure Monitor Agent Extension + 3 DCR associations
+var gpuResourcesPerVM = (hasAmdGpu || hasNvidiaGpu) ? 1 : 0 // GPU driver extension (AMD or NVIDIA)
+var integrityResourcesPerVM = integrityMonitoring ? 1 : 0 // Guest Attestation extension
+var customizationsResourcesPerVM = !empty(sessionHostCustomizations) ? (1 + length(sessionHostCustomizations)) : 0 // 1 module deployment + 1 run command per customization
+var totalResourcesPerVM = baseResourcesPerVM + monitoringResourcesPerVM + gpuResourcesPerVM + integrityResourcesPerVM + customizationsResourcesPerVM
+var calculatedMaxVMs = 800 / totalResourcesPerVM // ARM template limit is 800 resources per template
+var maxVMsPerDeployment = calculatedMaxVMs < 20 ? 20 : (calculatedMaxVMs > 45 ? 45 : calculatedMaxVMs) // Safety bounds: minimum 20, maximum 45 VMs per batch
+var divisionValue = sessionHostCount / maxVMsPerDeployment
+var divisionRemainderValue = sessionHostCount % maxVMsPerDeployment
+var sessionHostBatchCount = divisionRemainderValue > 0 ? divisionValue + 1 : divisionValue
 
 var backupPrivateDNSZoneResourceIds = [
   azureBackupPrivateDnsZoneResourceId
@@ -253,7 +266,7 @@ module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if(fslo
 
 @batchSize(5)
 module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sessionHostBatchCount): {
-  name: 'VirtualMachines-Batch-${i-1}-${deploymentSuffix}'
+  name: 'VirtualMachines-Batch-${i}-of-${sessionHostBatchCount}-${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}VMs-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     artifactsContainerUri: artifactsContainerUri
@@ -264,7 +277,6 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     availabilitySetNameConv: availabilitySetNameConv
     avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
     confidentialVMOSDiskEncryptionType: confidentialVMOSDiskEncryptionType
-
     customImageResourceId: customImageResourceId
     dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
     dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
@@ -293,6 +305,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     fslogixStorageService: fslogixStorageService
     hibernationEnabled: hibernationEnabled
     hostPoolResourceId: deploymentType != 'SessionHostsOnly' ? hostPoolResourceId : hostPoolUpdate!.outputs.resourceId
+    hasAmdGpu: hasAmdGpu
+    hasNvidiaGpu: hasNvidiaGpu
     identitySolution: identitySolution
     imageOffer: imageOffer
     imagePublisher: imagePublisher
@@ -304,7 +318,6 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     osDiskNameConv: osDiskNameConv
     ouPath: ouPath
     sessionHostCustomizations: sessionHostCustomizations
-    securityDataCollectionRulesResourceId: securityDataCollectionRulesResourceId
     secureBootEnabled: secureBootEnabled
     securityType: securityType
     sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment
@@ -411,6 +424,7 @@ module protectedItems_Vm 'modules/protectedItems.bicep' = [for i in range(1, ses
   ]
 }]
 */
+
 module getFlattenedVmNamesArray 'modules/flattenVirtualMachineNames.bicep' = {
   name: 'FlattenVirtualMachineNames-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
@@ -420,3 +434,21 @@ module getFlattenedVmNamesArray 'modules/flattenVirtualMachineNames.bicep' = {
 }
 
 output virtualMachineNames array = getFlattenedVmNamesArray.outputs.virtualMachineNames
+output batchingCalculation object = {
+  totalResourcesPerVM: totalResourcesPerVM
+  originalCalculatedMaxVMs: calculatedMaxVMs
+  maxVMsPerDeploymentWithBounds: maxVMsPerDeployment
+  sessionHostBatchCount: sessionHostBatchCount
+  sessionHostCount: sessionHostCount
+  breakdown: {
+    baseResources: baseResourcesPerVM
+    monitoringResources: monitoringResourcesPerVM
+    gpuResources: gpuResourcesPerVM
+    integrityResources: integrityResourcesPerVM
+    customizationsResources: customizationsResourcesPerVM
+  }
+  calculation: {
+    step1_rawCalculation: '800 / ${totalResourcesPerVM} = ${calculatedMaxVMs}'
+    step2_applyBounds: 'min(max(${calculatedMaxVMs}, 5), 100) = ${maxVMsPerDeployment}'
+  }
+}

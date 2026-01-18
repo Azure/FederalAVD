@@ -62,6 +62,7 @@
         'Remove-VirtualMachine'
         'Remove-ExpiredShutdownVMs'
         'Send-DrainNotification'
+        'Test-NewSessionHostsAvailable'
         
         # Device Cleanup functions (from SessionHostReplacer.DeviceCleanup.psm1)
         'Remove-DeviceFromDirectories'

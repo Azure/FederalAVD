@@ -525,7 +525,7 @@
 									"type": "Microsoft.Common.Slider",
 									"label": "Availability Safety Floor (%)",
 									"toolTip": "<b>Availability Safety Floor:</b> Prevents pool capacity from dropping below this percentage during replacements, ensuring minimum availability.<br/><br/><b>Smart Scaling Plan Integration (Phase-Aware):</b> If a scaling plan is assigned to your host pool:<ul><li><b>RampUp/Peak phases:</b> This configured value acts as a safety floor (whichever is higher: this config or scaling plan target)</li><li><b>RampDown/OffPeak phases:</b> Scaling plan percentage used directly (can go below this value for aggressive off-hours replacements)</li></ul>This allows safe, aggressive replacements during off-peak when users aren't active, while maintaining your safety floor during business hours. Falls back to this static value if no scaling plan configured.<br/><br/><b>Example:</b> Config=70%, Scaling Plan Peak=90%, OffPeak=50%. Result: Peak uses 90%, OffPeak uses 50% (aggressive off-hours updates).<br/><br/><b>Guidance:</b> 80% = very conservative, 50% = balanced. This works with 'Blast Radius Limit' to control replacement pace.",
-									"min": 50,
+									"min": 20,
 									"max": 100,
 									"defaultValue": 80,
 									"showStepMarkers": false,
@@ -540,8 +540,8 @@
 									"label": "Blast Radius Limit (VMs per cycle)",
 									"toolTip": "<b>Blast Radius Limit:</b> Caps the absolute number of VMs deleted/deployed per cycle, regardless of available headroom above the safety floor. Limits impact if issues occur during replacement.<br/><br/><b>Example:</b> With 500 target VMs and 50% floor (250 minimum), you have 250 VM headroom. Setting this to 50 means max 50 deleted per cycle despite having 250 of headroom.<br/><br/><b>Guidance:</b> Small pools (< 100 VMs): 20-50. Large pools (> 200 VMs): 50-100. Lower = slower/safer, higher = faster replacement. Works with Progressive Scale-Up which further limits initial cycles.",
 									"min": 1,
-									"max": 50,
-									"defaultValue": 5,
+									"max": 100,
+									"defaultValue": 50,
 									"showStepMarkers": false,
 									"constraints": {
 										"required": true
@@ -1730,7 +1730,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Integrity Monitoring",
 									"toolTip": "Integrity monitoring enables cryptographic attestation and verification of VM boot integrity along with monitoring alerts if the VM didn't boot because attestation failed with the defined baseline.",
-									"defaultValue": true,
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntegrityMonitoring), true, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntegrityMonitoring))]",
 									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
 								}
 							]

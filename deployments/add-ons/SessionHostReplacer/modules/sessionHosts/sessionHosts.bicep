@@ -210,8 +210,18 @@ var sessionHostRegistrationDSCUrl = startsWith(avdAgentsDSCPackage, 'https://')
 
 var confidentialVMOSDiskEncryptionType = confidentialVMOSDiskEncryption ? 'DiskWithVMGuestState' : 'VMGuestStateOnly'
 
-// Batching logic: Deploy max 40 VMs per batch
-var maxVMsPerDeployment = 40
+// Batching logic: Dynamically calculate max VMs per batch based on resources per VM
+// Empirically measured: 915 resources / 61 VMs = 15 with monitoring, so base = 11 without monitoring
+var hasAmdGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(virtualMachineSize, '_V710_v5'))
+var hasNvidiaGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, '_v3') || endsWith(virtualMachineSize, '_A10_v5'))
+var baseResourcesPerVM = 11 // NIC, VM, Domain/AAD Extension, DSC Extension, Run Command, updateOSDisk modules(2), diskUpdate, plus 3 unidentified
+var monitoringResourcesPerVM = enableMonitoring ? 4 : 0 // Azure Monitor Agent Extension + 3 DCR associations
+var gpuResourcesPerVM = (hasAmdGpu || hasNvidiaGpu) ? 1 : 0 // GPU driver extension (AMD or NVIDIA)
+var integrityResourcesPerVM = integrityMonitoring ? 1 : 0 // Guest Attestation extension
+var customizationsResourcesPerVM = !empty(sessionHostCustomizations) ? (1 + length(sessionHostCustomizations)) : 0 // 1 module deployment + 1 run command per customization
+var totalResourcesPerVM = baseResourcesPerVM + monitoringResourcesPerVM + gpuResourcesPerVM + integrityResourcesPerVM + customizationsResourcesPerVM
+var calculatedMaxVMs = 800 / totalResourcesPerVM // ARM template limit is 800 resources per template
+var maxVMsPerDeployment = calculatedMaxVMs < 20 ? 20 : (calculatedMaxVMs > 45 ? 45 : calculatedMaxVMs) // Safety bounds: minimum 20, maximum 45 VMs per batch
 var totalVMCount = length(sessionHostNames)
 var divisionValue = totalVMCount / maxVMsPerDeployment
 var divisionRemainderValue = totalVMCount % maxVMsPerDeployment
@@ -271,7 +281,7 @@ module availabilitySets '../../../../sharedModules/resources/compute/availabilit
 @batchSize(5)
 module virtualMachines 'modules/virtualMachines.bicep' = [
   for i in range(1, sessionHostBatchCount): {
-    name: 'shr-vm-batch-${i}-${deploymentSuffix}'
+    name: 'shr-vm-batch-${i}-of-${sessionHostBatchCount}-${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}vms-${deploymentSuffix}'
     params: {
       artifactsContainerUri: artifactsContainerUri
       artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
@@ -298,6 +308,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       enableIPv6: enableIPv6
       enableMonitoring: enableMonitoring
       encryptionAtHost: encryptionAtHost
+      hasAmdGpu: hasAmdGpu
+      hasNvidiaGpu: hasNvidiaGpu
       fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
       fslogixContainerType: fslogixContainerType
       fslogixFileShareNames: fslogixFileShareNames

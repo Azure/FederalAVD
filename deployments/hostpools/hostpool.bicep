@@ -540,9 +540,6 @@ param existingVMInsightsDataCollectionRuleResourceId string = ''
 @description('Optional. The resource Id of the existing Data Collection Endpoint. Only used when "DeploymentType" is "SessionHostOnly".')
 param existingDataCollectionEndpointResourceId string = ''
 
-@description('Optional. The resource ID of the data collection rule used for Azure Sentinel and / or Defender for Cloud when using the Azure Monitor Agent.')
-param securityDataCollectionRulesResourceId string = ''
-
 // Zero Trust
 
 @description('Optional. The resource id of the existing disk access resource for private link access to the managed disks. Only used when "DeploymentType" is "SessionHostOnly".')
@@ -773,6 +770,7 @@ var vmConfigurationTags = union(
     vmSecurityType: securityType
     vmSecureBoot: secureBootEnabled
     vmVirtualTPM: vTpmEnabled
+    vmIntegrityMonitoring: integrityMonitoring
     vmSubnetId: virtualMachineSubnetResourceId
   },
   vmDomain,
@@ -854,11 +852,9 @@ var fslogixFileShareNames = resourceNames.outputs.fslogixFileShareNames[fslogixC
 var fslogixStorageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
 
 //  BATCH SESSION HOSTS
-// The following variables are used to determine the batches to deploy any number of AVD session hosts.
-var maxVMsPerDeployment = 40 // The maximum number of VMs deployed per batch to stay within ARM template resource limits. Math: (800 - <Number of Static Resources>) / <Number of Resources per VM> 
-var divisionValue = sessionHostCount / maxVMsPerDeployment // The number of full batches (integer division).
-var divisionRemainderValue = sessionHostCount % maxVMsPerDeployment // The number of VMs in the final partial batch (0 if all batches are full).
-var sessionHostBatchCount = divisionRemainderValue > 0 ? divisionValue + 1 : divisionValue // The total number of batches needed (full batches + 1 partial batch if remainder exists).
+// The batching calculation is performed in the sessionHosts module to encapsulate deployment logic
+var hasAmdGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(virtualMachineSize, '_V710_v5'))
+var hasNvidiaGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, '_v3') || endsWith(virtualMachineSize, '_A10_v5'))
 
 //  BATCH AVAILABILITY SETS
 // The following variables are used to determine the number of availability sets.
@@ -1359,7 +1355,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     diskEncryptionSetNames: resourceNames.outputs.diskEncryptionSetNames
     diskSizeGB: diskSizeGB
     diskSku: diskSku
-    divisionRemainderValue: divisionRemainderValue
     #disable-next-line BCP422
     domainJoinUserPassword: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPassword)
@@ -1377,6 +1372,8 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     enableIPv6: enableIPv6
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
+    hasAmdGpu: hasAmdGpu
+    hasNvidiaGpu: hasNvidiaGpu
     encryptionKeyName: confidentialVMOSDiskEncryption
       ? resourceNames.outputs.encryptionKeyNames.confidentialVMs
       : resourceNames.outputs.encryptionKeyNames.virtualMachines
@@ -1417,7 +1414,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
           : existingLogAnalyticsWorkspaceResourceId)
       : ''
     location: virtualMachinesRegion
-    maxVMsPerDeployment: maxVMsPerDeployment
     osDiskNameConv: resourceNames.outputs.virtualMachineDiskNameConv
     ouPath: vmOUPath
     pooledHostPool: split(hostPoolType, ' ')[0] == 'Pooled' ? true : false
@@ -1434,10 +1430,9 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
       ? resourceNames.outputs.resourceGroupHosts
       : existingHostsResourceGroupName
     resourceGroupDeployment: resourceNames.outputs.resourceGroupDeployment
-    securityDataCollectionRulesResourceId: securityDataCollectionRulesResourceId
     securityType: securityType
     secureBootEnabled: secureBootEnabled
-    sessionHostBatchCount: sessionHostBatchCount
+    sessionHostCount: sessionHostCount
     sessionHostCustomizations: sessionHostCustomizations
     sessionHostIndex: sessionHostIndex
     vmNameIndexLength: vmNameIndexLength

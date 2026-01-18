@@ -76,7 +76,23 @@ function Get-ScalingPlanCurrentTarget {
         $scalingPlan = $scalingPlansResponse[0]
         $scalingPlanName = $scalingPlan.name
         
-        Write-LogEntry -Message "Found scaling plan: $scalingPlanName" -Level Trace
+        # Check if scaling plan is enabled for this host pool
+        $hostPoolReference = $scalingPlan.properties.hostPoolReferences | Where-Object { 
+            $_.hostPoolArmPath -eq $HostPoolResourceId 
+        } | Select-Object -First 1
+        
+        if (-not $hostPoolReference -or $hostPoolReference.scalingPlanEnabled -ne $true) {
+            Write-LogEntry -Message "Scaling plan '$scalingPlanName' is assigned but NOT enabled for this host pool (scalingPlanEnabled: $($hostPoolReference.scalingPlanEnabled))" -Level Trace
+            return [PSCustomObject]@{
+                CapacityPercentage = $null
+                ScalingPlanName = $scalingPlanName
+                ScheduleName = $null
+                Phase = $null
+                Source = 'Disabled'
+            }
+        }
+        
+        Write-LogEntry -Message "Found enabled scaling plan: $scalingPlanName" -Level Trace
         
         # Get current day of week and time for schedule matching
         $currentDayOfWeek = $CurrentDateTime.DayOfWeek.ToString()

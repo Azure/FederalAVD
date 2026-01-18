@@ -51,7 +51,6 @@ param sessionHostCount int
 param sessionHostIndex int
 param vmNameIndexLength int
 param sessionHostRegistrationDSCUrl string
-param securityDataCollectionRulesResourceId string
 param securityType string
 param secureBootEnabled bool
 param storageSuffix string
@@ -69,15 +68,8 @@ param virtualMachineNamePrefix string
 param virtualMachineSize string
 param vmInsightsDataCollectionRulesResourceId string
 param vTpmEnabled bool
-
-var amdVmSize = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(
-  virtualMachineSize,
-  '_V710_v5'
-))
-var nvidiaVmSize = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, '_v3') || endsWith(
-  virtualMachineSize,
-  '_A10_v5'
-))
+param hasAmdGpu bool
+param hasNvidiaGpu bool
 
 // Storage Accounts
 var fslogixLocalStorageAccountNames = [for id in fslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
@@ -409,20 +401,6 @@ resource vmInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollect
   }
 ]
 
-resource securityDataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
-  for i in range(0, sessionHostCount): if (!empty(securityDataCollectionRulesResourceId)) {
-    scope: virtualMachine[i]
-    name: '${virtualMachine[i].name}-security-data-coll-rule-assoc'
-    properties: {
-      dataCollectionRuleId: securityDataCollectionRulesResourceId
-      description: 'Security Events data collection rule association'
-    }
-    dependsOn: [
-      extension_AzureMonitorWindowsAgent
-    ]
-  }
-]
-
 resource extension_GuestAttestation 'Microsoft.Compute/virtualMachines/extensions@2023-09-01' = [
   for i in range(0, sessionHostCount): if (integrityMonitoring) {
     parent: virtualMachine[i]
@@ -457,7 +435,7 @@ resource extension_GuestAttestation 'Microsoft.Compute/virtualMachines/extension
 ]
 
 resource extension_AmdGpuDriverWindows 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
-  for i in range(0, sessionHostCount): if (amdVmSize) {
+  for i in range(0, sessionHostCount): if (hasAmdGpu) {
     parent: virtualMachine[i]
     name: 'AmdGpuDriverWindows'
     location: location
@@ -477,7 +455,7 @@ resource extension_AmdGpuDriverWindows 'Microsoft.Compute/virtualMachines/extens
 ]
 
 resource extension_NvidiaGpuDriverWindows 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
-  for i in range(0, sessionHostCount): if (nvidiaVmSize) {
+  for i in range(0, sessionHostCount): if (hasNvidiaGpu) {
     parent: virtualMachine[i]
     name: 'NvidiaGpuDriverWindows'
     location: location
@@ -505,11 +483,11 @@ resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runC
       parameters: [
         {
           name: 'AmdVmSize'
-          value: amdVmSize ? 'true' : 'false'
+          value: hasAmdGpu ? 'true' : 'false'
         }
         {
           name: 'NvidiaVmSize'
-          value: nvidiaVmSize ? 'true' : 'false'
+          value: hasNvidiaGpu ? 'true' : 'false'
         }
         {
           name: 'DisableUpdates'

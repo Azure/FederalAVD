@@ -804,8 +804,6 @@ This feature deploys the required resources to enable the AVD Insights workbook 
 
 **Reference:** [Azure Monitor for AVD - Microsoft Docs](https://docs.microsoft.com/en-us/azure/virtual-desktop/azure-monitor)
 
-In addition to Insights Monitoring, the solution also allows you to send security relevant logs to another log analytics workspace. This can be accomplished by configuring the `securityLogAnalyticsWorkspaceResourceId` parameter for the legacy Log Analytics Agent or the `securityDataCollectionRulesResourceId` parameter for the Azure Monitor Agent.
-
 **Deployed Resources:**
 
 - Log Analytics Workspace

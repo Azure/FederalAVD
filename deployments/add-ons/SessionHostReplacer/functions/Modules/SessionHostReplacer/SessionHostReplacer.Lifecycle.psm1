@@ -304,11 +304,18 @@ function Remove-SessionHosts {
                 # Update in-memory session host object so timestamp is available for deletion check in same run
                 $sessionHost.PendingDrainTimeStamp = [DateTime]::Parse($drainTimestamp, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
                 
-                # Re-evaluate deletion eligibility now that we have a timestamp (allows immediate deletion when MinimumDrainMinutes = 0 or SideBySide mode)
+                # Re-evaluate deletion eligibility now that we have a timestamp
+                # Priority order: PoweredOff > SideBySide > MinDrain=0 > MinDrainTime
                 if ($sessionHost.Sessions -eq 0) {
                     $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
+                    
+                    # HIGHEST PRIORITY: If VM is already powered off, delete immediately (no point waiting - it's already offline)
+                    if ($sessionHost.PoweredOff) {
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) is powered off - marking for immediate deletion (VM already shutdown)"
+                        $deleteSessionHost = $true
+                    }
                     # In SideBySide mode, allow immediate deletion since new capacity is already deployed
-                    if ($ReplacementMode -eq 'SideBySide') {
+                    elseif ($ReplacementMode -eq 'SideBySide') {
                         Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) is in SideBySide mode - marking for immediate deletion (new capacity already deployed)"
                         $deleteSessionHost = $true
                     }
@@ -615,7 +622,144 @@ function Send-DrainNotification {
     }
 }
 
+function Test-NewSessionHostsAvailable {
+    <#
+    .SYNOPSIS
+    Verifies that newly deployed session hosts are in 'Available' status before proceeding with old host removal.
+    
+    .DESCRIPTION
+    Safety check to ensure new session hosts have successfully registered to the host pool and passed health checks
+    before shutting down or deleting old hosts. This prevents capacity loss if new hosts fail to become accessible.
+    
+    .PARAMETER ARMToken
+    ARM access token for Azure Resource Manager API calls
+    
+    .PARAMETER SessionHosts
+    Collection of all current session hosts from the host pool
+    
+    .PARAMETER LatestImageVersion
+    The latest image version info (Version and Definition) to identify new hosts
+    
+    .PARAMETER MinimumAvailableCount
+    Minimum number of new hosts that must be Available before proceeding (default: 1)
+    
+    .PARAMETER MinimumAvailablePercentage
+    Minimum percentage of new hosts that must be Available before proceeding (default: 100)
+    
+    .OUTPUTS
+    PSCustomObject with:
+    - AllAvailable: Boolean indicating if all new hosts are available
+    - AvailableCount: Number of new hosts in Available status
+    - TotalNewHosts: Total number of new hosts found
+    - UnavailableHosts: Array of hosts not in Available status with their status
+    - SafeToProceed: Boolean indicating if it's safe to remove old hosts
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $ARMToken,
+        [Parameter(Mandatory = $true)]
+        $SessionHosts,
+        [Parameter(Mandatory = $true)]
+        $LatestImageVersion,
+        [Parameter()]
+        [int] $MinimumAvailableCount = 1,
+        [Parameter()]
+        [int] $MinimumAvailablePercentage = 100
+    )
+    
+    Write-LogEntry -Message "Verifying new session hosts are available before proceeding with old host removal"
+    
+    # Identify new hosts (hosts on the latest image version)
+    $newHosts = $SessionHosts | Where-Object { 
+        $_.ImageVersion -eq $LatestImageVersion.Version -and 
+        $_.ImageDefinition -eq $LatestImageVersion.Definition 
+    }
+    
+    if (-not $newHosts -or $newHosts.Count -eq 0) {
+        Write-LogEntry -Message "No new session hosts found on latest image version - skipping availability check" -Level Trace
+        return [PSCustomObject]@{
+            AllAvailable      = $true
+            AvailableCount    = 0
+            TotalNewHosts     = 0
+            UnavailableHosts  = @()
+            SafeToProceed     = $true
+            Message           = "No new hosts to verify"
+        }
+    }
+    
+    Write-LogEntry -Message "Found {0} new session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version
+    
+    # Check status of each new host
+    # Available statuses that indicate the host is working: Available, Needs Assistance (non-fatal), Upgrading, Upgrade Failed
+    # Statuses that indicate the host is NOT working: Unavailable, Shutdown, NoHeartbeat, NotJoinedToDomain, DomainTrustRelationshipLost, SxSStackListenerNotReady, FSLogixNotHealthy
+    $availableStatuses = @('Available', 'NeedsAssistance', 'Upgrading', 'UpgradeFailed')
+    
+    $availableHosts = @()
+    $unavailableHosts = @()
+    
+    foreach ($newHost in $newHosts) {
+        $hostStatus = $newHost.Status
+        $hostName = $newHost.SessionHostName
+        
+        Write-LogEntry -Message "New host {0} status: {1}" -StringValues $hostName, $hostStatus -Level Trace
+        
+        if ($hostStatus -in $availableStatuses) {
+            $availableHosts += $newHost
+            Write-LogEntry -Message "New host {0} is accessible (Status: {1})" -StringValues $hostName, $hostStatus -Level Trace
+        }
+        else {
+            $unavailableHosts += [PSCustomObject]@{
+                SessionHostName = $hostName
+                Status          = $hostStatus
+                ImageVersion    = $newHost.ImageVersion
+            }
+            Write-LogEntry -Message "New host {0} is NOT accessible (Status: {1})" -StringValues $hostName, $hostStatus -Level Warning
+        }
+    }
+    
+    $availableCount = $availableHosts.Count
+    $totalNewHosts = $newHosts.Count
+    $availablePercentage = if ($totalNewHosts -gt 0) { [Math]::Round(($availableCount / $totalNewHosts) * 100, 1) } else { 0 }
+    
+    # Determine if safe to proceed
+    $meetsMinimumCount = $availableCount -ge $MinimumAvailableCount
+    $meetsMinimumPercentage = $availablePercentage -ge $MinimumAvailablePercentage
+    $allAvailable = $unavailableHosts.Count -eq 0
+    $safeToProceed = $meetsMinimumCount -and $meetsMinimumPercentage
+    
+    # Build result message
+    $message = if ($allAvailable) {
+        "All $totalNewHosts new session host(s) are available"
+    }
+    elseif ($safeToProceed) {
+        "$availableCount of $totalNewHosts new session host(s) are available ($availablePercentage%) - meets minimum requirements"
+    }
+    else {
+        "Only $availableCount of $totalNewHosts new session host(s) are available ($availablePercentage%) - does NOT meet minimum requirements (need $MinimumAvailableCount hosts and $MinimumAvailablePercentage%)"
+    }
+    
+    Write-LogEntry -Message "NEW_HOST_VERIFICATION | Available: {0}/{1} ({2}%) | SafeToProceed: {3}" -StringValues $availableCount, $totalNewHosts, $availablePercentage, $safeToProceed
+    
+    if (-not $safeToProceed) {
+        Write-LogEntry -Message "WARNING: New session hosts are not ready - will skip removal of old hosts to preserve capacity" -Level Warning
+        foreach ($unavailable in $unavailableHosts) {
+            Write-LogEntry -Message "  - {0}: Status={1}" -StringValues $unavailable.SessionHostName, $unavailable.Status -Level Warning
+        }
+    }
+    
+    return [PSCustomObject]@{
+        AllAvailable         = $allAvailable
+        AvailableCount       = $availableCount
+        TotalNewHosts        = $totalNewHosts
+        AvailablePercentage  = $availablePercentage
+        UnavailableHosts     = $unavailableHosts
+        SafeToProceed        = $safeToProceed
+        Message              = $message
+    }
+}
+
 #EndRegion Session Host Lifecycle
 
 # Export functions
-Export-ModuleMember -Function Remove-SessionHosts, Remove-VirtualMachine, Remove-ExpiredShutdownVMs, Send-DrainNotification
+Export-ModuleMember -Function Remove-SessionHosts, Remove-VirtualMachine, Remove-ExpiredShutdownVMs, Send-DrainNotification, Test-NewSessionHostsAvailable

@@ -313,9 +313,6 @@
         "logAnalyticsWorkspaceSku": {
             "value": "PerGB2018"
         },
-        "securityDataCollectionRulesResourceId": {
-            "value": ""
-        },
         "deploymentVmSize": {
             "value": "Standard_B2s"
         },

@@ -685,6 +685,56 @@ If ($ConfigureFSLogix) {
         $RegSettings.Add([PSCustomObject]@{ Name = 'CloudKerberosTicketRetrievalEnabled'; Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters'; PropertyType = 'DWord'; Value = 1})
     }
 
+    # Windows Defender Exclusions for FSLogix https://learn.microsoft.com/en-us/fslogix/overview-prerequisites#configure-antivirus-file-and-folder-exclusions
+    Write-Log -message "Adding Windows Defender Exclusions for FSLogix"
+
+    $LocalPathExclusions = @(
+        "$env:ProgramData\FSLogix",
+        "$env:ProgramData\FSLogix\Cache",
+        "$env:ProgramData\FSLogix\Proxy",
+        "$env:ProgramFiles\FSLogix\Apps",
+        "$env:SystemDrive\Users\*\AppData\Local\FSLogix",
+        "$env:SystemRoot\Temp\*\*.vhdx",
+        "$env:SystemDrive\users\*\AppData\Local\Temp\*.vhdx"
+    )
+    
+    # Build UNC Path Exclusions from storage account paths
+    $UncPathExclusions = @()
+    $UncPathExclusions += $LocalProfileContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
+    $UncPathExclusions += $LocalOfficeContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
+    $UncPathExclusions += $RemoteProfileContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
+    $UncPathExclusions += $RemoteOfficeContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
+    $UncPathExclusions = $UncPathExclusions | Where-Object { $_ }
+
+    $PathExclusions = $LocalPathExclusions + $UncPathExclusions
+
+    $ProcessExclusions = @(
+        "$env:ProgramFiles\FSLogix\Apps\frxsvc.exe",
+        "$env:ProgramFiles\FSLogix\Apps\frxccds.exe",
+        "$env:ProgramFiles\FSLogix\Apps\frxdrv.sys",
+        "$env:ProgramFiles\FSLogix\Apps\frxdrvvt.sys",
+        "$env:ProgramFiles\FSLogix\Apps\frxccd.sys"
+    )
+
+    Try {
+        Write-Log -message "Adding path exclusions using Add-MpPreference"
+        ForEach ($Path in $PathExclusions) {
+            Write-Log -message "Adding path exclusion: $Path"
+            Add-MpPreference -ExclusionPath $Path -ErrorAction SilentlyContinue
+        }
+        
+        Write-Log -message "Adding process exclusions using Add-MpPreference"
+        ForEach ($Process in $ProcessExclusions) {
+            Write-Log -message "Adding process exclusion: $Process"
+            Add-MpPreference -ExclusionProcess $Process -ErrorAction SilentlyContinue
+        }
+        
+        Write-Log -message "Windows Defender exclusions added successfully"
+    }
+    Catch {
+        Write-Log -message "Warning: Failed to add Windows Defender exclusions via Add-MpPreference: $_" -Level Warning
+    }
+
     $LocalAdministrator = (Get-LocalUser | Where-Object { $_.SID -like '*-500' }).Name
     $LocalGroups = 'FSLogix Profile Exclude List', 'FSLogix ODFC Exclude List'
     ForEach ($Group in $LocalGroups) {
