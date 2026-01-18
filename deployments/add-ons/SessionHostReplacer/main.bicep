@@ -18,6 +18,37 @@ param location string = resourceGroup().location
 param tags object = {}
 
 // ================================================================================================
+// Brownfield Naming Override Parameters
+// These parameters allow explicit control over resource naming for brownfield deployments where
+// the existing host pool naming convention does not follow standard patterns. When specified,
+// these override the automatic naming convention detection.
+// ================================================================================================
+
+@description('Optional. Explicit name for the Function App. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique and follow Azure naming rules (2-60 chars, alphanumeric and hyphens).')
+@maxLength(60)
+param functionAppNameOverride string = ''
+
+@description('Optional. Explicit name for the Storage Account (used by Function App). If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique, 3-24 chars, lowercase alphanumeric only.')
+@maxLength(24)
+param storageAccountNameOverride string = ''
+
+@description('Optional. Explicit name for the Application Insights instance. If not provided, name is derived from shared naming convention. Use this for brownfield deployments with non-standard naming. Must follow Azure naming rules (1-260 chars, alphanumeric, hyphens, underscores, parentheses, periods).')
+@maxLength(260)
+param applicationInsightsNameOverride string = ''
+
+@description('Optional. Naming convention override for session host virtual machines. If not provided, derived from host pool naming convention. Use format with SHNAME token (e.g., "vm-SHNAME" or "SHNAME-vm"). SHNAME will be replaced with session host name prefix + index.')
+param virtualMachineNameConvOverride string = ''
+
+@description('Optional. Naming convention override for session host OS disks. If not provided, derived from host pool naming convention. Use format with SHNAME token (e.g., "disk-SHNAME" or "SHNAME-disk").')
+param diskNameConvOverride string = ''
+
+@description('Optional. Naming convention override for session host network interfaces. If not provided, derived from host pool naming convention. Use format with SHNAME token (e.g., "nic-SHNAME" or "SHNAME-nic").')
+param networkInterfaceNameConvOverride string = ''
+
+@description('Optional. Naming convention override for availability sets. If not provided, derived from host pool naming convention. Use format with ## token for index (e.g., "avset-##" or "##-avset").')
+param availabilitySetNameConvOverride string = ''
+
+// ================================================================================================
 // Function App Infrastructure Parameters
 // These parameters configure the Azure Function App infrastructure including networking, 
 // security, encryption, and monitoring capabilities.
@@ -462,15 +493,18 @@ var privateEndpointNICNameConv = replace(
 
 // Shared Application Insights naming - same name across all Session Host Replacer deployments
 // This enables multi-host-pool monitoring with a single App Insights instance
-var appInsightsName = replace(
-  replace(
-    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
-    'TOKEN-',
-    'sessionhostreplacer-'
-  ),
-  'LOCATION',
-  functionAppRegionAbbreviation
-)
+// Use explicit override if provided, otherwise derive from shared naming convention
+var appInsightsName = !empty(applicationInsightsNameOverride)
+  ? applicationInsightsNameOverride
+  : replace(
+      replace(
+        replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
+        'TOKEN-',
+        'sessionhostreplacer-'
+      ),
+      'LOCATION',
+      functionAppRegionAbbreviation
+    )
 
 // Enterprise Workbook naming - single workbook for all host pools across all regions
 // Azure Monitor Workbooks require GUID names for deterministic deployment
@@ -478,28 +512,40 @@ var appInsightsName = replace(
 var workbookName = guid(subscription().subscriptionId, 'session-host-replacer-workbook')
 
 // Function App naming - unique per host pool
-var functionAppName = replace(
-  replace(
-    replace(
-      replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
+// Use explicit override if provided, otherwise derive from host pool naming convention
+var functionAppName = !empty(functionAppNameOverride)
+  ? functionAppNameOverride
+  : replace(
+      replace(
+        replace(
+          replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
+          'LOCATION',
+          functionAppRegionAbbreviation
+        ),
+        'TOKEN-',
+        'shr-${uniqueStringHosts}-'
+      ),
       'LOCATION',
       functionAppRegionAbbreviation
-    ),
-    'TOKEN-',
-    'shr-${uniqueStringHosts}-'
-  ),
-  'LOCATION',
-  functionAppRegionAbbreviation
-)
-var storageAccountName = toLower(replace(
-  replace(
-    replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', functionAppRegionAbbreviation),
-    'TOKEN-',
-    'shr-${uniqueStringHosts}'
-  ),
-  '-',
-  ''
-))
+    )
+
+// Storage Account naming - use explicit override if provided, otherwise derive from naming convention
+var storageAccountName = !empty(storageAccountNameOverride)
+  ? toLower(storageAccountNameOverride)
+  : toLower(replace(
+      replace(
+        replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', functionAppRegionAbbreviation),
+        'TOKEN-',
+        'shr-${uniqueStringHosts}'
+      ),
+      '-',
+      ''
+    ))
+
+// Storage account name validation: Azure enforces 3-24 chars, lowercase alphanumeric only
+// If the derived name fails validation, deployment will error at storage account module
+// For brownfield deployments with non-standard host pool names, use storageAccountNameOverride parameter
+
 var encryptionKeyName = '${hpBaseName}-encryption-key-${storageAccountName}'
 var templateSpecNameFinal = !empty(templateSpecName)
   ? templateSpecName
@@ -513,31 +559,42 @@ var templateSpecNameFinal = !empty(templateSpecName)
       functionAppRegionAbbreviation
     )
 
-// Virtual Machine naming conventions
-var availabilitySetNameConv = nameConvReversed
-  ? replace(
-      replace(
-        replace(
-          replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'),
-          'RESOURCETYPE',
-          resourceAbbreviations.availabilitySets
-        ),
-        'LOCATION',
-        virtualMachinesRegionAbbreviation
-      ),
-      'TOKEN-',
-      ''
-    )
-  : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '')}-##'
-var virtualMachineNameConv = nameConvReversed
-  ? 'SHNAME-${resourceAbbreviations.virtualMachines}'
-  : '${resourceAbbreviations.virtualMachines}-SHNAME'
-var diskNameConv = nameConvReversed
-  ? 'SHNAME-${resourceAbbreviations.osdisks}'
-  : '${resourceAbbreviations.osdisks}-SHNAME'
-var networkInterfaceNameConv = nameConvReversed
-  ? 'SHNAME-${resourceAbbreviations.networkInterfaces}'
-  : '${resourceAbbreviations.networkInterfaces}-SHNAME'
+// Virtual Machine naming conventions - use overrides if provided, otherwise derive from host pool naming
+var availabilitySetNameConv = !empty(availabilitySetNameConvOverride)
+  ? availabilitySetNameConvOverride
+  : nameConvReversed
+      ? replace(
+          replace(
+            replace(
+              replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'),
+              'RESOURCETYPE',
+              resourceAbbreviations.availabilitySets
+            ),
+            'LOCATION',
+            virtualMachinesRegionAbbreviation
+          ),
+          'TOKEN-',
+          ''
+        )
+      : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '')}-##'
+
+var virtualMachineNameConv = !empty(virtualMachineNameConvOverride)
+  ? virtualMachineNameConvOverride
+  : nameConvReversed
+      ? 'SHNAME-${resourceAbbreviations.virtualMachines}'
+      : '${resourceAbbreviations.virtualMachines}-SHNAME'
+
+var diskNameConv = !empty(diskNameConvOverride)
+  ? diskNameConvOverride
+  : nameConvReversed
+      ? 'SHNAME-${resourceAbbreviations.osdisks}'
+      : '${resourceAbbreviations.osdisks}-SHNAME'
+
+var networkInterfaceNameConv = !empty(networkInterfaceNameConvOverride)
+  ? networkInterfaceNameConvOverride
+  : nameConvReversed
+      ? 'SHNAME-${resourceAbbreviations.networkInterfaces}'
+      : '${resourceAbbreviations.networkInterfaces}-SHNAME'
 
 // Extract compute gallery resource ID from custom image resource ID
 // Image definition format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}

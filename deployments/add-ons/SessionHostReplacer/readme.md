@@ -376,6 +376,64 @@ The deployment creates or uses an existing Function App:
 
 ## Deployment
 
+### Brownfield Deployments
+
+**The Session Host Replacer is fully brownfield-compatible** and can be deployed to manage any existing AVD host pool, regardless of how it was originally deployed (Azure Portal, Terraform, ARM/Bicep, etc.).
+
+#### Prerequisites for Brownfield
+
+- Existing host pool with session hosts
+- Key Vault with credentials (VM admin, domain join if applicable)
+- Subnet for new session hosts
+- RBAC permissions on host pool and VM resource group
+
+#### Naming Convention Considerations
+
+The solution automatically detects naming conventions from your host pool name. However, if your host pool uses a non-standard naming pattern (e.g., `prod-avd-hostpool-01` instead of `hp-avd-prod-eus`), you should provide explicit names for resources.
+
+**Required override parameters for non-standard naming:**
+
+```bicep
+// Function App infrastructure
+functionAppNameOverride: 'func-avdshr-prod-eus'           // 2-60 chars, globally unique
+storageAccountNameOverride: 'stavdshrprod'                // 3-24 chars, lowercase alphanumeric
+
+// Session host resources (CRITICAL - must match existing naming in host pool!)
+virtualMachineNameConvOverride: 'vm-SHNAME'               // Use SHNAME token
+diskNameConvOverride: 'disk-SHNAME'                       // Use SHNAME token
+networkInterfaceNameConvOverride: 'nic-SHNAME'            // Use SHNAME token
+availabilitySetNameConvOverride: 'avset-##'               // Use ## token for index
+```
+
+**Token Reference:**
+- `SHNAME` = Session host name (e.g., `avdvm-001` becomes `vm-avdvm-001` or `avdvm-001-vm`)
+- `##` = Availability set index (e.g., `avset-01`, `avset-02`)
+
+**Critical for brownfield:** Session host naming MUST match your existing pattern. For example:
+- If existing VMs are named `avdvm-001`, use `virtualMachineNameConvOverride: 'SHNAME'` (no prefix/suffix)
+- If existing VMs are named `vm-avdvm-001`, use `virtualMachineNameConvOverride: 'vm-SHNAME'`
+- If existing VMs are named `avdvm-001-vm`, use `virtualMachineNameConvOverride: 'SHNAME-vm'`
+
+**Note on other resources:**
+- **App Service Plan**: Use existing via `appServicePlanResourceId` parameter (no naming needed)
+- **Private Endpoints & NICs**: Automatically derived from storage account and function app names
+- **Application Insights**: Uses shared naming convention (works across multiple host pools)
+
+**When to use overrides:**
+
+- Host pool name doesn't start with `hp-` or end with `-hp`
+- Host pool name contains special characters or patterns that don't follow the automatic detection logic
+- Existing session hosts use non-standard naming (VMs not following resource type prefix/suffix pattern)
+- You want explicit control over function app and session host resource naming
+
+**When overrides are NOT needed:**
+
+- Host pool follows standard patterns: `hp-avd-prod-eus` or `avd-prod-eus-hp`
+- Session hosts follow standard patterns: `vm-avdvm-001` or `avdvm-001-vm`
+- You're comfortable with automatically-derived names
+
+See the [Brownfield Example](#brownfield-deployment-example) below for a complete deployment scenario.
+
 ### 1. Create Template Spec (Optional but Recommended)
 
 A template spec is a resource type for storing an Azure Resource Manager template (ARM template) in Azure for later deployment. Template specs enable you to share ARM templates with other users in your organization through Azure RBAC controls.
@@ -431,12 +489,14 @@ The custom UI form provides a guided experience with tooltips and validation:
 2. Select the **sessionHostReplacer** template spec
 3. Click **Deploy**
 4. Fill out the form with your configuration:
-   - **Basics**: Resource group, location, naming prefix
-   - **Host Pool Configuration**: Host pool resource ID, target session host count
-   - **Image Version Settings**: Optional delay before replacement after new image detection
-   - **Device Cleanup**: Optional - select user-assigned managed identity if device cleanup is enabled
+   - **Basics**: Resource group, location
+   - **Function App Configuration**: Host pool resource ID, execution settings
+   - **Session Hosts**: VM configuration, image, networking
+   - **Identity**: Domain join configuration
+   - **User Profiles**: FSLogix settings (optional)
    - **Monitoring**: Application Insights, Log Analytics workspace
-   - **Networking**: VNet integration, private endpoints (optional)
+   - **Custom Naming (Advanced)**: Brownfield naming overrides (optional)
+   - **Tags**: Resource tags
 5. Review and click **Create**
 
 Here is a screen shot of the form:
@@ -444,6 +504,42 @@ Here is a screen shot of the form:
 ![Deploy Template Spec](../../../docs/images/sessionHostReplacerUI.png)
 
 The form automatically validates inputs and provides helpful descriptions for each parameter.
+
+##### Brownfield Deployments with Custom Naming
+
+For brownfield deployments with non-standard host pool naming (e.g., `prod-avd-hostpool-01` instead of `hp-avd-prod-eus`), use the **Custom Naming (Advanced)** step:
+
+1. On the **Custom Naming (Advanced)** step, check **Use Custom Naming Overrides**
+2. Fill out the **Function App Infrastructure Naming** section:
+   - **Function App Name**: (Required) Globally unique name, 2-60 chars, alphanumeric and hyphens. Example: `func-avdshr-prod-eus2`
+   - **Storage Account Name**: (Required) Globally unique name, 3-24 chars, lowercase alphanumeric only. Example: `stavdshrprod`
+   - **Application Insights Name**: (Required if monitoring enabled) Unique within resource group, 1-260 chars. Example: `appi-avdshr-prod-eus2`
+3. Fill out the **Session Host Resource Naming** section:
+   - **Virtual Machine Naming Convention**: (Required) Pattern with `SHNAME` token. Example: `vm-SHNAME`
+   - **OS Disk Naming Convention**: (Required) Pattern with `SHNAME` token. Example: `disk-SHNAME`
+   - **Network Interface Naming Convention**: (Required) Pattern with `SHNAME` token. Example: `nic-SHNAME`
+   - **Availability Set Naming Convention**: (Required) Pattern with `##` token. Example: `avset-##`
+
+**Token Reference:**
+- `SHNAME` = Session host name (e.g., `avdvm-001` becomes `vm-avdvm-001` with `vm-SHNAME` pattern)
+- `##` = Availability set index (e.g., `01`, `02` becomes `avset-01`, `avset-02` with `avset-##` pattern)
+
+**Critical:** Session host naming conventions MUST match your existing VMs! The form includes:
+- Built-in validation for global uniqueness (Function App, Storage Account)
+- Token validation (SHNAME and ## tokens required in naming patterns)
+- Helpful examples and warnings
+- Conditional visibility (Application Insights only shows if monitoring is enabled)
+
+**When to use Custom Naming:**
+- Host pool name doesn't follow standard patterns (`hp-*` or `*-hp`)
+- Existing session hosts use non-standard naming
+- You want explicit control over resource naming
+- Deploying to existing infrastructure with specific naming requirements
+
+**When Custom Naming is NOT needed:**
+- Host pool follows standard patterns: `hp-avd-prod-eus` or `avd-prod-eus-hp`
+- Session hosts follow standard patterns: `vm-avdvm-001` or `avdvm-001-vm`
+- You're comfortable with automatically-derived names
 
 #### Option 2: Deploy via PowerShell
 
@@ -468,6 +564,73 @@ New-AzResourceGroupDeployment -ResourceGroupName $params.resourceGroupName `
     -TemplateFile ".\deployments\add-ons\SessionHostReplacer\main.bicep" `
     -TemplateParameterObject $params
 ```
+
+#### Brownfield Deployment Example
+
+**Recommended approach:** Use the Azure Portal with the custom UI form's **Custom Naming (Advanced)** step. The form provides built-in validation, helpful tooltips, and prevents common mistakes.
+
+**PowerShell alternative:** For automation or CI/CD pipelines, you can deploy via PowerShell with naming override parameters:
+
+Example deployment for an existing host pool with non-standard naming:
+
+```powershell
+# Existing environment details
+$existingHostPoolId = "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/rg-production-avd/providers/Microsoft.DesktopVirtualization/hostPools/prod-avd-hostpool-01"
+$existingVMResourceGroupId = "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/rg-production-sessionhosts"
+$existingKeyVaultId = "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/rg-production-shared/providers/Microsoft.KeyVault/vaults/kv-prod-avd"
+$existingSubnetId = "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/rg-production-network/providers/Microsoft.Network/virtualNetworks/vnet-prod/subnets/snet-avd"
+
+# Deploy Session Host Replacer with naming overrides
+$params = @{
+    # Required - brownfield references
+    hostPoolResourceId = $existingHostPoolId
+    virtualMachinesResourceGroupId = $existingVMResourceGroupId
+    credentialsKeyVaultResourceId = $existingKeyVaultId
+    virtualMachineSubnetResourceId = $existingSubnetId
+    
+    # Required - naming overrides for non-standard host pool name
+    functionAppNameOverride = "func-avdshr-prod-eus2"
+    storageAccountNameOverride = "stavdshrprod"
+    applicationInsightsNameOverride = "appi-avdshr-prod-eus2"  # Only if monitoring enabled
+    
+    # Required - session host naming overrides (MUST match existing VM naming!)
+    # Existing VMs: vm-avdvm-001, vm-avdvm-002, etc.
+    virtualMachineNameConvOverride = "vm-SHNAME"
+    diskNameConvOverride = "disk-SHNAME"
+    networkInterfaceNameConvOverride = "nic-SHNAME"
+    availabilitySetNameConvOverride = "avset-##"
+    
+    # Required - session host configuration
+    sessionHostNamePrefix = "avdvm"
+    imagePublisher = "MicrosoftWindowsDesktop"
+    imageOffer = "windows-11"
+    imageSku = "win11-25h2-avd"
+    virtualMachineSize = "Standard_D4ads_v6"
+    identitySolution = "ActiveDirectoryDomainServices"
+    domainName = "corp.contoso.com"
+    
+    # Optional - replacement strategy
+    replacementMode = "SideBySide"
+    targetSessionHostCount = 0  # Auto-detect from current pool
+    enableShutdownRetention = $true
+    shutdownRetentionDays = 3
+    
+    # Optional - device cleanup (requires Graph permissions)
+    removeEntraDevice = $true
+    removeIntuneDevice = $true
+}
+
+New-AzResourceGroupDeployment -ResourceGroupName "rg-avd-management" `
+    -TemplateFile ".\deployments\add-ons\SessionHostReplacer\main.bicep" `
+    -TemplateParameterObject $params
+```
+
+**Key differences for brownfield:**
+
+- No dependency on how the host pool was originally created
+- Works across subscriptions (function app, host pool, and VMs can all be in different subscriptions)
+- Naming overrides prevent issues with non-standard host pool names
+- Existing session hosts must be tagged to opt-in (see [Tag Session Hosts](#4-tag-session-hosts-for-automation))
 
 ### 3. Restart Function App (Required After Graph Permission Grant)
 

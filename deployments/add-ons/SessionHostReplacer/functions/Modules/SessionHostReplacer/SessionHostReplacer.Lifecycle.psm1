@@ -213,8 +213,13 @@ function Remove-SessionHosts {
         if ($sessionHost.Sessions -eq 0) {
             Write-LogEntry -Message "Session host $($sessionHost.FQDN) has no sessions."
             
+            # Optimization: If VM is already powered off, skip draining and delete immediately (no point draining an offline VM)
+            if ($sessionHost.PoweredOff) {
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is powered off - marking for immediate deletion without drain period (VM already shutdown)"
+                $deleteSessionHost = $true
+            }
             # Optimization: If MinimumDrainMinutes = 0, skip draining entirely and delete immediately
-            if ($MinimumDrainMinutes -eq 0) {
+            elseif ($MinimumDrainMinutes -eq 0) {
                 Write-LogEntry -Message "Session host $($sessionHost.FQDN) is idle and MinimumDrainMinutes is 0 - marking for immediate removal without drain period"
                 $deleteSessionHost = $true
             }

@@ -68,6 +68,7 @@
         'Remove-DeviceFromDirectories'
         'Remove-EntraDevice'
         'Remove-IntuneDevice'
+        'Confirm-SessionHostDeletions'
         
         # Monitoring functions (from SessionHostReplacer.Monitoring.psm1)
         'Update-HostPoolStatus'

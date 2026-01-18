@@ -107,11 +107,33 @@
 									}
 								},
 								{
-									"name": "hostPool",
-									"type": "Microsoft.Solutions.ResourceSelector",
-									"label": "Hostpool",
-									"resourceType": "Microsoft.DesktopVirtualization/hostPools",
+									"name": "hostPoolSubscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Host Pool Subscription",
+									"defaultValue": "[steps('basics').scope.subscription.displayName]",
+									"toolTip": "Select the subscription containing the host pool you want to manage.",
 									"constraints": {
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "hostPoolsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('functionApp').executionSettings.hostPoolSubscription.id))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('functionApp').executionSettings.hostPoolSubscription.id, '/providers/Microsoft.DesktopVirtualization/hostPools?api-version=2024-04-03')]"
+									}
+								},
+								{
+									"name": "hostPool",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Host Pool",
+									"multiLine": true,
+									"toolTip": "Select the host pool to automate with Session Host Replacer.",
+									"constraints": {
+										"allowedValues": "[map(steps('functionApp').executionSettings.hostPoolsApi.value, (hp) => parse(concat('{\"label\":\"', hp.name, '\",\"description\":\"Resource Group: ', first(skip(split(hp.id, '/'), 4)), '\",\"value\":{\"id\":\"', hp.id, '\",\"name\":\"', hp.name, '\"}}')))]",
 										"required": true
 									}
 								},
@@ -1287,7 +1309,8 @@
 									"name": "subscription",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Subscription",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId), steps('basics').scope.subscription.displayName, first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, first(skip(split(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId, '/'), 2))))).displayName)]",
+									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId), steps('functionApp').executionSettings.hostPoolSubscription.displayName, first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, first(skip(split(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId, '/'), 2))))).displayName)]",
+									"toolTip": "Select the subscription containing the session host VMs. Defaults to the host pool subscription, but can be changed if VMs are in a different subscription.",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
 										"required": true
@@ -2949,6 +2972,215 @@
 					]
 				},
 				{
+					"name": "customNaming",
+					"label": "Custom Naming (Advanced)",
+					"elements": [
+						{
+							"name": "infoBox1",
+							"type": "Microsoft.Common.InfoBox",
+							"options": {
+								"style": "Info",
+								"text": "This step is only needed for brownfield deployments where your host pool uses non-standard naming conventions. Leave 'Use Custom Naming' unchecked to automatically derive names from your host pool naming pattern."
+							}
+						},
+						{
+							"name": "enableCustomNaming",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Use Custom Naming Overrides",
+							"defaultValue": false,
+							"toolTip": "Check this box to explicitly define resource names. Required for brownfield deployments with non-standard host pool naming (e.g., 'prod-avd-hostpool-01' instead of 'hp-avd-prod-eus'). If unchecked, names are automatically derived from the host pool name."
+						},
+						{
+							"name": "functionApp_checkNameAvailability",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(steps('customNaming').enableCustomNaming, not(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride)))]",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Web/checkNameAvailability?api-version=2022-03-01')]",
+								"body": {
+									"name": "[steps('customNaming').infrastructureNaming.functionAppNameOverride]",
+									"type": "Microsoft.Web/sites"
+								}
+							}
+						},
+						{
+							"name": "functionAppName_rePUT",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(steps('customNaming').enableCustomNaming, not(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride)))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
+								"body": {}
+							}
+						},
+						{
+							"name": "storageAccount_checkNameAvailability",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(steps('customNaming').enableCustomNaming, not(empty(steps('customNaming').infrastructureNaming.storageAccountNameOverride)))]",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Storage/checkNameAvailability?api-version=2023-05-01')]",
+								"body": {
+									"name": "[steps('customNaming').infrastructureNaming.storageAccountNameOverride]",
+									"type": "Microsoft.Storage/storageAccounts"
+								}
+							}
+						},
+						{
+							"name": "infrastructureNaming",
+							"type": "Microsoft.Common.Section",
+							"label": "Function App Infrastructure Naming",
+							"visible": "[steps('customNaming').enableCustomNaming]",
+							"elements": [
+								{
+									"name": "infoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "These names are used for the Azure Function App and its supporting resources. All fields are required when custom naming is enabled."
+									}
+								},
+								{
+									"name": "functionAppNameOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Function App Name",
+									"placeholder": "func-avdshr-prod-eus2",
+									"toolTip": "Required. Explicit name for the Function App. Must be globally unique in the azurewebsites.net namespace, 2-60 characters, alphanumeric and hyphens. Example: func-avdshr-prod-eus2",
+									"constraints": {
+										"required": true,
+										"validations": [
+											{
+												"regex": "^[a-zA-Z0-9-]{2,60}$",
+												"message": "Function app name must be 2-60 characters, containing only alphanumeric characters and hyphens."
+											},
+											{
+												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride), steps('customNaming').functionApp_checkNameAvailability.nameAvailable, equals(steps('customNaming').functionApp_checkNameAvailability.reason, 'AlreadyExists'))]",
+												"message": "[steps('customNaming').functionApp_checkNameAvailability.message]"
+											},
+											{
+												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride), steps('customNaming').functionApp_checkNameAvailability.nameAvailable, equals(steps('customNaming').functionAppName_rePUT.id, concat(steps('basics').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride)), not(equals(steps('customNaming').functionApp_checkNameAvailability.reason, 'AlreadyExists')))]",
+												"message": "[steps('customNaming').functionApp_checkNameAvailability.message]"
+											}
+										]
+									}
+								},
+								{
+									"name": "storageAccountNameOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Storage Account Name",
+									"placeholder": "stavdshrprod",
+									"toolTip": "Required. Explicit name for the Storage Account (used by Function App). Must be globally unique in Azure, 3-24 characters, lowercase alphanumeric only. Example: stavdshrprod",
+									"constraints": {
+										"required": true,
+										"validations": [
+											{
+												"regex": "^[a-z0-9]{3,24}$",
+												"message": "Storage account name must be 3-24 characters, lowercase alphanumeric only (no hyphens or special characters)."
+											},
+											{
+												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.storageAccountNameOverride), steps('customNaming').storageAccount_checkNameAvailability.nameAvailable)]",
+												"message": "[steps('customNaming').storageAccount_checkNameAvailability.message]"
+											}
+										]
+									}
+								},
+								{
+									"name": "applicationInsightsNameOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Application Insights Name",
+									"placeholder": "appi-avdshr-prod-eus2",
+									"toolTip": "Required. Explicit name for the Application Insights instance. Must be unique within the resource group, 1-260 characters, alphanumeric, hyphens, underscores, parentheses, and periods. Example: appi-avdshr-prod-eus2",
+									"visible": "[steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring]",
+									"constraints": {
+										"required": true,
+										"validations": [
+											{
+												"regex": "^[a-zA-Z0-9-_().]{1,260}$",
+												"message": "Application Insights name must be 1-260 characters, containing alphanumeric characters, hyphens, underscores, parentheses, and periods."
+											}
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "sessionHostNaming",
+							"type": "Microsoft.Common.Section",
+							"label": "Session Host Resource Naming",
+							"visible": "[steps('customNaming').enableCustomNaming]",
+							"elements": [
+								{
+									"name": "infoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Warning",
+										"text": "CRITICAL: Session host naming conventions MUST match your existing VMs in the host pool! New VMs deployed as replacements will use these patterns. Use 'SHNAME' token for session host name and '##' token for availability set index."
+									}
+								},
+								{
+									"name": "namingExample",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Examples:\n• If existing VMs are 'avdvm-001', use 'SHNAME' (no prefix/suffix)\n• If existing VMs are 'vm-avdvm-001', use 'vm-SHNAME'\n• If existing VMs are 'avdvm-001-vm', use 'SHNAME-vm'"
+									}
+								},
+								{
+									"name": "virtualMachineNameConvOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Virtual Machine Naming Convention",
+									"placeholder": "vm-SHNAME",
+									"defaultValue": "vm-SHNAME",
+									"toolTip": "Required. Naming pattern for session host VMs. Use SHNAME token which will be replaced with the session host name (e.g., 'vm-SHNAME' becomes 'vm-avdvm-001'). This MUST match your existing VM naming.",
+									"constraints": {
+										"required": true,
+										"regex": "^.*SHNAME.*$",
+										"validationMessage": "VM naming convention must include the SHNAME token."
+									}
+								},
+								{
+									"name": "diskNameConvOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "OS Disk Naming Convention",
+									"placeholder": "disk-SHNAME",
+									"defaultValue": "disk-SHNAME",
+									"toolTip": "Required. Naming pattern for OS disks. Use SHNAME token (e.g., 'disk-SHNAME' becomes 'disk-avdvm-001'). Should align with existing disk naming.",
+									"constraints": {
+										"required": true,
+										"regex": "^.*SHNAME.*$",
+										"validationMessage": "Disk naming convention must include the SHNAME token."
+									}
+								},
+								{
+									"name": "networkInterfaceNameConvOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Network Interface Naming Convention",
+									"placeholder": "nic-SHNAME",
+									"defaultValue": "nic-SHNAME",
+									"toolTip": "Required. Naming pattern for NICs. Use SHNAME token (e.g., 'nic-SHNAME' becomes 'nic-avdvm-001'). Should align with existing NIC naming.",
+									"constraints": {
+										"required": true,
+										"regex": "^.*SHNAME.*$",
+										"validationMessage": "NIC naming convention must include the SHNAME token."
+									}
+								},
+								{
+									"name": "availabilitySetNameConvOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Availability Set Naming Convention",
+									"placeholder": "avset-##",
+									"defaultValue": "avset-##",
+									"toolTip": "Required. Naming pattern for availability sets. Use ## token for index (e.g., 'avset-##' becomes 'avset-01', 'avset-02'). Only used if availability is set to 'AvailabilitySets'.",
+									"constraints": {
+										"required": true,
+										"regex": "^.*##.*$",
+										"validationMessage": "Availability set naming convention must include the ## token for indexing."
+									}
+								}
+							]
+						}
+					]
+				},
+				{
 					"name": "tags",
 					"label": "Tags",
 					"elements": [
@@ -3061,6 +3293,13 @@
 				"vmInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.vmInsightsDataCollectionRule, ''), '')]",
 				"dataCollectionEndpointResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.dataCollectionEndpoint, ''), '')]",
 				"privateLinkScopeResourceId": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.enableAMPLS), steps('monitoring').functionAppMonitoringSection.privateLinkScope.id, '')]",
+				"functionAppNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.functionAppNameOverride, ''), '')]",
+				"storageAccountNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.storageAccountNameOverride, ''), '')]",
+				"applicationInsightsNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
+				"virtualMachineNameConvOverride": "[if(steps('customNaming').enableCustomNaming, steps('customNaming').sessionHostNaming.virtualMachineNameConvOverride, '')]",
+				"diskNameConvOverride": "[if(steps('customNaming').enableCustomNaming, steps('customNaming').sessionHostNaming.diskNameConvOverride, '')]",
+				"networkInterfaceNameConvOverride": "[if(steps('customNaming').enableCustomNaming, steps('customNaming').sessionHostNaming.networkInterfaceNameConvOverride, '')]",
+				"availabilitySetNameConvOverride": "[if(steps('customNaming').enableCustomNaming, steps('customNaming').sessionHostNaming.availabilitySetNameConvOverride, '')]",
 				"tags": "[steps('tags').tags]"
 			},
 			"kind": "ResourceGroup",
