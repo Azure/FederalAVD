@@ -281,6 +281,7 @@ module availabilitySets '../../../../sharedModules/resources/compute/availabilit
 @batchSize(5)
 module virtualMachines 'modules/virtualMachines.bicep' = [
   for i in range(1, sessionHostBatchCount): {
+    #disable-next-line BCP335
     name: 'shr-vm-batch-${i}-of-${sessionHostBatchCount}-${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}vms-${deploymentSuffix}'
     params: {
       artifactsContainerUri: artifactsContainerUri

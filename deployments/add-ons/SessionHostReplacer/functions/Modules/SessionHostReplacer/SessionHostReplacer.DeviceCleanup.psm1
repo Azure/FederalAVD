@@ -356,67 +356,65 @@ function Confirm-SessionHostDeletions {
                 }
                 catch {
                     Write-LogEntry -Message "Error verifying Intune deletion for {0}: {1}" -StringValues $host.Name, $_.Exception.Message -Level Warning
-                    if ($RemoveEntraDevice -or $RemoveIntuneDevice) {
-                        Write-LogEntry -Message "Graph token not available - skipping device validation" -Level Trace
-                    }
-                    # Mark all as confirmed since we didn't attempt deletion or
-                    else {
-                        # Not attempted, mark as confirmed
-                        $host.IntuneConfirmed = $true
-                    }
+                }
+            }
+            else {
+                # Not attempted, mark as confirmed
+                $host.IntuneConfirmed = $true
+            }
             
-                    # Per-host validation summary
-                    $vmStatus = if ($host.VMConfirmed) { "✓" } else { "✗" }
-                    $entraStatus = if ($host.EntraIDConfirmed) { "✓" } else { "✗" }
-                    $intuneStatus = if ($host.IntuneConfirmed) { "✓" } else { "✗" }
-                    Write-LogEntry -Message "Deletion status for {0}: VM={1} EntraID={2} Intune={3}" -StringValues $host.Name, $vmStatus, $entraStatus, $intuneStatus -Level Trace
-                }
-            }
-            else {
-                Write-LogEntry -Message "Graph token not available - skipping Entra ID and Intune validation" -Level Trace
-                # Mark all as confirmed since we can't verify
-                foreach ($host in $hostsToVerify) {
-                    $host.EntraIDConfirmed = $true
-                    $host.IntuneConfirmed = $true
-                }
-            }
-    
-            # Calculate summary counts
-            $vmsConfirmed = ($hostsToVerify | Where-Object { $_.VMConfirmed }).Count
-            $entraIDConfirmed = ($hostsToVerify | Where-Object { $_.EntraIDConfirmed }).Count
-            $intuneConfirmed = ($hostsToVerify | Where-Object { $_.IntuneConfirmed }).Count
-            $totalHosts = $hostsToVerify.Count
-    
-            # Summary logging
-            Write-LogEntry -Message "DELETION_VERIFICATION | VMs: {0}/{1} confirmed | EntraID: {2}/{3} confirmed | Intune: {4}/{5} confirmed" `
-                -StringValues $vmsConfirmed, $totalHosts, $entraIDConfirmed, $totalHosts, $intuneConfirmed, $totalHosts
-    
-            # Warn about any incomplete deletions
-            $incompleteHosts = $hostsToVerify | Where-Object { -not ($_.VMConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed) }
-            if ($incompleteHosts.Count -gt 0) {
-                foreach ($host in $incompleteHosts) {
-                    $failures = @()
-                    if (-not $host.VMConfirmed) { $failures += "VM" }
-                    if (-not $host.EntraIDConfirmed) { $failures += "EntraID" }
-                    if (-not $host.IntuneConfirmed) { $failures += "Intune" }
-                    Write-LogEntry -Message "Warning: Incomplete deletion for {0} - unconfirmed: {1}" -StringValues $host.Name, ($failures -join ', ') -Level Warning
-                }
-            }
-            else {
-                Write-LogEntry -Message "All deletions fully confirmed across VM, Entra ID, and Intune"
-            }
-    
-            # Return validation results
-            return [PSCustomObject]@{
-                TotalHosts       = $totalHosts
-                VMsConfirmed     = $vmsConfirmed
-                EntraIDConfirmed = $entraIDConfirmed
-                IntuneConfirmed  = $intuneConfirmed
-                IncompleteHosts  = $incompleteHosts
-            }
+            # Per-host validation summary
+            $vmStatus = if ($host.VMConfirmed) { "✓" } else { "✗" }
+            $entraStatus = if ($host.EntraIDConfirmed) { "✓" } else { "✗" }
+            $intuneStatus = if ($host.IntuneConfirmed) { "✓" } else { "✗" }
+            Write-LogEntry -Message "Deletion status for {0}: VM={1} EntraID={2} Intune={3}" -StringValues $host.Name, $vmStatus, $entraStatus, $intuneStatus -Level Trace
         }
+    }
+    else {
+        Write-LogEntry -Message "Graph token not available - skipping Entra ID and Intune validation" -Level Trace
+        # Mark all as confirmed since we can't verify
+        foreach ($host in $hostsToVerify) {
+            $host.EntraIDConfirmed = $true
+            $host.IntuneConfirmed = $true
+        }
+    }
 
-        #EndRegion Device Cleanup
+    # Calculate summary counts
+    $vmsConfirmed = ($hostsToVerify | Where-Object { $_.VMConfirmed }).Count
+    $entraIDConfirmed = ($hostsToVerify | Where-Object { $_.EntraIDConfirmed }).Count
+    $intuneConfirmed = ($hostsToVerify | Where-Object { $_.IntuneConfirmed }).Count
+    $totalHosts = $hostsToVerify.Count
 
-        # Export functions
-        Export-ModuleMember -Function Remove-DeviceFromDirectories, Remove-EntraDevice, Remove-IntuneDevice, Confirm-SessionHostDeletions
+    # Summary logging
+    Write-LogEntry -Message "DELETION_VERIFICATION | VMs: {0}/{1} confirmed | EntraID: {2}/{3} confirmed | Intune: {4}/{5} confirmed" `
+        -StringValues $vmsConfirmed, $totalHosts, $entraIDConfirmed, $totalHosts, $intuneConfirmed, $totalHosts
+
+    # Warn about any incomplete deletions
+    $incompleteHosts = $hostsToVerify | Where-Object { -not ($_.VMConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed) }
+    if ($incompleteHosts.Count -gt 0) {
+        foreach ($host in $incompleteHosts) {
+            $failures = @()
+            if (-not $host.VMConfirmed) { $failures += "VM" }
+            if (-not $host.EntraIDConfirmed) { $failures += "EntraID" }
+            if (-not $host.IntuneConfirmed) { $failures += "Intune" }
+            Write-LogEntry -Message "Warning: Incomplete deletion for {0} - unconfirmed: {1}" -StringValues $host.Name, ($failures -join ', ') -Level Warning
+        }
+    }
+    else {
+        Write-LogEntry -Message "All deletions fully confirmed across VM, Entra ID, and Intune"
+    }
+
+    # Return validation results
+    return [PSCustomObject]@{
+        TotalHosts       = $totalHosts
+        VMsConfirmed     = $vmsConfirmed
+        EntraIDConfirmed = $entraIDConfirmed
+        IntuneConfirmed  = $intuneConfirmed
+        IncompleteHosts  = $incompleteHosts
+    }
+}
+
+#EndRegion Device Cleanup
+
+# Export functions
+Export-ModuleMember -Function Remove-DeviceFromDirectories, Remove-EntraDevice, Remove-IntuneDevice, Confirm-SessionHostDeletions
