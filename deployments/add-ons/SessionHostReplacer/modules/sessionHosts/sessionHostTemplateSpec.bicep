@@ -19,7 +19,7 @@ resource sessionHostTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versi
   location: location
   tags: tags
   properties: {
-    mainTemplate: loadJsonContent('sessionHosts/sessionHosts.json')
+    mainTemplate: loadJsonContent('sessionHosts.json')
   }
 }
 

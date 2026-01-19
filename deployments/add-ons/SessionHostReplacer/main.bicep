@@ -694,7 +694,7 @@ var sessionHostParameters = union(
 )
 
 // Conditional Template Spec for Session Host Deployment
-module templateSpec 'modules/sessionHostTemplateSpec.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
+module templateSpec 'modules/sessionHosts/sessionHostTemplateSpec.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
   name: 'SessionHostTemplateSpec-${deploymentSuffix}'
   params: {
     location: location
