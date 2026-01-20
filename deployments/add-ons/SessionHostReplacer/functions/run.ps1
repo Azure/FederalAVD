@@ -6,9 +6,6 @@ if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
 }
 
-# Set host pool name for log prefixing
-Set-HostPoolNameForLogging -HostPoolName (Read-FunctionAppSetting HostPoolName)
-
 Write-LogEntry -Message "SessionHostReplacer function started at {0}" -StringValues (Get-Date -AsUTC -Format 'o')
 
 # Log configuration settings for workbook visibility
@@ -343,24 +340,34 @@ $isUpToDate = $false
 $replaceSessionHostOnNewImageVersionDelayDays = (Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersionDelayDays)
 $latestImageAge = (New-TimeSpan -Start $latestImageVersion.Date -End (Get-Date -AsUTC)).TotalDays
 
-# Check if there's outstanding work from a previous cycle (pending host mappings from failed deployments in DeleteFirst mode)
+# Check for work in progress that requires full processing
+$skipLightweightCheck = $false
+
+# DeleteFirst mode: Check for pending host mappings or hosts in drain mode
 if ($replacementMode -eq 'DeleteFirst') {
     $deploymentState = Get-DeploymentState
     $hasPendingMappings = $deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}'
     
     if ($hasPendingMappings) {
         Write-LogEntry -Message "Lightweight check: Found pending host mappings from previous deletion - proceeding with full processing" -Level Trace
-        $isUpToDate = $false
+        $skipLightweightCheck = $true
     }
     # Check if there are hosts in drain mode (work in progress)
     elseif (($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count -gt 0) {
         $hostsInDrainMode = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
         Write-LogEntry -Message "Lightweight check: Found $hostsInDrainMode host(s) in drain mode - proceeding with full processing" -Level Trace
-        $isUpToDate = $false
+        $skipLightweightCheck = $true
     }
-    # Check if there are any running or failed deployments
-    elseif ($runningDeployments.Count -eq 0 -and $failedDeployments.Count -eq 0) {
-    
+}
+
+# Check if there are any running or failed deployments (both modes)
+if ($runningDeployments.Count -gt 0 -or $failedDeployments.Count -gt 0) {
+    Write-LogEntry -Message "Lightweight check: Found $($runningDeployments.Count) running and $($failedDeployments.Count) failed deployments - proceeding with full processing" -Level Trace
+    $skipLightweightCheck = $true
+}
+
+# If no work in progress, perform quick image version check
+if (-not $skipLightweightCheck) {
     # Check if image is old enough to trigger replacements
     if ($latestImageAge -ge $replaceSessionHostOnNewImageVersionDelayDays) {
         
@@ -410,9 +417,6 @@ if ($replacementMode -eq 'DeleteFirst') {
         $isUpToDate = $true
         Write-LogEntry -Message "Lightweight check: Latest image is only $([Math]::Round($latestImageAge, 1)) days old (delay: $replaceSessionHostOnNewImageVersionDelayDays days) - no replacements needed" -Level Trace
     }
-}
-else {
-    Write-LogEntry -Message "Lightweight check: Found $($runningDeployments.Count) running and $($failedDeployments.Count) failed deployments - proceeding with full processing" -Level Trace
 }
 
 # If up to date, skip expensive operations and go straight to early exit path
@@ -690,7 +694,6 @@ if ($replacementMode -eq 'DeleteFirst') {
                 $hostPropertyMapping = @{}
             }
         }
-    }
     
     # SAFETY CHECK: Verify any previously deployed new hosts are available before deleting more old capacity
     # This prevents cascading capacity loss if previous deployments created VMs that didn't register properly
@@ -897,7 +900,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             }
         }
     } # End of safety check else block
-}
+} # End of DeleteFirst mode
 else {
     # ================================================================================================
     # SIDE-BY-SIDE MODE: Deploy new hosts first, then delete old ones
@@ -1046,15 +1049,28 @@ $shutdownRetentionCount = if ($enableShutdownRetention -and $hostsInShutdownRete
 
 # Calculate actual current counts by subtracting completed deletions from initial counts
 $completedDeletionsCount = if ($deletionResults -and $deletionResults.SuccessfulDeletions) { $deletionResults.SuccessfulDeletions.Count } else { 0 }
+$completedShutdownsCount = if ($deletionResults -and $deletionResults.SuccessfulShutdowns) { $deletionResults.SuccessfulShutdowns.Count } else { 0 }
 $currentSessionHostCount = $sessionHosts.Count - $completedDeletionsCount
 $currentEnabledCount = $sessionHostsFiltered.Count - $completedDeletionsCount
+
+# Adjust ToReplace to reflect completed deletions AND shutdowns in BOTH modes
+# Once hosts are deleted OR shutdown (regardless of mode), they no longer need replacement
+# - SuccessfulDeletions: Hosts fully removed (VM + devices deleted)
+# - SuccessfulShutdowns: Hosts powered off for retention (effectively replaced, kept as backup)
+# DeleteFirst: Deletes first, then deploys replacements with name reuse
+# SideBySide: Deploys first, then deletes/shuts down old hosts (both reduce ToReplace count)
+$totalReplacementOperations = $completedDeletionsCount + $completedShutdownsCount
+$remainingToReplace = $hostPoolReplacementPlan.TotalSessionHostsToReplace
+if ($totalReplacementOperations -gt 0) {
+    $remainingToReplace = [Math]::Max(0, $hostPoolReplacementPlan.TotalSessionHostsToReplace - $totalReplacementOperations)
+}
 
 $metricsLog = @{
     TotalSessionHosts     = $currentSessionHostCount
     EnabledForAutomation  = $currentEnabledCount
     TargetCount           = if ($hostPoolReplacementPlan.TargetSessionHostCount) { $hostPoolReplacementPlan.TargetSessionHostCount } else { 0 }
-    ToReplace             = if ($hostPoolReplacementPlan.TotalSessionHostsToReplace) { $hostPoolReplacementPlan.TotalSessionHostsToReplace } else { 0 }
-    ToReplacePercentage   = if ($currentEnabledCount -gt 0) { [math]::Round(($hostPoolReplacementPlan.TotalSessionHostsToReplace / $currentEnabledCount) * 100, 1) } else { 0 }
+    ToReplace             = $remainingToReplace
+    ToReplacePercentage   = if ($currentEnabledCount -gt 0) { [math]::Round(($remainingToReplace / $currentEnabledCount) * 100, 1) } else { 0 }
     InDrain               = $hostsInDrainMode
     PendingDelete         = $hostPoolReplacementPlan.SessionHostsPendingDelete.Count
     ShutdownRetention     = $shutdownRetentionCount

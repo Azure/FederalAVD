@@ -39,7 +39,7 @@ function Get-ScalingPlanCurrentTarget {
     .EXAMPLE
     $scalingTarget = Get-ScalingPlanCurrentTarget -ARMToken $token -HostPoolResourceId $hostPoolId
     if ($scalingTarget.CapacityPercentage) {
-        Write-Host "Current scaling plan target: $($scalingTarget.CapacityPercentage)%"
+        Write-LogEntry -Message "Current scaling plan target: {0}%" -StringValues $scalingTarget.CapacityPercentage
     }
     #>
     [CmdletBinding()]

@@ -13,9 +13,6 @@ $script:ResourceManagerUri = $null
 # Cached and normalized GraphEndpoint without trailing slash
 $script:GraphEndpoint = $null
 
-# Host Pool Name for log message prefixing
-$script:HostPoolNameForLogging = $null
-
 #EndRegion Module-Level Variables
 
 #Region Helper Functions
@@ -314,26 +311,6 @@ function Read-FunctionAppSetting {
 
 #Region Logging and Error Handling
 
-function Set-HostPoolNameForLogging {
-    <#
-    .SYNOPSIS
-        Sets the host pool name to be used as a prefix in all log messages.
-    .DESCRIPTION
-        This function sets the module-level variable used by Write-LogEntry to prefix all log messages.
-    .PARAMETER HostPoolName
-        The name of the host pool to use as a prefix.
-    .EXAMPLE
-        Set-HostPoolNameForLogging -HostPoolName "vdpool-test-01-use2"
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string] $HostPoolName
-    )
-    
-    $script:HostPoolNameForLogging = $HostPoolName
-}
-
 function Write-LogEntry {
     <#
     .SYNOPSIS
@@ -351,6 +328,9 @@ function Write-LogEntry {
     #>
     [CmdletBinding()]
     param (
+        [Parameter(Mandatory = $false)]
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
+
         [Parameter(Mandatory = $true, Position = 0)]
         [string] $Message,
         
@@ -376,11 +356,8 @@ function Write-LogEntry {
         $formattedMessage = $Message
     }
     
-    # Add host pool prefix if available
-    $prefix = if ($script:HostPoolNameForLogging) { "[$($script:HostPoolNameForLogging)]" } else { "" }
-    
     # Build output message (Azure Functions already adds timestamp and level)
-    $output = "$prefix $formattedMessage".Trim()
+    $output = if ($hostPoolName) { "[$hostPoolName] $formattedMessage".Trim() } else { $formattedMessage.Trim() }
     
     # Output based on level
     switch ($Level) {
@@ -397,7 +374,8 @@ function Write-LogEntry {
             Write-Warning $output
         }
         'Information' {
-            Write-Information $output
+            # Use Write-Host for Information level to ensure proper display in Azure Functions
+            Write-Host $output
         }
     }
 }
@@ -876,4 +854,4 @@ function Get-VMPowerStates {
 #EndRegion VM Helper Functions
 
 # Export functions
-Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Set-HostPoolNameForLogging, Write-LogEntry, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry, Get-VMPowerStates
+Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Write-LogEntry, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry, Get-VMPowerStates
