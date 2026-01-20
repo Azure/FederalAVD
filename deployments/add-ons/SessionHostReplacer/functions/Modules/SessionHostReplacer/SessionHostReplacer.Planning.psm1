@@ -552,10 +552,12 @@ function Get-SessionHostReplacementPlan {
     Write-LogEntry -Message "We have $($sessionHostsCurrentTotal.Count) good session hosts including $runningDeploymentVMCount session hosts being deployed"
     Write-LogEntry -Message "We target having $TargetSessionHostCount session hosts in good shape"
     
-    # Check if there are any running or recently submitted deployments - if so, don't submit new ones
+    # Check if there are any running or recently submitted deployments - if so, skip deployment and capacity calculations
     if ($runningDeployments -and $runningDeployments.Count -gt 0) {
         Write-LogEntry -Message "Found $($runningDeployments.Count) running or recently submitted deployment(s). Will not submit new deployments until these complete." -Level Warning
         $canDeploy = 0
+        # In DeleteFirst mode, deletions are aligned with deployments (1:1), so also skip deletion calculations
+        $canDelete = if ($ReplacementMode -eq 'DeleteFirst') { 0 } else { $SessionHosts.Count - $TargetSessionHostCount }
     }
     else {
         # In DeleteFirst mode, calculate deployments based on what needs replacement (we'll delete first to make room)
@@ -626,23 +628,23 @@ function Get-SessionHostReplacementPlan {
             $canDeploy = $actualDeployCount
         }
     }
-    
-    # Calculate how many hosts can be deleted
-    if ($ReplacementMode -eq 'DeleteFirst') {
-        # DeleteFirst mode: Calculate deletions based on hosts that need replacing (not net-new)
-        # When growing the pool (e.g., 8→10), we deploy net-new + replacements, but only delete replacements
-        # Example: Current=8, Target=10, Need 1 replacement → Deploy 3 (1 replacement + 2 net-new), Delete 1 (only the old one)
         
-        # Calculate how many are being replaced vs net-new
-        $hostsToReplace = $sessionHostsToReplace.Count  # Hosts with old image or other issues
-        $netNewHosts = $canDeploy - $hostsToReplace     # Additional hosts needed to reach target
-        
-        # Only delete hosts that are being replaced, not the net-new ones
-        $canDelete = [Math]::Min($canDeploy, $hostsToReplace)
-        
-        # Determine effective minimum capacity percentage (dynamic from scaling plan or static from config)
-        $effectiveMinimumCapacityPct = $MinimumCapacityPercentage
-        $capacitySource = 'Static configuration'
+    # Calculate deletion details (only if not already determined by running deployments check)
+    if (-not ($runningDeployments -and $runningDeployments.Count -gt 0)) {
+        if ($ReplacementMode -eq 'DeleteFirst') {
+            # DeleteFirst mode: Calculate deletions based on hosts that need replacing (not net-new)
+            # When growing the pool (e.g., 8→10), we deploy net-new + replacements, but only delete replacements
+            # Example: Current=8, Target=10, Need 1 replacement → Deploy 3 (1 replacement + 2 net-new), Delete 1 (only the old one)
+            
+            # Calculate how many hosts to delete (only replace existing hosts, not net-new ones)
+            $hostsToReplace = $sessionHostsToReplace.Count  # Hosts with old image or other issues
+            
+            # Only delete hosts that are being replaced, not the net-new ones
+            $canDelete = [Math]::Min($canDeploy, $hostsToReplace)
+            
+            # Determine effective minimum capacity percentage (dynamic from scaling plan or static from config)
+            $effectiveMinimumCapacityPct = $MinimumCapacityPercentage
+            $capacitySource = 'Static configuration'
         
         if ($ScalingPlanTarget -and $ScalingPlanTarget.CapacityPercentage) {
             $scalingPlanPct = $ScalingPlanTarget.CapacityPercentage
@@ -706,10 +708,11 @@ function Get-SessionHostReplacementPlan {
         $canDelete = [Math]::Max($canDelete, 0)  # Ensure non-negative
         
         Write-LogEntry -Message "Delete-First mode: Will delete $canDelete hosts (aligned with $canDeploy deployments, available capacity: $availableHostsCount, minimum: $minimumAbsoluteHosts at $effectiveMinimumCapacityPct%, draining: $drainingHostsCount, max per cycle: $MaxDeletionsPerCycle) [Capacity source: $capacitySource]"
-    }
-    else {
-        # SideBySide mode: Only delete when overpopulated (more hosts than target)
-        $canDelete = $SessionHosts.Count - $TargetSessionHostCount
+        }
+        else {
+            # SideBySide mode: Only delete when overpopulated (more hosts than target)
+            $canDelete = $SessionHosts.Count - $TargetSessionHostCount
+        }
     }
     
     if ($canDelete -gt 0) {
