@@ -150,7 +150,6 @@ function Get-LatestImageVersion {
         }
     }
     elseif ($ImageReference.id) {
-        Write-LogEntry -Message "Image is from Shared Image Gallery: $($ImageReference.id)"
         $imageDefinitionResourceIdPattern = '^\/subscriptions\/(?<subscription>[a-z0-9\-]+)\/resourceGroups\/(?<resourceGroup>[^\/]+)\/providers\/Microsoft\.Compute\/galleries\/(?<gallery>[^\/]+)\/images\/(?<image>[^\/]+)$'
         $imageVersionResourceIdPattern = '^\/subscriptions\/(?<subscription>[a-z0-9\-]+)\/resourceGroups\/(?<resourceGroup>[^\/]+)\/providers\/Microsoft\.Compute\/galleries\/(?<gallery>[^\/]+)\/images\/(?<image>[^\/]+)\/versions\/(?<version>[^\/]+)$'
         if ($ImageReference.id -match $imageDefinitionResourceIdPattern) {
@@ -159,6 +158,7 @@ function Get-LatestImageVersion {
             $imageResourceGroup = $Matches.resourceGroup
             $imageGalleryName = $Matches.gallery
             $imageDefinitionName = $Matches.image
+            Write-LogEntry -Message "Fetching image versions for gallery '$imageGalleryName', image definition '$imageDefinitionName' in resource group '$imageResourceGroup' and subscription '$imageSubscriptionId'."
             
             # Store the image definition resource ID for tracking
             $azImageDefinition = $ImageReference.id
@@ -212,12 +212,11 @@ function Get-LatestImageVersion {
                 # Sort by published date and select latest
                 $latestImageVersion = $validVersions |
                 Sort-Object -Property { [DateTime]$_.properties.publishingProfile.publishedDate } -Descending |
-                Select-Object -First 1
-                
-                Write-LogEntry -Message "Selected image version with resource Id {0} (most recent non-excluded version)" -StringValues $latestImageVersion.id
+                Select-Object -First 1                
+
                 $azImageVersion = $latestImageVersion.name
                 $azImageDate = [DateTime]$latestImageVersion.properties.publishingProfile.publishedDate
-                Write-LogEntry -Message "Image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
+                Write-LogEntry -Message "Select image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
             }
         }
         elseif ($ImageReference.id -match $imageVersionResourceIdPattern ) {

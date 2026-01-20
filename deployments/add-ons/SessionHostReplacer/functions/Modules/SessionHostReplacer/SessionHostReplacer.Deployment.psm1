@@ -424,20 +424,76 @@ function Deploy-SessionHosts {
         [string] $TagScalingPlanExclusionTag = (Read-FunctionAppSetting Tag_ScalingPlanExclusionTag)
     )
 
-    Write-LogEntry -Message "Generating new token for the host pool $HostPoolName in Resource Group $HostPoolResourceGroupName"
-    $Body = @{
-        properties = @{
-            registrationInfo = @{
-                expirationTime             = (Get-Date).AddHours(8)
-                registrationTokenOperation = 'Update'
+    # Check if we have a valid token with sufficient time remaining
+    Write-LogEntry -Message "Checking existing registration token for host pool $HostPoolName" -Level Trace
+    
+    try {
+        $existingTokens = Invoke-AzureRestMethod `
+            -ARMToken $ARMToken `
+            -Method Post `
+            -Uri ("$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$($HostPoolName)/listRegistrationTokens?api-version=2024-04-03")
+        
+        if ($existingTokens -and $existingTokens.expirationTime) {
+            # Parse expiration time - Azure returns UTC datetime strings
+            # Use RoundtripKind to properly parse timezone info (e.g., "2026-01-19T05:20:00.0000000Z")
+            $tokenExpiration = [DateTime]::Parse($existingTokens.expirationTime, $null, [System.Globalization.DateTimeStyles]::RoundtripKind)
+            
+            # If timezone info wasn't in the string, assume UTC (Azure always returns UTC)
+            if ($tokenExpiration.Kind -eq [System.DateTimeKind]::Unspecified) {
+                $tokenExpiration = [DateTime]::SpecifyKind($tokenExpiration, [System.DateTimeKind]::Utc)
+            }
+            
+            # Get current time in UTC
+            $currentTimeUtc = [DateTime]::UtcNow
+            
+            # Calculate remaining time (both times now in UTC)
+            $hoursRemaining = ($tokenExpiration - $currentTimeUtc).TotalHours
+            
+            if ($hoursRemaining -ge 2) {
+                Write-LogEntry -Message "Existing registration token is valid for {0:F1} more hours - reusing token" -StringValues $hoursRemaining
+                $skipTokenGeneration = $true
+            }
+            else {
+                Write-LogEntry -Message "Existing token expires in {0:F1} hours (less than 2 hours) - generating new token" -StringValues $hoursRemaining -Level Trace
+                $skipTokenGeneration = $false
             }
         }
+        else {
+            Write-LogEntry -Message "No valid token found - generating new token" -Level Trace
+            $skipTokenGeneration = $false
+        }
     }
-    Invoke-AzureRestMethod `
-        -ARMToken $ARMToken `
-        -Body ($Body | ConvertTo-Json -depth 10) `
-        -Method Patch `
-        -Uri ("$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$($HostPoolName)?api-version=2024-04-03") | Out-Null
+    catch {
+        Write-LogEntry -Message "Could not retrieve existing token: $($_.Exception.Message) - generating new token" -Level Trace
+        $skipTokenGeneration = $false
+    }
+    
+    # Generate new token if needed
+    if (-not $skipTokenGeneration) {
+        Write-LogEntry -Message "Generating new registration token for host pool $HostPoolName in Resource Group $HostPoolResourceGroupName"
+        $Body = @{
+            properties = @{
+                registrationInfo = @{
+                    expirationTime             = (Get-Date).AddHours(8)
+                    registrationTokenOperation = 'Update'
+                }
+            }
+        }
+        
+        try {
+            $tokenResponse = Invoke-AzureRestMethod `
+                -ARMToken $ARMToken `
+                -Body ($Body | ConvertTo-Json -depth 10) `
+                -Method Patch `
+                -Uri ("$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$($HostPoolName)?api-version=2024-04-03")
+            
+            Write-LogEntry -Message "Successfully generated new registration token (expires in 8 hours)"
+        }
+        catch {
+            Write-LogEntry -Message "Failed to generate registration token: $($_.Exception.Message)" -Level Error
+            throw "Failed to generate registration token for host pool $HostPoolName. Error: $($_.Exception.Message)"
+        }
+    }
     
     # Calculate Session Host Names
     Write-LogEntry -Message "Existing session host VM names: {0}" -StringValues ($ExistingSessionHostNames -join ',')

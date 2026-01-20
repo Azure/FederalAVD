@@ -157,8 +157,8 @@ param minimumCapacityPercentage int = 80
 @maxValue(100)
 param maxDeletionsPerCycle int = 50
 
-@description('Optional. Minimum host index for hostname numbering in SideBySide mode. Useful for starting numbering at a specific value (e.g., 10 instead of 1). Only applies when replacementMode is SideBySide. Default is 1.')
-@minValue(1)
+@description('Optional. Minimum host index for hostname numbering. Gap-filling logic starts from this index when deploying new hosts (e.g., 1 allows host01, host02; 10 allows host10, host11). Applies to both DeleteFirst and SideBySide modes. Default is 1.')
+@minValue(0)
 @maxValue(999)
 param minimumHostIndex int = 1
 
@@ -427,9 +427,7 @@ var locations = locationsObject[locationsEnvProperty]
 // the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.
 var graphEndpoint = cloud == 'azureusgovernment'
   ? 'https://graph.microsoft.us'
-  : startsWith(cloud, 'us')
-      ? 'https://graph.${environment().suffixes.storage}'
-      : 'https://graph.microsoft.com'
+  : startsWith(cloud, 'us') ? 'https://graph.${environment().suffixes.storage}' : 'https://graph.microsoft.com'
 
 var functionAppRegionAbbreviation = locations[location].abbreviation
 #disable-next-line BCP329
@@ -586,9 +584,7 @@ var virtualMachineNameConv = !empty(virtualMachineNameConvOverride)
 
 var diskNameConv = !empty(diskNameConvOverride)
   ? diskNameConvOverride
-  : nameConvReversed
-      ? 'SHNAME-${resourceAbbreviations.osdisks}'
-      : '${resourceAbbreviations.osdisks}-SHNAME'
+  : nameConvReversed ? 'SHNAME-${resourceAbbreviations.osdisks}' : '${resourceAbbreviations.osdisks}-SHNAME'
 
 var networkInterfaceNameConv = !empty(networkInterfaceNameConvOverride)
   ? networkInterfaceNameConvOverride
@@ -606,28 +602,54 @@ var computeGalleryResourceId = !empty(customImageResourceId)
 
 // Conditional Session Host Parameters
 var paramArtifactsContainerUri = !empty(artifactsContainerUri) ? { artifactsContainerUri: artifactsContainerUri } : {}
-var paramArtifactsUserAssignedIdentityResourceId = !empty(artifactsUserAssignedIdentityResourceId) ? { artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId } : {}
+var paramArtifactsUserAssignedIdentityResourceId = !empty(artifactsUserAssignedIdentityResourceId)
+  ? { artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId }
+  : {}
 var paramAvailabilityZones = !empty(availabilityZones) ? { availabilityZones: availabilityZones } : {}
-var paramAvdInsightsDataCollectionRulesResourceId = !empty(avdInsightsDataCollectionRulesResourceId) ? { avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId } : {}
-var paramConfidentialVMOSDiskEncryption = confidentialVMOSDiskEncryption ? { confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption } : {}
-var paramDataCollectionEndpointResourceId = !empty(dataCollectionEndpointResourceId) ? { dataCollectionEndpointResourceId: dataCollectionEndpointResourceId } : {}
-var paramDiskEncryptionSetResourceId = !empty(diskEncryptionSetResourceId) ? { diskEncryptionSetResourceId: diskEncryptionSetResourceId } : {}
+var paramAvdInsightsDataCollectionRulesResourceId = !empty(avdInsightsDataCollectionRulesResourceId)
+  ? { avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId }
+  : {}
+var paramConfidentialVMOSDiskEncryption = confidentialVMOSDiskEncryption
+  ? { confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption }
+  : {}
+var paramDataCollectionEndpointResourceId = !empty(dataCollectionEndpointResourceId)
+  ? { dataCollectionEndpointResourceId: dataCollectionEndpointResourceId }
+  : {}
+var paramDiskEncryptionSetResourceId = !empty(diskEncryptionSetResourceId)
+  ? { diskEncryptionSetResourceId: diskEncryptionSetResourceId }
+  : {}
 var paramDomainName = !empty(domainName) ? { domainName: domainName } : {}
 var paramEnableMonitoring = enableMonitoring ? { enableMonitoring: enableMonitoring } : {}
 var paramIntegrityMonitoring = integrityMonitoring ? { integrityMonitoring: integrityMonitoring } : {}
 var paramIntuneEnrollment = intuneEnrollment ? { intuneEnrollment: intuneEnrollment } : {}
 var paramOuPath = !empty(ouPath) ? { ouPath: ouPath } : {}
-var paramSessionHostCustomizations = !empty(sessionHostCustomizations) ? { sessionHostCustomizations: sessionHostCustomizations } : {}
-var paramVmInsightsDataCollectionRulesResourceId = !empty(vmInsightsDataCollectionRulesResourceId) ? { vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId } : {}
+var paramSessionHostCustomizations = !empty(sessionHostCustomizations)
+  ? { sessionHostCustomizations: sessionHostCustomizations }
+  : {}
+var paramVmInsightsDataCollectionRulesResourceId = !empty(vmInsightsDataCollectionRulesResourceId)
+  ? { vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId }
+  : {}
 
 // FSLogix conditional parameters
-var paramFslogixConfigureSessionHosts = fslogixConfigureSessionHosts ? { fslogixConfigureSessionHosts: fslogixConfigureSessionHosts } : {}
+var paramFslogixConfigureSessionHosts = fslogixConfigureSessionHosts
+  ? { fslogixConfigureSessionHosts: fslogixConfigureSessionHosts }
+  : {}
 var paramFslogixContainerType = fslogixConfigureSessionHosts ? { fslogixContainerType: fslogixContainerType } : {}
-var paramFslogixLocalNetAppVolumeResourceIds = fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds) ? { fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds } : {}
-var paramFslogixLocalStorageAccountResourceIds = fslogixConfigureSessionHosts && !empty(fslogixLocalStorageAccountResourceIds) ? { fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds } : {}
-var paramFslogixOSSGroups = fslogixConfigureSessionHosts && !empty(fslogixOSSGroups) ? { fslogixOSSGroups: fslogixOSSGroups } : {}
-var paramFslogixRemoteNetAppVolumeResourceIds = fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds) ? { fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds } : {}
-var paramFslogixRemoteStorageAccountResourceIds = fslogixConfigureSessionHosts && !empty(fslogixRemoteStorageAccountResourceIds) ? { fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds } : {}
+var paramFslogixLocalNetAppVolumeResourceIds = fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds)
+  ? { fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds }
+  : {}
+var paramFslogixLocalStorageAccountResourceIds = fslogixConfigureSessionHosts && !empty(fslogixLocalStorageAccountResourceIds)
+  ? { fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds }
+  : {}
+var paramFslogixOSSGroups = fslogixConfigureSessionHosts && !empty(fslogixOSSGroups)
+  ? { fslogixOSSGroups: fslogixOSSGroups }
+  : {}
+var paramFslogixRemoteNetAppVolumeResourceIds = fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds)
+  ? { fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds }
+  : {}
+var paramFslogixRemoteStorageAccountResourceIds = fslogixConfigureSessionHosts && !empty(fslogixRemoteStorageAccountResourceIds)
+  ? { fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds }
+  : {}
 var paramFslogixSizeInMBs = fslogixConfigureSessionHosts ? { fslogixSizeInMBs: fslogixSizeInMBs } : {}
 var paramFslogixStorageService = fslogixConfigureSessionHosts ? { fslogixStorageService: fslogixStorageService } : {}
 
@@ -826,7 +848,7 @@ module roleAssignmentComputeGallery '../../sharedModules/resources/compute/galle
   }
 }
 
-module roleAssignmentUaiArtifacts '../../sharedModules/resources/managed-identity/user-assigned-identity/rbac.bicep' = if(!empty(artifactsUserAssignedIdentityResourceId)) {
+module roleAssignmentUaiArtifacts '../../sharedModules/resources/managed-identity/user-assigned-identity/rbac.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
   name: 'RoleAssign-UAI-Artifacts-MngdIdOperator-${deploymentSuffix}'
   scope: resourceGroup(
     split(artifactsUserAssignedIdentityResourceId, '/')[2],
@@ -836,7 +858,9 @@ module roleAssignmentUaiArtifacts '../../sharedModules/resources/managed-identit
     principalId: functionApp.outputs.functionAppPrincipalId
     roleDefinitionId: 'f1a07417-d97a-45cb-824c-7a7467783830' // Managed Identity Operator
     principalType: 'ServicePrincipal'
-    identityName: empty(artifactsUserAssignedIdentityResourceId) ? '' : last(split(artifactsUserAssignedIdentityResourceId, '/'))
+    identityName: empty(artifactsUserAssignedIdentityResourceId)
+      ? ''
+      : last(split(artifactsUserAssignedIdentityResourceId, '/'))
   }
 }
 
@@ -927,14 +951,12 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
             }
           ]
         : [],
-      replacementMode == 'SideBySide'
-        ? [
-            {
-              name: 'MinimumHostIndex'
-              value: string(minimumHostIndex)
-            }
-          ]
-        : [],
+      [
+        {
+          name: 'MinimumHostIndex'
+          value: string(minimumHostIndex)
+        }
+      ],
       replacementMode == 'SideBySide'
         ? [
             {
@@ -1100,7 +1122,9 @@ output functionAppName string = functionApp.outputs.functionAppName
 output functionAppPrincipalId string = functionApp.outputs.functionAppPrincipalId
 
 @description('The type of managed identity used by the function app.')
-output identityType string = !empty(sessionHostReplacerUserAssignedIdentityResourceId) ? 'UserAssigned' : 'SystemAssigned'
+output identityType string = !empty(sessionHostReplacerUserAssignedIdentityResourceId)
+  ? 'UserAssigned'
+  : 'SystemAssigned'
 
 @description('The resource ID of the monitoring workbook.')
 output workbookId string = (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId))

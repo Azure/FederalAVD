@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "7838469604062091393"
+      "templateHash": "11211634876694338799"
     }
   },
   "parameters": {
@@ -13019,7 +13019,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "15276453904473750112"
+              "templateHash": "3817638581473862056"
             }
           },
           "parameters": {
@@ -15351,7 +15351,7 @@
               "condition": "[and(parameters('pooledHostPool'), equals(parameters('availability'), 'AvailabilitySets'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('{0}-{1}', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(add(range(0, parameters('availabilitySetsCount'))[copyIndex()], parameters('availabilitySetsIndex')), 1), 2, '0')), parameters('deploymentSuffix'))]",
+              "name": "[format('AvailabilitySet-{0}-{1}', padLeft(add(add(range(0, parameters('availabilitySetsCount'))[copyIndex()], parameters('availabilitySetsIndex')), 1), 2, '0'), parameters('deploymentSuffix'))]",
               "resourceGroup": "[parameters('resourceGroupHosts')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -15574,7 +15574,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('VirtualMachines-Batch-{0}-of-{1}-{2}VMs-{3}', range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount'), if(and(equals(range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment')), parameters('deploymentSuffix'))]",
+              "name": "[format('VirtualMachines-Batch-{0}-of-{1}-({2}-VMs)-{3}', range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount'), if(and(equals(range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment')), parameters('deploymentSuffix'))]",
               "resourceGroup": "[parameters('resourceGroupHosts')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -15776,7 +15776,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.39.26.7824",
-                      "templateHash": "8952103484562928575"
+                      "templateHash": "16624597491024813534"
                     }
                   },
                   "parameters": {
@@ -16439,7 +16439,7 @@
                         },
                         "protectedSettings": {
                           "Items": {
-                            "RegistrationInfoToken": "[listRegistrationTokens(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').value[0].token]"
+                            "RegistrationInfoToken": "[last(listRegistrationTokens(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').value).token]"
                           }
                         }
                       },
@@ -18731,7 +18731,7 @@
             {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('FlattenVirtualMachineNames-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('Flatten-VirtualMachine-Names-{0}', parameters('deploymentSuffix'))]",
               "resourceGroup": "[parameters('resourceGroupHosts')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -18744,7 +18744,7 @@
                       {
                         "name": "value",
                         "count": "[length(range(1, variables('sessionHostBatchCount')))]",
-                        "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('VirtualMachines-Batch-{0}-of-{1}-{2}VMs-{3}', range(1, variables('sessionHostBatchCount'))[sub(range(1, variables('sessionHostBatchCount'))[copyIndex('value')], 1)], variables('sessionHostBatchCount'), if(and(equals(range(1, variables('sessionHostBatchCount'))[sub(range(1, variables('sessionHostBatchCount'))[copyIndex('value')], 1)], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment')), parameters('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
+                        "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('VirtualMachines-Batch-{0}-of-{1}-({2}-VMs)-{3}', range(1, variables('sessionHostBatchCount'))[sub(range(1, variables('sessionHostBatchCount'))[copyIndex('value')], 1)], variables('sessionHostBatchCount'), if(and(equals(range(1, variables('sessionHostBatchCount'))[sub(range(1, variables('sessionHostBatchCount'))[copyIndex('value')], 1)], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment')), parameters('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
                       }
                     ]
                   }
@@ -18781,28 +18781,7 @@
           "outputs": {
             "virtualMachineNames": {
               "type": "array",
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('FlattenVirtualMachineNames-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
-            },
-            "batchingCalculation": {
-              "type": "object",
-              "value": {
-                "totalResourcesPerVM": "[variables('totalResourcesPerVM')]",
-                "originalCalculatedMaxVMs": "[variables('calculatedMaxVMs')]",
-                "maxVMsPerDeploymentWithBounds": "[variables('maxVMsPerDeployment')]",
-                "sessionHostBatchCount": "[variables('sessionHostBatchCount')]",
-                "sessionHostCount": "[parameters('sessionHostCount')]",
-                "breakdown": {
-                  "baseResources": "[variables('baseResourcesPerVM')]",
-                  "monitoringResources": "[variables('monitoringResourcesPerVM')]",
-                  "gpuResources": "[variables('gpuResourcesPerVM')]",
-                  "integrityResources": "[variables('integrityResourcesPerVM')]",
-                  "customizationsResources": "[variables('customizationsResourcesPerVM')]"
-                },
-                "calculation": {
-                  "step1_rawCalculation": "[format('800 / {0} = {1}', variables('totalResourcesPerVM'), variables('calculatedMaxVMs'))]",
-                  "step2_applyBounds": "[format('min(max({0}, 5), 100) = {1}', variables('calculatedMaxVMs'), variables('maxVMsPerDeployment'))]"
-                }
-              }
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('Flatten-VirtualMachine-Names-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
             }
           }
         }

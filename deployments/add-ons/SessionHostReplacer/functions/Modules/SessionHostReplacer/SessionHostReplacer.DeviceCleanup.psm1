@@ -221,7 +221,7 @@ function Confirm-SessionHostDeletions {
         [Parameter(Mandatory = $true)]
         [array] $SessionHosts,
         [Parameter()]
-        [int] $MaxWaitMinutes = 5,
+        [int] $MaxWaitMinutes = 10,
         [Parameter()]
         [int] $PollIntervalSeconds = 30,
         [Parameter()]

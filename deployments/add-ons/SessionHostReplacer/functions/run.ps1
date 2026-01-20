@@ -39,7 +39,7 @@ $settingsLog = @{
     ScaleUpIncrementPercent     = if ($enableProgressiveScaleUp) { $scaleUpIncrementPercentage } else { 'N/A' }
     SuccessfulRunsBeforeScaleUp = if ($enableProgressiveScaleUp) { $successfulRunsBeforeScaleUp } else { 'N/A' }
     MaxDeploymentBatchSize      = if ($replacementMode -eq 'SideBySide') { $maxDeploymentBatchSize } else { 'N/A' }
-    MinimumHostIndex            = if ($replacementMode -eq 'SideBySide') { $minimumHostIndex } else { 'N/A' }
+    MinimumHostIndex            = $minimumHostIndex
     EnableShutdownRetention     = if ($replacementMode -eq 'SideBySide') { $enableShutdownRetention } else { 'N/A' }
     ShutdownRetentionDays       = if ($replacementMode -eq 'SideBySide' -and $enableShutdownRetention -eq 'True') { $shutdownRetentionDays } else { 'N/A' }
     TargetSessionHostCount      = if ($targetSessionHostCount -eq 0) { 'Auto' } else { $targetSessionHostCount }
@@ -62,15 +62,14 @@ catch {
 }
 
 # Fetch ALL VMs in the resource group once to avoid redundant queries throughout the run
-# Note: $expand=instanceView requires filters and isn't supported on simple LIST operations
 # Power state will be queried lazily for deletion candidates only
-Write-LogEntry -Message "Fetching all VMs in resource group for caching" -Level Trace
+Write-LogEntry -Message "Fetching all VMs in resource group for caching"
 $virtualMachinesSubscriptionId = Read-FunctionAppSetting VirtualMachinesSubscriptionId
 $virtualMachinesResourceGroupName = Read-FunctionAppSetting VirtualMachinesResourceGroupName
 $resourceManagerUri = Get-ResourceManagerUri
 $Uri = "$resourceManagerUri/subscriptions/$virtualMachinesSubscriptionId/resourceGroups/$virtualMachinesResourceGroupName/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
 $cachedVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
-Write-LogEntry -Message "Cached {0} VMs from resource group" -StringValues $cachedVMs.Count -Level Trace
+Write-LogEntry -Message "Cached {0} VMs from resource group" -StringValues $cachedVMs.Count
 
 # Check for and cleanup expired shutdown VMs BEFORE fetching session hosts (so the list is already clean)
 if ($enableShutdownRetention) {
@@ -114,9 +113,13 @@ if ($enableShutdownRetention) {
 $sessionHosts = Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs
 Write-LogEntry -Message "Found {0} session hosts" -StringValues $sessionHosts.Count
 
-# Check previous deployment status if progressive scale-up is enabled
+# Check previous deployment status and pending host mappings
 $previousDeploymentStatus = $null
-if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
+$replacementMode = Read-FunctionAppSetting ReplacementMode
+$enableProgressiveScaleUp = Read-FunctionAppSetting EnableProgressiveScaleUp
+
+# Get deployment state if needed (for progressive scale-up OR DeleteFirst mode)
+if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
     $deploymentState = Get-DeploymentState
     
     if (-not [string]::IsNullOrEmpty($deploymentState.LastDeploymentName)) {
@@ -125,27 +128,55 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
         
         if ($previousDeploymentStatus) {
             if ($previousDeploymentStatus.Succeeded) {
-                # Increment consecutive successes
-                $deploymentState.ConsecutiveSuccesses++
-                $deploymentState.LastStatus = 'Success'
-                
-                # Clear pending host mappings on successful deployment (no longer needed)
-                if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
-                    Write-LogEntry -Message "Clearing pending host mappings after successful deployment" -Level Trace
-                    $deploymentState.PendingHostMappings = '{}'
+                # Verify hosts from pending mappings actually registered before counting as success (DeleteFirst mode)
+                $allHostsRegistered = $true
+                if ($replacementMode -eq 'DeleteFirst' -and $deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
+                    $pendingMappings = $deploymentState.PendingHostMappings | ConvertFrom-Json
+                    $expectedHostNames = $pendingMappings.PSObject.Properties.Name
+                    $registeredHostNames = $sessionHosts.SessionHostName
+                    $missingHosts = $expectedHostNames | Where-Object { $_ -notin $registeredHostNames }
+                    
+                    if ($missingHosts.Count -eq 0) {
+                        Write-LogEntry -Message "All {0} pending host(s) successfully registered - clearing mappings" -StringValues $expectedHostNames.Count -Level Trace
+                        $deploymentState.PendingHostMappings = '{}'
+                        $allHostsRegistered = $true
+                    }
+                    else {
+                        Write-LogEntry -Message "Deployment succeeded but {0} host(s) not yet registered: {1} - keeping mappings and NOT counting as successful run" -StringValues $missingHosts.Count, ($missingHosts -join ', ') -Level Warning
+                        $allHostsRegistered = $false
+                        # Keep mappings and don't increment success counter - hosts may still be registering or there may be a registration issue
+                    }
                 }
                 
-                # Calculate next percentage
-                $successfulRunsBeforeScaleUp = [int]::Parse((Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp))
-                $scaleUpIncrementPercentage = [int]::Parse((Read-FunctionAppSetting ScaleUpIncrementPercentage))
-                $initialDeploymentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
-                
-                $scaleUpMultiplier = [Math]::Floor($deploymentState.ConsecutiveSuccesses / $successfulRunsBeforeScaleUp)
-                $deploymentState.CurrentPercentage = [Math]::Min(
-                    $initialDeploymentPercentage + ($scaleUpMultiplier * $scaleUpIncrementPercentage),
-                    100
-                )                
-                Write-LogEntry -Message "Previous deployment succeeded. ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), CurrentPercentage: $($deploymentState.CurrentPercentage)%"
+                # Only increment consecutive successes and update scale-up percentage if progressive scale-up is enabled AND hosts registered
+                if ($enableProgressiveScaleUp) {
+                    if ($allHostsRegistered) {
+                        $deploymentState.ConsecutiveSuccesses++
+                        $deploymentState.LastStatus = 'Success'
+                        
+                        # Calculate next percentage
+                        $successfulRunsBeforeScaleUp = [int]::Parse((Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp))
+                        $scaleUpIncrementPercentage = [int]::Parse((Read-FunctionAppSetting ScaleUpIncrementPercentage))
+                        $initialDeploymentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+                        
+                        $scaleUpMultiplier = [Math]::Floor($deploymentState.ConsecutiveSuccesses / $successfulRunsBeforeScaleUp)
+                        $deploymentState.CurrentPercentage = [Math]::Min(
+                            $initialDeploymentPercentage + ($scaleUpMultiplier * $scaleUpIncrementPercentage),
+                            100
+                        )                
+                        Write-LogEntry -Message "Previous deployment succeeded with all hosts registered. ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), CurrentPercentage: $($deploymentState.CurrentPercentage)%"
+                    }
+                    else {
+                        # Deployment succeeded but hosts didn't register - don't count as success or scale up
+                        $deploymentState.LastStatus = 'PendingRegistration'
+                        Write-LogEntry -Message "Deployment succeeded but hosts not yet registered - NOT incrementing success counter or scaling up" -Level Warning
+                    }
+                }
+                elseif ($allHostsRegistered) {
+                    # Progressive scale-up disabled, but still track success for DeleteFirst mode
+                    $deploymentState.LastStatus = 'Success'
+                    Write-LogEntry -Message "Previous deployment succeeded with all hosts registered (progressive scale-up disabled)"
+                }
             }
             elseif ($previousDeploymentStatus.Failed) {
                 Write-LogEntry -Message "Previous deployment failed. Cleaning up partial resources before redeployment." -Level Warning
@@ -182,17 +213,18 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
                     Write-LogEntry -Message "Error during failed deployment cleanup: $_" -Level Error
                 }
                 
-                # Clear pending host mappings (starting fresh)
-                if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
-                    Write-LogEntry -Message "Clearing pending host mappings after failed deployment cleanup" -Level Trace
-                    $deploymentState.PendingHostMappings = '{}'
-                }
+                # DO NOT clear pending host mappings - those hosts still need deployment after cleanup
+                # PendingHostMappings will persist until deployment succeeds and VMs register
+                Write-LogEntry -Message "Keeping {0} pending host mapping(s) for retry after cleanup" -StringValues (($deploymentState.PendingHostMappings | ConvertFrom-Json).Count) -Level Trace
                 
-                # Reset on failure
-                $deploymentState.ConsecutiveSuccesses = 0
-                $deploymentState.CurrentPercentage = $initialDeploymentPercentage
-                $deploymentState.LastStatus = 'Failed'                
-                Write-LogEntry -Message "Reset consecutive successes to 0, CurrentPercentage: $($deploymentState.CurrentPercentage)%" -Level Warning
+                # Reset progressive scale-up on failure (if enabled)
+                if ($enableProgressiveScaleUp) {
+                    $deploymentState.ConsecutiveSuccesses = 0
+                    $initialDeploymentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+                    $deploymentState.CurrentPercentage = $initialDeploymentPercentage
+                    Write-LogEntry -Message "Reset consecutive successes to 0, CurrentPercentage: $($deploymentState.CurrentPercentage)%" -Level Warning
+                }
+                $deploymentState.LastStatus = 'Failed'
             }
             elseif ($previousDeploymentStatus.Running) {
                 Write-LogEntry -Message "Previous deployment is still running. Will check again on next run." -Level Warning
@@ -266,7 +298,7 @@ $sessionHostParameters = [hashtable]::new([System.StringComparer]::InvariantCult
 $sessionHostParameters += (Read-FunctionAppSetting SessionHostParameters)
 
 # Get latest version of session host image
-Write-LogEntry -Message "Getting latest image version using Image Reference: {0}" -StringValues ($sessionHostParameters.ImageReference | Out-String)
+Write-LogEntry -Message "Getting latest image version using Image Reference."
 $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location
 
 # Read AllowImageVersionRollback setting with default of false
@@ -286,8 +318,23 @@ $isUpToDate = $false
 $replaceSessionHostOnNewImageVersionDelayDays = [int]::Parse((Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersionDelayDays))
 $latestImageAge = (New-TimeSpan -Start $latestImageVersion.Date -End (Get-Date -AsUTC)).TotalDays
 
-# Check if there are any running or failed deployments
-if ($runningDeployments.Count -eq 0 -and $failedDeployments.Count -eq 0) {
+# Check if there's outstanding work from a previous cycle (pending host mappings from failed deployments in DeleteFirst mode)
+if ($replacementMode -eq 'DeleteFirst') {
+    $deploymentState = Get-DeploymentState
+    $hasPendingMappings = $deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}'
+    
+    if ($hasPendingMappings) {
+        Write-LogEntry -Message "Lightweight check: Found pending host mappings from previous deletion - proceeding with full processing" -Level Trace
+        $isUpToDate = $false
+    }
+    # Check if there are hosts in drain mode (work in progress)
+    elseif (($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count -gt 0) {
+        $hostsInDrainMode = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
+        Write-LogEntry -Message "Lightweight check: Found $hostsInDrainMode host(s) in drain mode - proceeding with full processing" -Level Trace
+        $isUpToDate = $false
+    }
+    # Check if there are any running or failed deployments
+    elseif ($runningDeployments.Count -eq 0 -and $failedDeployments.Count -eq 0) {
     
     # Check if image is old enough to trigger replacements
     if ($latestImageAge -ge $replaceSessionHostOnNewImageVersionDelayDays) {
@@ -367,7 +414,7 @@ else {
     # Query scaling plan for dynamic minimum capacity (DeleteFirst mode only)
     # This is ONLY needed when we're actually going to delete hosts
     $scalingPlanTarget = $null
-    if ($replacementMode -eq 'DeleteFirst') {
+    if ($replacementMode -ieq 'DeleteFirst') {
         try {
             $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
             $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
@@ -572,7 +619,7 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
     if ($deploymentState.LastImageVersion -and $deploymentState.LastImageVersion -ne $currentImageVersion -and $currentImageVersion -ne "N/A") {
         $isNewCycle = $true
         $resetReason = "Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion"
-        Write-LogEntry -Message "New cycle detection - Image version changed detected" -Level Trace
+        Write-LogEntry -Message "New cycle detection - Image version changed detected"
     }
     
     # Check if we completed the previous cycle (no hosts to replace) and now have new hosts to replace
@@ -626,13 +673,31 @@ if ($replacementMode -eq 'DeleteFirst') {
     $hostPropertyMapping = @{}
     $deletionResults = $null
     
-    # Check if there's a pending host mapping from a previous failed deployment
-    if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
-        $deploymentState = Get-DeploymentState
-        if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
+    # Check if there's a pending host mapping from a previous failed deployment or registration issue
+    # PendingHostMappings is essential for DeleteFirst mode to track deleted hosts for name reuse
+    $hasPendingUnresolvedHosts = $false
+    $deploymentState = Get-DeploymentState
+    if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
             try {
                 $hostPropertyMapping = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable
-                Write-LogEntry -Message "Loaded {0} pending host mapping(s) from previous run for failed deployment recovery" -StringValues $hostPropertyMapping.Count
+                Write-LogEntry -Message "Loaded {0} pending host mapping(s) from previous run" -StringValues $hostPropertyMapping.Count
+                
+                # Check if any pending hosts are still unresolved (deleted but not registered)
+                $pendingHostNames = $hostPropertyMapping.Keys
+                $registeredHostNames = $sessionHosts.SessionHostName
+                $unresolvedHosts = $pendingHostNames | Where-Object { $_ -notin $registeredHostNames }
+                
+                if ($unresolvedHosts.Count -gt 0) {
+                    $hasPendingUnresolvedHosts = $true
+                    Write-LogEntry -Message "CRITICAL: {0} host(s) were previously deleted but not yet registered: {1}" -StringValues $unresolvedHosts.Count, ($unresolvedHosts -join ', ') -Level Warning
+                    Write-LogEntry -Message "BLOCKING new deletions until pending hosts are resolved (deployment failure or registration issue)" -Level Warning
+                }
+                else {
+                    Write-LogEntry -Message "All pending hosts are now registered - clearing mappings" -Level Trace
+                    $deploymentState.PendingHostMappings = '{}'
+                    Save-DeploymentState -DeploymentState $deploymentState
+                    $hostPropertyMapping = @{}
+                }
             }
             catch {
                 Write-LogEntry -Message "Failed to parse pending host mappings: $_" -Level Warning
@@ -649,6 +714,11 @@ if ($replacementMode -eq 'DeleteFirst') {
         Write-LogEntry -Message "This prevents further capacity loss when previous deployments have hosts that aren't accessible" -Level Warning
         # Skip the entire delete/deploy cycle - exit DeleteFirst flow
     }
+    elseif ($hasPendingUnresolvedHosts) {
+        Write-LogEntry -Message "SAFETY CHECK FAILED: Cannot delete more hosts while previous deletions have unresolved deployments or registration issues" -Level Warning
+        Write-LogEntry -Message "Will retry deployment of pending hosts without deleting additional capacity" -Level Warning
+        # Skip deletion but allow deployment retry below
+    }
     else {
         if ($newHostAvailability.TotalNewHosts -gt 0) {
             Write-LogEntry -Message "SAFETY CHECK PASSED: {0}" -StringValues $newHostAvailability.Message
@@ -662,32 +732,37 @@ if ($replacementMode -eq 'DeleteFirst') {
             Write-LogEntry -Message "Deleted host names will be available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Trace
         
             # Build mapping of hostname to dedicated host properties for reuse (merge with existing from previous run)
+            # IMPORTANT: Include ALL hosts being deleted (even those without dedicated host properties)
+            # This ensures we track which hosts need deployment even if deployment fails
             foreach ($sessionHost in $hostPoolReplacementPlan.SessionHostsPendingDelete) {
-                if ($sessionHost.HostId -or $sessionHost.HostGroupId) {
-                    # Only add if not already in mapping (preserve previous mappings)
-                    if (-not $hostPropertyMapping.ContainsKey($sessionHost.SessionHostName)) {
-                        $hostPropertyMapping[$sessionHost.SessionHostName] = @{
-                            HostId      = $sessionHost.HostId
-                            HostGroupId = $sessionHost.HostGroupId
-                            Zones       = $sessionHost.Zones
-                        }
+                # Only add if not already in mapping (preserve previous mappings)
+                if (-not $hostPropertyMapping.ContainsKey($sessionHost.SessionHostName)) {
+                    $hostPropertyMapping[$sessionHost.SessionHostName] = @{
+                        HostId      = $sessionHost.HostId
+                        HostGroupId = $sessionHost.HostGroupId
+                        Zones       = $sessionHost.Zones
+                    }
+                    
+                    if ($sessionHost.HostId -or $sessionHost.HostGroupId) {
                         Write-LogEntry -Message "Captured dedicated host properties for {0}: HostId={1}, HostGroupId={2}, Zones={3}" -StringValues $sessionHost.SessionHostName, $sessionHost.HostId, $sessionHost.HostGroupId, ($sessionHost.Zones -join ', ') -Level Trace
+                    }
+                    else {
+                        Write-LogEntry -Message "Captured {0} for tracking (no dedicated host properties)" -StringValues $sessionHost.SessionHostName -Level Trace
                     }
                 }
             }
         
             # Save host property mapping to deployment state BEFORE deletion attempt (for recovery if deletion succeeds but deployment fails)
-            if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
-                $deploymentState = Get-DeploymentState
-                if ($hostPropertyMapping.Count -gt 0) {
-                    $deploymentState.PendingHostMappings = ($hostPropertyMapping | ConvertTo-Json -Compress)
-                    Write-LogEntry -Message "Saved {0} host property mapping(s) to deployment state before deletion" -StringValues $hostPropertyMapping.Count -Level Trace
-                }
-                else {
-                    $deploymentState.PendingHostMappings = '{}'
-                }
-                Save-DeploymentState -DeploymentState $deploymentState
+            # This is critical for DeleteFirst mode to track which hosts need deployment
+            $deploymentState = Get-DeploymentState
+            if ($hostPropertyMapping.Count -gt 0) {
+                $deploymentState.PendingHostMappings = ($hostPropertyMapping | ConvertTo-Json -Compress)
+                Write-LogEntry -Message "Saved {0} host property mapping(s) to deployment state before deletion" -StringValues $hostPropertyMapping.Count -Level Trace
             }
+            else {
+                $deploymentState.PendingHostMappings = '{}'
+            }
+            Save-DeploymentState -DeploymentState $deploymentState
         
             # Decommission session hosts
             $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
@@ -736,23 +811,57 @@ if ($replacementMode -eq 'DeleteFirst') {
                 $hostPoolReplacementPlan.SessionHostsPendingDelete = @($hostPoolReplacementPlan.SessionHostsPendingDelete | Where-Object { $_ -notin $deletionResults.SuccessfulDeletions })
                 Write-LogEntry -Message "Updated pending delete count to {0} after removing successfully deleted hosts" -StringValues $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -Level Trace
             
-                # Validate complete deletion (VM, Entra ID, Intune)
-                Confirm-SessionHostDeletions `
+                # Validate complete deletion (VM, Entra ID, Intune) - BLOCKING in DeleteFirst mode
+                $verificationResults = Confirm-SessionHostDeletions `
                     -ARMToken $ARMToken `
                     -GraphToken $GraphToken `
                     -DeletedHostNames $deletionResults.SuccessfulDeletions `
                     -SessionHosts $sessionHosts `
                     -RemoveEntraDevice $removeEntraDevice `
-                    -RemoveIntuneDevice $removeIntuneDevice | Out-Null
+                    -RemoveIntuneDevice $removeIntuneDevice
+                
+                # In DeleteFirst mode, device cleanup MUST succeed for hostname reuse
+                # Check if any hosts have incomplete device cleanup
+                $deviceCleanupRequired = $removeEntraDevice -or $removeIntuneDevice
+                if ($deviceCleanupRequired -and $verificationResults.IncompleteHosts.Count -gt 0) {
+                    Write-LogEntry -Message "CRITICAL ERROR: Device cleanup incomplete for {0} host(s) in Delete-First mode" -StringValues $verificationResults.IncompleteHosts.Count -Level Error
+                    
+                    foreach ($incompleteHost in $verificationResults.IncompleteHosts) {
+                        $failures = @()
+                        if (-not $incompleteHost.EntraIDConfirmed -and $removeEntraDevice) { $failures += "Entra ID" }
+                        if (-not $incompleteHost.IntuneConfirmed -and $removeIntuneDevice) { $failures += "Intune" }
+                        
+                        if ($failures.Count -gt 0) {
+                            Write-LogEntry -Message "  - {0}: Device cleanup failed for {1}" -StringValues $incompleteHost.Name, ($failures -join ', ') -Level Error
+                        }
+                    }
+                    
+                    Write-LogEntry -Message "Delete-First mode cannot proceed - hostname reuse will fail if devices still exist in Entra ID/Intune" -Level Error
+                    Write-LogEntry -Message "TROUBLESHOOTING: Verify managed identity has Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All)" -Level Error
+                    throw "Device cleanup verification failed in Delete-First mode - cannot safely reuse hostnames"
+                }
+                
+                Write-LogEntry -Message "Device cleanup verification passed - safe to reuse hostnames" -Level Trace
             }
         
             $deletedSessionHostNames = $deletionResults.SuccessfulDeletions
         
-            # Only deploy as many hosts as were actually deleted (not planned)
-            # If hosts were drained but not deleted yet, they're still taking up space
-            if ($deletionResults.SuccessfulDeletions.Count -lt $hostPoolReplacementPlan.PossibleDeploymentsCount) {
-                Write-LogEntry -Message "Delete-First mode: Reducing deployments from {0} to {1} to match actual successful deletions (some hosts are still draining)" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount, $deletionResults.SuccessfulDeletions.Count -Level Warning
-                $hostPoolReplacementPlan.PossibleDeploymentsCount = $deletionResults.SuccessfulDeletions.Count
+            # Calculate how many net-new hosts we're adding (growing the pool)
+            # Example: Current=8, Target=10, Need to replace=1 → Deploy 3 (1 replacement + 2 net-new), Delete 1
+            # In progressive scale-up scenarios, originalDeployCount may be less than hostsToReplace (batch sizing)
+            # Net-new should never be negative - if we're doing batch replacements, net-new = 0
+            $hostsToReplace = $hostPoolReplacementPlan.TotalSessionHostsToReplace
+            $originalDeployCount = $hostPoolReplacementPlan.PossibleDeploymentsCount
+            $netNewHosts = [Math]::Max(0, $originalDeployCount - $hostsToReplace)
+            
+            # Only limit REPLACEMENT deployments to match successful deletions (don't limit net-new growth)
+            # If hosts were drained but not deleted yet, they're still taking up space for replacements
+            $maxReplacements = $deletionResults.SuccessfulDeletions.Count
+            $actualDeployCount = $maxReplacements + $netNewHosts
+            
+            if ($actualDeployCount -lt $originalDeployCount) {
+                Write-LogEntry -Message "Delete-First mode: Reducing deployments from {0} to {1} (limited to {2} replacements + {3} net-new, some hosts still draining)" -StringValues $originalDeployCount, $actualDeployCount, $maxReplacements, $netNewHosts -Level Warning
+                $hostPoolReplacementPlan.PossibleDeploymentsCount = $actualDeployCount
             }
         }
     

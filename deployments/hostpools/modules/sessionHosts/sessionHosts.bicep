@@ -241,7 +241,7 @@ resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-
 }
 
 module availabilitySets '../../../sharedModules/resources/compute/availability-set/main.bicep' = [for i in range(0, availabilitySetsCount): if (pooledHostPool && availability == 'AvailabilitySets') {
-  name: '${replace(availabilitySetNameConv, '##', padLeft((i + availabilitySetsIndex) + 1, 2, '0'))}-${deploymentSuffix}'
+  name: 'AvailabilitySet-${padLeft((i + availabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     name: replace(availabilitySetNameConv, '##', padLeft((i + availabilitySetsIndex) + 1, 2, '0'))
@@ -266,7 +266,7 @@ module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if(fslo
 
 @batchSize(5)
 module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sessionHostBatchCount): {
-  name: 'VirtualMachines-Batch-${i}-of-${sessionHostBatchCount}-${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}VMs-${deploymentSuffix}'
+  name: 'VirtualMachines-Batch-${i}-of-${sessionHostBatchCount}-(${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}-VMs)-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     artifactsContainerUri: artifactsContainerUri
@@ -426,7 +426,7 @@ module protectedItems_Vm 'modules/protectedItems.bicep' = [for i in range(1, ses
 */
 
 module getFlattenedVmNamesArray 'modules/flattenVirtualMachineNames.bicep' = {
-  name: 'FlattenVirtualMachineNames-${deploymentSuffix}'
+  name: 'Flatten-VirtualMachine-Names-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     virtualMachineNamesPerBatch: [for i in range(1, sessionHostBatchCount):virtualMachines[i-1].outputs.virtualMachineNames]
@@ -434,21 +434,3 @@ module getFlattenedVmNamesArray 'modules/flattenVirtualMachineNames.bicep' = {
 }
 
 output virtualMachineNames array = getFlattenedVmNamesArray.outputs.virtualMachineNames
-output batchingCalculation object = {
-  totalResourcesPerVM: totalResourcesPerVM
-  originalCalculatedMaxVMs: calculatedMaxVMs
-  maxVMsPerDeploymentWithBounds: maxVMsPerDeployment
-  sessionHostBatchCount: sessionHostBatchCount
-  sessionHostCount: sessionHostCount
-  breakdown: {
-    baseResources: baseResourcesPerVM
-    monitoringResources: monitoringResourcesPerVM
-    gpuResources: gpuResourcesPerVM
-    integrityResources: integrityResourcesPerVM
-    customizationsResources: customizationsResourcesPerVM
-  }
-  calculation: {
-    step1_rawCalculation: '800 / ${totalResourcesPerVM} = ${calculatedMaxVMs}'
-    step2_applyBounds: 'min(max(${calculatedMaxVMs}, 5), 100) = ${maxVMsPerDeployment}'
-  }
-}

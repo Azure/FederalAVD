@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "5573771844240287506"
+      "templateHash": "14146623445166458904"
     }
   },
   "parameters": {
@@ -518,7 +518,7 @@
       "condition": "[equals(parameters('availability'), 'AvailabilitySets')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('shr-{0}-{1}', replace(variables('avSetNameConv'), '##', padLeft(add(add(range(0, variables('calculatedAvailabilitySetsCount'))[copyIndex()], variables('calculatedAvailabilitySetsIndex')), 1), 2, '0')), variables('deploymentSuffix'))]",
+      "name": "[format('shr-availabilitySet-{0}-{1}', padLeft(add(add(range(0, variables('calculatedAvailabilitySetsCount'))[copyIndex()], variables('calculatedAvailabilitySetsIndex')), 1), 2, '0'), variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -669,7 +669,7 @@
       },
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('shr-vm-batch-{0}-of-{1}-{2}vms-{3}', range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount'), if(and(equals(range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment')), variables('deploymentSuffix'))]",
+      "name": "[format('shr-vm-batch-{0}-of-{1}_({2}-vms)-{3}', range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount'), if(and(equals(range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment')), variables('deploymentSuffix'))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -820,6 +820,9 @@
           "tags": {
             "value": "[parameters('tags')]"
           },
+          "timestamp": {
+            "value": "[variables('deploymentSuffix')]"
+          },
           "timeZone": {
             "value": "[parameters('timeZone')]"
           },
@@ -859,7 +862,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "6911857405840418888"
+              "templateHash": "7756541200620846732"
             }
           },
           "parameters": {
@@ -1006,6 +1009,10 @@
             },
             "subnetResourceId": {
               "type": "string"
+            },
+            "timestamp": {
+              "type": "string",
+              "defaultValue": "[utcNow()]"
             },
             "tags": {
               "type": "object"
@@ -1491,6 +1498,7 @@
               "name": "[format('{0}/{1}', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]], 'AVDAgentInstallandConfig')]",
               "location": "[parameters('location')]",
               "properties": {
+                "forceUpdateTag": "[parameters('timestamp')]",
                 "publisher": "Microsoft.Powershell",
                 "type": "DSC",
                 "typeHandlerVersion": "2.73",
@@ -1505,13 +1513,13 @@
                       "Password": "PrivateSettingsRef:RegistrationInfoToken"
                     },
                     "aadJoin": "[not(contains(parameters('identitySolution'), 'DomainServices'))]",
-                    "UseAgentDownloadEndpoint": false,
+                    "UseAgentDownloadEndpoint": true,
                     "mdmId": "[if(parameters('intuneEnrollment'), '0000000a-0000-0000-c000-000000000000', '')]"
                   }
                 },
                 "protectedSettings": {
                   "Items": {
-                    "RegistrationInfoToken": "[listRegistrationTokens(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').value[0].token]"
+                    "RegistrationInfoToken": "[last(listRegistrationTokens(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').value).token]"
                   }
                 }
               },

@@ -265,7 +265,7 @@ module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if(fslo
 
 module availabilitySets '../../../../sharedModules/resources/compute/availability-set/main.bicep' = [
   for i in range(0, calculatedAvailabilitySetsCount): if (availability == 'AvailabilitySets') {
-    name: 'shr-${replace(avSetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))}-${deploymentSuffix}'
+    name: 'shr-availabilitySet-${padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
     params: {
       name: replace(avSetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))
       platformFaultDomainCount: 2
@@ -282,7 +282,7 @@ module availabilitySets '../../../../sharedModules/resources/compute/availabilit
 module virtualMachines 'modules/virtualMachines.bicep' = [
   for i in range(1, sessionHostBatchCount): {
     #disable-next-line BCP335
-    name: 'shr-vm-batch-${i}-of-${sessionHostBatchCount}-${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}vms-${deploymentSuffix}'
+    name: 'shr-vm-batch-${i}-of-${sessionHostBatchCount}_(${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}-vms)-${deploymentSuffix}'
     params: {
       artifactsContainerUri: artifactsContainerUri
       artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
@@ -340,6 +340,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       sessionHostRegistrationDSCUrl: sessionHostRegistrationDSCUrl
       subnetResourceId: subnetResourceId
       tags: tags
+      timestamp: deploymentSuffix
       timeZone: timeZone
       virtualMachineAdminPassword: kvCredentials.getSecret('VirtualMachineAdminPassword')
       virtualMachineAdminUserName: kvCredentials.getSecret('VirtualMachineAdminUserName')

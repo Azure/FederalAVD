@@ -48,6 +48,7 @@ param sessionHostRegistrationDSCUrl string
 param securityType string
 param secureBootEnabled bool
 param subnetResourceId string
+param timestamp string = utcNow()
 param tags object
 param deploymentSuffix string
 param timeZone string
@@ -567,6 +568,7 @@ resource extension_DSC_installAvdAgents 'Microsoft.Compute/virtualMachines/exten
     name: 'AVDAgentInstallandConfig'
     location: location
     properties: {
+      forceUpdateTag: timestamp
       publisher: 'Microsoft.Powershell'
       type: 'DSC'
       typeHandlerVersion: '2.73'
@@ -581,13 +583,13 @@ resource extension_DSC_installAvdAgents 'Microsoft.Compute/virtualMachines/exten
             Password: 'PrivateSettingsRef:RegistrationInfoToken'
           }
           aadJoin: !contains(identitySolution, 'DomainServices')
-          UseAgentDownloadEndpoint: false
+          UseAgentDownloadEndpoint: true
           mdmId: intuneEnrollment ? '0000000a-0000-0000-c000-000000000000' : ''
         }
       }
       protectedSettings: {
         Items: {
-          RegistrationInfoToken: hostPool.listRegistrationTokens().value[0].token
+          RegistrationInfoToken: last(hostPool.listRegistrationTokens().value).token
         }
       }
     }

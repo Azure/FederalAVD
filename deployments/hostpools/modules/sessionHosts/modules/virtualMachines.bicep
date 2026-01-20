@@ -616,7 +616,7 @@ resource extension_DSC_installAvdAgents 'Microsoft.Compute/virtualMachines/exten
       }
       protectedSettings: {
         Items: {
-          RegistrationInfoToken: hostPool.listRegistrationTokens().value[0].token
+          RegistrationInfoToken: last(hostPool.listRegistrationTokens().value).token
         }
       }
     }

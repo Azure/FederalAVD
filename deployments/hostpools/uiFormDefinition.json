@@ -2151,6 +2151,7 @@
 									"name": "useAgentDownloadEndpoint",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Download latest Agent",
+									"defaultValue": true,
 									"toolTip": "Automatically downloads the latest agent software during installation rather than waiting for an upgrade."
 								}
 							],
@@ -3730,13 +3731,6 @@
 										"allowedValues": "[map(filter(steps('management').monitoring.dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('hosts').scope.location.name)), (dce) => parse(concat('{\"label\":\"', dce.name, '\",\"description\":\"Resource Group: ', first(skip(split(dce.id, '/'), 4)), ', Location: ', dce.location, '\",\"value\":\"', dce.id, '\"}')))]",
 										"required": false
 									}
-								},
-								{
-									"name": "enableCentralMonitoring",
-									"type": "Microsoft.Common.CheckBox",
-									"visible": true,
-									"label": "Configure Centralized Security Monitoring for Session Hosts",
-									"toolTip": "Creates a Data Collection Rule Association to use the Azure Monitoring Agent for collecting data in a centralized workspace."
 								}
 							]
 						}
