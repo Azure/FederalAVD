@@ -1065,12 +1065,17 @@ if ($deploymentResult) {
 # Count VMs in shutdown retention for metrics (use count from earlier calculation to avoid stale cache issues)
 $shutdownRetentionCount = if ($enableShutdownRetention -and $hostsInShutdownRetention) { $hostsInShutdownRetention.Count } else { 0 }
 
+# Calculate actual current counts by subtracting completed deletions from initial counts
+$completedDeletionsCount = if ($deletionResults -and $deletionResults.SuccessfulDeletions) { $deletionResults.SuccessfulDeletions.Count } else { 0 }
+$currentSessionHostCount = $sessionHosts.Count - $completedDeletionsCount
+$currentEnabledCount = $sessionHostsFiltered.Count - $completedDeletionsCount
+
 $metricsLog = @{
-    TotalSessionHosts     = $sessionHosts.Count
-    EnabledForAutomation  = $sessionHostsFiltered.Count
+    TotalSessionHosts     = $currentSessionHostCount
+    EnabledForAutomation  = $currentEnabledCount
     TargetCount           = if ($hostPoolReplacementPlan.TargetSessionHostCount) { $hostPoolReplacementPlan.TargetSessionHostCount } else { 0 }
     ToReplace             = if ($hostPoolReplacementPlan.TotalSessionHostsToReplace) { $hostPoolReplacementPlan.TotalSessionHostsToReplace } else { 0 }
-    ToReplacePercentage   = if ($sessionHostsFiltered.Count -gt 0) { [math]::Round(($hostPoolReplacementPlan.TotalSessionHostsToReplace / $sessionHostsFiltered.Count) * 100, 1) } else { 0 }
+    ToReplacePercentage   = if ($currentEnabledCount -gt 0) { [math]::Round(($hostPoolReplacementPlan.TotalSessionHostsToReplace / $currentEnabledCount) * 100, 1) } else { 0 }
     InDrain               = $hostsInDrainMode
     PendingDelete         = $hostPoolReplacementPlan.SessionHostsPendingDelete.Count
     ShutdownRetention     = $shutdownRetentionCount
