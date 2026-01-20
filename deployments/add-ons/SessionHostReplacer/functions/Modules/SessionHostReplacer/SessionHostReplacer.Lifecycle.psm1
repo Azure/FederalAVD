@@ -39,7 +39,7 @@ function Remove-ExpiredShutdownVMs {
         [Parameter()]
         [string] $ResourceManagerUri = (Get-ResourceManagerUri),
         [Parameter()]
-        [int] $ShutdownRetentionDays = [int]::Parse((Read-FunctionAppSetting ShutdownRetentionDays)),
+        [int] $ShutdownRetentionDays = (Read-FunctionAppSetting ShutdownRetentionDays),
         [Parameter()]
         [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp),
         [Parameter()]
@@ -53,9 +53,9 @@ function Remove-ExpiredShutdownVMs {
         [Parameter()]
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
         [Parameter()]
-        [bool] $RemoveEntraDevice = [bool]::Parse((Read-FunctionAppSetting RemoveEntraDevice)),
+        [bool] $RemoveEntraDevice = (Read-FunctionAppSetting RemoveEntraDevice -AsBoolean),
         [Parameter()]
-        [bool] $RemoveIntuneDevice = [bool]::Parse((Read-FunctionAppSetting RemoveIntuneDevice)),
+        [bool] $RemoveIntuneDevice = (Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean),
         [Parameter()]
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
@@ -175,9 +175,9 @@ function Remove-SessionHosts {
         [Parameter()]
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
         [Parameter()]
-        [int] $DrainGracePeriodHours = [int]::Parse((Read-FunctionAppSetting DrainGracePeriodHours)),
+        [int] $DrainGracePeriodHours = (Read-FunctionAppSetting DrainGracePeriodHours),
         [Parameter()]
-        [int] $MinimumDrainMinutes = [int]::Parse((Read-FunctionAppSetting MinimumDrainMinutes)),
+        [int] $MinimumDrainMinutes = (Read-FunctionAppSetting MinimumDrainMinutes),
         [Parameter()]
         [string] $ReplacementMode = (Read-FunctionAppSetting ReplacementMode),
         [Parameter()]
@@ -191,10 +191,7 @@ function Remove-SessionHosts {
         [Parameter()]
         [bool] $RemoveIntuneDevice,
         [Parameter()]
-        [bool] $EnableShutdownRetention = $(
-            $setting = Read-FunctionAppSetting EnableShutdownRetention
-            if ([string]::IsNullOrEmpty($setting)) { $false } else { [bool]::Parse($setting) }
-        ),
+        [bool] $EnableShutdownRetention = (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean),
         [Parameter()]
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
@@ -405,7 +402,7 @@ function Remove-SessionHosts {
                     
                     # Track successful shutdown
                     $successfulShutdowns += $sessionHost.SessionHostName
-                    Write-LogEntry -Message "Successfully shutdown session host $($sessionHost.SessionHostName) - will remain in host pool for $([int]::Parse((Read-FunctionAppSetting ShutdownRetentionDays))) days for rollback"
+                    Write-LogEntry -Message "Successfully shutdown session host $($sessionHost.SessionHostName) - will remain in host pool for $((Read-FunctionAppSetting ShutdownRetentionDays)) days for rollback"
                 }
                 else {
                     # Standard delete flow - use helper function

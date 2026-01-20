@@ -12,13 +12,13 @@ Set-HostPoolNameForLogging -HostPoolName (Read-FunctionAppSetting HostPoolName)
 Write-LogEntry -Message "SessionHostReplacer function started at {0}" -StringValues (Get-Date -AsUTC -Format 'o')
 
 # Log configuration settings for workbook visibility
-$enableShutdownRetention = Read-FunctionAppSetting EnableShutdownRetention
+$enableShutdownRetention = Read-FunctionAppSetting EnableShutdownRetention -AsBoolean
 $replacementMode = Read-FunctionAppSetting ReplacementMode
 $minimumDrainMinutes = Read-FunctionAppSetting MinimumDrainMinutes
 $drainGracePeriodHours = Read-FunctionAppSetting DrainGracePeriodHours
 $minimumCapacityPercentage = Read-FunctionAppSetting MinimumCapacityPercentage
 $maxDeletionsPerCycle = Read-FunctionAppSetting MaxDeletionsPerCycle
-$enableProgressiveScaleUp = Read-FunctionAppSetting EnableProgressiveScaleUp
+$enableProgressiveScaleUp = Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean
 $initialDeploymentPercentage = Read-FunctionAppSetting InitialDeploymentPercentage
 $scaleUpIncrementPercentage = Read-FunctionAppSetting ScaleUpIncrementPercentage
 $successfulRunsBeforeScaleUp = Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp
@@ -26,6 +26,9 @@ $maxDeploymentBatchSize = Read-FunctionAppSetting MaxDeploymentBatchSize
 $minimumHostIndex = Read-FunctionAppSetting MinimumHostIndex
 $shutdownRetentionDays = Read-FunctionAppSetting ShutdownRetentionDays
 $targetSessionHostCount = Read-FunctionAppSetting TargetSessionHostCount
+$enableProgressiveScaleUp = Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean
+$removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice -AsBoolean
+$removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean
 
 # Build settings log with N/A for non-applicable values based on replacement mode
 $settingsLog = @{
@@ -77,8 +80,6 @@ if ($enableShutdownRetention) {
     
     # Acquire Graph token for device cleanup if enabled
     $GraphToken = $null
-    $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
-    $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice
     
     if ($removeEntraDevice -or $removeIntuneDevice) {
         try {
@@ -115,8 +116,6 @@ Write-LogEntry -Message "Found {0} session hosts" -StringValues $sessionHosts.Co
 
 # Check previous deployment status and pending host mappings
 $previousDeploymentStatus = $null
-$replacementMode = Read-FunctionAppSetting ReplacementMode
-$enableProgressiveScaleUp = Read-FunctionAppSetting EnableProgressiveScaleUp
 
 # Get deployment state if needed (for progressive scale-up OR DeleteFirst mode)
 if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
@@ -155,9 +154,9 @@ if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
                         $deploymentState.LastStatus = 'Success'
                         
                         # Calculate next percentage
-                        $successfulRunsBeforeScaleUp = [int]::Parse((Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp))
-                        $scaleUpIncrementPercentage = [int]::Parse((Read-FunctionAppSetting ScaleUpIncrementPercentage))
-                        $initialDeploymentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+                        $successfulRunsBeforeScaleUp = (Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp)
+                        $scaleUpIncrementPercentage = (Read-FunctionAppSetting ScaleUpIncrementPercentage)
+                        $initialDeploymentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage)
                         
                         $scaleUpMultiplier = [Math]::Floor($deploymentState.ConsecutiveSuccesses / $successfulRunsBeforeScaleUp)
                         $deploymentState.CurrentPercentage = [Math]::Min(
@@ -183,8 +182,6 @@ if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
                 
                 # Acquire Graph token for device cleanup if enabled
                 $GraphToken = $null
-                $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
-                $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice
                 
                 if ($removeEntraDevice -or $removeIntuneDevice) {
                     try {
@@ -220,7 +217,7 @@ if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
                 # Reset progressive scale-up on failure (if enabled)
                 if ($enableProgressiveScaleUp) {
                     $deploymentState.ConsecutiveSuccesses = 0
-                    $initialDeploymentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+                    $initialDeploymentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage)
                     $deploymentState.CurrentPercentage = $initialDeploymentPercentage
                     Write-LogEntry -Message "Reset consecutive successes to 0, CurrentPercentage: $($deploymentState.CurrentPercentage)%" -Level Warning
                 }
@@ -302,20 +299,14 @@ Write-LogEntry -Message "Getting latest image version using Image Reference."
 $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location
 
 # Read AllowImageVersionRollback setting with default of false
-$allowImageVersionRollback = Read-FunctionAppSetting AllowImageVersionRollback
-if ($null -eq $allowImageVersionRollback) {
-    $allowImageVersionRollback = $false
-}
-else {
-    $allowImageVersionRollback = [bool]::Parse($allowImageVersionRollback)
-}
+$allowImageVersionRollback = Read-FunctionAppSetting AllowImageVersionRollback -AsBoolean
 
 # OPTIMIZATION: Lightweight pre-check to determine if host pool is up to date
 # This avoids expensive operations (scaling plan query, full replacement plan calculation) when no work is needed
 Write-LogEntry -Message "Performing lightweight up-to-date check" -Level Trace
 
 $isUpToDate = $false
-$replaceSessionHostOnNewImageVersionDelayDays = [int]::Parse((Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersionDelayDays))
+$replaceSessionHostOnNewImageVersionDelayDays = (Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersionDelayDays)
 $latestImageAge = (New-TimeSpan -Start $latestImageVersion.Date -End (Get-Date -AsUTC)).TotalDays
 
 # Check if there's outstanding work from a previous cycle (pending host mappings from failed deployments in DeleteFirst mode)
@@ -438,7 +429,16 @@ else {
     }
     
     # Get full replacement plan with all calculations
-    $hostPoolReplacementPlan = Get-SessionHostReplacementPlan -ARMToken $ARMToken -SessionHosts $sessionHostsFiltered -RunningDeployments $runningDeployments -LatestImageVersion $latestImageVersion -AllowImageVersionRollback $allowImageVersionRollback -ScalingPlanTarget $scalingPlanTarget
+    $hostPoolReplacementPlan = Get-SessionHostReplacementPlan `
+        -ARMToken $ARMToken `
+        -SessionHosts $sessionHostsFiltered `
+        -RunningDeployments $runningDeployments `
+        -LatestImageVersion $latestImageVersion `
+        -AllowImageVersionRollback $allowImageVersionRollback `
+        -ScalingPlanTarget $scalingPlanTarget `
+        -GraphToken $GraphToken `
+        -RemoveEntraDevice $removeEntraDevice `
+        -RemoveIntuneDevice $removeIntuneDevice
 }
 
 # EARLY EXIT: Check if host pool is up to date (nothing to do)
@@ -602,7 +602,7 @@ else {
 }
 
 # Check if we're starting a new update cycle and reset progressive scale-up if needed
-if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
+if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
     $deploymentState = Get-DeploymentState
     $currentImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { 'N/A' }
     $totalToReplace = if ($hostPoolReplacementPlan.TotalSessionHostsToReplace) { $hostPoolReplacementPlan.TotalSessionHostsToReplace } else { 0 }
@@ -646,7 +646,7 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
         Write-LogEntry -Message "Detected new update cycle: $resetReason"
         Write-LogEntry -Message "Resetting progressive scale-up to initial percentage"
         $deploymentState.ConsecutiveSuccesses = 0
-        $deploymentState.CurrentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+        $deploymentState.CurrentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage)
         $deploymentState.LastStatus = 'NewCycle'
         $deploymentState.LastDeploymentName = ''
         Save-DeploymentState -DeploymentState $deploymentState
@@ -763,11 +763,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                 $deploymentState.PendingHostMappings = '{}'
             }
             Save-DeploymentState -DeploymentState $deploymentState
-        
-            # Decommission session hosts
-            $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
-            $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice
-        
+
             # Acquire Graph token if device cleanup is enabled
             $GraphToken = $null
             if ($removeEntraDevice -or $removeIntuneDevice) {
@@ -884,7 +880,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                 Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName
             
                 # Update deployment state for progressive scale-up tracking
-                if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
+                if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
                     $deploymentState = Get-DeploymentState               
                     # Save deployment info for checking on next run
                     $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
@@ -902,10 +898,10 @@ if ($replacementMode -eq 'DeleteFirst') {
                 Write-LogEntry -Message "Deployment failed with error: $_" -Level Error
             
                 # Update state to reflect immediate failure (submission error) if progressive scale-up is enabled
-                if ([bool]::Parse((Read-FunctionAppSetting EnableProgressiveScaleUp))) {
+                if ($enableProgressiveScaleUp) {
                     $deploymentState = Get-DeploymentState
                     $deploymentState.ConsecutiveSuccesses = 0
-                    $deploymentState.CurrentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+                    $deploymentState.CurrentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage)
                     $deploymentState.LastStatus = 'Failed'
                     $deploymentState.LastDeploymentName = '' # Clear deployment name since submission failed
                     $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
@@ -936,7 +932,7 @@ else {
             Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName
             
             # Update deployment state for progressive scale-up tracking
-            if (Read-FunctionAppSetting EnableProgressiveScaleUp) {
+            if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
                 $deploymentState = Get-DeploymentState
                 
                 # Save deployment info for checking on next run
@@ -959,10 +955,10 @@ else {
             Write-LogEntry -Message "Deployment failed with error: $_" -Level Error
             
             # Update state to reflect immediate failure (submission error) if progressive scale-up is enabled
-            if ([bool]::Parse((Read-FunctionAppSetting EnableProgressiveScaleUp))) {
+            if ($enableProgressiveScaleUp) {
                 $deploymentState = Get-DeploymentState
                 $deploymentState.ConsecutiveSuccesses = 0
-                $deploymentState.CurrentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage))
+                $deploymentState.CurrentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage)
                 $deploymentState.LastStatus = 'Failed'
                 $deploymentState.LastDeploymentName = '' # Clear deployment name since submission failed
                 $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
@@ -986,11 +982,7 @@ else {
     # STEP 3: Delete session hosts (only if safety check passed or no new hosts to verify)
     if (($newHostAvailability.SafeToProceed -or $newHostAvailability.TotalNewHosts -eq 0) -and $hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
         Write-LogEntry -Message "We will decommission {0} session hosts from this list: {1}" -StringValues $hostPoolReplacementPlan.SessionHostsPendingDelete.Count, ($hostPoolReplacementPlan.SessionHostsPendingDelete.SessionHostName -join ',') -Level Trace
-        
-        # Decommission session hosts
-        $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice
-        $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice
-        
+               
         # Acquire Graph token if device cleanup is enabled
         if ($removeEntraDevice -or $removeIntuneDevice) {
             Try {

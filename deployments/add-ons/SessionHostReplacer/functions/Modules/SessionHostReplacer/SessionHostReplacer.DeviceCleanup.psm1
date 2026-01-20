@@ -37,9 +37,9 @@ function Remove-DeviceFromDirectories {
         [Parameter()]
         [string] $GraphToken,
         [Parameter()]
-        [bool] $RemoveEntraDevice,
+        [bool] $RemoveEntraDevice = (Read-FunctionAppSetting RemoveEntraDevice -AsBoolean),
         [Parameter()]
-        [bool] $RemoveIntuneDevice,
+        [bool] $RemoveIntuneDevice = (Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean),
         [Parameter()]
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
@@ -75,10 +75,13 @@ function Remove-EntraDevice {
     param (
         [Parameter(Mandatory = $false)]
         [string] $GraphEndpoint = (Get-GraphEndpoint),
+        
         [Parameter(Mandatory = $true)]
         $GraphToken,
+        
         [Parameter(Mandatory = $true)]
         [string] $Name,
+        
         [Parameter(Mandatory = $false)]
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
@@ -127,10 +130,13 @@ function Remove-IntuneDevice {
     param(
         [Parameter(Mandatory = $false)]
         [string] $GraphEndpoint = (Get-GraphEndpoint),
+
         [Parameter(Mandatory = $true)]
         $GraphToken,
+
         [Parameter(Mandatory = $true)]
         [string] $Name,
+
         [Parameter(Mandatory = $false)]
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
@@ -214,22 +220,31 @@ function Confirm-SessionHostDeletions {
     param (
         [Parameter(Mandatory = $true)]
         [string] $ARMToken,
+        
         [Parameter()]
         [string] $GraphToken,
+        
         [Parameter(Mandatory = $true)]
         [array] $DeletedHostNames,
+        
         [Parameter(Mandatory = $true)]
         [array] $SessionHosts,
+        
         [Parameter()]
         [int] $MaxWaitMinutes = 10,
+        
         [Parameter()]
         [int] $PollIntervalSeconds = 30,
+        
         [Parameter()]
-        [bool] $RemoveEntraDevice = $false,
+        [bool] $RemoveEntraDevice = (Read-FunctionAppSetting RemoveEntraDevice -AsBoolean),
+        
         [Parameter()]
-        [bool] $RemoveIntuneDevice = $false,
+        [bool] $RemoveIntuneDevice = (Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean),
+        
         [Parameter()]
         [string] $ResourceManagerUri = (Get-ResourceManagerUri),
+        
         [Parameter()]
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
@@ -272,110 +287,110 @@ function Confirm-SessionHostDeletions {
         }
     }
     
-    # Poll VMs until all are gone or timeout
-    $checkCount = 0
-    while ((Get-Date) -lt $timeoutTime -and ($hostsToVerify | Where-Object { -not $_.VMConfirmed }).Count -gt 0) {
-        $checkCount++
-        $elapsedSeconds = [Math]::Round(((Get-Date) - $startTime).TotalSeconds)
-        $remainingVMs = ($hostsToVerify | Where-Object { -not $_.VMConfirmed }).Count
-        Write-LogEntry -Message "VM verification check {0} at {1}s: Checking {2} remaining VM(s)..." -StringValues $checkCount, $elapsedSeconds, $remainingVMs -Level Trace
-        
-        foreach ($host in ($hostsToVerify | Where-Object { -not $_.VMConfirmed })) {
-            try {
-                $vmCheck = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $host.VMUri -ErrorAction SilentlyContinue
-                
-                if ($null -eq $vmCheck -or $vmCheck.error.code -eq 'ResourceNotFound') {
-                    $host.VMConfirmed = $true
-                    Write-LogEntry -Message "VM deletion confirmed: {0}" -StringValues $host.VMName -Level Trace
-                }
-            }
-            catch {
-                # Exception likely means VM not found
-                $host.VMConfirmed = $true
-                Write-LogEntry -Message "VM deletion confirmed: {0}" -StringValues $host.VMName -Level Trace
-            }
-        }
-        
-        if (($hostsToVerify | Where-Object { -not $_.VMConfirmed }).Count -gt 0 -and (Get-Date) -lt $timeoutTime) {
-            Start-Sleep -Seconds $PollIntervalSeconds
+    # Mark Entra/Intune as confirmed if not being checked
+    if (-not $GraphToken -or (-not $RemoveEntraDevice -and -not $RemoveIntuneDevice)) {
+        Write-LogEntry -Message "Graph token not available or device cleanup disabled - skipping Entra ID and Intune validation" -Level Trace
+        foreach ($sh in $hostsToVerify) {
+            $sh.EntraIDConfirmed = $true
+            $sh.IntuneConfirmed = $true
         }
     }
+    elseif (-not $RemoveEntraDevice) {
+        foreach ($sh in $hostsToVerify) { $sh.EntraIDConfirmed = $true }
+    }
+    elseif (-not $RemoveIntuneDevice) {
+        foreach ($sh in $hostsToVerify) { $sh.IntuneConfirmed = $true }
+    }
     
-    # Verify Graph cleanup for all hosts (Entra ID and Intune)
-    if ($GraphToken -and ($RemoveEntraDevice -or $RemoveIntuneDevice)) {
-        $checkSystems = @()
-        if ($RemoveEntraDevice) { $checkSystems += 'Entra ID' }
-        if ($RemoveIntuneDevice) { $checkSystems += 'Intune' }
-        Write-LogEntry -Message "Verifying {0} device cleanup..." -StringValues ($checkSystems -join ' and ') -Level Trace
+    # Build verification system list for logging
+    $checkSystems = @('VM')
+    if ($GraphToken -and $RemoveEntraDevice) { $checkSystems += 'Entra ID' }
+    if ($GraphToken -and $RemoveIntuneDevice) { $checkSystems += 'Intune' }
+    Write-LogEntry -Message "Verifying deletion for {0}..." -StringValues ($checkSystems -join ', ') -Level Trace
+    
+    # Poll all systems until all hosts fully confirmed or timeout
+    $checkCount = 0
+    $incompleteHosts = $hostsToVerify | Where-Object { -not ($_.VMConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed) }
+    
+    while ((Get-Date) -lt $timeoutTime -and $incompleteHosts.Count -gt 0) {
+        $checkCount++
+        $elapsedSeconds = [Math]::Round(((Get-Date) - $startTime).TotalSeconds)
+        $remainingHosts = $incompleteHosts.Count
+        Write-LogEntry -Message "Deletion verification check {0} at {1}s: {2} host(s) with incomplete deletion..." -StringValues $checkCount, $elapsedSeconds, $remainingHosts -Level Trace
         
-        foreach ($host in $hostsToVerify) {
-            # Check Entra ID (only if removal was attempted)
-            if ($RemoveEntraDevice) {
+        foreach ($sh in $incompleteHosts) {
+            # Check VM deletion
+            if (-not $sh.VMConfirmed) {
+                try {
+                    $vmCheck = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $sh.VMUri -ErrorAction SilentlyContinue
+                    
+                    if ($null -eq $vmCheck -or $vmCheck.error.code -eq 'ResourceNotFound') {
+                        $sh.VMConfirmed = $true
+                        Write-LogEntry -Message "VM deletion confirmed: {0}" -StringValues $sh.VMName -Level Trace
+                    }
+                }
+                catch {
+                    # Exception likely means VM not found
+                    $sh.VMConfirmed = $true
+                    Write-LogEntry -Message "VM deletion confirmed: {0}" -StringValues $sh.VMName -Level Trace
+                }
+            }
+            
+            # Check Entra ID deletion (only if removal was enabled and Graph token available)
+            if (-not $sh.EntraIDConfirmed -and $GraphToken -and $RemoveEntraDevice) {
                 try {
                     $entraDevice = Invoke-GraphApiWithRetry `
                         -GraphEndpoint (Get-GraphEndpoint) `
                         -GraphToken $GraphToken `
                         -Method Get `
-                        -Uri "/v1.0/devices?`$filter=displayName eq '$($host.Name)'" `
+                        -Uri "/v1.0/devices?`$filter=displayName eq '$($sh.Name)'" `
                         -ClientId $ClientId
                     
-                    if ($entraDevice.value -and $entraDevice.value.Count -gt 0) {
-                        Write-LogEntry -Message "Entra ID device still exists: {0}" -StringValues $host.Name -Level Trace
-                    }
-                    else {
-                        $host.EntraIDConfirmed = $true
-                        Write-LogEntry -Message "Entra ID deletion confirmed: {0}" -StringValues $host.Name -Level Trace
+                    if (-not $entraDevice.value -or $entraDevice.value.Count -eq 0) {
+                        $sh.EntraIDConfirmed = $true
+                        Write-LogEntry -Message "Entra ID deletion confirmed: {0}" -StringValues $sh.Name -Level Trace
                     }
                 }
                 catch {
-                    Write-LogEntry -Message "Error verifying Entra ID deletion for {0}: {1}" -StringValues $host.Name, $_.Exception.Message -Level Warning
+                    Write-LogEntry -Message "Error verifying Entra ID deletion for {0}: {1}" -StringValues $sh.Name, $_.Exception.Message -Level Warning
                 }
             }
-            else {
-                # Not attempted, mark as confirmed
-                $host.EntraIDConfirmed = $true
-            }
             
-            # Check Intune (only if removal was attempted)
-            if ($RemoveIntuneDevice) {
+            # Check Intune deletion (only if removal was enabled and Graph token available)
+            if (-not $sh.IntuneConfirmed -and $GraphToken -and $RemoveIntuneDevice) {
                 try {
                     $intuneDevice = Invoke-GraphApiWithRetry `
                         -GraphEndpoint (Get-GraphEndpoint) `
                         -GraphToken $GraphToken `
                         -Method Get `
-                        -Uri "/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$($host.Name)'" `
+                        -Uri "/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$($sh.Name)'" `
                         -ClientId $ClientId
                     
-                    if ($intuneDevice.value -and $intuneDevice.value.Count -gt 0) {
-                        Write-LogEntry -Message "Intune device still exists: {0}" -StringValues $host.Name -Level Trace
-                    }
-                    else {
-                        $host.IntuneConfirmed = $true
-                        Write-LogEntry -Message "Intune deletion confirmed: {0}" -StringValues $host.Name -Level Trace
+                    if (-not $intuneDevice.value -or $intuneDevice.value.Count -eq 0) {
+                        $sh.IntuneConfirmed = $true
+                        Write-LogEntry -Message "Intune deletion confirmed: {0}" -StringValues $sh.Name -Level Trace
                     }
                 }
                 catch {
-                    Write-LogEntry -Message "Error verifying Intune deletion for {0}: {1}" -StringValues $host.Name, $_.Exception.Message -Level Warning
+                    Write-LogEntry -Message "Error verifying Intune deletion for {0}: {1}" -StringValues $sh.Name, $_.Exception.Message -Level Warning
                 }
             }
-            else {
-                # Not attempted, mark as confirmed
-                $host.IntuneConfirmed = $true
-            }
             
-            # Per-host validation summary
-            $vmStatus = if ($host.VMConfirmed) { "✓" } else { "✗" }
-            $entraStatus = if ($host.EntraIDConfirmed) { "✓" } else { "✗" }
-            $intuneStatus = if ($host.IntuneConfirmed) { "✓" } else { "✗" }
-            Write-LogEntry -Message "Deletion status for {0}: VM={1} EntraID={2} Intune={3}" -StringValues $host.Name, $vmStatus, $entraStatus, $intuneStatus -Level Trace
+            # Log per-host status after each check
+            $vmStatus = if ($sh.VMConfirmed) { "✓" } else { "✗" }
+            $entraStatus = if ($sh.EntraIDConfirmed) { "✓" } else { "✗" }
+            $intuneStatus = if ($sh.IntuneConfirmed) { "✓" } else { "✗" }
+            $fullyConfirmed = $sh.VMConfirmed -and $sh.EntraIDConfirmed -and $sh.IntuneConfirmed
+            if ($fullyConfirmed) {
+                Write-LogEntry -Message "Full deletion confirmed for {0}: VM={1} EntraID={2} Intune={3}" -StringValues $sh.Name, $vmStatus, $entraStatus, $intuneStatus -Level Trace
+            }
         }
-    }
-    else {
-        Write-LogEntry -Message "Graph token not available - skipping Entra ID and Intune validation" -Level Trace
-        # Mark all as confirmed since we can't verify
-        foreach ($host in $hostsToVerify) {
-            $host.EntraIDConfirmed = $true
-            $host.IntuneConfirmed = $true
+        
+        # Recalculate incomplete hosts for next iteration
+        $incompleteHosts = $hostsToVerify | Where-Object { -not ($_.VMConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed) }
+        
+        if ($incompleteHosts.Count -gt 0 -and (Get-Date) -lt $timeoutTime) {
+            Start-Sleep -Seconds $PollIntervalSeconds
         }
     }
 
@@ -392,12 +407,12 @@ function Confirm-SessionHostDeletions {
     # Warn about any incomplete deletions
     $incompleteHosts = $hostsToVerify | Where-Object { -not ($_.VMConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed) }
     if ($incompleteHosts.Count -gt 0) {
-        foreach ($host in $incompleteHosts) {
+        foreach ($sh in $incompleteHosts) {
             $failures = @()
-            if (-not $host.VMConfirmed) { $failures += "VM" }
-            if (-not $host.EntraIDConfirmed) { $failures += "EntraID" }
-            if (-not $host.IntuneConfirmed) { $failures += "Intune" }
-            Write-LogEntry -Message "Warning: Incomplete deletion for {0} - unconfirmed: {1}" -StringValues $host.Name, ($failures -join ', ') -Level Warning
+            if (-not $sh.VMConfirmed) { $failures += "VM" }
+            if (-not $sh.EntraIDConfirmed) { $failures += "EntraID" }
+            if (-not $sh.IntuneConfirmed) { $failures += "Intune" }
+            Write-LogEntry -Message "Warning: Incomplete deletion for {0} - unconfirmed: {1}" -StringValues $sh.Name, ($failures -join ', ') -Level Warning
         }
     }
     else {

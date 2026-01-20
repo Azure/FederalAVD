@@ -15,8 +15,6 @@ function Get-DeploymentState {
         consecutive successful deployments and current scale-up percentage.
     .PARAMETER HostPoolName
         Name of the host pool to retrieve state for.
-    .PARAMETER StorageAccountName
-        Name of the storage account containing the state table.
     .EXAMPLE
         $state = Get-DeploymentState -HostPoolName 'hp-prod-001'
     #>
@@ -24,9 +22,6 @@ function Get-DeploymentState {
     param (
         [Parameter()]
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
-        
-        [Parameter()]
-        [string] $StorageAccountName,
 
         [Parameter()]
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
@@ -34,14 +29,13 @@ function Get-DeploymentState {
     
     try {
         # Parse storage account name from AzureWebJobsStorage if not provided
-        if (-not $StorageAccountName) {
-            $storageUri = $env:AzureWebJobsStorage__blobServiceUri
-            if ($storageUri -match 'https://([^.]+)\.') {
-                $StorageAccountName = $Matches[1]
-            }
-            else {
-                throw "Unable to determine storage account name from environment variables"
-            }
+
+        $storageUri = $env:AzureWebJobsStorage__blobServiceUri
+        if ($storageUri -match 'https://([^.]+)\.') {
+            $StorageAccountName = $Matches[1]
+        }
+        else {
+            throw "Unable to determine storage account name from environment variables"
         }
         
         $tableName = 'sessionHostDeploymentState'
@@ -55,10 +49,10 @@ function Get-DeploymentState {
         $storageToken = Get-AccessToken -ResourceUri "https://$StorageAccountName.table.$storageSuffix" -ClientId $ClientId
         
         $headers = @{
-            'Authorization'  = "Bearer $storageToken"
-            'Accept'         = 'application/json;odata=nometadata'
-            'x-ms-version'   = '2019-02-02'
-            'x-ms-date'      = [DateTime]::UtcNow.ToString('R')
+            'Authorization' = "Bearer $storageToken"
+            'Accept'        = 'application/json;odata=nometadata'
+            'x-ms-version'  = '2019-02-02'
+            'x-ms-date'     = [DateTime]::UtcNow.ToString('R')
         }
         
         # Check if table exists, create if not
@@ -198,13 +192,13 @@ function Get-LastDeploymentStatus {
             Write-LogEntry -Message "Previous deployment status: $provisioningState" -Level Trace
             
             $result = [PSCustomObject]@{
-                DeploymentName   = $DeploymentName
+                DeploymentName    = $DeploymentName
                 ProvisioningState = $provisioningState
-                Succeeded        = $provisioningState -eq 'Succeeded'
-                Failed           = $provisioningState -eq 'Failed'
-                Running          = $provisioningState -in @('Running', 'Accepted')
-                ErrorMessage     = $deployment.properties.error.message
-                Timestamp        = $deployment.properties.timestamp
+                Succeeded         = $provisioningState -eq 'Succeeded'
+                Failed            = $provisioningState -eq 'Failed'
+                Running           = $provisioningState -in @('Running', 'Accepted')
+                ErrorMessage      = $deployment.properties.error.message
+                Timestamp         = $deployment.properties.timestamp
             }
             
             if ($result.Failed) {
@@ -239,8 +233,6 @@ function Save-DeploymentState {
         The deployment state object to save.
     .PARAMETER HostPoolName
         Name of the host pool.
-    .PARAMETER StorageAccountName
-        Name of the storage account.
     .EXAMPLE
         Save-DeploymentState -DeploymentState $state -HostPoolName 'hp-prod-001'
     #>
@@ -253,24 +245,19 @@ function Save-DeploymentState {
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
         
         [Parameter()]
-        [string] $StorageAccountName,
-
-        [Parameter()]
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
     
     try {
         # Parse storage account name from AzureWebJobsStorage if not provided
-        if (-not $StorageAccountName) {
-            $storageUri = $env:AzureWebJobsStorage__blobServiceUri
-            if ($storageUri -match 'https://([^.]+)\.') {
-                $StorageAccountName = $Matches[1]
-            }
-            else {
-                throw "Unable to determine storage account name from environment variables"
-            }
+        $storageUri = $env:AzureWebJobsStorage__blobServiceUri
+        if ($storageUri -match 'https://([^.]+)\.') {
+            $StorageAccountName = $Matches[1]
         }
-        
+        else {
+            throw "Unable to determine storage account name from environment variables"
+        }
+                
         $tableName = 'sessionHostDeploymentState'
         $partitionKey = $HostPoolName
         $rowKey = 'DeploymentState'
@@ -282,11 +269,11 @@ function Save-DeploymentState {
         $storageToken = Get-AccessToken -ResourceUri "https://$StorageAccountName.table.$storageSuffix" -ClientId $ClientId
         
         $headers = @{
-            'Authorization'  = "Bearer $storageToken"
-            'Accept'         = 'application/json;odata=nometadata'
-            'x-ms-version'   = '2019-02-02'
-            'x-ms-date'      = [DateTime]::UtcNow.ToString('R')
-            'Content-Type'   = 'application/json'
+            'Authorization' = "Bearer $storageToken"
+            'Accept'        = 'application/json;odata=nometadata'
+            'x-ms-version'  = '2019-02-02'
+            'x-ms-date'     = [DateTime]::UtcNow.ToString('R')
+            'Content-Type'  = 'application/json'
         }
         
         # Check if table exists, create if not
@@ -543,14 +530,14 @@ function Deploy-SessionHosts {
                 $props = $PreferredHostProperties[$vmName]
                 $dedicatedHostIds += if ($props.HostId) { $props.HostId } else { '' }
                 $dedicatedHostGroupIds += if ($props.HostGroupId) { $props.HostGroupId } else { '' }
-                $preferredZones += if ($props.Zones) { ,$props.Zones } else { ,@() }
+                $preferredZones += if ($props.Zones) { , $props.Zones } else { , @() }
                 Write-LogEntry -Message "Applying dedicated host properties to {0}: HostId={1}, HostGroupId={2}, Zones={3}" -StringValues $vmName, $props.HostId, $props.HostGroupId, ($props.Zones -join ', ') -Level Trace
             }
             else {
                 # Use empty string/array for VMs without specific assignments (will use template default)
                 $dedicatedHostIds += ''
                 $dedicatedHostGroupIds += ''
-                $preferredZones += ,@()
+                $preferredZones += , @()
             }
         }
         
@@ -763,8 +750,10 @@ function Get-TemplateSpecVersionResourceId {
     param(
         [Parameter(Mandatory = $true)]
         [string]$ARMToken,
+        
         [Parameter()]
         [string]$ResourceManagerUri = (Get-ResourceManagerUri),
+        
         [Parameter(Mandatory = $true)]
         [string]$ResourceId
     )
@@ -870,10 +859,10 @@ function Remove-FailedDeploymentArtifacts {
         [array] $RegisteredSessionHostNames = @(),
         
         [Parameter()]
-        [bool] $RemoveEntraDevice = $false,
+        [bool] $RemoveEntraDevice = (Read-FunctionAppSetting RemoveEntraDevice -AsBoolean),
         
         [Parameter()]
-        [bool] $RemoveIntuneDevice = $false,
+        [bool] $RemoveIntuneDevice = (Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean),
         
         [Parameter()]
         [string] $ResourceManagerUri = (Get-ResourceManagerUri),
@@ -925,9 +914,9 @@ function Remove-FailedDeploymentArtifacts {
                 if (-not $isRegistered) {
                     Write-LogEntry -Message "Found orphaned VM from failed deployment: $($vm.name) (matches session host name $sessionHostName but not registered)" -Level Warning
                     $orphanedVMs += [PSCustomObject]@{
-                        Name           = $vm.name
-                        ResourceId     = $vm.id
-                        DeploymentName = $deployment.DeploymentName
+                        Name            = $vm.name
+                        ResourceId      = $vm.id
+                        DeploymentName  = $deployment.DeploymentName
                         SessionHostName = $sessionHostName
                     }
                 }
@@ -1032,8 +1021,8 @@ function Remove-FailedDeploymentArtifacts {
                     if ($deployment -and $deployment.properties.dependencies) {
                         # Extract nested deployment names from dependencies
                         $nestedNames = $deployment.properties.dependencies | 
-                            Where-Object { $_.resourceType -eq 'Microsoft.Resources/deployments' } |
-                            ForEach-Object { $_.resourceName }
+                        Where-Object { $_.resourceType -eq 'Microsoft.Resources/deployments' } |
+                        ForEach-Object { $_.resourceName }
                         
                         if ($nestedNames) {
                             foreach ($nestedName in $nestedNames) {

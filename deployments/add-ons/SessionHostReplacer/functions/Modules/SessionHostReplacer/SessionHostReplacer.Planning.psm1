@@ -337,38 +337,50 @@ function Get-SessionHostReplacementPlan {
         [Parameter()]
         [PSCustomObject] $LatestImageVersion,
         [Parameter()]
-        [int] $ReplaceSessionHostOnNewImageVersionDelayDays = [int]::Parse((Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersionDelayDays)),
+        [int] $ReplaceSessionHostOnNewImageVersionDelayDays = (Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersionDelayDays),
         [Parameter()]
         [bool] $AllowImageVersionRollback = $false,
         [Parameter()]
-        [bool] $EnableProgressiveScaleUp = [bool]::Parse((Read-FunctionAppSetting EnableProgressiveScaleUp)),
+        [bool] $EnableProgressiveScaleUp = (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean),
         [Parameter()]
-        [int] $InitialDeploymentPercentage = [int]::Parse((Read-FunctionAppSetting InitialDeploymentPercentage)),
+        [int] $InitialDeploymentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage),
         [Parameter()]
-        [int] $ScaleUpIncrementPercentage = [int]::Parse((Read-FunctionAppSetting ScaleUpIncrementPercentage)),
+        [int] $ScaleUpIncrementPercentage = (Read-FunctionAppSetting ScaleUpIncrementPercentage),
         [Parameter()]
         [int] $MaxDeploymentBatchSize = $(
             $setting = Read-FunctionAppSetting MaxDeploymentBatchSize
-            if ([string]::IsNullOrEmpty($setting)) { 100 } else { [int]::Parse($setting) }
+            if ([string]::IsNullOrEmpty($setting)) { 100 } else { $setting }
         ),
         [Parameter()]
-        [int] $SuccessfulRunsBeforeScaleUp = [int]::Parse((Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp)),
+        [int] $SuccessfulRunsBeforeScaleUp = (Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp),
         [Parameter()]
         [string] $ReplacementMode = (Read-FunctionAppSetting ReplacementMode),
         [Parameter()]
-        [int] $DrainGracePeriodHours = [int]::Parse((Read-FunctionAppSetting DrainGracePeriodHours)),
+        [int] $DrainGracePeriodHours = (Read-FunctionAppSetting DrainGracePeriodHours),
         [Parameter()]
         [int] $MinimumCapacityPercentage = $(
             $setting = Read-FunctionAppSetting MinimumCapacityPercentage
-            if ([string]::IsNullOrEmpty($setting)) { 50 } else { [int]::Parse($setting) }
+            if ([string]::IsNullOrEmpty($setting)) { 50 } else { $setting }
         ),
         [Parameter()]
         [int] $MaxDeletionsPerCycle = $(
             $setting = Read-FunctionAppSetting MaxDeletionsPerCycle
-            if ([string]::IsNullOrEmpty($setting)) { 50 } else { [int]::Parse($setting) }
+            if ([string]::IsNullOrEmpty($setting)) { 50 } else { $setting }
         ),
         [Parameter()]
-        [PSCustomObject] $ScalingPlanTarget = $null
+        [PSCustomObject] $ScalingPlanTarget = $null,
+        [Parameter()]
+        [string] $GraphToken,
+        [Parameter()]
+        [bool] $RemoveEntraDevice = (Read-FunctionAppSetting RemoveEntraDevice -AsBoolean),
+        [Parameter()]
+        [bool] $RemoveIntuneDevice = (Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean),
+        [Parameter()]
+        [string] $HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
+        [Parameter()]
+        [string] $HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
+        [Parameter()]
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri)
     )
     
     Write-LogEntry -Message "We have $($SessionHosts.Count) session hosts (included in Automation)"
@@ -414,6 +426,12 @@ function Get-SessionHostReplacementPlan {
             # Compare versions with rollback protection
             [array] $sessionHostsOldVersion = @()
             foreach ($sh in $sessionHosts) {
+                # Skip version comparison for hosts without image version (unavailable/deleted VMs)
+                if ([string]::IsNullOrEmpty($sh.ImageVersion)) {
+                    Write-LogEntry -Message "Session host $($sh.SessionHostName) has no image version (likely unavailable) - skipping version comparison" -Level Trace
+                    continue
+                }
+                
                 if ($sh.ImageVersion -ne $LatestImageVersion.Version) {
                     # Check if image definition has changed
                     $imageDefinitionChanged = $false
@@ -459,12 +477,55 @@ function Get-SessionHostReplacementPlan {
         Write-LogEntry -Message "Latest Image age is less than New Image Delay value $ReplaceSessionHostOnNewImageVersionDelayDays - no session hosts will be replaced based on image version"
     }
 
+    # Detect and handle unavailable session hosts (VMs deleted but host pool registration remains)
+    $unavailableHosts = $SessionHosts | Where-Object { $_.IsUnavailable -eq $true -or $_.Status -eq 'Unavailable' }
+    if ($unavailableHosts.Count -gt 0) {
+        $unavailableHostNames = $unavailableHosts.SessionHostName -join ','
+        Write-LogEntry -Message "CRITICAL: Detected $($unavailableHosts.Count) unavailable session hosts (VMs deleted): $unavailableHostNames" -Level Error
+        Write-LogEntry -Message "Cleaning up device records and host pool registrations before redeployment..." -Level Warning
+        
+        # Clean up device records for each unavailable host
+        foreach ($unavailableHost in $unavailableHosts) {
+            # Remove from Entra ID and Intune if configured
+            if ($GraphToken -and ($RemoveEntraDevice -or $RemoveIntuneDevice)) {
+                try {
+                    Remove-DeviceFromDirectories `
+                        -DeviceName $unavailableHost.SessionHostName `
+                        -GraphToken $GraphToken `
+                        -RemoveEntraDevice $RemoveEntraDevice `
+                        -RemoveIntuneDevice $RemoveIntuneDevice
+                    Write-LogEntry -Message "Cleaned up device records for ghost host: $($unavailableHost.SessionHostName)" -Level Information
+                }
+                catch {
+                    Write-LogEntry -Message "Failed to clean up device records for $($unavailableHost.SessionHostName): $($_.Exception.Message)" -Level Warning
+                }
+            }
+            
+            # Remove stale host pool registration
+            try {
+                $hostPoolPath = "/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName"
+                $sessionHostPath = "$hostPoolPath/sessionHosts/$($unavailableHost.FQDN)"
+                $deleteUri = "$ResourceManagerUri$sessionHostPath`?api-version=2024-04-03&force=true"
+                
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Method Delete -Uri $deleteUri | Out-Null
+                Write-LogEntry -Message "Removed stale host pool registration: $($unavailableHost.FQDN)" -Level Information
+            }
+            catch {
+                Write-LogEntry -Message "Failed to remove host pool registration for $($unavailableHost.FQDN): $($_.Exception.Message)" -Level Warning
+            }
+        }
+        
+        Write-LogEntry -Message "Ghost host cleanup complete. These hosts will be excluded from deletion candidates and counted as needing replacement." -Level Warning
+    }
+    
     [array] $sessionHostsToReplace = $sessionHostsOldVersion | Select-Object -Property * -Unique
 
-    # Good hosts = not needing replacement AND not shutdown (shutdown VMs are deallocated and unavailable)
+    # Good hosts = not needing replacement AND not shutdown (shutdown VMs are deallocated and unavailable) AND not unavailable (VM deleted)
     $goodSessionHosts = $SessionHosts | Where-Object { 
         $_.SessionHostName -notin $sessionHostsToReplace.SessionHostName -and 
-        -not $_.ShutdownTimestamp 
+        -not $_.ShutdownTimestamp -and
+        -not $_.IsUnavailable -and
+        $_.Status -ne 'Unavailable'
     }
     
     # Count shutdown hosts for logging
@@ -502,6 +563,8 @@ function Get-SessionHostReplacementPlan {
         # In SideBySide mode, calculate based on buffer space (pool can temporarily double)
         if ($ReplacementMode -eq 'DeleteFirst') {
             # DeleteFirst: We can deploy as many as we need since we delete first
+            # Note: Unavailable hosts are already excluded from $sessionHostsCurrentTotal, so they're 
+            # automatically counted in the deficit calculation. No need to add them separately.
             $weNeedToDeploy = $TargetSessionHostCount - $sessionHostsCurrentTotal.Count
             
             if ($weNeedToDeploy -gt 0) {
@@ -516,6 +579,8 @@ function Get-SessionHostReplacementPlan {
         }
         else {
             # SideBySide: Use buffer to allow pool to double
+            # Note: Unavailable hosts are already excluded from $sessionHostsCurrentTotal.Count,
+            # so they will naturally be counted as needing replacement without special handling
             $effectiveBuffer = $TargetSessionHostCount
             Write-LogEntry -Message "Automatic buffer: $effectiveBuffer session hosts (allows pool to double during rolling updates)"
             
@@ -674,24 +739,35 @@ function Get-SessionHostReplacementPlan {
         }
         
         # Lazy load power states for hosts to replace being considered for deletion
-        $replaceHostResourceIds = $sessionHostsToReplace | ForEach-Object { $_.ResourceId }
-        Write-LogEntry -Message "Querying power state for $($replaceHostResourceIds.Count) replacement candidate(s): $($sessionHostsToReplace.VMName -join ',')"
+        # Filter out unavailable hosts (already deleted) before querying power state
+        $sessionHostsAvailableForReplace = $sessionHostsToReplace | Where-Object { 
+            -not $_.IsUnavailable -and 
+            $_.Status -ne 'Unavailable' 
+        }
+        
+        if ($sessionHostsAvailableForReplace.Count -lt $sessionHostsToReplace.Count) {
+            $unavailableCount = $sessionHostsToReplace.Count - $sessionHostsAvailableForReplace.Count
+            Write-LogEntry -Message "Filtered out $unavailableCount unavailable host(s) from deletion candidates (VMs already deleted)" -Level Warning
+        }
+        
+        $replaceHostResourceIds = $sessionHostsAvailableForReplace | ForEach-Object { $_.ResourceId }
+        Write-LogEntry -Message "Querying power state for $($replaceHostResourceIds.Count) replacement candidate(s): $($sessionHostsAvailableForReplace.VMName -join ',')"
         $powerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds $replaceHostResourceIds
         
         # Enrich hosts to replace with power state
-        foreach ($sh in $sessionHostsToReplace) {
+        foreach ($sh in $sessionHostsAvailableForReplace) {
             $sh | Add-Member -NotePropertyName PoweredOff -NotePropertyValue $powerStates[$sh.ResourceId] -Force
         }
         
         # Log power state results for visibility
-        $poweredOffHosts = $sessionHostsToReplace | Where-Object { $_.PoweredOff }
+        $poweredOffHosts = $sessionHostsAvailableForReplace | Where-Object { $_.PoweredOff }
         if ($poweredOffHosts) {
             Write-LogEntry -Message "Found $($poweredOffHosts.Count) powered-off host(s) among replacement candidates: $($poweredOffHosts.VMName -join ',')"
         }
         
         # Prioritize hosts for deletion: powered-off first, then idle, then draining, then fewest sessions
         # This ensures VMs that are already powered off are replaced before active ones
-        $sortedHostsToReplace = $sessionHostsToReplace | Sort-Object -Property @{Expression={-not $_.PoweredOff}; Ascending=$true}, @{Expression={$_.Sessions}; Ascending=$true}, @{Expression={$_.AllowNewSession}; Ascending=$true}, SessionHostName
+        $sortedHostsToReplace = $sessionHostsAvailableForReplace | Sort-Object -Property @{Expression={-not $_.PoweredOff}; Ascending=$true}, @{Expression={$_.Sessions}; Ascending=$true}, @{Expression={$_.AllowNewSession}; Ascending=$true}, SessionHostName
         $sessionHostsPendingDelete = (@($sortedHostsToReplace) + @($selectedGoodHostsTotDelete)) | Select-Object -First $canDelete
         
         # In SideBySide mode, apply progressive scale-up to deletions
@@ -778,9 +854,9 @@ function Get-SessionHosts {
         [Parameter()]
         [string] $TagScalingPlanExclusionTag = (Read-FunctionAppSetting Tag_ScalingPlanExclusionTag),
         [Parameter()]
-        [switch] $FixSessionHostTags = (Read-FunctionAppSetting FixSessionHostTags),
+        [switch] $FixSessionHostTags = (Read-FunctionAppSetting FixSessionHostTags -AsBoolean),
         [Parameter()]
-        [bool] $IncludePreExistingSessionHosts = (Read-FunctionAppSetting IncludePreExistingSessionHosts)
+        [bool] $IncludePreExistingSessionHosts = (Read-FunctionAppSetting IncludePreExistingSessionHosts -AsBoolean)
     )
     
     Write-LogEntry -Message "Getting current session hosts in host pool $HostPoolName"
@@ -812,7 +888,45 @@ function Get-SessionHosts {
         if (-not $vmResponse) {
             Write-LogEntry -Message "VM not found in cache, querying individually: $($sh.ResourceId)" -Level Trace
             $Uri = "$ResourceManagerUri$($sh.ResourceId)?api-version=2024-07-01"
-            $vmResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+            try {
+                $vmResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+            }
+            catch {
+                Write-LogEntry -Message "Failed to query VM $($sh.ResourceId): $($_.Exception.Message). VM may have been deleted." -Level Warning
+                $vmResponse = $null
+            }
+        }
+        
+        # Check if VM exists (will be null if deleted but host pool registration remains)
+        if (-not $vmResponse) {
+            # Ghost host - registered in host pool but VM deleted
+            $fqdn = $sh.Name -replace ".+\/(.+)", '$1'
+            $sessionHostName = $fqdn -replace '\..*$', ''
+            Write-LogEntry -Message "Detected unavailable session host (VM deleted): $sessionHostName (Status=$($sh.Status))" -Level Warning
+            
+            # Return minimal object marking this as unavailable
+            [PSCustomObject]@{
+                VMName              = $null
+                SessionHostName     = $sessionHostName
+                FQDN                = $fqdn
+                DeployTimestamp     = $null
+                IncludeInAutomation = $true
+                PendingDrainTimeStamp = $null
+                ShutdownTimestamp   = $null
+                ImageVersion        = $null
+                ImageDefinition     = $null
+                Tags                = @{}
+                HostId              = $null
+                HostGroupId         = $null
+                Zones               = $null
+                Name                = $sh.Name
+                ResourceId          = $sh.ResourceId
+                Sessions            = $sh.Sessions
+                AllowNewSession     = $sh.AllowNewSession
+                Status              = $sh.Status
+                IsUnavailable       = $true
+            }
+            continue
         }
         
         # Extract properties from nested structure

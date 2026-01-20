@@ -178,7 +178,8 @@ function Get-AccessToken {
         $uri = if ($ResourceUri[-1] -ne '/') { "$ResourceUri/" } else { $ResourceUri }
         Write-Verbose "Requesting ARM token for resource: $uri (with trailing slash)"
         $uri
-    } else {        
+    }
+    else {        
         # Graph and Storage: NO trailing slash
         $uri = if ($ResourceUri[-1] -eq '/') { $ResourceUri.TrimEnd('/') } else { $ResourceUri }
         $tokenType = if ($isGraphToken) { "Graph" } elseif ($isStorageToken) { "Storage" } else { "Other" }
@@ -192,7 +193,8 @@ function Get-AccessToken {
         # System-assigned managed identity
         Write-Verbose "Acquiring token using system-assigned managed identity for resource: $tokenResourceUri"
         $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $tokenResourceUri + '&api-version=2019-08-01'
-    } else {
+    }
+    else {
         # User-assigned managed identity
         Write-Verbose "Acquiring token using user-assigned managed identity (ClientId: $ClientId) for resource: $tokenResourceUri"
         $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $tokenResourceUri + "&client_id=$ClientId" + '&api-version=2019-08-01'
@@ -225,10 +227,14 @@ function Read-FunctionAppSetting {
         The name of the configuration key to retrieve from environment variables.
     .PARAMETER NoCache
         Optional. Bypass the cache and read directly from environment variable.
+    .PARAMETER AsBoolean
+        Optional. Process the value as a boolean.
     .EXAMPLE
         $hostPoolName = Read-FunctionAppSetting HostPoolName
     .EXAMPLE
         $value = Read-FunctionAppSetting 'SomeSetting' -NoCache
+    .EXAMPLE
+        $enabled = Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean
     #>
     [CmdletBinding()]
     param (
@@ -236,7 +242,10 @@ function Read-FunctionAppSetting {
         [string] $SettingKey,
         
         [Parameter(Mandatory = $false)]
-        [switch] $NoCache
+        [switch] $NoCache,
+        
+        [Parameter(Mandatory = $false)]
+        [switch] $AsBoolean
     )
     
     # Check cache first unless NoCache is specified
@@ -248,46 +257,57 @@ function Read-FunctionAppSetting {
     # Get the value from environment variable
     $value = [System.Environment]::GetEnvironmentVariable($SettingKey)
     
-    # Return null if value is null or empty
+    # Return null or false if value is null or empty
     if ([string]::IsNullOrWhiteSpace($value)) {
-        $Script:SettingCache[$SettingKey] = $null
-        return $null
-    }
-    
-    # Convert JSON strings to hashtables for complex configurations
-    if ($value.StartsWith('{')) {
-        try {
-            $parsed = $value | ConvertFrom-Json -AsHashtable -ErrorAction Stop
-            $Script:SettingCache[$SettingKey] = $parsed
-            return $parsed
+        If ( $AsBoolean ) {
+            $Script:SettingCache[$SettingKey] = $false
+            return $false
         }
-        catch {
-            Write-Warning "Failed to parse JSON for $SettingKey : $_"
+        Else {
+            $Script:SettingCache[$SettingKey] = $null
+            return $null
+        }
+    }
+    Else {
+        If ( $AsBoolean ) {
+            if ($value.ToLower() -eq 'true') {
+                $Script:SettingCache[$SettingKey] = $true
+                return $true
+            }
+            else {
+                $Script:SettingCache[$SettingKey] = $false
+                return $false
+            }
+        }
+        if ($value -match '^\d+$') {
+            [int]$intValue = [int]$value
+            $Script:SettingCache[$SettingKey] = $intValue
+            return $intValue
+        }
+        if ($value.StartsWith('{') -or $value.StartsWith('[')) {
+            Try {
+                If ($value.StartsWith('{')) {
+                    $parsed = $value | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+                    $Script:SettingCache[$SettingKey] = $parsed
+                    return $parsed
+                }
+                Else {
+                    $parsed = $value | ConvertFrom-Json -ErrorAction Stop
+                    $Script:SettingCache[$SettingKey] = $parsed
+                    return $parsed
+                }
+            }
+            catch {
+                Write-Warning "Failed to parse JSON for $SettingKey : $_"
+                $Script:SettingCache[$SettingKey] = $value
+                return $value
+            }
+        }
+        else {
             $Script:SettingCache[$SettingKey] = $value
             return $value
         }
-    }
-    
-    # Convert boolean strings to actual boolean values
-    if ($value -eq 'true' -or $value -eq 'True') {
-        $Script:SettingCache[$SettingKey] = $true
-        return $true
-    }
-    elseif ($value -eq 'false' -or $value -eq 'False') {
-        $Script:SettingCache[$SettingKey] = $false
-        return $false
-    }
-    
-    # Convert numeric strings to integers where appropriate
-    if ($value -match '^\d+$') {
-        $intValue = [int]$value
-        $Script:SettingCache[$SettingKey] = $intValue
-        return $intValue
-    }
-    
-    # Cache and return the string value
-    $Script:SettingCache[$SettingKey] = $value
-    return $value
+    }        
 }
 
 #EndRegion Configuration Functions
@@ -693,7 +713,8 @@ function Invoke-GraphApiWithRetry {
     # Ensure GraphEndpoint doesn't have trailing slash
     $graphBase = if ($GraphEndpoint[-1] -eq '/') { 
         $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) 
-    } else { 
+    }
+    else { 
         $GraphEndpoint 
     }
     
@@ -709,7 +730,7 @@ function Invoke-GraphApiWithRetry {
     if ($graphBase -eq 'https://graph.microsoft.us') {
         $endpointsToTry += @{ 
             Endpoint = 'https://dod-graph.microsoft.us'
-            Token = $null  # Will acquire fresh token if needed
+            Token    = $null  # Will acquire fresh token if needed
         }
     }
     
