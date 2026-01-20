@@ -1002,10 +1002,19 @@ Session hosts use these tags for automation:
 7. **Image Version Check**: Compare each host's image to latest marketplace/gallery version
 8. **Scaling Plan Query** (if work needed): Query active scaling plan schedule for dynamic capacity target
 9. **Availability Safety Check**: Verify any existing newly-deployed hosts meet availability threshold before proceeding with new deletions
+9b. **Ghost Host Detection and Recovery**: Automatically detect and clean up "ghost hosts" - session hosts registered in host pool but with deleted VMs:
+    - **Detection method**: VM query returns 404 (only reliable indicator; Status='Unavailable' also applies to powered-off VMs)
+    - **Automatic recovery**: Remove Entra ID device (if enabled) → Remove Intune device (if enabled) → Remove stale host pool registration → Count as needing replacement
+    - **Protection**: Prevents false positives from powered-off VMs (only trust IsUnavailable flag set when VM query fails)
 10. **Capacity Calculation**: Determine max deletions respecting:
     - `maxDeletionsPerCycle`: Upper limit per run
     - `minimumCapacityPercentage`: Safety floor (overridden by scaling plan if available)
-    - Dynamic capacity from scaling plan (phase-aware: peak uses higher floor, off-peak allows more aggressive)
+    - **Dynamic capacity from scaling plan** (phase-aware deletion throttling):
+      - **Peak/RampUp phases**: Uses max(configured minimum, scaling plan %) as floor (conservative during business hours)
+      - **RampDown/OffPeak phases**: Uses scaling plan % directly (more aggressive during off-hours)
+      - **Example**: 80% configured minimum + 20% scaling plan Peak → uses 80% (protects users)
+      - **Example**: 80% configured minimum + 10% scaling plan OffPeak → uses 10% (faster replacement)
+      - **Result**: Balances user capacity protection during peak hours with efficient replacement during off-hours
 11. **Drain Decision**: Mark old hosts for draining
 12. **Grace Period Tracking**: Monitor via `AutoReplacePendingDrainTimestamp` tag
 13. **Lazy Power State Loading**: Only query VM power states when hosts become eligible for deletion (not queried if pool up-to-date)
@@ -1018,7 +1027,14 @@ Session hosts use these tags for automation:
     - **Failure handling**: If any deletion fails, halt deployment to prevent hostname conflicts
     - **Success tracking**: Only reuse names from successfully deleted hosts
 16. **Cache Update**: Remove deleted VMs from cache (more efficient than re-querying all VMs)
-17. **Azure Resource Verification**: Poll Azure APIs to confirm VMs are fully deleted (up to 5 minutes)
+17. **Complete Deletion Verification**: Verify removal across all systems before proceeding:
+    - **VM deletion**: Poll Azure Resource Manager until 404 confirmed (up to 5 minutes)
+    - **Entra ID removal**: Query Microsoft Graph until device record removed
+    - **Intune removal**: Query Microsoft Graph until device record removed
+    - **Unified verification loop**: Checks all three systems together for each host until all confirmed
+    - **Graph propagation handling**: Accounts for delayed propagation (can lag VM deletion by 30+ seconds)
+    - **Per-host status logging**: Reports individual verification results after each check iteration
+    - **Exponential backoff**: 5-second initial delay, increases with retries, 5-minute maximum wait
 18. **Deployment Submission**: Deploy replacement hosts:
     - Reuse deleted hostnames (prevents name exhaustion)
     - Reuse dedicated host assignments (prevents stranding hosts)
@@ -1836,7 +1852,55 @@ $vm = Get-AzVM -ResourceGroupName "rg-sessionhosts" -Name "vm-001"
 $vm.Tags["AutoReplacePendingDrainTimestamp"]  # Should be ISO 8601 timestamp
 ```
 
-#### 11. Capacity Drops Too Low in DeleteFirst Mode
+#### 11. Replacement Progressing Slowly During Peak Hours
+
+**Symptoms:**
+
+- Only 2 hosts replaced per cycle despite many needing replacement
+- Many hosts powered off but not being deleted
+- Host pool shows low available capacity but high total count
+
+**Cause:** Peak/RampUp phase enforces higher capacity floor; powered-off hosts count toward total capacity
+
+**Explanation:**
+
+The capacity floor calculation uses **total host count** (including powered-off VMs) to maintain minimum capacity:
+- Peak phase: 80% capacity floor (default) = need 8 of 10 hosts minimum
+- Max deletions during Peak: 10 - 8 = 2 per cycle
+- Powered-off hosts are prioritized for deletion but still count toward floor
+
+**Resolution Options:**
+
+1. **Wait for off-hours** - RampDown/OffPeak phase uses lower capacity floor (e.g., 10% = 1 of 10 minimum) for faster replacement:
+
+```kusto
+traces
+| where message contains "Dynamic capacity from scaling plan"
+| where message contains "Phase:"
+| order by timestamp desc
+| take 10
+```
+
+2. **Power on old hosts** - Makes them truly available to users while waiting for replacement:
+
+```powershell
+# Identify powered-off hosts needing replacement
+$vms = Get-AzVM -ResourceGroupName "rg-sessionhosts" -Status
+$poweredOff = $vms | Where-Object { $_.PowerState -eq 'VM deallocated' }
+
+# Power on specific hosts if needed for user capacity
+$poweredOff | ForEach-Object { Start-AzVM -ResourceGroupName $_.ResourceGroupName -Name $_.Name }
+```
+
+3. **Lower static minimum** (not recommended for production during business hours):
+
+```bicep
+minimumCapacityPercentage: 50  // Allows more deletions but reduces user capacity protection
+```
+
+**Best Practice:** Let the phase-aware logic work as designed - scaling plan will power on old hosts if demand increases during Peak, while SessionHostReplacer maintains capacity floor and prioritizes powered-off hosts for replacement.
+
+#### 12. Capacity Drops Too Low in DeleteFirst Mode
 
 **Symptoms:**
 
@@ -1864,7 +1928,7 @@ traces
 | take 1
 ```
 
-#### 12. Failed Deployment Artifacts Not Cleaned Up
+#### 13. Failed Deployment Artifacts Not Cleaned Up
 
 **Symptoms:**
 

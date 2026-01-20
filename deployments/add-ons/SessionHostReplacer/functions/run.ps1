@@ -590,14 +590,21 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -gt 0) {
     $newHostAvailability = Test-NewSessionHostsAvailable -ARMToken $ARMToken -SessionHosts $sessionHosts -LatestImageVersion $latestImageVersion
 }
 else {
-    # No hosts need replacement - skip availability check
-    Write-LogEntry -Message "Skipping new host availability check - no hosts need replacement" -Level Trace
+    # No hosts need replacement - all hosts are on latest image
+    # For metrics purposes, count all enabled hosts as "new" (on latest image)
+    $hostsOnLatestImage = $sessionHosts | Where-Object { 
+        $_.ImageVersion -eq $latestImageVersion.Version -and 
+        -not $_.IsUnavailable
+    }
+    $availableOnLatest = $hostsOnLatestImage | Where-Object { $_.Status -eq 'Available' }
+    
+    Write-LogEntry -Message "All {0} enabled session hosts are on latest image version {1}" -StringValues $hostsOnLatestImage.Count, $latestImageVersion.Version -Level Trace
     $newHostAvailability = [PSCustomObject]@{
-        TotalNewHosts       = 0
-        AvailableCount      = 0
-        AvailablePercentage = 0
+        TotalNewHosts       = $hostsOnLatestImage.Count
+        AvailableCount      = $availableOnLatest.Count
+        AvailablePercentage = if ($hostsOnLatestImage.Count -gt 0) { [Math]::Round(($availableOnLatest.Count / $hostsOnLatestImage.Count) * 100) } else { 0 }
         SafeToProceed       = $true  # Always safe when no replacements needed
-        Message             = "No replacement needed"
+        Message             = "All session hosts up to date"
     }
 }
 
