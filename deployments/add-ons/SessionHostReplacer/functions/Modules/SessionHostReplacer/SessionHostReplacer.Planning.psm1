@@ -478,7 +478,7 @@ function Get-SessionHostReplacementPlan {
     }
 
     # Detect and handle unavailable session hosts (VMs deleted but host pool registration remains)
-    $unavailableHosts = $SessionHosts | Where-Object { $_.IsUnavailable -eq $true -or $_.Status -eq 'Unavailable' }
+    $unavailableHosts = $SessionHosts | Where-Object { $_.IsUnavailable -eq $true }
     if ($unavailableHosts.Count -gt 0) {
         $unavailableHostNames = $unavailableHosts.SessionHostName -join ','
         Write-LogEntry -Message "CRITICAL: Detected $($unavailableHosts.Count) unavailable session hosts (VMs deleted): $unavailableHostNames" -Level Error
@@ -524,8 +524,7 @@ function Get-SessionHostReplacementPlan {
     $goodSessionHosts = $SessionHosts | Where-Object { 
         $_.SessionHostName -notin $sessionHostsToReplace.SessionHostName -and 
         -not $_.ShutdownTimestamp -and
-        -not $_.IsUnavailable -and
-        $_.Status -ne 'Unavailable'
+        -not $_.IsUnavailable
     }
     
     # Count shutdown hosts for logging
@@ -741,8 +740,7 @@ function Get-SessionHostReplacementPlan {
         # Lazy load power states for hosts to replace being considered for deletion
         # Filter out unavailable hosts (already deleted) before querying power state
         $sessionHostsAvailableForReplace = $sessionHostsToReplace | Where-Object { 
-            -not $_.IsUnavailable -and 
-            $_.Status -ne 'Unavailable' 
+            -not $_.IsUnavailable
         }
         
         if ($sessionHostsAvailableForReplace.Count -lt $sessionHostsToReplace.Count) {
