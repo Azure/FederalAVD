@@ -859,25 +859,26 @@ Session hosts use these tags for automation:
    - Exit immediately
 4. **Discovery**: Enumerate all session hosts via AVD Host Pool API (only if work needed)
 5. **Tag Validation**: Filter to hosts with `IncludeInAutoReplace: true`
-6. **Target Count Determination**: Use explicit count or auto-detect current count at cycle start
-7. **Image Version Check**: Compare each host's image to latest marketplace/gallery version
-8. **Capacity Planning**: Calculate automatic buffer (equals target count) for zero-downtime updates
-9. **Progressive Scale-Up** (if enabled): Calculate batch size based on consecutive successes
-10. **Deployment Submission**: Deploy new hosts using Template Spec (up to MaxDeploymentBatchSize)
-11. **Availability Safety Check**: Verify newly deployed hosts have `Status` = `Available` before proceeding
-12. **Drain Decision**: Mark old hosts for draining if:
+6. **Image Version Check**: Compare each host's image to latest marketplace/gallery version
+7. **New Cycle Detection** (if progressive scale-up enabled): Check if image version changed, reset state before planning
+8. **Target Count Determination**: Use explicit count or auto-detect current count at cycle start
+9. **Capacity Planning**: Calculate automatic buffer (equals target count) for zero-downtime updates
+10. **Progressive Scale-Up** (if enabled): Calculate batch size based on consecutive successes (uses reset state if new cycle)
+11. **Deployment Submission**: Deploy new hosts using Template Spec (up to MaxDeploymentBatchSize)
+12. **Availability Safety Check**: Verify newly deployed hosts have `Status` = `Available` before proceeding
+13. **Drain Decision**: Mark old hosts for draining if:
     - New hosts are successfully deployed and registered
     - New hosts meet availability threshold (default 100%)
     - Image version differs from latest
     - Minimum drain time not yet met (if zero sessions)
-13. **Grace Period Tracking**: Monitor via `AutoReplacePendingDrainTimestamp` tag
-14. **Lazy Power State Loading**: Only query VM power states when hosts become eligible for deletion (not queried if pool up-to-date)
-15. **Deletion or Shutdown**: After grace period + zero sessions + availability check passed:
+14. **Grace Period Tracking**: Monitor via `AutoReplacePendingDrainTimestamp` tag
+15. **Lazy Power State Loading**: Only query VM power states when hosts become eligible for deletion (not queried if pool up-to-date)
+16. **Deletion or Shutdown**: After grace period + zero sessions + availability check passed:
     - **Without shutdown retention**: Delete VM, disks, NIC, session host registration
     - **With shutdown retention**: Shutdown (deallocate) VM and set `AutoReplaceShutdownTimestamp` tag
-16. **Device Cleanup** (if enabled): Remove from Entra ID and Intune
-17. **Expired Shutdown Cleanup**: Automatically delete VMs that have been shutdown beyond retention period (uses cached VM data)
-18. **State Tracking**: Save deployment state to Table Storage for progressive scale-up and auto-detect mode
+17. **Device Cleanup** (if enabled): Remove from Entra ID and Intune
+18. **Expired Shutdown Cleanup**: Automatically delete VMs that have been shutdown beyond retention period (uses cached VM data)
+19. **State Tracking**: Save deployment state to Table Storage for progressive scale-up and auto-detect mode
 
 ### DeleteFirst Mode Workflow
 
@@ -1083,8 +1084,9 @@ When `enableProgressiveScaleUp` is enabled, deployments start small and graduall
 
 **Behavior**:
 
-- **New cycle starts**: Reset to initial percentage (e.g., 20%)
-- **Cycle detected by**: Image version change OR completion of previous cycle (0 hosts to replace, 0 deploying, 0 draining)
+- **New cycle detection**: Happens **before** replacement plan calculation to ensure reset state is used
+- **Cycle detected by**: Image version change (e.g., new gallery image published)
+- **New cycle starts**: Reset to initial percentage (e.g., 20%), clear consecutive success counter
 - **After successful deployment AND registration**: Increment consecutive success counter (hosts must actually register in host pool)
 - **After deployment without registration**: Keep pending mappings, do NOT increment counter, status = "PendingRegistration"
 - **Scale up trigger**: After N consecutive successes, increase percentage by increment

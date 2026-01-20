@@ -301,6 +301,40 @@ $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference
 # Read AllowImageVersionRollback setting with default of false
 $allowImageVersionRollback = Read-FunctionAppSetting AllowImageVersionRollback -AsBoolean
 
+# CRITICAL: Check if we're starting a new update cycle and reset progressive scale-up if needed
+# This MUST happen BEFORE Get-SessionHostReplacementPlan so the reset state is used
+if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
+    $deploymentState = Get-DeploymentState
+    $currentImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { 'N/A' }
+    
+    # Detect if we're starting a new update cycle
+    $isNewCycle = $false
+    $resetReason = ''
+    
+    # Log current state for debugging
+    Write-LogEntry -Message "New cycle detection - Current state: ImageVersion=$currentImageVersion, RunningDeployments=$($runningDeployments.Count)" -Level Trace
+    Write-LogEntry -Message "New cycle detection - Previous state: LastImageVersion=$($deploymentState.LastImageVersion)" -Level Trace
+    
+    # Check if image version changed (only if we have a previous version to compare against)
+    if ($deploymentState.LastImageVersion -and $deploymentState.LastImageVersion -ne $currentImageVersion -and $currentImageVersion -ne "N/A") {
+        $isNewCycle = $true
+        $resetReason = "Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion"
+        Write-LogEntry -Message "New cycle detection - Image version changed: $resetReason"
+    }
+    
+    # Reset progressive scale-up for new cycle
+    if ($isNewCycle) {
+        Write-LogEntry -Message "Detected new update cycle: $resetReason"
+        Write-LogEntry -Message "Resetting progressive scale-up to initial percentage"
+        $deploymentState.ConsecutiveSuccesses = 0
+        $deploymentState.CurrentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage)
+        $deploymentState.LastStatus = 'NewCycle'
+        $deploymentState.LastDeploymentName = ''
+        $deploymentState.LastImageVersion = $currentImageVersion
+        Save-DeploymentState -DeploymentState $deploymentState
+    }
+}
+
 # OPTIMIZATION: Lightweight pre-check to determine if host pool is up to date
 # This avoids expensive operations (scaling plan query, full replacement plan calculation) when no work is needed
 Write-LogEntry -Message "Performing lightweight up-to-date check" -Level Trace
@@ -608,62 +642,7 @@ else {
     }
 }
 
-# Check if we're starting a new update cycle and reset progressive scale-up if needed
-if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
-    $deploymentState = Get-DeploymentState
-    $currentImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { 'N/A' }
-    $totalToReplace = if ($hostPoolReplacementPlan.TotalSessionHostsToReplace) { $hostPoolReplacementPlan.TotalSessionHostsToReplace } else { 0 }
-    
-    # Detect if we're starting a new update cycle
-    $isNewCycle = $false
-    $resetReason = ''
-    
-    # Log current state for debugging
-    Write-LogEntry -Message "New cycle detection - Current state: ImageVersion=$currentImageVersion, ToReplace=$totalToReplace, RunningDeployments=$($runningDeployments.Count)" -Level Trace
-    Write-LogEntry -Message "New cycle detection - Previous state: LastImageVersion=$($deploymentState.LastImageVersion), LastTotalToReplace=$($deploymentState.LastTotalToReplace)" -Level Trace
-    
-    # Check if image version changed (only if we have a previous version to compare against)
-    if ($deploymentState.LastImageVersion -and $deploymentState.LastImageVersion -ne $currentImageVersion -and $currentImageVersion -ne "N/A") {
-        $isNewCycle = $true
-        $resetReason = "Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion"
-        Write-LogEntry -Message "New cycle detection - Image version changed detected"
-    }
-    
-    # Check if we completed the previous cycle (no hosts to replace) and now have new hosts to replace
-    # Additional safeguards:
-    # - Previous cycle must have been truly complete (LastTotalToReplace was 0)
-    # - No running deployments (we're not still in the middle of the previous cycle)
-    # - No hosts in drain mode (cleanup phase still in progress)
-    # - Must have actually had a previous cycle (LastImageVersion exists)
-    $hostsInDrain = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
-    
-    Write-LogEntry -Message "New cycle detection - Cycle completion check: LastToReplace=$($deploymentState.LastTotalToReplace), CurrentToReplace=$totalToReplace, Deploying=$($runningDeployments.Count), InDrain=$hostsInDrain, HasPrevious=$($null -ne $deploymentState.LastImageVersion)" -Level Trace
-    
-    if ($deploymentState.LastTotalToReplace -eq 0 -and 
-        $totalToReplace -gt 0 -and 
-        $runningDeployments.Count -eq 0 -and 
-        $hostsInDrain -eq 0 -and
-        $deploymentState.LastImageVersion) {
-        $isNewCycle = $true
-        $resetReason = "Starting new update cycle with $totalToReplace hosts to replace (previous cycle was complete: 0 to replace, 0 deploying, 0 draining)"
-    }
-    
-    # Reset progressive scale-up for new cycle
-    if ($isNewCycle) {
-        Write-LogEntry -Message "Detected new update cycle: $resetReason"
-        Write-LogEntry -Message "Resetting progressive scale-up to initial percentage"
-        $deploymentState.ConsecutiveSuccesses = 0
-        $deploymentState.CurrentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage)
-        $deploymentState.LastStatus = 'NewCycle'
-        $deploymentState.LastDeploymentName = ''
-        Save-DeploymentState -DeploymentState $deploymentState
-    }
-    
-    # Update tracking values
-    $deploymentState.LastImageVersion = $currentImageVersion
-    $deploymentState.LastTotalToReplace = $totalToReplace
-    Save-DeploymentState -DeploymentState $deploymentState
-}
+# New cycle detection will now happen earlier in the flow, before replacement plan calculation
 
 # Check replacement mode to determine execution order
 $replacementMode = Read-FunctionAppSetting ReplacementMode
