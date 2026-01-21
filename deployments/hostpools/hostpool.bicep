@@ -1072,13 +1072,13 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : ''
+          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : ''
+          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
     encryptionAtHost: encryptionAtHost
@@ -1103,11 +1103,11 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     userAssignedIdentityNameConv: resourceNames.outputs.userAssignedIdentityNameConv
     #disable-next-line BCP422
     virtualMachineAdminPassword: !empty(credentialsKeyVaultResourceId)
-      ? kvCredentials.getSecret('VirtualMachineAdminPassword')
+      ? kvCredentials!.getSecret('VirtualMachineAdminPassword')
       : virtualMachineAdminPassword
     #disable-next-line BCP422
     virtualMachineAdminUserName: !empty(credentialsKeyVaultResourceId)
-      ? kvCredentials.getSecret('VirtualMachineAdminUserName')
+      ? kvCredentials!.getSecret('VirtualMachineAdminUserName')
       : virtualMachineAdminUserName
     virtualMachineName: resourceNames.outputs.depVirtualMachineName
     virtualMachineNICName: resourceNames.outputs.depVirtualMachineNicName
@@ -1255,13 +1255,13 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : ''
+          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : ''
+          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
@@ -1359,13 +1359,13 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     domainJoinUserPassword: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPassword') : ''
+          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : ''
+          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
     enableAcceleratedNetworking: enableAcceleratedNetworking
@@ -1445,11 +1445,11 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     useAgentDownloadEndpoint: useAgentDownloadEndpoint
     #disable-next-line BCP422
     virtualMachineAdminPassword: !empty(credentialsKeyVaultResourceId)
-      ? kvCredentials.getSecret('VirtualMachineAdminPassword')
+      ? kvCredentials!.getSecret('VirtualMachineAdminPassword')
       : virtualMachineAdminPassword
     #disable-next-line BCP422
     virtualMachineAdminUserName: !empty(credentialsKeyVaultResourceId)
-      ? kvCredentials.getSecret('VirtualMachineAdminUserName')
+      ? kvCredentials!.getSecret('VirtualMachineAdminUserName')
       : virtualMachineAdminUserName
     virtualMachineNameConv: resourceNames.outputs.virtualMachineNameConv
     virtualMachineNamePrefix: virtualMachineNamePrefix

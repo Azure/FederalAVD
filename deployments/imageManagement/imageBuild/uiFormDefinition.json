@@ -152,7 +152,7 @@
                                 "method": "GET",
                                 "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('basics').scope.location.name, decodeUriComponent('%27'))]",
                                 "transforms": {
-                                    "virtualMachines": "value[?resourceType == 'virtualMachines'].{name: name, acceleratedNetworking: capabilities[?name=='AcceleratedNetworkingEnabled'].value | [0], confidentialComputingType: capabilities[?name=='ConfidentialComputingType'].value | [0], diskControllerTypes: capabilities[?name=='DiskControllerTypes' || name=='diskControllerTypes'].value | [0]}"
+                                    "virtualMachines": "value[?resourceType == 'virtualMachines'].{name: name, acceleratedNetworking: capabilities[?name=='AcceleratedNetworkingEnabled'].value | [0], confidentialComputingType: capabilities[?name=='ConfidentialComputingType'].value | [0], diskControllerTypes: capabilities[?name=='DiskControllerTypes' || name=='diskControllerTypes'].value | [0], hibernationSupported: capabilities[?name=='HibernationSupported'].value | [0]}"
                                 }
                             }
                         },
@@ -1468,7 +1468,7 @@
                                         "method": "GET",
                                         "path": "[concat(steps('prereqs').gallery.gallery.id, '/images?api-version=2022-03-03')]",
                                         "transforms": {
-                                            "minimized": "value[*].{name: name, id: id, securityType: properties.features[?name=='SecurityType'].value | [0], isAcceleratedNetworkSupported: properties.features[?name=='IsAcceleratedNetworkSupported'].value | [0], diskControllerTypes: properties.features[?name=='DiskControllerTypes' || name=='diskControllerTypes'].value | [0]}"
+                                            "minimized": "value[*].{name: name, id: id, securityType: properties.features[?name=='SecurityType'].value | [0], isAcceleratedNetworkSupported: properties.features[?name=='IsAcceleratedNetworkSupported'].value | [0], diskControllerTypes: properties.features[?name=='DiskControllerTypes' || name=='diskControllerTypes'].value | [0], isHibernateSupported: properties.features[?name=='IsHibernateSupported'].value | [0]}"
                                         }
                                     }
                                 },
@@ -1480,7 +1480,7 @@
                                     "toolTip": "Select the existing image definition for which a new image version will be selected. If the desired image definition is not available, check your Compute Gallery selection on the 'Prerequisites' page or select to create a new one above.",
                                     "filterPlaceholder": "",
                                     "constraints": {
-                                        "allowedValues": "[map(steps('imageDest').imageDefinition.imagesApi.transformed.minimized, (imageDef) => parse(concat('{\"label\":\"', imageDef.name, '\",\"description\":\"Accelerated Networkingt: ', if(empty(imageDef.isAcceleratedNetworkSupported), 'No', 'Yes'), ' | NVMe: ', if(contains(string(if(empty(imageDef.diskControllerTypes), '', imageDef.diskControllerTypes)), 'NVMe'), 'Yes', 'No'), ' | SecurityType: ', if(empty(imageDef.securityType), 'Standard', imageDef.securityType), '\",\"value\":{\"id\":\"', imageDef.id, '\",\"IsAcceleratedNetworkSupported\":', if(equals(imageDef.isAcceleratedNetworkSupported, 'True'), 'true', 'false'), ',\"DiskControllerTypes\":\"', if(empty(imageDef.diskControllerTypes), 'SCSI', imageDef.diskControllerTypes), '\",\"SecurityType\":\"', if(empty(imageDef.securityType), 'Standard', imageDef.securityType), '\"}}')))]",
+                                        "allowedValues": "[map(steps('imageDest').imageDefinition.imagesApi.transformed.minimized, (imageDef) => parse(concat('{\"label\":\"', imageDef.name, '\",\"description\":\"Accelerated Networkingt: ', if(empty(imageDef.isAcceleratedNetworkSupported), 'No', 'Yes'), ' | NVMe: ', if(contains(string(if(empty(imageDef.diskControllerTypes), '', imageDef.diskControllerTypes)), 'NVMe'), 'Yes', 'No'), ' | SecurityType: ', if(empty(imageDef.securityType), 'Standard', imageDef.securityType), '\",\"value\":{\"id\":\"', imageDef.id, '\",\"IsAcceleratedNetworkSupported\":', if(equals(imageDef.isAcceleratedNetworkSupported, 'True'), 'true', 'false'), ',\"DiskControllerTypes\":\"', if(empty(imageDef.diskControllerTypes), 'SCSI', imageDef.diskControllerTypes), '\",\"SecurityType\":\"', if(empty(imageDef.securityType), 'Standard', imageDef.securityType), '\",\"IsHibernateSupported\":', if(equals(imageDef.isHibernateSupported, 'True'), 'true', 'false'), '}}')))]",
                                         "required": true
                                     },
                                     "visible": "[equals(steps('imageDest').imageDefinition.useExImageDef, true)]"
@@ -1586,6 +1586,16 @@
                                     "visible": "[and(equals(steps('imageDest').imageDefinition.useExImageDef, false), or(contains(steps('imageSource').sku, 'g2'), contains(steps('imageSource').sku, 'win11'), contains(steps('imageSource').sku, '2022')))]"
                                 },
                                 {
+                                    "name": "confidentialVmWarningBox",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[and(equals(steps('imageDest').imageDefinition.useExImageDef, false), contains(steps('imageDest').imageDefinition.securityType, 'Confidential'))]",
+                                    "options": {
+                                        "style": "Warning",
+                                        "text": "Confidential VMs do NOT support Accelerated Networking, NVMe storage, or hibernation. Only specific DC-series, EC-series, and NCC-series VM sizes support confidential computing. For more information, see the Azure Confidential Computing FAQ.",
+                                        "uri": "https://learn.microsoft.com/en-us/azure/confidential-computing/confidential-vm-faq"
+                                    }
+                                },
+                                {
                                     "name": "isAcceleratedNetworkSupported",
                                     "type": "Microsoft.Common.DropDown",
                                     "label": "Accelerated Networking Supported",
@@ -1602,40 +1612,32 @@
                                     "type": "Microsoft.Common.DropDown",
                                     "label": "Hibernation Supported (preview)",
                                     "defaultValue": "No",
-                                    "toolTip": "Set this to 'Yes' to enable Virtual Machines to be deployed from this image definition that support hibernation.",
+                                    "toolTip": "Set this to 'Yes' to enable Virtual Machines to be deployed from this image definition that support hibernation. Confidential VMs do not support hibernation.",
                                     "constraints": {
                                         "required": false,
-                                        "allowedValues": [
-                                            {
-                                                "label": "Yes",
-                                                "value": true
-                                            },
-                                            {
-                                                "label": "No",
-                                                "value": false
-                                            }
-                                        ]
+                                        "allowedValues": "[if(contains(steps('imageDest').imageDefinition.securityType, 'Confidential'), parse('[{\"label\":\"No\",\"value\":false}]'), parse('[{\"label\":\"Yes\",\"value\":true},{\"label\":\"No\",\"value\":false}]'))]"
                                     },
                                     "visible": "[and(equals(steps('imageDest').imageDefinition.useExImageDef, false), or(contains(steps('imageSource').sku, 'g2'), contains(steps('imageSource').sku, 'win11'), contains(steps('imageSource').sku, '2022')) )]"
+                                },
+                                {
+                                    "name": "hibernationWarningBox",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[and(equals(steps('imageDest').imageDefinition.useExImageDef, false), equals(steps('imageDest').imageDefinition.isHibernateSupported, true))]",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Hibernation is only supported on specific VM sizes (B-series v2, D/E-series v4/v5 with up to 64GB RAM, and NV-series v4/v5 with up to 112GB RAM). Confidential VMs do NOT support hibernation. For complete details and limitations, see the hibernation documentation.",
+                                        "uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/hibernate-resume"
+                                    }
                                 },
                                 {
                                     "name": "isNVMeSupported",
                                     "type": "Microsoft.Common.DropDown",
                                     "label": "NVMe Storage Support",
-                                    "defaultValue": "Yes",
-                                    "toolTip": "Set this to 'Yes' to enable the creation of an image that supports VMs using NVMe storage.",
+                                    "defaultValue": "[if(contains(steps('imageDest').imageDefinition.securityType, 'Confidential'), 'No', 'Yes')]",
+                                    "toolTip": "Set this to 'Yes' to enable the creation of an image that supports VMs using NVMe storage. Confidential VMs do not support NVMe.",
                                     "constraints": {
                                         "required": false,
-                                        "allowedValues": [
-                                            {
-                                                "label": "Yes",
-                                                "value": true
-                                            },
-                                            {
-                                                "label": "No",
-                                                "value": false
-                                            }
-                                        ]
+                                        "allowedValues": "[if(contains(steps('imageDest').imageDefinition.securityType, 'Confidential'), parse('[{\"label\":\"No\",\"value\":false}]'), parse('[{\"label\":\"Yes\",\"value\":true},{\"label\":\"No\",\"value\":false}]'))]"
                                     },
                                     "visible": "[equals(steps('imageDest').imageDefinition.useExImageDef, false)]"
                                 }
@@ -1970,13 +1972,12 @@
                     "label": "Virtual Machine Properties",
                     "elements": [
                         {
-                            "name": "nvmeWarningBox",
+                            "name": "featureLimitationsInfoBox",
                             "type": "Microsoft.Common.InfoBox",
-                            "visible": "[if(steps('imageDest').imageDefinition.useExImageDef, contains(steps('imageDest').imageDefinition.existingImageDefinition.DiskControllerTypes, 'NVMe'), steps('imageDest').imageDefinition.isNVMeSupported)]",
+                            "visible": true,
                             "options": {
-                                "style": "Warning",
-                                "text": "NVMe support is only available on select VM Sizes. See this link to ensure the vm size is compatible with NVMe before continuing.",
-                                "uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/nvme-overview"
+                                "style": "Info",
+                                "text": "Available VM sizes are filtered based on your image definition features selected on the <b>Image Distribution Options</b> page. Confidential VMs (DC/EC/NCC series) do NOT support Accelerated Networking, NVMe, or hibernation. Hibernation is only supported on B/D/E/NV-series v4/v5 with specific size limits. NVMe requires v6 or newer generation VMs. Incompatible VM sizes are automatically excluded from the list below."
                             }
                         },
                         {
@@ -1986,12 +1987,19 @@
                             "toolTip": "Select the size of the virtual machines. Multi-session hosts should have 4 - 24 vCPUs. Single session host should have 2 or more vCPUs.",
                             "recommendedSizes": [
                                 "Standard_D4ads_v6",
-                                "Standard_D8ads_v6",
-                                "Standard_D16ads_v6",
+                                "Standard_D4as_v6",
                                 "Standard_D4ads_v5",
-                                "Standard_D8ads_v5",
-                                "Standard_D16ads_v5"
+                                "Standard_D4as_v5",
+                                "Standard_D4ds_v6",
+                                "Standard_D4s_v6",
+                                "Standard_D4ds_v5",
+                                "Standard_DC4eds_v5",
+                                "Standard_DC8eds_v5",
+                                "Standard_EC4eds_v5"
                             ],
+                            "constraints": {
+                                "allowedSizes": "[map(filter(steps('basics').resourceSkusApi.transformed.virtualMachines, (sku) => and(if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, steps('imageDest').imageDefinition.existingImageDefinition.IsAcceleratedNetworkSupported, steps('imageDest').imageDefinition.isAcceleratedNetworkSupported), false), equals(sku.acceleratedNetworking, 'True'), true), if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, contains(coalesce(steps('imageDest').imageDefinition.existingImageDefinition.DiskControllerTypes, ''), 'NVMe'), steps('imageDest').imageDefinition.isNVMeSupported), false), contains(toLower(coalesce(sku.diskControllerTypes, '')), 'nvme'), true), if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, contains(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Confidential'), contains(steps('imageDest').imageDefinition.securityType, 'Confidential')), false), not(empty(coalesce(sku.confidentialComputingType, ''))), true), if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, steps('imageDest').imageDefinition.existingImageDefinition.IsHibernateSupported, steps('imageDest').imageDefinition.isHibernateSupported), false), equals(sku.hibernationSupported, 'True'), true))), (item) => item.name)]"
+                            },
                             "options": {
                                 "hideDiskTypeFilter": false
                             },
@@ -2033,8 +2041,6 @@
             "location": "[steps('basics').scope.location.name]",
             "subscriptionId": "[steps('basics').scope.subscription.id]",
             "parameters": {
-                "vmSkus": "[steps('basics').resourceSkusApi.transformed.virtualMachines]",
-                "allowedVmSizes": "[map(filter(steps('basics').resourceSkusApi.transformed.virtualMachines, (sku) => and(if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, steps('imageDest').imageDefinition.existingImageDefinition.IsAcceleratedNetworkSupported, steps('imageDest').imageDefinition.isAcceleratedNetworkSupported), false), equals(sku.acceleratedNetworking, 'True'), true), if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, contains(coalesce(steps('imageDest').imageDefinition.existingImageDefinition.DiskControllerTypes, ''), 'NVMe'), steps('imageDest').imageDefinition.isNVMeSupported), false), contains(toLower(coalesce(sku.diskControllerTypes, '')), 'nvme'), true))), (item) => item.name)]",
                 "location": "[steps('basics').scope.location.name]",
                 "deploymentPrefix": "[steps('basics').naming.deploymentPrefix]",
                 "nameConvResTypeAtEnd": "[steps('basics').naming.nameConvResTypeAtEnd]",
