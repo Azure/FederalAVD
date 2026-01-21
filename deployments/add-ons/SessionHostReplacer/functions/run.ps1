@@ -304,10 +304,6 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
     $deploymentState = Get-DeploymentState
     $currentImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { 'N/A' }
     
-    # Detect if we're starting a new update cycle
-    $isNewCycle = $false
-    $resetReason = ''
-    
     # Log current state for debugging
     $lastToReplace = if ($null -eq $deploymentState.LastImageVersion) { 0 } else { $deploymentState.LastTotalToReplace }
     Write-LogEntry -Message "New cycle detection - Current: ImageVersion='$currentImageVersion', LastTotalToReplace=$lastToReplace"
@@ -326,17 +322,7 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
     Write-LogEntry -Message "New cycle detection conditions - HasLastImageVersion: $hasLastImageVersion, ImageVersionChanged: $imageVersionChanged, CurrentVersionValid: $currentVersionValid, WasUpToDate: $wasUpToDate"
     
     if ($hasLastImageVersion -and $imageVersionChanged -and $currentVersionValid -and $wasUpToDate) {
-        $isNewCycle = $true
-        $resetReason = "Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion (was previously up to date)"
-        Write-LogEntry -Message "New cycle detection - Image version changed: $resetReason"
-    }
-    else {
-        Write-LogEntry -Message "New cycle detection - Conditions not met, no new cycle triggered" -Level Trace
-    }
-    
-    # Reset progressive scale-up for new cycle
-    if ($isNewCycle) {
-        Write-LogEntry -Message "Detected new update cycle: $resetReason"
+        Write-LogEntry -Message "New cycle detection - Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion (was previously up to date)"
         Write-LogEntry -Message "Resetting progressive scale-up to initial percentage"
         $deploymentState.ConsecutiveSuccesses = 0
         $deploymentState.CurrentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage)
@@ -345,6 +331,9 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
         # Update LastImageVersion immediately so we don't trigger new cycle on every subsequent run
         $deploymentState.LastImageVersion = $currentImageVersion
         Save-DeploymentState -DeploymentState $deploymentState
+    }
+    else {
+        Write-LogEntry -Message "New cycle detection - Conditions not met, no new cycle triggered" -Level Trace
     }
 }
 
@@ -697,32 +686,32 @@ if ($replacementMode -eq 'DeleteFirst') {
     $hasPendingUnresolvedHosts = $false
     $deploymentState = Get-DeploymentState
     if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
-            try {
-                $hostPropertyMapping = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable
-                Write-LogEntry -Message "Loaded {0} pending host mapping(s) from previous run" -StringValues $hostPropertyMapping.Count
+        try {
+            $hostPropertyMapping = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable
+            Write-LogEntry -Message "Loaded {0} pending host mapping(s) from previous run" -StringValues $hostPropertyMapping.Count
                 
-                # Check if any pending hosts are still unresolved (deleted but not registered)
-                $pendingHostNames = $hostPropertyMapping.Keys
-                $registeredHostNames = $sessionHosts.SessionHostName
-                $unresolvedHosts = $pendingHostNames | Where-Object { $_ -notin $registeredHostNames }
+            # Check if any pending hosts are still unresolved (deleted but not registered)
+            $pendingHostNames = $hostPropertyMapping.Keys
+            $registeredHostNames = $sessionHosts.SessionHostName
+            $unresolvedHosts = $pendingHostNames | Where-Object { $_ -notin $registeredHostNames }
                 
-                if ($unresolvedHosts.Count -gt 0) {
-                    $hasPendingUnresolvedHosts = $true
-                    Write-LogEntry -Message "CRITICAL: {0} host(s) were previously deleted but not yet registered: {1}" -StringValues $unresolvedHosts.Count, ($unresolvedHosts -join ', ') -Level Warning
-                    Write-LogEntry -Message "BLOCKING new deletions until pending hosts are resolved (deployment failure or registration issue)" -Level Warning
-                }
-                else {
-                    Write-LogEntry -Message "All pending hosts are now registered - clearing mappings" -Level Trace
-                    $deploymentState.PendingHostMappings = '{}'
-                    Save-DeploymentState -DeploymentState $deploymentState
-                    $hostPropertyMapping = @{}
-                }
+            if ($unresolvedHosts.Count -gt 0) {
+                $hasPendingUnresolvedHosts = $true
+                Write-LogEntry -Message "CRITICAL: {0} host(s) were previously deleted but not yet registered: {1}" -StringValues $unresolvedHosts.Count, ($unresolvedHosts -join ', ') -Level Warning
+                Write-LogEntry -Message "BLOCKING new deletions until pending hosts are resolved (deployment failure or registration issue)" -Level Warning
             }
-            catch {
-                Write-LogEntry -Message "Failed to parse pending host mappings: $_" -Level Warning
+            else {
+                Write-LogEntry -Message "All pending hosts are now registered - clearing mappings" -Level Trace
+                $deploymentState.PendingHostMappings = '{}'
+                Save-DeploymentState -DeploymentState $deploymentState
                 $hostPropertyMapping = @{}
             }
         }
+        catch {
+            Write-LogEntry -Message "Failed to parse pending host mappings: $_" -Level Warning
+            $hostPropertyMapping = @{}
+        }
+    }
     
     # SAFETY CHECK: Verify any previously deployed new hosts are available before deleting more old capacity
     # This prevents cascading capacity loss if previous deployments created VMs that didn't register properly
