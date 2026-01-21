@@ -309,13 +309,18 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
     $resetReason = ''
     
     # Log current state for debugging
-    Write-LogEntry -Message "New cycle detection - Current state: ImageVersion=$currentImageVersion, RunningDeployments=$($runningDeployments.Count)" -Level Trace
-    Write-LogEntry -Message "New cycle detection - Previous state: LastImageVersion=$($deploymentState.LastImageVersion)" -Level Trace
+    Write-LogEntry -Message "New cycle detection - Current state: ImageVersion=$currentImageVersion, RunningDeployments=$($runningDeployments.Count), LastTotalToReplace=$($deploymentState.LastTotalToReplace)" -Level Trace
+    Write-LogEntry -Message "New cycle detection - Previous state: LastImageVersion=$($deploymentState.LastImageVersion), LastStatus=$($deploymentState.LastStatus)" -Level Trace
     
-    # Check if image version changed (only if we have a previous version to compare against)
-    if ($deploymentState.LastImageVersion -and $deploymentState.LastImageVersion -ne $currentImageVersion -and $currentImageVersion -ne "N/A") {
+    # Check if image version changed AND we were previously up to date (not already in a cycle)
+    # This prevents repeatedly triggering new cycle on every run while hosts are still being replaced
+    if ($deploymentState.LastImageVersion -and 
+        $deploymentState.LastImageVersion -ne $currentImageVersion -and 
+        $currentImageVersion -ne "N/A" -and
+        $deploymentState.LastTotalToReplace -eq 0) {
+        
         $isNewCycle = $true
-        $resetReason = "Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion"
+        $resetReason = "Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion (was previously up to date)"
         Write-LogEntry -Message "New cycle detection - Image version changed: $resetReason"
     }
     
@@ -327,6 +332,7 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
         $deploymentState.CurrentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage)
         $deploymentState.LastStatus = 'NewCycle'
         $deploymentState.LastDeploymentName = ''
+        # Update LastImageVersion immediately so we don't trigger new cycle on every subsequent run
         $deploymentState.LastImageVersion = $currentImageVersion
         Save-DeploymentState -DeploymentState $deploymentState
     }
@@ -487,6 +493,19 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
     $failedDeployments.Count -eq 0) {
     
     Write-LogEntry -Message "Host pool is UP TO DATE - all session hosts are on the latest image version and no work is needed."
+    
+    # Update LastImageVersion now that the cycle is complete
+    if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
+        $deploymentState = Get-DeploymentState
+        $currentImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { 'N/A' }
+        
+        # Only update if it changed (to avoid unnecessary writes)
+        if ($deploymentState.LastImageVersion -ne $currentImageVersion) {
+            Write-LogEntry -Message "Cycle complete - updating LastImageVersion from $($deploymentState.LastImageVersion) to $currentImageVersion" -Level Trace
+            $deploymentState.LastImageVersion = $currentImageVersion
+            Save-DeploymentState -DeploymentState $deploymentState
+        }
+    }
     
     # CRITICAL: Check if scaling exclusion tags need to be removed before exiting
     # This handles the case where tags were set in a previous run but the cycle just completed
@@ -1210,6 +1229,18 @@ try {
 }
 catch {
     Write-LogEntry -Message "Failed to update host pool status tag: $($_.Exception.Message)" -Level Warning
+}
+
+# Update deployment state with current ToReplace count for new cycle detection
+if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
+    try {
+        $deploymentState = Get-DeploymentState
+        $deploymentState.LastTotalToReplace = $metricsLog.ToReplace
+        Save-DeploymentState -DeploymentState $deploymentState
+    }
+    catch {
+        Write-LogEntry -Message "Failed to update LastTotalToReplace in deployment state: $($_.Exception.Message)" -Level Warning
+    }
 }
 
 # Log completion timestamp for workbook visibility

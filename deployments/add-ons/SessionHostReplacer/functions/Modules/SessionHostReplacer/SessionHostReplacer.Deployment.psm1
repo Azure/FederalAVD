@@ -305,6 +305,8 @@ function Save-DeploymentState {
             ConsecutiveSuccesses     = $DeploymentState.ConsecutiveSuccesses
             CurrentPercentage        = $DeploymentState.CurrentPercentage
             TargetSessionHostCount   = $DeploymentState.TargetSessionHostCount
+            LastImageVersion         = if ($DeploymentState.LastImageVersion) { $DeploymentState.LastImageVersion } else { '' }
+            LastTotalToReplace       = $DeploymentState.LastTotalToReplace
             PendingHostMappings      = if ($DeploymentState.PendingHostMappings) { $DeploymentState.PendingHostMappings } else { '{}' }
         }
         

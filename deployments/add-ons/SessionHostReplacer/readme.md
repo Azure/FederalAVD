@@ -34,7 +34,7 @@ The Session Host Replacer monitors AVD session hosts and automatically replaces 
 - **Shutdown retention** for rollback capability (SideBySide mode)
 - **Auto-detect target count** for dynamic scaling plan compatibility
 - **Device cleanup** (Entra ID + Intune) with automatic hostname reuse
-- **Multi-cloud support** (Commercial, GCC High, DoD, China; US Secret/Top Secret via auto-detection)
+- **Multi-cloud support** (Commercial, GCC High, DoD, China; US Secret/Top Secret)
 
 ## Features
 
