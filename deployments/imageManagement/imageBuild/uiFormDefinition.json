@@ -2034,6 +2034,7 @@
             "subscriptionId": "[steps('basics').scope.subscription.id]",
             "parameters": {
                 "vmSkus": "[steps('basics').resourceSkusApi.transformed.virtualMachines]",
+                "allowedVmSizes": "[map(filter(steps('basics').resourceSkusApi.transformed.virtualMachines, (sku) => and(if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, steps('imageDest').imageDefinition.existingImageDefinition.IsAcceleratedNetworkSupported, steps('imageDest').imageDefinition.isAcceleratedNetworkSupported), false), equals(sku.acceleratedNetworking, 'True'), true), if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, contains(coalesce(steps('imageDest').imageDefinition.existingImageDefinition.DiskControllerTypes, ''), 'NVMe'), steps('imageDest').imageDefinition.isNVMeSupported), false), contains(toLower(coalesce(sku.diskControllerTypes, '')), 'nvme'), true))), (item) => item.name)]",
                 "location": "[steps('basics').scope.location.name]",
                 "deploymentPrefix": "[steps('basics').naming.deploymentPrefix]",
                 "nameConvResTypeAtEnd": "[steps('basics').naming.nameConvResTypeAtEnd]",
