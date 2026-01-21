@@ -309,22 +309,29 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
     $resetReason = ''
     
     # Log current state for debugging
-    Write-LogEntry -Message "New cycle detection - Current state: ImageVersion=$currentImageVersion, RunningDeployments=$($runningDeployments.Count), LastTotalToReplace=$($deploymentState.LastTotalToReplace)" -Level Trace
-    Write-LogEntry -Message "New cycle detection - Previous state: LastImageVersion=$($deploymentState.LastImageVersion), LastStatus=$($deploymentState.LastStatus)" -Level Trace
+    $lastToReplace = if ($null -eq $deploymentState.LastImageVersion) { 0 } else { $deploymentState.LastTotalToReplace }
+    Write-LogEntry -Message "New cycle detection - Current: ImageVersion='$currentImageVersion', LastTotalToReplace=$lastToReplace"
+    Write-LogEntry -Message "New cycle detection - Previous: LastImageVersion='$($deploymentState.LastImageVersion)' (IsNull: $($null -eq $deploymentState.LastImageVersion)), LastStatus='$($deploymentState.LastStatus)'"
     
     # Check if image version changed AND we were previously up to date (not already in a cycle)
     # This prevents repeatedly triggering new cycle on every run while hosts are still being replaced
     # Treat null/missing LastTotalToReplace as 0 (up to date) for backward compatibility
-    $lastToReplace = if ($null -eq $deploymentState.LastTotalToReplace) { 0 } else { $deploymentState.LastTotalToReplace }
     
-    if ($deploymentState.LastImageVersion -and 
-        $deploymentState.LastImageVersion -ne $currentImageVersion -and 
-        $currentImageVersion -ne "N/A" -and
-        $lastToReplace -eq 0) {
-        
+    # Evaluate each condition separately for visibility
+    $hasLastImageVersion = -not [string]::IsNullOrEmpty($deploymentState.LastImageVersion)
+    $imageVersionChanged = $deploymentState.LastImageVersion -ne $currentImageVersion
+    $currentVersionValid = $currentImageVersion -ne "N/A"
+    $wasUpToDate = $lastToReplace -eq 0
+    
+    Write-LogEntry -Message "New cycle detection conditions - HasLastImageVersion: $hasLastImageVersion, ImageVersionChanged: $imageVersionChanged, CurrentVersionValid: $currentVersionValid, WasUpToDate: $wasUpToDate"
+    
+    if ($hasLastImageVersion -and $imageVersionChanged -and $currentVersionValid -and $wasUpToDate) {
         $isNewCycle = $true
         $resetReason = "Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion (was previously up to date)"
         Write-LogEntry -Message "New cycle detection - Image version changed: $resetReason"
+    }
+    else {
+        Write-LogEntry -Message "New cycle detection - Conditions not met, no new cycle triggered" -Level Trace
     }
     
     # Reset progressive scale-up for new cycle

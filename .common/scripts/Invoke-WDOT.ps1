@@ -40,8 +40,7 @@ If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {
     $WebClient.Headers.Add('x-ms-version', '2017-11-09')
     $webClient.Headers.Add("Authorization", "Bearer $AccessToken")
 }
-$SourceFileName = ($Uri -Split "/")[-1]
-$DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName
+$DestFile = Join-Path -Path $TempDir -ChildPath 'WDOT.zip'
 Write-OutputWithTimeStamp "Downloading '$Uri' to '$DestFile'."
 $webClient.DownloadFile("$Uri", "$DestFile")
 Start-Sleep -seconds 5
