@@ -1027,7 +1027,7 @@
                                     "visible": true
                                 },
                                 {
-                                    "name": "installWindowsDesktopOptimizationTool",
+                                    "name": "applyWindowsDesktopOptimizations",
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Apply Windows Desktop Optimizations",
                                     "toolTip": "Select to apply the customizations prescribed in the Windows Desktop Optimization Tool",
@@ -2058,7 +2058,7 @@
                 "installTeams": "[if(equals(steps('imageSource').offer, 'office-365'), false, steps('imageCustomizations').office.installTeams)]",
                 "teamsCloudType": "[if(steps('imageCustomizations').office.installTeams, steps('imageCustomizations').office.teamsCloudType, 'Commercial')]",
                 "appsToRemove": "[steps('imageCustomizations').customizations.appsToRemove]",
-                "installVirtualDesktopOptimizationTool": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud')))), steps('imageCustomizations').customizations.installWindowsDesktopOptimizationTool, false)]",
+                "applyWindowsDesktopOptimizations": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud')))), steps('imageCustomizations').customizations.applyWindowsDesktopOptimizations, false)]",
                 "cleanupDesktop": "[steps('imageCustomizations').customizations.cleanupDesktop]",
                 "installUpdates": "[steps('imageCustomizations').updates.installUpdates]",
                 "updateService": "[steps('imageCustomizations').updates.updateService]",

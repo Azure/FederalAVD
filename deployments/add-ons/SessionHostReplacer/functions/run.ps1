@@ -314,10 +314,13 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
     
     # Check if image version changed AND we were previously up to date (not already in a cycle)
     # This prevents repeatedly triggering new cycle on every run while hosts are still being replaced
+    # Treat null/missing LastTotalToReplace as 0 (up to date) for backward compatibility
+    $lastToReplace = if ($null -eq $deploymentState.LastTotalToReplace) { 0 } else { $deploymentState.LastTotalToReplace }
+    
     if ($deploymentState.LastImageVersion -and 
         $deploymentState.LastImageVersion -ne $currentImageVersion -and 
         $currentImageVersion -ne "N/A" -and
-        $deploymentState.LastTotalToReplace -eq 0) {
+        $lastToReplace -eq 0) {
         
         $isNewCycle = $true
         $resetReason = "Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion (was previously up to date)"
