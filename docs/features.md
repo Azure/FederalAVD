@@ -905,7 +905,17 @@ Azure confidential VMs provide hardware-based trusted execution environments (TE
 - Support for cloud migration without code modifications
 - Compatible with existing applications and workloads
 
-**Reference:** [Confidential Virtual Machines - Microsoft Docs](https://learn.microsoft.com/en-us/azure/confidential-computing/confidential-vm-overview)
+**Limitations:**
+
+- Confidential VMs do **NOT** support Accelerated Networking
+- Confidential VMs do **NOT** support NVMe storage
+- Confidential VMs do **NOT** support hibernation
+- Only specific DC-series, EC-series, and NCC-series VM sizes support confidential computing
+
+**References:**
+
+- [Confidential Virtual Machines - Microsoft Docs](https://learn.microsoft.com/en-us/azure/confidential-computing/confidential-vm-overview)
+- [Azure Confidential Computing FAQ](https://learn.microsoft.com/en-us/azure/confidential-computing/confidential-vm-faq)
 
 **Deployed Resources:**
 
