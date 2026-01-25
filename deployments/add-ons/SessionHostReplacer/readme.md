@@ -144,7 +144,7 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 **Configuration parameters**:
 
 - `replacementMode`: `DeleteFirst`
-- `targetSessionHostCount`: Specific number (auto-detect not supported)
+- `targetSessionHostCount`: 0 (auto-detect) or Specific number
 - `maxDeletionsPerCycle`: Maximum hosts to replace per run (default: 5)
 - `minimumCapacityPercentage`: Safety floor for available capacity (default: 80%)
 - `removeEntraDevice`: Must be `true` for hostname reuse
