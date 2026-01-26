@@ -132,14 +132,14 @@
 											"label": "User Personas | Microsoft Learn",
 											"uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/scenarios/azure-virtual-desktop/migrate-assess#user-personas"
 										},
-										"text": "Please provide the naming components below.<br><br>The <b>Persona Identifier</b> is required and represents the user group being served by this host pool. Define separate personas when user groups have different requirements. See the link below for detailed guidance on defining personas."
+										"text": "Please provide the naming components below.<br><br>The Persona Identifier is required and is designed to represent the persona being provided resources by the host pool. Each persona requires a specific host-pool configuration. Defining personas (and thus host pools) will come as a result of bucketing users based on the following criteria:<ul><li><b>Personal Pools:</b> Do specific groups of users require dedicated desktops, instead of pools?</li><li><b>Density:</b> Do specific groups of users require a lower-density desktop experience?</li><li><b>Performance:</b> Do specific groups of users require a higher-performance desktop experience?</li><li><b>Graphical processing (GPU):</b> Do specific groups of users have greater graphical requirements?</li><li><b>Business functions:</b> Can the specific groupings of users be bucketed by business unit, charge code, or their business function?</li><li><b>User count:</b> How many users will be in each distinct persona?</li><li><b>Max session counts:</b> Based on geography and hours of operation, how many concurrent users are expected for each persona during maximum load?</li></ul>"
 									}
 								},
 								{
 									"name": "identifier",
 									"type": "Microsoft.Common.TextBox",
 									"label": "Persona Identifier",
-									"toolTip": "Input an alphanumeric identifier for the user persona. Define separate personas when user groups differ in: pool type (personal vs pooled), density requirements, performance requirements, GPU needs, business function/charge code, user count, or expected concurrent session counts.",
+									"toolTip": "Input an alphanumeric identifier for the business unit or the persona for which the hostpool will be deployed.",
 									"constraints": {
 										"required": true,
 										"validations": [
@@ -148,8 +148,8 @@
 												"message": "Only alphanumeric characters and a single dash '-' are allowed. The dash must be specified between alphanumeric characters."
 											},
 											{
-												"isValid": "[not(greater(add(length(steps('basics').naming.identifier), if(empty(steps('basics').naming.index), 0, 2)), 9))]",
-												"message": "The identifier cannot exceed 9 characters, or 7 characters when combined with the 2-digit index (total cannot exceed 9 characters)."
+												"isValid": "[not(greater(add(length(steps('basics').naming.identifier), length(steps('basics').naming.index)), 9))]",
+												"message": "The total length of the identifier and index cannot exceed 9 characters."
 											}
 										]
 									}
@@ -185,7 +185,7 @@
 									"name": "cafTextBlock",
 									"type": "Microsoft.Common.TextBlock",
 									"options": {
-										"text": "The Cloud Adoption Framework (CAF) recommends placing the resource type abbreviation at the beginning of names (e.g., 'vnet-prod'). This solution follows CAF by default. Select 'Yes' below if you prefer the resource type at the end (e.g., 'prod-vnet').",
+										"text": "The Cloud Adoption Framework (CAF) provides a recommended resource naming convention which specifies that the abbreviation for the resource type is listed first in the name. This solution automatically names resources using the CAF naming convention and suggested resource type abbreviations. Some customers have chosen to move the resource type to the end of the resource names. Select 'Yes' below to ensure that resources are named with this reverse convention or leave it set to 'No' to follow the CAF.",
 										"link": {
 											"label": "Resource Naming | Microsoft Learn",
 											"uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming"
@@ -1333,13 +1333,7 @@
 								"method": "GET",
 								"path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('hosts').scope.location.name, decodeUriComponent('%27'))]",
 								"transforms": {
-									"confidentialVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'ConfidentialComputingType'].value | [0] != null]|[*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])])}",
-									"hibernationVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'HibernationSupported'].value | [0] == 'True'].name",
-									"nvmeVMSizes": "value[?resourceType == 'virtualMachines' && contains(capabilities[?name == 'DiskControllerTypes'].value | [0] || '', 'NVMe')].name",
-									"acceleratedNetworkingVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'].name",
-									"hibernationAccelNetVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'HibernationSupported'].value | [0] == 'True' && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'].name",
-									"nvmeAccelNetVMSizes": "value[?resourceType == 'virtualMachines' && contains(capabilities[?name == 'DiskControllerTypes'].value | [0] || '', 'NVMe') && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'].name",
-									"defaultVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'ConfidentialComputingType'].value | [0] == null && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'].name"
+									"confidentialVMSizes": "value[?resourceType=='virtualMachines'&&ends_with(name, `v5`)&&(starts_with(name, `Standard_DC`)||starts_with(name, `Standard_EC`)||starts_with(name, `Standard_NCC`))]|[*].{label:name, value:name}"
 								}
 							}
 						},
@@ -1604,8 +1598,7 @@
 										"transforms": {
 											"IsHibernateSupported": "properties.features[?name=='IsHibernateSupported'].value | [0]",
 											"IsAcceleratedNetworkSupported": "properties.features[?name=='IsAcceleratedNetworkSupported'].value | [0]",
-											"SecurityType": "properties.features[?name=='SecurityType'].value | [0]",
-											"DiskControllerTypes": "properties.features[?name=='DiskControllerTypes'].value | [0]"
+											"SecurityType": "properties.features[?name=='SecurityType'].value | [0]"
 										}
 									}
 								}
@@ -1628,16 +1621,6 @@
 										"required": true
 									},
 									"visible": true
-								},
-								{
-									"name": "confidentialVMInfo",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[equals(steps('hosts').security.securityType, 'ConfidentialVM')]",
-									"options": {
-										"icon": "Info",
-										"text": "Confidential VMs provide hardware-based isolation and encryption for your entire VM. Only VM sizes with confidential computing capabilities are available for this security type. Note: Confidential VMs do not support Accelerated Networking, Hibernation, or NVMe storage.",
-										"uri": "https://learn.microsoft.com/en-us/azure/confidential-computing/confidential-vm-overview"
-									}
 								},
 								{
 									"name": "secureBootEnabled",
@@ -2045,45 +2028,27 @@
 									"visible": true
 								},
 								{
-									"name": "imageHibernationInfo",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported))))]",
-									"options": {
-										"icon": "Info",
-										"text": "This image supports Hibernation. Enable hibernation below to pause VMs when not in use and save on compute costs. Note: The VM size you select must also support hibernation for this feature to work.",
-										"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/hibernate-resume"
-									}
-								},
-								{
-									"name": "hibernationEnabled",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Hibernation",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), false, if(empty(steps('basics').hostsRGProps.tags.vmHibernate), false, bool(steps('basics').hostsRGProps.tags.vmHibernate)))]",
-									"toolTip": "Hibernation allows you to pause VMs that aren't being used and save on compute costs. The VM size must support hibernation.",
-									"visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported))))]"
-								},
-								{
 									"name": "sizeGeneric",
 									"type": "Microsoft.Compute.SizeSelector",
 									"label": "Size",
 									"toolTip": "Select the size of the virtual machines. Multi-session hosts should have 4 - 24 vCPUs. Single session host should have 2 or more vCPUs.",
 									"recommendedSizes": [
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D4ads_v5', 'Standard_D4ads_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D4ads_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D8ads_v5', 'Standard_D8ads_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D8ads_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D16ads_v5', 'Standard_D16ads_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D16ads_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D32ads_v5', 'Standard_D32ads_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D32ads_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D4as_v5', 'Standard_D4as_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D4as_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D8as_v5', 'Standard_D8as_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D8as_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D16as_v5', 'Standard_D16as_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D16as_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D32as_v5', 'Standard_D32as_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D32as_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D4ds_v5', 'Standard_D4ds_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D4ds_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D8ds_v5', 'Standard_D8ds_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D8ds_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D16ds_v5', 'Standard_D16ds_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D16ds_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D32ds_v5', 'Standard_D32ds_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D32ds_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D4s_v5', 'Standard_D4s_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D4s_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D8s_v5', 'Standard_D8s_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D8s_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D16s_v5', 'Standard_D16s_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D16s_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D32s_v5', 'Standard_D32s_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D32s_v6'))]"
+										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), 'Standard_D4ads_v6', coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D4ads_v6'))]",
+										"Standard_D8ads_v6",
+										"Standard_D16ads_v6",
+										"Standard_D32ads_v6",
+										"Standard_D4as_v6",
+										"Standard_D8as_v6",
+										"Standard_D16as_v6",
+										"Standard_D32as_v6",
+										"Standard_D4ds_v6",
+										"Standard_D8ds_v6",
+										"Standard_D16ds_v6",
+										"Standard_D32ds_v6",
+										"Standard_D4s_v6",
+										"Standard_D8s_v6",
+										"Standard_D16s_v6",
+										"Standard_D32s_v6"
 									],
 									"options": {
 										"hideDiskTypeFilter": "[if(equals(steps('hosts').specs.diskSku, 'Premium_LRS'), true, false)]"
@@ -2097,23 +2062,12 @@
 									"visible": "[not(equals(steps('hosts').security.securityType, 'ConfidentialVM'))]"
 								},
 								{
-									"name": "hibernationSizeWarning",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"icon": "Error",
-										"text": "The selected VM size does not support hibernation. Please choose a different VM size or disable hibernation.",
-										"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/hibernate-resume"
-									},
-									"visible": "[and(steps('hosts').specs.hibernationEnabled, not(equals(steps('hosts').security.securityType, 'ConfidentialVM')), not(contains(steps('hosts').resourceSkusApi.transformed.hibernationVMSizes, steps('hosts').specs.sizeGeneric)))]"
-								},
-								{
 									"name": "sizeConfidentialVM",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Machine Size",
-									"defaultValue": "Standard_DC16eds_v5",
+									"defaultValue": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), 'Standard_DC4ads_v5' ,'Standard_D4ads_v5')]",
 									"toolTip": "Select the size of the virtual machines. Multi-session hosts should have 4 - 24 vCPUs. Single session host should have 2 or more vCPUs.",
 									"defaultDescription": "",
-									"multiLine": true,
 									"constraints": {
 										"allowedValues": "[steps('hosts').resourceSkusApi.transformed.confidentialVMSizes]",
 										"required": true
@@ -2126,7 +2080,15 @@
 									"label": "Enable accelerated networking",
 									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking)), true, bool(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking))]",
 									"toolTip": "Enables low latency and high throughput on the network interface.",
-									"visible": "[and(not(equals(steps('hosts').security.securityType, 'ConfidentialVM')), bool(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value)), false)), or(equals(steps('hosts').image.source, 'marketplace'), bool(coalesce(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported, false))))]"
+									"visible": "[and(bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported)))]"
+								},								
+								{
+									"name": "hibernationEnabled",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Hibernation",
+									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), false, empty(steps('basics').hostsRGProps.tags.vmHibernate)), false, bool(steps('basics').hostsRGProps.tags.vmHibernate))]",
+									"toolTip": "Hibernation allows you to pause VMs that aren't being used and save on compute costs where the VMs don't need to run 24/7.",
+									"visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'HibernationSupported')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)))]"
 								}
 							]
 						},
@@ -4525,7 +4487,7 @@
 				"secureBootEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.secureBootEnabled)]",
 				"vTpmEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
 				"integrityMonitoring": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.integrityMonitoring)]",
-				"encryptionAtHost": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), false, steps('hosts').diskEncryption.encryptionAtHost)]",
+				"encryptionAtHost": "[steps('hosts').diskEncryption.encryptionAtHost]",
 				"existingDiskEncryptionSetResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('hosts').diskEncryption.selectDiskEncryptionSet), steps('hosts').diskEncryption.existingDiskEncryptionSet, '')]",
 				"keyManagementDisks": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('hosts').diskEncryption.keyManagement, 'PlatformManaged')]",
 				"confidentialVMOSDiskEncryption": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, false)]",
@@ -4539,8 +4501,8 @@
 				"vCPUs": "[first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (cap) => equals(cap.name, 'vCPUs')), (cap) => cap.value))]",
 				"memoryGB": "[first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (cap) => equals(cap.name, 'MemoryGB')), (cap) => cap.value))]",
 				"availabilityZones": "[if(and(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), equals(steps('hosts').availability.availability, 'AvailabilityZones')), steps('hosts').availability.availabilityZones, parse('[]'))]",
-				"enableAcceleratedNetworking": "[if(and(not(equals(steps('hosts').security.securityType, 'ConfidentialVM')), bool(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value)), false)), or(equals(steps('hosts').image.source, 'marketplace'), bool(coalesce(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported, false)))), steps('hosts').specs.enableAcceleratedNetworking, false)]",
-				"hibernationEnabled": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)))), steps('hosts').specs.hibernationEnabled, false)]",
+				"enableAcceleratedNetworking": "[if(and(bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported))), steps('hosts').specs.enableAcceleratedNetworking, false)]",
+				"hibernationEnabled": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'HibernationSupported')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported))), steps('hosts').specs.hibernationEnabled, false)]",
 				"avdAgentsDSCPackage": "[steps('hosts').registration.avdAgentsDSCPackage]",
 				"useAgentDownloadEndpoint": "[steps('hosts').registration.useAgentDownloadEndpoint]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",

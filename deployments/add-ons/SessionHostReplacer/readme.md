@@ -20,7 +20,7 @@ Automated Azure Function for managing Azure Virtual Desktop session host lifecyc
 
 ## Overview
 
-The Session Host Replacer monitors AVD session hosts and automatically replaces them when new images are available. It handles the complete lifecycle: detection → draining → deployment → deletion → device cleanup.
+The Session Host Replacer monitors AVD session hosts and automatically replaces them when new images are available. It handles the complete lifecycle including detection, draining, deployment, deletion, and device cleanup.
 
 **Key Benefits:**
 
@@ -391,7 +391,7 @@ The deployment creates or uses an existing Function App:
 
 #### Naming Convention Considerations
 
-The solution automatically detects naming conventions from your host pool name. However, if your host pool uses a non-standard naming pattern (e.g., `prod-avd-hostpool-01` instead of `hp-avd-prod-eus`), you should provide explicit names for resources.
+The solution automatically detects naming conventions from your host pool name. However, if your host pool uses a non-standard naming pattern (e.g., `prod-avd-hostpool-01` instead of `vdpool-prod-eus`), you should provide explicit names for resources.
 
 **Required override parameters for non-standard naming:**
 
@@ -408,29 +408,32 @@ availabilitySetNameConvOverride: 'avset-##'               // Use ## token for in
 ```
 
 **Token Reference:**
+
 - `SHNAME` = Session host name (e.g., `avdvm-001` becomes `vm-avdvm-001` or `avdvm-001-vm`)
 - `##` = Availability set index (e.g., `avset-01`, `avset-02`)
 
 **Critical for brownfield:** Session host naming MUST match your existing pattern. For example:
+
 - If existing VMs are named `avdvm-001`, use `virtualMachineNameConvOverride: 'SHNAME'` (no prefix/suffix)
 - If existing VMs are named `vm-avdvm-001`, use `virtualMachineNameConvOverride: 'vm-SHNAME'`
 - If existing VMs are named `avdvm-001-vm`, use `virtualMachineNameConvOverride: 'SHNAME-vm'`
 
 **Note on other resources:**
+
 - **App Service Plan**: Use existing via `appServicePlanResourceId` parameter (no naming needed)
 - **Private Endpoints & NICs**: Automatically derived from storage account and function app names
 - **Application Insights**: Uses shared naming convention (works across multiple host pools)
 
 **When to use overrides:**
 
-- Host pool name doesn't start with `hp-` or end with `-hp`
+- Host pool name doesn't start with `vdpool-` or end with `-vdpool`
 - Host pool name contains special characters or patterns that don't follow the automatic detection logic
 - Existing session hosts use non-standard naming (VMs not following resource type prefix/suffix pattern)
 - You want explicit control over function app and session host resource naming
 
 **When overrides are NOT needed:**
 
-- Host pool follows standard patterns: `hp-avd-prod-eus` or `avd-prod-eus-hp`
+- Host pool follows standard patterns: `vdpool-avd-prod-eus` or `avd-prod-eus-vdpool`
 - Session hosts follow standard patterns: `vm-avdvm-001` or `avdvm-001-vm`
 - You're comfortable with automatically-derived names
 
@@ -509,7 +512,7 @@ The form automatically validates inputs and provides helpful descriptions for ea
 
 ##### Brownfield Deployments with Custom Naming
 
-For brownfield deployments with non-standard host pool naming (e.g., `prod-avd-hostpool-01` instead of `hp-avd-prod-eus`), use the **Custom Naming (Advanced)** step:
+For brownfield deployments with non-standard host pool naming (e.g., `prod-avd-hostpool-01` instead of `vdpool-avd-prod-eus`), use the **Custom Naming (Advanced)** step:
 
 1. On the **Custom Naming (Advanced)** step, check **Use Custom Naming Overrides**
 2. Fill out the **Function App Infrastructure Naming** section:
@@ -523,23 +526,27 @@ For brownfield deployments with non-standard host pool naming (e.g., `prod-avd-h
    - **Availability Set Naming Convention**: (Required) Pattern with `##` token. Example: `avset-##`
 
 **Token Reference:**
+
 - `SHNAME` = Session host name (e.g., `avdvm-001` becomes `vm-avdvm-001` with `vm-SHNAME` pattern)
 - `##` = Availability set index (e.g., `01`, `02` becomes `avset-01`, `avset-02` with `avset-##` pattern)
 
 **Critical:** Session host naming conventions MUST match your existing VMs! The form includes:
+
 - Built-in validation for global uniqueness (Function App, Storage Account)
 - Token validation (SHNAME and ## tokens required in naming patterns)
 - Helpful examples and warnings
 - Conditional visibility (Application Insights only shows if monitoring is enabled)
 
 **When to use Custom Naming:**
-- Host pool name doesn't follow standard patterns (`hp-*` or `*-hp`)
+
+- Host pool name doesn't follow standard patterns (`vdpool-*` or `*-vdpool`)
 - Existing session hosts use non-standard naming
 - You want explicit control over resource naming
 - Deploying to existing infrastructure with specific naming requirements
 
 **When Custom Naming is NOT needed:**
-- Host pool follows standard patterns: `hp-avd-prod-eus` or `avd-prod-eus-hp`
+
+- Host pool follows standard patterns: `vdpool-avd-prod-eus` or `avd-prod-eus-vdpool`
 - Session hosts follow standard patterns: `vm-avdvm-001` or `avdvm-001-vm`
 - You're comfortable with automatically-derived names
 
@@ -550,7 +557,7 @@ For brownfield deployments with non-standard host pool naming (e.g., `prod-avd-h
 $params = @{
     resourceGroupName = "rg-avd-management-use2"
     location = "eastus2"
-    hostPoolResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.DesktopVirtualization/hostpools/hp-prod"
+    hostPoolResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.DesktopVirtualization/hostpools/vdpool-prod"
     # Optional: Only required if device cleanup is needed from first run (DeleteFirst mode)
     sessionHostReplacerUserAssignedIdentityResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/mi-sessionhostreplacer"
     # ... other parameters
@@ -712,7 +719,7 @@ The following settings are automatically configured during deployment but can be
 
 ```json
 {
-    "HostPoolName": "hp-prod-001",
+    "HostPoolName": "vdpool-prod-001",
     "HostPoolResourceGroupName": "rg-avd-hostpool",
     "HostPoolSubscriptionId": "...",
     "VirtualMachinesResourceGroupName": "rg-avd-sessionhosts",
@@ -1186,7 +1193,7 @@ A JSON field in the `sessionHostDeploymentState` Azure Table that tracks:
 **Table Storage Schema**:
 
 - **Table Name**: `sessionHostDeploymentState`
-- **Partition Key**: HostPoolName (e.g., "hp-prod-001")
+- **Partition Key**: HostPoolName (e.g., "vdpool-prod-001")
 - **Row Key**: "DeploymentState"
 - **Field**: `PendingHostMappings` (JSON string)
 
@@ -1957,7 +1964,7 @@ The function automatically cleans up failed deployments. If cleanup fails:
 $vms = Get-AzVM -ResourceGroupName "rg-sessionhosts"
 
 # Get registered session hosts
-$hostPool = Get-AzWvdHostPool -ResourceGroupName "rg-hostpool" -Name "hp-prod"
+$hostPool = Get-AzWvdHostPool -ResourceGroupName "rg-hostpool" -Name "vdpool-prod"
 $sessionHosts = Get-AzWvdSessionHost -HostPoolName $hostPool.Name -ResourceGroupName "rg-hostpool"
 
 # Find VMs not registered as session hosts
