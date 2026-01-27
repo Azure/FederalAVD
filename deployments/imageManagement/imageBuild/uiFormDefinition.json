@@ -723,7 +723,13 @@
                                             "value": "Microsoft.BingNews"
                                         },
                                         {
+                                            "value": "Microsoft.BingSearch"
+                                        },
+                                        {
                                             "value": "Microsoft.BingWeather"
+                                        },
+                                        {
+                                            "value": "Microsoft.Edge.GameAssist"
                                         },
                                         {
                                             "value": "Microsoft.GamingApp"
@@ -742,9 +748,6 @@
                                         },
                                         {
                                             "value": "Microsoft.MicrosoftSolitaireCollection"
-                                        },
-                                        {
-                                            "value": "Microsoft.Microsoft3DViewer"
                                         },
                                         {
                                             "value": "Microsoft.MixedReality.Portal"
@@ -787,9 +790,6 @@
                                         },
                                         {
                                             "value": "microsoft.windowscommunicationsapps"
-                                        },
-                                        {
-                                            "value": "Microsoft.WindowsFeedbackHub"
                                         },
                                         {
                                             "value": "Microsoft.WindowsFeedbackHub"
@@ -840,12 +840,28 @@
                                                 "value": "Clipchamp.Clipchamp"
                                             },
                                             {
+                                                "label": "Microsoft.AV1VideoExtension",
+                                                "value": "Microsoft.AV1VideoExtension"
+                                            },
+                                            {
+                                                "label": "Microsoft.AVCEncoderVideoExtension",
+                                                "value": "Microsoft.AVCEncoderVideoExtension"
+                                            },
+                                            {
                                                 "label": "Microsoft.BingNews",
                                                 "value": "Microsoft.BingNews"
                                             },
                                             {
+                                                "label": "Microsoft.BingSearch",
+                                                "value": "Microsoft.BingSearch"
+                                            },
+                                            {
                                                 "label": "Microsoft.BingWeather",
                                                 "value": "Microsoft.BingWeather"
+                                            },
+                                            {
+                                                "label": "Microsoft.Edge.GameAssist",
+                                                "value": "Microsoft.Edge.GameAssist"
                                             },
                                             {
                                                 "label": "Microsoft.GamingApp",
@@ -864,12 +880,20 @@
                                                 "value": "Microsoft.HEIFImageExtension"
                                             },
                                             {
+                                                "label": "Microsoft.HEVCVideoExtension",
+                                                "value": "Microsoft.HEVCVideoExtension"
+                                            },
+                                            {
                                                 "label": "Microsoft.Messaging",
                                                 "value": "Microsoft.Messaging"
                                             },
                                             {
                                                 "label": "Microsoft.Microsoft3DViewer",
                                                 "value": "Microsoft.Microsoft3DViewer"
+                                            },
+                                                                                        {
+                                                "label": "Microsoft.MicrosoftJournal",
+                                                "value": "Microsoft.MicrosoftJournal"
                                             },
                                             {
                                                 "label": "Microsoft.MicrosoftOfficeHub",
@@ -886,6 +910,10 @@
                                             {
                                                 "label": "Microsoft.MixedReality.Portal",
                                                 "value": "Microsoft.MixedReality.Portal"
+                                            },
+                                            {
+                                                "label": "Microsoft.MPEG2VideoExtension",
+                                                "value": "Microsoft.MPEG2VideoExtension"
                                             },
                                             {
                                                 "label": "Microsoft.MSPaint",
@@ -1024,8 +1052,16 @@
                                                 "value": "Microsoft.ZuneVideo"
                                             },
                                             {
+                                                "label": "MicrosoftCorporationII.MicrosoftFamily",
+                                                "value": "MicrosoftCorporationII.MicrosoftFamily"
+                                            },
+                                            {
                                                 "label": "MicrosoftCorporationII.QuickAssist",
                                                 "value": "MicrosoftCorporationII.QuickAssist"
+                                            },
+                                            {
+                                                "label": "MicrosoftWindows.CrossDevice",
+                                                "value": "MicrosoftWindows.CrossDevice"
                                             }
                                         ],
                                         "required": false
