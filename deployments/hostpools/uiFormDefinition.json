@@ -3528,13 +3528,13 @@
 							]
 						},
 						{
-							"name": "vmSize",
+							"name": "managementVmSize",
 							"type": "Microsoft.Common.Section",
 							"label": "Management VM Size",
 							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName))))]",
 							"elements": [
 								{
-									"name": "managementVmSize",
+									"name": "vmSize",
 									"type": "Microsoft.Compute.SizeSelector",
 									"label": "VM Size",
 									"toolTip": "Select the virtual machine size for management resources. Recommended to start with 2 CPU sizes like Standard_B2s or Standard_B2ms for cost efficiency.",
@@ -3554,8 +3554,7 @@
 											"Standard_D4s_v3",
 											"Standard_D4s_v4",
 											"Standard_D4s_v5"
-										],
-										"required": true
+										]
 									},
 									"options": {
 										"hideDiskTypeFilter": false
@@ -3567,6 +3566,10 @@
 										"sku": "2022-datacenter-azure-edition"
 									},
 									"count": 1,
+									"scope": {
+										"location": "[steps('hosts').scope.location.name]",
+										"subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]"
+									},
 									"visible": true
 								}
 							]
@@ -4611,7 +4614,7 @@
 				"fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('identity').solution, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true)), steps('userProfiles').managedIdentity.id, '')]",
 				"fslogixAdminGroups": "[if(steps('userProfiles').shareManagement.configureAdminAccess, steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups, parse('[]'))]",
 				"avdObjectId": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('management').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('management').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('management').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
-				"deploymentVmSize": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))), steps('management').vmSize.managementVmSize, 'Standard_B2s')]",
+				"deploymentVmSize": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))), steps('management').managementVmSize.vmSize, 'Standard_B2s')]",
 				"recoveryServices": "[steps('management').backup.recoveryServices]",
 				"existingRecoveryServicesVaultResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices), steps('management').backup.recoveryServicesVault, '')]",
 				"existingDiskAccessResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices, steps('management').backup.associateDiskAccessResource), steps('management').backup.diskAccess, '')]",
