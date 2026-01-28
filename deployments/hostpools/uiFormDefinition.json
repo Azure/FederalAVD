@@ -3528,16 +3528,25 @@
 							]
 						},
 						{
-							"name": "managementVmSize",
+							"name": "deploymentVm",
 							"type": "Microsoft.Common.Section",
-							"label": "Management VM Size",
+							"label": "Deployment Virtual Machine",
 							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName))))]",
 							"elements": [
 								{
-									"name": "vmSize",
+									"name": "deploymentVmInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "[concat('Based on your configuration choices, a deployment virtual machine is required to perform steps that cannot be completed via ARM templates. This virtual machine will be automatically deleted from Azure once the deployment is complete.', if(contains(steps('identity').solution, 'DomainServices'), '<br><br>Since you selected a Active Directory Domain Services or Entra Kerberos Domain Service as your identity solution and deployed FSLogix profile storage, the deployment virtual machine will also be joined to the domain and the same OU as the session hosts. You should remove the computer account for this VM once the deployment completes.', if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), '<br><br>Since you selected Entra Kerberos with Hybrid Identities as your identity solution, deployed FSLogix profile storage, and chose to either configure least privilege NTFS permissions or shard the storage, the deployment virtual machine will also be joined to the domain in the OU specified. The computer object for this virtual maachine should be deleted from the domain when the deployment is complete.','')))]"
+									},
+									"visible": true
+								},
+								{
+									"name": "size",
 									"type": "Microsoft.Compute.SizeSelector",
-									"label": "VM Size",
-									"toolTip": "Select the virtual machine size for management resources. Recommended to start with 2 CPU sizes like Standard_B2s or Standard_B2ms for cost efficiency.",
+									"label": "Virtual Machine Size",
+									"toolTip": "Select the virtual machine size for deployment resources. Recommended to start with 2 CPU sizes like Standard_B2s or Standard_B2ms for cost efficiency.",
 									"recommendedSizes": [
 										"Standard_B2s",
 										"Standard_B2ms",
@@ -4614,7 +4623,7 @@
 				"fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('identity').solution, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true)), steps('userProfiles').managedIdentity.id, '')]",
 				"fslogixAdminGroups": "[if(steps('userProfiles').shareManagement.configureAdminAccess, steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups, parse('[]'))]",
 				"avdObjectId": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('management').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('management').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('management').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
-				"deploymentVmSize": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))), steps('management').managementVmSize.vmSize, 'Standard_B2s')]",
+				"deploymentVmSize": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))), steps('management').deploymentVm.size, 'Standard_B2s')]",
 				"recoveryServices": "[steps('management').backup.recoveryServices]",
 				"existingRecoveryServicesVaultResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices), steps('management').backup.recoveryServicesVault, '')]",
 				"existingDiskAccessResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices, steps('management').backup.associateDiskAccessResource), steps('management').backup.diskAccess, '')]",
