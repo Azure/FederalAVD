@@ -74,7 +74,7 @@
     },
     "OneDrive": {
         "Description": "Required: OneDrive Sync Client",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/p/?linkid=2121808",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=844652",
         "WebSiteUrl": "",
         "SearchString": "",
         "APIUrl": "",
