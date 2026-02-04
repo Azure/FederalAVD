@@ -43,7 +43,7 @@ module storageAccountEncryptionKey '../../resources/key-vault/vault/key/main.bic
         }
       ]
     }
-    tags: { 'cm-resource-parent': hostPoolResourceId }
+    tags: { 'cm-resource-parent': toLower(hostPoolResourceId) }
   }
 }
 

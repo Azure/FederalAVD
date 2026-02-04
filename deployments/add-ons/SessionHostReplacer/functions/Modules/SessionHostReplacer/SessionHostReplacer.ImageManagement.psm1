@@ -163,7 +163,8 @@ function Get-LatestImageVersion {
             # Store the image definition resource ID for tracking
             $azImageDefinition = $ImageReference.id
 
-            $Uri = "$ResourceManagerUri/subscriptions/$imageSubscriptionId/resourceGroups/$imageResourceGroup/providers/Microsoft.Compute/galleries/$imageGalleryName/images/$imageDefinitionName/versions?api-version=2023-07-03"
+            # First, list all image versions (without replication status)
+            $Uri = "$ResourceManagerUri/subscriptions/$imageSubscriptionId/resourceGroups/$imageResourceGroup/providers/Microsoft.Compute/galleries/$imageGalleryName/images/$imageDefinitionName/versions?api-version=2024-03-03"
             $imageVersions = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
             
             if (-not $imageVersions -or $imageVersions.Count -eq 0) {
@@ -175,14 +176,12 @@ function Get-LatestImageVersion {
             # Normalize location for comparison (Azure returns full names like "East US 2")
             $normalizedLocation = $Location -replace '\s', ''
             
-            # Filter out versions marked as excluded from latest (checking both global AND regional flags)
-            # Azure VM deployments respect the regional flag when using image definition without version
-            # Also verify that the image has been successfully replicated to the target region
-            $validVersions = $imageVersions |
+            # Filter candidate versions (exclude flag check and published date check only)
+            # We'll check replication status afterwards for the selected candidate
+            $candidateVersions = $imageVersions |
             Where-Object { 
                 $globalExclude = $_.properties.publishingProfile.excludeFromLatest
                 $regionalExclude = $false
-                $isReplicated = $false
                 
                 # Check if this version is excluded in the target region
                 $targetRegion = $_.properties.publishingProfile.targetRegions | Where-Object { 
@@ -192,62 +191,72 @@ function Get-LatestImageVersion {
                     $regionalExclude = $targetRegion.excludeFromLatest
                 }
                 
+                # Include only if NOT excluded globally AND NOT excluded regionally AND has published date
+                -not $globalExclude -and -not $regionalExclude -and $_.properties.publishingProfile.publishedDate
+            }
+            
+            if (-not $candidateVersions -or $candidateVersions.Count -eq 0) {
+                # Fallback: if no valid candidates, get first non-excluded version
+                $candidateVersions = $imageVersions |
+                Where-Object { -not $_.properties.publishingProfile.excludeFromLatest }
+            }
+            
+            if (-not $candidateVersions -or $candidateVersions.Count -eq 0) {
+                throw "No available image versions found (all versions are marked as excluded from latest)."
+            }
+            
+            # Sort candidates by published date and check replication status for each until we find a replicated one
+            $sortedCandidates = $candidateVersions |
+            Sort-Object -Property { [DateTime]$_.properties.publishingProfile.publishedDate } -Descending
+            
+            $latestImageVersion = $null
+            foreach ($candidate in $sortedCandidates) {
+                # Fetch full details with replication status for this specific version
+                $versionUri = "$ResourceManagerUri/subscriptions/$imageSubscriptionId/resourceGroups/$imageResourceGroup/providers/Microsoft.Compute/galleries/$imageGalleryName/images/$imageDefinitionName/versions/$($candidate.name)?`$expand=ReplicationStatus&api-version=2024-03-03"
+                $versionDetails = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $versionUri
+                
                 # Check replication status for the target region
-                if ($_.properties.replicationStatus.summary) {
-                    $regionReplicationStatus = $_.properties.replicationStatus.summary | Where-Object {
+                $isReplicated = $false
+                if ($versionDetails.properties.replicationStatus.summary) {
+                    $regionReplicationStatus = $versionDetails.properties.replicationStatus.summary | Where-Object {
                         ($_.region -replace '\s', '') -eq $normalizedLocation
                     }
                     
                     if ($regionReplicationStatus) {
-                        # Check if replication is completed (progress = 100%)
                         $isReplicated = $regionReplicationStatus.state -eq 'Completed'
                         
-                        if (-not $isReplicated) {
+                        if ($isReplicated) {
+                            Write-LogEntry -Message "Image version {0} is replicated to region {1}" `
+                                -StringValues $candidate.name, $Location
+                            $latestImageVersion = $versionDetails
+                            break
+                        }
+                        else {
                             Write-LogEntry -Message "Image version {0} is not yet replicated to region {1} (state: {2}, progress: {3}%)" `
-                                -StringValues $_.name, $Location, $regionReplicationStatus.state, $regionReplicationStatus.progress `
+                                -StringValues $candidate.name, $Location, $regionReplicationStatus.state, $regionReplicationStatus.progress `
                                 -Level Warning
                         }
                     }
                     else {
                         Write-LogEntry -Message "Image version {0} does not have replication status for region {1}" `
-                            -StringValues $_.name, $Location `
+                            -StringValues $candidate.name, $Location `
                             -Level Warning
                     }
                 }
                 else {
                     Write-LogEntry -Message "Image version {0} does not have replication status information" `
-                        -StringValues $_.name `
+                        -StringValues $candidate.name `
                         -Level Warning
                 }
-                
-                # Include only if NOT excluded globally AND NOT excluded regionally AND has published date AND is replicated
-                -not $globalExclude -and -not $regionalExclude -and $_.properties.publishingProfile.publishedDate -and $isReplicated
             }
             
-            if (-not $validVersions -or $validVersions.Count -eq 0) {
-                # Fallback: if no versions have dates, just get the first non-excluded version
-                $latestImageVersion = $imageVersions |
-                Where-Object { -not $_.properties.publishingProfile.excludeFromLatest } |
-                Select-Object -First 1
-                
-                if (-not $latestImageVersion) {
-                    throw "No available image versions found (all versions are marked as excluded from latest)."
-                }
-                
-                Write-LogEntry -Message "Selected image version (no published dates available) with resource Id {0}" -StringValues $latestImageVersion.id -Level Warning
-                $azImageVersion = $latestImageVersion.name
-                $azImageDate = Get-Date -AsUTC
+            if (-not $latestImageVersion) {
+                throw "No replicated image versions found for region '$Location'. All candidate versions are either still replicating or missing replication status."
             }
-            else {
-                # Sort by published date and select latest
-                $latestImageVersion = $validVersions |
-                Sort-Object -Property { [DateTime]$_.properties.publishingProfile.publishedDate } -Descending |
-                Select-Object -First 1                
-
-                $azImageVersion = $latestImageVersion.name
-                $azImageDate = [DateTime]$latestImageVersion.properties.publishingProfile.publishedDate
-                Write-LogEntry -Message "Select image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
-            }
+            
+            $azImageVersion = $latestImageVersion.name
+            $azImageDate = [DateTime]$latestImageVersion.properties.publishingProfile.publishedDate
+            Write-LogEntry -Message "Select image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
         }
         elseif ($ImageReference.id -match $imageVersionResourceIdPattern ) {
             Write-LogEntry 'Image reference is an Image Version resource.'
