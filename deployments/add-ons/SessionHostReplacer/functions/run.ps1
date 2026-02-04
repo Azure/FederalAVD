@@ -715,18 +715,23 @@ if ($replacementMode -eq 'DeleteFirst') {
     
     # SAFETY CHECK: Verify any previously deployed new hosts are available before deleting more old capacity
     # This prevents cascading capacity loss if previous deployments created VMs that didn't register properly
+    $shouldSkipEntireFlow = $false
     if (-not $newHostAvailability.SafeToProceed -and $newHostAvailability.TotalNewHosts -gt 0) {
         Write-LogEntry -Message "SAFETY CHECK FAILED: {0}" -StringValues $newHostAvailability.Message -Level Warning
         Write-LogEntry -Message "Halting DeleteFirst mode - will not delete old hosts until existing new hosts become available" -Level Warning
         Write-LogEntry -Message "This prevents further capacity loss when previous deployments have hosts that aren't accessible" -Level Warning
         # Skip the entire delete/deploy cycle - exit DeleteFirst flow
+        $shouldSkipEntireFlow = $true
     }
-    elseif ($hasPendingUnresolvedHosts) {
+    
+    # Log pending host retry scenario
+    if ($hasPendingUnresolvedHosts) {
         Write-LogEntry -Message "SAFETY CHECK FAILED: Cannot delete more hosts while previous deletions have unresolved deployments or registration issues" -Level Warning
         Write-LogEntry -Message "Will retry deployment of pending hosts without deleting additional capacity" -Level Warning
-        # Skip deletion but allow deployment retry below
     }
-    else {
+    
+    # Execute deletion logic only if we're not in a pending host retry scenario
+    if (-not $shouldSkipEntireFlow -and -not $hasPendingUnresolvedHosts) {
         if ($newHostAvailability.TotalNewHosts -gt 0) {
             Write-LogEntry -Message "SAFETY CHECK PASSED: {0}" -StringValues $newHostAvailability.Message
         }
@@ -879,26 +884,44 @@ if ($replacementMode -eq 'DeleteFirst') {
         
             Write-LogEntry -Message "Excluded {0} deleted host name(s) from existing list to allow reuse" -StringValues $deletedSessionHostNames.Count -Level Trace
             Write-LogEntry -Message "Available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Trace
+        }
+    } # End of deletion logic block
+    
+    # STEP 2: Deploy replacement session hosts (executes whether we deleted hosts or are retrying pending deployments)
+    if (-not $shouldSkipEntireFlow -and $hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) {
+        Write-LogEntry -Message "We will deploy {0} replacement session hosts" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount
         
-            try {
-                $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames -PreferredSessionHostNames $deletedSessionHostNames -PreferredHostProperties $hostPropertyMapping
-            
-                # Log deployment submission immediately for workbook visibility
-                Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName
-            
-                # Update deployment state for progressive scale-up tracking
-                if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
-                    $deploymentState = Get-DeploymentState               
-                    # Save deployment info for checking on next run
-                    $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
-                    $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
-                    $deploymentState.LastDeploymentNeeded = $hostPoolReplacementPlan.PossibleDeploymentsCount
-                    $deploymentState.LastDeploymentPercentage = if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) { [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolReplacementPlan.PossibleDeploymentsCount) * 100) } else { 0 }
-                    $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'                
-                    Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
+        # In# Update deployment state for progressive scale-up tracking
+            if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
+                $deploymentState = Get-DeploymentState               
+                # Save deployment info for checking on next run
+                $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
+                $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
+                $deploymentState.LastDeploymentNeeded = $hostPoolReplacementPlan.PossibleDeploymentsCount
+                $deploymentState.LastDeploymentPercentage = if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) { [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolReplacementPlan.PossibleDeploymentsCount) * 100) } else { 0 }
+                $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'                
+                Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
                 
-                    # Save state
-                    Save-DeploymentState -DeploymentState $deploymentState
+                # Save state
+                Save-DeploymentState -DeploymentState $deploymentState
+            }
+        }
+        catch {
+            Write-LogEntry -Message "Deployment failed with error: $_" -Level Error
+            
+            # Update state to reflect immediate failure (submission error) if progressive scale-up is enabled
+            if ($enableProgressiveScaleUp) {
+                $deploymentState = Get-DeploymentState
+                $deploymentState.ConsecutiveSuccesses = 0
+                $deploymentState.CurrentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage)
+                $deploymentState.LastStatus = 'Failed'
+                $deploymentState.LastDeploymentName = '' # Clear deployment name since submission failed
+                $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
+                Save-DeploymentState -DeploymentState $deploymentState
+            }            
+            throw
+        }
+    }te -DeploymentState $deploymentState
                 }
             }
             catch {
