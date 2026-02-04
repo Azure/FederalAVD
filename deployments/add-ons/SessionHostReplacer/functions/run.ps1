@@ -728,6 +728,14 @@ if ($replacementMode -eq 'DeleteFirst') {
     if ($hasPendingUnresolvedHosts) {
         Write-LogEntry -Message "SAFETY CHECK FAILED: Cannot delete more hosts while previous deletions have unresolved deployments or registration issues" -Level Warning
         Write-LogEntry -Message "Will retry deployment of pending hosts without deleting additional capacity" -Level Warning
+        
+        # CRITICAL FIX: Adjust deployment count to only retry pending hosts, not add extra capacity
+        # The planning function doesn't know about pending deleted hosts, so it calculates as if pool is short
+        # Example: Target=7, Registered=6 (missing the 1 pending), Plan says deploy 1+replacement
+        # But we should ONLY deploy the 1 pending, not grow beyond target
+        $pendingHostCount = $unresolvedHosts.Count
+        Write-LogEntry -Message "Adjusting deployment count: plan suggested {0}, but limiting to {1} pending host(s) only" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount, $pendingHostCount -Level Warning
+        $hostPoolReplacementPlan.PossibleDeploymentsCount = $pendingHostCount
     }
     
     # Execute deletion logic only if we're not in a pending host retry scenario
