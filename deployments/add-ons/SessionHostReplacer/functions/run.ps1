@@ -891,7 +891,26 @@ if ($replacementMode -eq 'DeleteFirst') {
     if (-not $shouldSkipEntireFlow -and $hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) {
         Write-LogEntry -Message "We will deploy {0} replacement session hosts" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount
         
-        # In# Update deployment state for progressive scale-up tracking
+        # In DeleteFirst mode: exclude deleted host names so they can be reused
+        # Calculate existing names: all current hosts + running deployments - just deleted hosts
+        $currentExistingNames = (@($sessionHosts.SessionHostName) + @($hostPoolReplacementPlan.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
+        $existingSessionHostNames = $currentExistingNames | Where-Object { $_ -notin $deletedSessionHostNames }
+        
+        if ($deletedSessionHostNames.Count -gt 0) {
+            Write-LogEntry -Message "Excluded {0} deleted host name(s) from existing list to allow reuse" -StringValues $deletedSessionHostNames.Count -Level Trace
+            Write-LogEntry -Message "Available for reuse: {0}" -StringValues ($deletedSessionHostNames -join ',') -Level Trace
+        }
+        elseif ($hasPendingUnresolvedHosts) {
+            Write-LogEntry -Message "Retrying deployment for {0} pending host(s) from previous failed deployment" -StringValues $hostPropertyMapping.Count -Level Warning
+        }
+        
+        try {
+            $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames -PreferredSessionHostNames $deletedSessionHostNames -PreferredHostProperties $hostPropertyMapping
+            
+            # Log deployment submission immediately for workbook visibility
+            Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName
+            
+            # Update deployment state for progressive scale-up tracking
             if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
                 $deploymentState = Get-DeploymentState               
                 # Save deployment info for checking on next run
@@ -921,26 +940,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             }            
             throw
         }
-    }te -DeploymentState $deploymentState
-                }
-            }
-            catch {
-                Write-LogEntry -Message "Deployment failed with error: $_" -Level Error
-            
-                # Update state to reflect immediate failure (submission error) if progressive scale-up is enabled
-                if ($enableProgressiveScaleUp) {
-                    $deploymentState = Get-DeploymentState
-                    $deploymentState.ConsecutiveSuccesses = 0
-                    $deploymentState.CurrentPercentage = (Read-FunctionAppSetting InitialDeploymentPercentage)
-                    $deploymentState.LastStatus = 'Failed'
-                    $deploymentState.LastDeploymentName = '' # Clear deployment name since submission failed
-                    $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
-                    Save-DeploymentState -DeploymentState $deploymentState
-                }            
-                throw
-            }
-        }
-    } # End of safety check else block
+    }
 } # End of DeleteFirst mode
 else {
     # ================================================================================================
