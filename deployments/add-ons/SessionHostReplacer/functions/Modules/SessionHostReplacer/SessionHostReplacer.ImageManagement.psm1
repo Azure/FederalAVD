@@ -177,10 +177,12 @@ function Get-LatestImageVersion {
             
             # Filter out versions marked as excluded from latest (checking both global AND regional flags)
             # Azure VM deployments respect the regional flag when using image definition without version
+            # Also verify that the image has been successfully replicated to the target region
             $validVersions = $imageVersions |
             Where-Object { 
                 $globalExclude = $_.properties.publishingProfile.excludeFromLatest
                 $regionalExclude = $false
+                $isReplicated = $false
                 
                 # Check if this version is excluded in the target region
                 $targetRegion = $_.properties.publishingProfile.targetRegions | Where-Object { 
@@ -190,8 +192,36 @@ function Get-LatestImageVersion {
                     $regionalExclude = $targetRegion.excludeFromLatest
                 }
                 
-                # Include only if NOT excluded globally AND NOT excluded regionally AND has published date
-                -not $globalExclude -and -not $regionalExclude -and $_.properties.publishingProfile.publishedDate
+                # Check replication status for the target region
+                if ($_.properties.replicationStatus.summary) {
+                    $regionReplicationStatus = $_.properties.replicationStatus.summary | Where-Object {
+                        ($_.region -replace '\s', '') -eq $normalizedLocation
+                    }
+                    
+                    if ($regionReplicationStatus) {
+                        # Check if replication is completed (progress = 100%)
+                        $isReplicated = $regionReplicationStatus.state -eq 'Completed'
+                        
+                        if (-not $isReplicated) {
+                            Write-LogEntry -Message "Image version {0} is not yet replicated to region {1} (state: {2}, progress: {3}%)" `
+                                -StringValues $_.name, $Location, $regionReplicationStatus.state, $regionReplicationStatus.progress `
+                                -Level Warning
+                        }
+                    }
+                    else {
+                        Write-LogEntry -Message "Image version {0} does not have replication status for region {1}" `
+                            -StringValues $_.name, $Location `
+                            -Level Warning
+                    }
+                }
+                else {
+                    Write-LogEntry -Message "Image version {0} does not have replication status information" `
+                        -StringValues $_.name `
+                        -Level Warning
+                }
+                
+                # Include only if NOT excluded globally AND NOT excluded regionally AND has published date AND is replicated
+                -not $globalExclude -and -not $regionalExclude -and $_.properties.publishingProfile.publishedDate -and $isReplicated
             }
             
             if (-not $validVersions -or $validVersions.Count -eq 0) {
