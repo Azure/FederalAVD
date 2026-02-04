@@ -1,9 +1,6 @@
 # SessionHostReplacer Deployment Module
 # Contains deployment and progressive scale-up functions
 
-# Import Core utilities
-Import-Module "$PSScriptRoot\SessionHostReplacer.Core.psm1" -Force
-
 #Region Progressive Scale-Up State Management
 
 function Get-DeploymentState {

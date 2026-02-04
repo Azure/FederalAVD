@@ -1,9 +1,6 @@
 # SessionHostReplacer Device Cleanup Module
 # Contains Entra ID and Intune device removal functions
 
-# Import Core utilities
-Import-Module "$PSScriptRoot\SessionHostReplacer.Core.psm1" -Force
-
 #Region Device Cleanup
 
 function Remove-DeviceFromDirectories {

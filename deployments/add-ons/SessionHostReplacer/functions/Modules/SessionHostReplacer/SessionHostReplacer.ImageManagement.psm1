@@ -1,9 +1,6 @@
 # SessionHostReplacer Image Management Module
 # Contains image version comparison and retrieval functions
 
-# Import Core utilities
-Import-Module "$PSScriptRoot\SessionHostReplacer.Core.psm1" -Force
-
 #Region Image Version Functions
 
 function Compare-ImageVersion {

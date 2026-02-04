@@ -1,10 +1,6 @@
 # SessionHostReplacer Lifecycle Module
 # Contains session host removal, shutdown retention, and drain notification functions
 
-# Import Core and DeviceCleanup utilities
-Import-Module "$PSScriptRoot\SessionHostReplacer.Core.psm1" -Force
-Import-Module "$PSScriptRoot\SessionHostReplacer.DeviceCleanup.psm1" -Force
-
 #Region Session Host Lifecycle
 
 function Remove-ExpiredShutdownVMs {

@@ -1,11 +1,6 @@
 # SessionHostReplacer Planning Module
 # Contains session host planning and inventory functions
 
-# Import Core and Deployment utilities
-Import-Module "$PSScriptRoot\SessionHostReplacer.Core.psm1" -Force
-Import-Module "$PSScriptRoot\SessionHostReplacer.Deployment.psm1" -Force
-Import-Module "$PSScriptRoot\SessionHostReplacer.ImageManagement.psm1" -Force
-
 #Region Session Host Planning
 
 function Get-ScalingPlanCurrentTarget {

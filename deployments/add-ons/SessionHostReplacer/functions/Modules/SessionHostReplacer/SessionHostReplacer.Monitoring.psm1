@@ -1,9 +1,6 @@
 # SessionHostReplacer Monitoring Module
 # Contains host pool status tagging function
 
-# Import Core utilities
-Import-Module "$PSScriptRoot\SessionHostReplacer.Core.psm1" -Force
-
 #Region Monitoring
 
 function Update-HostPoolStatus {
