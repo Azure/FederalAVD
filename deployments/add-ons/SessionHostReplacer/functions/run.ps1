@@ -293,7 +293,33 @@ $sessionHostParameters += (Read-FunctionAppSetting SessionHostParameters)
 
 # Get latest version of session host image
 Write-LogEntry -Message "Getting latest image version using Image Reference."
-$latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location
+try {
+    $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location
+}
+catch {
+    Write-LogEntry -Message "CRITICAL ERROR: Failed to get latest image version: $($_.Exception.Message)" -Level Error
+    Write-LogEntry -Message "Cannot proceed with replacements - no replicated image versions available in target region" -Level Error
+    Write-LogEntry -Message "This prevents replacing hosts with unreplicated or outdated images" -Level Warning
+    Write-LogEntry -Message "ACTION REQUIRED: Check Azure Compute Gallery replication status for target region: $($sessionHostParameters.Location)" -Level Warning
+    
+    # Update host pool status tag to reflect image availability issue
+    try {
+        Update-HostPoolStatus `
+            -ARMToken $ARMToken `
+            -SessionHosts $sessionHostsFiltered `
+            -RunningDeployments 0 `
+            -FailedDeployments @() `
+            -HostsToReplace 0 `
+            -CachedVMs $cachedVMs
+    }
+    catch {
+        Write-LogEntry -Message "Failed to update host pool status tag: $($_.Exception.Message)" -Level Warning
+    }
+    
+    Write-LogEntry -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o')
+    Write-LogEntry -Message "SessionHostReplacer function exiting - no replicated image versions available"
+    return
+}
 
 # Read AllowImageVersionRollback setting with default of false
 $allowImageVersionRollback = Read-FunctionAppSetting AllowImageVersionRollback -AsBoolean
