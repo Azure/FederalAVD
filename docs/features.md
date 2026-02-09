@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Design**](design.md) | [**Get Started**](quickStart.md) | [**Artifacts Guide**](artifacts-guide.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md)
+[**Home**](../README.md) | [**Host Pool Deployment**](HOSTPOOL-DEPLOYMENT.md) | [**Image Build Guide**](IMAGE-BUILD.md) | [**Design**](design.md) | [**Get Started**](quickStart.md) | [**Artifacts Guide**](artifacts-guide.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md)
 
 # Features
 

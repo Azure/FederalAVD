@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Design**](design.md) | [**Features**](features.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md)
+[**Home**](../README.md) | [**Host Pool Deployment**](HOSTPOOL-DEPLOYMENT.md) | [**Image Build Guide**](IMAGE-BUILD.md) | [**Design**](design.md) | [**Features**](features.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md)
 
 # Quickstart Guide
 
@@ -48,8 +48,8 @@ There are several Azure resource prerequisites that are required to run this dep
   The deployment of the custom image build option and session host customizations depends on software packages and scripts (called **artifacts**) that must be hosted in Azure Blob storage. This approach satisfies Zero Trust principles by eliminating the need for session hosts to have direct internet access for software downloads.
   
   **Artifacts** are PowerShell scripts and installers packaged into folders that can be executed during:
-  - Custom image builds (via Azure Image Builder)
-  - Session host post-deployment configuration (via Custom Script Extension)
+  - Custom image builds (via VM Run Commands)
+  - Session host post-deployment configuration (via VM Run Commands)
   
   This repo contains the `Deploy-ImageManagement.ps1` helper script that:
   - Deploys the required Azure resources (storage account, compute gallery, managed identity)

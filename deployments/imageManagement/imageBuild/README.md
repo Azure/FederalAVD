@@ -108,10 +108,12 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
 ### Optional Resources
 
 5. **Private DNS Zones** (Private Endpoints)
+
    - `privatelink.blob.core.windows.net` (Azure Commercial)
    - `privatelink.blob.core.usgovcloudapi.net` (Azure Government)
 
 6. **Remote Compute Gallery** (Disaster Recovery)
+
    - Second gallery in different region
    - For multi-region image distribution
 

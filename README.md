@@ -1,50 +1,274 @@
-[**Design**](docs/design.md) | [**Features**](docs/features.md) | [**Get Started**](docs/quickStart.md) | [**Limitations**](docs/limitations.md) | [**Troubleshooting**](docs/troubleshooting.md) | [**Parameters**](docs/parameters.md)
+# 🖥️ Federal Azure Virtual Desktop Automation
 
-# Federal Azure Virtual Desktop Automation
+> **Enterprise-grade Azure Virtual Desktop deployment automation for Azure Commercial, Government, Secret, and Top Secret clouds**
 
-With this solution, you can deploy:
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Azure](https://img.shields.io/badge/Azure-AVD-0078D4?logo=microsoft-azure)](https://azure.microsoft.com/services/virtual-desktop/)
 
-1. One (1) or more fully operational Azure Virtual Desktop hostpools - either pooled or personal.
-2. Image management capability with artifact-based software deployment.
-3. Custom Image build automation solution.
+---
 
-The code and automation capabilities of this repo can be used to deploy these capabilities in Azure Commercial, Azure US Government, **Azure Government Secret**, and **Azure Government Top Secret** environments. The code is designed to allow you to deploy in compliance with Microsoft's [Zero Trust principles](https://learn.microsoft.com/security/zero-trust/azure-infrastructure-avd) and [IL5 Isolation Guidance](https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5).
+## 📋 Overview
 
-The code is idempotent to allow all resources deployed via this solution to be redeployed without conflicts when the same parameters are used. The [resource organization](docs/design.md) follows CAF guidance and by changing the `identifier` parameter and/or the deployment location of the host pool deployment, you can deploy multiple host pools while sharing many resources to create an enterprise ready AVD solution including regional disaster recovery capabilities. Many of the [common features](docs/features.md) used with AVD have been automated in this solution for your convenience.
+The Federal AVD solution provides comprehensive automation for deploying and managing Azure Virtual Desktop environments across all Azure cloud environments with built-in Zero Trust security controls, multi-cloud support, and enterprise-scale capabilities.
 
-## Add-Ons
+### What You Can Deploy
 
-Optional add-ons extend the base AVD deployment with advanced lifecycle management and automation capabilities:
+| Component | Description | Documentation |
+|-----------|-------------|---------------|
+| 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/HOSTPOOL-DEPLOYMENT.md) |
+| 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/IMAGE-BUILD.md) |
+| 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifacts-guide.md) |
+| 🔧 **Add-Ons** | Lifecycle automation and operational tools | [Add-Ons](#-add-ons) |
 
-- **[Storage Quota Manager](deployments/add-ons/StorageQuotaManager/readme.md)** - Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage
-- **[Session Host Replacer](deployments/add-ons/SessionHostReplacer/readme.md)** - Automatically replaces session hosts when new images are available with zero-downtime rolling updates
-- **[Run Commands on VMs](deployments/add-ons/RunCommandsOnVms/readme.md)** - Execute one or multiple scripts on selected virtual machines from a resource group
-- **[Update Storage Account Key on Session Hosts](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md)** - Update FSLogix storage account keys on session hosts to support Entra ID-only identities with FSLogix
+### Cloud Environment Support
 
-For more details, see the [Features - Add-Ons](docs/features.md#add-ons) section.
+✅ **Azure Commercial** • ✅ **Azure Government** • ✅ **Azure Government Secret** • ✅ **Azure Government Top Secret**
 
-## Quick Start
+---
 
-For detailed step by step instructions to deploy the solution components including the prerequisites, see the [Quick Start Guide](docs/quickStart.md).
+## 🚀 Quick Start
 
-## Contributing
+### Prerequisites
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
+Before you begin, ensure you have:
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+- **Required**: Azure subscription with Owner or Contributor + User Access Administrator roles
+- **Required**: Virtual network with subnet for session hosts
+- **Required**: Microsoft Entra ID or Active Directory Domain Services
+- **Required**: Security group for AVD users
+- **Optional**: Image Management resources (see below)
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+**👉 [Complete Prerequisites Guide](docs/quickStart.md#prerequisites)**
 
-## Trademarks
+### Deployment Path
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
+Choose your deployment approach based on your needs:
+
+```mermaid
+graph TD
+    A[Start] --> B{Need Custom<br/>Software?}
+    B -->|Yes| C[📦 Deploy Image<br/>Management]
+    B -->|No| D[🏢 Deploy Host Pool<br/>with Marketplace Image]
+    C --> E{Build Custom<br/>Image?}
+    E -->|Yes| F[🎨 Build Custom Image]
+    E -->|No| G[🏢 Deploy Host Pool<br/>with Customizations]
+    F --> H[🏢 Deploy Host Pool<br/>with Custom Image]
+    D --> I[✅ Complete]
+    G --> I
+    H --> I
+```
+
+### Step-by-Step
+
+#### 1️⃣ Deploy Image Management (If Using Custom Software)
+
+Image Management provides centralized storage for software artifacts used during image builds or session host deployments.
+
+**Required for:**
+
+- Custom image builds with software installation
+- Session host post-deployment customizations
+- Air-gapped cloud deployments
+
+**Deploy using the PowerShell helper script:**
+
+```powershell
+cd deployments
+.\Deploy-ImageManagement.ps1 -DeployImageManagementResources -Location "East US 2"
+```
+
+📚 **Documentation:**
+
+- [Artifacts & Image Management Guide](docs/artifacts-guide.md) - Understand the artifact system
+- [Deploy-ImageManagement Script Guide](docs/Deploy-ImageManagement-README.md) - Script parameters and usage
+- [Creating Custom Artifacts](docs/artifacts-guide.md#creating-custom-artifact-packages) - Build your own software packages
+
+#### 2️⃣ Build Custom Image (Optional)
+
+Automated custom image building for standardized, pre-configured session host images.
+
+**Benefits:**
+
+- Faster session host deployment
+- Consistent configuration across hosts
+- Pre-installed software and settings
+- Reduced runtime customizations
+
+```powershell
+cd deployments
+.\Invoke-ImageBuilds.ps1 -Location "East US 2" -ParameterFilePrefixes @('demo')
+```
+
+📚 **[Image Build Guide](docs/IMAGE-BUILD.md)** - Complete image building documentation
+
+#### 3️⃣ Deploy Host Pool
+
+Deploy a complete AVD environment with session hosts, storage, networking, and monitoring.
+
+**Deployment Methods:**
+
+- 🖱️ **Azure Portal** - Use Template Specs with UI form
+- 💻 **PowerShell/Azure CLI** - Command-line deployment with parameter files
+- 🔘 **GitHub Deploy Button** - Quick deployment from repository (Commercial cloud only)
+
+📚 **[Host Pool Deployment Guide](docs/HOSTPOOL-DEPLOYMENT.md)** - Complete deployment documentation
+
+---
+
+## 🏗️ Architecture Components
+
+### Core Components
+
+#### Image Management Resources
+
+Central storage and management for software artifacts. **Required** for custom image builds or session host customizations.
+
+**Resources Created:**
+
+- 🗄️ Storage Account with blob container for artifacts
+- 🆔 Managed Identity with RBAC for secure access
+- 🖼️ Compute Gallery for custom images
+- 🔐 Private endpoints (optional, for Zero Trust)
+
+**Learn More:**
+
+- [Artifacts & Image Management Guide](docs/artifacts-guide.md)
+- [Deploy-ImageManagement Script](docs/Deploy-ImageManagement-README.md)
+
+#### Custom Image Building
+
+Automated custom image build pipeline with artifact-based customizations.
+
+**Features:**
+
+- Automated software installation from artifacts
+- Windows Updates and optimizations
+- Supports marketplace or custom base images
+- Regional image replication
+- Build automation with PowerShell script
+
+**Learn More:**
+
+- [Image Build Guide](docs/IMAGE-BUILD.md)
+
+#### Host Pool Deployment
+
+Complete AVD environment deployment with enterprise features.
+
+**What's Included:**
+
+- AVD host pool, workspace, and application groups
+- Session host virtual machines (pooled or personal)
+- FSLogix profile storage (Azure Files or NetApp Files)
+- Monitoring with Log Analytics and Application Insights
+- Key Vault for secrets management
+- Private endpoints and network security (Zero Trust)
+- Backup and recovery configuration
+
+**Learn More:**
+
+- [Host Pool Deployment Guide](docs/HOSTPOOL-DEPLOYMENT.md)
+- [Features](docs/features.md)
+- [Design](docs/design.md)
+
+---
+
+## 🔧 Add-Ons
+
+Optional add-ons extend the base AVD deployment with advanced lifecycle management and operational automation:
+
+| Add-On | Purpose | Documentation |
+|--------|---------|---------------|
+| 🔄 **Session Host Replacer** | Automates rolling replacement of session hosts when new images are available with zero-downtime updates | [Session Host Replacer](deployments/add-ons/SessionHostReplacer/readme.md) |
+| 📊 **Storage Quota Manager** | Monitors and automatically increases Azure Files Premium share quotas for FSLogix storage | [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/readme.md) |
+| 🔑 **Update Storage Keys** | Updates FSLogix storage account keys on session hosts for Entra ID-only deployments | [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md) |
+| 📝 **Run Commands on VMs** | Execute scripts on selected virtual machines from a resource group | [Run Commands](deployments/add-ons/RunCommandsOnVms/readme.md) |
+
+---
+
+## 🔒 Zero Trust Security
+
+This solution is architected to align with [Microsoft's Zero Trust principles for Azure Virtual Desktop](https://learn.microsoft.com/security/zero-trust/azure-infrastructure-avd):
+
+### Security Controls
+
+| Layer | Capability |
+|-------|------------|
+| **🌐 Network** | Private endpoints, no public IPs, network segmentation |
+| **🔐 Identity** | Managed identities, Entra ID authentication, conditional access |
+| **📁 Data** | Customer-managed keys, encryption at rest/transit, private connectivity |
+| **🎯 Access** | RBAC least privilege, Azure Policy enforcement, user assignment restrictions |
+| **📊 Monitoring** | Centralized logging, diagnostic data collection, threat detection |
+| **⚙️ Configuration** | Immutable infrastructure, artifact-based deployment, integrity verification |
+
+**[Zero Trust Architecture Details](docs/features.md#zero-trust-architecture)**
+
+---
+
+## 🌍 Identity Solutions
+
+Support for multiple identity configurations to meet organizational requirements:
+
+| Identity Solution | Description | Use Case |
+|------------------|-------------|----------|
+| **Active Directory Domain Services** | Traditional hybrid identity with AD domain join | Enterprise hybrid environments with on-premises AD |
+| **Entra Domain Services** | Managed domain services in Azure | Cloud-focused without on-premises AD infrastructure |
+| **Entra Kerberos (Hybrid)** | Entra ID-joined hosts with AD user accounts | Modernizing while maintaining AD user accounts |
+| **Entra Kerberos (Cloud-Only)** | Entra ID users with Kerberos authentication | Cloud-native with Kerberos for FSLogix |
+| **Entra ID** | Pure cloud identity solution | Fully cloud-native deployments |
+
+**[Identity Solutions Details](docs/features.md#identity-solutions)**
+
+---
+
+## 📚 Documentation
+
+### Getting Started
+
+- 📖 [Quick Start Guide](docs/quickStart.md) - Step-by-step deployment instructions
+- 🏗️ [Design](docs/design.md) - Architecture and resource organization
+- ⚙️ [Parameters Reference](docs/parameters.md) - Complete parameter documentation
+
+### Deployment Guides
+
+- 🏢 [Host Pool Deployment](docs/HOSTPOOL-DEPLOYMENT.md) - Deploy AVD host pools
+- 🎨 [Image Build Guide](docs/IMAGE-BUILD.md) - Build custom images
+- 📦 [Artifacts & Image Management](docs/artifacts-guide.md) - Software artifact system
+- 🔧 [Deploy-ImageManagement Script](docs/Deploy-ImageManagement-README.md) - Script usage guide
+
+### Advanced Topics
+
+- ✨ [Features](docs/features.md) - Detailed feature descriptions
+- 🚫 [Limitations](docs/limitations.md) - Known limitations and workarounds
+- 🔧 [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
+- 🔐 [Entra Kerberos Setup](docs/entraKerberosCloudOnly.md) - Kerberos configuration
+- 🌐 [Air-Gapped Clouds](docs/imageAir-GappedCloud.md) - Secret/Top Secret deployment
+
+### Add-Ons
+
+- 🔄 [Session Host Replacer](deployments/add-ons/SessionHostReplacer/readme.md)
+- 📊 [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/readme.md)
+- 🔑 [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md)
+- 📝 [Run Commands on VMs](deployments/add-ons/RunCommandsOnVms/readme.md)
+
+---
+
+## 🤝 Contributing
+
+This project welcomes contributions and suggestions. Most contributions require you to agree to a Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us the rights to use your contribution.
+
+When you submit a pull request, a CLA bot will automatically determine whether you need to provide a CLA and decorate the PR appropriately. Simply follow the instructions provided by the bot.
+
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with questions or comments.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## ™️ Trademarks
+
+This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/legal/intellectualproperty/trademarks/usage/general). Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party's policies.

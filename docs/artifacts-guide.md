@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Design**](design.md) | [**Features**](features.md) | [**Deploy-ImageManagement Script**](Deploy-ImageManagement-README.md) | [**Parameters**](parameters.md)
+[**Home**](../README.md) | [**Host Pool Deployment**](HOSTPOOL-DEPLOYMENT.md) | [**Image Build Guide**](IMAGE-BUILD.md) | [**Quick Start**](quickStart.md) | [**Design**](design.md) | [**Features**](features.md) | [**Deploy-ImageManagement Script**](Deploy-ImageManagement-README.md) | [**Parameters**](parameters.md)
 
 # Artifacts and Image Management Guide
 

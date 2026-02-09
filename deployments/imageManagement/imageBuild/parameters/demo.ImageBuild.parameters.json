@@ -1,0 +1,224 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "value": "eastus2"
+        },
+        "deploymentPrefix": {
+            "value": ""
+        },
+        "nameConvResTypeAtEnd": {
+            "value": false
+        },
+        "computeGalleryResourceId": {
+            "value": "/subscriptions/67edfd17-f0d1-466a-aacb-ca9daeabb9b8/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/galleries/gal_avd_image_management_use2"
+        },
+        "artifactsContainerUri": {
+            "value": "https://saimageassetsuse2ao2v2p2.blob.core.windows.net/artifacts"
+        },
+        "userAssignedIdentityResourceId": {
+            "value": "/subscriptions/67edfd17-f0d1-466a-aacb-ca9daeabb9b8/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-use2"
+        },
+        "subnetResourceId": {
+            "value": "/subscriptions/67edfd17-f0d1-466a-aacb-ca9daeabb9b8/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/snet-avd-imagebuilds"
+        },
+        "imageBuildResourceGroupId": {
+            "value": "/subscriptions/67edfd17-f0d1-466a-aacb-ca9daeabb9b8/resourceGroups/rg-avd-image-builds-use2"
+        },
+        "customBuildResourceGroupName": {
+            "value": ""
+        },
+        "customSourceImageResourceId": {
+            "value": ""
+        },
+        "mpPublisher": {
+            "value": "MicrosoftWindowsDesktop"
+        },
+        "mpOffer": {
+            "value": "windows-11"
+        },
+        "mpSku": {
+            "value": "win11-25h2-avd"
+        },
+        "encryptionAtHost": {
+            "value": true
+        },
+        "vmSize": {
+            "value": "Standard_D4ads_v6"
+        },
+        "appsToRemove": {
+            "value": [
+                "Microsoft.BingNews",
+                "Microsoft.BingSearch",
+                "Microsoft.BingWeather",
+                "Microsoft.Edge.GameAssist",
+                "Microsoft.GamingApp",
+                "Microsoft.GetHelp",
+                "Microsoft.Getstarted",
+                "Microsoft.Messaging",
+                "Microsoft.Microsoft3DViewer",
+                "Microsoft.MicrosoftSolitaireCollection",
+                "Microsoft.MixedReality.Portal",
+                "Microsoft.Office.OneNote",
+                "Microsoft.OutlookForWindows",
+                "Microsoft.Outlook.DesktopIntegrationServices",
+                "Microsoft.OneConnect",
+                "Microsoft.People",
+                "Microsoft.PowerAutomateDesktop",
+                "Microsoft.SkypeApp",
+                "Microsoft.Todos",
+                "Microsoft.Wallet",
+                "Microsoft.WindowsAlarms",
+                "Microsoft.WindowsCamera",
+                "microsoft.windowscommunicationsapps",
+                "Microsoft.WindowsFeedbackHub",
+                "Microsoft.WindowsMaps",
+                "Microsoft.WindowsSoundRecorder",
+                "Microsoft.Xbox.TCUI",
+                "Microsoft.XboxApp",
+                "Microsoft.XboxGameOverlay",
+                "Microsoft.XboxGamingOverlay",
+                "Microsoft.XboxIdentityProvider",
+                "Microsoft.XboxSpeechToTextOverlay",
+                "Microsoft.YourPhone",
+                "Microsoft.ZuneMusic",
+                "Microsoft.ZuneVideo",
+                "MicrosoftCorporationII.QuickAssist"
+            ]
+        },
+        "downloadLatestMicrosoftContent": {
+            "value": false
+        },
+        "installFsLogix": {
+            "value": true
+        },
+        "office365AppsToInstall": {
+            "value": [
+                "Access",
+                "Excel",
+                "OneNote",
+                "Outlook",
+                "PowerPoint",
+                "Word"
+            ]
+        },
+        "installOneDrive": {
+            "value": true
+        },
+        "installTeams": {
+            "value": true
+        },
+        "teamsCloudType": {
+            "value": "GCCH"
+        },
+        "applyWindowsDesktopOptimizations": {
+            "value": true
+        },
+        "customizations": {
+            "value": [
+                {
+                    "name": "AzCli",
+                    "blobNameOrUri": "AzCLI.zip"
+                },
+                {
+                    "name": "Powershell7",
+                    "blobNameOrUri": "Powershell.msi"
+                }
+            ]
+        },
+        "vdiCustomizations": {
+            "value": []
+        },
+        "cleanupDesktop": {
+            "value": true
+        },
+        "collectCustomizationLogs": {
+            "value": true
+        },
+        "logStorageAccountNetworkAccess": {
+            "value": "PublicEndpoint"
+        },
+        "installUpdates": {
+            "value": true
+        },
+        "updateService": {
+            "value": "MU"
+        },
+        "wsusServer": {
+            "value": ""
+        },
+        "blobPrivateDnsZoneResourceId": {
+            "value": ""
+        },
+        "privateEndpointSubnetResourceId": {
+            "value": ""
+        },
+        "imageDefinitionResourceId": {
+            "value": "/subscriptions/67edfd17-f0d1-466a-aacb-ca9daeabb9b8/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/galleries/gal_avd_image_management_use2/images/vmid-MicrosoftWindowsDesktop-windows11-win1125h2avd"
+        },
+        "customImageDefinitionName": {
+            "value": ""
+        },
+        "imageDefinitionPublisher": {
+            "value": ""
+        },
+        "imageDefinitionOffer": {
+            "value": ""
+        },
+        "imageDefinitionSku": {
+            "value": ""
+        },
+        "imageDefinitionIsAcceleratedNetworkSupported": {
+            "value": false
+        },
+        "imageDefinitionIsHibernateSupported": {
+            "value": false
+        },
+        "imageDefinitionIsHigherStoragePerformanceSupported": {
+            "value": false
+        },
+        "imageDefinitionSecurityType": {
+            "value": "Standard"
+        },
+        "imageMajorVersion": {
+            "value": -1
+        },
+        "imageMinorVersion": {
+            "value": -1
+        },
+        "imagePatch": {
+            "value": -1
+        },
+        "imageVersionEOLinDays": {
+            "value": 0
+        },
+        "imageVersionDefaultReplicaCount": {
+            "value": 10
+        },
+        "imageVersionDefaultStorageAccountType": {
+            "value": "Standard_LRS"
+        },
+        "imageVersionExcludeFromLatest": {
+            "value": false
+        },
+        "imageVersionTargetRegions": {
+            "value": []
+        },
+        "remoteComputeGalleryResourceId": {
+            "value": ""
+        },
+        "remoteImageVersionExcludeFromLatest": {
+            "value": false
+        },
+        "remoteImageVersionDefaultReplicaCount": {
+            "value": 1
+        },
+        "remoteImageVersionStorageAccountType": {
+            "value": "Standard_LRS"
+        },
+        "tags": {
+            "value": {}
+        }
+    }
+}

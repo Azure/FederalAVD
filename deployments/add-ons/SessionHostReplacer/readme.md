@@ -378,6 +378,14 @@ The deployment creates or uses an existing Function App:
 
 ## Deployment
 
+### Quick Deploy
+
+Click the button for your target cloud to open the deployment UI in Azure Portal:
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2FuiFormDefinition.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2FuiFormDefinition.json)
+
+**⚠️ Note:** For Air-Gapped clouds (Secret/Top Secret), use Template Specs or PowerShell deployment methods. See [DEPLOY.md](DEPLOY.md) for detailed deployment instructions.
+
 ### Brownfield Deployments
 
 **The Session Host Replacer is fully brownfield-compatible** and can be deployed to manage any existing AVD host pool, regardless of how it was originally deployed (Azure Portal, Terraform, ARM/Bicep, etc.).

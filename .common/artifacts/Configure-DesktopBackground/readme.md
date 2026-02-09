@@ -47,10 +47,10 @@ This PowerShell script configures a custom desktop background image for Azure Vi
 ### Deployment Scenarios
 
 **Image Customization:**
-Used during Azure Image Builder (AIB) customization phase
+Used during custom image build via VM Run Commands
 
 **Session Host Deployment:**
-Applied via Custom Script Extension during VM deployment
+Applied via VM Run Commands during session host deployment
 
 **Manual Configuration:**
 Run directly on session hosts with Administrator privileges
