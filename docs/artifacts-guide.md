@@ -1214,8 +1214,12 @@ Get-ChildItem .\temp\extracted\ -Recurse
 
 **Image Build:**
 
+If you enabled `collectCustomizationLogs` during deployment, all logs are automatically saved to blob storage in the `image-customization-logs` container. See the [Image Build Guide - Getting Detailed Logs](IMAGE-BUILD.md#getting-detailed-logs) for details on accessing these logs.
+
+Alternatively, you can check logs directly on the build VM during or after the build:
+
 ```powershell
-# On Image Builder VM during build
+# On build VM during image build
 # Each customization creates its own log file
 Get-Content "C:\Windows\Logs\Install-MyApp.log"
 

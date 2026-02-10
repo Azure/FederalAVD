@@ -168,6 +168,8 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 | **replicationRegions** | Regions to replicate image to | `["eastus2", "westus2"]` |
 | **runWindowsUpdate** | Install Windows Updates during build | `true` |
 | **windowsUpdateCategories** | Categories of updates to install | `Critical, Security, UpdateRollup` |
+| **collectCustomizationLogs** | Save customization logs to blob storage | `true` (optional, default: `false`) |
+| **logStorageAccountNetworkAccess** | Network access for log storage account | `PrivateEndpoint`, `ServiceEndpoint`, or `PublicEndpoint` |
 
 ### Image Management Parameters
 
@@ -268,14 +270,42 @@ Monitor the deployment in Azure Portal:
 2. Find your deployment (e.g., `avd-image-build-202602091530`)
 3. Check deployment status and any errors
 
-### Image Builder Status
+### Build VM Status
 
-Check the Image Builder resource:
+Check the build VM and its Run Command executions:
 
-1. Navigate to Resource Group (e.g., `rg-image-management-usgovvirginia`)
-2. Find the Image Template resource (e.g., `it-avd-win11-23h2`)
-3. View **Run History** to see build progress
-4. Check **Customization Log** for detailed artifact execution logs
+1. Navigate to the Resource Group (e.g., `rg-avd-imagebuild-use2`)
+2. Find the build VM (e.g., `vm-avd-build`)
+3. View **Run Commands** to see execution progress
+4. Check Run Command output logs for detailed artifact execution results
+
+### Customization Logs in Blob Storage
+
+The image build solution includes an optional feature to automatically save all customization logs to Azure Blob Storage. This is controlled by the `collectCustomizationLogs` parameter (or the "Collect customization logs in a storage container" checkbox in the Azure Portal UI).
+
+**When enabled:**
+
+- A dedicated storage account is created in the build resource group
+- All Run Command output and error logs are uploaded to a blob container named `image-customization-logs`
+- Logs are automatically retained for **7 days** via lifecycle management policy
+- You can configure network access: **Private Endpoint**, **Service Endpoint**, or **Public Endpoint**
+
+**Log File Naming Convention:**
+
+- Custom artifacts: `{vm-name}-{artifact-name}-output-{timestamp}.log` and `{vm-name}-{artifact-name}-error-{timestamp}.log`
+- Built-in customizations:
+  - `{vm-name}-Remove-AppxPackages-output-{timestamp}.log`
+  - `{vm-name}-FSLogix-output-{timestamp}.log`
+  - `{vm-name}-Office-output-{timestamp}.log`
+  - `{vm-name}-OneDrive-output-{timestamp}.log`
+  - `{vm-name}-Teams-output-{timestamp}.log`
+
+**To access logs:**
+
+1. Navigate to the build resource group
+2. Find the storage account (name starts with `stlogs`)
+3. Open **Storage Browser** > **Blob containers** > **image-customization-logs**
+4. Download or view log files directly in the portal
 
 ### Build Timeline
 
@@ -300,7 +330,7 @@ Typical build duration: **45-90 minutes** depending on:
 
 - Check artifact PowerShell script for errors
 - Verify blob storage access (managed identity permissions)
-- Review customization logs in Image Builder
+- Review Run Command output logs on the build VM
 - Test artifact locally on a test VM first
 
 #### Issue: Windows Updates Timeout
@@ -336,7 +366,28 @@ Typical build duration: **45-90 minutes** depending on:
 
 ### Getting Detailed Logs
 
-**Build VM Run Command Logs:**
+**Option 1: Blob Storage Logs (Recommended)**
+
+If you enabled the `collectCustomizationLogs` parameter during deployment:
+
+```powershell
+# List all customization logs
+$buildRg = "rg-avd-imagebuild-use2"
+$storageAccount = Get-AzStorageAccount -ResourceGroupName $buildRg | Where-Object {$_.StorageAccountName -like "stlogs*"}
+$ctx = $storageAccount.Context
+
+# List all logs in the container
+Get-AzStorageBlob -Container "image-customization-logs" -Context $ctx | Select-Object Name, LastModified, Length
+
+# Download a specific log
+Get-AzStorageBlob -Container "image-customization-logs" -Blob "vm-avd-build-Install-MyApp-output-*.log" -Context $ctx | Get-AzStorageBlobContent -Destination "."
+
+# View log content directly
+$blob = Get-AzStorageBlob -Container "image-customization-logs" -Blob "vm-avd-build-FSLogix-output-*.log" -Context $ctx
+$blob.ICloudBlob.DownloadText()
+```
+
+**Option 2: Build VM Run Command Logs**
 
 ```powershell
 # View Run Commands on the build VM
@@ -347,9 +398,9 @@ $buildVm = Get-AzVM -ResourceGroupName $buildRg | Where-Object {$_.Name -like "*
 Get-AzVMRunCommand -ResourceGroupName $buildRg -VMName $buildVm.Name
 ```
 
-**Storage Account Logs:**
+**Artifacts Storage Account Logs:**
 
-- Enable diagnostic logs on storage account
+- Enable diagnostic logs on the artifacts storage account
 - Check for blob download activity
 - Verify managed identity access attempts
 
