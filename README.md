@@ -35,16 +35,15 @@ Ready to deploy? The **[Quick Start Guide](docs/quickStart.md)** walks you throu
 
 ```mermaid
 graph TD
-    A[Start] --> B{Need Custom<br/>Software?}
-    B -->|Yes| C[📦 Deploy Image<br/>Management]
-    B -->|No| D[🏢 Deploy Host Pool<br/>with Marketplace Image]
-    C --> E{Build Custom<br/>Image?}
-    E -->|Yes| F[🎨 Build Custom Image]
-    E -->|No| G[🏢 Deploy Host Pool<br/>with Customizations]
-    F --> H[🏢 Deploy Host Pool<br/>with Custom Image]
-    D --> I[✅ Complete]
-    G --> I
-    H --> I
+    A[Start] --> B{Need Custom<br/>Software or<br/>Configurations?}
+    B -->|Yes| C[📦 Step 1: Deploy<br/>Image Management]
+    B -->|No| D[Use Marketplace<br/>Image]
+    C --> E{Build<br/>Custom Image?}
+    E -->|Yes<br/>Pre-install software| F[🎨 Step 2: Build<br/>Custom Image]
+    E -->|No<br/>Install at runtime| H[🏢 Step 3: Deploy<br/>Host Pool]
+    F --> H
+    D --> H
+    H --> I[✅ Complete]
 ```
 
 ### Deployment Methods
