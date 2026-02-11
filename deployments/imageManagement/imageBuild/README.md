@@ -129,7 +129,7 @@ Use the included PowerShell script to automate prerequisite deployment:
   -PrivateEndpointSubnetResourceId '/subscriptions/.../subnets/endpoints'
 ```
 
-See [Deploy-ImageManagement-README.md](../../docs/Deploy-ImageManagement-README.md) for details.
+See [imageManagementScript.md](../../docs/imageManagementScript.md) for details.
 
 ## Parameters
 
@@ -1240,7 +1240,7 @@ This sets the `endOfLifeDate` property, visible in Azure Portal and queryable vi
 
 ### Related Templates
 
-- [Deploy-ImageManagement.ps1](../../docs/Deploy-ImageManagement-README.md) - Deploy prerequisites
+- [Deploy-ImageManagement.ps1](../../docs/imageManagementScript.md) - Deploy prerequisites
 - [Invoke-ImageBuilds.ps1](../Invoke-ImageBuilds.ps1) - Batch build multiple images
 - [New-TemplateSpecs.ps1](../New-TemplateSpecs.ps1) - Create template specs
 

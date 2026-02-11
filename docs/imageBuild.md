@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](HOSTPOOL-DEPLOYMENT.md) | [**Artifacts Guide**](artifacts-guide.md)
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
 
 # 🎨 Custom Image Build Guide
 
@@ -49,7 +49,7 @@ The Federal AVD solution includes an automated custom image building capability.
 
 Custom image building **requires** the Image Management resources to be deployed first. These resources provide the storage and infrastructure needed for artifacts and image distribution.
 
-**📦 [Deploy Image Management Resources](artifacts-guide.md#deploying-image-management-resources)**
+**📦 [Deploy Image Management Resources](artifactsGuide.md#deploying-image-management-resources)**
 
 The Image Management deployment creates:
 
@@ -62,7 +62,7 @@ The Image Management deployment creates:
 
 Custom images are built by executing **artifacts** during the image build process. Artifacts are packages containing PowerShell scripts and installers stored in Azure Blob Storage.
 
-**📚 [Understanding Artifacts](artifacts-guide.md)**
+**📚 [Understanding Artifacts](artifactsGuide.md)**
 
 **Example artifacts included:**
 
@@ -73,7 +73,7 @@ Custom images are built by executing **artifacts** during the image build proces
 - OneDrive installation
 - Custom software packages
 
-**📝 [Creating Custom Artifacts](artifacts-guide.md#creating-custom-artifact-packages)**
+**📝 [Creating Custom Artifacts](artifactsGuide.md#creating-custom-artifact-packages)**
 
 ### Required - Parameter Files
 
@@ -162,7 +162,7 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 | **sourceImagePublisher** | Base image publisher (marketplace) | `MicrosoftWindowsDesktop` |
 | **sourceImageOffer** | Base image offer | `office-365` |
 | **sourceImageSku** | Base image SKU | `win11-23h2-avd-m365` |
-| **imageVersionName** | Version number for the image | `1.0.0` (auto-incremented) |
+| **imageVersionName** | Version number for the image | Leave blank for automatic timestamp-based versioning (e.g., `2026.0210.1435`), or specify custom version (e.g., `1.0.0`) |
 | **excludeFromLatest** | Exclude this version from 'latest' | `false` |
 | **replicaCount** | Number of replicas per region | `1` |
 | **replicationRegions** | Regions to replicate image to | `["eastus2", "westus2"]` |
@@ -181,6 +181,32 @@ Reference parameters in `<prefix>.imageManagement.parameters.json`:
 | **artifactsStorageAccountResourceId** | Resource ID of storage account |
 | **artifactsUserAssignedIdentityResourceId** | Managed identity for blob access |
 | **computeGalleryResourceId** | Compute Gallery resource ID |
+
+### Automatic Image Versioning
+
+The image build process includes automatic timestamp-based versioning:
+
+**How it works:**
+- If `imageVersionName` is left blank (recommended), the build automatically generates a version number
+- Version format: `YYYY.MMDD.HHMM` (e.g., `2026.0210.1435` for February 10, 2026 at 2:35 PM)
+- Each build gets a unique, sortable version number based on build time
+- Versions are chronologically sortable in the Compute Gallery
+
+**Benefits:**
+- ✅ No manual version management required
+- ✅ Multiple builds per day automatically get unique versions
+- ✅ Build time is captured in the version number
+- ✅ Easy to identify when an image was built
+
+**Custom versioning:**
+- Specify a custom `imageVersionName` value (e.g., `1.0.0`, `2.5.3`) to override automatic versioning
+- Useful for release milestones or semantic versioning requirements
+
+**⚠️ Note about `timeStamp` parameter:**
+- The Bicep template uses a `timeStamp` parameter to generate automatic versions
+- This parameter has a default value of `utcNow()` and should **never be included in parameter files**
+- When downloading parameters from Template Spec UI, remove the `timeStamp` parameter
+- Each deployment automatically generates a fresh timestamp for unique versioning
 
 ---
 
@@ -478,16 +504,16 @@ The Session Host Replacer add-on automatically detects new image versions and re
 
 ## Next Steps
 
-- **[Deploy Host Pool](HOSTPOOL-DEPLOYMENT.md)** - Deploy AVD host pool using your custom image
-- **[Create Custom Artifacts](artifacts-guide.md#creating-custom-artifact-packages)** - Build your own software packages
+- **[Deploy Host Pool](hostpoolDeployment.md)** - Deploy AVD host pool using your custom image
+- **[Create Custom Artifacts](artifactsGuide.md#creating-custom-artifact-packages)** - Build your own software packages
 - **[Session Host Replacer](../deployments/add-ons/SessionHostReplacer/readme.md)** - Automate host replacements on image updates
 
 ---
 
 ## Related Documentation
 
-- 📦 [Artifacts & Image Management Guide](artifacts-guide.md)
-- 🔧 [Deploy-ImageManagement Script](Deploy-ImageManagement-README.md)
-- 🏢 [Host Pool Deployment Guide](HOSTPOOL-DEPLOYMENT.md)
+- 📦 [Artifacts & Image Management Guide](artifactsGuide.md)
+- 🔧 [Deploy-ImageManagement Script](imageManagementScript.md)
+- 🏢 [Host Pool Deployment Guide](hostpoolDeployment.md)
 - 📖 [Quick Start Guide](quickStart.md)
 - ⚙️ [Parameters Reference](parameters.md)

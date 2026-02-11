@@ -15,9 +15,9 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 
 | Component | Description | Documentation |
 |-----------|-------------|---------------|
-| 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/HOSTPOOL-DEPLOYMENT.md) |
-| 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/IMAGE-BUILD.md) |
-| 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifacts-guide.md) |
+| 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpoolDeployment.md) |
+| 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/imageBuild.md) |
+| 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifactsGuide.md) |
 | 🔧 **Add-Ons** | Lifecycle automation and operational tools | [Add-Ons](#-add-ons) |
 
 ### Cloud Environment Support
@@ -39,6 +39,24 @@ Before you begin, ensure you have:
 - **Optional**: Image Management resources (see below)
 
 **👉 [Complete Prerequisites Guide](docs/quickStart.md#prerequisites)**
+
+### 🔒 Air-Gapped Clouds: Deployment Options
+
+> **ℹ️ Azure Secret / Azure Top Secret Users**
+> 
+> Blue Button deployments are not available. Choose from:
+> 
+> **Option A: Template Spec + Portal UI (Recommended for first deployment)**
+> - Guided form experience with validation
+> - Generate parameter files for future use
+> 
+> **Option B: PowerShell/CLI**
+> - Direct deployment with parameter files
+> - No Template Specs required
+> 
+> **💡 Pro Tip:** Deploy once with Template Spec UI, save the parameters, then use PowerShell for future deployments.
+> 
+> **📖 [Template Spec Setup Guide](docs/quickStart.md#-air-gapped-clouds-template-specs-optional-but-recommended)** | **[Air-Gapped Cloud Guide](docs/airGappedClouds.md)**
 
 ### Deployment Path
 
@@ -79,9 +97,9 @@ cd deployments
 
 📚 **Documentation:**
 
-- [Artifacts & Image Management Guide](docs/artifacts-guide.md) - Understand the artifact system
-- [Deploy-ImageManagement Script Guide](docs/Deploy-ImageManagement-README.md) - Script parameters and usage
-- [Creating Custom Artifacts](docs/artifacts-guide.md#creating-custom-artifact-packages) - Build your own software packages
+- [Artifacts & Image Management Guide](docs/artifactsGuide.md) - Understand the artifact system
+- [Deploy-ImageManagement Script Guide](docs/imageManagementScript.md) - Script parameters and usage
+- [Creating Custom Artifacts](docs/artifactsGuide.md#creating-custom-artifact-packages) - Build your own software packages
 
 #### 2️⃣ Build Custom Image (Optional)
 
@@ -99,7 +117,7 @@ cd deployments
 .\Invoke-ImageBuilds.ps1 -Location "East US 2" -ParameterFilePrefixes @('demo')
 ```
 
-📚 **[Image Build Guide](docs/IMAGE-BUILD.md)** - Complete image building documentation
+📚 **[Image Build Guide](docs/imageBuild.md)** - Complete image building documentation
 
 #### 3️⃣ Deploy Host Pool
 
@@ -107,11 +125,11 @@ Deploy a complete AVD environment with session hosts, storage, networking, and m
 
 **Deployment Methods:**
 
-- 🖱️ **Azure Portal** - Use Template Specs with UI form
-- 💻 **PowerShell/Azure CLI** - Command-line deployment with parameter files
-- 🔘 **GitHub Deploy Button** - Quick deployment from repository (Commercial cloud only)
+- 🖱️ **Azure Portal (Template Specs)** - UI form deployment *(Recommended for air-gapped clouds)*
+- 💻 **PowerShell/Azure CLI** - Command-line deployment with parameter files *(Works in all clouds)*
+- 🔘 **GitHub Deploy Button** - Quick deployment *(Commercial & Government clouds only)*
 
-📚 **[Host Pool Deployment Guide](docs/HOSTPOOL-DEPLOYMENT.md)** - Complete deployment documentation
+📚 **[Host Pool Deployment Guide](docs/hostpoolDeployment.md)** - Complete deployment documentation
 
 ---
 
@@ -132,8 +150,8 @@ Central storage and management for software artifacts. **Required** for custom i
 
 **Learn More:**
 
-- [Artifacts & Image Management Guide](docs/artifacts-guide.md)
-- [Deploy-ImageManagement Script](docs/Deploy-ImageManagement-README.md)
+- [Artifacts & Image Management Guide](docs/artifactsGuide.md)
+- [Deploy-ImageManagement Script](docs/imageManagementScript.md)
 
 #### Custom Image Building
 
@@ -149,7 +167,7 @@ Automated custom image build pipeline with artifact-based customizations.
 
 **Learn More:**
 
-- [Image Build Guide](docs/IMAGE-BUILD.md)
+- [Image Build Guide](docs/imageBuild.md)
 
 #### Host Pool Deployment
 
@@ -167,7 +185,7 @@ Complete AVD environment deployment with enterprise features.
 
 **Learn More:**
 
-- [Host Pool Deployment Guide](docs/HOSTPOOL-DEPLOYMENT.md)
+- [Host Pool Deployment Guide](docs/hostpoolDeployment.md)
 - [Features](docs/features.md)
 - [Design](docs/design.md)
 
@@ -231,10 +249,10 @@ Support for multiple identity configurations to meet organizational requirements
 
 ### Deployment Guides
 
-- 🏢 [Host Pool Deployment](docs/HOSTPOOL-DEPLOYMENT.md) - Deploy AVD host pools
-- 🎨 [Image Build Guide](docs/IMAGE-BUILD.md) - Build custom images
-- 📦 [Artifacts & Image Management](docs/artifacts-guide.md) - Software artifact system
-- 🔧 [Deploy-ImageManagement Script](docs/Deploy-ImageManagement-README.md) - Script usage guide
+- 🏢 [Host Pool Deployment](docs/hostpoolDeployment.md) - Deploy AVD host pools
+- 🎨 [Image Build Guide](docs/imageBuild.md) - Build custom images
+- 📦 [Artifacts & Image Management](docs/artifactsGuide.md) - Software artifact system
+- 🔧 [Deploy-ImageManagement Script](docs/imageManagementScript.md) - Script usage guide
 
 ### Advanced Topics
 
@@ -242,7 +260,7 @@ Support for multiple identity configurations to meet organizational requirements
 - 🚫 [Limitations](docs/limitations.md) - Known limitations and workarounds
 - 🔧 [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 - 🔐 [Entra Kerberos Setup](docs/entraKerberosCloudOnly.md) - Kerberos configuration
-- 🌐 [Air-Gapped Clouds](docs/imageAir-GappedCloud.md) - Secret/Top Secret deployment
+- 🌐 [Air-Gapped Clouds](docs/airGappedClouds.md) - Secret/Top Secret deployment
 
 ### Add-Ons
 

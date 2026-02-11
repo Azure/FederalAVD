@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Host Pool Deployment**](HOSTPOOL-DEPLOYMENT.md) | [**Image Build Guide**](IMAGE-BUILD.md) | [**Quick Start**](quickStart.md) | [**Design**](design.md) | [**Features**](features.md) | [**Deploy-ImageManagement Script**](Deploy-ImageManagement-README.md) | [**Parameters**](parameters.md)
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
 
 # Artifacts and Image Management Guide
 
@@ -1214,7 +1214,7 @@ Get-ChildItem .\temp\extracted\ -Recurse
 
 **Image Build:**
 
-If you enabled `collectCustomizationLogs` during deployment, all logs are automatically saved to blob storage in the `image-customization-logs` container. See the [Image Build Guide - Getting Detailed Logs](IMAGE-BUILD.md#getting-detailed-logs) for details on accessing these logs.
+If you enabled `collectCustomizationLogs` during deployment, all logs are automatically saved to blob storage in the `image-customization-logs` container. See the [Image Build Guide - Getting Detailed Logs](imageBuild.md#getting-detailed-logs) for details on accessing these logs.
 
 Alternatively, you can check logs directly on the build VM during or after the build:
 
@@ -1253,7 +1253,7 @@ Get-Content "C:\WindowsAzure\Logs\Plugins\Microsoft.CPlat.Core.RunCommandWindows
 If you encounter issues not covered here:
 
 1. **Check existing documentation:**
-   - [Deploy-ImageManagement Script Guide](Deploy-ImageManagement-README.md)
+   - [Deploy-ImageManagement Script Guide](imageManagementScript.md)
    - [Troubleshooting Guide](troubleshooting.md)
    - [Quick Start Guide](quickStart.md)
 
@@ -1274,10 +1274,10 @@ If you encounter issues not covered here:
 
 ## Related Documentation
 
-- [Deploy-ImageManagement Script Guide](Deploy-ImageManagement-README.md) - Detailed script documentation
+- [Deploy-ImageManagement Script Guide](imageManagementScript.md) - Detailed script documentation
 - [Quick Start Guide](quickStart.md) - Complete deployment walkthrough
 - [Parameters Reference](parameters.md) - All deployment parameters
-- [Air-Gapped Cloud Guide](imageAir-GappedCloud.md) - Special considerations for air-gapped environments
+- [Air-Gapped Cloud Guide](airGappedClouds.md) - Special considerations for air-gapped environments
 
 ---
 

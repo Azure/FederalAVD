@@ -1,4 +1,6 @@
-[**Home**](../README.md) | [**Design**](design.md) | [**Get Started**](quickStart.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md)
+↩ **Back to:** [Host Pool Deployment](hostpoolDeployment.md)
+
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
 
 # Entra Kerberos for Azure Files (Hybrid)
 

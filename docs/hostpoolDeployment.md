@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Image Build Guide**](IMAGE-BUILD.md) | [**Artifacts Guide**](artifacts-guide.md)
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
 
 # 🏢 Host Pool Deployment Guide
 
@@ -61,7 +61,7 @@ Before deploying a host pool, ensure you have completed these prerequisites from
 
 If you plan to use custom images or run post-deployment customizations, deploy Image Management resources first:
 
-**📦 [Image Management Prerequisites](artifacts-guide.md)**
+**📦 [Image Management Prerequisites](artifactsGuide.md)**
 
 **Required for:**
 
@@ -78,7 +78,7 @@ If you plan to use custom images or run post-deployment customizations, deploy I
 
 If building custom images with pre-installed software:
 
-**🎨 [Image Build Guide](IMAGE-BUILD.md)**
+**🎨 [Image Build Guide](imageBuild.md)**
 
 ---
 
@@ -246,7 +246,7 @@ Run post-deployment scripts on session hosts using the `sessionHostCustomization
 }
 ```
 
-**⚠️ Requires Image Management resources** - See [Artifacts Guide](artifacts-guide.md)
+**⚠️ Requires Image Management resources** - See [Artifacts Guide](artifactsGuide.md)
 
 #### Storage Configuration
 
@@ -612,8 +612,8 @@ Automatically monitor and increase Azure Files Premium quotas:
 
 ## Next Steps
 
-- **[Image Build Guide](IMAGE-BUILD.md)** - Build custom images for faster deployments
-- **[Artifacts Guide](artifacts-guide.md)** - Create custom software packages
+- **[Image Build Guide](imageBuild.md)** - Build custom images for faster deployments
+- **[Artifacts Guide](artifactsGuide.md)** - Create custom software packages
 - **[Session Host Replacer](../deployments/add-ons/SessionHostReplacer/readme.md)** - Automate host updates
 - **[Features](features.md)** - Explore advanced features
 - **[Troubleshooting](troubleshooting.md)** - Resolve common issues
@@ -757,7 +757,6 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
    - Save the file
 
 4. **Use for future deployments:**
-
    ```powershell
    # Option 1: Use descriptive name based on environment/identifier
    $identifier = "prod"  # or extract from parameter file name

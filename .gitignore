@@ -5,3 +5,4 @@
 *.zip
 temp/**
 **/parameters/m365x*
+**/uploadedFileVersionInfo.txt

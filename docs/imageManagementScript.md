@@ -1,4 +1,6 @@
-[**Home**](../README.md) | [**Host Pool Deployment**](HOSTPOOL-DEPLOYMENT.md) | [**Image Build Guide**](IMAGE-BUILD.md) | [**Quick Start**](quickStart.md) | [**Design**](design.md) | [**Features**](features.md) | [**Artifacts Guide**](artifacts-guide.md) | [**Limitations**](limitations.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md)
+↩ **Back to:** [Quick Start](quickStart.md)
+
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
 
 # Deploy-ImageManagement.ps1 Script Guide
 
@@ -206,7 +208,7 @@ The script processes the `.common/artifacts` directory:
 
 Each subdirectory becomes a compressed zip file uploaded to blob storage.
 
-**For comprehensive documentation on creating custom artifacts, script requirements, and best practices, see the [Artifacts and Image Management Guide](artifacts-guide.md).**
+**For comprehensive documentation on creating custom artifacts, script requirements, and best practices, see the [Artifacts and Image Management Guide](artifactsGuide.md).**
 
 ## File Version Tracking
 
@@ -326,7 +328,7 @@ Get-AzStorageAccount -ResourceGroupName $ResourceGroup -Name $StorageAccountName
 
 - [Quick Start Guide](quickStart.md) - Complete deployment walkthrough
 - [Parameters Documentation](parameters.md) - Detailed parameter reference
-- [Air-Gapped Cloud Guide](imageAir-GappedCloud.md) - Special considerations for air-gapped environments
+- [Air-Gapped Cloud Guide](airGappedClouds.md) - Special considerations for air-gapped environments
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions
 
 ## Support

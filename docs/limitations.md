@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Design**](design.md) | [**Features**](features.md) | [**Quick Start**](quickStart.md) | [**Troubleshooting**](troubleshooting.md) | [**Parameters**](parameters.md)
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
 
 # Solution Limitations
 
