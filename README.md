@@ -49,19 +49,20 @@ graph TD
 
 ### Deployment Methods
 
-All components support multiple deployment methods:
+| Component | Blue Button | Template Spec | PowerShell/CLI |
+|-----------|-------------|---------------|----------------|
+| **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
+| **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Networking** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 
-| Method | Description | Available In |
-|--------|-------------|--------------|
-| **🔵 Blue Button** | One-click portal deployment with pre-populated templates | Commercial, Government |
-| **📋 Template Specs** | Portal UI with form validation and guided configuration | All clouds (including Secret/Top Secret) |
-| **⌨️ PowerShell/CLI** | Command-line automation with parameter files | All clouds |
-
-**💡 Template Spec Benefits:**
-- Guided form experience with built-in validation
-- Generate parameter files for automation
-- Useful for teams unfamiliar with ARM/Bicep
+**💡 About Template Specs:**
+- Provide guided form experience with built-in validation
+- Generate parameter files for automation workflows
+- Useful for teams unfamiliar with ARM/Bicep syntax
 - **Only UI option for air-gapped clouds** (Secret/Top Secret)
+- Not available for image management infrastructure deployment
 
 **👉 [Get Started Now](docs/quickStart.md)** - Complete prerequisites, deployment options, and step-by-step instructions
 

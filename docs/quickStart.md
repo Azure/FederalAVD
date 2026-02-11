@@ -32,17 +32,19 @@ graph TD
 
 ## Deployment Methods
 
-All components support three deployment methods:
+Most components support multiple deployment methods:
 
-| Method | Best For | Clouds |
-|--------|----------|--------|
-| **🔵 Blue Button (Portal UI)** | Quick deployments, visual configuration | Commercial, Government |
-| **📋 Template Spec + Portal UI** | Guided deployments with form validation | All clouds including Secret/Top Secret |
-| **⌨️ Command Line (PowerShell/CLI)** | Automation, CI/CD pipelines, scripting | All clouds |
+| Component | Blue Button | Template Spec | PowerShell/CLI |
+|-----------|-------------|---------------|----------------|
+| **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
+| **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Networking** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 
 > **🔒 Air-Gapped Clouds (Azure Secret/Top Secret):** Blue Button deployments are NOT available. You can use either:
-> - **Template Specs with Portal UI** (recommended for first-time deployment) - Provides guided form experience
-> - **PowerShell/CLI with parameter files** - Direct deployment without Template Specs
+> - **Template Specs with Portal UI** (for custom images, host pools, networking, add-ons)
+> - **PowerShell/CLI with parameter files** (for all components)
 > 
 > **💡 Pro Tip:** Use Template Spec UI to generate your parameter files! Deploy once with the UI form, save the generated parameters, remove the `timeStamp` parameter, then use PowerShell for future deployments.
 > 
