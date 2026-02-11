@@ -17,8 +17,8 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 |-----------|-------------|---------------|
 | 🚀 **Quick Start** | Step-by-step guide for new deployments | [Quick Start Guide](docs/quickStart.md) |
 | 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpoolDeployment.md) |
-| 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/imageBuild.md) |
 | 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifactsGuide.md) |
+| 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/imageBuild.md) |
 | 🔧 **Add-Ons** | Lifecycle automation and operational tools | [Add-Ons](#-add-ons) |
 
 ### Cloud Environment Support
@@ -50,13 +50,14 @@ graph TD
 
 | Component | Blue Button | Template Spec | PowerShell/CLI |
 |-----------|-------------|---------------|----------------|
+| **Networking** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Networking** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 
 **💡 About Template Specs:**
+
 - Provide guided form experience with built-in validation
 - Generate parameter files for automation workflows
 - Useful for teams unfamiliar with ARM/Bicep syntax
