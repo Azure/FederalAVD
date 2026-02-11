@@ -29,39 +29,9 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 
 ## 🚀 Quick Start
 
-### Prerequisites
+Ready to deploy? The **[Quick Start Guide](docs/quickStart.md)** walks you through the complete deployment process with decision trees, prerequisites, and step-by-step instructions.
 
-Before you begin, ensure you have:
-
-- **Required**: Azure subscription with Owner or Contributor + User Access Administrator roles
-- **Required**: Virtual network with subnet for session hosts
-- **Required**: Microsoft Entra ID or Active Directory Domain Services
-- **Required**: Security group for AVD users
-- **Optional**: Image Management resources (see below)
-
-**👉 [Complete Prerequisites Guide](docs/quickStart.md#prerequisites)**
-
-### 🔒 Air-Gapped Clouds: Deployment Options
-
-> **ℹ️ Azure Secret / Azure Top Secret Users**
-> 
-> Blue Button deployments are not available. Choose from:
-> 
-> **Option A: Template Spec + Portal UI (Recommended for first deployment)**
-> - Guided form experience with validation
-> - Generate parameter files for future use
-> 
-> **Option B: PowerShell/CLI**
-> - Direct deployment with parameter files
-> - No Template Specs required
-> 
-> **💡 Pro Tip:** Deploy once with Template Spec UI, save the parameters, then use PowerShell for future deployments.
-> 
-> **📖 [Template Spec Setup Guide](docs/quickStart.md#-air-gapped-clouds-template-specs-optional-but-recommended)** | **[Air-Gapped Cloud Guide](docs/airGappedClouds.md)**
-
-### Deployment Path
-
-Choose your deployment approach based on your needs:
+### Deployment Path Overview
 
 ```mermaid
 graph TD
@@ -77,60 +47,23 @@ graph TD
     H --> I
 ```
 
-### Step-by-Step
+### Deployment Methods
 
-#### 1️⃣ Deploy Image Management (If Using Custom Software)
+All components support multiple deployment methods:
 
-Image Management provides centralized storage for software artifacts used during image builds or session host deployments.
+| Method | Description | Available In |
+|--------|-------------|--------------|
+| **🔵 Blue Button** | One-click portal deployment with pre-populated templates | Commercial, Government |
+| **📋 Template Specs** | Portal UI with form validation and guided configuration | All clouds (including Secret/Top Secret) |
+| **⌨️ PowerShell/CLI** | Command-line automation with parameter files | All clouds |
 
-**Required for:**
+**💡 Template Spec Benefits:**
+- Guided form experience with built-in validation
+- Generate parameter files for automation
+- Useful for teams unfamiliar with ARM/Bicep
+- **Only UI option for air-gapped clouds** (Secret/Top Secret)
 
-- Custom image builds with software installation
-- Session host post-deployment customizations
-- Air-gapped cloud deployments
-
-**Deploy using the PowerShell helper script:**
-
-```powershell
-cd deployments
-.\Deploy-ImageManagement.ps1 -DeployImageManagementResources -Location "East US 2"
-```
-
-📚 **Documentation:**
-
-- [Artifacts & Image Management Guide](docs/artifactsGuide.md) - Understand the artifact system
-- [Deploy-ImageManagement Script Guide](docs/imageManagementScript.md) - Script parameters and usage
-- [Creating Custom Artifacts](docs/artifactsGuide.md#creating-custom-artifact-packages) - Build your own software packages
-
-#### 2️⃣ Build Custom Image (Optional)
-
-Automated custom image building for standardized, pre-configured session host images.
-
-**Benefits:**
-
-- Faster session host deployment
-- Consistent configuration across hosts
-- Pre-installed software and settings
-- Reduced runtime customizations
-
-```powershell
-cd deployments
-.\Invoke-ImageBuilds.ps1 -Location "East US 2" -ParameterFilePrefixes @('demo')
-```
-
-📚 **[Image Build Guide](docs/imageBuild.md)** - Complete image building documentation
-
-#### 3️⃣ Deploy Host Pool
-
-Deploy a complete AVD environment with session hosts, storage, networking, and monitoring.
-
-**Deployment Methods:**
-
-- 🖱️ **Azure Portal (Template Specs)** - UI form deployment *(Recommended for air-gapped clouds)*
-- 💻 **PowerShell/Azure CLI** - Command-line deployment with parameter files *(Works in all clouds)*
-- 🔘 **GitHub Deploy Button** - Quick deployment *(Commercial & Government clouds only)*
-
-📚 **[Host Pool Deployment Guide](docs/hostpoolDeployment.md)** - Complete deployment documentation
+**👉 [Get Started Now](docs/quickStart.md)** - Complete prerequisites, deployment options, and step-by-step instructions
 
 ---
 
