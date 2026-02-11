@@ -15,9 +15,8 @@ graph TD
     B -->|No| D[Use Marketplace<br/>Image]
     C --> E{Build<br/>Custom Image?}
     E -->|Yes<br/>Pre-install software| F[🎨 Step 2: Build<br/>Custom Image]
-    E -->|No<br/>Install at runtime| G[Skip to Step 3]
-    F --> H[🏢 Step 3: Deploy<br/>Host Pool]
-    G --> H
+    E -->|No<br/>Install at runtime| H[🏢 Step 3: Deploy<br/>Host Pool]
+    F --> H
     D --> H
     H --> I[✅ Complete]
 ```
