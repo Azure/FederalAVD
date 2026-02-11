@@ -329,7 +329,7 @@ Store required secrets in Azure Key Vault (referenced by parameter file):
 
 ```powershell
 # Example: Set secrets in Key Vault
-$keyVaultName = "kv-avd-secrets-eastus2"
+$keyVaultName = "kv-avd-secrets-usgovvirginia"
 
 Set-AzKeyVaultSecret -VaultName $keyVaultName `
     -Name "VirtualMachineAdminPassword" `
@@ -381,8 +381,8 @@ After deployment completes, assign users to the desktop application group:
 **PowerShell:**
 
 ```powershell
-$resourceGroup = "rg-avd-general-prod-eastus2"
-$appGroupName = "dag-avd-general-prod-eastus2"
+$resourceGroup = "rg-avd-general-prod-usgovvirginia"
+$appGroupName = "dag-avd-general-prod-usgovvirginia"
 $userGroupObjectId = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 New-AzRoleAssignment `
@@ -798,7 +798,7 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
 "finance-pool-general"        # From finance-pool-general.parameters.json
 
 # Based on environment + component
-"avd-prod-eastus2"
+"avd-prod-usgovvirginia"
 "avd-dev-centralus"
 
 # For updates/revisions (manual increment)
@@ -906,7 +906,7 @@ To find available marketplace images for session hosts:
 
 ```powershell
 # Set your region
-$Location = 'eastus2'
+$Location = 'usgovvirginia'
 
 # List publishers
 (Get-AzVMImagePublisher -Location $Location).PublisherName

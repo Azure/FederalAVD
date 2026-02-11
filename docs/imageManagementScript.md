@@ -97,7 +97,7 @@ Set-AzContext -Subscription "your-subscription-id"
 cd "C:\repos\FederalAVD\deployments"
 
 # Deploy with custom parameter prefix
-.\Deploy-ImageManagement.ps1 -DeployImageManagementResources -Location "East US 2" -ParameterFilePrefix "contoso"
+.\Deploy-ImageManagement.ps1 -DeployImageManagementResources -Location "USGov Virginia" -ParameterFilePrefix "contoso"
 ```
 
 ### Example 2: Update Existing Storage Account
@@ -105,8 +105,8 @@ cd "C:\repos\FederalAVD\deployments"
 ```powershell
 # Update existing storage account with new artifacts
 .\Deploy-ImageManagement.ps1 `
-    -StorageAccountResourceId "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/rg-avd-shared-eastus2/providers/Microsoft.Storage/storageAccounts/stavdsharedeastus2001" `
-    -ManagedIdentityResourceID "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/rg-avd-shared-eastus2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-avd-shared-eastus2" `
+    -StorageAccountResourceId "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/rg-avd-shared-usgovvirginia/providers/Microsoft.Storage/storageAccounts/stavdsharedusgovva001" `
+    -ManagedIdentityResourceID "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/rg-avd-shared-usgovvirginia/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-avd-shared-usgovvirginia" `
     -DeleteExistingBlobs
 ```
 
@@ -138,7 +138,7 @@ The script automatically detects the Azure environment and selects appropriate p
 
 | Azure Environment | Default Prefix | Parameter File |
 |-------------------|----------------|----------------|
-| AzureCloud (Commercial) | public | public.downloads.parameters.json |
+| AzureUSGovernment | public | public.downloads.parameters.json |
 | AzureUSGovernment (IL4/5) | public | public.downloads.parameters.json |
 | Azure Secret (IL6) | secret | secret.downloads.parameters.json |
 | Azure Top Secret (IL7) | topsecret | topsecret.downloads.parameters.json |
@@ -229,8 +229,8 @@ Downloaded on = 10/31/2025 2:30:15 PM
 Upon successful completion, the script outputs critical information for subsequent deployments:
 
 ```text
-The 'ArtifactsLocation' = 'https://stavdsharedeastus2001.blob.core.windows.net/artifacts/'
-The 'ArtifactsUserAssignedIdentityResourceId' = '/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-avd-shared-eastus2'
+The 'ArtifactsLocation' = 'https://stavdsharedusgovva001.blob.core.usgovcloudapi.net/artifacts/'
+The 'ArtifactsUserAssignedIdentityResourceId' = '/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-avd-shared-usgovvirginia'
 ```
 
 These values are required for:

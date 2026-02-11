@@ -593,7 +593,7 @@ The `Invoke-Customization.ps1` script (`.common/scripts/Invoke-Customization.ps1
 |-----------|------|----------|-------------|
 | `APIVersion` | string | No | IMDS API version for managed identity tokens (default based on cloud) |
 | `Arguments` | string | No | Arguments string passed to the artifact (default: empty) |
-| `BlobStorageSuffix` | string | Yes | Blob storage endpoint suffix (e.g., `blob.core.windows.net`) |
+| `BlobStorageSuffix` | string | Yes | Blob storage endpoint suffix (e.g., `blob.core.usgovcloudapi.net`) |
 | `BuildDir` | string | No | Build directory for temp files (used in image builds) |
 | `Name` | string | Yes | Name of the customization (used for logging) |
 | `Uri` | string | Yes | Full URI to the artifact in blob storage |
@@ -737,9 +737,9 @@ All activity is logged via PowerShell transcript:
 ```
 [12/22/2024 10:30:15] Starting 'MyApp' script with the following parameters.
 [12/22/2024 10:30:15] APIVersion: 2018-02-01
-[12/22/2024 10:30:15] BlobStorageSuffix: blob.core.windows.net
+[12/22/2024 10:30:15] BlobStorageSuffix: blob.core.usgovcloudapi.net
 [12/22/2024 10:30:15] Name: MyApp
-[12/22/2024 10:30:15] Uri: https://staccount.blob.core.windows.net/artifacts/MyApp.zip
+[12/22/2024 10:30:15] Uri: https://staccount.blob.core.usgovcloudapi.net/artifacts/MyApp.zip
 [12/22/2024 10:30:15] Arguments: -InstallMode Full
 [12/22/2024 10:30:16] Downloading 'https://...' to 'C:\Temp\MyApp'
 [12/22/2024 10:30:20] Finished downloading
@@ -834,7 +834,7 @@ Edit your image build parameters file:
 ```json
 {
   "artifactsContainerUri": {
-    "value": "https://staccount.blob.core.windows.net/artifacts/"
+    "value": "https://staccount.blob.core.usgovcloudapi.net/artifacts/"
   },
   "artifactsUserAssignedIdentityResourceId": {
     "value": "/subscriptions/.../userAssignedIdentities/uami-artifacts"
@@ -903,7 +903,7 @@ Edit your host pool parameters file:
 ```json
 {
   "artifactsContainerUri": {
-    "value": "https://staccount.blob.core.windows.net/artifacts/"
+    "value": "https://staccount.blob.core.usgovcloudapi.net/artifacts/"
   },
   "artifactsUserAssignedIdentityResourceId": {
     "value": "/subscriptions/.../userAssignedIdentities/uami-artifacts"

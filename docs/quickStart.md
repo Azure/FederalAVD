@@ -203,14 +203,14 @@ Image Management deploys:
 
 ```powershell
 # Connect to Azure
-Connect-AzAccount -Environment AzureCloud  # or AzureUSGovernment
+Connect-AzAccount -Environment AzureUSGovernment
 
 # Set subscription
 Set-AzContext -Subscription "<subscription-id>"
 
 # Deploy image management
 cd deployments
-.\Deploy-ImageManagement.ps1 -DeployImageManagementResources -Location "eastus2"
+.\Deploy-ImageManagement.ps1 -DeployImageManagementResources -Location "usgovvirginia"
 ```
 
 **📖 Detailed Guides:**
@@ -238,7 +238,7 @@ cd deployments
 
 ```powershell
 cd deployments
-.\Invoke-ImageBuilds.ps1 -Location "eastus2" -ParameterFilePrefixes @('demo')
+.\Invoke-ImageBuilds.ps1 -Location "usgovvirginia" -ParameterFilePrefixes @('demo')
 ```
 
 **Option 3: Template Spec + Portal UI** - Recommended for air-gapped clouds
@@ -328,10 +328,10 @@ New-AzDeployment `
 
 ```powershell
 # Connect to Azure
-Connect-AzAccount -Environment AzureCloud
+Connect-AzAccount -Environment AzureUSGovernment
 
 # List available regions
-Get-AzLocation | Select-Object Location, DisplayName | Sort-Object DisplayName
+Get-AzLocation | Select-Object Location,DisplayName | Sort-Object DisplayName
 
 # Check resource provider
 Get-AzResourceProvider -ProviderNamespace Microsoft.DesktopVirtualization
@@ -353,7 +353,7 @@ $paramFile = "prod.hostpool.parameters.json"
 $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 # Result: "prod.hostpool.parameters"
 
-New-AzDeployment -Location "eastus2" -Name $deploymentName -TemplateFile "..." -TemplateParameterFile "..."
+New-AzDeployment -Location "usgovvirginia" -Name $deploymentName -TemplateFile "..." -TemplateParameterFile "..."
 ```
 
 **Alternative patterns:**

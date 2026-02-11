@@ -189,7 +189,7 @@ This instance deploys an AVD host pool with default values.
             "value": "<REDACTED>"
         },
         "virtualMachineSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eastus/providers/Microsoft.Network/virtualNetworks/vnet-avd-eastus/subnets/hosts"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgovvirginia/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgovvirginia/subnets/hosts"
         }            
     }
 }
@@ -215,7 +215,7 @@ This example shows a Zero Trust Compliant host pool that includes AVD Private Li
             "value": "EntraId"
         },            
         "virtualMachineSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eastus/providers/Microsoft.Network/virtualNetworks/vnet-avd-eastus/subnets/hosts"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgovvirginia/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgovvirginia/subnets/hosts"
         },
         "virtualMachineNamePrefix": {
             "value": "avd-hp1-eus-"
@@ -232,36 +232,36 @@ This example shows a Zero Trust Compliant host pool that includes AVD Private Li
             "value": true
         },
         "storagePrivateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eastus/providers/Microsoft.Network/virtualNetworks/vnet-avd-eastus/subnets/privateEndpoints"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgovvirginia/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgovvirginia/subnets/privateEndpoints"
         },            
         "azureFilesPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-lab-eus/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-lab-usgovva/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.usgovcloudapi.net"
         },
         // Management Private Endpoints (required)
         "managementPrivateEndpoints": {
             "value": true
         },                        
         "managementPrivateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eastus/providers/Microsoft.Network/virtualNetworks/vnet-avd-eastus/subnets/privateEndpoints"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgovvirginia/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgovvirginia/subnets/privateEndpoints"
         },            
         // AVD Private Link (optional)
         "avdPrivateLinkPrivateRoutes": {
             "value": "All"
         },
         "globalFeedPrivateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-hub-networking-eastus/providers/Microsoft.Network/virtualNetworks/vnet-hub-eastus/subnets/privateEndpoints"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-hub-networking-usgovvirginia/providers/Microsoft.Network/virtualNetworks/vnet-hub-usgovvirginia/subnets/privateEndpoints"
         },
         "hostPoolPrivateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eastus/providers/Microsoft.Network/virtualNetworks/vnet-avd-eastus/subnets/privateEndpoints"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgovvirginia/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgovvirginia/subnets/privateEndpoints"
         },
         "feedPrivateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-hub-networking-eastus/providers/Microsoft.Network/virtualNetworks/vnet-hub-eastus/subnets/privateEndpoints"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-hub-networking-usgovvirginia/providers/Microsoft.Network/virtualNetworks/vnet-hub-usgovvirginia/subnets/privateEndpoints"
         },
         "avdGlobalFeedPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eastus/providers/Microsoft.Network/privateDnsZones/privatelink-global.wvd.microsoft.com"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgovvirginia/providers/Microsoft.Network/privateDnsZones/privatelink-global.wvd.microsoft.com"
         },
         "avdPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eastus/providers/Microsoft.Network/privateDnsZones/privatelink.wvd.microsoft.com"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgovvirginia/providers/Microsoft.Network/privateDnsZones/privatelink.wvd.microsoft.com"
         },
         "hostPoolPublicNetworkAccess": {
             "value": "Disabled"
@@ -303,7 +303,7 @@ This example deploys an AVD host pool with Virtual Machines joined to an Active 
             "value": "<REDACTED>"
         },            
         "virtualMachineSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eastus/providers/Microsoft.Network/virtualNetworks/vnet-avd-eastus/subnets/hosts"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgovvirginia/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgovvirginia/subnets/hosts"
         },
         "domainName": {
             "value": "contoso.com"
@@ -379,7 +379,7 @@ This instance deploys a scaling plan and associates it with the host pool.
             "value": "<REDACTED>"
         },            
         "virtualMachineSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eastus/providers/Microsoft.Network/virtualNetworks/vnet-avd-eastus/subnets/hosts"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgovvirginia/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgovvirginia/subnets/hosts"
         },
         // Scaling Plan
         "deployScalingPlan": {
@@ -533,10 +533,10 @@ This instance deploys the storage account with private endpoints to meet Zero Tr
     "contentVersion": "1.0.0.0",
     "parameters": {
         "privateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eastus/providers/Microsoft.Network/virtualNetworks/vnet-avd-eastus/subnets/privateEndpoints"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgovvirginia/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgovvirginia/subnets/privateEndpoints"
         },
         "azureBlobPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-lab-eus/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-lab-usgovva/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.usgovcloudapi.net"
         },
         "storagePublicNetworkAccess": {
             "value": "Disabled"
@@ -863,7 +863,7 @@ This instance creates a new image definition (with a name based on the provide P
                 },
                 {
                     "storageAccountType": "Standard_LRS",
-                    "name": "westus",
+                    "name": "usgovarizona",
                     "regionalReplicaCount": "10"
                 },
                 {

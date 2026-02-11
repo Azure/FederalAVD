@@ -165,7 +165,7 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 | **imageVersionName** | Version number for the image | Leave blank for automatic timestamp-based versioning (e.g., `2026.0210.1435`), or specify custom version (e.g., `1.0.0`) |
 | **excludeFromLatest** | Exclude this version from 'latest' | `false` |
 | **replicaCount** | Number of replicas per region | `1` |
-| **replicationRegions** | Regions to replicate image to | `["eastus2", "westus2"]` |
+| **replicationRegions** | Regions to replicate image to | `["usgovvirginia", "usgovarizona"]` |
 | **runWindowsUpdate** | Install Windows Updates during build | `true` |
 | **windowsUpdateCategories** | Categories of updates to install | `Critical, Security, UpdateRollup` |
 | **collectCustomizationLogs** | Save customization logs to blob storage | `true` (optional, default: `false`) |

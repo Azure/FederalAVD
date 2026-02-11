@@ -728,7 +728,7 @@ Configure FSLogix to use storage accounts in multiple Azure regions, providing g
 
 **Example Multi-Region Deployment:**
 
-**Region 1 (Primary) - East US:**
+**Region 1 (Primary) - USGov Virginia:**
 
 ```bicep
 identifier = 'finance'
@@ -737,13 +737,13 @@ availabilityZones = ['1', '2', '3']
 fslogixContainerType = 'CloudCacheProfileContainer'
 fslogixStorageService = 'AzureFiles Premium'
 fslogixExistingRemoteStorageAccountResourceIds = [           // Reference primary region storage
-  '/subscriptions/.../resourceGroups/rg-finance-01-storage-usw/providers/Microsoft.Storage/storageAccounts/stfinance01usw'
+  '/subscriptions/.../resourceGroups/rg-finance-01-storage-usgovaz/providers/Microsoft.Storage/storageAccounts/stfinance01usgovaz'
 ]
 deployFSLogixStorage = true                                   // Deploy storage in primary region
-controlPlaneLocation = 'eastus'
+controlPlaneLocation = 'usgovvirginia'
 ```
 
-**Region 2 (Secondary) - West US:**
+**Region 2 (Secondary) - USGov Arizona:**
 
 ```bicep
 identifier = 'finance'
@@ -755,7 +755,7 @@ deployFSLogixStorage = true                                   // Deploy storage 
 fslogixExistingRemoteStorageAccountResourceIds = [           // Reference primary region storage
   '/subscriptions/.../resourceGroups/rg-finance-01-storage-use/providers/Microsoft.Storage/storageAccounts/stfinance01use'
 ]
-controlPlaneLocation = 'westus'
+controlPlaneLocation = 'usgovvirginia'
 ```
 
 **Session Host Configuration:**

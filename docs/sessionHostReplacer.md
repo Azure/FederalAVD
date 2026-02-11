@@ -159,8 +159,8 @@ existingHostingPlanResourceId: '' // Leave empty for Complete deployments, provi
 functionAppSubnetResourceId: '/subscriptions/.../subnets/snet-functionapps'
 deployPrivateEndpoints: true
 azureFunctionAppPrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.azurewebsites.net'
-azureBlobPrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.blob.core.windows.net'
-azureFilesPrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.file.core.windows.net'
+azureBlobPrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.blob.core.usgovcloudapi.net'
+azureFilesPrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.file.core.usgovcloudapi.net'
 azureQueuePrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.queue.core.windows.net'
 azureTablePrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.table.core.windows.net'
 ```
