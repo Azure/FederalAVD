@@ -6,12 +6,18 @@
 
 The air-gapped clouds, Azure Government Secret and Azure Government Top Secret, offer unique challenges because not all software is available for download via http and where it is it may not be available to all enclaves on the networks these clouds service.
 
+> **✅ Azure Toolbox Availability**
+> 
+> **FSLogix installer is now available directly in the Azure Toolbox** within air-gapped clouds! This eliminates the need to download from the internet and transfer files between networks. You can obtain FSLogix directly within your air-gapped environment from Azure Toolbox and upload it to your storage account.
+> 
+> **Note:** A storage account is still required because automated downloads from Azure Toolbox require authentication that cannot be performed by the deployment scripts.
+
 The following table provides specific instructions for preparing your air-gapped environment for building custom images. This assumes that you have already created the image management storage account and blob container. The **Storage Account Provided** and **Download Latest Microsoft Content** columns represent the `artifactsContainerUri` and the `downloadLatestMicrosoftContent` image build parameters respectively.
 
 | Software | Storage Account</br>Provided | Download Latest</br>Microsoft Content | Instructions and Caveats |
 | :-- | :--: | :--: | :-- |
-| FSLogix | Yes | Yes / No | <ol><li>On a system with access to the public Internet, download the latest agent at [aka.ms/fslogix_download](https://aka.ms/fslogix_download).</li><li>Transfer it to the air-gapped cloud and save it as **FSLogix.zip** in the storage account and container specified.</li></ol> |
-| FSLogix | No | Yes / No | <span style="color:red">Not supported</span> |
+| FSLogix | Yes | Yes / No | **✅ Available in Azure Toolbox!** <ol><li>Within your air-gapped cloud, download the latest FSLogix installer from the Azure Toolbox.</li><li>Save it as **FSLogix.zip** in the storage account and container specified.</li></ol>**Note:** No internet access or cross-network file transfer required! Alternatively, you can still download from [aka.ms/fslogix_download](https://aka.ms/fslogix_download) on an internet-connected system and transfer it. |
+| FSLogix | No | Yes / No | <span style="color:red">Not supported</span> - Storage account is required because automated script downloads from Azure Toolbox require authentication. |
 | Office | Yes | No | On your air-gapped management system, execute [Deploy-ImageManagement.ps1](quickStart.md#deploy-image-management-resources) or download the Office Deployment Tool from the appropriate Microsoft 365 Apps link below and save it to the blob storage container as **Office365DeploymentTool.exe**. |
 | Office | Yes / No | Yes | The air-gapped cloud Office Deployment Tool Setup.exe download url must be accessible from the image build virtual machine. |
 | OneDrive | Yes | No |  On your air-gapped management system, execute [Deploy-ImageManagement.ps1](quickStart.md#deploy-image-management-resources) or download OneDriveSetup.exe from the appropriate air-gapped download url and save it as **OneDriveSetup.exe** in the blob container.|
