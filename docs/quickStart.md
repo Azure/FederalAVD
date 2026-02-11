@@ -12,7 +12,7 @@ Get your Azure Virtual Desktop environment deployed quickly with this step-by-st
 graph TD
     A[Start] --> B{Need Custom<br/>Software or<br/>Configurations?}
     B -->|Yes| C[📦 Step 1: Deploy<br/>Image Management]
-    B -->|No<br/>Use Marketplace| D[Skip to Step 3]
+    B -->|No| D[Use Marketplace<br/>Image]
     C --> E{Build<br/>Custom Image?}
     E -->|Yes<br/>Pre-install software| F[🎨 Step 2: Build<br/>Custom Image]
     E -->|No<br/>Install at runtime| G[Skip to Step 3]
