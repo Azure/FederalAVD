@@ -15,6 +15,7 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 
 | Component | Description | Documentation |
 |-----------|-------------|---------------|
+| 🚀 **Quick Start** | Step-by-step guide for new deployments | [Quick Start Guide](docs/quickStart.md) |
 | 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpoolDeployment.md) |
 | 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/imageBuild.md) |
 | 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifactsGuide.md) |
