@@ -267,12 +267,14 @@ New-AzDeployment `
 ### Typical Deployment Scenarios
 
 **Scenario 1: Simple Greenfield (Development/Test)**
+
 - VNet with session host subnet only
 - Public routing
 - No hub peering
 - Minimal configuration
 
 **Scenario 2: Production with Hub (Zero Trust)**
+
 - VNet with multiple subnets (hosts, private endpoints)
 - Hub peering for hybrid connectivity
 - NVA routing through hub firewall
@@ -280,6 +282,7 @@ New-AzDeployment `
 - DDoS protection enabled
 
 **Scenario 3: Air-Gapped Cloud**
+
 - VNet with segmented subnets
 - Private DNS zones for cloud-specific service endpoints
 - Route tables configured for on-premises routing
@@ -345,12 +348,14 @@ cd deployments
 ```
 
 **Option 3: Template Spec + Portal UI** - Recommended for air-gapped clouds
+
 1. Navigate to **Template Specs** in Azure Portal
 2. Select **Azure Virtual Desktop Custom Image**
 3. Click **Deploy** and fill out the form
 4. *Optional:* Download parameters for future PowerShell deployments
 
 **📖 Complete Image Build Guide:**
+
 - **[imageBuild.md](imageBuild.md)** - Full image build documentation with parameters, monitoring, and troubleshooting
 
 **⏱️ Typical build time:** 45-90 minutes depending on customizations
@@ -384,12 +389,14 @@ New-AzDeployment `
 ```
 
 **Option 3: Template Spec + Portal UI** - Recommended for air-gapped clouds
+
 1. Navigate to **Template Specs** in Azure Portal
 2. Select **Azure Virtual Desktop HostPool**
 3. Click **Deploy** and fill out the form
 4. *Optional:* Download parameters for future PowerShell deployments
 
 **📖 Complete Host Pool Guide:**
+
 - **[hostpoolDeployment.md](hostpoolDeployment.md)** - Full deployment documentation with all parameters, features, and configurations
 
 ---
@@ -410,6 +417,7 @@ New-AzDeployment `
 ### Lifecycle Management & Add-Ons
 
 **Explore operational automation:**
+
 - 🔄 **[Session Host Replacer](../deployments/add-ons/SessionHostReplacer/readme.md)** - Zero-downtime host replacements on image updates
 - 💾 **[Storage Quota Manager](../deployments/add-ons/StorageQuotaManager/readme.md)** - Automated FSLogix profile quota management
 - 🔑 **[Update Storage Keys](../deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md)** - Automated key rotation
