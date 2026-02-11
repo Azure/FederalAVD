@@ -4,6 +4,7 @@ param hostsSubnet object
 param privateEndpointsSubnet object
 param functionAppSubnet object
 param defaultRouting string
+param includeAvdBypassRoutes bool
 param natGatewayName string
 param publicIPName string
 param routeTableName string
@@ -170,24 +171,34 @@ resource ddosProtectionPlan 'Microsoft.Network/ddosProtectionPlans@2023-04-01' =
   tags: tags[?'Microsoft.Network/ddosProtectionPlans'] ?? {}
 }
 
-resource routeTable 'Microsoft.Network/routeTables@2023-04-01' = if (defaultRouting != 'nat') {
+resource routeTable 'Microsoft.Network/routeTables@2023-04-01' = if (defaultRouting == 'nva') {
   name: routeTableName
   location: location
   properties: {
-    routes: defaultRouting == 'default'
-      ? defaultUDRs
-      : defaultRouting == 'nva'
-          ? [
-              {
-                name: 'DefaultRoute'
-                properties: {
-                  addressPrefix: '0.0.0.0/0'
-                  nextHopType: 'VirtualAppliance'
-                  nextHopIpAddress: nvaIPAddress
-                }
+    routes: includeAvdBypassRoutes
+      ? concat(
+          [
+            {
+              name: 'DefaultRoute'
+              properties: {
+                addressPrefix: '0.0.0.0/0'
+                nextHopType: 'VirtualAppliance'
+                nextHopIpAddress: nvaIPAddress
               }
-            ]
-          : []
+            }
+          ],
+          defaultUDRs
+        )
+      : [
+          {
+            name: 'DefaultRoute'
+            properties: {
+              addressPrefix: '0.0.0.0/0'
+              nextHopType: 'VirtualAppliance'
+              nextHopIpAddress: nvaIPAddress
+            }
+          }
+        ]
   }
   tags: tags[?'Microsoft.Network/routeTables'] ?? {}
 }

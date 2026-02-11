@@ -166,6 +166,7 @@ cd C:\repos\FederalAVD\deployments
 6. Use this parameter file for all future PowerShell/CLI deployments
 
 **Example:**
+
 ```powershell
 # Use parameter file name as deployment name (recommended)
 $paramFile = "prod.hostpool.parameters.json"
@@ -179,12 +180,14 @@ New-AzDeployment `
 ```
 
 **💡 Deployment Naming Tips:**
+
 - Use descriptive, consistent names (e.g., `"prod-hostpool"`, `"dev-finance-pool"`)
 - Base names on parameter file names for easy correlation
 - Avoid timestamps - Azure tracks deployment history automatically
 - Example: `prod.hostpool.parameters.json` → deployment name: `"prod.hostpool.parameters"`
 
 **📝 Note about `timeStamp` parameter:**
+
 - The Bicep templates include a `timeStamp` parameter with default value `utcNow()`
 - This auto-generates unique suffixes for deployment names and resource names
 - **Always remove it from saved parameter files** - it should be auto-generated on each deployment
@@ -209,8 +212,8 @@ The networking deployment provides a complete foundation for AVD, including:
 - **🌐 Virtual Network** - Spoke or standalone VNet with customizable address space
 - **🔀 Subnets** - Session hosts, private endpoints, function apps
 - **🛡️ Network Security Groups** - Basic NSGs for subnet security
-- **🛣️ Routing** - Default, NVA (Network Virtual Appliance), or NAT gateway routing
-- **🚦 NAT Gateway** - Optional NAT gateway for secure outbound connectivity
+- **🛣️ Routing** - NAT gateway (default) or NVA (Network Virtual Appliance) force-tunnel routing
+- **🚦 NAT Gateway** - NAT gateway for secure outbound connectivity
 - **🔗 Hub Peering** - Optional peering to hub VNet for hybrid connectivity
 - **🔒 Private DNS Zones** - For Azure services (Blob, Files, Queue, Table, Key Vault, Backup, AVD)
 - **🛡️ DDoS Protection** - Optional DDoS Network Protection
@@ -240,10 +243,13 @@ New-AzDeployment `
 ```
 
 **Option 3: Template Spec + Portal UI** - Recommended for air-gapped clouds
+
 1. Create networking template spec:
+
    ```powershell
    .\New-TemplateSpecs.ps1 -Location "usgovvirginia" -createNetwork $true -createCustomImage $false -createHostPool $false -CreateAddOns $false
    ```
+
 2. Navigate to **Template Specs** in Azure Portal
 3. Select **AVD Network Spoke**
 4. Click **Deploy** and fill out the form
@@ -253,7 +259,7 @@ New-AzDeployment `
 | Feature | Description | When to Use |
 |---------|-------------|-------------|
 | **Hub Peering** | Peer spoke VNet to hub VNet | Hybrid connectivity, centralized routing |
-| **NVA Routing** | Route traffic through Network Virtual Appliance | Centralized firewall/inspection |
+| **NVA Routing** | Route traffic through Network Virtual Appliance (with optional AVD bypass routes) | Centralized firewall/inspection |
 | **Private DNS Zones** | Create DNS zones for Azure services | Private endpoints, Zero Trust architecture |
 | **DDoS Protection** | Enable DDoS Network Protection | Production environments, security requirements |
 | **Multiple Subnets** | Session hosts, private endpoints, functions | Segmentation, private link deployments |
@@ -287,10 +293,10 @@ New-AzDeployment `
 
 **⏭️ Skip this step if:** You're using marketplace images without customization.
 
-
 **Required for:** Custom image builds or session host runtime customizations with software packages.
 
 Image Management deploys:
+
 - Storage Account for artifacts (scripts & installers)
 - Compute Gallery for custom images
 - Managed Identity for secure access
@@ -310,6 +316,7 @@ cd deployments
 ```
 
 **📖 Detailed Guides:**
+
 - **[Artifacts & Image Management Guide](artifactsGuide.md)** - Understanding the artifact system
 - **[Deploy-ImageManagement Script Reference](imageManagementScript.md)** - All parameters and options
 - **[Creating Custom Artifacts](artifactsGuide.md#creating-custom-artifact-packages)** - Build your own software packages

@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.37.4.10188",
-      "templateHash": "10081969417750565269"
+      "version": "0.39.26.7824",
+      "templateHash": "13875584560081833410"
     }
   },
   "parameters": {
@@ -74,14 +74,20 @@
     },
     "defaultRouting": {
       "type": "string",
-      "defaultValue": "default",
+      "defaultValue": "nat",
       "allowedValues": [
-        "default",
         "nva",
         "nat"
       ],
       "metadata": {
-        "description": "Optional. The type of default routing used on the subnets."
+        "description": "Optional. The routing method to use for the virtual network subnets."
+      }
+    },
+    "includeAvdBypassRoutes": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. When using NVA routing, determines if AVD service bypass routes should be added to the route table. These routes allow AVD service traffic to bypass the NVA."
       }
     },
     "nameConvResTypeAtEnd": {
@@ -848,8 +854,10 @@
       "routeTables": "rt",
       "scalingPlans": "vdscaling",
       "storageAccounts": "sa",
+      "templateSpecs": "ts",
       "userAssignedIdentities": "uai",
       "virtualMachines": "vm",
+      "workbooks": "wb",
       "workspaces": "vdws",
       "imageDefinitions": "vmid"
     },
@@ -920,7 +928,7 @@
     {
       "condition": "[parameters('deployVnet')]",
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "[format('Network-Resources-{0}', parameters('timeStamp'))]",
       "location": "[deployment().location]",
       "properties": {
@@ -937,6 +945,9 @@
           },
           "defaultRouting": {
             "value": "[parameters('defaultRouting')]"
+          },
+          "includeAvdBypassRoutes": {
+            "value": "[parameters('includeAvdBypassRoutes')]"
           },
           "deployDDoSNetworkProtection": {
             "value": "[parameters('deployDDoSNetworkProtection')]"
@@ -995,8 +1006,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.37.4.10188",
-              "templateHash": "12488389241263905719"
+              "version": "0.39.26.7824",
+              "templateHash": "7119484120088273096"
             }
           },
           "parameters": {
@@ -1020,6 +1031,9 @@
             },
             "defaultRouting": {
               "type": "string"
+            },
+            "includeAvdBypassRoutes": {
+              "type": "bool"
             },
             "natGatewayName": {
               "type": "string"
@@ -1081,7 +1095,7 @@
             },
             {
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
+              "apiVersion": "2025-04-01",
               "name": "[format('VNet-Resources-{0}', parameters('timeStamp'))]",
               "resourceGroup": "[parameters('vnetResourceGroupName')]",
               "properties": {
@@ -1107,6 +1121,9 @@
                   },
                   "defaultRouting": {
                     "value": "[parameters('defaultRouting')]"
+                  },
+                  "includeAvdBypassRoutes": {
+                    "value": "[parameters('includeAvdBypassRoutes')]"
                   },
                   "natGatewayName": {
                     "value": "[parameters('natGatewayName')]"
@@ -1160,8 +1177,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.37.4.10188",
-                      "templateHash": "15358680869613732775"
+                      "version": "0.39.26.7824",
+                      "templateHash": "2718392506129921909"
                     }
                   },
                   "parameters": {
@@ -1182,6 +1199,9 @@
                     },
                     "defaultRouting": {
                       "type": "string"
+                    },
+                    "includeAvdBypassRoutes": {
+                      "type": "bool"
                     },
                     "natGatewayName": {
                       "type": "string"
@@ -1259,13 +1279,13 @@
                       "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/ddosProtectionPlans'), createObject())]"
                     },
                     {
-                      "condition": "[not(equals(parameters('defaultRouting'), 'nat'))]",
+                      "condition": "[equals(parameters('defaultRouting'), 'nva')]",
                       "type": "Microsoft.Network/routeTables",
                       "apiVersion": "2023-04-01",
                       "name": "[parameters('routeTableName')]",
                       "location": "[parameters('location')]",
                       "properties": {
-                        "routes": "[if(equals(parameters('defaultRouting'), 'default'), variables('defaultUDRs'), if(equals(parameters('defaultRouting'), 'nva'), createArray(createObject('name', 'DefaultRoute', 'properties', createObject('addressPrefix', '0.0.0.0/0', 'nextHopType', 'VirtualAppliance', 'nextHopIpAddress', parameters('nvaIPAddress')))), createArray()))]"
+                        "routes": "[if(parameters('includeAvdBypassRoutes'), concat(createArray(createObject('name', 'DefaultRoute', 'properties', createObject('addressPrefix', '0.0.0.0/0', 'nextHopType', 'VirtualAppliance', 'nextHopIpAddress', parameters('nvaIPAddress')))), variables('defaultUDRs')), createArray(createObject('name', 'DefaultRoute', 'properties', createObject('addressPrefix', '0.0.0.0/0', 'nextHopType', 'VirtualAppliance', 'nextHopIpAddress', parameters('nvaIPAddress')))))]"
                       },
                       "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/routeTables'), createObject())]"
                     },
@@ -1390,7 +1410,7 @@
                     {
                       "condition": "[not(empty(parameters('hubVnetName')))]",
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2022-09-01",
+                      "apiVersion": "2025-04-01",
                       "name": "[format('localVnetPeering-{0}', parameters('timeStamp'))]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -1420,8 +1440,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.37.4.10188",
-                              "templateHash": "4620384731392814384"
+                              "version": "0.39.26.7824",
+                              "templateHash": "16912846919175043346"
                             }
                           },
                           "parameters": {
@@ -1482,7 +1502,7 @@
                     {
                       "condition": "[not(empty(parameters('hubVnetName')))]",
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2022-09-01",
+                      "apiVersion": "2025-04-01",
                       "name": "[format('remoteVnetPeering-{0}', parameters('timeStamp'))]",
                       "subscriptionId": "[parameters('hubVnetSubscriptionId')]",
                       "resourceGroup": "[parameters('hubVnetResourceGroup')]",
@@ -1514,8 +1534,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.37.4.10188",
-                              "templateHash": "4620384731392814384"
+                              "version": "0.39.26.7824",
+                              "templateHash": "16912846919175043346"
                             }
                           },
                           "parameters": {
@@ -1591,7 +1611,7 @@
           "outputs": {
             "vNetResourceId": {
               "type": "string",
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('vnetResourceGroupName')), 'Microsoft.Resources/deployments', format('VNet-Resources-{0}', parameters('timeStamp'))), '2022-09-01').outputs.vnetResourceId.value]"
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('vnetResourceGroupName')), 'Microsoft.Resources/deployments', format('VNet-Resources-{0}', parameters('timeStamp'))), '2025-04-01').outputs.vnetResourceId.value]"
             }
           }
         }
@@ -1600,7 +1620,7 @@
     {
       "condition": "[or(or(variables('createPrivateDNSZones'), parameters('linkPrivateDnsZonesToNewVnet')), not(empty(parameters('privateDnsZonesVnetId'))))]",
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "[format('Private-DNS-Zones-Resources-{0}', parameters('timeStamp'))]",
       "subscriptionId": "[parameters('privateDNSZonesSubscriptionId')]",
       "location": "[deployment().location]",
@@ -1628,7 +1648,7 @@
           "privateDnsZonesToCreate": {
             "value": "[filter(variables('dedupedPrivateDnsZones'), lambda('zone', not(empty(lambdaVariables('zone')))))]"
           },
-          "privateDnsZonesVnetId": "[if(not(empty(parameters('privateDnsZonesVnetId'))), createObject('value', parameters('privateDnsZonesVnetId')), if(parameters('linkPrivateDnsZonesToNewVnet'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Network-Resources-{0}', parameters('timeStamp'))), '2022-09-01').outputs.vNetResourceId.value), createObject('value', '')))]",
+          "privateDnsZonesVnetId": "[if(not(empty(parameters('privateDnsZonesVnetId'))), createObject('value', parameters('privateDnsZonesVnetId')), if(parameters('linkPrivateDnsZonesToNewVnet'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Network-Resources-{0}', parameters('timeStamp'))), '2025-04-01').outputs.vNetResourceId.value), createObject('value', '')))]",
           "tags": {
             "value": "[parameters('tags')]"
           },
@@ -1642,8 +1662,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.37.4.10188",
-              "templateHash": "2714345509783324192"
+              "version": "0.39.26.7824",
+              "templateHash": "9786657321248100610"
             }
           },
           "parameters": {
@@ -1687,7 +1707,7 @@
             {
               "condition": "[parameters('createPrivateDNSZones')]",
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
+              "apiVersion": "2025-04-01",
               "name": "[format('Private-DNS-Zones-{0}', parameters('timeStamp'))]",
               "resourceGroup": "[parameters('privateDNSZonesResourceGroupName')]",
               "properties": {
@@ -1709,8 +1729,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.37.4.10188",
-                      "templateHash": "3423985917440763293"
+                      "version": "0.39.26.7824",
+                      "templateHash": "520324767220429185"
                     }
                   },
                   "parameters": {
@@ -1753,7 +1773,7 @@
             {
               "condition": "[not(empty(parameters('privateDnsZonesVnetId')))]",
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
+              "apiVersion": "2025-04-01",
               "name": "[format('Private-DNS-Zones-Vnet-Links-{0}', parameters('timeStamp'))]",
               "location": "[deployment().location]",
               "properties": {
@@ -1762,7 +1782,7 @@
                 },
                 "mode": "Incremental",
                 "parameters": {
-                  "privateDnsZoneResourceIds": "[if(parameters('createPrivateDNSZones'), createObject('value', union(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('privateDNSZonesResourceGroupName')), 'Microsoft.Resources/deployments', format('Private-DNS-Zones-{0}', parameters('timeStamp'))), '2022-09-01').outputs.resourceIds.value, parameters('existingPrivateDnsZoneIds'))), createObject('value', parameters('existingPrivateDnsZoneIds')))]",
+                  "privateDnsZoneResourceIds": "[if(parameters('createPrivateDNSZones'), createObject('value', union(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('privateDNSZonesResourceGroupName')), 'Microsoft.Resources/deployments', format('Private-DNS-Zones-{0}', parameters('timeStamp'))), '2025-04-01').outputs.resourceIds.value, parameters('existingPrivateDnsZoneIds'))), createObject('value', parameters('existingPrivateDnsZoneIds')))]",
                   "vnetId": {
                     "value": "[parameters('privateDnsZonesVnetId')]"
                   },
@@ -1776,8 +1796,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.37.4.10188",
-                      "templateHash": "8375326678188348252"
+                      "version": "0.39.26.7824",
+                      "templateHash": "1585659650741687107"
                     }
                   },
                   "parameters": {
@@ -1798,7 +1818,7 @@
                         "count": "[length(parameters('privateDnsZoneResourceIds'))]"
                       },
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2022-09-01",
+                      "apiVersion": "2025-04-01",
                       "name": "[format('privateDnsZoneVnetLink-{0}-{1}', copyIndex(), parameters('timeStamp'))]",
                       "subscriptionId": "[split(parameters('privateDnsZoneResourceIds')[copyIndex()], '/')[2]]",
                       "resourceGroup": "[split(parameters('privateDnsZoneResourceIds')[copyIndex()], '/')[4]]",
@@ -1821,8 +1841,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.37.4.10188",
-                              "templateHash": "1449062318143951188"
+                              "version": "0.39.26.7824",
+                              "templateHash": "10423243267782498951"
                             }
                           },
                           "parameters": {
@@ -1868,7 +1888,7 @@
   "outputs": {
     "vnetResourceId": {
       "type": "string",
-      "value": "[if(parameters('deployVnet'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Network-Resources-{0}', parameters('timeStamp'))), '2022-09-01').outputs.vNetResourceId.value, '')]"
+      "value": "[if(parameters('deployVnet'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Network-Resources-{0}', parameters('timeStamp'))), '2025-04-01').outputs.vNetResourceId.value, '')]"
     }
   }
 }

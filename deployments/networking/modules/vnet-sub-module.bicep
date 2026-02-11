@@ -7,6 +7,7 @@ param hostsSubnet object
 param privateEndpointsSubnet object
 param functionAppSubnet object
 param defaultRouting string
+param includeAvdBypassRoutes bool
 param natGatewayName string
 param publicIPName string
 param routeTableName string
@@ -40,6 +41,7 @@ module vnetResources 'vnetResources.bicep' = {
     privateEndpointsSubnet: privateEndpointsSubnet
     functionAppSubnet: functionAppSubnet
     defaultRouting: defaultRouting
+    includeAvdBypassRoutes: includeAvdBypassRoutes
     natGatewayName: natGatewayName
     publicIPName: publicIPName
     routeTableName: routeTableName

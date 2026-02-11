@@ -27,13 +27,15 @@ param privateEndpointsSubnet object = {}
 @description('Optional. The function app subnet to create within the virtual network.')
 param functionAppSubnet object = {}
 
-@description('Optional. The type of default routing used on the subnets.')
+@description('Optional. The routing method to use for the virtual network subnets.')
 @allowed([
-  'default'
   'nva'
   'nat'
 ])
-param defaultRouting string = 'default'
+param defaultRouting string = 'nat'
+
+@description('Optional. When using NVA routing, determines if AVD service bypass routes should be added to the route table. These routes allow AVD service traffic to bypass the NVA.')
+param includeAvdBypassRoutes bool = false
 
 @description('Optional. Determines if the resources should be named with the resource type at the end.')
 param nameConvResTypeAtEnd bool = false
@@ -217,6 +219,7 @@ module vnetResources 'modules/vnet-sub-module.bicep' = if (deployVnet) {
     customDNSServers: customDNSServers
     deployVnetResourceGroup: deployVnetResourceGroup
     defaultRouting: defaultRouting
+    includeAvdBypassRoutes: includeAvdBypassRoutes
     deployDDoSNetworkProtection: deployDDoSNetworkProtection
     functionAppSubnet: functionAppSubnet
     hostsSubnet: hostsSubnet
