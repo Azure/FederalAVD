@@ -10,22 +10,30 @@ Get your Azure Virtual Desktop environment deployed quickly with this step-by-st
 
 ```mermaid
 graph TD
-    A[Start] --> B{Need Custom<br/>Software or<br/>Configurations?}
-    B -->|Yes| C[📦 Step 1: Deploy<br/>Image Management]
-    B -->|No| D[Use Marketplace<br/>Image]
-    C --> E{Build<br/>Custom Image?}
-    E -->|Yes<br/>Pre-install software| F[🎨 Step 2: Build<br/>Custom Image]
-    E -->|No<br/>Install at runtime| H[🏢 Step 3: Deploy<br/>Host Pool]
-    F --> H
-    D --> H
-    H --> I[✅ Complete]
+    A[Start] --> B{Have Existing<br/>VNet?}
+    B -->|No<br/>Greenfield| C[🌐 Step 0: Deploy<br/>Networking]
+    B -->|Yes| D{Need Custom<br/>Software?}
+    C --> D
+    D -->|Yes| E[📦 Step 1: Deploy<br/>Image Management]
+    D -->|No| F[Use Marketplace<br/>Image]
+    E --> G{Build<br/>Custom Image?}
+    G -->|Yes<br/>Pre-install software| H[🎨 Step 2: Build<br/>Custom Image]
+    G -->|No<br/>Install at runtime| I[🏢 Step 3: Deploy<br/>Host Pool]
+    H --> I
+    F --> I
+    I --> J[✅ Complete]
 ```
 
 **Decision Guide:**
 
-- **Simple PoC with marketplace images?** → Jump to [Step 3: Deploy Host Pool](#step-3-deploy-host-pool)
-- **Need custom software but okay installing at runtime?** → Follow [Step 1](#step-1-deploy-image-management-resources) → [Step 3](#step-3-deploy-host-pool)
-- **Want pre-configured images with software installed?** → Follow all 3 steps
+- **Greenfield environment without networking?** → Start with [Step 0: Deploy Networking](#step-0-deploy-networking-infrastructure-greenfield), then continue below
+- **Have existing VNet + subnet?** → Skip Step 0, continue below
+
+**Then choose your deployment approach:**
+
+- **Simple PoC with marketplace images?** → Jump directly to [Step 3: Deploy Host Pool](#step-3-deploy-host-pool)
+- **Need custom software, install at session host runtime?** → [Step 1](#step-1-deploy-image-management-resources) → [Step 3](#step-3-deploy-host-pool)
+- **Want pre-configured images with software pre-installed?** → [Step 1](#step-1-deploy-image-management-resources) → [Step 2](#step-2-build-custom-image-optional) → [Step 3](#step-3-deploy-host-pool)
 
 ---
 
@@ -35,10 +43,10 @@ Most components support multiple deployment methods:
 
 | Component | Blue Button | Template Spec | PowerShell/CLI |
 |-----------|-------------|---------------|----------------|
+| **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Networking** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 
 > **🔒 Air-Gapped Clouds (Azure Secret/Top Secret):** Blue Button deployments are NOT available. You can use either:
@@ -188,9 +196,95 @@ New-AzDeployment `
 
 ---
 
+## Step 0: Deploy Networking Infrastructure (Greenfield)
+
+**⏭️ Skip this step if:** You already have a virtual network with subnets for AVD session hosts.
+
+**Required for:** Greenfield deployments without existing networking infrastructure.
+
+### What Gets Deployed
+
+The networking deployment provides a complete foundation for AVD, including:
+
+- **🌐 Virtual Network** - Spoke VNet with customizable address space
+- **🔌 Subnets** - Session hosts, private endpoints, function apps
+- **🛣️ Routing** - Default, NVA (Network Virtual Appliance), or NAT gateway routing
+- **🔗 Hub Peering** - Optional peering to hub VNet for hybrid connectivity
+- **🔒 Private DNS Zones** - For Azure services (Blob, Files, Queue, Table, Key Vault, Backup, AVD)
+- **🛡️ DDoS Protection** - Optional DDoS Network Protection
+- **📊 Diagnostics** - NSG flow logs to Log Analytics
+
+### Quick Deploy Options
+
+**Option 1: Azure Portal (Blue Button)** - Commercial & Government clouds only
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2Fnetworking.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2FuiFormDefinition.json) 
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2Fnetworking.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2FuiFormDefinition.json)
+
+**Option 2: PowerShell** - All clouds
+
+```powershell
+# Connect to Azure
+Connect-AzAccount -Environment AzureUSGovernment
+Set-AzContext -Subscription "<subscription-id>"
+
+# Deploy networking
+New-AzDeployment `
+    -Location "usgovvirginia" `
+    -Name "avd-networking-deployment" `
+    -TemplateFile ".\deployments\networking\networking.bicep" `
+    -TemplateParameterFile ".\deployments\networking\parameters\<your-params>.json" `
+    -Verbose
+```
+
+**Option 3: Template Spec + Portal UI** - Recommended for air-gapped clouds
+1. Create networking template spec:
+   ```powershell
+   .\New-TemplateSpecs.ps1 -Location "usgovvirginia" -createNetwork $true -createCustomImage $false -createHostPool $false -CreateAddOns $false
+   ```
+2. Navigate to **Template Specs** in Azure Portal
+3. Select **AVD Network Spoke**
+4. Click **Deploy** and fill out the form
+
+### Key Configuration Options
+
+| Feature | Description | When to Use |
+|---------|-------------|-------------|
+| **Hub Peering** | Peer spoke VNet to hub VNet | Hybrid connectivity, centralized routing |
+| **NVA Routing** | Route traffic through Network Virtual Appliance | Centralized firewall/inspection |
+| **Private DNS Zones** | Create DNS zones for Azure services | Private endpoints, Zero Trust architecture |
+| **DDoS Protection** | Enable DDoS Network Protection | Production environments, security requirements |
+| **Multiple Subnets** | Session hosts, private endpoints, functions | Segmentation, private link deployments |
+
+### Typical Deployment Scenarios
+
+**Scenario 1: Simple Greenfield (Development/Test)**
+- VNet with session host subnet only
+- Public routing
+- No hub peering
+- Minimal configuration
+
+**Scenario 2: Production with Hub (Zero Trust)**
+- VNet with multiple subnets (hosts, private endpoints)
+- Hub peering for hybrid connectivity
+- NVA routing through hub firewall
+- Private DNS zones for all Azure services
+- DDoS protection enabled
+
+**Scenario 3: Air-Gapped Cloud**
+- VNet with segmented subnets
+- Private DNS zones for cloud-specific service endpoints
+- Route tables configured for on-premises routing
+- No internet egress
+
+**📖 For detailed networking architecture and requirements:** [Host Pool Deployment Guide - Networking Prerequisites](hostpoolDeployment.md#c-networking-setup)
+
+---
+
 ## Step 1: Deploy Image Management Resources
 
 **⏭️ Skip this step if:** You're using marketplace images without customization.
+
 
 **Required for:** Custom image builds or session host runtime customizations with software packages.
 

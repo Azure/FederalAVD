@@ -16,7 +16,8 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 | Component | Description | Documentation |
 |-----------|-------------|---------------|
 | 🚀 **Quick Start** | Step-by-step guide for new deployments | [Quick Start Guide](docs/quickStart.md) |
-| 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpoolDeployment.md) |
+| � **Networking** | Virtual network, subnets, hub peering, route tables, private DNS zones | [Quick Start - Networking](docs/quickStart.md#step-0-deploy-networking-infrastructure-greenfield) |
+| �🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpoolDeployment.md) |
 | 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifactsGuide.md) |
 | 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/imageBuild.md) |
 | 🔧 **Add-Ons** | Lifecycle automation and operational tools | [Add-Ons](#-add-ons) |
@@ -35,22 +36,25 @@ Ready to deploy? The **[Quick Start Guide](docs/quickStart.md)** walks you throu
 
 ```mermaid
 graph TD
-    A[Start] --> B{Need Custom<br/>Software or<br/>Configurations?}
-    B -->|Yes| C[📦 Step 1: Deploy<br/>Image Management]
-    B -->|No| D[Use Marketplace<br/>Image]
-    C --> E{Build<br/>Custom Image?}
-    E -->|Yes<br/>Pre-install software| F[🎨 Step 2: Build<br/>Custom Image]
-    E -->|No<br/>Install at runtime| H[🏢 Step 3: Deploy<br/>Host Pool]
-    F --> H
-    D --> H
-    H --> I[✅ Complete]
+    A[Start] --> B{Have Existing<br/>VNet?}
+    B -->|No<br/>Greenfield| C[🌐 Deploy<br/>Networking]
+    B -->|Yes| D{Need Custom<br/>Software?}
+    C --> D
+    D -->|Yes| E[📦 Deploy Image<br/>Management]
+    D -->|No| F[Use Marketplace<br/>Image]
+    E --> G{Build<br/>Custom Image?}
+    G -->|Yes<br/>Pre-install| H[🎨 Build Custom<br/>Image]
+    G -->|No<br/>Runtime install| I[🏢 Deploy<br/>Host Pool]
+    H --> I
+    F --> I
+    I --> J[✅ Complete]
 ```
 
 ### Deployment Methods
 
 | Component | Blue Button | Template Spec | PowerShell/CLI |
 |-----------|-------------|---------------|----------------|
-| **Networking** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
