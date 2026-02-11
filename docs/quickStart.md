@@ -133,13 +133,14 @@ cd C:\repos\FederalAVD\deployments
 ```
 
 **This creates Template Specs for:**
-- ✅ Image Management Resources
+
 - ✅ Custom Image Build
 - ✅ Host Pool Deployment
 - ✅ Networking Infrastructure
 - ✅ All Add-Ons (Session Host Replacer, Storage Quota Manager, etc.)
 
 **Deploy using Template Spec UI:**
+
 1. Navigate to **Template Specs** in Azure Portal
 2. Select the desired template spec
 3. Click **Deploy** and fill out the form
