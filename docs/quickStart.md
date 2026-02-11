@@ -206,10 +206,12 @@ New-AzDeployment `
 
 The networking deployment provides a complete foundation for AVD, including:
 
-- **🌐 Virtual Network** - Spoke VNet with customizable address space
-- **🔌 Subnets** - Session hosts, private endpoints, function apps
-- **�️ Network Security Groups** - Basic NSG for subnet security
-- **�🛣️ Routing** - Default, NVA (Network Virtual Appliance), or NAT gateway routing- **🚪 NAT Gateway** - Optional NAT gateway for secure outbound connectivity- **🔗 Hub Peering** - Optional peering to hub VNet for hybrid connectivity
+- **🌐 Virtual Network** - Spoke or standalone VNet with customizable address space
+- **🔀 Subnets** - Session hosts, private endpoints, function apps
+- **🛡️ Network Security Groups** - Basic NSGs for subnet security
+- **🛣️ Routing** - Default, NVA (Network Virtual Appliance), or NAT gateway routing
+- **🚦 NAT Gateway** - Optional NAT gateway for secure outbound connectivity
+- **🔗 Hub Peering** - Optional peering to hub VNet for hybrid connectivity
 - **🔒 Private DNS Zones** - For Azure services (Blob, Files, Queue, Table, Key Vault, Backup, AVD)
 - **🛡️ DDoS Protection** - Optional DDoS Network Protection
 - **📊 Diagnostics** - NSG flow logs to Log Analytics
