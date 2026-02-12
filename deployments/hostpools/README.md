@@ -122,7 +122,7 @@ Subscription
    - Private endpoint subnet (for Zero Trust)
 
 3. **Compute**
-   - VM size (e.g., `Standard_D4ads_v5`)
+   - VM size (e.g., `Standard_D4ads_v6`)
    - VM count
    - Availability zone preferences
 
