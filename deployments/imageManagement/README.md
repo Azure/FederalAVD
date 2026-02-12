@@ -29,7 +29,7 @@ Subscription
 │   ├── Azure Compute Gallery
 │   │   └── Image Definitions (created during image builds)
 │   ├── Storage Account
-│  │   └── Artifacts Blob Container
+│   │   └── Artifacts Blob Container
 │   ├── User-Assigned Managed Identity
 │   │   └── RBAC: Storage Blob Data Reader (on storage account)
 │   └── Private Endpoint (optional)
