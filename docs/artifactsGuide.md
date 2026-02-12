@@ -139,7 +139,7 @@ graph TD
 
 **Looping is handled by Bicep/ARM:**
 
-- Image builds: `deployments/imageManagement/imageBuild/modules/applyCustomizationsBatch.bicep`
+- Image builds: `deployments/imageBuild/modules/applyCustomizationsBatch.bicep`
 - Session hosts: `deployments/hostpools/modules/sessionHosts/modules/invokeCustomizations.bicep`
 
 **Each artifact execution is independent:**
@@ -754,7 +754,7 @@ All activity is logged via PowerShell transcript:
 **How Invoke-Customization.ps1 is Called:**
 
 **Image Builds:**
-File: `deployments/imageManagement/imageBuild/modules/applyCustomization.bicep`
+File: `deployments/imageBuild/modules/applyCustomization.bicep`
 
 ```bicep
 resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = {
@@ -886,8 +886,8 @@ Edit your image build parameters file:
 ```powershell
 New-AzDeployment `
     -Location "East US 2" `
-    -TemplateFile ".\deployments\imageManagement\imageBuild\imageBuild.bicep" `
-    -TemplateParameterFile ".\deployments\imageManagement\imageBuild\parameters\production.imageBuild.parameters.json"
+    -TemplateFile ".\deployments\imageBuild\imageBuild.bicep" `
+    -TemplateParameterFile ".\deployments\imageBuild\parameters\production.imageBuild.parameters.json"
 ```
 
 ### Session Host Integration

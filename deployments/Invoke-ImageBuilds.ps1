@@ -8,11 +8,11 @@ param (
 
 $DeploymentJobs = @()
 ForEach ($Prefix in $ParameterFilePrefixes) {
-    $ParameterFile = Join-Path -Path $PSScriptRoot -ChildPath "imageManagement\imageBuild\parameters\$Prefix.imagebuild.parameters.json"
+    $ParameterFile = Join-Path -Path $PSScriptRoot -ChildPath "imageBuild\parameters\$Prefix.imagebuild.parameters.json"
     If (Test-Path -Path $ParameterFile) {
         Write-Output "Using parameter file: $ParameterFile"
         $Date = Get-Date -Format 'yyyyMMddhhmmss'
-        $DeploymentJob = New-AzDeployment -Name "ImageBuild-$Prefix-$Date" -Location 'eastus2' -TemplateFile (Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageBuild\imageBuild.json') -TemplateParameterFile $ParameterFile -AsJob 
+        $DeploymentJob = New-AzDeployment -Name "ImageBuild-$Prefix-$Date" -Location 'eastus2' -TemplateFile (Join-Path -Path $PSScriptRoot -ChildPath 'imageBuild\imageBuild.json') -TemplateParameterFile $ParameterFile -AsJob 
         Start-Sleep -Seconds 1
     }
     else {

@@ -77,8 +77,8 @@ if ($createCustomImage) {
         Name = 'avd-custom-image'
         DisplayName = 'AVD Custom Image'
         Description = 'Generates a custom image for Azure Virtual Desktop'
-        TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageBuild\imageBuild.json'
-        UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageBuild\uiFormDefinition.json'
+        TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath 'imageBuild\imageBuild.json'
+        UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath 'imageBuild\uiFormDefinition.json'
     }
 }
 

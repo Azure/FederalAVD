@@ -1074,8 +1074,8 @@ stages:
                 $timestamp = Get-Date -Format 'yyyyMMddHHmmss'
                 az deployment sub create `
                   --location $(location) `
-                  --template-file deployments/imageManagement/imageBuild/imageBuild.bicep `
-                  --parameters deployments/imageManagement/imageBuild/parameters/prod.bicepparam `
+                  --template-file deployments/imageBuild/imageBuild.bicep `
+                  --parameters deployments/imageBuild/parameters/prod.bicepparam `
                   --name "imageBuild-$timestamp" `
                   --verbose
 ```
@@ -1132,8 +1132,8 @@ jobs:
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
           az deployment sub create \
             --location ${{ env.LOCATION }} \
-            --template-file deployments/imageManagement/imageBuild/imageBuild.bicep \
-            --parameters deployments/imageManagement/imageBuild/parameters/prod.bicepparam \
+            --template-file deployments/imageBuild/imageBuild.bicep \
+            --parameters deployments/imageBuild/parameters/prod.bicepparam \
             --name "imageBuild-$TIMESTAMP"
 ```
 

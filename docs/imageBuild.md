@@ -77,22 +77,22 @@ Custom images are built by executing **artifacts** during the image build proces
 
 ### Required - Parameter Files
 
-Image build configurations are defined in parameter files located in `deployments/imageManagement/parameters/`:
+Image build configurations are defined in parameter files located in `deployments/imageBuild/parameters/`:
 
-**Two parameter files are required:**
+**One parameter file is required per image build:**
 
-1. **`<prefix>.imageBuild.parameters.json`** - Defines the image build configuration
-2. **`<prefix>.imageManagement.parameters.json`** - References the Image Management resources
+- **`<prefix>.imageBuild.parameters.json`** - Contains the complete image build configuration including compute gallery reference, artifacts location, source image details, and customizations
 
 **Example structure:**
 
 ```
-deployments/imageManagement/parameters/
+deployments/imageBuild/parameters/
 ├── demo.imageBuild.parameters.json
-├── demo.imageManagement.parameters.json
-├── prod.imageBuild.parameters.json
-└── prod.imageManagement.parameters.json
+├── dev.imageBuild.parameters.json
+└── prod.imageBuild.parameters.json
 ```
+
+**Prefix naming:** The `<prefix>` allows you to maintain multiple image build configurations (e.g., `demo`, `dev`, `prod`) and deploy them using the `Invoke-ImageBuilds.ps1` script by specifying the prefix(es).
 
 ---
 
@@ -171,16 +171,15 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 | **collectCustomizationLogs** | Save customization logs to blob storage | `true` (optional, default: `false`) |
 | **logStorageAccountNetworkAccess** | Network access for log storage account | `PrivateEndpoint`, `ServiceEndpoint`, or `PublicEndpoint` |
 
-### Image Management Parameters
+### Image Management Resource References
 
-Reference parameters in `<prefix>.imageManagement.parameters.json`:
+These parameters reference the Image Management resources and are included in the same `<prefix>.imageBuild.parameters.json` file:
 
-| Parameter | Description |
-|-----------|-------------|
-| **artifactsContainerName** | Blob container name for artifacts |
-| **artifactsStorageAccountResourceId** | Resource ID of storage account |
-| **artifactsUserAssignedIdentityResourceId** | Managed identity for blob access |
-| **computeGalleryResourceId** | Compute Gallery resource ID |
+| Parameter | Description | Example |
+|-----------|-------------|------|
+| **computeGalleryResourceId** | Resource ID of the Azure Compute Gallery | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.Compute/galleries/{gallery-name}` |
+| **artifactsContainerUri** | URI of the blob container with artifacts | `https://{storage-account}.blob.core.usgovcloudapi.net/artifacts` |
+| **userAssignedIdentityResourceId** | Managed identity for blob access | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity-name}` |
 
 ### Automatic Image Versioning
 
@@ -269,8 +268,8 @@ Deploy using Azure CLI or PowerShell directly:
 ```powershell
 New-AzSubscriptionDeployment `
     -Location "usgovvirginia" `
-    -TemplateFile ".\imageManagement\imageBuild\imageBuild.bicep" `
-    -TemplateParameterFile ".\imageManagement\parameters\demo.imageBuild.parameters.json" `
+    -TemplateFile ".\imageBuild\imageBuild.bicep" `
+    -TemplateParameterFile ".\imageBuild\parameters\demo.imageBuild.parameters.json" `
     -Name "avd-image-build-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
 
@@ -279,8 +278,8 @@ New-AzSubscriptionDeployment `
 ```bash
 az deployment sub create \
     --location usgovvirginia \
-    --template-file ./imageManagement/imageBuild/imageBuild.bicep \
-    --parameters @./imageManagement/parameters/demo.imageBuild.parameters.json \
+    --template-file ./imageBuild/imageBuild.bicep \
+    --parameters @./imageBuild/parameters/demo.imageBuild.parameters.json \
     --name avd-image-build-$(date +%Y%m%d%H%M)
 ```
 
