@@ -503,7 +503,7 @@ try {
     Write-ColorOutput "   Trigger a test condition and verify Action Group receives notification" -ForegroundColor Gray
     Write-ColorOutput "`n3. Review and tune thresholds after 1 week of operation" -ForegroundColor White
     Write-ColorOutput "`n4. Consider creating a Log Analytics dashboard for trending" -ForegroundColor White
-    Write-ColorOutput "   See ALERTS.md for recommended queries" -ForegroundColor Gray
+    Write-ColorOutput "   See alertsGuide.md for recommended queries" -ForegroundColor Gray
     Write-ColorOutput "`n==================================================" -ForegroundColor Cyan
     
 }

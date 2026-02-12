@@ -36,6 +36,7 @@ Run multiple scripts stored in an Azure Storage Account blob container on select
 
 **Required format for scripts parameter:**
 Each script object must contain:
+
 - `name` - Unique identifier for the run command (alphanumeric, no spaces)
 - `blobNameOrUri` - Blob name (if in container) or full URI
 - `arguments` (optional) - Space-separated arguments to pass to the script
