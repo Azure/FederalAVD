@@ -6,7 +6,7 @@ param logsContainerUri string
 param parameters array
 @secure()
 param protectedParameter object = {}
-param base64ScriptContent string = ''
+param scriptContent string = ''
 param scriptUri string = ''
 param scriptsUserAssignedIdentityClientId string
 param timeoutInSeconds int
@@ -38,17 +38,12 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
       ? null
       : '${logsContainerUri}/${vm}-${runCommandName}-output-${timeStamp}.log'
     parameters: empty(parameters) ? null : parameters
-    protectedParameters: empty(base64ScriptContent)
-      ? (empty(protectedParameter) ? null : [protectedParameter])
-      : [
-          {
-            name: 'ScriptB64'
-            value: base64ScriptContent
-          }
-        ]
+    protectedParameters: empty(protectedParameter) ? null : [protectedParameter]
     source: {
       scriptUri: empty(scriptUri) ? null : scriptUri
-      script: empty(base64ScriptContent) ? null : loadTextContent('../functions/Execute-Base64Script.ps1')
+      // Pass inline script content directly - no encoding needed
+      // Run Command accepts up to 256KB of inline script content
+      script: empty(scriptContent) ? null : scriptContent
       scriptUriManagedIdentity: empty(scriptsUserAssignedIdentityClientId)
         ? null
         : {

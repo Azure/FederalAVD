@@ -68,8 +68,9 @@ var multipleScripts = [
   }
 ]
 
-// Encode script content to base64 if provided to prevent issues with special characters
-var base64ScriptContent = empty(scriptContent) ? '' : base64(replace(replace(scriptContent, '\r\n', '\n'), '\r', '\n'))
+// Normalize line endings for cross-platform consistency
+// No base64 encoding needed - Run Command accepts inline scripts up to 256KB
+var normalizedScriptContent = empty(scriptContent) ? '' : replace(replace(scriptContent, '\r\n', '\n'), '\r', '\n')
 
 resource logsUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(logsUserAssignedIdentityResourceId)) {
   name: last(split(logsUserAssignedIdentityResourceId, '/'))
@@ -152,7 +153,7 @@ module runCommand 'modules/runCommand.bicep' = [
         : scriptsUserAssignedIdentity!.properties.clientId
       parameters: parameters
       protectedParameter: protectedParameter
-      base64ScriptContent: base64ScriptContent
+      scriptContent: normalizedScriptContent
       scriptUri: scriptUri
       timeoutInSeconds: timeoutInSeconds
       timeStamp: timeStamp

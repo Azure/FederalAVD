@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.39.26.7824",
-      "templateHash": "5483842683969039359"
+      "version": "0.40.2.10011",
+      "templateHash": "10035919117737131946"
     }
   },
   "parameters": {
@@ -141,7 +141,7 @@
     ],
     "logsContainerUri": "[if(or(empty(parameters('logsContainerName')), empty(parameters('logsStorageAccountName'))), '', format('https://{0}.blob.{1}/{2}', parameters('logsStorageAccountName'), environment().suffixes.storage, parameters('logsContainerName')))]",
     "scriptsContainerUri": "[if(or(empty(parameters('scriptsContainerName')), empty(parameters('scriptsStorageAccountName'))), '', format('https://{0}.blob.{1}/{2}', parameters('scriptsStorageAccountName'), environment().suffixes.storage, parameters('scriptsContainerName')))]",
-    "base64ScriptContent": "[if(empty(parameters('scriptContent')), '', base64(replace(replace(parameters('scriptContent'), '\r\n', '\n'), '\r', '\n')))]"
+    "normalizedScriptContent": "[if(empty(parameters('scriptContent')), '', replace(replace(parameters('scriptContent'), '\r\n', '\n'), '\r', '\n'))]"
   },
   "resources": [
     {
@@ -194,8 +194,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "16965621387823645782"
+              "version": "0.40.2.10011",
+              "templateHash": "17175578679719777736"
             }
           },
           "parameters": {
@@ -292,8 +292,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "4042916111366723965"
+              "version": "0.40.2.10011",
+              "templateHash": "13472448701982493506"
             }
           },
           "parameters": {
@@ -416,8 +416,8 @@
           "protectedParameter": {
             "value": "[parameters('protectedParameter')]"
           },
-          "base64ScriptContent": {
-            "value": "[variables('base64ScriptContent')]"
+          "scriptContent": {
+            "value": "[variables('normalizedScriptContent')]"
           },
           "scriptUri": {
             "value": "[parameters('scriptUri')]"
@@ -435,8 +435,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "1294445455569883190"
+              "version": "0.40.2.10011",
+              "templateHash": "14138041112015825831"
             }
           },
           "parameters": {
@@ -462,7 +462,7 @@
               "type": "secureObject",
               "defaultValue": {}
             },
-            "base64ScriptContent": {
+            "scriptContent": {
               "type": "string",
               "defaultValue": ""
             },
@@ -480,9 +480,6 @@
               "type": "string"
             }
           },
-          "variables": {
-            "$fxv#0": "param(\r\n    [securestring]\r\n    [Parameter(Mandatory = $true)]\r\n    [string] $ScriptB64\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n# Decode the base64-encoded script\r\n$bytes = [Convert]::FromBase64String($ScriptB64)\r\n$script = [Text.Encoding]::UTF8.GetString($bytes)\r\n\r\n# Normalize line endings (optional but safe)\r\n$script = $script -replace \"`r`n\", \"`n\" -replace \"`r\", \"`n\"\r\n\r\n# Execute\r\n$sb = [ScriptBlock]::Create($script)\r\ntry {\r\n    Write-Host \"----- Begin user script output -----\"\r\n    & $sb\r\n    $exitCode = if ($LASTEXITCODE) { $LASTEXITCODE } else { 0 }\r\n    Write-Host \"----- End user script output -----\"\r\n    exit $exitCode\r\n}\r\ncatch {\r\n    Write-Error (\"User script threw: \" + $_.Exception.Message)\r\n    Write-Error $_.Exception | Format-List * -Force\r\n    exit 1\r\n}"
-          },
           "resources": [
             {
               "type": "Microsoft.Compute/virtualMachines/runCommands",
@@ -495,10 +492,10 @@
                 "outputBlobManagedIdentity": "[if(empty(parameters('logsUserAssignedIdentityClientId')), null(), createObject('clientId', parameters('logsUserAssignedIdentityClientId')))]",
                 "outputBlobUri": "[if(or(empty(parameters('logsContainerUri')), empty(parameters('logsUserAssignedIdentityClientId'))), null(), format('{0}/{1}-{2}-output-{3}.log', parameters('logsContainerUri'), reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmName')), '2023-03-01', 'full'), parameters('runCommandName'), parameters('timeStamp')))]",
                 "parameters": "[if(empty(parameters('parameters')), null(), parameters('parameters'))]",
-                "protectedParameters": "[if(empty(parameters('base64ScriptContent')), if(empty(parameters('protectedParameter')), null(), createArray(parameters('protectedParameter'))), createArray(createObject('name', 'ScriptB64', 'value', parameters('base64ScriptContent'))))]",
+                "protectedParameters": "[if(empty(parameters('protectedParameter')), null(), createArray(parameters('protectedParameter')))]",
                 "source": {
                   "scriptUri": "[if(empty(parameters('scriptUri')), null(), parameters('scriptUri'))]",
-                  "script": "[if(empty(parameters('base64ScriptContent')), null(), variables('$fxv#0'))]",
+                  "script": "[if(empty(parameters('scriptContent')), null(), parameters('scriptContent'))]",
                   "scriptUriManagedIdentity": "[if(empty(parameters('scriptsUserAssignedIdentityClientId')), null(), createObject('clientId', parameters('scriptsUserAssignedIdentityClientId')))]"
                 },
                 "timeoutInSeconds": "[if(equals(parameters('timeoutInSeconds'), 5400), null(), parameters('timeoutInSeconds'))]",
