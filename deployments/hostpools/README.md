@@ -39,29 +39,28 @@ Subscription
 │   ├── Desktop Application Group
 │   ├── Workspace
 │   ├── Scaling Plan (optional)
-│   └── Private Endpoint (Workspace, optional)
+│   └── Private Endpoint (Workspace and/or Host Pool, optional)
 ├── Session Hosts Resource Group
 │   ├── Virtual Machines
 │   ├── Network Interface Cards
-│   ├── Disks (OS + Data)
+│   ├── OS Disks
 │   ├── Availability Set (optional)
-│   ├── Proximity Placement Group (optional)
-│   └── Application Security Group (optional)
+│   └── Disk Encryption Set (optional)
 ├── Management Resource Group
-│   ├── Log Analytics Workspace
-│   ├── Data Collection Rules (VM Insights, session host logs)
-│   ├── Automation Account (FSLogix quota automation)
-│   ├── Private Endpoint (Automation Account, optional)
-│   └── Application Configuration Store (optional)
+│   ├── Key Vaults
+│   └── Private Endpoints (Key Vaults)
 ├── Storage Resource Group
+│   ├── Azure NetApp Files Account (optional)
+│   ├── Capacity Pool (optional)
+│   ├── Volumes (optional)
 │   ├── Storage Account(s) for FSLogix profiles
 │   ├── Azure Files Shares
 │   ├── Private Endpoint(s) (Storage, optional)
 │   └── RBAC Assignments or Kerberos Configuration
 └── Monitoring Resource Group (optional)
-    ├  Azure NetApp Files Account (optional)
-    ├── Capacity Pool (optional)
-    └── Volumes (optional)
+    ├── Log Analytics Workspace
+    ├── Data Collection Rules (VM Insights, session host logs)
+    └── Data Collection Endpoint
 ```
 
 ## Key Features
