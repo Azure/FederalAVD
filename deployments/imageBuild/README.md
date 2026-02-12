@@ -1,5 +1,7 @@
 # AVD Custom Image Build Template
 
+> **📖 User Guide:** For deployment instructions and getting started, see the [Image Build Guide](../../docs/imageBuild.md)
+
 ## Overview
 
 This Azure template provides a comprehensive solution for building custom Windows images for Azure Virtual Desktop (AVD) using a zero-trust architecture approach. Unlike Azure VM Image Builder, this solution gives you complete control over the image build process while maintaining security best practices.

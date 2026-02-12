@@ -1,5 +1,7 @@
 [**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
 
+> **🔧 Technical Reference:** [Image Build Template Documentation](../deployments/imageBuild/README.md) - Complete parameter reference and CI/CD examples
+
 # 🎨 Custom Image Build Guide
 
 ## Overview

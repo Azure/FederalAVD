@@ -1,5 +1,7 @@
 [**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
 
+> **🔧 Technical Reference:** [Host Pool Template Documentation](../deployments/hostpools/README.md) - Complete parameter catalog and advanced scenarios
+
 # 🏢 Host Pool Deployment Guide
 
 ## Overview

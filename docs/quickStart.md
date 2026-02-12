@@ -205,6 +205,8 @@ New-AzDeployment `
 
 **Required for:** Greenfield deployments without existing networking infrastructure.
 
+> **🔧 Technical Reference:** [Networking Template Documentation](../deployments/networking/README.md) - Complete parameter reference and advanced configuration
+
 ### What Gets Deployed
 
 The networking deployment provides a complete foundation for AVD, including:

@@ -1,5 +1,9 @@
 [**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
 
+> **🔧 Technical References:**
+> - [Image Management Template Documentation](../deployments/imageManagement/README.md) - Artifacts storage infrastructure
+> - [Image Build Template Documentation](../deployments/imageBuild/README.md) - Using artifacts in image builds
+
 # Artifacts and Image Management Guide
 
 ## Table of Contents
