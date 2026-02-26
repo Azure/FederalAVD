@@ -202,7 +202,7 @@ resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-
       }
     ]
     source: {
-      script: loadTextContent('../../../../.common/scripts/Remove-AppXPackages.ps1')
+      script: loadTextContent('../../../.common/scripts/Remove-AppXPackages.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -243,7 +243,7 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
       }
     ])
     source: {
-      script: loadTextContent('../../../../.common/scripts/Install-FSLogix.ps1')
+      script: loadTextContent('../../../.common/scripts/Install-FSLogix.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -296,7 +296,7 @@ resource office 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if 
       }
     ])
     source: {
-      script: loadTextContent('../../../../.common/scripts/Install-M365Applications.ps1')
+      script: loadTextContent('../../../.common/scripts/Install-M365Applications.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -342,7 +342,7 @@ resource onedrive 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = i
       }
     ])
     source: {
-      script: loadTextContent('../../../../.common/scripts/Install-OneDrive.ps1')
+      script: loadTextContent('../../../.common/scripts/Install-OneDrive.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -395,7 +395,7 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
       }
     ])
     source: {
-      script: loadTextContent('../../../../.common/scripts/Install-Teams.ps1')
+      script: loadTextContent('../../../.common/scripts/Install-Teams.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -437,7 +437,7 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
       }
     ]
     source: {
-      script: loadTextContent('../../../../.common/scripts/Remove-RunCommands.ps1')
+      script: loadTextContent('../../../.common/scripts/Remove-RunCommands.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -459,7 +459,7 @@ resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands
     asyncExecution: false
     parameters: restartVMParameters
     source: {
-      script: loadTextContent('../../../../.common/scripts/Restart-Vm.ps1')
+      script: loadTextContent('../../../.common/scripts/Restart-Vm.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -511,7 +511,7 @@ resource restartCustomizations 'Microsoft.Compute/virtualMachines/runCommands@20
     asyncExecution: false
     parameters: restartVMParameters
     source: {
-      script: loadTextContent('../../../../.common/scripts/Restart-Vm.ps1')
+      script: loadTextContent('../../../.common/scripts/Restart-Vm.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -560,7 +560,7 @@ resource microsoftUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03
           }
         ]
     source: {
-      script: loadTextContent('../../../../.common/scripts/Invoke-WindowsUpdate.ps1')
+      script: loadTextContent('../../../.common/scripts/Invoke-WindowsUpdate.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -578,7 +578,7 @@ resource restartUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
     asyncExecution: false
     parameters: restartVMParameters
     source: {
-      script: loadTextContent('../../../../.common/scripts/Restart-Vm.ps1')
+      script: loadTextContent('../../../.common/scripts/Restart-Vm.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -620,7 +620,7 @@ resource wdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (a
       }
     ])
     source: {
-      script: loadTextContent('../../../../.common/scripts/Invoke-WDOT.ps1')
+      script: loadTextContent('../../../.common/scripts/Invoke-WDOT.ps1')
     }
     timeoutInSeconds: 600
     treatFailureAsDeploymentFailure: true
@@ -641,7 +641,7 @@ resource restartWDOT 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
     asyncExecution: false
     parameters: restartVMParameters
     source: {
-      script: loadTextContent('../../../../.common/scripts/Restart-Vm.ps1')
+      script: loadTextContent('../../../.common/scripts/Restart-Vm.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -689,7 +689,7 @@ resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-
         }
       ])
       source: {
-        script: loadTextContent('../../../../.common/scripts/Invoke-Customization.ps1')
+        script: loadTextContent('../../../.common/scripts/Invoke-Customization.ps1')
       }
       treatFailureAsDeploymentFailure: true
     }
@@ -803,7 +803,7 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
       }
     ]
     source: {
-      script: loadTextContent('../../../../.common/scripts/Invoke-Sysprep.ps1')
+      script: loadTextContent('../../../.common/scripts/Invoke-Sysprep.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

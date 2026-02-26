@@ -53,7 +53,7 @@ resource application 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
       }
     ])
     source: {
-      script: loadTextContent('../../../../.common/scripts/Invoke-Customization.ps1')
+      script: loadTextContent('../../../.common/scripts/Invoke-Customization.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -67,7 +67,7 @@ resource restart 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if
     asyncExecution: false
     parameters: restartVMParameters
     source: {
-      script: loadTextContent('../../../../.common/scripts/Restart-Vm.ps1')
+      script: loadTextContent('../../../.common/scripts/Restart-Vm.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

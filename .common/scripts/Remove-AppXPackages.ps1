@@ -26,7 +26,7 @@ ForEach ($app in $apps) {
 
     If ($($ProvisionedApps.DisplayName) -contains $app) {
         Write-OutputWithTimeStamp "Removing Provisioned AppX Package [$app]"
-        Get-AppxProvisionedPackage -online | Where-Object {$_.DisplayName -eq "$app"} | Remove-AppxProvisionedPackage -online
+        Get-AppxProvisionedPackage -online | Where-Object {$_.DisplayName -eq "$app"} | Remove-AppxProvisionedPackage -Online -AllUsers
     }
 
     If ($($InstalledApps.Name) -contains $app) {

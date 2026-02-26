@@ -63,7 +63,7 @@ resource removeRunCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-0
       }
     ]
     source: {
-      script: loadTextContent('../../../../.common/scripts/Remove-RunCommands.ps1')
+      script: loadTextContent('../../../.common/scripts/Remove-RunCommands.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

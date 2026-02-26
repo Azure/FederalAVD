@@ -282,13 +282,13 @@ var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes
 #disable-next-line BCP329
 var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location)-5) : location
-var locations = startsWith(cloud, 'us') ? (loadJsonContent('../../../.common/data/locations.json')).other : (loadJsonContent('../../../.common/data/locations.json'))[environment().name]
-var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
+var locations = startsWith(cloud, 'us') ? (loadJsonContent('../../.common/data/locations.json')).other : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
+var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 var downloads = startsWith(cloud, 'usn')
-  ? loadJsonContent('../parameters/topsecret.downloads.parameters.json')
+  ? loadJsonContent('../imageManagement/parameters/topsecret.downloads.parameters.json')
   : startsWith(cloud, 'uss')
-      ? loadJsonContent('../parameters/secret.downloads.parameters.json')
-      : loadJsonContent('../parameters/public.downloads.parameters.json')
+      ? loadJsonContent('../imageManagement/parameters/secret.downloads.parameters.json')
+      : loadJsonContent('../imageManagement/parameters/public.downloads.parameters.json')
 
 var computeLocation = vnet.location
 var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''
@@ -440,7 +440,7 @@ resource imageBuildRg 'Microsoft.Resources/resourceGroups@2023-07-01' = if (empt
 
 // * Managed Identity * //
 
-module userAssignedIdentity '../../sharedModules/resources/managed-identity/user-assigned-identity/main.bicep' = if (empty(userAssignedIdentityResourceId)) {
+module userAssignedIdentity '../sharedModules/resources/managed-identity/user-assigned-identity/main.bicep' = if (empty(userAssignedIdentityResourceId)) {
   name: '${depPrefix}ManagedIdentity-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -467,7 +467,7 @@ resource existingImageDefinition 'Microsoft.Compute/galleries/images@2024-03-03'
   scope: resourceGroup(split(imageDefinitionResourceId, '/')[2], split(imageDefinitionResourceId, '/')[4])
 }
 
-module imageDefinition '../../sharedModules/resources/compute/gallery/image/main.bicep' = if (empty(imageDefinitionResourceId)) {
+module imageDefinition '../sharedModules/resources/compute/gallery/image/main.bicep' = if (empty(imageDefinitionResourceId)) {
   name: '${depPrefix}Gallery-Image-Definition-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[4])
   params: {
@@ -490,7 +490,7 @@ resource remoteComputeGallery 'Microsoft.Compute/galleries@2024-03-03' existing 
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
 }
 
-module remoteImageDefinition '../../sharedModules/resources/compute/gallery/image/main.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
+module remoteImageDefinition '../sharedModules/resources/compute/gallery/image/main.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
   name: '${depPrefix}Remote-Gallery-Image-Definition-${deploymentSuffix}'
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {
@@ -518,7 +518,7 @@ module remoteImageDefinition '../../sharedModules/resources/compute/gallery/imag
 
 // * Role Assignments * //
 
-module roleAssignmentContributorBuildRg '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = {
+module roleAssignmentContributorBuildRg '../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = {
   name: '${depPrefix}RA-MI-VirtMachContr-BuildRG-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -533,7 +533,7 @@ module roleAssignmentContributorBuildRg '../../sharedModules/resources/authoriza
   ]
 }
 
-module roleAssignmentBlobDataContributorBuilderRg '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = if (collectCustomizationLogs) {
+module roleAssignmentBlobDataContributorBuilderRg '../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = if (collectCustomizationLogs) {
   name: '${depPrefix}RA-MI-StorBlobDataContr-BuildRG-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -547,7 +547,7 @@ module roleAssignmentBlobDataContributorBuilderRg '../../sharedModules/resources
 
 // * Logging * //
 
-module logsStorageAccount '../../sharedModules/resources/storage/storage-account/main.bicep' = if (collectCustomizationLogs) {
+module logsStorageAccount '../sharedModules/resources/storage/storage-account/main.bicep' = if (collectCustomizationLogs) {
   name: '${depPrefix}Logs-StorageAccount-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -637,7 +637,7 @@ module logsStorageAccount '../../sharedModules/resources/storage/storage-account
 
 // * Orchestration VM * //
 
-module orchestrationVm '../../sharedModules/resources/compute/virtual-machine/main.bicep' = {
+module orchestrationVm '../sharedModules/resources/compute/virtual-machine/main.bicep' = {
   name: '${depPrefix}Orchestration-VM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -693,7 +693,7 @@ module orchestrationVm '../../sharedModules/resources/compute/virtual-machine/ma
 
 // * Image VM * //
 
-module imageVm '../../sharedModules/resources/compute/virtual-machine/main.bicep' = {
+module imageVm '../sharedModules/resources/compute/virtual-machine/main.bicep' = {
   name: '${depPrefix}Image-VM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -793,7 +793,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
 
 // * VM Generalization * //
 
-module stopAndGeneralizeImageVM '../../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = {
+module stopAndGeneralizeImageVM '../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = {
   name: '${depPrefix}Generalize-VM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -815,7 +815,7 @@ module stopAndGeneralizeImageVM '../../sharedModules/resources/compute/virtual-m
         value: imageVm.outputs.resourceId
       }
     ]
-    script: loadTextContent('../../../.common/scripts/Generalize-Vm.ps1')
+    script: loadTextContent('../../.common/scripts/Generalize-Vm.ps1')
     treatFailureAsDeploymentFailure: true
     virtualMachineName: orchestrationVm.outputs.name
   }
@@ -855,7 +855,7 @@ module captureImage 'modules/captureImage.bicep' = {
 
 // * Cleanup Temporary Resources * //
 
-module removeImageBuildResources '../../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = {
+module removeImageBuildResources '../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = {
   name: '${depPrefix}Remove-Image-Image-Build-Resources-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -886,13 +886,13 @@ module removeImageBuildResources '../../sharedModules/resources/compute/virtual-
         value: orchestrationVm.outputs.resourceId
       }
     ]
-    script: loadTextContent('../../../.common/scripts/Remove-ImageBuildResources.ps1')
+    script: loadTextContent('../../.common/scripts/Remove-ImageBuildResources.ps1')
     treatFailureAsDeploymentFailure: false
     virtualMachineName: orchestrationVm.outputs.name
   }
 }
 
-module remoteImageVersion '../../sharedModules/resources/compute/gallery/image/version/main.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
+module remoteImageVersion '../sharedModules/resources/compute/gallery/image/version/main.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
   name: '${depPrefix}Remote-ImageVersion-${deploymentSuffix}'
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {
