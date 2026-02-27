@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.40.2.10011",
-      "templateHash": "3622325540705269071"
+      "templateHash": "11721468761967580510"
     },
     "name": "Zero Trust Architecture Custom Windows Image Builder",
     "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
@@ -1489,8 +1489,8 @@
     "$fxv#6": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$VmResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod `\r\n        -Headers @{Metadata=\"true\"} `\r\n        -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Stop the VM\r\n    $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/powerOff?api-version=2024-03-01')\r\n    # Wait for it to show as stopped in Azure\r\n    Do {\r\n        Start-Sleep -Seconds 5\r\n        $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')\r\n        $VMPowerState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).displayStatus\r\n\r\n    } Until ($VMPowerState -eq 'VM stopped')\r\n    # Generatlize the VM\r\n    $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/generalize?api-version=2024-03-01')\r\n}\r\ncatch {\r\n    throw\r\n}",
     "$fxv#7": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ImageVmResourceId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ManagementVmResourceId,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$ImageResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Delete Image VM \r\n    Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageVmResourceId + '?api-version=2024-03-01')\r\n\r\n    # Delete the Image (If it exists)\r\n    If ($ImageResourceId -ne '') {\r\n        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageResourceId + '?api-version=2024-03-01')\r\n    }\r\n    # Wait for at least 20 seconds to allow the Run Command to complete. Run Commands have a minimum 20 secs execution time.\r\n    Start-Sleep -seconds 20\r\n\r\n    # Delete the Management VM\r\n    Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ManagementVmResourceId + '?forceDeletion=true&api-version=2024-03-01')\r\n}\r\ncatch {\r\n    throw\r\n}",
     "deploymentSuffix": "[if(startsWith(deployment().name, 'Microsoft.Template-'), substring(deployment().name, 19, 14), parameters('timeStamp'))]",
-    "installers": [],
-    "customizers": "[union(parameters('customizations'), variables('installers'))]",
+    "uniqueCustomizers": "[map(range(0, length(parameters('customizations'))), lambda('i', createObject('name', if(greater(length(filter(parameters('customizations'), lambda('item', equals(lambdaVariables('item').name, parameters('customizations')[lambdaVariables('i')].name)))), 1), format('{0}-{1}', parameters('customizations')[lambdaVariables('i')].name, length(filter(take(parameters('customizations'), add(lambdaVariables('i'), 1)), lambda('item', equals(lambdaVariables('item').name, parameters('customizations')[lambdaVariables('i')].name))))), parameters('customizations')[lambdaVariables('i')].name), 'blobNameOrUri', parameters('customizations')[lambdaVariables('i')].blobNameOrUri, 'arguments', coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'arguments'), ''), 'restart', coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'restart'), false()))))]",
+    "uniqueVdiCustomizers": "[map(range(0, length(parameters('vdiCustomizations'))), lambda('i', createObject('name', if(greater(length(filter(parameters('vdiCustomizations'), lambda('item', equals(lambdaVariables('item').name, parameters('vdiCustomizations')[lambdaVariables('i')].name)))), 1), format('{0}-{1}', parameters('vdiCustomizations')[lambdaVariables('i')].name, length(filter(take(parameters('vdiCustomizations'), add(lambdaVariables('i'), 1)), lambda('item', equals(lambdaVariables('item').name, parameters('vdiCustomizations')[lambdaVariables('i')].name))))), parameters('vdiCustomizations')[lambdaVariables('i')].name), 'blobNameOrUri', parameters('vdiCustomizations')[lambdaVariables('i')].blobNameOrUri, 'arguments', coalesce(tryGet(parameters('vdiCustomizations')[lambdaVariables('i')], 'arguments'), ''))))]",
     "cloud": "[toLower(environment().name)]",
     "varLocation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), parameters('location'))]",
     "locations": "[if(startsWith(variables('cloud'), 'us'), variables('$fxv#0').other, variables('$fxv#1')[environment().name])]",
@@ -12108,7 +12108,7 @@
             "value": "[parameters('cleanupDesktop')]"
           },
           "customizations": {
-            "value": "[variables('customizers')]"
+            "value": "[variables('uniqueCustomizers')]"
           },
           "installFsLogix": {
             "value": "[parameters('installFsLogix')]"
@@ -12155,7 +12155,7 @@
             "value": "[parameters('downloadLatestMicrosoftContent')]"
           },
           "vdiCustomizations": {
-            "value": "[parameters('vdiCustomizations')]"
+            "value": "[variables('uniqueVdiCustomizers')]"
           }
         },
         "template": {

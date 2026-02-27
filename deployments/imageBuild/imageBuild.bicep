@@ -274,9 +274,23 @@ param tags object = {}
 
 var deploymentSuffix = startsWith(deployment().name, 'Microsoft.Template-') ? substring(deployment().name, 19, 14) : timeStamp
 
-var installers = []
-// elimnate duplicates
-var customizers = union(customizations, installers)
+// Function to ensure unique names in customization arrays by appending index to duplicates
+var uniqueCustomizers = map(range(0, length(customizations)), i => {
+  name: length(filter(customizations, item => item.name == customizations[i].name)) > 1
+    ? '${customizations[i].name}-${length(filter(take(customizations, i + 1), item => item.name == customizations[i].name))}'
+    : customizations[i].name
+  blobNameOrUri: customizations[i].blobNameOrUri
+  arguments: customizations[i].?arguments ?? ''
+  restart: customizations[i].?restart ?? false
+})
+
+var uniqueVdiCustomizers = map(range(0, length(vdiCustomizations)), i => {
+  name: length(filter(vdiCustomizations, item => item.name == vdiCustomizations[i].name)) > 1
+    ? '${vdiCustomizations[i].name}-${length(filter(take(vdiCustomizations, i + 1), item => item.name == vdiCustomizations[i].name))}'
+    : vdiCustomizations[i].name
+  blobNameOrUri: vdiCustomizations[i].blobNameOrUri
+  arguments: vdiCustomizations[i].?arguments ?? ''
+})
 
 var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes
@@ -768,7 +782,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     appsToRemove: appsToRemove
     location: computeLocation
     cleanupDesktop: cleanupDesktop
-    customizations: customizers
+    customizations: uniqueCustomizers
     installFsLogix: installFsLogix
     installOneDrive: installOneDrive
     installTeams: installTeams
@@ -787,7 +801,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     artifactsContainerUri: artifactsContainerUri
     downloads: downloads
     downloadLatestMicrosoftContent: downloadLatestMicrosoftContent
-    vdiCustomizations: vdiCustomizations
+    vdiCustomizations: uniqueVdiCustomizers
   }
 }
 
