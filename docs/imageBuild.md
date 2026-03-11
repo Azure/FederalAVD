@@ -270,19 +270,21 @@ Deploy using Azure CLI or PowerShell directly:
 ```powershell
 New-AzSubscriptionDeployment `
     -Location "usgovvirginia" `
-    -TemplateFile ".\imageBuild\imageBuild.bicep" `
-    -TemplateParameterFile ".\imageBuild\parameters\demo.imageBuild.parameters.json" `
+    -TemplateFile "imageBuild\imageBuild.json" `
+    -TemplateParameterFile "imageBuild\parameters\demo.imageBuild.parameters.json" `
     -Name "avd-image-build-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
 
 #### Azure CLI
 
+Executed from Deployments folder.
+
 ```bash
 az deployment sub create \
     --location usgovvirginia \
-    --template-file ./imageBuild/imageBuild.bicep \
-    --parameters @./imageBuild/parameters/demo.imageBuild.parameters.json \
-    --name avd-image-build-$(date +%Y%m%d%H%M)
+    --template-file imageBuild/imageBuild.json \
+    --parameters @imageBuild/parameters/demo.imageBuild.parameters.json \
+    --name "avd-image-build-$(date +%Y%m%d%H%M)"
 ```
 
 ---
