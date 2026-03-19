@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.40.2.10011",
-      "templateHash": "11317158903710434500"
+      "version": "0.41.2.15936",
+      "templateHash": "18306252040707236871"
     },
     "name": "AVD Session Host Replacer Add-On",
     "description": "Deploys automated session host lifecycle management for Azure Virtual Desktop",
@@ -1171,8 +1171,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "10224960162525916020"
+              "version": "0.41.2.15936",
+              "templateHash": "252813173301506374"
             }
           },
           "parameters": {
@@ -3069,8 +3069,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "8286437522501107395"
+              "version": "0.41.2.15936",
+              "templateHash": "10853238195944764783"
             }
           },
           "parameters": {
@@ -3180,8 +3180,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "17878112866154693754"
+              "version": "0.41.2.15936",
+              "templateHash": "10850819189361169262"
             }
           },
           "parameters": {
@@ -3254,8 +3254,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7880731019312073531"
+              "version": "0.41.2.15936",
+              "templateHash": "16177454696692472470"
             },
             "name": "Role Assignments (Subscription scope)",
             "description": "This module deploys a Role Assignment at a Subscription scope.",
@@ -3407,8 +3407,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7880731019312073531"
+              "version": "0.41.2.15936",
+              "templateHash": "16177454696692472470"
             },
             "name": "Role Assignments (Subscription scope)",
             "description": "This module deploys a Role Assignment at a Subscription scope.",
@@ -3564,8 +3564,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "14989425040168770091"
+              "version": "0.41.2.15936",
+              "templateHash": "6545014133739016602"
             }
           },
           "parameters": {
@@ -3665,8 +3665,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "744002619297737923"
+              "version": "0.41.2.15936",
+              "templateHash": "12893307518470466099"
             }
           },
           "parameters": {
@@ -3733,8 +3733,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "2495264875924736635"
+              "version": "0.41.2.15936",
+              "templateHash": "8209271510981971038"
             }
           },
           "parameters": {
@@ -3806,8 +3806,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "6193311948219226423"
+              "version": "0.41.2.15936",
+              "templateHash": "1234104714096386463"
             }
           },
           "parameters": {
@@ -3947,8 +3947,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "3952633927330306878"
+              "version": "0.41.2.15936",
+              "templateHash": "18415933759729462591"
             }
           },
           "parameters": {
@@ -4234,7 +4234,7 @@
                   "scmIpSecurityRestrictions": "[if(parameters('privateEndpoint'), createArray(createObject('ipAddress', 'Any', 'action', 'Deny', 'priority', 2147483647, 'name', 'Deny all', 'description', 'Deny all access')), null())]",
                   "scmIpSecurityRestrictionsDefaultAction": "[if(parameters('privateEndpoint'), 'Deny', null())]",
                   "scmIpSecurityRestrictionsUseMain": "[if(parameters('privateEndpoint'), true(), null())]",
-                  "publicNetworkAccess": "Enabled",
+                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', 'Enabled')]",
                   "use32BitWorkerProcess": false
                 },
                 "outboundVnetRouting": "[if(empty(parameters('functionAppDelegatedSubnetResourceId')), null(), createObject('allTraffic', true(), 'applicationTraffic', true()))]",
@@ -4328,8 +4328,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "13153425445175558891"
+                      "version": "0.41.2.15936",
+                      "templateHash": "6685112461135941918"
                     }
                   },
                   "parameters": {
@@ -4424,8 +4424,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "3537915357704697883"
+                              "version": "0.41.2.15936",
+                              "templateHash": "1394222621253148037"
                             }
                           },
                           "parameters": {
@@ -4549,8 +4549,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "11110463680693508695"
+                              "version": "0.41.2.15936",
+                              "templateHash": "12830647359452053359"
                             }
                           },
                           "parameters": {
@@ -4636,8 +4636,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "14014809249376933795"
+                      "version": "0.41.2.15936",
+                      "templateHash": "11930303770485753828"
                     }
                   },
                   "parameters": {
@@ -4677,8 +4677,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "2919254825473931406"
+                              "version": "0.41.2.15936",
+                              "templateHash": "15343113952619135541"
                             }
                           },
                           "parameters": {
@@ -4748,8 +4748,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "14494216343304504955"
+                      "version": "0.41.2.15936",
+                      "templateHash": "18212431912123992271"
                     }
                   },
                   "parameters": {
@@ -4829,8 +4829,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "3943722023111753482"
+                      "version": "0.41.2.15936",
+                      "templateHash": "223485388202861050"
                     }
                   },
                   "parameters": {
@@ -4972,8 +4972,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "180185396569108974"
+              "version": "0.41.2.15936",
+              "templateHash": "18305280013848113805"
             }
           },
           "parameters": {
@@ -5047,8 +5047,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "2631345058714834099"
+              "version": "0.41.2.15936",
+              "templateHash": "16728435244310921426"
             }
           },
           "parameters": {

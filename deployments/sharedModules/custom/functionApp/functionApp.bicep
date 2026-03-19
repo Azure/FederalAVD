@@ -388,7 +388,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       ] : null
       scmIpSecurityRestrictionsDefaultAction: privateEndpoint ? 'Deny' : null
       scmIpSecurityRestrictionsUseMain: privateEndpoint ? true : null
-      publicNetworkAccess: 'Enabled'
+      publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
       use32BitWorkerProcess: false
     }
     outboundVnetRouting: empty(functionAppDelegatedSubnetResourceId)
