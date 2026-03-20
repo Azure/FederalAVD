@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.40.2.10011",
-      "templateHash": "8610883523715035754"
+      "version": "0.41.2.15936",
+      "templateHash": "13309745308092463669"
     }
   },
   "parameters": {
@@ -586,7 +586,7 @@
       "type": "array",
       "defaultValue": [],
       "metadata": {
-        "description": "Optional.\nArray of objects containing the following properties\n-name: The name of the script or application that is running minus extension\n-blobNameOrUri: The blob name when used with the artifactsContainerUri or the full URI of the file to download.\n-arguments: Arguments required by the installer or script being ran.\n\nJSON example:\n[\n  {\n    \"name\": \"FSLogix\",\n    \"blobNameOrUri\": \"https://aka.ms/fslogix_download\"\n  },\n  {\n    \"name\": \"VSCode\",\n    \"blobNameOrUri\": \"VSCode.zip\",\n    \"arguments\": \"/verysilent /mergetasks=!runcode\"\n  }\n]\n"
+        "description": "Optional.\nArray of objects containing the following properties\n-name: The name of the script or application that is running minus extension\n-blobNameOrUri: The blob name when used with the artifactsContainerUri or the full URI of the file to download.\n-arguments: Arguments required by the installer or script being ran.\n-runAfterHostPoolJoin: (Optional, boolean, defaults to false) When true, the customization runs AFTER the host joins the AVD host pool. When false, it runs BEFORE joining the host pool.\n\nJSON example:\n[\n  {\n    \"name\": \"FSLogix\",\n    \"blobNameOrUri\": \"https://aka.ms/fslogix_download\"\n  },\n  {\n    \"name\": \"VSCode\",\n    \"blobNameOrUri\": \"VSCode.zip\",\n    \"arguments\": \"/verysilent /mergetasks=!runcode\"\n  },\n  {\n    \"name\": \"PostJoinConfig\",\n    \"blobNameOrUri\": \"PostJoinConfig.ps1\",\n    \"arguments\": \"-Environment Production\",\n    \"runAfterHostPoolJoin\": true\n  }\n]\n"
       }
     },
     "deployFSLogixStorage": {
@@ -1114,8 +1114,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "17061810652436725351"
+              "version": "0.41.2.15936",
+              "templateHash": "17719567897054484063"
             }
           },
           "parameters": {
@@ -1724,8 +1724,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7752921793356606256"
+              "version": "0.41.2.15936",
+              "templateHash": "4034502601776582328"
             }
           },
           "parameters": {
@@ -1783,8 +1783,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7752921793356606256"
+              "version": "0.41.2.15936",
+              "templateHash": "4034502601776582328"
             }
           },
           "parameters": {
@@ -1842,8 +1842,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7752921793356606256"
+              "version": "0.41.2.15936",
+              "templateHash": "4034502601776582328"
             }
           },
           "parameters": {
@@ -1899,8 +1899,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7752921793356606256"
+              "version": "0.41.2.15936",
+              "templateHash": "4034502601776582328"
             }
           },
           "parameters": {
@@ -1956,8 +1956,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7752921793356606256"
+              "version": "0.41.2.15936",
+              "templateHash": "4034502601776582328"
             }
           },
           "parameters": {
@@ -2015,8 +2015,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7752921793356606256"
+              "version": "0.41.2.15936",
+              "templateHash": "4034502601776582328"
             }
           },
           "parameters": {
@@ -2074,8 +2074,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7752921793356606256"
+              "version": "0.41.2.15936",
+              "templateHash": "4034502601776582328"
             }
           },
           "parameters": {
@@ -2134,8 +2134,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7752921793356606256"
+              "version": "0.41.2.15936",
+              "templateHash": "4034502601776582328"
             }
           },
           "parameters": {
@@ -2197,8 +2197,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "11610869107126863435"
+              "version": "0.41.2.15936",
+              "templateHash": "12642824254382367649"
             }
           },
           "parameters": {
@@ -2335,8 +2335,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "1195075504788938205"
+              "version": "0.41.2.15936",
+              "templateHash": "15989804219882947538"
             }
           },
           "parameters": {
@@ -2496,8 +2496,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "18430623046341090285"
+                      "version": "0.41.2.15936",
+                      "templateHash": "6606576635313369759"
                     }
                   },
                   "parameters": {
@@ -2574,8 +2574,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "14989425040168770091"
+                      "version": "0.41.2.15936",
+                      "templateHash": "6545014133739016602"
                     }
                   },
                   "parameters": {
@@ -2721,8 +2721,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "17646572378247978148"
+                      "version": "0.41.2.15936",
+                      "templateHash": "16537858602895237992"
                     }
                   },
                   "parameters": {
@@ -3021,8 +3021,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "11860738086215690274"
+              "version": "0.41.2.15936",
+              "templateHash": "1820133376004343298"
             }
           },
           "parameters": {
@@ -3090,8 +3090,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "5770719140360983678"
+                      "version": "0.41.2.15936",
+                      "templateHash": "14893380728205639427"
                     }
                   },
                   "parameters": {
@@ -3170,8 +3170,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "14938781358044840637"
+                      "version": "0.41.2.15936",
+                      "templateHash": "5204673410267439670"
                     }
                   },
                   "parameters": {
@@ -3316,8 +3316,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "5353628119731276117"
+                      "version": "0.41.2.15936",
+                      "templateHash": "14547732561776328634"
                     }
                   },
                   "parameters": {
@@ -3420,8 +3420,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "9163181550659951355"
+                      "version": "0.41.2.15936",
+                      "templateHash": "7728045288936362239"
                     }
                   },
                   "parameters": {
@@ -3492,8 +3492,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "14014809249376933795"
+                      "version": "0.41.2.15936",
+                      "templateHash": "11930303770485753828"
                     }
                   },
                   "parameters": {
@@ -3533,8 +3533,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "2919254825473931406"
+                              "version": "0.41.2.15936",
+                              "templateHash": "15343113952619135541"
                             }
                           },
                           "parameters": {
@@ -3674,8 +3674,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "11235634472698229708"
+              "version": "0.41.2.15936",
+              "templateHash": "7716422917302191642"
             }
           },
           "parameters": {
@@ -3801,8 +3801,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "10915300700135407625"
+                      "version": "0.41.2.15936",
+                      "templateHash": "7554619845746666783"
                     }
                   },
                   "parameters": {
@@ -4110,8 +4110,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "9008978061645526782"
+                              "version": "0.41.2.15936",
+                              "templateHash": "1019539823383017921"
                             }
                           },
                           "parameters": {
@@ -4235,8 +4235,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "3537915357704697883"
+                              "version": "0.41.2.15936",
+                              "templateHash": "1394222621253148037"
                             }
                           },
                           "parameters": {
@@ -4388,8 +4388,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "10934815099459103725"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6759741912810663768"
                             },
                             "name": "Private Endpoints"
                           },
@@ -4526,8 +4526,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "3240554809200430347"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "17593519362769062006"
                                     }
                                   },
                                   "parameters": {
@@ -4727,8 +4727,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "10915300700135407625"
+                      "version": "0.41.2.15936",
+                      "templateHash": "7554619845746666783"
                     }
                   },
                   "parameters": {
@@ -5036,8 +5036,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "9008978061645526782"
+                              "version": "0.41.2.15936",
+                              "templateHash": "1019539823383017921"
                             }
                           },
                           "parameters": {
@@ -5161,8 +5161,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "3537915357704697883"
+                              "version": "0.41.2.15936",
+                              "templateHash": "1394222621253148037"
                             }
                           },
                           "parameters": {
@@ -5314,8 +5314,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "10934815099459103725"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6759741912810663768"
                             },
                             "name": "Private Endpoints"
                           },
@@ -5452,8 +5452,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "3240554809200430347"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "17593519362769062006"
                                     }
                                   },
                                   "parameters": {
@@ -5761,8 +5761,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "10477117165956452578"
+              "version": "0.41.2.15936",
+              "templateHash": "3936855063725868949"
             }
           },
           "parameters": {
@@ -5984,8 +5984,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "5299350957960726909"
+                      "version": "0.41.2.15936",
+                      "templateHash": "1887994866102360958"
                     }
                   },
                   "parameters": {
@@ -6140,8 +6140,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "10934815099459103725"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6759741912810663768"
                             },
                             "name": "Private Endpoints"
                           },
@@ -6278,8 +6278,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "3240554809200430347"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "17593519362769062006"
                                     }
                                   },
                                   "parameters": {
@@ -6449,8 +6449,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "7933071245868714815"
+                      "version": "0.41.2.15936",
+                      "templateHash": "10699112868961807118"
                     }
                   },
                   "parameters": {
@@ -6557,8 +6557,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "1171943043194121908"
+                              "version": "0.41.2.15936",
+                              "templateHash": "3868582904970379055"
                             }
                           },
                           "parameters": {
@@ -6705,8 +6705,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "7571097646488454665"
+                      "version": "0.41.2.15936",
+                      "templateHash": "17868483579000286007"
                     }
                   },
                   "parameters": {
@@ -6837,8 +6837,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "10934815099459103725"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6759741912810663768"
                             },
                             "name": "Private Endpoints"
                           },
@@ -6975,8 +6975,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "3240554809200430347"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "17593519362769062006"
                                     }
                                   },
                                   "parameters": {
@@ -7144,8 +7144,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "17456167629658362086"
+                      "version": "0.41.2.15936",
+                      "templateHash": "5672352527084051776"
                     }
                   },
                   "parameters": {
@@ -7431,8 +7431,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "7571097646488454665"
+                      "version": "0.41.2.15936",
+                      "templateHash": "17868483579000286007"
                     }
                   },
                   "parameters": {
@@ -7563,8 +7563,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "10934815099459103725"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6759741912810663768"
                             },
                             "name": "Private Endpoints"
                           },
@@ -7701,8 +7701,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "3240554809200430347"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "17593519362769062006"
                                     }
                                   },
                                   "parameters": {
@@ -7991,8 +7991,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "293137730260552187"
+              "version": "0.41.2.15936",
+              "templateHash": "13895200286792650731"
             }
           },
           "parameters": {
@@ -8206,8 +8206,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "3037225714061831691"
+                      "version": "0.41.2.15936",
+                      "templateHash": "651734501565691228"
                     }
                   },
                   "parameters": {
@@ -8325,8 +8325,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "3537915357704697883"
+                              "version": "0.41.2.15936",
+                              "templateHash": "1394222621253148037"
                             }
                           },
                           "parameters": {
@@ -8442,8 +8442,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "18430623046341090285"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6606576635313369759"
                             }
                           },
                           "parameters": {
@@ -8526,8 +8526,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "11110463680693508695"
+                              "version": "0.41.2.15936",
+                              "templateHash": "12830647359452053359"
                             }
                           },
                           "parameters": {
@@ -8618,8 +8618,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "4060504899065582299"
+                              "version": "0.41.2.15936",
+                              "templateHash": "14565005851157864128"
                             }
                           },
                           "parameters": {
@@ -8788,8 +8788,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "6879418386476433704"
+                      "version": "0.41.2.15936",
+                      "templateHash": "13833805137512768282"
                     }
                   },
                   "parameters": {
@@ -8962,8 +8962,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "9286923385610269324"
+                              "version": "0.41.2.15936",
+                              "templateHash": "13166357539812535810"
                             }
                           },
                           "parameters": {
@@ -9201,8 +9201,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "13507303091951454992"
+                      "version": "0.41.2.15936",
+                      "templateHash": "18414968270313532224"
                     }
                   },
                   "parameters": {
@@ -9507,8 +9507,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "12473810483366498108"
+                              "version": "0.41.2.15936",
+                              "templateHash": "14225290545669688413"
                             }
                           },
                           "parameters": {
@@ -9594,8 +9594,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "10934815099459103725"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6759741912810663768"
                             },
                             "name": "Private Endpoints"
                           },
@@ -9732,8 +9732,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "3240554809200430347"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "17593519362769062006"
                                     }
                                   },
                                   "parameters": {
@@ -9879,8 +9879,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "14494216343304504955"
+                              "version": "0.41.2.15936",
+                              "templateHash": "18212431912123992271"
                             }
                           },
                           "parameters": {
@@ -9976,8 +9976,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "436240229308147410"
+                              "version": "0.41.2.15936",
+                              "templateHash": "17739980936251352244"
                             }
                           },
                           "parameters": {
@@ -10156,8 +10156,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "2348697558115544982"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6571597106389321447"
                             }
                           },
                           "parameters": {
@@ -10304,8 +10304,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "17564894414425898494"
+                              "version": "0.41.2.15936",
+                              "templateHash": "15263164579573054232"
                             }
                           },
                           "parameters": {
@@ -10421,8 +10421,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "10297773934167547804"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6837902211427338642"
                             }
                           },
                           "parameters": {
@@ -10550,8 +10550,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "5967401634428341127"
+                              "version": "0.41.2.15936",
+                              "templateHash": "12361551519118545606"
                             }
                           },
                           "parameters": {
@@ -10683,8 +10683,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "9439535868119137288"
+                              "version": "0.41.2.15936",
+                              "templateHash": "9991192394722362858"
                             }
                           },
                           "parameters": {
@@ -10974,8 +10974,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "2182366012307584942"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "8492161397131982809"
                                     }
                                   },
                                   "parameters": {
@@ -11052,8 +11052,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.40.2.10011",
-                                              "templateHash": "16770800217787743667"
+                                              "version": "0.41.2.15936",
+                                              "templateHash": "7829965478338642101"
                                             },
                                             "name": "Recovery Services Vault Replication Fabric Replication Protection Containers",
                                             "description": "This module deploys a Recovery Services Vault Replication Protection Container.\r\n\r\n> **Note**: this version of the module only supports the `instanceType: 'A2A'` scenario.",
@@ -11147,8 +11147,8 @@
                                                   "metadata": {
                                                     "_generator": {
                                                       "name": "bicep",
-                                                      "version": "0.40.2.10011",
-                                                      "templateHash": "16963729350533401891"
+                                                      "version": "0.41.2.15936",
+                                                      "templateHash": "14714429829025412453"
                                                     },
                                                     "name": "Recovery Services Vault Replication Fabric Replication Protection Container Replication Protection Container Mappings",
                                                     "description": "This module deploys a Recovery Services Vault (RSV) Replication Protection Container Mapping.\r\n\r\n> **Note**: this version of the module only supports the `instanceType: 'A2A'` scenario.",
@@ -11364,8 +11364,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "17472128626073639070"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "9448076295726912628"
                                     }
                                   },
                                   "parameters": {
@@ -11486,8 +11486,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "16715287520887897859"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "14686945896112576367"
                                     }
                                   },
                                   "parameters": {
@@ -11610,8 +11610,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "17692547895691183039"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "6954008423922755806"
                                     }
                                   },
                                   "parameters": {
@@ -11748,8 +11748,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.40.2.10011",
-                                              "templateHash": "12830381209469998447"
+                                              "version": "0.41.2.15936",
+                                              "templateHash": "6869368667713974530"
                                             }
                                           },
                                           "parameters": {
@@ -11911,8 +11911,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "6886772507926071492"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "7659493044383420335"
                                     }
                                   },
                                   "parameters": {
@@ -12017,8 +12017,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "16667211662267310824"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "15498932717096160618"
                                     }
                                   },
                                   "parameters": {
@@ -12187,8 +12187,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "5427077945477488605"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "7877407121717936581"
                                     }
                                   },
                                   "parameters": {
@@ -12331,8 +12331,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "10934815099459103725"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "6759741912810663768"
                                     },
                                     "name": "Private Endpoints"
                                   },
@@ -12469,8 +12469,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.40.2.10011",
-                                              "templateHash": "3240554809200430347"
+                                              "version": "0.41.2.15936",
+                                              "templateHash": "17593519362769062006"
                                             }
                                           },
                                           "parameters": {
@@ -12933,8 +12933,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "2388857076492688183"
+              "version": "0.41.2.15936",
+              "templateHash": "4793691922562153985"
             }
           },
           "parameters": {
@@ -13287,8 +13287,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "14989425040168770091"
+                      "version": "0.41.2.15936",
+                      "templateHash": "6545014133739016602"
                     }
                   },
                   "parameters": {
@@ -13383,8 +13383,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "6173741512267651623"
+                      "version": "0.41.2.15936",
+                      "templateHash": "15241098883305728923"
                     }
                   },
                   "parameters": {
@@ -13474,8 +13474,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "12597940541072544046"
+                      "version": "0.41.2.15936",
+                      "templateHash": "17654424443329532564"
                     }
                   },
                   "parameters": {
@@ -13561,8 +13561,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "10934815099459103725"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6759741912810663768"
                             },
                             "name": "Private Endpoints"
                           },
@@ -13699,8 +13699,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "3240554809200430347"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "17593519362769062006"
                                     }
                                   },
                                   "parameters": {
@@ -13845,8 +13845,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "781607044471277865"
+                      "version": "0.41.2.15936",
+                      "templateHash": "13940034042928958107"
                     }
                   },
                   "parameters": {
@@ -13928,8 +13928,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "17730759738355177409"
+                              "version": "0.41.2.15936",
+                              "templateHash": "16507304652262438243"
                             }
                           },
                           "parameters": {
@@ -14042,8 +14042,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "7829601511522208779"
+                      "version": "0.41.2.15936",
+                      "templateHash": "7778598009591491537"
                     }
                   },
                   "parameters": {
@@ -14168,8 +14168,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "3537915357704697883"
+                              "version": "0.41.2.15936",
+                              "templateHash": "1394222621253148037"
                             }
                           },
                           "parameters": {
@@ -14310,8 +14310,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "7598553075464749152"
+                              "version": "0.41.2.15936",
+                              "templateHash": "12035975746464862159"
                             },
                             "name": "Virtual Machine RunCommand",
                             "description": "This module deploys a Virtual Machine Run Command.",
@@ -14527,8 +14527,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "11110463680693508695"
+                              "version": "0.41.2.15936",
+                              "templateHash": "12830647359452053359"
                             }
                           },
                           "parameters": {
@@ -14607,8 +14607,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "6106692401236685265"
+                              "version": "0.41.2.15936",
+                              "templateHash": "16082215887211755512"
                             }
                           },
                           "parameters": {
@@ -14760,8 +14760,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "11112481621532101716"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "16246577283621012285"
                                     }
                                   },
                                   "parameters": {
@@ -14839,8 +14839,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.40.2.10011",
-                                              "templateHash": "18119926243081549809"
+                                              "version": "0.41.2.15936",
+                                              "templateHash": "17638537012563538614"
                                             }
                                           },
                                           "parameters": {
@@ -14971,8 +14971,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "11110463680693508695"
+                              "version": "0.41.2.15936",
+                              "templateHash": "12830647359452053359"
                             }
                           },
                           "parameters": {
@@ -15058,8 +15058,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "4060504899065582299"
+                              "version": "0.41.2.15936",
+                              "templateHash": "14565005851157864128"
                             }
                           },
                           "parameters": {
@@ -15176,8 +15176,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "4060504899065582299"
+                              "version": "0.41.2.15936",
+                              "templateHash": "14565005851157864128"
                             }
                           },
                           "parameters": {
@@ -15305,8 +15305,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "2351126210212373013"
+                      "version": "0.41.2.15936",
+                      "templateHash": "1106264359754286460"
                     },
                     "name": "Availability Sets",
                     "description": "This module deploys an Availability Set.",
@@ -15440,8 +15440,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "14554992220137531053"
+                      "version": "0.41.2.15936",
+                      "templateHash": "5423539998599085545"
                     }
                   },
                   "parameters": {
@@ -15696,8 +15696,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "17317310947767746616"
+                      "version": "0.41.2.15936",
+                      "templateHash": "5433438732580254204"
                     }
                   },
                   "parameters": {
@@ -15926,7 +15926,9 @@
                     "identityType": "[if(if(or(not(contains(parameters('identitySolution'), 'DomainServices')), parameters('enableMonitoring')), true(), false()), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'SystemAssigned, UserAssigned', 'SystemAssigned'), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'UserAssigned', 'None'))]",
                     "userAssignedIdentities": "[if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), createObject(format('{0}', parameters('artifactsUserAssignedIdentityResourceId')), createObject()), createObject())]",
                     "identity": "[if(not(equals(variables('identityType'), 'None')), createObject('type', variables('identityType'), 'userAssignedIdentities', if(not(empty(variables('userAssignedIdentities'))), variables('userAssignedIdentities'), null())), null())]",
-                    "ImageReference": "[if(empty(parameters('customImageResourceId')), createObject('publisher', parameters('imagePublisher'), 'offer', parameters('imageOffer'), 'sku', parameters('imageSku'), 'version', 'latest'), createObject('id', parameters('customImageResourceId')))]"
+                    "ImageReference": "[if(empty(parameters('customImageResourceId')), createObject('publisher', parameters('imagePublisher'), 'offer', parameters('imageOffer'), 'sku', parameters('imageSku'), 'version', 'latest'), createObject('id', parameters('customImageResourceId')))]",
+                    "preHostPoolJoinCustomizations": "[filter(parameters('sessionHostCustomizations'), lambda('customization', not(coalesce(tryGet(lambdaVariables('customization'), 'runAfterHostPoolJoin'), false()))))]",
+                    "postHostPoolJoinCustomizations": "[filter(parameters('sessionHostCustomizations'), lambda('customization', coalesce(tryGet(lambdaVariables('customization'), 'runAfterHostPoolJoin'), false())))]"
                   },
                   "resources": [
                     {
@@ -16368,20 +16370,20 @@
                         }
                       },
                       "dependsOn": [
-                        "postDeploymentScripts",
+                        "customizations_preHostPoolJoin",
                         "runCommand_ConfigureSessionHost",
                         "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
                     {
                       "copy": {
-                        "name": "postDeploymentScripts",
+                        "name": "customizations_preHostPoolJoin",
                         "count": "[length(range(0, parameters('sessionHostCount')))]"
                       },
-                      "condition": "[not(empty(parameters('sessionHostCustomizations')))]",
+                      "condition": "[not(empty(variables('preHostPoolJoinCustomizations')))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('{0}-Customizations-{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), parameters('deploymentSuffix'))]",
+                      "name": "[format('{0}-PreJoinCustomizations-{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), parameters('deploymentSuffix'))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -16392,7 +16394,7 @@
                             "value": "[parameters('artifactsContainerUri')]"
                           },
                           "customizations": {
-                            "value": "[parameters('sessionHostCustomizations')]"
+                            "value": "[variables('preHostPoolJoinCustomizations')]"
                           },
                           "userAssignedIdentityClientId": {
                             "value": "[parameters('artifactsUserAssignedIdentityClientId')]"
@@ -16407,8 +16409,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "1461024722578395542"
+                              "version": "0.41.2.15936",
+                              "templateHash": "8444208172269173697"
                             }
                           },
                           "parameters": {
@@ -16500,6 +16502,131 @@
                     },
                     {
                       "copy": {
+                        "name": "customizations_postHostPoolJoin",
+                        "count": "[length(range(0, parameters('sessionHostCount')))]"
+                      },
+                      "condition": "[not(empty(variables('postHostPoolJoinCustomizations')))]",
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('{0}-PostJoinCustomizations-{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), parameters('deploymentSuffix'))]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "artifactsContainerUri": {
+                            "value": "[parameters('artifactsContainerUri')]"
+                          },
+                          "customizations": {
+                            "value": "[variables('postHostPoolJoinCustomizations')]"
+                          },
+                          "userAssignedIdentityClientId": {
+                            "value": "[parameters('artifactsUserAssignedIdentityClientId')]"
+                          },
+                          "virtualMachineName": {
+                            "value": "[replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.41.2.15936",
+                              "templateHash": "8444208172269173697"
+                            }
+                          },
+                          "parameters": {
+                            "artifactsContainerUri": {
+                              "type": "string"
+                            },
+                            "customizations": {
+                              "type": "array"
+                            },
+                            "location": {
+                              "type": "string",
+                              "defaultValue": "[resourceGroup().location]"
+                            },
+                            "userAssignedIdentityClientId": {
+                              "type": "string"
+                            },
+                            "virtualMachineName": {
+                              "type": "string"
+                            }
+                          },
+                          "variables": {
+                            "copy": [
+                              {
+                                "name": "customizers",
+                                "count": "[length(parameters('customizations'))]",
+                                "input": {
+                                  "name": "[replace(parameters('customizations')[copyIndex('customizers')].name, ' ', '-')]",
+                                  "uri": "[if(or(startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'https://'), startsWith(parameters('customizations')[copyIndex('customizers')].blobNameorUri, 'http://')), parameters('customizations')[copyIndex('customizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri))]",
+                                  "arguments": "[coalesce(tryGet(parameters('customizations')[copyIndex('customizers')], 'arguments'), '')]"
+                                }
+                              }
+                            ],
+                            "$fxv#0": "param(\r\n  [string]$APIVersion,\r\n  [string]$Arguments='',\r\n  [string]$BlobStorageSuffix,\r\n  [string]$BuildDir='',\r\n  [string]$Name,\r\n  [string]$Uri,\r\n  [string]$UserAssignedIdentityClientId\r\n)\r\n\r\nfunction Write-OutputWithTimeStamp {\r\n  param(\r\n      [string]$Message\r\n  )    \r\n  $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'\r\n  $Entry = '[' + $Timestamp + '] ' + $Message\r\n  Write-Output $Entry\r\n}\r\n\r\nFunction Split-ArgumentString {\r\n    param (\r\n        [string]$ArgumentString\r\n    )\r\n\r\n    if ([string]::IsNullOrWhiteSpace($ArgumentString)) {\r\n        return @()\r\n    }\r\n\r\n    # For PowerShell execution with &, we want individual arguments, not combined ones\r\n    $arguments = @()\r\n    $currentArg = \"\"\r\n    $inQuotes = $false\r\n    \r\n    for ($i = 0; $i -lt $ArgumentString.Length; $i++) {\r\n        $char = $ArgumentString[$i]\r\n        \r\n        if ($char -eq '\"' -and ($i -eq 0 -or $ArgumentString[$i-1] -ne '\\')) {\r\n            $inQuotes = !$inQuotes\r\n            $currentArg += $char\r\n        }\r\n        elseif ($char -eq ' ' -and !$inQuotes) {\r\n            if ($currentArg.Length -gt 0) {\r\n                # Handle boolean conversion\r\n                $value = $currentArg.Trim('\"')\r\n                if ($value -eq 'true') {\r\n                    $arguments += '$true'\r\n                }\r\n                elseif ($value -eq 'false') {\r\n                    $arguments += '$false'\r\n                }\r\n                else {\r\n                    $arguments += $value\r\n                }\r\n                $currentArg = \"\"\r\n            }\r\n        }\r\n        else {\r\n            $currentArg += $char\r\n        }\r\n    }\r\n    \r\n    # Add the last argument\r\n    if ($currentArg.Length -gt 0) {\r\n        $value = $currentArg.Trim('\"')\r\n        if ($value -eq 'true') {\r\n            $arguments += '$true'\r\n        }\r\n        elseif ($value -eq 'false') {\r\n            $arguments += '$false'\r\n        }\r\n        else {\r\n            $arguments += $value\r\n        }\r\n    }\r\n    \r\n    return $arguments\r\n}\r\n\r\nFunction ConvertTo-ParametersSplat {\r\n    param (\r\n        [string]$ArgumentString\r\n    )\r\n\r\n    if ([string]::IsNullOrWhiteSpace($ArgumentString)) {\r\n        return @{}\r\n    }\r\n\r\n    $tokens = Split-ArgumentString -ArgumentString $ArgumentString\r\n    $parameters = @{}\r\n    \r\n    $i = 0\r\n    while ($i -lt $tokens.Count) {\r\n        $token = $tokens[$i]\r\n        \r\n        # If this is a parameter (starts with -)\r\n        if ($token -match '^-(\\w+)$') {\r\n            $paramName = $matches[1]  # Remove the dash\r\n            \r\n            # Check if there's a value following this parameter\r\n            if (($i + 1) -lt $tokens.Count -and $tokens[$i + 1] -notmatch '^-\\w+$') {\r\n                # Parameter with value\r\n                $i++  # Move to the value\r\n                $value = $tokens[$i]\r\n                \r\n                # Handle PowerShell booleans\r\n                if ($value -eq '$true') {\r\n                    $parameters[$paramName] = $true\r\n                }\r\n                elseif ($value -eq '$false') {\r\n                    $parameters[$paramName] = $false\r\n                }\r\n                else {\r\n                    # Remove quotes if present\r\n                    $cleanValue = $value.Trim('\"')\r\n                    $parameters[$paramName] = $cleanValue\r\n                }\r\n            }\r\n            else {\r\n                # This is a switch parameter (no value)\r\n                $parameters[$paramName] = $true\r\n            }\r\n        }\r\n        else {\r\n            # Handle positional arguments (rare in this context)\r\n            # You could add logic here if needed\r\n        }\r\n        \r\n        $i++\r\n    }\r\n    \r\n    return $parameters\r\n}\r\n\r\nStart-Transcript -Path \"$env:SystemRoot\\Logs\\$Name.log\" -Force\r\nWrite-OutputWithTimeStamp \"Starting '$Name' script with the following parameters.\"\r\nWrite-Output ( $PSBoundParameters | Format-Table -AutoSize )\r\nIf ($Arguments -eq '') { $Arguments = $null }\r\nIf ($BuildDir -ne '') {\r\n  $TempDir = Join-Path $BuildDir -ChildPath $Name\r\n} Else {\r\n  $TempDir = Join-Path $Env:TEMP -ChildPath $Name\r\n}\r\nNew-Item -Path $TempDir -ItemType Directory -Force | Out-Null\r\n$WebClient = New-Object System.Net.WebClient\r\nIf ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n  Write-OutputWithTimeStamp \"Getting access token for '$Uri' using User Assigned Identity.\"\r\n  $StorageEndpoint = ($Uri -split \"://\")[0] + \"://\" + ($Uri -split \"/\")[2] + \"/\"\r\n  $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n  $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n  $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n  $webClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n}\r\n$SourceFileName = ($Uri -Split \"/\")[-1]\r\nWrite-OutputWithTimeStamp \"Downloading '$Uri' to '$TempDir'.\"\r\n$DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName\r\n$webClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\nStart-Sleep -Seconds 10\r\nIf (!(Test-Path -Path $DestFile)) { Write-Error \"Failed to download $SourceFileName\"; Exit 1 }\r\nWrite-OutputWithTimeStamp 'Finished downloading'\r\nSet-Location -Path $TempDir\r\n$Ext = [System.IO.Path]::GetExtension($DestFile).ToLower().Replace('.','')\r\nswitch ($Ext) {\r\n  'exe' {\r\n      If ($Arguments) {\r\n        Write-OutputWithTimeStamp \"Executing '`\"$DestFile`\" $Arguments'\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -ArgumentList (Split-ArgumentString -ArgumentString $Arguments) -NoNewWindow -Wait -PassThru\r\n        Write-OutputWithTimeStamp \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }\r\n      Else {\r\n        Write-OutputWithTimeStamp \"Executing `\"$DestFile`\"\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -NoNewWindow -Wait -PassThru\r\n        Write-OutputWithTimeStamp \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }      \r\n    }\r\n  'msi' {\r\n    If ($Arguments) {\r\n      $Arguments = Split-ArgumentString -ArgumentString $Arguments\r\n      If ($Arguments -notcontains $DestFile) {\r\n        $InstallArg = \"/i $DestFile\"\r\n        $Arguments = @($InstallArg) + $Arguments\r\n      }\r\n      Write-OutputWithTimeStamp \"Executing 'msiexec.exe $Arguments'\"\r\n      $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $Arguments -Wait -PassThru\r\n      Write-OutputWithTimeStamp \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Executing 'msiexec.exe /i $DestFile /qn'\"\r\n      $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList \"/i $DestFile /qn\" -Wait -PassThru\r\n      Write-OutputWithTimeStamp \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n    }    \r\n  }\r\n  'bat' {\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Executing 'cmd.exe `\"$DestFile`\" $Arguments'\"\r\n      $Arguments = Split-ArgumentString -ArgumentString $Arguments\r\n      If ($Arguments -notcontains $DestFile) {\r\n        $Arguments = @(\"$DestFile\") + $Arguments\r\n      }\r\n      Start-Process -FilePath cmd.exe -ArgumentList $Arguments -Wait\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Executing 'cmd.exe `\"$DestFile`\"'\"\r\n      Start-Process -FilePath cmd.exe -ArgumentList \"`\"$DestFile`\"\" -Wait\r\n    }\r\n  }\r\n  'ps1' {\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile' with arguments '$Arguments'\"\r\n      $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n      & $DestFile @parameterSplat\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile'\"\r\n      & $DestFile\r\n    }\r\n  }\r\n  'zip' {\r\n    $DestinationPath = Join-Path -Path \"$TempDir\" -ChildPath $([System.IO.Path]::GetFileNameWithoutExtension($SourceFileName))\r\n    Write-OutputWithTimeStamp \"Extracting '$DestFile' to '$DestinationPath'.\"\r\n    Expand-Archive -Path $DestFile -DestinationPath $DestinationPath -Force\r\n    Write-OutputWithTimeStamp \"Finding PowerShell script in root of '$DestinationPath'.\"\r\n    $PSScript = (Get-ChildItem -Path $DestinationPath -filter '*.ps1').FullName\r\n    If ($PSScript.count -gt 1) { $PSScript = $PSScript[0] }\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile' with arguments '$Arguments'\"\r\n      $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n      & $PSScript @parameterSplat\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$PSScript'\"         \r\n      & $PSScript\r\n    }\r\n  }\r\n}\r\nIf ((Split-Path $TempDir -Parent) -eq $Env:Temp) {Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue}\r\nStop-Transcript",
+                            "apiVersion": "[if(startsWith(environment().name, 'USN'), '2017-08-01', '2018-02-01')]"
+                          },
+                          "resources": [
+                            {
+                              "copy": {
+                                "name": "runCommands",
+                                "count": "[length(variables('customizers'))]",
+                                "mode": "serial",
+                                "batchSize": 1
+                              },
+                              "type": "Microsoft.Compute/virtualMachines/runCommands",
+                              "apiVersion": "2023-03-01",
+                              "name": "[format('{0}/{1}', parameters('virtualMachineName'), variables('customizers')[copyIndex()].name)]",
+                              "location": "[parameters('location')]",
+                              "properties": {
+                                "parameters": [
+                                  {
+                                    "name": "APIVersion",
+                                    "value": "[variables('apiVersion')]"
+                                  },
+                                  {
+                                    "name": "BlobStorageSuffix",
+                                    "value": "[format('blob.{0}', environment().suffixes.storage)]"
+                                  },
+                                  {
+                                    "name": "UserAssignedIdentityClientId",
+                                    "value": "[parameters('userAssignedIdentityClientId')]"
+                                  },
+                                  {
+                                    "name": "Name",
+                                    "value": "[variables('customizers')[copyIndex()].name]"
+                                  },
+                                  {
+                                    "name": "Uri",
+                                    "value": "[variables('customizers')[copyIndex()].uri]"
+                                  },
+                                  {
+                                    "name": "Arguments",
+                                    "value": "[variables('customizers')[copyIndex()].arguments]"
+                                  }
+                                ],
+                                "source": {
+                                  "script": "[variables('$fxv#0')]"
+                                },
+                                "treatFailureAsDeploymentFailure": true
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "dependsOn": [
+                        "extension_DSC_installAvdAgents",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
+                      ]
+                    },
+                    {
+                      "copy": {
                         "name": "updateOSDiskNetworkAccess",
                         "count": "[length(range(0, parameters('sessionHostCount')))]"
                       },
@@ -16534,8 +16661,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "10091729990026936636"
+                              "version": "0.41.2.15936",
+                              "templateHash": "1778847093014441860"
                             }
                           },
                           "parameters": {
@@ -16585,8 +16712,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "13295648595698282417"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "4722228040618398443"
                                     }
                                   },
                                   "parameters": {
@@ -16715,8 +16842,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "9439535868119137288"
+                      "version": "0.41.2.15936",
+                      "templateHash": "9991192394722362858"
                     }
                   },
                   "parameters": {
@@ -17006,8 +17133,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "2182366012307584942"
+                              "version": "0.41.2.15936",
+                              "templateHash": "8492161397131982809"
                             }
                           },
                           "parameters": {
@@ -17084,8 +17211,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "16770800217787743667"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "7829965478338642101"
                                     },
                                     "name": "Recovery Services Vault Replication Fabric Replication Protection Containers",
                                     "description": "This module deploys a Recovery Services Vault Replication Protection Container.\r\n\r\n> **Note**: this version of the module only supports the `instanceType: 'A2A'` scenario.",
@@ -17179,8 +17306,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.40.2.10011",
-                                              "templateHash": "16963729350533401891"
+                                              "version": "0.41.2.15936",
+                                              "templateHash": "14714429829025412453"
                                             },
                                             "name": "Recovery Services Vault Replication Fabric Replication Protection Container Replication Protection Container Mappings",
                                             "description": "This module deploys a Recovery Services Vault (RSV) Replication Protection Container Mapping.\r\n\r\n> **Note**: this version of the module only supports the `instanceType: 'A2A'` scenario.",
@@ -17396,8 +17523,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "17472128626073639070"
+                              "version": "0.41.2.15936",
+                              "templateHash": "9448076295726912628"
                             }
                           },
                           "parameters": {
@@ -17518,8 +17645,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "16715287520887897859"
+                              "version": "0.41.2.15936",
+                              "templateHash": "14686945896112576367"
                             }
                           },
                           "parameters": {
@@ -17642,8 +17769,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "17692547895691183039"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6954008423922755806"
                             }
                           },
                           "parameters": {
@@ -17780,8 +17907,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "12830381209469998447"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "6869368667713974530"
                                     }
                                   },
                                   "parameters": {
@@ -17943,8 +18070,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "6886772507926071492"
+                              "version": "0.41.2.15936",
+                              "templateHash": "7659493044383420335"
                             }
                           },
                           "parameters": {
@@ -18049,8 +18176,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "16667211662267310824"
+                              "version": "0.41.2.15936",
+                              "templateHash": "15498932717096160618"
                             }
                           },
                           "parameters": {
@@ -18219,8 +18346,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "5427077945477488605"
+                              "version": "0.41.2.15936",
+                              "templateHash": "7877407121717936581"
                             }
                           },
                           "parameters": {
@@ -18363,8 +18490,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "10934815099459103725"
+                              "version": "0.41.2.15936",
+                              "templateHash": "6759741912810663768"
                             },
                             "name": "Private Endpoints"
                           },
@@ -18501,8 +18628,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "3240554809200430347"
+                                      "version": "0.41.2.15936",
+                                      "templateHash": "17593519362769062006"
                                     }
                                   },
                                   "parameters": {
@@ -18679,8 +18806,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "3504926540309330457"
+                      "version": "0.41.2.15936",
+                      "templateHash": "6252104478316738229"
                     }
                   },
                   "parameters": {
@@ -18758,8 +18885,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "15410428688959432415"
+              "version": "0.41.2.15936",
+              "templateHash": "9868388046121972271"
             }
           },
           "parameters": {
@@ -18825,8 +18952,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "8152558550892622248"
+                      "version": "0.41.2.15936",
+                      "templateHash": "11138551601350921775"
                     }
                   },
                   "parameters": {
@@ -18925,8 +19052,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "4986657196039711985"
+                      "version": "0.41.2.15936",
+                      "templateHash": "14836358652754977318"
                     }
                   },
                   "parameters": {
@@ -19014,8 +19141,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15865672522913943608"
+                      "version": "0.41.2.15936",
+                      "templateHash": "15881787449364487921"
                     }
                   },
                   "parameters": {

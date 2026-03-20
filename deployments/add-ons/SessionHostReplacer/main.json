@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "18306252040707236871"
+      "templateHash": "16339950535706182264"
     },
     "name": "AVD Session Host Replacer Add-On",
     "description": "Deploys automated session host lifecycle management for Azure Virtual Desktop",
@@ -774,7 +774,7 @@
       "type": "array",
       "defaultValue": [],
       "metadata": {
-        "description": "Optional. Session host customizations array."
+        "description": "Optional.\nArray of objects containing the following properties\n-name: The name of the script or application that is running minus extension\n-blobNameOrUri: The blob name when used with the artifactsContainerUri or the full URI of the file to download.\n-arguments: Arguments required by the installer or script being ran.\n-runAfterHostPoolJoin: (Optional, boolean, defaults to false) When true, the customization runs AFTER the host joins the AVD host pool. When false, it runs BEFORE joining the host pool.\n\nJSON example:\n[\n  {\n    \"name\": \"FSLogix\",\n    \"blobNameOrUri\": \"https://aka.ms/fslogix_download\"\n  },\n  {\n    \"name\": \"VSCode\",\n    \"blobNameOrUri\": \"VSCode.zip\",\n    \"arguments\": \"/verysilent /mergetasks=!runcode\"\n  },\n  {\n    \"name\": \"PostJoinConfig\",\n    \"blobNameOrUri\": \"PostJoinConfig.ps1\",\n    \"arguments\": \"-Environment Production\",\n    \"runAfterHostPoolJoin\": true\n  }\n]\n"
       }
     }
   },

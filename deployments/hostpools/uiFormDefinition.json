@@ -2375,7 +2375,7 @@
 										"columns": [
 											{
 												"id": "name",
-												"header": "Customization Name",
+												"header": "Name",
 												"width": "1fr",
 												"element": {
 													"type": "Microsoft.Common.TextBox",
@@ -2411,6 +2411,27 @@
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "Example: /install /silent",
 													"constraints": {
+														"required": false
+													}
+												}
+											},
+											{
+												"id": "runAfterHostPoolJoin",
+												"header": "Post Host Pool Join",
+												"width": "1frx",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"constraints": {
+														"allowedValues": [
+															{
+																"label": "No",
+																"value": false
+															},
+															{
+																"label": "Yes",
+																"value": true
+															}
+														],
 														"required": false
 													}
 												}

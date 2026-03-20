@@ -119,6 +119,11 @@ var ImageReference = empty(customImageResourceId)
       id: customImageResourceId
     }
 
+// Split customizations into before and after host pool join
+// runAfterHostPoolJoin defaults to false if not specified
+var preHostPoolJoinCustomizations = filter(sessionHostCustomizations, customization => !(customization.?runAfterHostPoolJoin ?? false))
+var postHostPoolJoinCustomizations = filter(sessionHostCustomizations, customization => (customization.?runAfterHostPoolJoin ?? false))
+
 // call on the host pool to get the registration token
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
   name: last(split(hostPoolResourceId, '/'))
@@ -578,12 +583,13 @@ resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runC
   }
 ]
 
-module postDeploymentScripts 'invokeCustomizations.bicep' = [
-  for i in range(0, sessionHostCount): if (!empty(sessionHostCustomizations)) {
-    name: '${virtualMachine[i].name}-Customizations-${deploymentSuffix}'
+// Run customizations configured to execute BEFORE host pool join
+module customizations_preHostPoolJoin 'invokeCustomizations.bicep' = [
+  for i in range(0, sessionHostCount): if (!empty(preHostPoolJoinCustomizations)) {
+    name: '${virtualMachine[i].name}-PreJoinCustomizations-${deploymentSuffix}'
     params: {
       artifactsContainerUri: artifactsContainerUri
-      customizations: sessionHostCustomizations
+      customizations: preHostPoolJoinCustomizations
       userAssignedIdentityClientId: artifactsUserAssignedIdentityClientId
       virtualMachineName: virtualMachine[i].name
     }
@@ -625,7 +631,23 @@ resource extension_DSC_installAvdAgents 'Microsoft.Compute/virtualMachines/exten
     }
     dependsOn: [
       runCommand_ConfigureSessionHost
-      postDeploymentScripts
+      customizations_preHostPoolJoin
+    ]
+  }
+]
+
+// Run customizations configured to execute AFTER host pool join
+module customizations_postHostPoolJoin 'invokeCustomizations.bicep' = [
+  for i in range(0, sessionHostCount): if (!empty(postHostPoolJoinCustomizations)) {
+    name: '${virtualMachine[i].name}-PostJoinCustomizations-${deploymentSuffix}'
+    params: {
+      artifactsContainerUri: artifactsContainerUri
+      customizations: postHostPoolJoinCustomizations
+      userAssignedIdentityClientId: artifactsUserAssignedIdentityClientId
+      virtualMachineName: virtualMachine[i].name
+    }
+    dependsOn: [
+      extension_DSC_installAvdAgents
     ]
   }
 ]

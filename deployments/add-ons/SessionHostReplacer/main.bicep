@@ -404,7 +404,32 @@ param artifactsContainerUri string = ''
 @description('Optional. Artifacts user assigned identity resource ID.')
 param artifactsUserAssignedIdentityResourceId string = ''
 
-@description('Optional. Session host customizations array.')
+@description('''Optional.
+Array of objects containing the following properties
+-name: The name of the script or application that is running minus extension
+-blobNameOrUri: The blob name when used with the artifactsContainerUri or the full URI of the file to download.
+-arguments: Arguments required by the installer or script being ran.
+-runAfterHostPoolJoin: (Optional, boolean, defaults to false) When true, the customization runs AFTER the host joins the AVD host pool. When false, it runs BEFORE joining the host pool.
+
+JSON example:
+[
+  {
+    "name": "FSLogix",
+    "blobNameOrUri": "https://aka.ms/fslogix_download"
+  },
+  {
+    "name": "VSCode",
+    "blobNameOrUri": "VSCode.zip",
+    "arguments": "/verysilent /mergetasks=!runcode"
+  },
+  {
+    "name": "PostJoinConfig",
+    "blobNameOrUri": "PostJoinConfig.ps1",
+    "arguments": "-Environment Production",
+    "runAfterHostPoolJoin": true
+  }
+]
+''')
 param sessionHostCustomizations array = []
 
 // ========== //

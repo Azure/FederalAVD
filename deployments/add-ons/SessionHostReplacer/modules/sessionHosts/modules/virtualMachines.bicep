@@ -113,6 +113,11 @@ var identity = identityType != 'None'
     }
   : null
 
+// Split customizations into before and after host pool join
+// runAfterHostPoolJoin defaults to false if not specified
+var preHostPoolJoinCustomizations = filter(sessionHostCustomizations, customization => !(customization.?runAfterHostPoolJoin ?? false))
+var postHostPoolJoinCustomizations = filter(sessionHostCustomizations, customization => (customization.?runAfterHostPoolJoin ?? false))
+
 // Network Interface names once to avoid complex array access in resource loop
 var networkInterfaceNames = [for i in range(0, sessionHostCount): empty(networkInterfaceNameConv) ? sessionHostNames[i] : replace(networkInterfaceNameConv, 'SHNAME', sessionHostNames[i])]
 
@@ -547,12 +552,13 @@ resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runC
   }
 ]
 
-module postDeploymentScripts 'invokeCustomizations.bicep' = [
-  for i in range(0, sessionHostCount): if (!empty(sessionHostCustomizations)) {
-    name: 'shr-${virtualMachine[i].name}-customizations-${deploymentSuffix}'
+// Run customizations configured to execute BEFORE host pool join
+module customizations_preHostPoolJoin 'invokeCustomizations.bicep' = [
+  for i in range(0, sessionHostCount): if (!empty(preHostPoolJoinCustomizations)) {
+    name: 'shr-${virtualMachine[i].name}-PreJoinCustomizations-${deploymentSuffix}'
     params: {
       artifactsContainerUri: artifactsContainerUri
-      customizations: sessionHostCustomizations
+      customizations: preHostPoolJoinCustomizations
       userAssignedIdentityClientId: artifactsUserAssignedIdentityClientId
       virtualMachineName: virtualMachine[i].name
     }
@@ -595,7 +601,23 @@ resource extension_DSC_installAvdAgents 'Microsoft.Compute/virtualMachines/exten
     }
     dependsOn: [
       runCommand_ConfigureSessionHost
-      postDeploymentScripts
+      customizations_preHostPoolJoin
+    ]
+  }
+]
+
+// Run customizations configured to execute AFTER host pool join
+module customizations_postHostPoolJoin 'invokeCustomizations.bicep' = [
+  for i in range(0, sessionHostCount): if (!empty(postHostPoolJoinCustomizations)) {
+    name: 'shr-${virtualMachine[i].name}-PostJoinCustomizations-${deploymentSuffix}'
+    params: {
+      artifactsContainerUri: artifactsContainerUri
+      customizations: postHostPoolJoinCustomizations
+      userAssignedIdentityClientId: artifactsUserAssignedIdentityClientId
+      virtualMachineName: virtualMachine[i].name
+    }
+    dependsOn: [
+      extension_DSC_installAvdAgents
     ]
   }
 ]
