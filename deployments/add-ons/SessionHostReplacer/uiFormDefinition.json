@@ -2239,7 +2239,16 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('hosts').customScripts.addCustomScripts]",
 									"options": {
-										"text": "Enter the name of the customizer and either the full URI or the blob name (if using the storage account and container above). If you are not using the storage account above, then the URI must be accessible from the session hosts VMs. <i>Optionally</i>, enter the any arguments that should be passed to the customization script or installer."
+										"text": "Specify each customization's name, blob name (or full URI), and optional arguments. Set 'Post Host Pool Join' to <b>Yes</b> to execute after the host joins the AVD pool, or <b>No</b> (default) to execute before joining."
+									}
+								},
+								{
+									"name": "customizationInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[steps('hosts').customScripts.addCustomScripts]",
+									"options": {
+										"style": "Info",
+										"text": "Some software installations may interfere with the host pool join process and should be run after joining completes. Note that the session host will be available for connections before post-join customizations run."
 									}
 								},
 								{
