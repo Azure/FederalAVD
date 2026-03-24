@@ -700,10 +700,11 @@ function Get-Deployments {
     $output.RunningDeployments = foreach ($deployment in $runningDeployments) {
         if ($deployment.properties.parameters) {
             $parameters = $deployment.properties.parameters | ConvertTo-CaseInsensitiveHashtable
-            Write-LogEntry -Message "Running deployment '$($deployment.name)' is deploying: $(($parameters['sessionHostNames'].Value -join ','))" -Level Trace
+            $sessionHostNames = if ($parameters.ContainsKey('sessionHostNames')) { $parameters['sessionHostNames'].Value } else { @() }
+            Write-LogEntry -Message "Running deployment '$($deployment.name)' is deploying: $(($sessionHostNames -join ','))" -Level Trace
             [PSCustomObject]@{
                 DeploymentName   = $deployment.name
-                SessionHostNames = $parameters['sessionHostNames'].Value
+                SessionHostNames = $sessionHostNames
                 Timestamp        = $deployment.properties.timestamp
                 Status           = $deployment.properties.provisioningState
             }
@@ -895,6 +896,12 @@ function Remove-FailedDeploymentArtifacts {
     
     foreach ($deployment in $FailedDeployments) {
         $failedDeploymentNames += $deployment.DeploymentName
+        
+        # Handle case where SessionHostNames may not be present (e.g., when called from deployment state tracking)
+        if (-not $deployment.SessionHostNames -or $deployment.SessionHostNames.Count -eq 0) {
+            Write-LogEntry -Message "Deployment '$($deployment.DeploymentName)' has no session host names to check for cleanup" -Level Trace
+            continue
+        }
         
         foreach ($sessionHostName in $deployment.SessionHostNames) {
             # Session host name is like 'avdtest01use201', but actual VM could be:

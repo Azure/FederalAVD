@@ -195,8 +195,22 @@ if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
                 }
                 
                 # Clean up the failed deployment and its partial resources
+                # Extract SessionHostNames from PendingHostMappings if available
+                $sessionHostNames = @()
+                if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
+                    try {
+                        $pendingMappings = $deploymentState.PendingHostMappings | ConvertFrom-Json
+                        $sessionHostNames = $pendingMappings.PSObject.Properties.Name
+                        Write-LogEntry -Message "Extracted {0} session host name(s) from pending mappings for cleanup: {1}" -StringValues $sessionHostNames.Count, ($sessionHostNames -join ', ')
+                    }
+                    catch {
+                        Write-LogEntry -Message "Failed to extract session host names from pending mappings: $_" -Level Warning
+                    }
+                }
+                
                 $failedDeploymentInfo = @([PSCustomObject]@{
-                        DeploymentName = $deploymentState.LastDeploymentName
+                        DeploymentName   = $deploymentState.LastDeploymentName
+                        SessionHostNames = $sessionHostNames
                     })
                 
                 try {
