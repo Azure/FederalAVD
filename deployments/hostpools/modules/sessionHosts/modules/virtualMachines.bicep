@@ -1,3 +1,5 @@
+param agentBootLoaderDownloadUrl string
+param agentDownloadUrl string
 param artifactsContainerUri string
 param artifactsUserAssignedIdentityClientId string
 param artifactsUserAssignedIdentityResourceId string
@@ -50,7 +52,6 @@ param sessionHostCustomizations array
 param sessionHostCount int
 param sessionHostIndex int
 param vmNameIndexLength int
-param sessionHostRegistrationDSCUrl string
 param securityType string
 param secureBootEnabled bool
 param storageSuffix string
@@ -58,7 +59,6 @@ param subnetResourceId string
 param tags object
 param deploymentSuffix string
 param timeZone string
-param useAgentDownloadEndpoint bool
 @secure()
 param virtualMachineAdminPassword string
 @secure()
@@ -121,8 +121,14 @@ var ImageReference = empty(customImageResourceId)
 
 // Split customizations into before and after host pool join
 // runAfterHostPoolJoin defaults to false if not specified
-var preHostPoolJoinCustomizations = filter(sessionHostCustomizations, customization => !(customization.?runAfterHostPoolJoin ?? false))
-var postHostPoolJoinCustomizations = filter(sessionHostCustomizations, customization => (customization.?runAfterHostPoolJoin ?? false))
+var preHostPoolJoinCustomizations = filter(
+  sessionHostCustomizations,
+  customization => !(customization.?runAfterHostPoolJoin ?? false)
+)
+var postHostPoolJoinCustomizations = filter(
+  sessionHostCustomizations,
+  customization => (customization.?runAfterHostPoolJoin ?? false)
+)
 
 // call on the host pool to get the registration token
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
@@ -470,9 +476,11 @@ resource extension_NvidiaGpuDriverWindows 'Microsoft.Compute/virtualMachines/ext
       type: 'NvidiaGpuDriverWindows'
       typeHandlerVersion: '1.10'
       autoUpgradeMinorVersion: true
-      settings: empty(nvidiaDriverVersion) ? {} : {
-        driverVersion: nvidiaDriverVersion
-      }
+      settings: empty(nvidiaDriverVersion)
+        ? {}
+        : {
+            driverVersion: nvidiaDriverVersion
+          }
     }
     dependsOn: [
       extension_AADLoginForWindows
@@ -599,35 +607,55 @@ module customizations_preHostPoolJoin 'invokeCustomizations.bicep' = [
   }
 ]
 
-resource extension_DSC_installAvdAgents 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
+resource runCommand_RegisterSessionHost 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = [
   for i in range(0, sessionHostCount): {
     parent: virtualMachine[i]
-    name: 'AVDAgentInstallandConfig'
+    name: 'registerSessionHost'
     location: location
     properties: {
-      publisher: 'Microsoft.Powershell'
-      type: 'DSC'
-      typeHandlerVersion: '2.73'
-      autoUpgradeMinorVersion: true
-      settings: {
-        modulesUrl: sessionHostRegistrationDSCUrl
-        configurationFunction: 'Configuration.ps1\\AddSessionHost'
-        properties: {
-          hostPoolName: last(split(hostPoolResourceId, '/'))
-          registrationInfoTokenCredential: {
-            UserName: 'PLACEHOLDER_DO_NOT_USE'
-            Password: 'PrivateSettingsRef:RegistrationInfoToken'
-          }
-          aadJoin: !contains(identitySolution, 'DomainServices')
-          UseAgentDownloadEndpoint: useAgentDownloadEndpoint
-          mdmId: intuneEnrollment ? '0000000a-0000-0000-c000-000000000000' : ''
+      parameters: [
+        {
+          name: 'AADJoin'
+          value: !contains(identitySolution, 'DomainServices') ? 'true' : 'false'
         }
-      }
-      protectedSettings: {
-        Items: {
-          RegistrationInfoToken: last(hostPool.listRegistrationTokens().value).token
+        {
+          name: 'AgentBootLoaderUrl'
+          value: agentBootLoaderDownloadUrl
         }
+        {
+          name: 'AgentUrl'
+          value: agentDownloadUrl
+        }
+        {
+          name: 'ApiVersion'
+          value: startsWith(environment().name, 'USN') ? '2017-08-01' : '2018-02-01'
+        }
+        {
+          name: 'StorageSuffix'
+          value: storageSuffix
+        }
+        {
+          name: 'MdmId'
+          value: intuneEnrollment ? '0000000a-0000-0000-c000-000000000000' : ''
+        }
+        {
+          name: 'RegistrationInfoTokenCredential'
+          value: 'PrivateSettingsRef:RegistrationInfoToken'
+        }
+
+
+      ]
+      protectedParameters: [
+        {
+          name: 'RegistrationToken'
+          value: last(hostPool.listRegistrationTokens().value).token
+        }
+      ]
+      source: {
+        script: loadTextContent('../../../../../.common/scripts/Set-SessionHostConfiguration.ps1')
       }
+      treatFailureAsDeploymentFailure: true
+      timeoutInSeconds: 600
     }
     dependsOn: [
       runCommand_ConfigureSessionHost
@@ -647,7 +675,7 @@ module customizations_postHostPoolJoin 'invokeCustomizations.bicep' = [
       virtualMachineName: virtualMachine[i].name
     }
     dependsOn: [
-      extension_DSC_installAvdAgents
+      runCommand_RegisterSessionHost
     ]
   }
 ]

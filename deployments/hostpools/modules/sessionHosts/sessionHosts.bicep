@@ -1,6 +1,8 @@
 targetScope = 'subscription'
 
 param deploymentType string
+param agentBootLoaderDownloadUrl string
+param agentDownloadUrl string
 param appGroupSecurityGroups array
 param artifactsContainerUri string
 param artifactsUserAssignedIdentityResourceId string
@@ -83,7 +85,6 @@ param secureBootEnabled bool
 param securityType string
 param sessionHostCount int
 param sessionHostCustomizations array
-param sessionHostRegistrationDSCUrl string
 param sessionHostIndex int
 param vmNameIndexLength int
 param storageSuffix string
@@ -91,7 +92,6 @@ param subnetResourceId string
 param tags object
 param deploymentSuffix string
 param timeZone string
-param useAgentDownloadEndpoint bool
 param virtualMachineNameConv string
 param virtualMachineNamePrefix string
 param virtualMachineSize string
@@ -270,6 +270,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
   name: 'VirtualMachines-Batch-${i}-of-${sessionHostBatchCount}-(${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}-VMs)-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
+    agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
+    agentDownloadUrl: agentDownloadUrl
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId) ? '' : artifactsUAI!.properties.clientId
@@ -325,13 +327,11 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment
     sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxVMsPerDeployment) + sessionHostIndex
     vmNameIndexLength: vmNameIndexLength
-    sessionHostRegistrationDSCUrl: sessionHostRegistrationDSCUrl
     storageSuffix: storageSuffix
     subnetResourceId: subnetResourceId
     tags: tags
     deploymentSuffix: deploymentSuffix
     timeZone: timeZone
-    useAgentDownloadEndpoint: useAgentDownloadEndpoint
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
     virtualMachineNameConv: virtualMachineNameConv
