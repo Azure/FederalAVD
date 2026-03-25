@@ -952,8 +952,8 @@ function Remove-FailedDeploymentArtifacts {
                         $deviceUri = "$graphEndpoint/v1.0/devices?`$filter=displayName eq '$($orphanedVM.SessionHostName)'"
                         $device = Invoke-GraphRestMethod -GraphToken $GraphToken -Method Get -Uri $deviceUri
                         
-                        if ($device -and $device.Count -gt 0) {
-                            $deviceId = $device[0].id
+                        if ($device.value -and $device.value.Count -gt 0) {
+                            $deviceId = $device.value[0].id
                             $deleteDeviceUri = "$graphEndpoint/v1.0/devices/$deviceId"
                             Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri
                             Write-LogEntry -Message "Successfully deleted Entra device for orphaned VM: $($orphanedVM.SessionHostName)"
@@ -974,8 +974,8 @@ function Remove-FailedDeploymentArtifacts {
                         $deviceUri = "$graphEndpoint/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$($orphanedVM.SessionHostName)'"
                         $device = Invoke-GraphRestMethod -GraphToken $GraphToken -Method Get -Uri $deviceUri
                         
-                        if ($device -and $device.Count -gt 0) {
-                            $deviceId = $device[0].id
+                        if ($device.value -and $device.value.Count -gt 0) {
+                            $deviceId = $device.value[0].id
                             $deleteDeviceUri = "$graphEndpoint/v1.0/deviceManagement/managedDevices/$deviceId"
                             Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri
                             Write-LogEntry -Message "Successfully deleted Intune device for orphaned VM: $($orphanedVM.SessionHostName)"
