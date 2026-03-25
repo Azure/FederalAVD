@@ -966,7 +966,22 @@ if ($replacementMode -eq 'DeleteFirst') {
                 $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
                 $deploymentState.LastDeploymentNeeded = $hostPoolReplacementPlan.PossibleDeploymentsCount
                 $deploymentState.LastDeploymentPercentage = if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) { [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolReplacementPlan.PossibleDeploymentsCount) * 100) } else { 0 }
-                $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'                
+                $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
+                
+                # Save session host names for cleanup tracking if deployment fails
+                if ($deploymentResult.SessionHostNames -and $deploymentResult.SessionHostNames.Count -gt 0) {
+                    # Build mapping with just VM names as keys (DeleteFirst mode will have full properties, this is simplified)
+                    $deploymentMapping = @{}
+                    foreach ($vmName in $deploymentResult.SessionHostNames) {
+                        $deploymentMapping[$vmName] = @{}
+                    }
+                    $deploymentState.PendingHostMappings = ($deploymentMapping | ConvertTo-Json -Compress)
+                    Write-LogEntry -Message "Saved {0} session host name(s) to deployment state for cleanup tracking" -StringValues $deploymentResult.SessionHostNames.Count -Level Trace
+                }
+                else {
+                    $deploymentState.PendingHostMappings = '{}'
+                }
+                
                 Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
                 
                 # Save state
@@ -1022,6 +1037,20 @@ else {
                 }
                 else { 0 }
                 $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
+                
+                # Save session host names for cleanup tracking if deployment fails
+                if ($deploymentResult.SessionHostNames -and $deploymentResult.SessionHostNames.Count -gt 0) {
+                    # Build mapping with just VM names as keys (SideBySide mode has no host properties to track)
+                    $deploymentMapping = @{}
+                    foreach ($vmName in $deploymentResult.SessionHostNames) {
+                        $deploymentMapping[$vmName] = @{}
+                    }
+                    $deploymentState.PendingHostMappings = ($deploymentMapping | ConvertTo-Json -Compress)
+                    Write-LogEntry -Message "Saved {0} session host name(s) to deployment state for cleanup tracking" -StringValues $deploymentResult.SessionHostNames.Count -Level Trace
+                }
+                else {
+                    $deploymentState.PendingHostMappings = '{}'
+                }
                 
                 Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
                 

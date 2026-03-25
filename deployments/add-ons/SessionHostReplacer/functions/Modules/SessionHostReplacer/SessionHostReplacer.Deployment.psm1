@@ -199,7 +199,7 @@ function Get-LastDeploymentStatus {
             }
             
             if ($result.Failed) {
-                Write-LogEntry -Message "Previous deployment failed with error: $($result.ErrorMessage)" -Level Error
+                Write-LogEntry -Message "Previous deployment failed with error: $($result.ErrorMessage)" -Level Warning
             }
             elseif ($result.Running) {
                 Write-LogEntry -Message "Previous deployment is still running" -Level Warning
@@ -615,6 +615,7 @@ function Deploy-SessionHosts {
         Write-LogEntry -Message "Deployment submission failed: $($deploymentJob.Error)" -Level Error
         return [PSCustomObject]@{
             DeploymentName   = $deploymentName
+            SessionHostNames = $sessionHostNames
             SessionHostCount = $NewSessionHostsCount
             Succeeded        = $false
             Timestamp        = $deploymentTimestamp
@@ -628,6 +629,7 @@ function Deploy-SessionHosts {
     # Note: Succeeded is initially null - will be determined on next run
     return [PSCustomObject]@{
         DeploymentName   = $deploymentName
+        SessionHostNames = $sessionHostNames
         SessionHostCount = $NewSessionHostsCount
         Succeeded        = $null  # Unknown until checked on next run
         Timestamp        = $deploymentTimestamp
