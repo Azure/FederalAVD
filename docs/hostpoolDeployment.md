@@ -866,12 +866,14 @@ Ensure your firewall, NSGs, and proxy configurations allow access to the require
 Session hosts require network access to download and install the AVD Agent and Boot Loader during deployment.
 
 **Download Behavior:**
+
 - **AVD Agent:** The deployment always attempts to download the latest agent version from the host pool API endpoint first. If the endpoint is unavailable or fails, it falls back to the `agentDownloadUrl` parameter (if provided) or cloud-specific default URLs
 - **Boot Loader:** The deployment uses the `agentBootLoaderDownloadUrl` parameter (if provided) or cloud-specific default URLs
 
 **Custom Agent URLs (Optional):**
 
 For air-gapped environments or when you need to override default URLs, configure these parameters:
+
 - `agentBootLoaderDownloadUrl` - Custom URL or blob name for AVD Agent Boot Loader MSI
 - `agentDownloadUrl` - Custom URL or blob name for AVD Agent MSI (used as fallback after endpoint attempt)
 
