@@ -45,12 +45,6 @@ During session host deployment (host pool creation and Session Host Replacer ope
 
 ## Custom Image Build
 
-> **✅ Azure Toolbox Availability**
->
-> **FSLogix installer is now available directly in the Azure Toolbox** within air-gapped clouds! This eliminates the need to download from the internet and transfer files between networks. You can obtain FSLogix directly within your air-gapped environment from Azure Toolbox and upload it to your storage account.
->
-> **Note:** A storage account is still required because automated downloads from Azure Toolbox require authentication that cannot be performed by the deployment scripts.
-
 The following table provides specific instructions for preparing your air-gapped environment for building custom images. This assumes that you have already created the image management storage account and blob container. The **Storage Account Provided** and **Download Latest Microsoft Content** columns represent the `artifactsContainerUri` and the `downloadLatestMicrosoftContent` image build parameters respectively.
 
 | Software | Storage Account</br>Provided | Download Latest</br>Microsoft Content | Instructions and Caveats |
