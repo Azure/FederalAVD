@@ -395,8 +395,14 @@ param fslogixRemoteNetAppVolumeResourceIds array = []
 @description('Optional. FSLogix OSS groups for sharding.')
 param fslogixOSSGroups array = []
 
-@description('Optional. AVD Agents DSC package name or URL.')
-param avdAgentsDSCPackage string = 'Configuration_1.0.03266.1110.zip'
+@description('Optional. Use the agent download endpoint for retrieving the latest AVD agent version. When false, the publicly available go.microsoft.com links for public clouds or aka perma-links for air-gapped clouds will be used unless a custom url is specified.')
+param useAgentDownloadEndpoint bool = false
+
+@description('Optional. Custom URL for AVD Agent Boot Loader MSI installer. When empty, defaults to publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds).')
+param agentBootLoaderDownloadUrl string = ''
+
+@description('Optional. Custom URL for AVD Agent MSI installer. When empty and useAgentDownloadEndpoint is false, defaults to publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Not used when useAgentDownloadEndpoint is true.')
+param agentDownloadUrl string = ''
 
 @description('Optional. Artifacts container URI for custom scripts.')
 param artifactsContainerUri string = ''
@@ -409,7 +415,6 @@ Array of objects containing the following properties
 -name: The name of the script or application that is running minus extension
 -blobNameOrUri: The blob name when used with the artifactsContainerUri or the full URI of the file to download.
 -arguments: Arguments required by the installer or script being ran.
--runAfterHostPoolJoin: (Optional, boolean, defaults to false) When true, the customization runs AFTER the host joins the AVD host pool. When false, it runs BEFORE joining the host pool.
 
 JSON example:
 [
@@ -421,12 +426,6 @@ JSON example:
     "name": "VSCode",
     "blobNameOrUri": "VSCode.zip",
     "arguments": "/verysilent /mergetasks=!runcode"
-  },
-  {
-    "name": "PostJoinConfig",
-    "blobNameOrUri": "PostJoinConfig.ps1",
-    "arguments": "-Environment Production",
-    "runAfterHostPoolJoin": true
   }
 ]
 ''')
@@ -626,6 +625,9 @@ var computeGalleryResourceId = !empty(customImageResourceId)
   : ''
 
 // Conditional Session Host Parameters
+var paramAgentDownloadUrl = !empty(agentDownloadUrl) ? { agentDownloadUrl: agentDownloadUrl } : {}
+var paramAgentBootLoaderDownloadUrl = !empty(agentBootLoaderDownloadUrl) ? { agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl } : {}
+var paramUseAgentDownloadEndpoint = useAgentDownloadEndpoint == true ? { useAgentDownloadEndpoint: useAgentDownloadEndpoint } : {}
 var paramArtifactsContainerUri = !empty(artifactsContainerUri) ? { artifactsContainerUri: artifactsContainerUri } : {}
 var paramArtifactsUserAssignedIdentityResourceId = !empty(artifactsUserAssignedIdentityResourceId)
   ? { artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId }
@@ -684,7 +686,6 @@ var sessionHostParameters = union(
   {
     availability: availability
     availabilitySetNameConv: availabilitySetNameConv
-    avdAgentsDSCPackage: avdAgentsDSCPackage
     credentialsKeyVaultResourceId: credentialsKeyVaultResourceId
     diskSizeGB: diskSizeGB
     diskSku: diskSku
@@ -715,6 +716,9 @@ var sessionHostParameters = union(
     virtualMachineSize: virtualMachineSize
     vTpmEnabled: vTpmEnabled
   },
+  paramAgentBootLoaderDownloadUrl,
+  paramAgentDownloadUrl,
+  paramUseAgentDownloadEndpoint,
   paramArtifactsContainerUri,
   paramArtifactsUserAssignedIdentityResourceId,
   paramAvailabilityZones,

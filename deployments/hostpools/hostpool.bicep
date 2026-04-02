@@ -376,6 +376,15 @@ JSON example:
 ''')
 param sessionHostCustomizations array = []
 
+@description('Optional. Determines if the Azure Virtual Desktop agent should use the agent download endpoint to download the agent installer instead of the direct download URL. When true, the agent download URL is not used.')
+param useAgentDownloadEndpoint bool = false
+
+@description('Optional. The URL to download the AVD Agent Boot Loader. If not provided, the URL is determined based on the cloud environment.')
+param agentBootLoaderDownloadUrl string = ''
+
+@description('Optional. The URL to download the AVD Agent. If not provided and useAgentDownloadEndpoint is false, the URL is determined based on the cloud environment. If useAgentDownloadEndpoint is true, this value is ignored.')
+param agentDownloadUrl string = ''
+
 // User Profiles
 
 @description('Optional. Determines whether resources to support FSLogix profile storage are deployed.')
@@ -866,12 +875,6 @@ var maxAvSetMembers = 200 // This is the max number of session hosts that can be
 var beginAvSetRange = sessionHostIndex / maxAvSetMembers // This determines the availability set to start with.
 var endAvSetRange = (sessionHostCount + sessionHostIndex) / maxAvSetMembers // This determines the availability set to end with.
 var availabilitySetsCount = length(range(beginAvSetRange, (endAvSetRange - beginAvSetRange) + 1))
-
-// Agent Download URLs
-var cloud = toLower(environment().name)
-var cloudSuffix = replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')
-var agentBootLoaderDownloadUrl = startsWith(cloud, 'us') ? 'https://aka.${cloudSuffix}/avdRDAgentBootLoader' : 'https://go.microsoft.com/fwlink/?linkid=2311028'
-var agentDownloadUrl = startsWith(cloud, 'us') ? 'https://aka.${cloudSuffix}/avdRDAgent' : 'https://go.microsoft.com/fwlink/?linkid=2310011'
 
 var deployDiskAccessResource = contains(hostPoolType, 'Personal') && recoveryServices && deployPrivateEndpoints
   ? true
@@ -1447,6 +1450,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     tags: hostTags
     deploymentSuffix: deploymentSuffix
     timeZone: virtualMachinesTimeZone
+    useAgentDownloadEndpoint: useAgentDownloadEndpoint
     #disable-next-line BCP422
     virtualMachineAdminPassword: !empty(credentialsKeyVaultResourceId)
       ? kvCredentials!.getSecret('VirtualMachineAdminPassword')

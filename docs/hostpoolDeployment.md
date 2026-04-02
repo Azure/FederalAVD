@@ -53,6 +53,7 @@ Before deploying a host pool, ensure you have completed these prerequisites from
 
 ✅ **Azure Subscription** - Owner or Contributor + User Access Administrator role  
 ✅ **Virtual Network** - Subnet for session hosts with appropriate connectivity  
+✅ **Network Connectivity** - Firewall/NSG rules allowing access to [required AVD endpoints](https://learn.microsoft.com/azure/virtual-desktop/required-fqdn-endpoint?tabs=azure) ([air-gapped clouds](airGappedClouds.md))  
 ✅ **Identity Solution** - Microsoft Entra ID or Active Directory Domain Services  
 ✅ **Security Group** - Group containing AVD users  
 ✅ **Desktop Virtualization Provider** - Enabled in subscription
@@ -721,6 +722,7 @@ cd C:\repos\FederalAVD\deployments
 ```
 
 This creates template specs for:
+
 - Azure Virtual Desktop Host Pool
 - Azure Virtual Desktop Custom Image Build
 - Azure Virtual Desktop Networking
@@ -794,6 +796,7 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
 - **Keep it simple:** Deployment names are just labels for tracking in Azure Portal
 
 **Example naming patterns:**
+
 ```powershell
 # Based on parameter file
 "prod-hostpool-001"           # From prod-hostpool-001.parameters.json
@@ -838,7 +841,47 @@ When using private endpoints, these private DNS zones must be created and linked
 
 For hybrid identity scenarios (AD DS or Entra Kerberos), configure custom DNS on your virtual network to point to domain controllers or DNS resolvers that can resolve domain SRV records.
 
-### D. Domain Permissions Setup
+### D. Required URLs & Network Connectivity
+
+#### AVD Service Endpoints
+
+Session hosts require network access to specific Azure Virtual Desktop service endpoints to function properly. These include endpoints for:
+
+- AVD control plane services (host pool registration, session brokering)
+- Windows Update and activation services
+- Telemetry and diagnostics
+- Azure Storage and Key Vault (when using private endpoints)
+- Additional Microsoft services (depending on your configuration)
+
+**🔒 Firewall & Network Requirements:**
+
+Ensure your firewall, NSGs, and proxy configurations allow access to the required FQDNs for your cloud environment:
+
+📖 **[Required URL List for Azure Virtual Desktop](https://learn.microsoft.com/azure/virtual-desktop/required-fqdn-endpoint?tabs=azure)** - Complete list of required endpoints by cloud (Azure Commercial, Azure Government, Azure China)
+
+> **Important:** Blocking access to required endpoints will prevent session hosts from registering with the host pool and users from connecting to their sessions.
+
+#### AVD Agent Installation
+
+Session hosts require network access to download and install the AVD Agent and Boot Loader during deployment.
+
+**Download Behavior:**
+- The deployment attempts to use the host pool API endpoint to download the latest agent version (when `useAgentDownloadEndpoint=true`, which is the default)
+- If the endpoint is unavailable or fails, the deployment falls back to cloud-specific default URLs or custom URLs (if configured)
+- For the Boot Loader, the deployment uses cloud-specific default URLs or custom URLs (if configured)
+
+**Custom Agent URLs (Optional):**
+
+For air-gapped environments or when you need to override default URLs, configure these parameters:
+- `agentBootLoaderDownloadUrl` - Custom URL or blob name for AVD Agent Boot Loader MSI
+- `agentDownloadUrl` - Custom URL or blob name for AVD Agent MSI  
+- `useAgentDownloadEndpoint` - Set to `false` to skip the host pool API endpoint and use URLs directly
+
+📖 **For Air-Gapped Clouds:** See [Air-Gapped Cloud Considerations](airGappedClouds.md) for complete setup instructions, including agent download URLs and storage account configuration.
+
+📖 **Parameter Details:** See [Parameters](parameters.md) for complete parameter documentation.
+
+### E. Domain Permissions Setup
 
 #### Active Directory Domain Services
 
@@ -879,7 +922,7 @@ Create a service account with permissions to domain join VMs:
 
 Ensure the principal is a member of the **AAD DC Administrators** group in Entra ID.
 
-### E. Azure Permissions
+### F. Azure Permissions
 
 #### Required Permissions
 
@@ -902,7 +945,7 @@ Ensure the principal is a member of the **AAD DC Administrators** group in Entra
 **For secret management:**
 - **Key Vault Administrator** role on subscription or key vault resource groups
 
-### F. Marketplace Image Selection
+### G. Marketplace Image Selection
 
 To find available marketplace images for session hosts:
 
@@ -932,7 +975,7 @@ Get-AzVMImage -Location $Location -PublisherName $Publisher -Offer $Offer -Skus 
 - `win11-23h2-avd` - Windows 11 multi-session
 - `win10-22h2-avd-m365` - Windows 10 multi-session with Microsoft 365 Apps
 
-### G. Feature Enablement
+### H. Feature Enablement
 
 #### Enable Desktop Virtualization Resource Provider
 
@@ -992,7 +1035,7 @@ Get-MgServicePrincipal -Filter "displayName eq 'Confidential VM Orchestrator'" |
 
 Use the returned `Id` value for the `confidentialVMOrchestratorObjectId` parameter.
 
-### H. Azure NetApp Files Setup
+### I. Azure NetApp Files Setup
 
 If using Azure NetApp Files for FSLogix storage:
 
@@ -1020,7 +1063,7 @@ Get-AzProviderFeature -ProviderNamespace Microsoft.NetApp -FeatureName ANFShared
 
 📖 [Enable Shared AD Feature](https://learn.microsoft.com/azure/azure-netapp-files/create-active-directory-connections#shared_ad)
 
-### I. Entra Kerberos Setup
+### J. Entra Kerberos Setup
 
 For Entra Kerberos authentication to Azure Files, see the dedicated guides:
 
@@ -1029,7 +1072,7 @@ For Entra Kerberos authentication to Azure Files, see the dedicated guides:
 
 Both require creating a User Assigned Managed Identity with Microsoft Graph permissions to automate storage account configuration.
 
-### J. Networking Setup
+### K. Networking Setup
 
 The solution includes an automated networking deployment for creating spoke VNets, subnets, and private DNS zones.
 

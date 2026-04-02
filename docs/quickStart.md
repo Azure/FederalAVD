@@ -50,12 +50,13 @@ Most components support multiple deployment methods:
 | **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 
 > **🔒 Air-Gapped Clouds (Azure Secret/Top Secret):** Blue Button deployments are NOT available. You can use either:
+>
 > - **Template Specs with Portal UI** (for custom images, host pools, networking, add-ons)
 > - **PowerShell/CLI with parameter files** (for all components)
-> 
+>
 > **💡 Pro Tip:** Use Template Spec UI to generate your parameter files! Deploy once with the UI form, save the generated parameters, remove the `timeStamp` parameter, then use PowerShell for future deployments.
-> 
-> **For details on air-gapped considerations:** [Air-Gapped Image Management Guide](airGappedClouds.md)
+>
+> **For details on air-gapped considerations:** [Air-Gapped Guide](airGappedClouds.md)
 
 ---
 
@@ -67,6 +68,7 @@ Before deploying, ensure you have these essentials ready:
 
 - ✅ **Azure Subscription** with Owner role (or Contributor + User Access Administrator)
 - ✅ **Virtual Network** with at least one subnet for session hosts
+- ✅ **Network Connectivity** - Firewall/NSG rules allowing access to [required AVD endpoints](https://learn.microsoft.com/azure/virtual-desktop/required-fqdn-endpoint?tabs=azure) ([air-gapped clouds](airGappedClouds.md))
 - ✅ **Security Group** for AVD users (Entra ID or AD-synced)
 - ✅ **AVD Licenses** - [Verify licensing requirements](https://learn.microsoft.com/azure/virtual-desktop/overview#requirements)
 - ✅ **Resource Provider** - Enable `Microsoft.DesktopVirtualization` in your subscription
@@ -87,6 +89,7 @@ Before deploying, ensure you have these essentials ready:
 <summary><b>📖 Detailed Prerequisites & Setup Guides</b></summary>
 
 **Complete Prerequisites & Setup Instructions:**
+
 - **[Host Pool Deployment Guide - Appendix](hostpoolDeployment.md#appendix-detailed-setup--prerequisites)** - Comprehensive setup guide including:
   - Installing PowerShell Az Module & Bicep CLI
   - Creating Template Specs
@@ -100,6 +103,7 @@ Before deploying, ensure you have these essentials ready:
   - Networking infrastructure deployment
 
 **Identity & Authentication:**
+
 - **[Entra Kerberos (Hybrid)](entraKerberosHybrid.md)** - Setup for hybrid identity with on-premises AD
 - **[Entra Kerberos (Cloud-Only)](entraKerberosCloudOnly.md)** - Setup for pure cloud identities
 

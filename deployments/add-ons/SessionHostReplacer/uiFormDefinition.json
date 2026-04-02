@@ -2082,27 +2082,6 @@
 							"visible": true
 						},
 						{
-							"name": "registration",
-							"type": "Microsoft.Common.Section",
-							"label": "Session Host Registration",
-							"elements": [
-								{
-									"name": "avdAgentsDSCPackage",
-									"type": "Microsoft.Common.TextBox",
-									"label": "AVD Agent DSC Package",
-									"placeholder": "",
-									"defaultValue": "Configuration_1.0.03266.1110.zip",
-									"toolTip": "Provide the full URL (or just the file name to use the default storage account for the environment) to the DSC Configuration Package containing the AVD Agents and code to register the virtual machines as session hosts in the environment.",
-									"constraints": {
-										"required": true,
-										"validationMessage": "The package name must start with 'Configuration', optionally be followed by an underscore and a version number, and end with '.zip'."
-									},
-									"visible": true
-								}
-							],
-							"visible": true
-						},
-						{
 							"name": "management",
 							"type": "Microsoft.Common.Section",
 							"label": "Management",
@@ -2126,46 +2105,46 @@
 							]							
 						},
 						{
-							"name": "customScripts",
+							"name": "customizations",
 							"type": "Microsoft.Common.Section",
-							"label": "Custom Scripts",
+							"label": "Customizations",
 							"elements": [
 								{
+									"name": "customizationsIntro",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "Optionally customize your session host deployment by selecting one or both of the options below. You can customize the AVD Agent and AVD Agent Boot Loader download Urls and/or add custom scripts or software to install during deployment."
+									}
+								},
+								{
+									"name": "customizeAgentDownload",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Customize Agent Download Sources",
+									"defaultValue": false,
+									"toolTip": "By default, agent installers are downloaded from publicly documented sources (go.microsoft.com links for Internet accessible clouds, aka perma-links for air-gapped cloud environments). Select this checkbox to override the defaults and specify custom URLs or storage account locations for the AVD Agent installers."
+								},
+								{
 									"name": "addCustomScripts",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Add Custom Scripts",
-									"placeholder": "",
-									"defaultValue": "No",
-									"toolTip": "",
-									"constraints": {
-										"allowedValues": [
-											{
-												"label": "Yes",
-												"value": true
-											},
-											{
-												"label": "No",
-												"value": false
-											}
-										],
-										"required": false
-									},
-									"visible": true
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Add Custom Scripts or Software",
+									"defaultValue": false,
+									"toolTip": "Select this checkbox to add custom scripts or software installers to run during session host deployment."
 								},
 								{
 									"name": "storageHeader",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('hosts').customScripts.addCustomScripts]",
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
 									"options": {
 										"text": "<u>Artifacts Storage</u>"
 									}
 								},
 								{
-									"name": "textBlockStorageAndManagedIdentity",
+									"name": "storageIntro",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('hosts').customScripts.addCustomScripts]",
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
 									"options": {
-										"text": "Use the drop downs below to optionally select the storage account and blob container with the build artifacts (scripts and installers) and the User Assigned Managed Identity that has been assigned the 'Storage Blob Data Reader' role the storage account. If you do not host your scripts internally then these items are not required, but you must provide full URIs in the customizations Blob or URI name field."
+										"text": "Optionally select a storage account and blob container hosting your artifacts (agent installers, scripts, or software), and a User Assigned Managed Identity with 'Storage Blob Data Reader' role assignment. If you provide full URLs in the fields below, these selections are not required."
 									}
 								},
 								{
@@ -2174,70 +2153,120 @@
 									"label": "Storage Account Subscription",
 									"placeholder": "",
 									"defaultValue": "[steps('hosts').scope.subscription.displayName]",
-									"toolTip": "",
+									"toolTip": "Select the subscription containing the storage account with your artifacts.",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
 										"required": false
 									},
-									"visible": "[steps('hosts').customScripts.addCustomScripts]"
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
 								},
 								{
 									"name": "storageAccountsApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('hosts').customScripts.storageAccountSubscription))]",
+									"condition": "[not(empty(steps('hosts').customizations.storageAccountSubscription))]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('hosts').customScripts.storageAccountSubscription.id, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01')]"
+										"path": "[concat(steps('hosts').customizations.storageAccountSubscription.id, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01')]"
 									}
 								},
 								{
 									"name": "storageAccount",
 									"type": "Microsoft.Common.DropDown",
-									"label": "Image Artifacts Storage Account",
+									"label": "Artifacts Storage Account",
 									"multiLine": true,
-									"toolTip": "Select the storage account containing the image customization artifacts (i.e., installers, scripts).",
+									"toolTip": "Select the storage account containing your deployment artifacts.",
 									"constraints": {
-										"allowedValues": "[map(steps('hosts').customScripts.storageAccountsApi.value, (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Location: ', sa.location, ' Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\",\"value\":{\"id\":\"', sa.id, '\",\"blobEndpoint\":\"', sa.properties.primaryEndpoints.blob, '\"}}')))]",
+										"allowedValues": "[map(steps('hosts').customizations.storageAccountsApi.value, (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Location: ', sa.location, ' Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\",\"value\":{\"id\":\"', sa.id, '\",\"blobEndpoint\":\"', sa.properties.primaryEndpoints.blob, '\"}}')))]",
 										"required": false
 									},
-									"visible": "[steps('hosts').customScripts.addCustomScripts]"
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
 								},
 								{
 									"name": "containerApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('hosts').customScripts.storageAccount))]",
+									"condition": "[not(empty(steps('hosts').customizations.storageAccount))]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('hosts').customScripts.storageAccount.id, '/blobServices/default/containers?api-version=2023-01-01')]"
+										"path": "[concat(steps('hosts').customizations.storageAccount.id, '/blobServices/default/containers?api-version=2023-01-01')]"
 									}
 								},
 								{
 									"name": "container",
 									"type": "Microsoft.Common.DropDown",
-									"visible": "[steps('hosts').customScripts.addCustomScripts]",
-									"label": "Image Artifacts Container",
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
+									"label": "Artifacts Container",
 									"defaultValue": "",
-									"toolTip": "Select the container which contains the software and script blobs.",
+									"toolTip": "Select the blob container which contains your artifact files.",
 									"constraints": {
-										"required": false,
-										"allowedValues": "[map(steps('hosts').customScripts.containerApi.value, (con) => parse(concat('{\"label\":\"', con.name, '\",\"value\":\"', con.name, '\"}')))]"
+										"allowedValues": "[map(steps('hosts').customizations.containerApi.value, (con) => parse(concat('{\"label\":\"', con.name, '\",\"value\":\"', con.name, '\"}')))]",
+										"required": false
 									}
 								},
 								{
 									"name": "managedIdentity",
 									"type": "Microsoft.Solutions.ResourceSelector",
-									"label": "Storage Account access User Assigned Identity",
-									"toolTip": "Select an existing User Assigned Identity which has been assigned data plane rights of at least 'Storage Blob Data Reader' to the storage account and container selected above.",
+									"label": "Storage Access User Assigned Identity",
+									"toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role assigned to the storage account selected above.",
 									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
 									"constraints": {
 										"required": false
 									},
-									"visible": "[steps('hosts').customScripts.addCustomScripts]"
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
 								},
 								{
-									"name": "customizationText",
+									"name": "agentDownloadHeader",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('hosts').customScripts.addCustomScripts]",
+									"visible": "[steps('hosts').customizations.customizeAgentDownload]",
+									"options": {
+										"text": "<u>AVD Agent Downloads</u>"
+									}
+								},
+								{
+									"name": "agentBootLoaderUrl",
+									"type": "Microsoft.Common.TextBox",
+									"label": "[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent Boot Loader URL', 'AVD Agent Boot Loader URL or Blob Name')]",
+									"defaultValue": "[if(empty(steps('hosts').customizations.storageAccount), '', 'Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi')]",
+									"toolTip": "[if(empty(steps('hosts').customizations.storageAccount), 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide a custom full URL to override the default.', 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide either a blob name (if using the storage account selected above) or a custom full URL to override the default.')]",
+									"constraints": {
+										"required": false,
+										"regex": "^(https?://.*\\.msi|[^/\\\\]+\\.msi)?$",
+										"validationMessage": "Must be either a full URL (https://...) or a blob name ending in .msi"
+									},
+									"visible": "[steps('hosts').customizations.customizeAgentDownload]"
+								},
+								{
+									"name": "useAgentDownloadEndpoint",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Use Agent Download Endpoint",
+									"defaultValue": true,
+									"toolTip": "When enabled, the latest agent installer will be downloaded from the AVD service endpoint. If the endpoint download fails and an agent URL is provided below, the system will automatically fall back to that URL. When disabled, only the agent URL below will be used.",
+									"visible": "[steps('hosts').customizations.customizeAgentDownload]"
+								},
+								{
+									"name": "agentUrl",
+									"type": "Microsoft.Common.TextBox",
+									"label": "[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent URL', 'AVD Agent URL or Blob Name')]",
+									"defaultValue": "[if(empty(steps('hosts').customizations.storageAccount), '', 'Microsoft.RDInfra.RDAgent.Installer-x64.msi')]",
+									"toolTip": "[if(empty(steps('hosts').customizations.storageAccount), if(steps('hosts').customizations.useAgentDownloadEndpoint, 'Optional. Provide a custom full URL to override defaults (go.microsoft.com for public clouds, aka.ms perma-links for air-gapped clouds). This URL will be used as fallback if the endpoint download fails, or exclusively if endpoint is disabled above.', 'Provide a full URL or leave empty to use defaults (go.microsoft.com for public clouds, aka.ms perma-links for air-gapped clouds). Required when endpoint download is disabled above.'), if(steps('hosts').customizations.useAgentDownloadEndpoint, 'Optional. Provide a blob name (using storage account above) or full URL to override defaults. This will be used as fallback if the endpoint download fails, or exclusively if endpoint is disabled above.', 'Provide a blob name (using storage account above) or full URL, or leave empty to use defaults. Required when endpoint download is disabled above.'))]",
+									"constraints": {
+										"required": false,
+										"regex": "^(https?://.*\\.msi|[^/\\\\]+\\.msi)?$",
+										"validationMessage": "Must be either a full URL (https://...) or a blob name ending in .msi"
+									},
+									"visible": "[steps('hosts').customizations.customizeAgentDownload]"
+								},
+								{
+									"name": "customScriptsHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('hosts').customizations.addCustomScripts]",
+									"options": {
+										"text": "<u>Custom Scripts and Software</u>"
+									}
+								},
+								{
+									"name": "customScriptsIntro",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('hosts').customizations.addCustomScripts]",
 									"options": {
 										"text": "Specify each customization's name, blob name (or full URI), and optional arguments. Set 'Post Host Pool Join' to <b>Yes</b> to execute after the host joins the AVD pool, or <b>No</b> (default) to execute before joining."
 									}
@@ -2245,18 +2274,18 @@
 								{
 									"name": "customizationInfoBox",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[steps('hosts').customScripts.addCustomScripts]",
+									"visible": "[steps('hosts').customizations.addCustomScripts]",
 									"options": {
 										"style": "Info",
 										"text": "Some software installations may interfere with the host pool join process and should be run after joining completes. Note that the session host will be available for connections before post-join customizations run."
 									}
 								},
 								{
-									"name": "customizations",
+									"name": "customScripts",
 									"type": "Microsoft.Common.EditableGrid",
 									"ariaLabel": "Customizations",
-									"label": "Custom Scripts and Software",
-									"visible": "[steps('hosts').customScripts.addCustomScripts]",
+									"label": "Customizations",
+									"visible": "[steps('hosts').customizations.addCustomScripts]",
 									"constraints": {
 										"width": "Full",
 										"rows": {
@@ -2304,27 +2333,6 @@
 													"type": "Microsoft.Common.TextBox",
 													"placeholder": "Example: /install /silent",
 													"constraints": {
-														"required": false
-													}
-												}
-											},
-											{
-												"id": "runAfterHostPoolJoin",
-												"header": "Post Host Pool Join",
-												"width": "1fr",
-												"element": {
-													"type": "Microsoft.Common.DropDown",
-													"constraints": {
-														"allowedValues": [
-															{
-																"label": "No",
-																"value": false
-															},
-															{
-																"label": "Yes",
-																"value": true
-															}
-														],
 														"required": false
 													}
 												}
@@ -3350,9 +3358,12 @@
 				"availability": "[steps('hosts').availability.availability]",
 				"availabilityZones": "[if(equals(steps('hosts').availability.availability, 'AvailabilityZones'), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
-				"artifactsContainerUri": "[if(and(steps('hosts').customScripts.addCustomScripts, not(empty(steps('hosts').customScripts.storageAccount)), not(empty(steps('hosts').customScripts.container))), concat(steps('hosts').customScripts.storageAccount.blobEndpoint, steps('hosts').customScripts.container), '')]",
-				"artifactsUserAssignedIdentityResourceId": "[if(and(steps('hosts').customScripts.addCustomScripts, not(empty(steps('hosts').customScripts.managedIdentity))), steps('hosts').customScripts.managedIdentity.id, '')]",
-				"sessionHostCustomizations": "[if(steps('hosts').customScripts.addCustomScripts, steps('hosts').customScripts.customizations, parse('[]'))]",
+				"artifactsContainerUri": "[if(steps('hosts').customizations.addCustomScripts, if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container), ''), '')]",
+				"artifactsUserAssignedIdentityResourceId": "[if(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), if(not(empty(steps('hosts').customizations.managedIdentity)), steps('hosts').customizations.managedIdentity.id, ''), '')]",
+				"useAgentDownloadEndpoint": "[if(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.useAgentDownloadEndpoint, true)]",
+				"agentBootLoaderDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentBootLoaderUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentBootLoaderUrl), steps('hosts').customizations.agentBootLoaderUrl), '')]",
+				"agentDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentUrl), steps('hosts').customizations.agentUrl), '')]",
+				"sessionHostCustomizations": "[if(steps('hosts').customizations.addCustomScripts, steps('hosts').customizations.customScripts, parse('[]'))]",
 				"fslogixConfigureSessionHosts": "[steps('userProfiles').configureSessionHosts]",
 				"fslogixContainerType": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').fslogixContainerType, 'ProfileContainer')]",
 				"fslogixSizeInMBs": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').sizeInMBs, 30720)]",

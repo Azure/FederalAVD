@@ -64,7 +64,6 @@ param (
     
     [Parameter(Mandatory = $false)]
     [string]$UserAssignedIdentityClientId
-
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,8 +72,9 @@ $ErrorActionPreference = 'Stop'
 $Script:LogPath = "$env:TEMP\AVDSessionHostInstall.log"
 
 # Convert string parameters to boolean for internal use
-$AADJoinBool = [System.Convert]::ToBoolean($AADJoin)
-$AADJoinPreviewBool = [System.Convert]::ToBoolean($AADJoinPreview)
+# Treat empty string as false
+$AADJoinBool = if ([string]::IsNullOrEmpty($AADJoin)) { $false } else { [System.Convert]::ToBoolean($AADJoin) }
+$AADJoinPreviewBool = if ([string]::IsNullOrEmpty($AADJoinPreview)) { $false } else { [System.Convert]::ToBoolean($AADJoinPreview) }
 
 #region Helper Functions
 
@@ -329,33 +329,34 @@ function Get-InstallerFromUrl {
     
     try {
         $WebClient = New-Object System.Net.WebClient
+        
+        # If URL is Azure Storage and we have a managed identity, authenticate
         if (-not [string]::IsNullOrEmpty($StorageSuffix) -and $Url -match $StorageSuffix -and -not [string]::IsNullOrEmpty($ClientId)) {
-            If ($Url -match $StorageSuffix -and $ClientId -ne '') {
-                $StorageEndpoint = ($Url -split "://")[0] + "://" + ($Uri -split "/")[2] + "/"
-                $TokenUri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$ApiVersion&resource=$StorageEndpoint&client_id=$ClientId"
-                $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token
-                $WebClient.Headers.Add('x-ms-version', '2017-11-09')
-                $webClient.Headers.Add("Authorization", "Bearer $AccessToken")
-            }
+            Write-Log -Message "Authenticating to Azure Storage using managed identity"
+            $StorageEndpoint = ($Url -split "://")[0] + "://" + ($Url -split "/")[2] + "/"
+            $TokenUri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$ApiVersion&resource=$StorageEndpoint&client_id=$ClientId"
+            $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token
+            $WebClient.Headers.Add('x-ms-version', '2017-11-09')
+            $WebClient.Headers.Add("Authorization", "Bearer $AccessToken")
         }
 
         Write-Log -Message "Downloading $DisplayName from: $Url"
-        $webClient.DownloadFile("$Url", "$DestinationPath")
-        $WebClient - $null
+        $WebClient.DownloadFile("$Url", "$DestinationPath")
+        $WebClient = $null
         Write-Log -Message "Successfully downloaded $DisplayName to: $DestinationPath"
         return $true
     }
     catch {
         Write-Log -Category Error -Message "Failed to download $DisplayName : $($_.Exception.Message)"
-        $webClient = $null
+        $WebClient = $null
         return $false
     }
 }
 
 function Set-AADJoinRegistryKeys {
     param (       
-        [Parameter(Mandatory = $true)]
-        [string]$MdmId
+        [Parameter(Mandatory = $false)]
+        [string]$MdmId = ''
     )
       
     Write-Log -Message "Configuring Azure AD Join preview registry keys"
@@ -393,7 +394,7 @@ function Wait-ForBootLoaderService {
     while (-not (Get-Service $ServiceName -ErrorAction SilentlyContinue)) {
         if ($RetryCount -ge $MaxRetries) {
             $ErrorMsg = "Service $ServiceName not found after $MaxRetries retries"
-            Write-Log -Err $ErrorMsg
+            Write-Log -Category Error -Message $ErrorMsg
             throw $ErrorMsg
         }
         
@@ -491,7 +492,7 @@ try {
     
     # Set Azure AD Join registry keys if needed
     if ($AADJoinPreviewBool) {
-        Set-AADJoinRegistryKeys -AADJoinPreview $AADJoinPreviewBool -MdmId $MdmId
+        Set-AADJoinRegistryKeys -MdmId $MdmId
     }
     
     # Install RD Infra Agent

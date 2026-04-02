@@ -92,6 +92,7 @@ param subnetResourceId string
 param tags object
 param deploymentSuffix string
 param timeZone string
+param useAgentDownloadEndpoint bool
 param virtualMachineNameConv string
 param virtualMachineNamePrefix string
 param virtualMachineSize string
@@ -118,6 +119,16 @@ var maxVMsPerDeployment = calculatedMaxVMs < 20 ? 20 : (calculatedMaxVMs > 45 ? 
 var divisionValue = sessionHostCount / maxVMsPerDeployment
 var divisionRemainderValue = sessionHostCount % maxVMsPerDeployment
 var sessionHostBatchCount = divisionRemainderValue > 0 ? divisionValue + 1 : divisionValue
+
+// Agent Download URLs
+var cloud = toLower(environment().name)
+var cloudSuffix = replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')
+var agentBootLoaderUrl = !empty(agentBootLoaderDownloadUrl) 
+  ? agentBootLoaderDownloadUrl 
+  : (startsWith(cloud, 'us') ? 'https://aka.${cloudSuffix}/avdRDAgentBootLoader' : 'https://go.microsoft.com/fwlink/?linkid=2311028')
+var agentUrl = !empty(agentDownloadUrl) 
+  ? agentDownloadUrl 
+  : (startsWith(cloud, 'us') ? 'https://aka.${cloudSuffix}/avdRDAgent' : 'https://go.microsoft.com/fwlink/?linkid=2310011')
 
 var backupPrivateDNSZoneResourceIds = [
   azureBackupPrivateDnsZoneResourceId
@@ -270,8 +281,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
   name: 'VirtualMachines-Batch-${i}-of-${sessionHostBatchCount}-(${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}-VMs)-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
-    agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
-    agentDownloadUrl: agentDownloadUrl
+    agentBootLoaderDownloadUrl: agentBootLoaderUrl
+    agentDownloadUrl: agentUrl
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId) ? '' : artifactsUAI!.properties.clientId
@@ -332,6 +343,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     tags: tags
     deploymentSuffix: deploymentSuffix
     timeZone: timeZone
+    useAgentDownloadEndpoint: useAgentDownloadEndpoint
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
     virtualMachineNameConv: virtualMachineNameConv

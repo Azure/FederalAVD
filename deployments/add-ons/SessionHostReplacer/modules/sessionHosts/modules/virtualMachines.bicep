@@ -1,3 +1,5 @@
+param agentBootLoaderDownloadUrl string
+param agentDownloadUrl string
 param artifactsContainerUri string
 param artifactsUserAssignedIdentityClientId string
 param artifactsUserAssignedIdentityResourceId string
@@ -44,14 +46,13 @@ param ouPath string
 param sessionHostCustomizations array
 param sessionHostNameIndexLength int
 param sessionHostNames array
-param sessionHostRegistrationDSCUrl string
 param securityType string
 param secureBootEnabled bool
 param subnetResourceId string
-param timestamp string = utcNow()
 param tags object
 param deploymentSuffix string
 param timeZone string
+param useAgentDownloadEndpoint bool
 @secure()
 param virtualMachineAdminPassword string
 @secure()
@@ -112,11 +113,6 @@ var identity = identityType != 'None'
       userAssignedIdentities: !empty(userAssignedIdentities) ? userAssignedIdentities : null
     }
   : null
-
-// Split customizations into before and after host pool join
-// runAfterHostPoolJoin defaults to false if not specified
-var preHostPoolJoinCustomizations = filter(sessionHostCustomizations, customization => !(customization.?runAfterHostPoolJoin ?? false))
-var postHostPoolJoinCustomizations = filter(sessionHostCustomizations, customization => (customization.?runAfterHostPoolJoin ?? false))
 
 // Network Interface names once to avoid complex array access in resource loop
 var networkInterfaceNames = [for i in range(0, sessionHostCount): empty(networkInterfaceNameConv) ? sessionHostNames[i] : replace(networkInterfaceNameConv, 'SHNAME', sessionHostNames[i])]
@@ -451,13 +447,69 @@ resource extension_NvidiaGpuDriverWindows 'Microsoft.Compute/virtualMachines/ext
   }
 ]
 
-resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = [
+module customizations 'invokeCustomizations.bicep' = [
+  for i in range(0, sessionHostCount): if (!empty(sessionHostCustomizations)) {
+    name: '${virtualMachine[i].name}-Customizations-${deploymentSuffix}'
+    params: {
+      artifactsContainerUri: artifactsContainerUri
+      customizations: sessionHostCustomizations
+      userAssignedIdentityClientId: artifactsUserAssignedIdentityClientId
+      virtualMachineName: virtualMachine[i].name
+    }
+    dependsOn: [
+      extension_AADLoginForWindows
+      extension_JsonADDomainExtension
+      extension_AmdGpuDriverWindows
+      extension_NvidiaGpuDriverWindows
+      extension_AzureMonitorWindowsAgent
+      extension_GuestAttestation
+    ]
+  }
+]
+
+// Run Command: Initialize Session Host (Configuration + Agent Installation/Registration)
+// This executes the Initialize-SessionHost.ps1 script which performs:
+// Phase 1: FSLogix configuration, timezone settings, GPU drivers, registry settings
+// Phase 2: AVD Agent installation/registration
+resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = [
   for i in range(0, sessionHostCount): {
     parent: virtualMachine[i]
-    name: 'configureSessionHost'
+    name: 'initializeSessionHost'
     location: location
     properties: {
       parameters: [
+        {
+          name: 'AADJoin'
+          value: !contains(identitySolution, 'DomainServices') ? 'true' : 'false'
+        }
+        {
+          name: 'AgentBootLoaderUrl'
+          value: agentBootLoaderDownloadUrl
+        }
+        {
+          name: 'AgentUrl'
+          value: agentDownloadUrl
+        }
+        {
+          name: 'ApiVersion'
+          value: startsWith(environment().name, 'USN') ? '2017-08-01' : '2018-02-01'
+        }
+        {
+          name: 'StorageSuffix'
+          value: storageSuffix
+        }
+        {
+          name: 'MdmId'
+          value: intuneEnrollment ? '0000000a-0000-0000-c000-000000000000' : ''
+        }
+        {
+          name: 'UserAssignedIdentityClientId'
+          value: artifactsUserAssignedIdentityClientId
+        }
+        {
+          name: 'TimeZone'
+          value: timeZone
+        }
         {
           name: 'AmdVmSize'
           value: hasAmdGpu ? 'true' : 'false'
@@ -519,12 +571,16 @@ resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runC
           value: fslogixStorageService
         }
         {
-          name: 'TimeZone'
-          value: timeZone
+          name: 'UseAgentDownloadEndpoint'
+          value: useAgentDownloadEndpoint ? 'true' : 'false'
         }
       ]
       protectedParameters: fslogixConfigureSessionHosts
         ? [
+            {
+              name: 'RegistrationToken'
+              value: last(hostPool.listRegistrationTokens().value).token
+            }
             {
               name: 'LocalStorageAccountKeys'
               value: string(fslogixLocalStorageAccountKeys)
@@ -534,90 +590,26 @@ resource runCommand_ConfigureSessionHost 'Microsoft.Compute/virtualMachines/runC
               value: string(fslogixRemoteStorageAccountKeys)
             }
           ]
-        : null
+        : [
+            {
+              name: 'RegistrationToken'
+              value: last(hostPool.listRegistrationTokens().value).token
+            }
+          ]
       source: {
-        script: loadTextContent('../../../../../../.common/scripts/Set-SessionHostConfiguration.ps1')
+        script: loadTextContent('../../../../../../.common/scripts/Initialize-SessionHost.ps1')
       }
       treatFailureAsDeploymentFailure: true
-      timeoutInSeconds: 600
+      timeoutInSeconds: 900
     }
     dependsOn: [
-      extension_AADLoginForWindows
-      extension_JsonADDomainExtension
-      extension_AmdGpuDriverWindows
-      extension_NvidiaGpuDriverWindows
-      extension_AzureMonitorWindowsAgent
-      extension_GuestAttestation
-    ]
-  }
-]
-
-// Run customizations configured to execute BEFORE host pool join
-module customizations_preHostPoolJoin 'invokeCustomizations.bicep' = [
-  for i in range(0, sessionHostCount): if (!empty(preHostPoolJoinCustomizations)) {
-    name: 'shr-${virtualMachine[i].name}-PreJoinCustomizations-${deploymentSuffix}'
-    params: {
-      artifactsContainerUri: artifactsContainerUri
-      customizations: preHostPoolJoinCustomizations
-      userAssignedIdentityClientId: artifactsUserAssignedIdentityClientId
-      virtualMachineName: virtualMachine[i].name
-    }
-    dependsOn: [
-      runCommand_ConfigureSessionHost
-    ]
-  }
-]
-
-resource extension_DSC_installAvdAgents 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
-  for i in range(0, sessionHostCount): {
-    parent: virtualMachine[i]
-    name: 'AVDAgentInstallandConfig'
-    location: location
-    properties: {
-      forceUpdateTag: timestamp
-      publisher: 'Microsoft.Powershell'
-      type: 'DSC'
-      typeHandlerVersion: '2.73'
-      autoUpgradeMinorVersion: true
-      settings: {
-        modulesUrl: sessionHostRegistrationDSCUrl
-        configurationFunction: 'Configuration.ps1\\AddSessionHost'
-        properties: {
-          hostPoolName: last(split(hostPoolResourceId, '/'))
-          registrationInfoTokenCredential: {
-            UserName: 'PLACEHOLDER_DO_NOT_USE'
-            Password: 'PrivateSettingsRef:RegistrationInfoToken'
-          }
-          aadJoin: !contains(identitySolution, 'DomainServices')
-          UseAgentDownloadEndpoint: true
-          mdmId: intuneEnrollment ? '0000000a-0000-0000-c000-000000000000' : ''
-        }
-      }
-      protectedSettings: {
-        Items: {
-          RegistrationInfoToken: last(hostPool.listRegistrationTokens().value).token
-        }
-      }
-    }
-    dependsOn: [
-      runCommand_ConfigureSessionHost
-      customizations_preHostPoolJoin
-    ]
-  }
-]
-
-// Run customizations configured to execute AFTER host pool join
-module customizations_postHostPoolJoin 'invokeCustomizations.bicep' = [
-  for i in range(0, sessionHostCount): if (!empty(postHostPoolJoinCustomizations)) {
-    name: 'shr-${virtualMachine[i].name}-PostJoinCustomizations-${deploymentSuffix}'
-    params: {
-      artifactsContainerUri: artifactsContainerUri
-      customizations: postHostPoolJoinCustomizations
-      userAssignedIdentityClientId: artifactsUserAssignedIdentityClientId
-      virtualMachineName: virtualMachine[i].name
-    }
-    dependsOn: [
-      extension_DSC_installAvdAgents
+      extension_AADLoginForWindows[i]
+      extension_JsonADDomainExtension[i]
+      extension_AmdGpuDriverWindows[i]
+      extension_NvidiaGpuDriverWindows[i]
+      extension_AzureMonitorWindowsAgent[i]
+      extension_GuestAttestation[i]
+      customizations[i]
     ]
   }
 ]
