@@ -14,7 +14,7 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 ### What You Can Deploy
 
 | Component | Description | Documentation |
-|-----------|-------------|---------------|
+| --------- | ----------- | ------------- |
 | 🌐 **Networking** | Virtual network, subnets, NSGs, NAT gateway, hub peering, route tables, private DNS zones | [Quick Start - Networking](docs/quickStart.md#step-0-deploy-networking-infrastructure-greenfield) |
 | 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpoolDeployment.md) |
 | 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifactsGuide.md) |
@@ -52,7 +52,7 @@ graph TD
 ### Deployment Methods
 
 | Component | Blue Button | Template Spec | PowerShell/CLI |
-|-----------|-------------|---------------|----------------|
+| --------- | ----------- | ------------- | -------------- |
 | **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
