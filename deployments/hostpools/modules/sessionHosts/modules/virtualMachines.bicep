@@ -595,10 +595,6 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
           value: string(fslogixSizeInMBs)
         }
         {
-          name: 'StorageAccountDNSSuffix'
-          value: storageSuffix
-        }
-        {
           name: 'StorageService'
           value: fslogixStorageService
         }

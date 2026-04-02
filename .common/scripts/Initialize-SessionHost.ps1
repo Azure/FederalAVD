@@ -79,9 +79,6 @@ Optional. JSON array of FSLogix file share names.
 .PARAMETER SizeInMBs
 Optional. FSLogix container size in MB. Default is 30000.
 
-.PARAMETER StorageAccountDNSSuffix
-Optional. DNS suffix for storage accounts.
-
 .PARAMETER StorageService
 Optional. Storage service type: AzureFiles or AzureNetAppFiles.
 
@@ -168,9 +165,6 @@ param (
 
     [Parameter(Mandatory = $false)]
     [string]$SizeInMBs = '30000',
-
-    [Parameter(Mandatory = $false)]
-    [string]$StorageAccountDNSSuffix = '',
 
     [Parameter(Mandatory = $false)]
     [string]$StorageService = ''
@@ -859,7 +853,7 @@ try {
                 # Process Local Storage Accounts
                 Write-Log -message "Processing Local Storage Accounts"
                 For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {
-                    $SAFQDN = "$($LocalStorageAccountNamesArray[$i]).file.$StorageAccountDNSSuffix"
+                    $SAFQDN = "$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix"
                     Write-Log -message "LocalStorageAccountFQDN: '$SAFQDN'"
                     
                     If ($LocalStorageAccountKeysArray.Count -gt 0 -and $LocalStorageAccountKeysArray[$i]) {
@@ -883,7 +877,7 @@ try {
                 If ($RemoteStorageAccountNamesArray.Count -gt 0) {
                     Write-Log Info "Processing Remote Storage Accounts"
                     For ($i = 0; $i -lt $RemoteStorageAccountNamesArray.Count; $i++) {
-                        $SAFQDN = "$($RemoteStorageAccountNamesArray[$i]).file.$StorageAccountDNSSuffix"
+                        $SAFQDN = "$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix"
                         Write-Log -message "RemoteStorageAccountFQDN: '$SAFQDN'"
                         
                         If ($RemoteStorageAccountKeysArray.Count -gt 0 -and $RemoteStorageAccountKeysArray[$i]) {
