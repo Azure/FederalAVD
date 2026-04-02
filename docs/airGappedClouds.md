@@ -32,7 +32,7 @@ During session host deployment (host pool creation and Session Host Replacer ope
   1. Attempts to download the latest agent version from the host pool API endpoint
   2. If endpoint fails → uses `agentDownloadUrl` (if provided) OR the `https://aka.<cloudsuffix>/avdRDAgent` permalink.
 - If `useAgentDownloadEndpoint` is `false`:
-  - Uses `agentDownloadUrl` (if provided) OR the `https://aka.<cloudsuffix>\avdRDAgent permalink.
+  - Uses `agentDownloadUrl` (if provided) OR the `https://aka.<cloudsuffix>\avdRDAgent` permalink.
 
 | Component | Storage Account</br>Provided | Instructions |
 | :-- | :--: | :-- |
