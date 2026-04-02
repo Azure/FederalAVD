@@ -627,12 +627,12 @@ function Invoke-GraphRestMethod {
                 return $result
             }
             catch {
-                Write-LogEntry -Message "Graph API call to DoD endpoint also failed: $_" -Level Error
+                Write-LogEntry -Message "Graph API call to DoD endpoint also failed: $_" -Level Warning
                 throw $_
             }
         }
         else {
-            Write-LogEntry -Message "Graph API call failed: $_" -Level Error
+            Write-LogEntry -Message "Graph API call failed: $_" -Level Warning
             throw $_
         }
     }

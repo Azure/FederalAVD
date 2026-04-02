@@ -515,7 +515,7 @@ function Get-SessionHostReplacementPlan {
     
     [array] $sessionHostsToReplace = $sessionHostsOldVersion | Select-Object -Property * -Unique
 
-    # Good hosts = not needing replacement AND not shutdown (shutdown VMs are deallocated and unavailable) AND not unavailable (VM deleted)
+    # Up-to-date hosts = not needing replacement AND not shutdown (shutdown VMs are deallocated and unavailable) AND not unavailable (VM deleted)
     $goodSessionHosts = $SessionHosts | Where-Object { 
         $_.SessionHostName -notin $sessionHostsToReplace.SessionHostName -and 
         -not $_.ShutdownTimestamp -and
@@ -544,8 +544,8 @@ function Get-SessionHostReplacementPlan {
     }
     
     $sessionHostsCurrentTotal = ([array]$goodSessionHosts.SessionHostName + [array]$runningDeploymentVMNames) | Select-Object -Unique
-    Write-LogEntry -Message "We have $($sessionHostsCurrentTotal.Count) good session hosts including $runningDeploymentVMCount session hosts being deployed"
-    Write-LogEntry -Message "We target having $TargetSessionHostCount session hosts in good shape"
+    Write-LogEntry -Message "We have $($sessionHostsCurrentTotal.Count) up-to-date session hosts including $runningDeploymentVMCount session hosts being deployed"
+    Write-LogEntry -Message "We target having $TargetSessionHostCount up-to-date session hosts"
     
     # Check if there are any running or recently submitted deployments - if so, skip deployment and capacity calculations
     if ($runningDeployments -and $runningDeployments.Count -gt 0) {
@@ -570,7 +570,7 @@ function Get-SessionHostReplacementPlan {
             }
             else {
                 $canDeploy = 0
-                Write-LogEntry -Message "We have enough session hosts in good shape."
+                Write-LogEntry -Message "We have enough up-to-date session hosts."
             }
         }
         else {
@@ -593,7 +593,7 @@ function Get-SessionHostReplacementPlan {
                 }
                 else {
                     $canDeploy = 0
-                    Write-LogEntry -Message "We have enough session hosts in good shape."
+                    Write-LogEntry -Message "We have enough up-to-date session hosts."
                 }
             }
             else {
@@ -715,20 +715,20 @@ function Get-SessionHostReplacementPlan {
         if ($canDelete -gt $sessionHostsToReplace.Count) {
             Write-LogEntry -Message "Host pool is over populated"
             $goodSessionHostsToDeleteCount = $canDelete - $sessionHostsToReplace.Count
-            Write-LogEntry -Message "We will delete $goodSessionHostsToDeleteCount good session hosts"
+            Write-LogEntry -Message "We will delete $goodSessionHostsToDeleteCount up-to-date session hosts (pool is over-populated)"
             
-            # Lazy load power states for good hosts being considered for deletion
+            # Lazy load power states for up-to-date hosts being considered for deletion
             $goodHostResourceIds = $goodSessionHosts | ForEach-Object { $_.ResourceId }
             $powerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds $goodHostResourceIds
             
-            # Enrich good hosts with power state
+            # Enrich up-to-date hosts with power state
             foreach ($sh in $goodSessionHosts) {
                 $sh | Add-Member -NotePropertyName PoweredOff -NotePropertyValue $powerStates[$sh.ResourceId] -Force
             }
             
             # Sort by power state (prioritize powered-off VMs), then session count (idle hosts), then drain status, then name
             $selectedGoodHostsTotDelete = [array] ($goodSessionHosts | Sort-Object -Property @{Expression={-not $_.PoweredOff}; Ascending=$true}, @{Expression={$_.Sessions}; Ascending=$true}, @{Expression={$_.AllowNewSession}; Ascending=$true}, SessionHostName | Select-Object -First $goodSessionHostsToDeleteCount)
-            Write-LogEntry -Message "Selected the following good session hosts to delete: $($($selectedGoodHostsTotDelete.VMName) -join ',')"
+            Write-LogEntry -Message "Selected the following up-to-date session hosts to delete: $($($selectedGoodHostsTotDelete.VMName) -join ',')"
         }
         else {
             $selectedGoodHostsTotDelete = @()
@@ -788,7 +788,12 @@ function Get-SessionHostReplacementPlan {
             $sessionHostsPendingDelete = $sessionHostsPendingDelete | Select-Object -First $actualDeleteCount
         }
         
-        Write-LogEntry -Message "The following Session Hosts are now pending delete: $($($SessionHostsPendingDelete.SessionHostName) -join ',')"
+        if ($enableShutdownRetention) {
+            Write-LogEntry -Message "The following session hosts will be shut down for $shutdownRetentionDays day(s) before deletion: $($($SessionHostsPendingDelete.SessionHostName) -join ',')"
+        }
+        else {
+            Write-LogEntry -Message "The following session hosts are pending deletion: $($($SessionHostsPendingDelete.SessionHostName) -join ',')"
+        }
     }
     elseif ($sessionHostsToReplace.Count -gt 0) {
         Write-LogEntry -Message "We need to delete $($sessionHostsToReplace.Count) session hosts but we don't have enough session hosts in the host pool."

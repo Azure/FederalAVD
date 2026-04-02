@@ -199,7 +199,7 @@ function Get-LastDeploymentStatus {
             }
             
             if ($result.Failed) {
-                Write-LogEntry -Message "Previous deployment failed with error: $($result.ErrorMessage)" -Level Error
+                Write-LogEntry -Message "Previous deployment failed with error: $($result.ErrorMessage)" -Level Warning
             }
             elseif ($result.Running) {
                 Write-LogEntry -Message "Previous deployment is still running" -Level Warning
@@ -615,6 +615,7 @@ function Deploy-SessionHosts {
         Write-LogEntry -Message "Deployment submission failed: $($deploymentJob.Error)" -Level Error
         return [PSCustomObject]@{
             DeploymentName   = $deploymentName
+            SessionHostNames = $sessionHostNames
             SessionHostCount = $NewSessionHostsCount
             Succeeded        = $false
             Timestamp        = $deploymentTimestamp
@@ -628,6 +629,7 @@ function Deploy-SessionHosts {
     # Note: Succeeded is initially null - will be determined on next run
     return [PSCustomObject]@{
         DeploymentName   = $deploymentName
+        SessionHostNames = $sessionHostNames
         SessionHostCount = $NewSessionHostsCount
         Succeeded        = $null  # Unknown until checked on next run
         Timestamp        = $deploymentTimestamp
@@ -700,10 +702,11 @@ function Get-Deployments {
     $output.RunningDeployments = foreach ($deployment in $runningDeployments) {
         if ($deployment.properties.parameters) {
             $parameters = $deployment.properties.parameters | ConvertTo-CaseInsensitiveHashtable
-            Write-LogEntry -Message "Running deployment '$($deployment.name)' is deploying: $(($parameters['sessionHostNames'].Value -join ','))" -Level Trace
+            $sessionHostNames = if ($parameters.ContainsKey('sessionHostNames')) { $parameters['sessionHostNames'].Value } else { @() }
+            Write-LogEntry -Message "Running deployment '$($deployment.name)' is deploying: $(($sessionHostNames -join ','))" -Level Trace
             [PSCustomObject]@{
                 DeploymentName   = $deployment.name
-                SessionHostNames = $parameters['sessionHostNames'].Value
+                SessionHostNames = $sessionHostNames
                 Timestamp        = $deployment.properties.timestamp
                 Status           = $deployment.properties.provisioningState
             }
@@ -896,6 +899,12 @@ function Remove-FailedDeploymentArtifacts {
     foreach ($deployment in $FailedDeployments) {
         $failedDeploymentNames += $deployment.DeploymentName
         
+        # Handle case where SessionHostNames may not be present (e.g., when called from deployment state tracking)
+        if (-not $deployment.SessionHostNames -or $deployment.SessionHostNames.Count -eq 0) {
+            Write-LogEntry -Message "Deployment '$($deployment.DeploymentName)' has no session host names to check for cleanup" -Level Trace
+            continue
+        }
+        
         foreach ($sessionHostName in $deployment.SessionHostNames) {
             # Session host name is like 'avdtest01use201', but actual VM could be:
             # - avdtest01use201 (no CAF naming)
@@ -943,8 +952,8 @@ function Remove-FailedDeploymentArtifacts {
                         $deviceUri = "$graphEndpoint/v1.0/devices?`$filter=displayName eq '$($orphanedVM.SessionHostName)'"
                         $device = Invoke-GraphRestMethod -GraphToken $GraphToken -Method Get -Uri $deviceUri
                         
-                        if ($device -and $device.Count -gt 0) {
-                            $deviceId = $device[0].id
+                        if ($device.value -and $device.value.Count -gt 0) {
+                            $deviceId = $device.value[0].id
                             $deleteDeviceUri = "$graphEndpoint/v1.0/devices/$deviceId"
                             Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri
                             Write-LogEntry -Message "Successfully deleted Entra device for orphaned VM: $($orphanedVM.SessionHostName)"
@@ -965,8 +974,8 @@ function Remove-FailedDeploymentArtifacts {
                         $deviceUri = "$graphEndpoint/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$($orphanedVM.SessionHostName)'"
                         $device = Invoke-GraphRestMethod -GraphToken $GraphToken -Method Get -Uri $deviceUri
                         
-                        if ($device -and $device.Count -gt 0) {
-                            $deviceId = $device[0].id
+                        if ($device.value -and $device.value.Count -gt 0) {
+                            $deviceId = $device.value[0].id
                             $deleteDeviceUri = "$graphEndpoint/v1.0/deviceManagement/managedDevices/$deviceId"
                             Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri
                             Write-LogEntry -Message "Successfully deleted Intune device for orphaned VM: $($orphanedVM.SessionHostName)"
