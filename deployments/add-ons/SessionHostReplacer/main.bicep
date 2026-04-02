@@ -395,13 +395,10 @@ param fslogixRemoteNetAppVolumeResourceIds array = []
 @description('Optional. FSLogix OSS groups for sharding.')
 param fslogixOSSGroups array = []
 
-@description('Optional. Use the agent download endpoint for retrieving the latest AVD agent version. When false, the publicly available go.microsoft.com links for public clouds or aka perma-links for air-gapped clouds will be used unless a custom url is specified.')
-param useAgentDownloadEndpoint bool = false
-
 @description('Optional. Custom URL for AVD Agent Boot Loader MSI installer. When empty, defaults to publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds).')
 param agentBootLoaderDownloadUrl string = ''
 
-@description('Optional. Custom URL for AVD Agent MSI installer. When empty and useAgentDownloadEndpoint is false, defaults to publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Not used when useAgentDownloadEndpoint is true.')
+@description('Optional. Custom URL for AVD Agent MSI installer. When empty, defaults to publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds).')
 param agentDownloadUrl string = ''
 
 @description('Optional. Artifacts container URI for custom scripts.')
@@ -627,7 +624,6 @@ var computeGalleryResourceId = !empty(customImageResourceId)
 // Conditional Session Host Parameters
 var paramAgentDownloadUrl = !empty(agentDownloadUrl) ? { agentDownloadUrl: agentDownloadUrl } : {}
 var paramAgentBootLoaderDownloadUrl = !empty(agentBootLoaderDownloadUrl) ? { agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl } : {}
-var paramUseAgentDownloadEndpoint = useAgentDownloadEndpoint == true ? { useAgentDownloadEndpoint: useAgentDownloadEndpoint } : {}
 var paramArtifactsContainerUri = !empty(artifactsContainerUri) ? { artifactsContainerUri: artifactsContainerUri } : {}
 var paramArtifactsUserAssignedIdentityResourceId = !empty(artifactsUserAssignedIdentityResourceId)
   ? { artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId }
@@ -718,7 +714,6 @@ var sessionHostParameters = union(
   },
   paramAgentBootLoaderDownloadUrl,
   paramAgentDownloadUrl,
-  paramUseAgentDownloadEndpoint,
   paramArtifactsContainerUri,
   paramArtifactsUserAssignedIdentityResourceId,
   paramAvailabilityZones,

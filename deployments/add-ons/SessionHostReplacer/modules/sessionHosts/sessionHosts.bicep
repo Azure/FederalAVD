@@ -18,13 +18,10 @@ param availabilitySetNameConv string = ''
 @description('Array of availability zones to distribute session hosts across when availability is set to AvailabilityZones.')
 param availabilityZones array = []
 
-@description('Use the agent download endpoint for retrieving the latest AVD agent version. When false, a direct download URL must be provided.')
-param useAgentDownloadEndpoint bool = false
-
 @description('Custom URL for AVD Agent Boot Loader MSI installer. When empty, defaults to publicly documented sources.')
 param agentBootLoaderDownloadUrl string = ''
 
-@description('Custom URL for AVD Agent MSI installer. When empty and useAgentDownloadEndpoint is false, defaults to publicly documented sources. Not used when useAgentDownloadEndpoint is true.')
+@description('Custom URL for AVD Agent MSI installer. When empty, defaults to publicly documented sources.')
 param agentDownloadUrl string = ''
 
 @description('Resource ID of the data collection rule for AVD Insights monitoring.')
@@ -380,7 +377,6 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       subnetResourceId: subnetResourceId
       tags: tags
       timeZone: timeZone
-      useAgentDownloadEndpoint: useAgentDownloadEndpoint
       virtualMachineAdminPassword: kvCredentials.getSecret('VirtualMachineAdminPassword')
       virtualMachineAdminUserName: kvCredentials.getSecret('VirtualMachineAdminUserName')
       virtualMachineNameConv: virtualMachineNameConv

@@ -14,10 +14,7 @@ Required. The host pool registration token for joining the session host.
 Required. Direct URL to download the RDAgent BootLoader MSI.
 
 .PARAMETER AgentUrl
-Optional. Direct URL to download the RD Infra Agent MSI. Used when UseAgentDownloadEndpoint is false, or as fallback if endpoint download fails.
-
-.PARAMETER UseAgentDownloadEndpoint
-Optional. Set to 'true' to use the AVD service endpoint for downloading the latest agent. If endpoint download fails, falls back to AgentUrl. Set to 'false' to use AgentUrl directly. Default is 'true'.
+Optional. Direct URL to download the RD Infra Agent MSI. Used as fallback if endpoint download fails.
 
 .PARAMETER AADJoin
 Optional. Set to 'true' if the VM is Azure AD joined. Default is 'false'.
@@ -115,10 +112,6 @@ param (
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('true', 'false', '')]
-    [string]$UseAgentDownloadEndpoint = 'true',
-
-    [Parameter(Mandatory = $false)]
-    [ValidateSet('true', 'false', '')]
     [string]$AADJoin,
 
     [Parameter(Mandatory = $false)]
@@ -191,7 +184,6 @@ $Script:Name = 'Initialize-SessionHost'
 
 # Convert string parameters to boolean for internal use
 $AADJoinBool = if ([string]::IsNullOrEmpty($AADJoin)) { $false } else { [System.Convert]::ToBoolean($AADJoin) }
-$UseAgentDownloadEndpointBool = if ([string]::IsNullOrEmpty($UseAgentDownloadEndpoint)) { $true } else { [System.Convert]::ToBoolean($UseAgentDownloadEndpoint) }
 
 #region Helper Functions
 
@@ -744,7 +736,6 @@ try {
     Write-Log -Message "Script Parameters:"
     Write-Log -Message "  AADJoin: $AADJoin (Converted: $AADJoinBool)"
     Write-Log -Message "  MdmId: $(if (-not [string]::IsNullOrEmpty($MdmId)) { $MdmId } else { '(not set)' })"
-    Write-Log -Message "  UseAgentDownloadEndpoint: $UseAgentDownloadEndpoint"
     Write-Log -Message "  AgentUrl: $(if ($AgentUrl) { $AgentUrl } else { '(not provided)' })"
     Write-Log -Message "  AgentBootLoaderUrl: $AgentBootLoaderUrl"   
     Write-Log -Message "  TimeZone: $TimeZone"
@@ -1127,7 +1118,7 @@ try {
         # Entra Kerberos Cloud Kerberos Ticket Retrieval
         If ($IdentitySolution -match 'EntraKerberos') {
             Write-Log -message "Adding Entra Kerberos Cloud Kerberos Ticket Retrieval Setting"
-            $RegSettings.Add([PSCustomObject]@{ Name = 'CloudKerberosTicketRetrievalEnabled'; Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters'; PropertyType = 'DWord'; Value = 1})
+            $RegSettings.Add([PSCustomObject]@{ Name = 'CloudKerberosTicketRetrievalEnabled'; Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters'; PropertyType = 'DWord'; Value = 1 })
         }
 
         # Windows Defender Exclusions for FSLogix
@@ -1207,11 +1198,11 @@ try {
     }
     catch {
         if ($_.Exception.Message -like "*already the requested size*") {
-            Write-Log -Message "OS Disk is already at maximum size. No resize needed." -Level 'Info'
+            Write-Log -Message "OS Disk is already at maximum size. No resize needed."
         }
         else {
-            Write-Log -Message "Failed to resize OS Disk: $($_.Exception.Message)" -Level 'Warn'
-            Write-Log -Message "Continuing with deployment..." -Level 'Info'
+            Write-Log -Message "Failed to resize OS Disk: $($_.Exception.Message)" -Category 'Warning'
+            Write-Log -Message "Continuing with deployment..."
         }
     }
     
@@ -1253,40 +1244,24 @@ try {
     # Get Agent Installer with endpoint-first, URL-fallback logic
     $AgentInstallerPath = $null
     
-    if ($UseAgentDownloadEndpointBool) {
-        # Try endpoint first
-        Write-Log -Message 'UseAgentDownloadEndpoint is true. Attempting to download latest agent from Azure endpoint'
-        $AgentInstallerPath = Get-LatestAgentInstaller -RegistrationToken $RegistrationToken -DownloadFolder $DownloadFolder
-        
-        # If endpoint failed and we have a URL, fall back to URL
-        if (-not $AgentInstallerPath -and -not [string]::IsNullOrEmpty($AgentUrl)) {
-            Write-Log -Message 'Endpoint download failed. Falling back to provided AgentUrl'
-            $AgentInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgent.msi'
-            $Success = Get-InstallerFromUrl -Url $AgentUrl -DestinationPath $AgentInstallerPath -DisplayName 'RD Agent'
-            
-            if (-not $Success) {
-                throw "Failed to download RD Agent from both endpoint and fallback URL: $AgentUrl"
-            }
-        }
-        elseif (-not $AgentInstallerPath) {
-            throw 'Failed to download RD Agent from Azure endpoint and no fallback AgentUrl provided'
-        }
-    }
-    else {
-        # UseAgentDownloadEndpoint is false, use URL directly
-        if ([string]::IsNullOrEmpty($AgentUrl)) {
-            throw 'UseAgentDownloadEndpoint is false but no AgentUrl provided. Either set UseAgentDownloadEndpoint to true or provide AgentUrl'
-        }
-        
-        Write-Log -Message 'UseAgentDownloadEndpoint is false. Downloading agent from provided URL'
-        $AgentInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgent.msi'
-        $Success = Get-InstallerFromUrl -Url $AgentUrl -DestinationPath $AgentInstallerPath -DisplayName 'RD Agent'
-        
-        if (-not $Success) {
-            throw "Failed to download RD Agent from provided URL: $AgentUrl"
-        }
-    }
     
+    # Try endpoint first
+    Write-Log -Message 'Attempting to download latest agent from Azure endpoint'
+    $AgentInstallerPath = Get-LatestAgentInstaller -RegistrationToken $RegistrationToken -DownloadFolder $DownloadFolder
+        
+    # If endpoint failed and we have a URL, fall back to URL
+    if (-not $AgentInstallerPath -and -not [string]::IsNullOrEmpty($AgentUrl)) {
+        Write-Log -Message 'Endpoint download failed. Falling back to provided AgentUrl'
+        $AgentInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgent.msi'
+        $Success = Get-InstallerFromUrl -Url $AgentUrl -DestinationPath $AgentInstallerPath -DisplayName 'RD Agent'            
+        if (-not $Success) {
+            throw "Failed to download RD Agent from both endpoint and fallback URL: $AgentUrl"
+        }
+    }
+    elseif (-not $AgentInstallerPath) {
+        throw 'Failed to download RD Agent from Azure endpoint and no fallback AgentUrl provided'
+    }
+        
     # Get Agent Boot Loader Installer
     Write-Log -Message 'Downloading agent boot loader from provided URL'
     $BootLoaderInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgentBootLoader.msi'

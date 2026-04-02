@@ -376,13 +376,10 @@ JSON example:
 ''')
 param sessionHostCustomizations array = []
 
-@description('Optional. Determines if the Azure Virtual Desktop agent should use the agent download endpoint to download the agent installer instead of the direct download URL. When true, the agent download URL is not used.')
-param useAgentDownloadEndpoint bool = false
-
 @description('Optional. The URL to download the AVD Agent Boot Loader. If not provided, the URL is determined based on the cloud environment.')
 param agentBootLoaderDownloadUrl string = ''
 
-@description('Optional. The URL to download the AVD Agent. If not provided and useAgentDownloadEndpoint is false, the URL is determined based on the cloud environment. If useAgentDownloadEndpoint is true, this value is ignored.')
+@description('Optional. The URL to download the AVD Agent. If not provided, the URL is determined based on the cloud environment.')
 param agentDownloadUrl string = ''
 
 // User Profiles
@@ -1450,7 +1447,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     tags: hostTags
     deploymentSuffix: deploymentSuffix
     timeZone: virtualMachinesTimeZone
-    useAgentDownloadEndpoint: useAgentDownloadEndpoint
     #disable-next-line BCP422
     virtualMachineAdminPassword: !empty(credentialsKeyVaultResourceId)
       ? kvCredentials!.getSecret('VirtualMachineAdminPassword')

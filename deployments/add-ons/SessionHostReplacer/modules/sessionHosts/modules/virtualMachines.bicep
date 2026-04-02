@@ -52,7 +52,6 @@ param subnetResourceId string
 param tags object
 param deploymentSuffix string
 param timeZone string
-param useAgentDownloadEndpoint bool
 @secure()
 param virtualMachineAdminPassword string
 @secure()
@@ -569,10 +568,6 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
         {
           name: 'StorageService'
           value: fslogixStorageService
-        }
-        {
-          name: 'UseAgentDownloadEndpoint'
-          value: useAgentDownloadEndpoint ? 'true' : 'false'
         }
       ]
       protectedParameters: fslogixConfigureSessionHosts

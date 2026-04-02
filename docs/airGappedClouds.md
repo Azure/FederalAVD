@@ -28,18 +28,15 @@ During session host deployment (host pool creation and Session Host Replacer ope
 
 **AVD Agent:**
 
-- If `useAgentDownloadEndpoint` is `true` (default):
-  1. Attempts to download the latest agent version from the host pool API endpoint
-  2. If endpoint fails → uses `agentDownloadUrl` (if provided) OR the `https://aka.<cloudsuffix>/avdRDAgent` permalink.
-- If `useAgentDownloadEndpoint` is `false`:
-  - Uses `agentDownloadUrl` (if provided) OR the `https://aka.<cloudsuffix>\avdRDAgent` permalink.
+1. Always attempts to download the latest agent version from the host pool API endpoint first
+2. If endpoint fails → uses `agentDownloadUrl` (if provided) OR the `https://aka.<cloudsuffix>/avdRDAgent` permalink
 
 | Component | Storage Account</br>Provided | Instructions |
 | :-- | :--: | :-- |
-| **AVD Agent &</br>Boot Loader** | Yes | For air-gapped environments where the permalinks are not accessible:<ol><li>Download the latest AVD Agent Boot Loader and AVD Agent MSI files from a system where they are accessible.</li><li>Upload them to your artifacts storage account blob container with the original filenames (e.g., **Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi** and **Microsoft.RDInfra.RDAgent.Installer-x64.msi**).</li><li>Configure the `agentBootLoaderDownloadUrl` and `agentDownloadUrl` parameters with the full URLs to the installers in blob storage to override the default permalinks.</li></ol>**Note:** When `useAgentDownloadEndpoint` is enabled (default), the Agent download tries the host pool API endpoint first, then falls back to your custom URL. See [Parameters](parameters.md) for details. |
-| **AVD Agent &</br>Boot Loader** | No | The deployment uses the default cloud-specific permalinks (see network requirements above) for both components. For the Agent, if `useAgentDownloadEndpoint` is `true` (default), the deployment first attempts the host pool API endpoint for the latest version before falling back to the permalink. |
+| **AVD Agent &</br>Boot Loader** | Yes | For air-gapped environments where the permalinks are not accessible:<ol><li>Download the latest AVD Agent Boot Loader and AVD Agent MSI files from a system where they are accessible.</li><li>Upload them to your artifacts storage account blob container with the original filenames (e.g., **Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi** and **Microsoft.RDInfra.RDAgent.Installer-x64.msi**).</li><li>Configure the `agentBootLoaderDownloadUrl` and `agentDownloadUrl` parameters with the full URLs to the installers in blob storage to override the default permalinks.</li></ol>**Note:** The Agent download always tries the host pool API endpoint first for the latest version, then falls back to your custom URL. See [Parameters](parameters.md) for details. |
+| **AVD Agent &</br>Boot Loader** | No | The deployment uses the default cloud-specific permalinks (see network requirements above) for both components. For the Agent, the deployment always attempts the host pool API endpoint first for the latest version before falling back to the permalink. |
 
-📖 **Parameter Reference:** See the `agentDownloadUrl`, `agentBootLoaderDownloadUrl`, and `useAgentDownloadEndpoint` parameters in [Parameters](parameters.md).
+📖 **Parameter Reference:** See the `agentDownloadUrl` and `agentBootLoaderDownloadUrl` parameters in [Parameters](parameters.md).
 
 ---
 

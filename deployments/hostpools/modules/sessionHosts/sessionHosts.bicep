@@ -92,7 +92,6 @@ param subnetResourceId string
 param tags object
 param deploymentSuffix string
 param timeZone string
-param useAgentDownloadEndpoint bool
 param virtualMachineNameConv string
 param virtualMachineNamePrefix string
 param virtualMachineSize string
@@ -343,7 +342,6 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     tags: tags
     deploymentSuffix: deploymentSuffix
     timeZone: timeZone
-    useAgentDownloadEndpoint: useAgentDownloadEndpoint
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
     virtualMachineNameConv: virtualMachineNameConv

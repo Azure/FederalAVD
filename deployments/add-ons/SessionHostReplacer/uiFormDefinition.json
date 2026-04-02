@@ -2235,19 +2235,11 @@
 									"visible": "[steps('hosts').customizations.customizeAgentDownload]"
 								},
 								{
-									"name": "useAgentDownloadEndpoint",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Use Agent Download Endpoint",
-									"defaultValue": true,
-									"toolTip": "When enabled, the latest agent installer will be downloaded from the AVD service endpoint. If the endpoint download fails and an agent URL is provided below, the system will automatically fall back to that URL. When disabled, only the agent URL below will be used.",
-									"visible": "[steps('hosts').customizations.customizeAgentDownload]"
-								},
-								{
 									"name": "agentUrl",
 									"type": "Microsoft.Common.TextBox",
 									"label": "[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent URL', 'AVD Agent URL or Blob Name')]",
 									"defaultValue": "[if(empty(steps('hosts').customizations.storageAccount), '', 'Microsoft.RDInfra.RDAgent.Installer-x64.msi')]",
-									"toolTip": "[if(empty(steps('hosts').customizations.storageAccount), if(steps('hosts').customizations.useAgentDownloadEndpoint, 'Optional. Provide a custom full URL to override defaults (go.microsoft.com for public clouds, aka.ms perma-links for air-gapped clouds). This URL will be used as fallback if the endpoint download fails, or exclusively if endpoint is disabled above.', 'Provide a full URL or leave empty to use defaults (go.microsoft.com for public clouds, aka.ms perma-links for air-gapped clouds). Required when endpoint download is disabled above.'), if(steps('hosts').customizations.useAgentDownloadEndpoint, 'Optional. Provide a blob name (using storage account above) or full URL to override defaults. This will be used as fallback if the endpoint download fails, or exclusively if endpoint is disabled above.', 'Provide a blob name (using storage account above) or full URL, or leave empty to use defaults. Required when endpoint download is disabled above.'))]",
+									"toolTip": "[if(empty(steps('hosts').customizations.storageAccount), 'Optional. Provide a custom full URL to override defaults (go.microsoft.com for public clouds, aka.ms perma-links for air-gapped clouds). This URL will be used as fallback if the endpoint download fails.', 'Optional. Provide a blob name (using storage account above) or full URL to override defaults. This will be used as fallback if the endpoint download fails.')]",
 									"constraints": {
 										"required": false,
 										"regex": "^(https?://.*\\.msi|[^/\\\\]+\\.msi)?$",
@@ -3360,7 +3352,6 @@
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
 				"artifactsContainerUri": "[if(steps('hosts').customizations.addCustomScripts, if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container), ''), '')]",
 				"artifactsUserAssignedIdentityResourceId": "[if(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), if(not(empty(steps('hosts').customizations.managedIdentity)), steps('hosts').customizations.managedIdentity.id, ''), '')]",
-				"useAgentDownloadEndpoint": "[if(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.useAgentDownloadEndpoint, true)]",
 				"agentBootLoaderDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentBootLoaderUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentBootLoaderUrl), steps('hosts').customizations.agentBootLoaderUrl), '')]",
 				"agentDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentUrl), steps('hosts').customizations.agentUrl), '')]",
 				"sessionHostCustomizations": "[if(steps('hosts').customizations.addCustomScripts, steps('hosts').customizations.customScripts, parse('[]'))]",
