@@ -15,7 +15,6 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 
 | Component | Description | Documentation |
 |-----------|-------------|---------------|
-| 🚀 **Quick Start** | Step-by-step guide for new deployments | [Quick Start Guide](docs/quickStart.md) |
 | 🌐 **Networking** | Virtual network, subnets, NSGs, NAT gateway, hub peering, route tables, private DNS zones | [Quick Start - Networking](docs/quickStart.md#step-0-deploy-networking-infrastructure-greenfield) |
 | 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpoolDeployment.md) |
 | 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifactsGuide.md) |
