@@ -18,8 +18,11 @@ param availabilitySetNameConv string = ''
 @description('Array of availability zones to distribute session hosts across when availability is set to AvailabilityZones.')
 param availabilityZones array = []
 
-@description('Name of the DSC package used to register session hosts with the AVD host pool.')
-param avdAgentsDSCPackage string
+@description('Custom URL for AVD Agent Boot Loader MSI installer. When empty, defaults to publicly documented sources.')
+param agentBootLoaderDownloadUrl string = ''
+
+@description('Custom URL for AVD Agent MSI installer. When empty, defaults to publicly documented sources.')
+param agentDownloadUrl string = ''
 
 @description('Resource ID of the data collection rule for AVD Insights monitoring.')
 param avdInsightsDataCollectionRulesResourceId string = ''
@@ -197,24 +200,43 @@ param vmInsightsDataCollectionRulesResourceId string = ''
 
 // Variables
 
-var avSetNameConv = empty(availabilitySetNameConv) ? 'as-${substring(sessionHostNames[0], 0, length(sessionHostNames[0])-sessionHostNameIndexLength)}-##' : availabilitySetNameConv
+var avSetNameConv = empty(availabilitySetNameConv)
+  ? 'as-${substring(sessionHostNames[0], 0, length(sessionHostNames[0])-sessionHostNameIndexLength)}-##'
+  : availabilitySetNameConv
 
 var deploymentSuffix = uniqueString(deployment().name)
 
-var sessionHostRegistrationDSCStorageAccount = startsWith(environment().name, 'USN')
-  ? 'wvdexportalcontainer'
-  : 'wvdportalstorageblob'
-var sessionHostRegistrationDSCUrl = startsWith(avdAgentsDSCPackage, 'https://')
-  ? avdAgentsDSCPackage
-  : 'https://${sessionHostRegistrationDSCStorageAccount}.blob.${environment().suffixes.storage}/galleryartifacts/${avdAgentsDSCPackage}'
+// Agent download URL construction with environment-based fallback
+var cloud = toLower(environment().name)
+var cloudSuffix = replace(
+  replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''),
+  '/',
+  ''
+)
+var agentBootLoaderUrl = !empty(agentBootLoaderDownloadUrl)
+  ? agentBootLoaderDownloadUrl
+  : (startsWith(cloud, 'us')
+      ? 'https://aka.${cloudSuffix}/avdRDAgentBootLoader'
+      : 'https://go.microsoft.com/fwlink/?linkid=2311028')
+var agentUrl = !empty(agentDownloadUrl)
+  ? agentDownloadUrl
+  : (startsWith(cloud, 'us')
+      ? 'https://aka.${cloudSuffix}/avdRDAgent'
+      : 'https://go.microsoft.com/fwlink/?linkid=2310011')
 
 var confidentialVMOSDiskEncryptionType = confidentialVMOSDiskEncryption ? 'DiskWithVMGuestState' : 'VMGuestStateOnly'
 
 // Batching logic: Dynamically calculate max VMs per batch based on resources per VM
 // Empirically measured: 915 resources / 61 VMs = 15 with monitoring, so base = 11 without monitoring
-var hasAmdGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(virtualMachineSize, '_V710_v5'))
-var hasNvidiaGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, '_v3') || endsWith(virtualMachineSize, '_A10_v5'))
-var baseResourcesPerVM = 11 // NIC, VM, Domain/AAD Extension, DSC Extension, Run Command, updateOSDisk modules(2), diskUpdate, plus 3 unidentified
+var hasAmdGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(
+  virtualMachineSize,
+  '_V710_v5'
+))
+var hasNvidiaGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, '_v3') || endsWith(
+  virtualMachineSize,
+  '_A10_v5'
+))
+var baseResourcesPerVM = 11 // NIC, VM, Domain/AAD Extension, Run Command (Initialize-SessionHost), Run Command (Customizations), updateOSDisk modules(2), diskUpdate, plus 3 unidentified
 var monitoringResourcesPerVM = enableMonitoring ? 4 : 0 // Azure Monitor Agent Extension + 3 DCR associations
 var gpuResourcesPerVM = (hasAmdGpu || hasNvidiaGpu) ? 1 : 0 // GPU driver extension (AMD or NVIDIA)
 var integrityResourcesPerVM = integrityMonitoring ? 1 : 0 // Guest Attestation extension
@@ -230,7 +252,11 @@ var sessionHostBatchCount = divisionRemainderValue > 0 ? divisionValue + 1 : div
 // Availability Set logic: Max 200 VMs per availability set
 // Extract VM numbers from names to determine which availability sets are needed
 var vmNumbersForAvSet = [
-  for name in sessionHostNames: int(substring(name, length(name)-sessionHostNameIndexLength, sessionHostNameIndexLength))
+  for name in sessionHostNames: int(substring(
+    name,
+    length(name) - sessionHostNameIndexLength,
+    sessionHostNameIndexLength
+  ))
 ]
 
 var minVmNumber = min(vmNumbersForAvSet)
@@ -241,7 +267,9 @@ var endAvSetRange = maxVmNumber / maxAvSetMembers
 var calculatedAvailabilitySetsCount = endAvSetRange - beginAvSetRange + 1
 var calculatedAvailabilitySetsIndex = beginAvSetRange
 
-var fslogixFileShareNames = contains(fslogixContainerType, 'Office') ? ['profile-containers', 'office-containers'] : ['profile-containers']
+var fslogixFileShareNames = contains(fslogixContainerType, 'Office')
+  ? ['profile-containers', 'office-containers']
+  : ['profile-containers']
 
 // Existing Key Vault for secrets
 resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
@@ -250,11 +278,14 @@ resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
 }
 
 resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(artifactsUserAssignedIdentityResourceId)) {
-  scope: resourceGroup(split(artifactsUserAssignedIdentityResourceId, '/')[2], split(artifactsUserAssignedIdentityResourceId, '/')[4])
+  scope: resourceGroup(
+    split(artifactsUserAssignedIdentityResourceId, '/')[2],
+    split(artifactsUserAssignedIdentityResourceId, '/')[4]
+  )
   name: last(split(artifactsUserAssignedIdentityResourceId, '/'))
 }
 
-module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if(fslogixConfigureSessionHosts && (!empty(fslogixLocalNetAppVolumeResourceIds) || !empty(fslogixRemoteNetAppVolumeResourceIds))) {
+module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if (fslogixConfigureSessionHosts && (!empty(fslogixLocalNetAppVolumeResourceIds) || !empty(fslogixRemoteNetAppVolumeResourceIds))) {
   name: 'shr-netAppVolumeFqdns-${deploymentSuffix}'
   params: {
     localNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
@@ -284,6 +315,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
     #disable-next-line BCP335
     name: 'shr-vm-batch-${i}-of-${sessionHostBatchCount}_(${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}-vms)-${deploymentSuffix}'
     params: {
+      agentBootLoaderDownloadUrl: agentBootLoaderUrl
+      agentDownloadUrl: agentUrl
       artifactsContainerUri: artifactsContainerUri
       artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
       artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId)
@@ -315,9 +348,13 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       fslogixContainerType: fslogixContainerType
       fslogixFileShareNames: fslogixFileShareNames
       fslogixOSSGroups: fslogixOSSGroups
-      fslogixLocalNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.localNetAppVolumeSmbServerFqdns : []
+      fslogixLocalNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds)
+        ? netAppVolumeFqdns!.outputs.localNetAppVolumeSmbServerFqdns
+        : []
       fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
-      fslogixRemoteNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns : []
+      fslogixRemoteNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds)
+        ? netAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns
+        : []
       fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
       fslogixSizeInMBs: fslogixSizeInMBs
       fslogixStorageService: fslogixStorageService
@@ -337,10 +374,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       sessionHostNames: i == sessionHostBatchCount && divisionRemainderValue > 0
         ? take(skip(sessionHostNames, (i - 1) * maxVMsPerDeployment), divisionRemainderValue)
         : take(skip(sessionHostNames, (i - 1) * maxVMsPerDeployment), maxVMsPerDeployment)
-      sessionHostRegistrationDSCUrl: sessionHostRegistrationDSCUrl
       subnetResourceId: subnetResourceId
       tags: tags
-      timestamp: deploymentSuffix
       timeZone: timeZone
       virtualMachineAdminPassword: kvCredentials.getSecret('VirtualMachineAdminPassword')
       virtualMachineAdminUserName: kvCredentials.getSecret('VirtualMachineAdminUserName')

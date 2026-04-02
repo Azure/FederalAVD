@@ -955,7 +955,7 @@ function Remove-FailedDeploymentArtifacts {
                         if ($device.value -and $device.value.Count -gt 0) {
                             $deviceId = $device.value[0].id
                             $deleteDeviceUri = "$graphEndpoint/v1.0/devices/$deviceId"
-                            Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri
+                            Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri | Out-Null
                             Write-LogEntry -Message "Successfully deleted Entra device for orphaned VM: $($orphanedVM.SessionHostName)"
                         }
                         else {
@@ -977,7 +977,7 @@ function Remove-FailedDeploymentArtifacts {
                         if ($device.value -and $device.value.Count -gt 0) {
                             $deviceId = $device.value[0].id
                             $deleteDeviceUri = "$graphEndpoint/v1.0/deviceManagement/managedDevices/$deviceId"
-                            Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri
+                            Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri | Out-Null
                             Write-LogEntry -Message "Successfully deleted Intune device for orphaned VM: $($orphanedVM.SessionHostName)"
                         }
                         else {
@@ -992,7 +992,7 @@ function Remove-FailedDeploymentArtifacts {
                 # Delete the VM
                 Write-LogEntry -Message "Deleting orphaned VM: $($orphanedVM.Name) (session host: $($orphanedVM.SessionHostName), from deployment: $($orphanedVM.DeploymentName))" -Level Warning
                 $Uri = "$ResourceManagerUri$($orphanedVM.ResourceId)?forceDeletion=true&api-version=2024-07-01"
-                Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri | Out-Null
                 Write-LogEntry -Message "Successfully deleted orphaned VM: $($orphanedVM.Name)"
             }
             catch {
@@ -1064,7 +1064,7 @@ function Remove-FailedDeploymentArtifacts {
                     try {
                         Write-LogEntry -Message "Deleting nested deployment record: $nestedDeploymentName" -Level Trace
                         $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/providers/Microsoft.Resources/deployments/$nestedDeploymentName`?api-version=2021-04-01"
-                        Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
+                        Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri | Out-Null
                         Write-LogEntry -Message "Successfully deleted nested deployment record: $nestedDeploymentName" -Level Trace
                     }
                     catch {
@@ -1079,7 +1079,7 @@ function Remove-FailedDeploymentArtifacts {
             # Delete the top-level deployment record last
             Write-LogEntry -Message "Deleting top-level deployment record: $deploymentName"
             $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/providers/Microsoft.Resources/deployments/$deploymentName`?api-version=2021-04-01"
-            Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri
+            Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri | Out-Null
             Write-LogEntry -Message "Successfully deleted deployment record: $deploymentName"
         }
         catch {

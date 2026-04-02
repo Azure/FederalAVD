@@ -336,12 +336,6 @@ param imageSku string = 'win11-24h2-avd-m365'
 @description('Required. The resource ID for the Compute Gallery Image Version. Do not set this value if using a marketplace image.')
 param customImageResourceId string = ''
 
-@description('Optional. The DSC package name or full Url used by the PowerShell DSC extension to install the AVD Agent and register the virtual machine as a Session Host.')
-param avdAgentsDSCPackage string = 'Configuration_1.0.03266.1110.zip'
-
-@description('Optional. Instruct the AVD Agent Installation script to automatically download the latest agent version during installation.zip.')
-param useAgentDownloadEndpoint bool = false
-
 @description('''Optional.
 The Uri of the container hosting the scripts or installers that are used to customize the session host Virtual Machines.
 Do not include the trailing slash.
@@ -381,6 +375,12 @@ JSON example:
 ]
 ''')
 param sessionHostCustomizations array = []
+
+@description('Optional. The URL to download the AVD Agent Boot Loader. If not provided, the URL is determined based on the cloud environment.')
+param agentBootLoaderDownloadUrl string = ''
+
+@description('Optional. The URL to download the AVD Agent. If not provided, the URL is determined based on the cloud environment.')
+param agentDownloadUrl string = ''
 
 // User Profiles
 
@@ -873,13 +873,6 @@ var beginAvSetRange = sessionHostIndex / maxAvSetMembers // This determines the 
 var endAvSetRange = (sessionHostCount + sessionHostIndex) / maxAvSetMembers // This determines the availability set to end with.
 var availabilitySetsCount = length(range(beginAvSetRange, (endAvSetRange - beginAvSetRange) + 1))
 
-var sessionHostRegistrationDSCStorageAccount = startsWith(environment().name, 'USN')
-  ? 'wvdexportalcontainer'
-  : 'wvdportalstorageblob'
-var sessionHostRegistrationDSCUrl = startsWith(avdAgentsDSCPackage, 'https://')
-  ? avdAgentsDSCPackage
-  : 'https://${sessionHostRegistrationDSCStorageAccount}.blob.${environment().suffixes.storage}/galleryartifacts/${avdAgentsDSCPackage}'
-
 var deployDiskAccessResource = contains(hostPoolType, 'Personal') && recoveryServices && deployPrivateEndpoints
   ? true
   : false
@@ -1328,6 +1321,8 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
   name: 'Session-Hosts-${deploymentSuffix}'
   scope: subscription(hostsSubscription)
   params: {
+    agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
+    agentDownloadUrl: agentDownloadUrl
     appGroupSecurityGroups: deploymentType != 'SessionHostsOnly' ? map(appGroupSecurityGroups, group => group.id) : []
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
@@ -1447,13 +1442,11 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     sessionHostCustomizations: sessionHostCustomizations
     sessionHostIndex: sessionHostIndex
     vmNameIndexLength: vmNameIndexLength
-    sessionHostRegistrationDSCUrl: sessionHostRegistrationDSCUrl
     storageSuffix: environment().suffixes.storage
     subnetResourceId: virtualMachineSubnetResourceId
     tags: hostTags
     deploymentSuffix: deploymentSuffix
     timeZone: virtualMachinesTimeZone
-    useAgentDownloadEndpoint: useAgentDownloadEndpoint
     #disable-next-line BCP422
     virtualMachineAdminPassword: !empty(credentialsKeyVaultResourceId)
       ? kvCredentials!.getSecret('VirtualMachineAdminPassword')
