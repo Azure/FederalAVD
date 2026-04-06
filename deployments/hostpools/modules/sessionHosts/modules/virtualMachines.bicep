@@ -1,5 +1,6 @@
 param agentBootLoaderDownloadUrl string
 param agentDownloadUrl string
+param agentFallBackDownloadUrl string
 param artifactsContainerUri string
 param artifactsUserAssignedIdentityClientId string
 param artifactsUserAssignedIdentityResourceId string
@@ -521,6 +522,10 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
         {
           name: 'AgentUrl'
           value: agentDownloadUrl
+        }
+        {
+          name: 'FallBackUrl'
+          value: agentFallBackDownloadUrl
         }
         {
           name: 'ApiVersion'

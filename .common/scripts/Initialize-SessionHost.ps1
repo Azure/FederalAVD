@@ -16,6 +16,9 @@ Required. Direct URL to download the RDAgent BootLoader MSI.
 .PARAMETER AgentUrl
 Optional. Direct URL to download the RD Infra Agent MSI. Used as fallback if endpoint download fails.
 
+.PARAMETER FallbackUrl
+Optional. URL to download configuration.zip package containing DeployAgent.zip with agent MSI installers. Used as last resort fallback if both endpoint and AgentUrl fail.
+
 .PARAMETER AADJoin
 Optional. Set to 'true' if the VM is Azure AD joined. Default is 'false'.
 
@@ -106,6 +109,9 @@ param (
     
     [Parameter(Mandatory = $false)]
     [string]$AgentUrl,
+
+    [Parameter(Mandatory = $false)]
+    [string]$FallbackUrl,
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('true', 'false', '')]
@@ -689,6 +695,107 @@ Function Set-RegistryValue {
     }
 }
 
+function Get-AgentInstallersFromFallbackUrl {
+    <#
+    .SYNOPSIS
+    Extract agent MSI installers from configuration.zip fallback package
+    
+    .DESCRIPTION
+    Downloads and extracts configuration.zip, locates the DeployAgent.zip within it,
+    extracts that, and returns paths to the RDAgent.msi and RDAgentBootLoader.msi files.
+    #>
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$FallbackUrl,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$DownloadFolder
+    )
+    
+    try {
+        Write-Log -Message "Attempting to extract agent installers from fallback URL: $FallbackUrl"
+        
+        # Create fallback extraction location
+        $FallbackExtractPath = Join-Path -Path $DownloadFolder -ChildPath 'FallbackExtract'
+        New-Item -Path $FallbackExtractPath -ItemType Directory -Force | Out-Null
+        
+        # Download configuration.zip
+        $ConfigZipPath = Join-Path -Path $FallbackExtractPath -ChildPath 'configuration.zip'
+        Write-Log -Message "Downloading configuration.zip from: $FallbackUrl"
+        
+        $Success = Get-InstallerFromUrl -Url $FallbackUrl -DestinationPath $ConfigZipPath -DisplayName 'Configuration Package'
+        
+        if (-not $Success) {
+            Write-Log -Category Error -Message "Failed to download configuration.zip from: $FallbackUrl"
+            return $null
+        }
+        
+        # Extract configuration.zip
+        $ConfigExtractPath = Join-Path -Path $FallbackExtractPath -ChildPath 'ConfigExtracted'
+        Write-Log -Message "Extracting configuration.zip to: $ConfigExtractPath"
+        Expand-Archive -Path $ConfigZipPath -DestinationPath $ConfigExtractPath -Force
+        
+        # Look for DeployAgent.zip inside the extracted configuration
+        $DeployAgentZip = Get-ChildItem -Path $ConfigExtractPath -Filter 'DeployAgent.zip' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        
+        if (-not $DeployAgentZip) {
+            Write-Log -Category Error -Message "DeployAgent.zip not found in configuration.zip"
+            return $null
+        }
+        
+        Write-Log -Message "Found DeployAgent.zip at: $($DeployAgentZip.FullName)"
+        
+        # Extract DeployAgent.zip
+        $DeployAgentExtractPath = Join-Path -Path $FallbackExtractPath -ChildPath 'DeployAgent'
+        Write-Log -Message "Extracting DeployAgent.zip to: $DeployAgentExtractPath"
+        Expand-Archive -Path $DeployAgentZip.FullName -DestinationPath $DeployAgentExtractPath -Force
+        
+        # Locate the MSI files
+        $BootLoaderMsi = Get-ChildItem -Path $DeployAgentExtractPath -Filter '*.msi' -Recurse | Where-Object { $_.Name -like '*BootLoader*' -or $_.Directory.Name -like '*BootLoader*' } | Select-Object -First 1
+        $AgentMsi = Get-ChildItem -Path $DeployAgentExtractPath -Filter '*.msi' -Recurse | Where-Object { $_.Name -notlike '*BootLoader*' -and $_.Directory.Name -notlike '*BootLoader*' -and ($_.Name -like '*Agent*' -or $_.Directory.Name -like '*Agent*') } | Select-Object -First 1
+        
+        if (-not $BootLoaderMsi) {
+            Write-Log -Category Error -Message "RDAgentBootLoader MSI not found in DeployAgent.zip"
+            return $null
+        }
+        
+        if (-not $AgentMsi) {
+            Write-Log -Category Error -Message "RDAgent MSI not found in DeployAgent.zip"
+            return $null
+        }
+        
+        Write-Log -Message "Found RDAgentBootLoader MSI: $($BootLoaderMsi.FullName)"
+        Write-Log -Message "Found RDAgent MSI: $($AgentMsi.FullName)"
+        
+        # Copy MSIs to download folder for installation
+        $BootLoaderDestination = Join-Path -Path $DownloadFolder -ChildPath 'RDAgentBootLoader.msi'
+        $AgentDestination = Join-Path -Path $DownloadFolder -ChildPath 'RDAgent.msi'
+        
+        Copy-Item -Path $BootLoaderMsi.FullName -Destination $BootLoaderDestination -Force
+        Copy-Item -Path $AgentMsi.FullName -Destination $AgentDestination -Force
+        
+        Write-Log -Message "Copied agent installers to download folder"
+        
+        # Clean up extraction folder
+        try {
+            Remove-Item -Path $FallbackExtractPath -Force -Recurse -ErrorAction SilentlyContinue
+        }
+        catch {
+            Write-Log -Category Warning -Message "Failed to clean up fallback extract folder: $($_.Exception.Message)"
+        }
+        
+        return @{
+            AgentPath = $AgentDestination
+            BootLoaderPath = $BootLoaderDestination
+        }
+    }
+    catch {
+        Write-Log -Category Error -Message "Failed to extract agent installers from fallback URL: $($_.Exception.Message)"
+        Write-Log -Category Error -Message "Stack trace: $($_.ScriptStackTrace)"
+        return $null
+    }
+}
+
 #endregion Helper Functions
 
 #region FSLogix Redirections XML Templates
@@ -1237,7 +1344,7 @@ try {
     
     # Get Agent Installer with endpoint-first, URL-fallback logic
     $AgentInstallerPath = $null
-    
+    $BootLoaderInstallerPath = $null
     
     # Try endpoint first
     Write-Log -Message 'Attempting to download latest agent from Azure endpoint'
@@ -1249,20 +1356,67 @@ try {
         $AgentInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgent.msi'
         $Success = Get-InstallerFromUrl -Url $AgentUrl -DestinationPath $AgentInstallerPath -DisplayName 'RD Agent'            
         if (-not $Success) {
-            throw "Failed to download RD Agent from both endpoint and fallback URL: $AgentUrl"
+            $AgentInstallerPath = $null
+            Write-Log -Category Warning -Message "Failed to download RD Agent from fallback URL: $AgentUrl"
         }
     }
-    elseif (-not $AgentInstallerPath) {
-        throw 'Failed to download RD Agent from Azure endpoint and no fallback AgentUrl provided'
+    
+    # If both endpoint and AgentUrl failed (or AgentUrl wasn't provided), try extracting from FallbackUrl
+    if (-not $AgentInstallerPath -and -not [string]::IsNullOrEmpty($FallbackUrl)) {
+        Write-Log -Message 'Attempting to extract installers from fallback package...'
+        
+        $FallbackInstallers = Get-AgentInstallersFromFallbackUrl -FallbackUrl $FallbackUrl -DownloadFolder $DownloadFolder
+        
+        if ($FallbackInstallers) {
+            $AgentInstallerPath = $FallbackInstallers.AgentPath
+            $BootLoaderInstallerPath = $FallbackInstallers.BootLoaderPath
+            Write-Log -Message 'Successfully extracted agent installers from fallback package'
+        }
+        else {
+            Write-Log -Category Error -Message 'Failed to extract installers from fallback package'
+        }
     }
+    
+    # Final check - if we still don't have the agent installer, fail
+    if (-not $AgentInstallerPath) {
+        throw 'Failed to obtain RD Agent installer from all available sources (Azure endpoint, AgentUrl, and FallbackUrl)'
+    }
+    
+    # Get Agent Boot Loader Installer (if not already obtained from fallback)
+    if (-not $BootLoaderInstallerPath) {
+        Write-Log -Message 'Downloading agent boot loader from provided URL'
+        $BootLoaderInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgentBootLoader.msi'
+        $Success = Get-InstallerFromUrl -Url $AgentBootLoaderUrl -DestinationPath $BootLoaderInstallerPath -DisplayName 'RD Agent Boot Loader'
         
-    # Get Agent Boot Loader Installer
-    Write-Log -Message 'Downloading agent boot loader from provided URL'
-    $BootLoaderInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgentBootLoader.msi'
-    $Success = Get-InstallerFromUrl -Url $AgentBootLoaderUrl -DestinationPath $BootLoaderInstallerPath -DisplayName 'RD Agent Boot Loader'
-        
-    if (-not $Success) {
-        throw 'Failed to download RD Agent Boot Loader from provided URL'
+        if (-not $Success) {
+            $BootLoaderInstallerPath = $null
+            Write-Log -Category Warning -Message 'Failed to download RD Agent Boot Loader from provided URL'
+            
+            # If BootLoader download fails and we have FallbackUrl, try extracting from there
+            if (-not [string]::IsNullOrEmpty($FallbackUrl)) {
+                Write-Log -Message 'Attempting to extract boot loader from fallback package...'
+                
+                $FallbackInstallers = Get-AgentInstallersFromFallbackUrl -FallbackUrl $FallbackUrl -DownloadFolder $DownloadFolder
+                
+                if ($FallbackInstallers -and $FallbackInstallers.BootLoaderPath) {
+                    $BootLoaderInstallerPath = $FallbackInstallers.BootLoaderPath
+                    # Also update agent path if we didn't have it
+                    if (-not $AgentInstallerPath) {
+                        $AgentInstallerPath = $FallbackInstallers.AgentPath
+                    }
+                    Write-Log -Message 'Successfully extracted boot loader installer from fallback package'
+                }
+            }
+            
+            if (-not $BootLoaderInstallerPath) {
+                throw 'Failed to download or extract RD Agent Boot Loader from all available sources'
+            }
+        }
+    }
+    
+    # Final verification that we have both installers
+    if (-not $AgentInstallerPath -or -not $BootLoaderInstallerPath) {
+        throw 'Failed to obtain required installers. Agent: ' + $(if ($AgentInstallerPath) { 'OK' } else { 'FAILED' }) + ', BootLoader: ' + $(if ($BootLoaderInstallerPath) { 'OK' } else { 'FAILED' })
     }
     
     # Install RD Infra Agent

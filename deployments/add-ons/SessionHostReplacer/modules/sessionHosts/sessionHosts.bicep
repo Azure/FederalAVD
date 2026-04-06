@@ -24,6 +24,9 @@ param agentBootLoaderDownloadUrl string = ''
 @description('Custom URL for AVD Agent MSI installer. When empty, defaults to publicly documented sources.')
 param agentDownloadUrl string = ''
 
+@description('Optional. The name of the PowerShell DSC configuration file containing the avd agent installers. This file is only downloaded and used if the agentDownloadUrl or endpoint download fails.')
+param avdAgentDscPackage string = 'Configuration_1.0.03362.1223.zip'
+
 @description('Resource ID of the data collection rule for AVD Insights monitoring.')
 param avdInsightsDataCollectionRulesResourceId string = ''
 
@@ -224,6 +227,11 @@ var agentUrl = !empty(agentDownloadUrl)
       ? 'https://aka.${cloudSuffix}/avdRDAgent'
       : 'https://go.microsoft.com/fwlink/?linkid=2310011')
 
+var dscStorageAccount = startsWith(environment().name, 'USN')
+  ? 'wvdexportalcontainer'
+  : 'wvdportalstorageblob'
+var dscUrl = 'https://${dscStorageAccount}.blob.${environment().suffixes.storage}/galleryartifacts/${avdAgentDscPackage}'
+
 var confidentialVMOSDiskEncryptionType = confidentialVMOSDiskEncryption ? 'DiskWithVMGuestState' : 'VMGuestStateOnly'
 
 // Batching logic: Dynamically calculate max VMs per batch based on resources per VM
@@ -317,6 +325,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
     params: {
       agentBootLoaderDownloadUrl: agentBootLoaderUrl
       agentDownloadUrl: agentUrl
+      agentFallBackDownloadUrl: dscUrl
       artifactsContainerUri: artifactsContainerUri
       artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
       artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId)

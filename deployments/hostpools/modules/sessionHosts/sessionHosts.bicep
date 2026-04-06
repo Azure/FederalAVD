@@ -3,6 +3,7 @@ targetScope = 'subscription'
 param deploymentType string
 param agentBootLoaderDownloadUrl string
 param agentDownloadUrl string
+param avdAgentDscPackage string
 param appGroupSecurityGroups array
 param artifactsContainerUri string
 param artifactsUserAssignedIdentityResourceId string
@@ -128,6 +129,11 @@ var agentBootLoaderUrl = !empty(agentBootLoaderDownloadUrl)
 var agentUrl = !empty(agentDownloadUrl) 
   ? agentDownloadUrl 
   : (startsWith(cloud, 'us') ? 'https://aka.${cloudSuffix}/avdRDAgent' : 'https://go.microsoft.com/fwlink/?linkid=2310011')
+
+var dscStorageAccount = startsWith(environment().name, 'USN')
+  ? 'wvdexportalcontainer'
+  : 'wvdportalstorageblob'
+var dscUrl = 'https://${dscStorageAccount}.blob.${environment().suffixes.storage}/galleryartifacts/${avdAgentDscPackage}'
 
 var backupPrivateDNSZoneResourceIds = [
   azureBackupPrivateDnsZoneResourceId
@@ -282,6 +288,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderUrl
     agentDownloadUrl: agentUrl
+    agentFallBackDownloadUrl: dscUrl
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId) ? '' : artifactsUAI!.properties.clientId
