@@ -179,8 +179,9 @@ param (
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$Script:LogPath = "$env:TEMP\AVDSessionHostInitialization.log"
+
 $Script:Name = 'Initialize-SessionHost'
+$Script:LogPath = Join-Path -Path $env:SystemRoot -ChildPath @("Logs", "$Script:Name.log")
 
 # Convert string parameters to boolean for internal use
 $AADJoinBool = if ([string]::IsNullOrEmpty($AADJoin)) { $false } else { [System.Convert]::ToBoolean($AADJoin) }
@@ -1293,9 +1294,25 @@ try {
     Write-Log -Message "Resizing OS Disk"
     try {
         $driveLetter = $env:SystemDrive.Substring(0, 1)
-        $size = Get-PartitionSupportedSize -DriveLetter $driveLetter
-        Resize-Partition -DriveLetter $driveLetter -Size $size.SizeMax -ErrorAction Stop
-        Write-Log -Message "OS Disk Resized Successfully"
+        $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop
+        $currentSizeGB = [math]::Round($currentPartition.Size / 1GB, 2)
+        Write-Log -Message "Current partition size: $currentSizeGB GB (drive: $driveLetter)"
+
+        $size = Get-PartitionSupportedSize -DriveLetter $driveLetter -ErrorAction Stop
+        $maxSizeGB = [math]::Round($size.SizeMax / 1GB, 2)
+        $minSizeGB = [math]::Round($size.SizeMin / 1GB, 2)
+        Write-Log -Message "Partition supported size range: Min=$minSizeGB GB, Max=$maxSizeGB GB"
+
+        if ($null -eq $size -or $size.SizeMax -eq 0) {
+            Write-Log -Message "Get-PartitionSupportedSize returned null or zero SizeMax. Skipping resize." -Category 'Warning'
+        }
+        elseif ($currentPartition.Size -ge $size.SizeMax) {
+            Write-Log -Message "OS Disk partition ($currentSizeGB GB) is already at or above maximum supported size ($maxSizeGB GB). No resize needed."
+        }
+        else {
+            Resize-Partition -DriveLetter $driveLetter -Size $size.SizeMax -ErrorAction Stop
+            Write-Log -Message "OS Disk resized successfully from $currentSizeGB GB to $maxSizeGB GB"
+        }
     }
     catch {
         if ($_.Exception.Message -like "*already the requested size*") {
