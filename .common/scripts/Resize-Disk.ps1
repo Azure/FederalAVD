@@ -23,11 +23,11 @@ param (
 $ErrorActionPreference = 'Stop'
 [int]$DiskSizeGBInt = [int]$DiskSizeGB
 if ($DiskSizeGBInt -eq 0 -or $DiskSizeGBInt -eq 128) {
-    Write-Output "DiskSizeGB is $DiskSizeGBInt — no resize needed. Exiting."
+    Write-Output "DiskSizeGB is $DiskSizeGBInt - no resize needed. Exiting."
     exit 0
 }
 
-Write-Output "DiskSizeGB is $DiskSizeGBInt GB — resizing OS partition."
+Write-Output "DiskSizeGB is $DiskSizeGBInt GB - resizing OS partition."
 
 try {
     $driveLetter = $env:SystemDrive.Substring(0, 1)

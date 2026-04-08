@@ -786,7 +786,7 @@ module imageVm '../sharedModules/resources/compute/virtual-machine/main.bicep' =
 // * Resize OS Disk Partition * //
 
 module resizeDisk '../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = if (diskSizeGB != 0 && diskSizeGB != 128) {
-  name: '${depPrefix}Resize-Disk-${deploymentSuffix}'
+  name: '${depPrefix}Resize-ImageVM-OSDisk-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     location: computeLocation
