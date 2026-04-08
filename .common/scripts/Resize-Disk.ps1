@@ -1,33 +1,4 @@
-<#
-.SYNOPSIS
-Resizes the OS partition to fill the full OS disk.
-
-.DESCRIPTION
-Expands the OS partition to the maximum supported size. Only runs when the
-disk size is not 0 or 128 GB (i.e. when the disk was explicitly enlarged
-beyond the default image size). Skips silently if the partition is already
-at maximum size.
-
-.PARAMETER DiskSizeGB
-The target OS disk size in GB as specified at deployment time. The script
-exits without taking action if this value is 0 or 128.
-
-#>
-
-[CmdletBinding()]
-param (
-    [Parameter(Mandatory = $true)]
-    [string]$DiskSizeGB
-)
-
 $ErrorActionPreference = 'Stop'
-[int]$DiskSizeGBInt = [int]$DiskSizeGB
-if ($DiskSizeGBInt -eq 0 -or $DiskSizeGBInt -eq 128) {
-    Write-Output "DiskSizeGB is $DiskSizeGBInt - no resize needed. Exiting."
-    exit 0
-}
-
-Write-Output "DiskSizeGB is $DiskSizeGBInt GB - resizing OS partition."
 
 try {
     $driveLetter = $env:SystemDrive.Substring(0, 1)

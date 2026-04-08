@@ -791,12 +791,6 @@ module resizeDisk '../sharedModules/resources/compute/virtual-machine/runCommand
   params: {
     location: computeLocation
     name: 'ResizeDisk'
-    parameters: [
-      {
-        name: 'DiskSizeGB'
-        value: string(diskSizeGB)
-      }
-    ]
     script: loadTextContent('../../.common/scripts/Resize-Disk.ps1')
     treatFailureAsDeploymentFailure: true
     virtualMachineName: imageVm.outputs.name
