@@ -181,7 +181,7 @@ $ErrorActionPreference = 'Stop'
 
 
 $Script:Name = 'Initialize-SessionHost'
-$Script:LogPath = Join-Path -Path $env:SystemRoot -ChildPath @("Logs", "$Script:Name.log")
+$Script:LogPath = Join-Path -Path $env:SystemRoot -ChildPath "Logs\$Script:Name.log"
 
 # Convert string parameters to boolean for internal use
 $AADJoinBool = if ([string]::IsNullOrEmpty($AADJoin)) { $false } else { [System.Convert]::ToBoolean($AADJoin) }

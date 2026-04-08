@@ -836,31 +836,20 @@ module customizeImage 'modules/customizeImage.bicep' = {
 
 // * VM Generalization * //
 
-module stopAndGeneralizeImageVM '../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = {
-  name: '${depPrefix}Generalize-VM-${deploymentSuffix}'
+module generalizeImageVM 'modules/generalizeVm.bicep' = {
+  name: '${depPrefix}Generalize-ImageVM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
-    location: computeLocation
-    name: 'StopAndGeneralize'
-    parameters: [
-      {
-        name: 'ResourceManagerUri'
-        value: environment().resourceManager
-      }
-      {
-        name: 'UserAssignedIdentityClientId'
-        value: empty(userAssignedIdentityResourceId)
+    adminPw: adminPw
+    cloud: cloud
+    deploymentSuffix: deploymentSuffix
+    imageVmName: imageVm.outputs.name
+    location: location
+    logBlobContainerUri: logContainerUri
+    orchestrationVmName: orchestrationVm.outputs.name
+    userAssignedIdentityClientId: empty(userAssignedIdentityResourceId)
           ? userAssignedIdentity!.outputs.clientId
           : existingUserAssignedIdentity!.properties.clientId
-      }
-      {
-        name: 'VmResourceId'
-        value: imageVm.outputs.resourceId
-      }
-    ]
-    script: loadTextContent('../../.common/scripts/Generalize-Vm.ps1')
-    treatFailureAsDeploymentFailure: true
-    virtualMachineName: orchestrationVm.outputs.name
   }
   dependsOn: [
     customizeImage
@@ -892,7 +881,7 @@ module captureImage 'modules/captureImage.bicep' = {
     virtualMachineResourceId: imageVm.outputs.resourceId
   }
   dependsOn: [
-    stopAndGeneralizeImageVM
+    generalizeImageVM
   ]
 }
 
