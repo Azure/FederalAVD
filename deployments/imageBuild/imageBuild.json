@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.40.2.10011",
-      "templateHash": "11721468761967580510"
+      "version": "0.42.1.51946",
+      "templateHash": "14982362082319991784"
     },
     "name": "Zero Trust Architecture Custom Windows Image Builder",
     "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
@@ -118,6 +118,21 @@
       "defaultValue": "Standard_D4ads_v6",
       "metadata": {
         "description": "The size of the Image build and Orchestration VMs."
+      }
+    },
+    "diskSizeGB": {
+      "type": "int",
+      "defaultValue": 0,
+      "allowedValues": [
+        0,
+        128,
+        256,
+        512,
+        1024,
+        2048
+      ],
+      "metadata": {
+        "description": "Optional. The size of the OS disk in GB for the image build VM. When set to 0 it defaults to the image size - typically 128 GB."
       }
     },
     "appsToRemove": {
@@ -1486,8 +1501,9 @@
         ]
       }
     },
-    "$fxv#6": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$VmResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod `\r\n        -Headers @{Metadata=\"true\"} `\r\n        -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Stop the VM\r\n    $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/powerOff?api-version=2024-03-01')\r\n    # Wait for it to show as stopped in Azure\r\n    Do {\r\n        Start-Sleep -Seconds 5\r\n        $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')\r\n        $VMPowerState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).displayStatus\r\n\r\n    } Until ($VMPowerState -eq 'VM stopped')\r\n    # Generatlize the VM\r\n    $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/generalize?api-version=2024-03-01')\r\n}\r\ncatch {\r\n    throw\r\n}",
-    "$fxv#7": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ImageVmResourceId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ManagementVmResourceId,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$ImageResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Delete Image VM \r\n    Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageVmResourceId + '?api-version=2024-03-01')\r\n\r\n    # Delete the Image (If it exists)\r\n    If ($ImageResourceId -ne '') {\r\n        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageResourceId + '?api-version=2024-03-01')\r\n    }\r\n    # Wait for at least 20 seconds to allow the Run Command to complete. Run Commands have a minimum 20 secs execution time.\r\n    Start-Sleep -seconds 20\r\n\r\n    # Delete the Management VM\r\n    Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ManagementVmResourceId + '?forceDeletion=true&api-version=2024-03-01')\r\n}\r\ncatch {\r\n    throw\r\n}",
+    "$fxv#6": "<#\r\n.SYNOPSIS\r\nResizes the OS partition to fill the full OS disk.\r\n\r\n.DESCRIPTION\r\nExpands the OS partition to the maximum supported size. Only runs when the\r\ndisk size is not 0 or 128 GB (i.e. when the disk was explicitly enlarged\r\nbeyond the default image size). Skips silently if the partition is already\r\nat maximum size.\r\n\r\n.PARAMETER DiskSizeGB\r\nThe target OS disk size in GB as specified at deployment time. The script\r\nexits without taking action if this value is 0 or 128.\r\n\r\n#>\r\n\r\n[CmdletBinding()]\r\nparam (\r\n    [Parameter(Mandatory = $true)]\r\n    [string]$DiskSizeGB\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n[int]$DiskSizeGBInt = [int]$DiskSizeGB\r\nif ($DiskSizeGBInt -eq 0 -or $DiskSizeGBInt -eq 128) {\r\n    Write-Output \"DiskSizeGB is $DiskSizeGBInt — no resize needed. Exiting.\"\r\n    exit 0\r\n}\r\n\r\nWrite-Output \"DiskSizeGB is $DiskSizeGBInt GB — resizing OS partition.\"\r\n\r\ntry {\r\n    $driveLetter = $env:SystemDrive.Substring(0, 1)\r\n\r\n    $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop\r\n    $currentSizeGB    = [math]::Round($currentPartition.Size / 1GB, 2)\r\n    Write-Output \"Current partition size: $currentSizeGB GB (drive: $driveLetter)\"\r\n\r\n    $size    = Get-PartitionSupportedSize -DriveLetter $driveLetter -ErrorAction Stop\r\n    $maxSizeGB = [math]::Round($size.SizeMax / 1GB, 2)\r\n    $minSizeGB = [math]::Round($size.SizeMin / 1GB, 2)\r\n    Write-Output \"Partition supported size range: Min=$minSizeGB GB, Max=$maxSizeGB GB\"\r\n\r\n    if ($null -eq $size -or $size.SizeMax -eq 0) {\r\n        Write-Warning \"Get-PartitionSupportedSize returned null or zero SizeMax. Skipping resize.\"\r\n        exit 0\r\n    }\r\n\r\n    if ($currentPartition.Size -ge $size.SizeMax) {\r\n        Write-Output \"Partition ($currentSizeGB GB) is already at or above maximum supported size ($maxSizeGB GB). No resize needed.\"\r\n        exit 0\r\n    }\r\n\r\n    Resize-Partition -DriveLetter $driveLetter -Size $size.SizeMax -ErrorAction Stop\r\n    Write-Output \"OS partition resized successfully from $currentSizeGB GB to $maxSizeGB GB.\"\r\n}\r\ncatch {\r\n    if ($_.Exception.Message -like '*already the requested size*') {\r\n        Write-Output \"Partition is already at maximum size. No resize needed.\"\r\n    }\r\n    else {\r\n        Write-Error \"Failed to resize OS partition: $($_.Exception.Message)\"\r\n        exit 1\r\n    }\r\n}\r\n",
+    "$fxv#7": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$VmResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod `\r\n        -Headers @{Metadata=\"true\"} `\r\n        -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Stop the VM\r\n    $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/powerOff?api-version=2024-03-01')\r\n    # Wait for it to show as stopped in Azure\r\n    Do {\r\n        Start-Sleep -Seconds 5\r\n        $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')\r\n        $VMPowerState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).displayStatus\r\n\r\n    } Until ($VMPowerState -eq 'VM stopped')\r\n    # Generatlize the VM\r\n    $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/generalize?api-version=2024-03-01')\r\n}\r\ncatch {\r\n    throw\r\n}",
+    "$fxv#8": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ImageVmResourceId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ManagementVmResourceId,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$ImageResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Delete Image VM \r\n    Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageVmResourceId + '?api-version=2024-03-01')\r\n\r\n    # Delete the Image (If it exists)\r\n    If ($ImageResourceId -ne '') {\r\n        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageResourceId + '?api-version=2024-03-01')\r\n    }\r\n    # Wait for at least 20 seconds to allow the Run Command to complete. Run Commands have a minimum 20 secs execution time.\r\n    Start-Sleep -seconds 20\r\n\r\n    # Delete the Management VM\r\n    Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ManagementVmResourceId + '?forceDeletion=true&api-version=2024-03-01')\r\n}\r\ncatch {\r\n    throw\r\n}",
     "deploymentSuffix": "[if(startsWith(deployment().name, 'Microsoft.Template-'), substring(deployment().name, 19, 14), parameters('timeStamp'))]",
     "uniqueCustomizers": "[map(range(0, length(parameters('customizations'))), lambda('i', createObject('name', if(greater(length(filter(parameters('customizations'), lambda('item', equals(lambdaVariables('item').name, parameters('customizations')[lambdaVariables('i')].name)))), 1), format('{0}-{1}', parameters('customizations')[lambdaVariables('i')].name, length(filter(take(parameters('customizations'), add(lambdaVariables('i'), 1)), lambda('item', equals(lambdaVariables('item').name, parameters('customizations')[lambdaVariables('i')].name))))), parameters('customizations')[lambdaVariables('i')].name), 'blobNameOrUri', parameters('customizations')[lambdaVariables('i')].blobNameOrUri, 'arguments', coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'arguments'), ''), 'restart', coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'restart'), false()))))]",
     "uniqueVdiCustomizers": "[map(range(0, length(parameters('vdiCustomizations'))), lambda('i', createObject('name', if(greater(length(filter(parameters('vdiCustomizations'), lambda('item', equals(lambdaVariables('item').name, parameters('vdiCustomizations')[lambdaVariables('i')].name)))), 1), format('{0}-{1}', parameters('vdiCustomizations')[lambdaVariables('i')].name, length(filter(take(parameters('vdiCustomizations'), add(lambdaVariables('i'), 1)), lambda('item', equals(lambdaVariables('item').name, parameters('vdiCustomizations')[lambdaVariables('i')].name))))), parameters('vdiCustomizations')[lambdaVariables('i')].name), 'blobNameOrUri', parameters('vdiCustomizations')[lambdaVariables('i')].blobNameOrUri, 'arguments', coalesce(tryGet(parameters('vdiCustomizations')[lambdaVariables('i')], 'arguments'), ''))))]",
@@ -1552,8 +1568,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "18430623046341090285"
+              "version": "0.42.1.51946",
+              "templateHash": "540104313929573274"
             }
           },
           "parameters": {
@@ -1652,8 +1668,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "16631357535697133072"
+              "version": "0.42.1.51946",
+              "templateHash": "3097623151229944434"
             },
             "name": "Compute Galleries Image Definitions",
             "description": "This module deploys an Azure Compute Gallery Image Definition.",
@@ -1971,8 +1987,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "16631357535697133072"
+              "version": "0.42.1.51946",
+              "templateHash": "3097623151229944434"
             },
             "name": "Compute Galleries Image Definitions",
             "description": "This module deploys an Azure Compute Gallery Image Definition.",
@@ -2276,8 +2292,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "14989425040168770091"
+              "version": "0.42.1.51946",
+              "templateHash": "3820017231658912112"
             }
           },
           "parameters": {
@@ -2377,8 +2393,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "14989425040168770091"
+              "version": "0.42.1.51946",
+              "templateHash": "3820017231658912112"
             }
           },
           "parameters": {
@@ -2534,8 +2550,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "17986076429808099528"
+              "version": "0.42.1.51946",
+              "templateHash": "17843054099444152747"
             }
           },
           "parameters": {
@@ -3028,8 +3044,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "10934815099459103725"
+                      "version": "0.42.1.51946",
+                      "templateHash": "7859679631242150362"
                     },
                     "name": "Private Endpoints"
                   },
@@ -3166,8 +3182,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "3240554809200430347"
+                              "version": "0.42.1.51946",
+                              "templateHash": "7558458120235629638"
                             }
                           },
                           "parameters": {
@@ -3300,8 +3316,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "13735259085772981808"
+                      "version": "0.42.1.51946",
+                      "templateHash": "10772350246448656768"
                     }
                   },
                   "parameters": {
@@ -3407,8 +3423,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "10818173298783177307"
+                      "version": "0.42.1.51946",
+                      "templateHash": "11835464631347956109"
                     }
                   },
                   "parameters": {
@@ -3597,8 +3613,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "5275446612607808744"
+                      "version": "0.42.1.51946",
+                      "templateHash": "15753595424866381266"
                     }
                   },
                   "parameters": {
@@ -3924,8 +3940,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "11384256043962850837"
+                              "version": "0.42.1.51946",
+                              "templateHash": "6762661274535014294"
                             }
                           },
                           "parameters": {
@@ -4059,8 +4075,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.40.2.10011",
-                                      "templateHash": "13485709923079094572"
+                                      "version": "0.42.1.51946",
+                                      "templateHash": "2411166989423103308"
                                     }
                                   },
                                   "parameters": {
@@ -4245,8 +4261,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "14657627649046883120"
+                      "version": "0.42.1.51946",
+                      "templateHash": "8864761428063335870"
                     },
                     "name": "Storage Account File Share Services",
                     "description": "This module deploys a Storage Account File Share Service.",
@@ -4447,8 +4463,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "7107308614227474571"
+                              "version": "0.42.1.51946",
+                              "templateHash": "3318511199702967742"
                             }
                           },
                           "parameters": {
@@ -4630,8 +4646,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "16741867433040593875"
+                      "version": "0.42.1.51946",
+                      "templateHash": "7613608265019570327"
                     }
                   },
                   "parameters": {
@@ -4791,8 +4807,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "646633901110095557"
+                              "version": "0.42.1.51946",
+                              "templateHash": "5287267241727355004"
                             }
                           },
                           "parameters": {
@@ -4925,8 +4941,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "8703052285209701235"
+                      "version": "0.42.1.51946",
+                      "templateHash": "10907472489916508007"
                     }
                   },
                   "parameters": {
@@ -5083,8 +5099,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "15718669789395481415"
+                              "version": "0.42.1.51946",
+                              "templateHash": "11279936249935169659"
                             }
                           },
                           "parameters": {
@@ -5293,8 +5309,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7305905505107753177"
+              "version": "0.42.1.51946",
+              "templateHash": "16461100463300421267"
             }
           },
           "parameters": {
@@ -6078,8 +6094,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "11638408116870934961"
+                      "version": "0.42.1.51946",
+                      "templateHash": "7333565645138466601"
                     }
                   },
                   "parameters": {
@@ -6224,8 +6240,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "13621883933958801767"
+                              "version": "0.42.1.51946",
+                              "templateHash": "1769680180235782308"
                             },
                             "name": "Public IP Addresses",
                             "description": "This module deploys a Public IP Address.",
@@ -6565,8 +6581,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "7720811374765675076"
+                              "version": "0.42.1.51946",
+                              "templateHash": "10073710336690954938"
                             }
                           },
                           "parameters": {
@@ -6864,8 +6880,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -7066,8 +7082,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -7263,8 +7279,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -7465,8 +7481,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -7657,8 +7673,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -7849,8 +7865,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -8049,8 +8065,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -8253,8 +8269,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -8452,8 +8468,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -8701,6 +8717,7 @@
               "caching": "ReadWrite",
               "createOption": "fromImage",
               "deleteOption": "Delete",
+              "diskSizeGB": "[if(not(equals(parameters('diskSizeGB'), 0)), parameters('diskSizeGB'), null())]",
               "managedDisk": {
                 "storageAccountType": "Premium_LRS"
               }
@@ -8726,8 +8743,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7305905505107753177"
+              "version": "0.42.1.51946",
+              "templateHash": "16461100463300421267"
             }
           },
           "parameters": {
@@ -9511,8 +9528,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "11638408116870934961"
+                      "version": "0.42.1.51946",
+                      "templateHash": "7333565645138466601"
                     }
                   },
                   "parameters": {
@@ -9657,8 +9674,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "13621883933958801767"
+                              "version": "0.42.1.51946",
+                              "templateHash": "1769680180235782308"
                             },
                             "name": "Public IP Addresses",
                             "description": "This module deploys a Public IP Address.",
@@ -9998,8 +10015,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "7720811374765675076"
+                              "version": "0.42.1.51946",
+                              "templateHash": "10073710336690954938"
                             }
                           },
                           "parameters": {
@@ -10297,8 +10314,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -10499,8 +10516,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -10696,8 +10713,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -10898,8 +10915,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -11090,8 +11107,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -11282,8 +11299,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -11482,8 +11499,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -11686,8 +11703,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -11885,8 +11902,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "15962244518196805282"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4836891383170434280"
                     },
                     "name": "Virtual Machine Extensions",
                     "description": "This module deploys a Virtual Machine Extension.",
@@ -12082,6 +12099,234 @@
       ]
     },
     {
+      "condition": "[and(not(equals(parameters('diskSizeGB'), 0)), not(equals(parameters('diskSizeGB'), 128)))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('{0}Resize-Disk-{1}', variables('depPrefix'), variables('deploymentSuffix'))]",
+      "resourceGroup": "[variables('imageBuildResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('subnetResourceId'), '/')[2], split(parameters('subnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('subnetResourceId'), '/')[8]), '2023-05-01', 'full').location]"
+          },
+          "name": {
+            "value": "ResizeDisk"
+          },
+          "parameters": {
+            "value": [
+              {
+                "name": "DiskSizeGB",
+                "value": "[string(parameters('diskSizeGB'))]"
+              }
+            ]
+          },
+          "script": {
+            "value": "[variables('$fxv#6')]"
+          },
+          "treatFailureAsDeploymentFailure": {
+            "value": true
+          },
+          "virtualMachineName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Image-VM-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.name.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.42.1.51946",
+              "templateHash": "14233536523269153625"
+            },
+            "name": "Virtual Machine RunCommand",
+            "description": "This module deploys a Virtual Machine Run Command.",
+            "owner": "shawn.meyer@microsoft.com"
+          },
+          "parameters": {
+            "virtualMachineName": {
+              "type": "string",
+              "metadata": {
+                "description": "Conditional. The name of the parent virtual machine that extension is provisioned for. Required if the template is used in a standalone deployment."
+              }
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. The name of the virtual machine extension."
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. The location the extension is deployed to."
+              }
+            },
+            "asyncExecution": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional.  If set to true, provisioning will complete as soon as the script starts and will not wait for script to complete."
+              }
+            },
+            "errorBlobManagedIdentity": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. User-assigned managed identity that has access to errorBlobContainerUri storage blob container.\nUse an empty object in case of system-assigned identity. Make sure managed identity has been given access to blob\\'s container with \\'Storage Blob Data Contributor\\' role assignment.\nIn case of user-assigned identity, make sure you add it under VM's identity.\nFor more info on managed identity and Run Command, refer https://aka.ms/ManagedIdentity and https://aka.ms/RunCommandManaged"
+              }
+            },
+            "errorBlobContainerUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. \tSpecifies the Azure storage blob where script error stream will be uploaded.\nUse a SAS URI with read, append, create, write access OR use managed identity to provide the VM access to the blob.\nRefer errorBlobManagedIdentity parameter."
+              }
+            },
+            "outputBlobManagedIdentity": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. User-assigned managed identity that has access to outputBlobContainerUri storage blob container.\nUse an empty object in case of system-assigned identity. Make sure managed identity has been given access to blob\\'s container with \\'Storage Blob Data Contributor\\' role assignment.\nIn case of user-assigned identity, make sure you add it under VM's identity.\nFor more info on managed identity and Run Command, refer https://aka.ms/ManagedIdentity and https://aka.ms/RunCommandManaged"
+              }
+            },
+            "outputBlobContainerUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. \tSpecifies the Azure storage blob where script error stream will be uploaded.\nUse a SAS URI with read, append, create, write access OR use managed identity to provide the VM access to the blob.\nRefer errorBlobManagedIdentity parameter."
+              }
+            },
+            "parameters": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Parameters used by the script."
+              }
+            },
+            "protectedParameters": {
+              "type": "secureObject",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Protected parameters used by the script. These parameters will not show up in deployment data.\nFormat the object as follows:\n{\n  SecureParameterName1: { value: 'secureParameterValue1'}\n  SecureParameterName2: { value: 'secureParameterValue2'}\n}    \n"
+              }
+            },
+            "runAsPassword": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Specifies the user account password on the VM when executing the run command."
+              }
+            },
+            "runAsUser": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Specifies the user account on the VM when executing the run command."
+              }
+            },
+            "commandId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Conditional. Specifies a commandId of predefined built-in script. Do not use with [script] or [scriptUri] parameters."
+              }
+            },
+            "script": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Specifies the script content to be executed on the VM. Do not use with [commandId] or [scriptUri] parameters."
+              }
+            },
+            "scriptUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Specifies the script download location. It can be either SAS URI of an Azure storage blob with read access or public URI.\nDo not use with [commandId] or [script] parameters."
+              }
+            },
+            "scriptUriManagedIdentity": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. User-assigned managed identity that has access to scriptUri in case of Azure storage blob.\nUse an empty object in case of system-assigned identity.\nMake sure the Azure storage blob exists, and managed identity has been given access to blob's container with 'Storage Blob Data Reader' role assignment.\nIn case of user-assigned identity, make sure you add it under VM's identity.\nFor more info on managed identity and Run Command, refer https://aka.ms/ManagedIdentity and https://aka.ms/RunCommandManaged."
+              }
+            },
+            "timeoutInSeconds": {
+              "type": "int",
+              "defaultValue": -1,
+              "metadata": {
+                "description": "Optional. The timeout in seconds to execute the run command."
+              }
+            },
+            "treatFailureAsDeploymentFailure": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Optional. If set to true, any failure in the script will fail the deployment and ProvisioningState will be marked as Failed.\nIf set to false, ProvisioningState would only reflect whether the run command was run or not by the extensions platform, it would not indicate whether script failed in case of script failures.\nSee instance view of run command in case of script failures to see executionMessage, output, error: https://aka.ms/runcommandmanaged#get-execution-status-and-results"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags of the resource."
+              }
+            }
+          },
+          "variables": {
+            "copy": [
+              {
+                "name": "protectedParametersArray",
+                "count": "[length(items(parameters('protectedParameters')))]",
+                "input": {
+                  "name": "[items(parameters('protectedParameters'))[copyIndex('protectedParametersArray')].key]",
+                  "value": "[items(parameters('protectedParameters'))[copyIndex('protectedParametersArray')].value.value]"
+                }
+              }
+            ]
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Compute/virtualMachines/runCommands",
+              "apiVersion": "2023-03-01",
+              "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "asyncExecution": "[parameters('asyncExecution')]",
+                "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentity'))), parameters('errorBlobManagedIdentity'), null())]",
+                "errorBlobUri": "[if(not(empty(parameters('errorBlobContainerUri'))), format('{0}{1}-error.log', toLower(parameters('errorBlobContainerUri')), parameters('name')), null())]",
+                "outputBlobManagedIdentity": "[if(not(empty(parameters('outputBlobManagedIdentity'))), parameters('outputBlobManagedIdentity'), null())]",
+                "outputBlobUri": "[if(not(empty(parameters('outputBlobContainerUri'))), format('{0}{1}-output.log', toLower(parameters('outputBlobContainerUri')), parameters('name')), null())]",
+                "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
+                "protectedParameters": "[variables('protectedParametersArray')]",
+                "runAsPassword": "[if(not(empty(parameters('runAsPassword'))), parameters('runAsPassword'), null())]",
+                "runAsUser": "[if(not(empty(parameters('runAsUser'))), parameters('runAsUser'), null())]",
+                "source": {
+                  "commandId": "[if(not(empty(parameters('commandId'))), parameters('commandId'), null())]",
+                  "script": "[if(not(empty(parameters('script'))), parameters('script'), null())]",
+                  "scriptUri": "[if(not(empty(parameters('scriptUri'))), parameters('scriptUri'), null())]",
+                  "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentity'))), parameters('scriptUriManagedIdentity'), null())]"
+                },
+                "timeoutInSeconds": "[if(not(equals(parameters('timeoutInSeconds'), -1)), parameters('timeoutInSeconds'), null())]",
+                "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Image-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]"
+      ]
+    },
+    {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('{0}Customize-Image-{1}', variables('depPrefix'), variables('deploymentSuffix'))]",
@@ -12164,8 +12409,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "16095845381528841045"
+              "version": "0.42.1.51946",
+              "templateHash": "3995784997495914733"
             }
           },
           "parameters": {
@@ -12810,8 +13055,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "14052728455743456461"
+                      "version": "0.42.1.51946",
+                      "templateHash": "12441423594540321810"
                     }
                   },
                   "parameters": {
@@ -12947,8 +13192,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "10364988223727367222"
+                              "version": "0.42.1.51946",
+                              "templateHash": "14783981358950870697"
                             }
                           },
                           "parameters": {
@@ -13040,6 +13285,7 @@
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Image-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Logs-StorageAccount-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Orchestration-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Resize-Disk-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}ManagedIdentity-{1}', variables('depPrefix'), variables('deploymentSuffix')))]"
       ]
     },
@@ -13077,7 +13323,7 @@
             ]
           },
           "script": {
-            "value": "[variables('$fxv#6')]"
+            "value": "[variables('$fxv#7')]"
           },
           "treatFailureAsDeploymentFailure": {
             "value": true
@@ -13092,8 +13338,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7598553075464749152"
+              "version": "0.42.1.51946",
+              "templateHash": "14233536523269153625"
             },
             "name": "Virtual Machine RunCommand",
             "description": "This module deploys a Virtual Machine Run Command.",
@@ -13341,8 +13587,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "3020647343065149266"
+              "version": "0.42.1.51946",
+              "templateHash": "9224814432881644277"
             }
           },
           "parameters": {
@@ -13430,8 +13676,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "5382981592980752271"
+                      "version": "0.42.1.51946",
+                      "templateHash": "3240792035215418573"
                     },
                     "name": "Images",
                     "description": "This module deploys a Compute Image.",
@@ -13670,8 +13916,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "8766111063451479731"
+                      "version": "0.42.1.51946",
+                      "templateHash": "2681084340843293918"
                     }
                   },
                   "parameters": {
@@ -13976,7 +14222,7 @@
             ]
           },
           "script": {
-            "value": "[variables('$fxv#7')]"
+            "value": "[variables('$fxv#8')]"
           },
           "treatFailureAsDeploymentFailure": {
             "value": false
@@ -13991,8 +14237,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7598553075464749152"
+              "version": "0.42.1.51946",
+              "templateHash": "14233536523269153625"
             },
             "name": "Virtual Machine RunCommand",
             "description": "This module deploys a Virtual Machine Run Command.",
@@ -14230,8 +14476,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "8766111063451479731"
+              "version": "0.42.1.51946",
+              "templateHash": "2681084340843293918"
             }
           },
           "parameters": {

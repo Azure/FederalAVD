@@ -2042,6 +2042,39 @@
                             "label": "EncryptionAtHost",
                             "defaultValue": true,
                             "toolTip": "Check to enable 'EncryptionAtHost' for Disk Encryption."
+                        },
+                        {
+                            "name": "diskSizeGB",
+                            "type": "Microsoft.Common.DropDown",
+                            "label": "OS Disk Size (GB)",
+                            "defaultValue": "128",
+                            "toolTip": "Select the OS disk size for the image build VM. Choose a larger size when building images that require more disk space. 128 GB uses the image default.",
+                            "constraints": {
+                                "allowedValues": [
+                                    {
+                                        "label": "128",
+                                        "value": 128
+                                    },
+                                    {
+                                        "label": "256",
+                                        "value": 256
+                                    },
+                                    {
+                                        "label": "512",
+                                        "value": 512
+                                    },
+                                    {
+                                        "label": "1024",
+                                        "value": 1024
+                                    },
+                                    {
+                                        "label": "2048",
+                                        "value": 2048
+                                    }
+                                ],
+                                "required": true
+                            },
+                            "visible": true
                         }
                     ]
                 },
@@ -2082,6 +2115,7 @@
                 "subnetResourceId": "[steps('prereqs').network.subnet]",
                 "vmSize": "[steps('vmProps').vmSize]",
                 "encryptionAtHost": "[steps('vmProps').encryptionAtHost]",
+                "diskSizeGB": "[steps('vmProps').diskSizeGB]",
                 "customSourceImageResourceId": "[if(equals(steps('imageSource').source, 'gallery'), steps('imageSource').imageDefinition.id, '')]",
                 "mpPublisher": "[steps('imageSource').publisher]",
                 "mpOffer": "[steps('imageSource').offer]",

@@ -56,6 +56,17 @@ param encryptionAtHost bool = true
 @description('The size of the Image build and Orchestration VMs.')
 param vmSize string = 'Standard_D4ads_v6'
 
+@allowed([
+  0
+  128
+  256
+  512
+  1024
+  2048
+])
+@description('Optional. The size of the OS disk in GB for the image build VM. When set to 0 it defaults to the image size - typically 128 GB.')
+param diskSizeGB int = 0
+
 // Image customizers
 @description('Optional. List of Appx Apps to Remove. Default is [].')
 param appsToRemove array = []
@@ -748,6 +759,7 @@ module imageVm '../sharedModules/resources/compute/virtual-machine/main.bicep' =
       caching: 'ReadWrite'
       createOption: 'fromImage'
       deleteOption: 'Delete'
+      diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
       managedDisk: {
         storageAccountType: 'Premium_LRS'
       }
@@ -769,6 +781,26 @@ module imageVm '../sharedModules/resources/compute/virtual-machine/main.bicep' =
   dependsOn: [
     imageBuildRg
   ]
+}
+
+// * Resize OS Disk Partition * //
+
+module resizeDisk '../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = if (diskSizeGB != 0 && diskSizeGB != 128) {
+  name: '${depPrefix}Resize-Disk-${deploymentSuffix}'
+  scope: resourceGroup(imageBuildResourceGroupName)
+  params: {
+    location: computeLocation
+    name: 'ResizeDisk'
+    parameters: [
+      {
+        name: 'DiskSizeGB'
+        value: string(diskSizeGB)
+      }
+    ]
+    script: loadTextContent('../../.common/scripts/Resize-Disk.ps1')
+    treatFailureAsDeploymentFailure: true
+    virtualMachineName: imageVm.outputs.name
+  }
 }
 
 // * Image Customizations * //
@@ -803,6 +835,9 @@ module customizeImage 'modules/customizeImage.bicep' = {
     downloadLatestMicrosoftContent: downloadLatestMicrosoftContent
     vdiCustomizations: uniqueVdiCustomizers
   }
+  dependsOn: [
+    resizeDisk
+  ]
 }
 
 // * VM Generalization * //
