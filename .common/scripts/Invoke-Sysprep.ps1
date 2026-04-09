@@ -91,6 +91,6 @@ If ($LogBlobContainerUri -ne '') {
             "x-ms-version"   = "2020-10-02"
         }    
         $body = [System.IO.File]::ReadAllBytes($FilePath)    
-        Invoke-WebRequest -Method Put -Uri $uri -Headers $headers -Body $body -UseBasicParsing
+        Invoke-WebRequest -Method Put -Uri $uri -Headers $headers -Body $body -UseBasicParsing | out-null
     }
 }
