@@ -10,7 +10,8 @@ function Write-OutputWithTimeStamp {
 
         [Parameter(Mandatory = $true, Position = 1)]
         [string]$Message
-    )    
+    )
+        
     $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'
     $content = '[' + $Timestamp + '] ' + $Message
     Switch ($Category) {
