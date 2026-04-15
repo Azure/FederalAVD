@@ -2,15 +2,12 @@ targetScope = 'resourceGroup'
 
 @secure()
 param adminPw string
-param cloud string
 param location string = resourceGroup().location
 param logBlobContainerUri string
 param orchestrationVmName string
 param imageVmName string
 param deploymentSuffix string = utcNow('yyMMddhhmm')
 param userAssignedIdentityClientId string
-
-var apiVersion = startsWith(cloud, 'usn') ? '2017-08-01' : '2018-02-01'
 
 resource imageVm 'Microsoft.Compute/virtualMachines@2022-11-01' existing = {
   name: imageVmName
@@ -42,22 +39,7 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
     outputBlobUri: empty(logBlobContainerUri)
       ? null
       : '${logBlobContainerUri}${imageVmName}-Sysprep-output-${deploymentSuffix}.log'
-    parameters: empty(logBlobContainerUri)
-      ? null
-      : [
-          {
-            name: 'APIVersion'
-            value: apiVersion
-          }
-          {
-            name: 'LogBlobContainerUri'
-            value: logBlobContainerUri
-          }
-          {
-            name: 'UserAssignedIdentityClientId'
-            value: userAssignedIdentityClientId
-          }
-        ]
+    parameters: null
     protectedParameters: [
       {
         name: 'AdminUserPw'
@@ -84,7 +66,7 @@ resource generalizeVm 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
         }
     errorBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Sysprep-error-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-GeneralizeVM-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -92,7 +74,7 @@ resource generalizeVm 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Sysprep-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-GeneralizeVM-output-${deploymentSuffix}.log'
     parameters: [
           {
             name: 'ResourceManagerUri'

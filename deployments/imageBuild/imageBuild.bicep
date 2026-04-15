@@ -841,7 +841,6 @@ module generalizeImageVM 'modules/generalizeVm.bicep' = {
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     adminPw: adminPw
-    cloud: cloud
     deploymentSuffix: deploymentSuffix
     imageVmName: imageVm.outputs.name
     location: location
