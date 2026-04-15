@@ -11,7 +11,7 @@ function Write-OutputWithTimeStamp {
         [Parameter(Mandatory = $true, Position = 1)]
         [string]$Message
     )
-        
+
     $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'
     $content = '[' + $Timestamp + '] ' + $Message
     Switch ($Category) {
@@ -61,6 +61,50 @@ If (-Not $AdminAccount.Enabled) {
     Write-OutputWithTimeStamp -Message "Enabling local administrator account '$($AdminAccount.Name)'."
     Enable-LocalUser -Name $AdminAccount.Name
 }
+
+# Wait for CBS (Component Based Servicing) to settle. CBS still churning after a post-update reboot will cause sysprep to fail.
+Write-OutputWithTimeStamp -Message "Checking CBS (Component Based Servicing) status before running sysprep."
+$CbsTimeout = (Get-Date).AddMinutes(30)
+do {
+    $CbsBusy = $false
+
+    # A reboot is still pending - sysprep will fail in this state. Cannot auto-recover from a run command on the image VM.
+    $RebootPendingPaths = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootInProgress'
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
+    )
+    foreach ($Path in $RebootPendingPaths) {
+        if (Test-Path $Path) {
+            Write-OutputWithTimeStamp -Category 'Error' -Message "A reboot is required before sysprep can run ($Path exists). Add an additional restart step in the orchestration after Windows Updates and re-deploy."
+            Exit 1
+        }
+    }
+
+    # TrustedInstaller running means CBS is actively applying packages
+    if ((Get-Service -Name TrustedInstaller -ErrorAction SilentlyContinue).Status -eq 'Running') {
+        Write-OutputWithTimeStamp -Message "TrustedInstaller service is running. CBS is still processing. Waiting..."
+        $CbsBusy = $true
+    }
+
+    # Pending exclusive CBS sessions indicate packages are queued
+    if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\SessionsPending') {
+        $Exclusive = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\SessionsPending' -ErrorAction SilentlyContinue).Exclusive
+        if ($Exclusive -gt 0) {
+            Write-OutputWithTimeStamp -Message "CBS has $Exclusive pending exclusive session(s). Waiting..."
+            $CbsBusy = $true
+        }
+    }
+
+    if ($CbsBusy) {
+        if ((Get-Date) -ge $CbsTimeout) {
+            Write-OutputWithTimeStamp -Category 'Warning' -Message "Timed out waiting for CBS to settle after 30 minutes. Proceeding with sysprep."
+            break
+        }
+        Start-Sleep -Seconds 30
+    }
+} while ($CbsBusy)
+Write-OutputWithTimeStamp -Message "CBS check complete. Proceeding with sysprep."
 
 Write-OutputWithTimeStamp -Message "Creating a Scheduled Task to start Sysprep using the local admin account credentials."
 $TaskName = "RunSysprep"
