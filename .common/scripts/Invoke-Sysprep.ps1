@@ -22,9 +22,14 @@ ForEach ($Service in $Services) {
         If ((Get-Service -Name $Service).Status -eq 'Running') {
             Write-Message -Message "'$Service' is already running."
         }
-        Else {            
+        Else {
+            $ServiceTimeout = (Get-Date).AddMinutes(5)
             While ((Get-Service -Name $Service).Status -ne 'Running') {
                 Write-Message -Message "Waiting for $Service to start."
+                If ((Get-Date) -ge $ServiceTimeout) {
+                    Write-Message -Message "WARNING: Timed out waiting for service '$Service' to start. Continuing."
+                    Break
+                }
                 Start-Sleep -Seconds 5
             }
         }
@@ -55,20 +60,48 @@ $Action = New-ScheduledTaskAction -Execute "C:\Windows\System32\Sysprep\sysprep.
 # Create the task trigger (run once, immediately)
 $Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(20)
 # Register the scheduled task
-Register-ScheduledTask -TaskName $TaskName -Description $TaskDescription -Action $Action -User $AdminAccount.Name -Password $AdminUserPw -Trigger $Trigger -RunLevel Highest -Force
+Register-ScheduledTask -TaskName $TaskName -Description $TaskDescription -Action $Action -User $AdminAccount.Name -Password $AdminUserPw -Trigger $Trigger -RunLevel Highest -Force | Out-Null
+$RegisteredTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+If ($RegisteredTask) {
+    Write-Message -Message "Scheduled task '$TaskName' registered successfully."
+} Else {
+    Write-Message -Message "ERROR: Scheduled task '$TaskName' was not found after registration. Exiting."
+    Exit 1
+}
+$SysprepTimeout = (Get-Date).AddMinutes(5)
 Do {
     Start-Sleep -Seconds 5
-} Until (Get-Process | Where-Object { $_.Name -eq 'sysprep' })
-Write-Message -Message "Sysprep started."
+    If ((Get-Date) -ge $SysprepTimeout) {
+        Write-Message -Message "ERROR: Timed out waiting for sysprep process to start. Exiting."
+        Exit 1
+    }
+    $TaskInfo = Get-ScheduledTask -TaskName $TaskName | Get-ScheduledTaskInfo
+    If ($TaskInfo.LastTaskResult -ne 0 -and $TaskInfo.LastRunTime -ne (Get-Date -Date '11/30/1999')) {
+        Write-Message -Message "ERROR: Scheduled task failed to start sysprep. LastTaskResult: 0x$("{0:X8}" -f $TaskInfo.LastTaskResult). Check credentials passed via AdminUserPw parameter."
+        Exit 1
+    }
+    $Sysprep = Get-Process | Where-Object { $_.Name -eq 'sysprep' }
+} Until ($Sysprep)
+Write-Message -Message "Sysprep started at $($Sysprep.StartTime)"
+$ImageStateTimeout = (Get-Date).AddMinutes(10)
 while ($true) {
-    $imageState = (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\State).ImageState
+    $imageState = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\State' -ErrorAction SilentlyContinue).ImageState
     Write-Message -Message "Current Image State: $imageState"
     if ($imageState -eq 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE') { break }
+    If ((Get-Date) -ge $ImageStateTimeout) {
+        Write-Message -Message "ERROR: Timed out waiting for Sysprep to reach generalize state. Final image state: $imageState. Exiting."
+        Exit 1
+    }
     Write-Message -Message "Waiting for Sysprep to complete"
     Start-Sleep -s 5
 }
-
-Get-Process | Where-Object { $_.Name -eq 'sysprep' } | Wait-Process -Timeout 300
+$SysprepProcess = Get-Process | Where-Object { $_.Name -eq 'sysprep' }
+If ($SysprepProcess) {
+    $Exited = $SysprepProcess | Wait-Process -Timeout 300 -PassThru
+    If (-Not $Exited) {
+        Write-Message -Message "WARNING: Sysprep process did not exit within 300 seconds after image state was reached."
+    }
+}
 Write-Message -Message "Sysprep complete"
 Get-ScheduledTask | Where-Object { $_.TaskName -eq $TaskName } | Unregister-ScheduledTask -Confirm:$false
 
