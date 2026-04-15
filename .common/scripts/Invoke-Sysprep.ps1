@@ -51,7 +51,7 @@ $Files = "$env:SystemRoot\System32\sysprep\unattend.xml", "$env:SystemRoot\Panth
 Write-OutputWithTimeStamp -Message "Checking for files cached unattend files."
 ForEach ($File in $Files) {
     if (Test-Path -Path $File) {
-        Write-OutputWithTimeStamp "Removing $File"
+        Write-OutputWithTimeStamp -Message "Removing $File"
         Remove-Item $File -Force
     }
 }
