@@ -8,101 +8,130 @@ function Write-OutputWithTimeStamp {
     Write-Output $Entry
 }
 
-function Install-DesktopAppInstaller {
-    # Downloads and provisions the App Installer package (which contains winget)
-    # and its required VCLibs dependency. Runs as SYSTEM via Add-AppxProvisionedPackage.
-    # Microsoft.UI.Xaml is assumed present on Windows 11 Multi-Session (inbox).
-    $TempDir = Join-Path $env:TEMP 'WingetInstall'
-    New-Item -Path $TempDir -ItemType Directory -Force | Out-Null
-
-    try {
-        # VCLibs — required dependency for App Installer
-        $VCLibsPath = Join-Path $TempDir 'Microsoft.VCLibs.x64.14.00.Desktop.appx'
-        Write-OutputWithTimeStamp "Downloading Microsoft.VCLibs..."
-        Invoke-WebRequest -Uri 'https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx' `
-            -OutFile $VCLibsPath -UseBasicParsing
-
-        # App Installer (winget) msixbundle
-        $AppInstallerPath = Join-Path $TempDir 'Microsoft.DesktopAppInstaller.msixbundle'
-        Write-OutputWithTimeStamp "Downloading App Installer (winget)..."
-        Invoke-WebRequest -Uri 'https://aka.ms/getwinget' `
-            -OutFile $AppInstallerPath -UseBasicParsing
-
-        Write-OutputWithTimeStamp "Provisioning App Installer..."
-        Add-AppxProvisionedPackage -Online `
-            -PackagePath $AppInstallerPath `
-            -DependencyPackagePath $VCLibsPath `
-            -SkipLicense | Out-Null
-
-        Write-OutputWithTimeStamp "App Installer provisioned successfully."
-    } catch {
-        Write-Warning "Failed to install App Installer: $_"
-        return $false
-    } finally {
-        Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+function Get-ProvisionedPackageVersionMap {
+    $map = @{}
+    Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | ForEach-Object {
+        $map[$_.DisplayName] = $_.Version
     }
-    return $true
-}
-
-function Find-Winget {
-    # winget is not on the system PATH when running as SYSTEM — search WindowsApps directly.
-    $OnPath = Get-Command -Name winget.exe -ErrorAction SilentlyContinue
-    If ($OnPath) { return $OnPath.Source }
-
-    return Resolve-Path "$env:ProgramFiles\WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe" `
-        -ErrorAction SilentlyContinue |
-        Sort-Object -Property Path |
-        Select-Object -Last 1 -ExpandProperty Path
+    return $map
 }
 
 Start-Transcript -Path "$env:SystemRoot\Logs\Update-UwpApps.log" -Force
 Write-Output "*********************************"
-Write-Output "Updating Built-In UWP Apps via winget"
+Write-Output "Updating Built-In UWP Apps via InstallService"
 Write-Output "*********************************"
 
-$WingetPath = Find-Winget
+$TaskPath = '\Microsoft\Windows\InstallService\'
+$TaskName = 'ScanForUpdates'
 
-If (-not $WingetPath) {
-    Write-OutputWithTimeStamp "winget not found. Attempting to install App Installer..."
-    $Installed = Install-DesktopAppInstaller
-    If ($Installed) {
-        $WingetPath = Find-Winget
-    }
-}
-
-If (-not $WingetPath) {
-    Write-Warning "winget.exe could not be found or installed. Skipping Store app updates."
-    Write-OutputWithTimeStamp "This may be expected in air-gapped or restricted network environments."
+$Task = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue
+If (-not $Task) {
+    Write-Warning "Scheduled task '$TaskPath$TaskName' not found. Skipping Store app updates."
     Stop-Transcript
     Exit 0
 }
 
-Write-OutputWithTimeStamp "Found winget at: $WingetPath"
-Write-OutputWithTimeStamp "winget version: $(& $WingetPath --version 2>&1)"
+# Snapshot versions before triggering the scan so we can detect and report actual changes.
+Write-OutputWithTimeStamp "Snapshotting current provisioned package versions..."
+$VersionsBefore = Get-ProvisionedPackageVersionMap
+Write-OutputWithTimeStamp "Found $($VersionsBefore.Count) provisioned package(s)."
 
-Write-OutputWithTimeStamp "Running winget upgrade for all packages..."
-$UpgradeArgs = @(
-    'upgrade'
-    '--all'
-    '--silent'
-    '--accept-source-agreements'
-    '--accept-package-agreements'
-    '--include-unknown'
-)
+# Trigger the scan. Brief sleep gives the task scheduler time to transition to Running.
+Write-OutputWithTimeStamp "Starting scheduled task '$TaskName'..."
+Start-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName
+Start-Sleep -Seconds 5
 
-Write-Output "Executing: $WingetPath $($UpgradeArgs -join ' ')"
-$Process = Start-Process -FilePath $WingetPath -ArgumentList $UpgradeArgs -Wait -PassThru -NoNewWindow
+# Wait for the task itself to finish. The task orchestrates the scan and kicks off
+# downloads/installs in the background - it does not block until they complete.
+$TaskTimeoutSeconds  = 300
+$TaskPollInterval    = 10
+$TaskElapsed         = 0
 
-Write-OutputWithTimeStamp "winget upgrade exited with code: $($Process.ExitCode)"
+Write-OutputWithTimeStamp "Waiting for task to complete (timeout: ${TaskTimeoutSeconds}s)..."
+do {
+    Start-Sleep -Seconds $TaskPollInterval
+    $TaskElapsed += $TaskPollInterval
+    $TaskState = (Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName).State
+    Write-OutputWithTimeStamp "Task state: $TaskState ($TaskElapsed/${TaskTimeoutSeconds}s elapsed)"
+} while ($TaskState -eq 'Running' -and $TaskElapsed -lt $TaskTimeoutSeconds)
 
-# winget exit codes:
-#   0            = success, all updates applied
-#   -1978335189  = no applicable updates found — not an error
-If ($Process.ExitCode -eq 0 -or $Process.ExitCode -eq -1978335189) {
-    Write-OutputWithTimeStamp "winget upgrade completed successfully."
-} Else {
-    Write-Warning "winget upgrade returned exit code $($Process.ExitCode). Review the output above for details."
-    Write-OutputWithTimeStamp "This may be expected in environments with restricted outbound access to the Microsoft Store CDN."
+$TaskResult = (Get-ScheduledTaskInfo -TaskPath $TaskPath -TaskName $TaskName).LastTaskResult
+Write-OutputWithTimeStamp "Task completed. LastTaskResult: $TaskResult (0x0 = success)"
+
+# The task completing means the scan is done and downloads have been queued, but the
+# actual MSIX installs continue asynchronously. Wait a minimum time before polling
+# so downloads have a chance to start and provisioned package versions begin changing.
+$MinWaitSeconds = 60
+Write-OutputWithTimeStamp "Waiting $MinWaitSeconds seconds for installs to begin..."
+Start-Sleep -Seconds $MinWaitSeconds
+
+# Poll provisioned package versions until they stop changing across two consecutive
+# checks. This is the most reliable signal that all async installs have settled.
+$StabilityTimeoutSeconds = 600
+$StabilityPollInterval   = 30
+$StableChecksRequired    = 2
+$StableCount             = 0
+$StabilityElapsed        = 0
+$LastVersionMap          = Get-ProvisionedPackageVersionMap
+
+Write-OutputWithTimeStamp "Polling for version stability (interval: ${StabilityPollInterval}s, timeout: ${StabilityTimeoutSeconds}s)..."
+
+while ($StabilityElapsed -lt $StabilityTimeoutSeconds) {
+    Start-Sleep -Seconds $StabilityPollInterval
+    $StabilityElapsed += $StabilityPollInterval
+
+    $CurrentVersionMap = Get-ProvisionedPackageVersionMap
+    $Changed = $CurrentVersionMap.Keys | Where-Object {
+        $LastVersionMap.ContainsKey($_) -and $LastVersionMap[$_] -ne $CurrentVersionMap[$_]
+    }
+
+    if ($Changed) {
+        $StableCount = 0
+        foreach ($pkg in $Changed) {
+            Write-OutputWithTimeStamp "  [updating] $pkg : $($LastVersionMap[$pkg]) -> $($CurrentVersionMap[$pkg])"
+        }
+        Write-OutputWithTimeStamp "$(@($Changed).Count) package(s) changed this interval. Resetting stability counter. ($StabilityElapsed/${StabilityTimeoutSeconds}s elapsed)"
+    } else {
+        $StableCount++
+        Write-OutputWithTimeStamp "No version changes detected (stable check $StableCount/$StableChecksRequired). ($StabilityElapsed/${StabilityTimeoutSeconds}s elapsed)"
+    }
+
+    $LastVersionMap = $CurrentVersionMap
+
+    if ($StableCount -ge $StableChecksRequired) {
+        Write-OutputWithTimeStamp "Version map stable for $StableChecksRequired consecutive checks. Updates complete."
+        break
+    }
+}
+
+if ($StabilityElapsed -ge $StabilityTimeoutSeconds -and $StableCount -lt $StableChecksRequired) {
+    Write-Warning "Timed out after $StabilityTimeoutSeconds seconds before versions fully stabilized. Some packages may still be updating."
+}
+
+# Final summary — report everything that changed relative to the pre-scan snapshot.
+Write-Output ""
+Write-Output "*********************************"
+Write-Output "Update Summary"
+Write-Output "*********************************"
+$FinalVersionMap = Get-ProvisionedPackageVersionMap
+$Updated = $FinalVersionMap.Keys | Where-Object {
+    $VersionsBefore.ContainsKey($_) -and $VersionsBefore[$_] -ne $FinalVersionMap[$_]
+}
+$NewPackages = $FinalVersionMap.Keys | Where-Object { -not $VersionsBefore.ContainsKey($_) }
+
+if ($Updated) {
+    Write-OutputWithTimeStamp "Packages updated ($(@($Updated).Count)):"
+    foreach ($pkg in ($Updated | Sort-Object)) {
+        Write-Output "  $pkg : $($VersionsBefore[$pkg]) -> $($FinalVersionMap[$pkg])"
+    }
+} else {
+    Write-OutputWithTimeStamp "No provisioned package versions changed. The image may already be up to date."
+}
+if ($NewPackages) {
+    Write-OutputWithTimeStamp "New packages added ($(@($NewPackages).Count)):"
+    foreach ($pkg in ($NewPackages | Sort-Object)) {
+        Write-Output "  $pkg : $($FinalVersionMap[$pkg])"
+    }
 }
 
 Stop-Transcript
