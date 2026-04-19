@@ -209,6 +209,38 @@ resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-
   }
 }
 
+resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (updateUwpApps) {
+  name: 'update-builtInUwpApps'
+  location: location
+  parent: imageVm
+  properties: {
+    asyncExecution: false
+    errorBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    errorBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-error-${deploymentSuffix}.log'
+    outputBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    outputBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-output-${deploymentSuffix}.log'
+    source: {
+      script: loadTextContent('../../../.common/scripts/Update-UwpApps.ps1')
+    }
+    treatFailureAsDeploymentFailure: true
+  }
+  dependsOn: [
+    removeAppxPackages
+  ]
+}
+
 resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if (installFsLogix) {
   name: 'fslogix'
   location: location
@@ -251,6 +283,7 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
   ]
 }
 
@@ -304,6 +337,7 @@ resource office 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if 
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
     fslogix
   ]
 }
@@ -350,6 +384,7 @@ resource onedrive 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = i
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
     fslogix
     office
   ]
@@ -403,41 +438,10 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
     fslogix
     office
     onedrive
-  ]
-}
-
-resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (updateUwpApps) {
-  name: 'update-builtInUwpApps'
-  location: location
-  parent: imageVm
-  properties: {
-    asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-error-${deploymentSuffix}.log'
-    outputBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    outputBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-output-${deploymentSuffix}.log'
-    source: {
-      script: loadTextContent('../../../.common/scripts/Update-UwpApps.ps1')
-    }
-    treatFailureAsDeploymentFailure: true
-  }
-  dependsOn: [
-    removeAppxPackages
   ]
 }
 
@@ -477,11 +481,11 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
     fslogix
     onedrive
     office
     teams
-    updateBuiltInApps
   ]
 }
 
@@ -500,11 +504,11 @@ resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
     fslogix
     office
     onedrive
     teams
-    updateBuiltInApps
     removeRunCommandsMicrosoftSoftware
   ]
 }
