@@ -46,8 +46,8 @@ function Install-DesktopAppInstaller {
 
 function Find-Winget {
     # winget is not on the system PATH when running as SYSTEM — search WindowsApps directly.
-    $OnPath = (Get-Command -Name winget.exe -ErrorAction SilentlyContinue)?.Source
-    If ($OnPath) { return $OnPath }
+    $OnPath = Get-Command -Name winget.exe -ErrorAction SilentlyContinue
+    If ($OnPath) { return $OnPath.Source }
 
     return Resolve-Path "$env:ProgramFiles\WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe" `
         -ErrorAction SilentlyContinue |
@@ -80,11 +80,10 @@ If (-not $WingetPath) {
 Write-OutputWithTimeStamp "Found winget at: $WingetPath"
 Write-OutputWithTimeStamp "winget version: $(& $WingetPath --version 2>&1)"
 
-Write-OutputWithTimeStamp "Running winget upgrade for Microsoft Store sourced packages..."
+Write-OutputWithTimeStamp "Running winget upgrade for all packages..."
 $UpgradeArgs = @(
     'upgrade'
     '--all'
-    '--source', 'msstore'
     '--silent'
     '--accept-source-agreements'
     '--accept-package-agreements'
