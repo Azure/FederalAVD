@@ -18,6 +18,7 @@ param installFsLogix bool
 param installOneDrive bool
 param installTeams bool
 param installUpdates bool
+param updateUwpApps bool
 param office365AppsToInstall array
 param teamsCloudType string
 param deploymentSuffix string = utcNow('yyMMddhhmm')
@@ -208,6 +209,39 @@ resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-
   }
 }
 
+resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (updateUwpApps) {
+  name: 'update-builtInUwpApps'
+  location: location
+  parent: imageVm
+  properties: {
+    asyncExecution: false
+    errorBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    errorBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-error-${deploymentSuffix}.log'
+    outputBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    outputBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-output-${deploymentSuffix}.log'
+    parameters: []
+    source: {
+      script: loadTextContent('../../../.common/scripts/Update-UwpApps.ps1')
+    }
+    treatFailureAsDeploymentFailure: true
+  }
+  dependsOn: [
+    removeAppxPackages
+  ]
+}
+
 resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if (installFsLogix) {
   name: 'fslogix'
   location: location
@@ -250,6 +284,7 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
   ]
 }
 
@@ -303,6 +338,7 @@ resource office 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if 
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
     fslogix
   ]
 }
@@ -349,6 +385,7 @@ resource onedrive 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = i
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
     fslogix
     office
   ]
@@ -402,6 +439,7 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
     fslogix
     office
     onedrive
@@ -444,6 +482,7 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
     fslogix
     onedrive
     office
@@ -451,7 +490,7 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
   ]
 }
 
-resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(appsToRemove) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams) {
+resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(appsToRemove) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || updateUwpApps) {
   name: 'restart-post-microsoft-software'
   location: location
   parent: orchestrationVm
@@ -466,6 +505,7 @@ resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    updateBuiltInApps
     fslogix
     office
     onedrive

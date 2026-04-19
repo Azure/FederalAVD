@@ -159,6 +159,9 @@ param logStorageAccountNetworkAccess string = 'PublicEndpoint'
 @description('Optional. Determines if the latest updates from the specified update service will be installed.')
 param installUpdates bool = true
 
+@description('Optional. Determines if the built-in UWP (Store) apps will be updated during the image build.')
+param updateUwpApps bool = false
+
 @allowed([
   'WU'
   'MU'
@@ -822,6 +825,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     teamsCloudType: teamsCloudType
     logBlobContainerUri: logContainerUri
     installUpdates: installUpdates
+    updateUwpApps: updateUwpApps
     updateService: updateService
     wsusServer: wsusServer
     artifactsContainerUri: artifactsContainerUri
@@ -841,7 +845,7 @@ module generalizeImageVM 'modules/generalizeVm.bicep' = {
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     adminPw: adminPw
-    checkCbsAndRestart: empty(uniqueCustomizers) ? true : false
+    checkCbsAndRestart: empty(vdiCustomizations) ? true : false
     deploymentSuffix: deploymentSuffix
     imageVmName: imageVm.outputs.name
     location: location
