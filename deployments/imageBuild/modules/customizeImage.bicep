@@ -18,6 +18,7 @@ param installFsLogix bool
 param installOneDrive bool
 param installTeams bool
 param installUpdates bool
+param updateUwpApps bool
 param office365AppsToInstall array
 param teamsCloudType string
 param deploymentSuffix string = utcNow('yyMMddhhmm')
@@ -408,6 +409,38 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
   ]
 }
 
+resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (updateUwpApps) {
+  name: 'update-builtInUwpApps'
+  location: location
+  parent: imageVm
+  properties: {
+    asyncExecution: false
+    errorBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    errorBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-error-${deploymentSuffix}.log'
+    outputBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    outputBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-output-${deploymentSuffix}.log'
+    source: {
+      script: loadTextContent('../../../.common/scripts/Update-UwpApps.ps1')
+    }
+    treatFailureAsDeploymentFailure: true
+  }
+  dependsOn: [
+    removeAppxPackages
+  ]
+}
+
 resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = if (length(customizations) + length(vdiCustomizations) > 13) {
   parent: orchestrationVm
   name: 'remove-microsoft-software-runCommands'
@@ -448,10 +481,11 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
     onedrive
     office
     teams
+    updateBuiltInApps
   ]
 }
 
-resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(appsToRemove) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams) {
+resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(appsToRemove) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || updateUwpApps) {
   name: 'restart-post-microsoft-software'
   location: location
   parent: orchestrationVm
@@ -470,6 +504,7 @@ resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands
     office
     onedrive
     teams
+    updateBuiltInApps
     removeRunCommandsMicrosoftSoftware
   ]
 }
