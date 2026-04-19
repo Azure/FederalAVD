@@ -32,7 +32,7 @@
 param (
     [Parameter()]
     [bool]
-    $DisableUpdates
+    $DisableUpdates = $true
 )
 #region functions
 Function Write-Log {
