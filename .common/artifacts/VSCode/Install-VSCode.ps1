@@ -114,7 +114,7 @@ Function Set-RegistryValue {
     If (-not (Get-ItemProperty -LiteralPath $key -Name $Name -ErrorAction 'SilentlyContinue')) {
         If (-not (Test-Path -LiteralPath $key -ErrorAction 'Stop')) {
             Try {
-                Write-Log -Info -Message "${CmdletName}: Create registry key [$key]."
+                Write-Log -Category Info -Message "${CmdletName}: Create registry key [$key]."
                 # No forward slash found in Key. Use New-Item cmdlet to create registry key
                 If ((($Key -split '/').Count - 1) -eq 0) {
                     $null = New-Item -Path $key -ItemType 'Registry' -Force -ErrorAction 'Stop'
@@ -152,36 +152,84 @@ Function Set-RegistryValue {
 #region Initialization
 $Script:Name = [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)
 $DownloadUrl = 'https://go.microsoft.com/fwlink/?linkid=852157'
-New-Log "C:\Windows\Logs"
+New-Log 'C:\Windows\Logs'
 $ErrorActionPreference = 'Stop'
-Write-Log -category Info -message "Starting '$PSCommandPath'."
+Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 #endregion
 
-#region Install               
-$installer = Get-ChildItem -Path "$PSScriptRoot" -File -Filter '*.exe'
-If ($installer.Count -gt 0) {
-    $VSCodeExe = $installer[0].FullName
-    
-} Else {
-    Write-Log -category Warning -message "No installer executable found in $PSScriptRoot."
-    Write-Log -Category Information -message "Attempting to download installer from $DownloadUrl"
-    $VSCodeExe = Join-Path -Path $env:Temp -ChildPath 'VSCodeInstaller.exe'
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $VSCodeExe -ErrorAction Stop
+$DownloadedInstaller = $null
+
+try {
+    #region Locate or download installer
+    $installerFiles = Get-ChildItem -Path $PSScriptRoot -File -Filter '*.exe' -ErrorAction Stop
+    if ($installerFiles.Count -gt 0) {
+        $VSCodeExe = $installerFiles[0].FullName
+        Write-Log -Category Info -Message "Found local installer: '$VSCodeExe'."
+    }
+    else {
+        Write-Log -Category Warning -Message "No installer executable found in '$PSScriptRoot'. Attempting download from '$DownloadUrl'."
+        $DownloadedInstaller = Join-Path -Path $env:Temp -ChildPath 'VSCodeInstaller.exe'
+        try {
+            Invoke-WebRequest -Uri $DownloadUrl -OutFile $DownloadedInstaller -UseBasicParsing -ErrorAction Stop
+        }
+        catch {
+            Write-Log -Category Error -Message "Failed to download VS Code installer from '$DownloadUrl'. Error: $_"
+            throw
+        }
+        if (-not (Test-Path -Path $DownloadedInstaller)) {
+            $errMsg = "Installer download appeared to succeed but file not found at '$DownloadedInstaller'."
+            Write-Log -Category Error -Message $errMsg
+            throw $errMsg
+        }
+        $VSCodeExe = $DownloadedInstaller
+        Write-Log -Category Info -Message "Installer downloaded to '$VSCodeExe'."
+    }
+    #endregion
+
+    #region Install
+    $Arguments = '/VERYSILENT /NORESTART /MERGETASKS=!runcode'
+    Write-Log -Category Info -Message "Starting installation of VS Code from '$VSCodeExe'."
+    Write-Log -Category Info -Message "Executing: '$VSCodeExe $Arguments'."
+    try {
+        $installerProcess = Start-Process -FilePath $VSCodeExe -ArgumentList $Arguments -Wait -PassThru -ErrorAction Stop
+    }
+    catch {
+        Write-Log -Category Error -Message "Failed to launch VS Code installer. Error: $_"
+        throw
+    }
+    if ($installerProcess.ExitCode -eq 0) {
+        Write-Log -Category Info -Message 'VS Code installed successfully.'
+    }
+    else {
+        $errMsg = "VS Code installer exited with non-zero exit code: $($installerProcess.ExitCode)."
+        Write-Log -Category Error -Message $errMsg
+        throw $errMsg
+    }
+    #endregion Install
+
+    #region Disable Updates
+    if ($DisableUpdates) {
+        Write-Log -Category Info -Message 'Disabling VS Code auto-updates via registry.'
+        try {
+            Set-RegistryValue -Key 'HKLM:\SOFTWARE\Policies\Microsoft\VSCode' -Name 'UpdateMode' -Value 'none' -Type 'String'
+        }
+        catch {
+            Write-Log -Category Error -Message "Failed to set VS Code update registry value. Error: $_"
+            throw
+        }
+    }
+    #endregion Disable Updates
+
+    Write-Log -Category Info -Message "Ending '$PSCommandPath'."
 }
-Write-Log -message "Starting installation of VSCode."
-$Arguments = "/VERYSILENT /NORESTART /MERGETASKS=!runcode" 
-Write-Log -message "Executing '$VSCodeexec $Arguments'"
-$Installer = Start-Process -FilePath "$VSCodeExe" -ArgumentList $Arguments -Wait -PassThru
-If ($($Installer.ExitCode) -eq 0 ) {
-    Write-Log -message "'VSCode' installed successfully."
+catch {
+    Write-Log -Category Error -Message "Script failed: $_"
+    exit 1
 }
-Else {
-    Write-Log -category Error -message "The exit code is $($Installer.ExitCode)"
+finally {
+    if ($null -ne $DownloadedInstaller -and (Test-Path -Path $DownloadedInstaller)) {
+        Write-Log -Category Info -Message "Removing temporary installer file '$DownloadedInstaller'."
+        Remove-Item -Path $DownloadedInstaller -Force -ErrorAction SilentlyContinue
+    }
 }
-#endregion Install
-if($DisableUpdates) {
-    Write-Log -message "Disabling VSCode updates by setting registry value."
-    Set-RegistryValue -Key 'HKLM:\SOFTWARE\Policies\Microsoft\VSCode' -Name 'UpdateMode' -Value 'none' -Type 'String'
-}
-Write-Log -Message "Ending '$PSCommandPath'."
 
