@@ -1,9 +1,39 @@
-Param
-(
-    [Parameter(Mandatory = $false)]
-    [Hashtable]$DynParameters
-)
+<#
+.SYNOPSIS
+    Installs Visual Studio Code silently and optionally disables automatic updates.
 
+.DESCRIPTION
+    Installs the Visual Studio Code executable found in the same directory as this
+    script using a fully silent, no-restart installation. Optionally sets the
+    machine-wide Group Policy registry value to disable VS Code's built-in update
+    mechanism, which is recommended for managed VDI image builds where updates
+    should be controlled through the image pipeline rather than the application.
+
+.PARAMETER DisableUpdates
+    When set to $true, sets HKLM:\SOFTWARE\Policies\Microsoft\VSCode\UpdateMode
+    to 'none', preventing VS Code from automatically checking for and downloading
+    updates. Defaults to $false.
+
+.NOTES
+    - The installer executable (.exe) must be present in the same directory as
+      this script. The first .exe file found is used.
+    - Logs are written to C:\Windows\Logs\Install_VSCode-<datetime>.log.
+    - Designed to run silently in a SYSTEM context during an image build.
+
+.EXAMPLE
+    # Install VS Code and allow automatic updates (default)
+    .\Install_VSCode.ps1
+
+.EXAMPLE
+    # Install VS Code and disable automatic updates
+    .\Install_VSCode.ps1 -DisableUpdates $true
+#>
+[CmdletBinding()]
+param (
+    [Parameter()]
+    [bool]
+    $DisableUpdates
+)
 #region functions
 Function Write-Log {
     Param (
@@ -121,15 +151,23 @@ Function Set-RegistryValue {
 
 #region Initialization
 $Script:Name = [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)
+$DownloadUrl = 'https://go.microsoft.com/fwlink/?linkid=852157'
 New-Log "C:\Windows\Logs"
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
 #endregion
 
-#region Install
-               
-$exefiles = Get-ChildItem -Path "$PSScriptRoot" -File -Filter '*.exe'
-$VSCodeExe = $exefiles[0].FullName
+#region Install               
+$installer = Get-ChildItem -Path "$PSScriptRoot" -File -Filter '*.exe'
+If ($installer.Count -gt 0) {
+    $VSCodeExe = $exefiles[0].FullName
+    
+} Else {
+    Write-Log -category Warning -message "No installer executable found in $PSScriptRoot."
+    Write-Log -Category Information -message "Attempting to download installer from $DownloadUrl"
+    $VSCodeExe = Join-Path -Path $env:Temp -ChildPath 'VSCodeInstaller.exe'
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $VSCodeExe -ErrorAction Stop
+}
 Write-Log -message "Starting installation of VSCode."
 $Arguments = "/VERYSILENT /NORESTART /MERGETASKS=!runcode" 
 Write-Log -message "Executing '$VSCodeexec $Arguments'"
@@ -141,5 +179,9 @@ Else {
     Write-Log -category Error -message "The exit code is $($Installer.ExitCode)"
 }
 #endregion Install
+if($DisableUpdates) {
+    Write-Log -message "Disabling VSCode updates by setting registry value."
+    Set-RegistryValue -Key 'HKLM:\SOFTWARE\Policies\Microsoft\VSCode' -Name 'UpdateMode' -Value 'none' -Type 'String'
+}
 Write-Log -Message "Ending '$PSCommandPath'."
-Exit $($Installer.ExitCode)
+
