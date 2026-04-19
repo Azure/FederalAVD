@@ -160,7 +160,7 @@ Write-Log -category Info -message "Starting '$PSCommandPath'."
 #region Install               
 $installer = Get-ChildItem -Path "$PSScriptRoot" -File -Filter '*.exe'
 If ($installer.Count -gt 0) {
-    $VSCodeExe = $exefiles[0].FullName
+    $VSCodeExe = $installer[0].FullName
     
 } Else {
     Write-Log -category Warning -message "No installer executable found in $PSScriptRoot."
