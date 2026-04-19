@@ -1,7 +1,6 @@
-targetScope = 'resourceGroup'
-
 @secure()
 param adminPw string
+param checkCbsAndRestart bool
 param location string = resourceGroup().location
 param logBlobContainerUri string
 param orchestrationVmName string
@@ -32,7 +31,7 @@ var waitForRestartParameters = [
   }
 ]
 
-resource cbsCheck 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
+resource cbsCheck 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (checkCbsAndRestart) {
   name: 'cbs-check-and-restart'
   location: location
   parent: imageVm
@@ -61,7 +60,7 @@ resource cbsCheck 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
   }
 }
 
-resource waitForCbsRestart 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
+resource waitForCbsRestart 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if(checkCbsAndRestart) {
   name: 'wait-for-cbs-restart'
   location: location
   parent: orchestrationVm

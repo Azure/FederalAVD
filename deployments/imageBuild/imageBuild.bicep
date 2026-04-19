@@ -841,6 +841,7 @@ module generalizeImageVM 'modules/generalizeVm.bicep' = {
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     adminPw: adminPw
+    checkCbsAndRestart: empty(uniqueCustomizers) ? true : false
     deploymentSuffix: deploymentSuffix
     imageVmName: imageVm.outputs.name
     location: location

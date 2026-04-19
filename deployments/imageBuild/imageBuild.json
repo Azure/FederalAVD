@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "10187001348534730549"
+      "templateHash": "8999894014690244433"
     },
     "name": "Zero Trust Architecture Custom Windows Image Builder",
     "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
@@ -13260,6 +13260,7 @@
           "adminPw": {
             "value": "[variables('adminPw')]"
           },
+          "checkCbsAndRestart": "[if(empty(variables('uniqueCustomizers')), createObject('value', true()), createObject('value', false()))]",
           "deploymentSuffix": {
             "value": "[variables('deploymentSuffix')]"
           },
@@ -13282,12 +13283,15 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "5423707752415808302"
+              "templateHash": "8010834452966582524"
             }
           },
           "parameters": {
             "adminPw": {
               "type": "securestring"
+            },
+            "checkCbsAndRestart": {
+              "type": "bool"
             },
             "location": {
               "type": "string",
@@ -13332,6 +13336,7 @@
           },
           "resources": [
             {
+              "condition": "[parameters('checkCbsAndRestart')]",
               "type": "Microsoft.Compute/virtualMachines/runCommands",
               "apiVersion": "2023-03-01",
               "name": "[format('{0}/{1}', parameters('imageVmName'), 'cbs-check-and-restart')]",
@@ -13349,6 +13354,7 @@
               }
             },
             {
+              "condition": "[parameters('checkCbsAndRestart')]",
               "type": "Microsoft.Compute/virtualMachines/runCommands",
               "apiVersion": "2023-03-01",
               "name": "[format('{0}/{1}', parameters('orchestrationVmName'), 'wait-for-cbs-restart')]",
