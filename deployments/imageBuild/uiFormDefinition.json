@@ -1287,6 +1287,21 @@
                                     "toolTip": "Select to install updates and specify an update source."
                                 },
                                 {
+                                    "name": "updateUwpApps",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Update Built-In UWP (Store) Apps",
+                                    "toolTip": "Select to trigger a Microsoft Store update scan and update all built-in UWP apps provisioned in the image. Note: this option requires access to the Microsoft Store and may not work in air-gapped or restricted network environments."
+                                },
+                                {
+                                    "name": "updateUwpAppsAirGapWarning",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[steps('imageCustomizations').updates.updateUwpApps]",
+                                    "options": {
+                                        "style": "Warning",
+                                        "text": "Updating built-in UWP apps requires outbound access to the Microsoft Store. This option may not work in air-gapped or restricted network environments (e.g., IL5/Top Secret clouds). If the update scan fails, the step will log a warning and continue without failing the build."
+                                    }
+                                },
+                                {
                                     "name": "updateService",
                                     "type": "Microsoft.Common.DropDown",
                                     "label": "Software update service",
@@ -2132,6 +2147,7 @@
                 "applyWindowsDesktopOptimizations": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud')))), steps('imageCustomizations').customizations.applyWindowsDesktopOptimizations, false)]",
                 "cleanupDesktop": "[steps('imageCustomizations').customizations.cleanupDesktop]",
                 "installUpdates": "[steps('imageCustomizations').updates.installUpdates]",
+                "updateUwpApps": "[steps('imageCustomizations').updates.updateUwpApps]",
                 "updateService": "[steps('imageCustomizations').updates.updateService]",
                 "wsusServer": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), steps('imageCustomizations').updates.wsusServer, '')]",
                 "collectCustomizationLogs": "[steps('imageCustomizations').logging.collectLogs]",
