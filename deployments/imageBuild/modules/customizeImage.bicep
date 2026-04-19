@@ -231,8 +231,14 @@ resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-0
     outputBlobUri: empty(logBlobContainerUri)
       ? null
       : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-output-${deploymentSuffix}.log'
+    parameters: [
+      {
+        name: 'Service'
+        value: 'STORE'
+      }
+    ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Update-UwpApps.ps1')
+      script: loadTextContent('../../../.common/scripts/Invoke-WindowsUpdate.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
