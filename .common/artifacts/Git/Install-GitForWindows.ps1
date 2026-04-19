@@ -4,50 +4,6 @@ $SoftwareName = 'GitforWindows'
 #endregion
 
 #region Functions
-Function Get-InternetUrl {
-    [CmdletBinding()]
-    Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [uri]$Url,
-        [Parameter(Mandatory = $true, Position = 1)]
-        [string]$searchstring
-    )
-    Begin {
-        ## Get the name of this function and write header
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-        Write-Log -Message "${CmdletName}: Starting ${CmdletName} with the following parameters: $PSBoundParameters"
-    }
-    Process {
-
-        Try {
-            Write-Log -Message -message "${CmdletName}: Now extracting download URL from '$Url'."
-            $HTML = Invoke-WebRequest -Uri $Url -UseBasicParsing
-            $Links = $HTML.Links
-            $ahref = $null
-            $ahref=@()
-            $ahref = ($Links | Where-Object {$_.href -like "*$searchstring*"}).href
-            If ($ahref.count -eq 0 -or $null -eq $ahref) {
-                $ahref = ($Links | Where-Object {$_.OuterHTML -like "*$searchstring*"}).href
-            }
-            If ($ahref.Count -eq 1) {
-                Write-Log -Message -Message "${CmdletName}: Download URL = '$ahref'"
-                $ahref
-
-            }
-            Elseif ($ahref.Count -gt 1) {
-                Write-Log -Message -Message "${CmdletName}: Download URL = '$($ahref[0])'"
-                $ahref[0]
-            }
-        }
-        Catch {
-            Write-Log -Category Error -Message  "${CmdletName}: Error Downloading HTML and determining link for download."
-        }
-    }
-    End {
-        Write-Log -Message -Message "${CmdletName}: Ending ${CmdletName}"
-    }
-}
-
 Function Get-InternetFile {
     [CmdletBinding()]
     Param (
@@ -215,37 +171,86 @@ EnableFSMonitor=Disabled
 '@
 
 ## MAIN
-New-Log -Path (Join-Path -Path "$Env:SystemRoot\Logs" -ChildPath 'Software')
-Write-Log -category Info -message "Starting '$PSCommandPath'."
+$Script:Name = [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)
+New-Log -Path (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs\Software')
+$ErrorActionPreference = 'Stop'
+Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 
-$Uninstaller = "C:\Program Files\Git\unins000.exe"
-If (Test-Path -Path $Uninstaller) {
-    Write-Log -Message "Git is already installed. Uninstalling."
-    $Uninstall = Start-Process -FilePath $Uninstaller -ArgumentList '/SILENT' -Wait -PassThru
-    Write-Log -Message "Uninstall completed with exit code: [$($Uninstall.ExitCode)]"
+$TempDir = Join-Path -Path $env:SystemRoot -ChildPath 'Temp\Git'
+$TempDirCreated = $false
+
+try {
+    # Uninstall existing installation if present
+    $Uninstaller = 'C:\Program Files\Git\unins000.exe'
+    if (Test-Path -Path $Uninstaller) {
+        Write-Log -Message "Git is already installed. Uninstalling."
+        $uninstallProcess = Start-Process -FilePath $Uninstaller -ArgumentList '/SILENT' -Wait -PassThru -ErrorAction Stop
+        if ($uninstallProcess.ExitCode -ne 0) {
+            Write-Log -Category Warning -Message "Uninstaller exited with code $($uninstallProcess.ExitCode). Continuing anyway."
+        }
+        else {
+            Write-Log -Message "Uninstall completed successfully."
+        }
+    }
+
+    # Locate or download installer
+    Write-Log -Message "Checking for installer in '$PSScriptRoot'."
+    $installerFiles = Get-ChildItem -Path $PSScriptRoot -Filter '*.exe' -ErrorAction Stop
+    if ($installerFiles.Count -gt 0) {
+        $GitInstaller = $installerFiles[0].FullName
+        Write-Log -Message "Found local installer: '$GitInstaller'."
+    }
+    else {
+        Write-Log -Message "No local installer found. Retrieving latest release from GitHub API."
+        New-Item -Path $TempDir -ItemType Directory -Force -ErrorAction Stop | Out-Null
+        $TempDirCreated = $true
+        $ReleasesUri = 'https://api.github.com/repos/git-for-windows/git/releases/latest'
+        Write-Log -Message "Querying '$ReleasesUri'."
+        try {
+            $releaseAssets = (Invoke-RestMethod -Method GET -Uri $ReleasesUri -UseBasicParsing -ErrorAction Stop).assets
+        }
+        catch {
+            Write-Log -Category Error -Message "Failed to query GitHub API at '$ReleasesUri'. Error: $_"
+            throw
+        }
+        $GitDownloadUrl = ($releaseAssets | Where-Object { $_.name -like '*64-bit.exe' }).browser_download_url
+        if (-not $GitDownloadUrl) {
+            throw "No 64-bit installer asset found in the latest Git for Windows release."
+        }
+        Write-Log -Message "Downloading Git installer from '$GitDownloadUrl'."
+        $GitInstaller = Get-InternetFile -Url $GitDownloadUrl -OutputDirectory $TempDir
+        if (-not $GitInstaller) {
+            throw "Failed to download Git installer from '$GitDownloadUrl'."
+        }
+    }
+
+    # Write setup INF to temp directory
+    New-Item -Path $TempDir -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    $TempDirCreated = $true
+    $InfPath = Join-Path $TempDir 'setup.inf'
+    $SetupIni | Out-File -FilePath $InfPath -Encoding unicode -ErrorAction Stop
+    Write-Log -Message "Setup INF written to '$InfPath'."
+
+    # Install
+    $ArgumentList = "/VERYSILENT /NORESTART /CLOSEAPPLICATIONS /FORCECLOSEAPPLICATIONS /LOADINF=`"$InfPath`""
+    Write-Log -Message "Installing '$SoftwareName' via: '$GitInstaller $ArgumentList'."
+    $installerProcess = Start-Process -FilePath $GitInstaller -ArgumentList $ArgumentList -Wait -PassThru -ErrorAction Stop
+    if ($installerProcess.ExitCode -eq 0) {
+        Write-Log -Message "'$SoftwareName' installed successfully."
+    }
+    else {
+        throw "'$SoftwareName' installer exited with non-zero exit code: $($installerProcess.ExitCode)."
+    }
+
+    Write-Log -Message "Completed '$SoftwareName' installation."
 }
-Write-Log -Message "Checking for installer in current directory."
-$GitInstaller = (Get-ChildItem -Path $PSScriptRoot -Filter '*.exe').FullName
-If (!$GitInstaller) {
-    Write-Log -Message "Installer not found."
-    $TempDir = Join-Path -Path "$env:SystemRoot\Temp" -ChildPath Git
-    New-Item -Path $TempDir -ItemType Directory -Force | Out-Null
-    $GitWebUrl = 'https://git-scm.com/download/win'
-    $GitDownloadUrl = Get-InternetUrl -Url $GitWebUrl -searchstring '64-bit.exe'
-    Write-Log -Message "Downloading Git from `"$GitWebUrl`"."
-    If ($GitDownloadUrl) {
-        $GitInstaller = Get-InternetFile -url $GitDownloadUrl -OutputDirectory $TempDir
+catch {
+    Write-Log -Category Error -Message "Script failed: $_"
+    exit 1
+}
+finally {
+    if ($TempDirCreated -and (Test-Path -Path $TempDir)) {
+        Write-Log -Message "Cleaning up temporary directory '$TempDir'."
+        Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
-$SetupIni | Out-File -FilePath "$TempDir\setup.inf" -Encoding unicode
-$ArgumentList = "/VERYSILENT /NORESTART /CLOSEAPPLICATIONS /FORCECLOSEAPPLICATIONS /LOADINF=$TempDir\setup.inf"   
-Write-Log -Message "Installing '$SoftwareName' via cmdline: '$GitInstaller $ArgumentList'"
-$Installer = Start-Process -FilePath $GitInstaller -ArgumentList $ArgumentList -Wait -PassThru
-If ($($Installer.ExitCode) -eq 0) {
-    Write-Log -Message "'$SoftwareName' installed successfully."
-}
-Else {
-    Write-Log -Category Error -Message  "The Installer exit code is $($Installer.ExitCode)"
-}
-Write-Log -Message "Completed '$SoftwareName' Installation."
-If ($TempDir) {Remove-Item -Path $TempDir -Recurse -Force}
