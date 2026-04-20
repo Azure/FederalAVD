@@ -12,8 +12,7 @@ param(
     [string]$VmResourceId,
 
     [Parameter(Mandatory=$true)]
-    [string]$Location
-   
+    [string]$Location   
 )
 
 $ErrorActionPreference = 'Stop'
