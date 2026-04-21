@@ -33,6 +33,8 @@ var apiVersion = startsWith(cloud, 'usn') ? '2017-08-01' : '2018-02-01'
 var envSuffix = substring(environment().suffixes.storage, 5, length(environment().suffixes.storage) - 5)
 
 var buildDir = 'c:\\BuildDir'
+var restartVmScript = loadTextContent('../../../.common/scripts/Restart-Vm.ps1')
+var customizationScript = loadTextContent('../../../.common/scripts/Invoke-Customization.ps1')
 
 var customizers = [
   for customization in customizations: {
@@ -498,7 +500,7 @@ resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands
     asyncExecution: false
     parameters: restartVMParameters
     source: {
-      script: loadTextContent('../../../.common/scripts/Restart-Vm.ps1')
+      script: restartVmScript
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -551,7 +553,7 @@ resource restartCustomizations 'Microsoft.Compute/virtualMachines/runCommands@20
     asyncExecution: false
     parameters: restartVMParameters
     source: {
-      script: loadTextContent('../../../.common/scripts/Restart-Vm.ps1')
+      script: restartVmScript
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -618,7 +620,7 @@ resource restartUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
     asyncExecution: false
     parameters: restartVMParameters
     source: {
-      script: loadTextContent('../../../.common/scripts/Restart-Vm.ps1')
+      script: restartVmScript
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -681,7 +683,7 @@ resource restartWDOT 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
     asyncExecution: false
     parameters: restartVMParameters
     source: {
-      script: loadTextContent('../../../.common/scripts/Restart-Vm.ps1')
+      script: restartVmScript
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -729,7 +731,7 @@ resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-
         }
       ])
       source: {
-        script: loadTextContent('../../../.common/scripts/Invoke-Customization.ps1')
+        script: customizationScript
       }
       treatFailureAsDeploymentFailure: true
     }

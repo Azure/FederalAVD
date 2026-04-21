@@ -8,6 +8,8 @@ param deploymentSuffix string
 param commonScriptParams array
 param restartVMParameters array
 
+var customizationScript = loadTextContent('../../../.common/scripts/Invoke-Customization.ps1')
+
 resource imageVm 'Microsoft.Compute/virtualMachines@2022-11-01' existing = {
   name: imageVmName
 }
@@ -53,7 +55,7 @@ resource application 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
       }
     ])
     source: {
-      script: loadTextContent('../../../.common/scripts/Invoke-Customization.ps1')
+      script: customizationScript
     }
     treatFailureAsDeploymentFailure: true
   }

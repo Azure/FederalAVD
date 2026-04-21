@@ -123,12 +123,12 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
+    fileShares: fslogixFileShares
+    fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
     encryptionKeyVaultUri: encryptionKeyVaultUri
     encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'MicrosoftManaged'
       ? ''
       : customerManagedKeys!.outputs.userAssignedIdentityResourceId
-    fileShares: fslogixFileShares
-    fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
     kerberosEncryptionType: kerberosEncryptionType

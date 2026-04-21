@@ -1,95 +1,3 @@
-<#
-.SYNOPSIS
-Comprehensive script to configure and register an AVD session host.
-
-.DESCRIPTION
-This script combines session host configuration (FSLogix, time zone, GPU settings, etc.) 
-and AVD agent installation/registration into a single unified operation.
-Designed to run as a RunCommand script after all VM extensions and customizations are complete.
-
-.PARAMETER RegistrationToken
-Required. The host pool registration token for joining the session host.
-
-.PARAMETER AgentBootLoaderUrl
-Required. Direct URL to download the RDAgent BootLoader MSI.
-
-.PARAMETER AgentUrl
-Optional. Direct URL to download the RD Infra Agent MSI. Used as fallback if endpoint download fails.
-
-.PARAMETER FallbackUrl
-Optional. URL to download configuration.zip package containing DeployAgent.zip with agent MSI installers. Used as last resort fallback if both endpoint and AgentUrl fail.
-
-.PARAMETER AADJoin
-Optional. Set to 'true' if the VM is Azure AD joined. Default is 'false'.
-
-.PARAMETER MdmId
-Optional. MDM enrollment ID for Intune enrollment with AAD join.
-
-.PARAMETER UserAssignedIdentityClientId
-Optional. Client ID of managed identity for Azure Storage authentication.
-
-.PARAMETER ApiVersion
-Optional. Azure metadata service API version.
-
-.PARAMETER StorageSuffix
-Optional. Azure storage DNS suffix for the cloud environment.
-
-.PARAMETER TimeZone
-Required. Time zone ID to configure on the session host.
-
-.PARAMETER AmdVmSize
-Optional. Set to 'true' if VM has AMD GPU. Default is 'false'.
-
-.PARAMETER NvidiaVmSize
-Optional. Set to 'true' if VM has NVIDIA GPU. Default is 'false'.
-
-.PARAMETER DisableUpdates
-Optional. Set to 'true' to disable automatic updates. Default is 'false'.
-
-.PARAMETER ConfigureFSLogix
-Optional. Set to 'true' to configure FSLogix. Default is 'false'.
-
-.PARAMETER CloudCache
-Optional. Set to 'true' to enable FSLogix Cloud Cache. Default is 'false'.
-
-.PARAMETER IdentitySolution
-Optional. Identity solution: ActiveDirectoryDomainServices, EntraDomainServices, EntraKerberos-Hybrid, EntraKerberos-CloudOnly, EntraId.
-
-.PARAMETER LocalNetAppServers
-Optional. JSON array of local NetApp server FQDNs.
-
-.PARAMETER LocalStorageAccountNames
-Optional. JSON array of local storage account names.
-
-.PARAMETER LocalStorageAccountKeys
-Optional. JSON array of local storage account keys.
-
-.PARAMETER OSSGroups
-Optional. JSON array of groups for Object Specific Settings.
-
-.PARAMETER RemoteNetAppServers
-Optional. JSON array of remote NetApp server FQDNs.
-
-.PARAMETER RemoteStorageAccountNames
-Optional. JSON array of remote storage account names.
-
-.PARAMETER RemoteStorageAccountKeys
-Optional. JSON array of remote storage account keys.
-
-.PARAMETER Shares
-Optional. JSON array of FSLogix file share names.
-
-.PARAMETER SizeInMBs
-Optional. FSLogix container size in MB. Default is 30000.
-
-.PARAMETER StorageService
-Optional. Storage service type: AzureFiles or AzureNetAppFiles.
-
-.EXAMPLE
-.\Initialize-SessionHost.ps1 -RegistrationToken "eyJ..." -AgentBootLoaderUrl "https://..." -TimeZone "Eastern Standard Time"
-
-#>
-
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
     # Agent Installation Parameters
@@ -205,56 +113,6 @@ function Write-Log {
         'Info' { Write-Host $content }
         'Error' { Write-Error $Content }
         'Warning' { Write-Warning $Content }
-    }
-}
-
-function Test-IsServer {
-    $OSVersionInfo = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction SilentlyContinue
-    
-    if ($null -ne $OSVersionInfo -and $null -ne $OSVersionInfo.InstallationType) {
-        return $OSVersionInfo.InstallationType -eq 'Server'
-    }
-    
-    return $false
-}
-
-function Install-WindowsFeature {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$FeatureName
-    )
-    
-    Write-Log -Message "Installing Windows Feature: $FeatureName"
-    
-    try {
-        $feature = Get-WindowsFeature -Name $FeatureName -ErrorAction SilentlyContinue
-        
-        if ($null -eq $feature) {
-            Write-Log -Message "Feature $FeatureName not found, skipping installation"
-            return
-        }
-        
-        if ($feature.Installed) {
-            Write-Log -Message "Feature $FeatureName is already installed"
-            return
-        }
-        
-        $result = Install-WindowsFeature -Name $FeatureName -ErrorAction Stop
-        
-        if ($result.Success) {
-            Write-Log -Message "Successfully installed feature: $FeatureName"
-            
-            if ($result.RestartNeeded -eq 'Yes') {
-                Write-Log -Message "WARNING: A restart is required after installing $FeatureName"
-            }
-        }
-        else {
-            Write-Log -Category Error -Message "Failed to install feature: $FeatureName"
-        }
-    }
-    catch {
-        Write-Log -Category Error -Message "Error installing feature $FeatureName : $($_.Exception.Message)"
-        throw
     }
 }
 
@@ -546,111 +404,6 @@ Function Convert-GroupToSID {
     }
 }
 
-Function Get-InstalledApplication {
-    [CmdletBinding()]
-    Param (
-        [Parameter(Mandatory = $false)]
-        [ValidateNotNullorEmpty()]
-        [string[]]$Name,
-        [Parameter(Mandatory = $false)]
-        [ValidateNotNullorEmpty()]
-        [string]$ProductCode
-    )
-
-    Begin {
-        [string[]]$regKeyApplications = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
-    }
-    Process { 
-        ## Enumerate the installed applications from the registry for applications that have the "DisplayName" property
-        [psobject[]]$regKeyApplication = @()
-        ForEach ($regKey in $regKeyApplications) {
-            If (Test-Path -LiteralPath $regKey -ErrorAction 'SilentlyContinue' -ErrorVariable '+ErrorUninstallKeyPath') {
-                [psobject[]]$UninstallKeyApps = Get-ChildItem -LiteralPath $regKey -ErrorAction 'SilentlyContinue' -ErrorVariable '+ErrorUninstallKeyPath'
-                ForEach ($UninstallKeyApp in $UninstallKeyApps) {
-                    Try {
-                        [psobject]$regKeyApplicationProps = Get-ItemProperty -LiteralPath $UninstallKeyApp.PSPath -ErrorAction 'Stop'
-                        If ($regKeyApplicationProps.DisplayName) { [psobject[]]$regKeyApplication += $regKeyApplicationProps }
-                    }
-                    Catch {
-                        Continue
-                    }
-                }
-            }
-        }
-
-        ## Create a custom object with the desired properties for the installed applications and sanitize property details
-        [psobject[]]$installedApplication = @()
-        ForEach ($regKeyApp in $regKeyApplication) {
-            Try {
-                [string]$appDisplayName = ''
-                [string]$appDisplayVersion = ''
-                [string]$appPublisher = ''
-
-                ## Bypass any updates or hotfixes
-                If (($regKeyApp.DisplayName -match '(?i)kb\d+') -or ($regKeyApp.DisplayName -match 'Cumulative Update') -or ($regKeyApp.DisplayName -match 'Security Update') -or ($regKeyApp.DisplayName -match 'Hotfix')) {
-                    Continue
-                }
-
-                ## Remove any control characters which may interfere with logging and creating file path names from these variables
-                $appDisplayName = $regKeyApp.DisplayName -replace '[^\u001F-\u007F]', ''
-                $appDisplayVersion = $regKeyApp.DisplayVersion -replace '[^\u001F-\u007F]', ''
-                $appPublisher = $regKeyApp.Publisher -replace '[^\u001F-\u007F]', ''
-
-                ## Determine if application is a 64-bit application
-                [boolean]$Is64BitApp = If (($is64Bit) -and ($regKeyApp.PSPath -notmatch '^Microsoft\.PowerShell\.Core\\Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node')) { $true } Else { $false }
-
-                If ($ProductCode) {
-                    ## Verify if there is a match with the product code passed to the script
-                    If ($regKeyApp.PSChildName -match [regex]::Escape($productCode)) {
-                        $installedApplication += New-Object -TypeName 'PSObject' -Property @{
-                            UninstallSubkey    = $regKeyApp.PSChildName
-                            ProductCode        = If ($regKeyApp.PSChildName -match $MSIProductCodeRegExPattern) { $regKeyApp.PSChildName } Else { [string]::Empty }
-                            DisplayName        = $appDisplayName
-                            DisplayVersion     = $appDisplayVersion
-                            UninstallString    = $regKeyApp.UninstallString
-                            InstallSource      = $regKeyApp.InstallSource
-                            InstallLocation    = $regKeyApp.InstallLocation
-                            InstallDate        = $regKeyApp.InstallDate
-                            Publisher          = $appPublisher
-                            Is64BitApplication = $Is64BitApp
-                        }
-                    }
-                }
-
-                If ($name) {
-                    ## Verify if there is a match with the application name(s) passed to the script
-                    ForEach ($application in $Name) {
-                        $applicationMatched = $false
-                        #  Check for a contains application name match
-                        If ($regKeyApp.DisplayName -match [regex]::Escape($application)) {
-                            $applicationMatched = $true
-                        }
-
-                        If ($applicationMatched) {
-                            $installedApplication += New-Object -TypeName 'PSObject' -Property @{
-                                UninstallSubkey    = $regKeyApp.PSChildName
-                                ProductCode        = If ($regKeyApp.PSChildName -match $MSIProductCodeRegExPattern) { $regKeyApp.PSChildName } Else { [string]::Empty }
-                                DisplayName        = $appDisplayName
-                                DisplayVersion     = $appDisplayVersion
-                                UninstallString    = $regKeyApp.UninstallString
-                                InstallSource      = $regKeyApp.InstallSource
-                                InstallLocation    = $regKeyApp.InstallLocation
-                                InstallDate        = $regKeyApp.InstallDate
-                                Publisher          = $appPublisher
-                                Is64BitApplication = $Is64BitApp
-                            }
-                        }
-                    }
-                }
-            }
-            Catch {
-                Continue
-            }
-        }
-        Write-Output -InputObject $installedApplication
-    }
-}
-
 Function Set-RegistryValue {
     [CmdletBinding()]
     param (
@@ -663,48 +416,25 @@ Function Set-RegistryValue {
         [Parameter()]
         $Value
     )
-    Begin {
-        Write-Log -message "[Set-RegistryValue]: Setting Registry Value: $Name"
+    If (!(Test-Path -Path $Path)) {
+        New-Item -Path $Path -Force | Out-Null
     }
-    Process {
-        # Create the registry Key(s) if necessary.
-        If (!(Test-Path -Path $Path)) {
-            Write-Log -message "[Set-RegistryValue]: Creating Registry Key: $Path"
-            New-Item -Path $Path -Force | Out-Null
+    $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
+    If ($RemoteValue) {
+        $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name
+        If ($Value -ne $CurrentValue) {
+            Write-Log -message "Registry update: $Name = $Value (was: $CurrentValue)"
+            Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
         }
-        # Check for existing registry setting
-        $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
-        If ($RemoteValue) {
-            # Get current Value
-            $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name
-            Write-Log -message "[Set-RegistryValue]: Current Value of $($Path)\$($Name) : $CurrentValue"
-            If ($Value -ne $CurrentValue) {
-                Write-Log -message "[Set-RegistryValue]: Setting Value of $($Path)\$($Name) : $Value"
-                Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
-            }
-            Else {
-                Write-Log -message "[Set-RegistryValue]: Value of $($Path)\$($Name) is already set to $Value"
-            }           
-        }
-        Else {
-            Write-Log -message "[Set-RegistryValue]: Setting Value of $($Path)\$($Name) : $Value"
-            New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
-        }
-        Start-Sleep -Milliseconds 500
     }
-    End {
+    Else {
+        Write-Log -message "Registry create: $Name = $Value"
+        New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
     }
+    Start-Sleep -Milliseconds 500
 }
 
 function Get-AgentInstallersFromFallbackUrl {
-    <#
-    .SYNOPSIS
-    Extract agent MSI installers from configuration.zip fallback package
-    
-    .DESCRIPTION
-    Downloads and extracts configuration.zip, locates the DeployAgent.zip within it,
-    extracts that, and returns paths to the RDAgent.msi and RDAgentBootLoader.msi files.
-    #>
     param (
         [Parameter(Mandatory = $true)]
         [string]$FallbackUrl,
@@ -714,16 +444,14 @@ function Get-AgentInstallersFromFallbackUrl {
     )
     
     try {
-        Write-Log -Message "Attempting to extract agent installers from fallback URL: $FallbackUrl"
+        Write-Log -Message "Extracting agent installers from fallback URL: $FallbackUrl"
         
         # Create fallback extraction location
         $FallbackExtractPath = Join-Path -Path $DownloadFolder -ChildPath 'FallbackExtract'
         New-Item -Path $FallbackExtractPath -ItemType Directory -Force | Out-Null
         
-        # Download configuration.zip
+        # Download and extract configuration.zip
         $ConfigZipPath = Join-Path -Path $FallbackExtractPath -ChildPath 'configuration.zip'
-        Write-Log -Message "Downloading configuration.zip from: $FallbackUrl"
-        
         $Success = Get-InstallerFromUrl -Url $FallbackUrl -DestinationPath $ConfigZipPath -DisplayName 'Configuration Package'
         
         if (-not $Success) {
@@ -731,9 +459,7 @@ function Get-AgentInstallersFromFallbackUrl {
             return $null
         }
         
-        # Extract configuration.zip
         $ConfigExtractPath = Join-Path -Path $FallbackExtractPath -ChildPath 'ConfigExtracted'
-        Write-Log -Message "Extracting configuration.zip to: $ConfigExtractPath"
         Expand-Archive -Path $ConfigZipPath -DestinationPath $ConfigExtractPath -Force
         
         # Look for DeployAgent.zip inside the extracted configuration
@@ -744,11 +470,7 @@ function Get-AgentInstallersFromFallbackUrl {
             return $null
         }
         
-        Write-Log -Message "Found DeployAgent.zip at: $($DeployAgentZip.FullName)"
-        
-        # Extract DeployAgent.zip
         $DeployAgentExtractPath = Join-Path -Path $FallbackExtractPath -ChildPath 'DeployAgent'
-        Write-Log -Message "Extracting DeployAgent.zip to: $DeployAgentExtractPath"
         Expand-Archive -Path $DeployAgentZip.FullName -DestinationPath $DeployAgentExtractPath -Force
         
         # Locate the MSI files
@@ -765,17 +487,12 @@ function Get-AgentInstallersFromFallbackUrl {
             return $null
         }
         
-        Write-Log -Message "Found RDAgentBootLoader MSI: $($BootLoaderMsi.FullName)"
-        Write-Log -Message "Found RDAgent MSI: $($AgentMsi.FullName)"
-        
         # Copy MSIs to download folder for installation
         $BootLoaderDestination = Join-Path -Path $DownloadFolder -ChildPath 'RDAgentBootLoader.msi'
         $AgentDestination = Join-Path -Path $DownloadFolder -ChildPath 'RDAgent.msi'
         
         Copy-Item -Path $BootLoaderMsi.FullName -Destination $BootLoaderDestination -Force
         Copy-Item -Path $AgentMsi.FullName -Destination $AgentDestination -Force
-        
-        Write-Log -Message "Copied agent installers to download folder"
         
         # Clean up extraction folder
         try {
@@ -834,17 +551,8 @@ try {
     Write-Log -Message 'AVD Session Host Initialization Starting'
     Write-Log -Message '========================================='
     
-    # Log parameters (excluding sensitive data)
-    Write-Log -Message "Script Parameters:"
-    Write-Log -Message "  AADJoin: $AADJoin (Converted: $AADJoinBool)"
-    Write-Log -Message "  MdmId: $(if (-not [string]::IsNullOrEmpty($MdmId)) { $MdmId } else { '(not set)' })"
-    Write-Log -Message "  AgentUrl: $(if ($AgentUrl) { $AgentUrl } else { '(not provided)' })"
-    Write-Log -Message "  AgentBootLoaderUrl: $AgentBootLoaderUrl"   
-    Write-Log -Message "  TimeZone: $TimeZone"
-    Write-Log -Message "  ConfigureFSLogix: $ConfigureFSLogix"
-    Write-Log -Message "  DisableUpdates: $DisableUpdates"
-    Write-Log -Message "  AmdVmSize: $AmdVmSize"
-    Write-Log -Message "  NvidiaVmSize: $NvidiaVmSize"
+    Write-Log -Message "TimeZone=$TimeZone | ConfigureFSLogix=$ConfigureFSLogix | DisableUpdates=$DisableUpdates | AmdVmSize=$AmdVmSize | NvidiaVmSize=$NvidiaVmSize"
+    Write-Log -Message "AADJoin=$AADJoin | AgentBootLoaderUrl=$AgentBootLoaderUrl$(if ($AgentUrl) { " | AgentUrl=$AgentUrl" })$(if ($MdmId) { " | MdmId=$MdmId" })"
     
     #region Phase 1: Session Host Configuration
     
@@ -854,12 +562,10 @@ try {
     Write-Log -Message '========================================='
     
     # Configure Time Zone
-    Write-Log -Message "Configuring Time Zone to: $TimeZone"
     Set-TimeZone -Id "$TimeZone"
-    Write-Log -Message "Time Zone configured successfully"
+    Write-Log -Message "Time Zone set to: $TimeZone"
     
     # Initialize registry settings array
-    Write-Log -Message "Building Array of Registry Settings"
     $RegSettings = New-Object System.Collections.ArrayList
     
     # Convert boolean parameters
@@ -875,7 +581,7 @@ try {
         # Set the OneDrive Update Ring to Deferred
         $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive'; Name = 'GPOSetUpdateRing'; PropertyType = 'DWORD'; Value = 0 })
         
-        If (Get-InstalledApplication -Name 'Microsoft 365 Apps') {
+        If (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match 'Microsoft 365 Apps' } | Select-Object -First 1) {
             Write-Log -Message "Microsoft 365 Apps detected, disabling Office updates"
             $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate'; Name = 'hideupdatenotifications'; PropertyType = 'DWORD'; Value = 1 })
             $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate'; Name = 'hideenabledisableupdates'; PropertyType = 'DWORD'; Value = 1 })
@@ -935,7 +641,7 @@ try {
             Write-Log -message "SizeInMBs not specified. Defaulting to: $SizeInMBsInt"
         }
         
-        $AzCLIInstalled = Get-InstalledApplication -Name 'Azure CLI'
+        $AzCLIInstalled = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match 'Azure CLI' } | Select-Object -First 1
         $TeamsInstalled = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq 'MSTeams' }
         
         # Create Array Lists for storage paths
@@ -962,47 +668,39 @@ try {
                 Write-Log -message "Processing Local Storage Accounts"
                 For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {
                     $SAFQDN = "$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix"
-                    Write-Log -message "LocalStorageAccountFQDN: '$SAFQDN'"
+                    Write-Log -message "Local storage [$i]: $SAFQDN"
                     
                     If ($LocalStorageAccountKeysArray.Count -gt 0 -and $LocalStorageAccountKeysArray[$i]) {
-                        Write-Log -message "Adding Local Storage Account Key for '$SAFQDN' to Credential Manager"
+                        Write-Log -message "Adding storage key for '$SAFQDN' to Credential Manager"
                         Start-Process -FilePath 'cmdkey.exe' -ArgumentList "/add:$SAFQDN /user:localhost\$($LocalStorageAccountNamesArray[$i]) /pass:$($LocalStorageAccountKeysArray[$i])" -NoNewWindow -Wait
                     }
                     
                     If ($OfficeShareName) {
                         $LocalOfficeContainerPaths.Add("\\$SAFQDN\$OfficeShareName") | Out-Null
-                        Write-Log -message "LocalOfficeContainerPath: '\\$($SAFQDN)\$($OfficeShareName)'"                
                         $LocalCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
-                        Write-Log -message "LocalCloudCacheOfficeContainerPath: 'type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)'"
                     }
                     $LocalProfileContainerPaths.Add("\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
-                    Write-Log -message "LocalProfileContainerPath: \\$($SAFQDN)\$($ProfileShareName)"
                     $LocalCloudCacheProfileContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
-                    Write-Log -message "LocalCloudCacheProfileContainerPath: 'type=smb,connectionString=\\$($SAFQDN)\$($ProfileShareName)'"
                 }
                 
                 # Process Remote Storage Accounts
                 If ($RemoteStorageAccountNamesArray.Count -gt 0) {
-                    Write-Log Info "Processing Remote Storage Accounts"
+                    Write-Log -message "Processing Remote Storage Accounts"
                     For ($i = 0; $i -lt $RemoteStorageAccountNamesArray.Count; $i++) {
                         $SAFQDN = "$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix"
-                        Write-Log -message "RemoteStorageAccountFQDN: '$SAFQDN'"
+                        Write-Log -message "Remote storage [$i]: $SAFQDN"
                         
                         If ($RemoteStorageAccountKeysArray.Count -gt 0 -and $RemoteStorageAccountKeysArray[$i]) {
-                            Write-Log -message "Adding Remote Storage Account Key for '$SAFQDN' to Credential Manager"
+                            Write-Log -message "Adding storage key for '$SAFQDN' to Credential Manager"
                             Start-Process -FilePath 'cmdkey.exe' -ArgumentList "/add:$($SAFQDN) /user:localhost\$($RemoteStorageAccountNamesArray[$i]) /pass:$($RemoteStorageAccountKeysArray[$i])" -NoNewWindow -Wait
                         }
                         
                         If ($OfficeShareName) {
                             $RemoteOfficeContainerPaths.Add("\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
-                            Write-Log -message "RemoteOfficeContainerPath: '\\$($SAFQDN)\$($OfficeShareName)'"
                             $RemoteCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
-                            Write-Log -message "RemoteCloudCacheOfficeContainerPath: 'type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)"
                         }
                         $RemoteProfileContainerPaths.Add("\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
-                        Write-Log -message "RemoteProfileContainerPath: '\\$($SAFQDN)\$($ProfileShareName)'"
                         $RemoteCloudCacheProfileContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
-                        Write-Log -message "RemoteCloudCacheProfileContainerPath: 'type=smb,connectionString=\\$($SAFQDN)\$($ProfileShareName)'"
                     }
                 }
             }
@@ -1011,38 +709,29 @@ try {
                 [array]$LocalNetAppServersArray = ConvertFrom-JsonString -JsonString $LocalNetAppServers -Name 'LocalNetAppServers'
                 [array]$RemoteNetAppServersArray = ConvertFrom-JsonString -JsonString $RemoteNetAppServers -Name 'RemoteNetAppServers'
                 
-                Write-Log -message "Processing Local Azure NetApp Servers"        
+                Write-Log -message "Local NetApp: $($LocalNetAppServersArray[0])"
                 $LocalProfileContainerPaths.Add("\\$($LocalNetAppServersArray[0])\$($ProfileShareName)") | Out-Null
-                Write-Log -message "LocalProfileContainerPath: '\\$($LocalNetAppServersArray[0])\$($ProfileShareName)'"
                 $LocalCloudCacheProfileContainerPaths.Add("type=smb,connectionString=\\$($LocalNetAppServersArray[0])\$($ProfileShareName)") | Out-Null
-                Write-Log -message "LocalCloudCacheProfileContainerPath: 'type=smb,connectionString=\\$($LocalNetAppServersArray[0])\$($ProfileShareName)'"
                 
                 If ($LocalNetAppServersArray.Length -gt 1 -and $OfficeShareName) {            
                     $LocalOfficeContainerPaths.Add("\\$($LocalNetAppServersArray[1])\$($OfficeShareName)") | Out-Null
-                    Write-Log -message "LocalOfficeContainerPath: \\$($LocalnetAppServersArray[1])\$($OfficeShareName)"
                     $LocalCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($LocalNetAppServersArray[1])\$($OfficeShareName)") | Out-Null
-                    Write-Log -message "LocalCloudCacheOfficeContainerPath: 'type=smb,connectionString=\\$($LocalNetAppServersArray[1])\$($OfficeShareName)'"
                 }
                 
                 If ($RemoteNetAppServersArray.Count -gt 0) {
-                    Write-Log -message "Processing Remote Azure NetApp Servers"
+                    Write-Log -message "Remote NetApp: $($RemoteNetAppServersArray[0])"
                     $RemoteProfileContainerPaths.Add("\\$($RemoteNetAppServersArray[0])\$($ProfileShareName)") | Out-Null
-                    Write-Log -message "RemoteProfileContainerPath: '\\$($RemoteNetAppServersArray[0])\$($ProfileShareName)'"
                     $RemoteCloudCacheProfileContainerPaths.Add("type=smb,connectionString=\\$($RemoteNetAppServersArray[0])\$($ProfileShareName)") | Out-Null
-                    Write-Log -message "RemoteCloudCacheProfileContainerPath: 'type=smb,connectionString=\\$($RemoteNetAppServersArray[0])\$($ProfileShareName)"
                     
                     If ($RemoteNetAppServersArray.Length -gt 1 -and $OfficeShareName) {
                         $RemoteOfficeContainerPaths.Add("\\$($RemoteNetAppServersArray[1])\$($OfficeShareName)") | Out-Null
-                        Write-Log -message "RemoteOfficeContainerPath: '\\$($RemoteNetAppServersArray[1])\$($OfficeShareName)'"
                         $RemoteCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($RemoteNetAppServersArray[1])\$($OfficeShareName)") | Out-Null
-                        Write-Log -message "RemoteCloudCacheOfficeContainerPath: 'type=smb,connectionString=\\$($RemoteNetAppServersArray[1])\$($OfficeShareName)'"
                     }        
                 }
             }
         }
         
         # Add Common FSLogix Registry Settings
-        Write-Log -message "Adding Common FSLogix Settings"
         $RegSettings.Add([PSCustomObject]@{ Name = 'CleanupInvalidSessions'; Path = 'HKLM:\SOFTWARE\FSLogix\Apps'; PropertyType = 'DWord'; Value = 1 })
         $RegSettings.Add([PSCustomObject]@{ Name = 'Enabled'; Path = 'HKLM:\SOFTWARE\Fslogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
         $RegSettings.Add([PSCustomObject]@{ Name = 'DeleteLocalProfileWhenVHDShouldApply'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
@@ -1055,18 +744,15 @@ try {
         $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'String'; Value = 'VHDX' })
         
         If ($LocalStorageAccountKeysArray.Count -gt 0) {
-            Write-Log -message "Adding AccessNetworkAsComputerObject for cloud only identities."
             $RegSettings.Add([PSCustomObject]@{Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
         }
         
         if ($CloudCacheBool -eq $True) {
-            Write-Log -message "Adding Cloud Cache Settings"
             $RegSettings.Add([PSCustomObject]@{ Name = 'ClearCacheOnLogoff'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
         }
         
         # Office Container Settings
         If ($LocalOfficeContainerPaths.Count -gt 0) {
-            Write-Log -message "Adding Office Container Settings"    
             $RegSettings.Add([PSCustomObject]@{ Name = 'Enabled'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 1 })   
             $RegSettings.Add([PSCustomObject]@{ Name = 'FlipFlopProfileDirectoryName'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 1 })
             $RegSettings.Add([PSCustomObject]@{ Name = 'LockedRetryCount'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 3 })
@@ -1079,12 +765,10 @@ try {
             $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'String'; Value = 'VHDX' })
             
             If ($LocalStorageAccountKeysArray.Count -gt 0) {
-                Write-Log -message "Adding AccessNetworkAsComputerObject for cloud only identities (Office Containers)"
                 $RegSettings.Add([PSCustomObject]@{ Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 1 })
             }
             
             If ($CloudCacheBool -eq $True) {
-                Write-Log -message "Adding Cloud Cache Settings for Office Containers"
                 $RegSettings.Add([PSCustomObject]@{ Name = 'ClearCacheOnLogoff'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 1 })
             }   
         }
@@ -1099,15 +783,11 @@ try {
                 Write-Log -message "Getting SID for $($OSSGroupsArray[$i])"        
                 $OSSGroupSID = Convert-GroupToSID -DomainName $DomainName -GroupName $OSSGroupsArray[$i]
                 [string]$LocalProfileContainerPath = $LocalProfileContainerPaths[$i]
-                Write-Log -message "LocalProfileContainerPath: '$LocalProfileContainerPath'"
                 [string]$LocalCloudCacheProfileContainerPath = $LocalCloudCacheProfileContainerPaths[$i]
-                Write-Log -message "LocalCloudCacheProfileContainerPath: '$LocalCloudCacheProfileContainerPath'"
 
                 If ($RemoteStorageAccountNamesArray) {
                     [string]$RemoteProfileContainerPath = $RemoteProfileContainerPaths[$i]
-                    Write-Log -message "RemoteProfileContainerPath: '$RemoteProfileContainerPath'"
                     [string]$RemoteCloudCacheProfileContainerPath = $RemoteCloudCacheProfileContainerPaths[$i]
-                    Write-Log -message "RemoteCloudCacheProfileContainerPath: '$RemoteCloudCacheProfileContainerPath'"
                     [array]$ProfileContainerPathsForGroup = @($LocalProfileContainerPath, $RemoteProfileContainerPath)
                     [array]$CloudCacheProfileContainerPathsForGroup = @($LocalCloudCacheProfileContainerPath, $RemoteCloudCacheProfileContainerPath)
                 }
@@ -1127,15 +807,11 @@ try {
 
                 If ($LocalOfficeContainerPaths.Count -gt 0) {
                     [string]$LocalOfficeContainerPath = $LocalOfficeContainerPaths[$i]
-                    Write-Log -message "LocalOfficeContainerPath: '$LocalOfficeContainerPath'"
                     [string]$LocalCloudCacheOfficeContainerPath = $LocalCloudCacheOfficeContainerPaths[$i]
-                    Write-Log -message "LocalCloudCacheOfficeContainerPath: '$LocalCloudCacheOfficeContainerPath'"
                     
                     If ($RemoteStorageAccountNamesArray) {
                         [string]$RemoteOfficeContainerPath = $RemoteOfficeContainerPaths[$i]
-                        Write-Log -message "RemoteOfficeContainerPath: '$RemoteOfficeContainerPath'"
                         [string]$RemoteCloudCacheOfficeContainerPath = $RemoteCloudCacheOfficeContainerPaths[$i]
-                        Write-Log -message "RemoteCloudCacheOfficeContainerPath: '$RemoteCloudCacheOfficeContainerPath'"
                         [array]$OfficeContainerPathsForGroup = @($LocalOfficeContainerPath, $RemoteOfficeContainerPath)
                         [array]$CloudCacheOfficeContainerPathsForGroup = @($LocalCloudCacheOfficeContainerPath, $RemoteCloudCacheOfficeContainerPath)
                     }
@@ -1224,8 +900,6 @@ try {
         }
 
         # Windows Defender Exclusions for FSLogix
-        Write-Log -message "Adding Windows Defender Exclusions for FSLogix"
-
         $LocalPathExclusions = @(
             "$env:ProgramData\FSLogix",
             "$env:ProgramData\FSLogix\Cache",
@@ -1255,19 +929,13 @@ try {
         )
 
         Try {
-            Write-Log -message "Adding path exclusions using Add-MpPreference"
             ForEach ($Path in $PathExclusions) {
-                Write-Log -message "Adding path exclusion: $Path"
                 Add-MpPreference -ExclusionPath $Path -ErrorAction SilentlyContinue
             }
-            
-            Write-Log -message "Adding process exclusions using Add-MpPreference"
             ForEach ($Process in $ProcessExclusions) {
-                Write-Log -message "Adding process exclusion: $Process"
                 Add-MpPreference -ExclusionProcess $Process -ErrorAction SilentlyContinue
             }
-            
-            Write-Log -message "Windows Defender exclusions added successfully"
+            Write-Log -message "Added $($PathExclusions.Count) Defender path exclusions and $($ProcessExclusions.Count) process exclusions"
         }
         Catch {
             Write-Log -Category Warning -Message "Failed to add Windows Defender exclusions: $_"
@@ -1285,7 +953,6 @@ try {
     }
     
     # Apply all registry settings
-    Write-Log -Message "Applying Registry Settings"
     ForEach ($Setting in $RegSettings) {
         Set-RegistryValue -Name $Setting.Name -Path $Setting.Path -PropertyType $Setting.PropertyType -Value $Setting.Value
     }
@@ -1335,13 +1002,16 @@ try {
     Write-Log -Message 'Phase 2: AVD Agent Installation'
     Write-Log -Message '========================================='
     
-    # Check if this is a Server OS
-    $IsServer = Test-IsServer
+    # Install RDS-RD-Server feature if this is a Server OS
+    $IsServer = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction SilentlyContinue).InstallationType -eq 'Server'
     Write-Log -Message "Operating System Type: $(if ($IsServer) { 'Server' } else { 'Client' })"
-    
-    # Install RDS-RD-Server feature if it's a Server OS
     if ($IsServer) {
-        Install-WindowsFeature -FeatureName 'RDS-RD-Server'
+        $rdFeature = Get-WindowsFeature -Name 'RDS-RD-Server' -ErrorAction SilentlyContinue
+        if ($rdFeature -and -not $rdFeature.Installed) {
+            Write-Log -Message 'Installing RDS-RD-Server feature'
+            Install-WindowsFeature -Name 'RDS-RD-Server' -ErrorAction Stop | Out-Null
+            Write-Log -Message 'RDS-RD-Server feature installed successfully'
+        }
     }
     
     # Check if already registered
@@ -1357,7 +1027,6 @@ try {
     # Create temporary download folder
     $DownloadFolder = Join-Path -Path $env:TEMP -ChildPath "AVDAgentInstall_$(Get-Date -Format 'yyyyMMddHHmmss')"
     New-Item -Path $DownloadFolder -ItemType Directory -Force | Out-Null
-    Write-Log -Message "Download folder: $DownloadFolder"
     
     # Get Agent Installer with endpoint-first, URL-fallback logic
     $AgentInstallerPath = $null
@@ -1463,14 +1132,7 @@ try {
     catch {
         Write-Log -Message "Warning: Failed to clean up download folder: $($_.Exception.Message)"
     }
-    
-    # If AAD Join with Intune enrollment, sleep for 6 minutes to ensure Intune metadata logging
-    if ($AADJoinBool -and -not [string]::IsNullOrEmpty($MdmId)) {
-        Write-Log -Message 'AAD Join with Intune enrollment detected. Sleeping for 6 minutes to ensure Intune metadata logging...'
-        Start-Sleep -Seconds 360
-        Write-Log -Message 'Completed 6 minute wait for Intune metadata logging'
-    }
-    
+      
     # Get and log the session host name
     $SessionHostName = Get-SessionHostName
     Write-Log -Message "Successfully registered session host: $SessionHostName"

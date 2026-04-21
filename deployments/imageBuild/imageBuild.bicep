@@ -310,7 +310,8 @@ var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes
 #disable-next-line BCP329
 var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location)-5) : location
-var locations = startsWith(cloud, 'us') ? (loadJsonContent('../../.common/data/locations.json')).other : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
+var locationsData = loadJsonContent('../../.common/data/locations.json')
+var locations = startsWith(cloud, 'us') ? locationsData.other : locationsData[environment().name]
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 var downloads = startsWith(cloud, 'usn')
   ? loadJsonContent('../imageManagement/parameters/topsecret.downloads.parameters.json')
@@ -665,7 +666,7 @@ module logsStorageAccount '../sharedModules/resources/storage/storage-account/ma
 
 // * Orchestration VM * //
 
-module orchestrationVm '../sharedModules/resources/compute/virtual-machine/main.bicep' = {
+module orchestrationVm 'modules/orchestrationVm.bicep' = {
   name: '${depPrefix}Orchestration-VM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -673,44 +674,13 @@ module orchestrationVm '../sharedModules/resources/compute/virtual-machine/main.
     name: orchestrationVmName
     adminPassword: adminPw
     adminUsername: adminUserName
-    diskControllerType: vmDiskControllerType
+    enableAcceleratedNetworking: vmAcceleratedNetworking
     encryptionAtHost: encryptionAtHost
-    imageReference: {
-      publisher: 'MicrosoftWindowsServer'
-      offer: 'WindowsServer'
-      sku: '2019-datacenter-core-g2'
-      version: 'latest'
-    }
-    nicConfigurations: [
-      {
-        deleteOption: 'Delete'
-        enableAcceleratedNetworking: vmAcceleratedNetworking
-        ipConfigurations: [
-          {
-            name: 'ipconfig01'
-            subnetResourceId: subnetResourceId
-          }
-        ]
-        nicSuffix: '-nic-01'
-      }
-    ]
-    osDisk: {
-      caching: 'ReadWrite'
-      createOption: 'fromImage'
-      deleteOption: 'Delete'
-      managedDisk: {
-        storageAccountType: 'Standard_LRS'
-      }
-    }
-    osType: 'Windows'
+    subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
-    userAssignedIdentities: empty(userAssignedIdentityResourceId)
-      ? {
-          '${userAssignedIdentity!.outputs.resourceId}': {}
-        }
-      : {
-          '${userAssignedIdentityResourceId}': {}
-        }
+    userAssignedIdentityResourceId: empty(userAssignedIdentityResourceId)
+      ? userAssignedIdentity!.outputs.resourceId
+      : userAssignedIdentityResourceId
     vmSize: vmSize
   }
   dependsOn: [
