@@ -276,7 +276,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": true,
                                     "options": {
-                                        "text": "Select the check box below to enable Zero Trust and select the storage account, blob container, and user assigned identity that has been assigned the 'Storage Blob Data Reader' role the storage account.<br/><br/>The User Assigned Identity will be assigned the Contributor and Storage Blob Data Contributor roles on the Build Resource Group in order to support logging and deployment cleanup."
+                                        "text": "Select the check box below to enable Zero Trust and select the storage account, blob container, and user assigned identity that has been assigned the 'Storage Blob Data Reader' role the storage account. The User Assigned Identity will be assigned the Contributor and Storage Blob Data Contributor roles on the Build Resource Group in order to support logging and deployment cleanup."
                                     }
                                 },
                                 {
@@ -301,7 +301,7 @@
                                     "multiLine": true,
                                     "toolTip": "Select the storage account containing the image customization artifacts (i.e., installers, scripts).",
                                     "constraints": {
-                                        "allowedValues": "[map(steps('prereqs').storage.storageAccountsApi.value, (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"<b>Location</b>: ', sa.location, ' <b>Resource Group</b>: ', first(skip(split(sa.id, '/'), 4)), '\",\"value\":{\"id\":\"', sa.id, '\",\"blobEndpoint\":\"', sa.properties.primaryEndpoints.blob, '\"}}')))]",
+                                        "allowedValues": "[map(steps('prereqs').storage.storageAccountsApi.value, (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Location: ', sa.location, ' Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\",\"value\":{\"id\":\"', sa.id, '\",\"blobEndpoint\":\"', sa.properties.primaryEndpoints.blob, '\"}}')))]",
                                         "required": true
                                     },
                                     "visible": "[steps('prereqs').storage.enableZeroTrustStorage]"
@@ -527,7 +527,7 @@
                             "visible": "[and(steps('prereqs').storage.enableZeroTrustStorage, equals(steps('imageCustomizations').downloadLatestMicrosoftContent, false))]",
                             "options": {
                                 "style": "Warning",
-                                "text": "This page of the wizard allows you to add image customizations by downloading blobs from the storage account selected on the <b>Prerequisites</b> page and performing the defined actions. The blobs for the predefined installers listed below (i.e., FSLogix, Office, OneDrive, Teams, Virtual Desktop Optimization Tool) must be present in the storage account. The easiest way to upload them to the storage account is through the Deploy-ImageManagementResources script."
+                                "text": "This page of the wizard allows you to add image customizations by downloading blobs from the storage account selected on the 'Prerequisites' page and performing the defined actions. The blobs for the predefined installers listed below (i.e., FSLogix, Office, OneDrive, Teams, Virtual Desktop Optimization Tool) must be present in the storage account. The easiest way to upload them to the storage account is through the Deploy-ImageManagementResources script."
                             }
                         },
                         {
@@ -1109,7 +1109,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addCustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows:<br><ul><li><b>Name:</b> Enter the name of the customization. Can only contain alphanumerics and no spaces.</li><li><b>Blob Name (or URI):</b> Enter the blob name or full URI. It is case-sensitive.</li><li><b>Arguments:</b> Enter any arguments</li><li><b>Restart:</b> Optionally, select Yes or No to introduce a system restart after this customizer runs.</li></ul>"
+                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization. Can only contain alphanumerics and no spaces,2.  Blob Name (or URI): Enter the case-sensitive blob name or url, optionally, 3. Arguments: Enter any arguments, and finally, Restart: Optionally, select Yes or No to introduce a system restart after this customizer runs."
                                     }
                                 },
                                 {
@@ -1212,7 +1212,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addVDICustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows:<br><ul><li><b>Name:</b> Enter the name of the customization. Can only contain alphanumerics and no spaces.</li><li><b>Blob Name (or URI):</b> Enter the blob name or full URI. It is case-sensitive.</li><li><b>Arguments:</b> Enter any arguments</li></ul>"
+                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization (can only contain alphanumerics and no spaces), 2. Blob Name (or url): enter the case-sensitive blob name or url, optionally 3. Arguments: any arguments."
                                     }
                                 },
                                 {
@@ -1379,7 +1379,7 @@
                                         "allowedValues": "[if(empty(filter(filter(steps('prereqs').network.subnetsApi.value, (snet) => equals(snet.name, last(split(steps('prereqs').network.subnet, '/')))), (snet) => equals(first(map(snet.properties.serviceEndpoints, (se) => se.service)), 'Microsoft.Storage'))), parse('[{\"label\":\"Private Endpoint\",\"value\":\"PrivateEndpoint\"},{\"label\":\"Public Endpoint\",\"value\":\"PublicEndpoint\"}]'), parse('[{\"label\":\"Private Endpoint\",\"value\":\"PrivateEndpoint\"},{\"label\":\"Service Endpoint\",\"value\":\"ServiceEndpoint\"},{\"label\":\"Public Endpoint\",\"value\":\"PublicEndpoint\"}]'))]",
                                         "required": true
                                     },
-                                    "toolTip": "Select the storage account network access configuration below.</br></br>If you select 'Private Endpoint', then you must specify the subnet where it will be attached and select the blob storage private DNS zone where it's record will be created.</br></br>If you select 'Service Endpoint', then the subnet to which the image virtual machine is attached will be configured with a service endpoint for 'Microsoft.Storage' and the storage account will be configured to only allow access from this network.</br></br>If you select 'Public Access', then the storage account will allow access through the public endpoint.",
+                                    "toolTip": "Select the storage account network access configuration below. If you select 'Private Endpoint', then you must specify the subnet where it will be attached and select the blob storage private DNS zone where it's record will be created. If you select 'Service Endpoint', then the subnet to which the image virtual machine is attached will be configured with a service endpoint for 'Microsoft.Storage' and the storage account will be configured to only allow access from this network. If you select 'Public Access', then the storage account will allow access through the public endpoint.",
                                     "visible": "[steps('imageCustomizations').logging.collectLogs]"
                                 },
                                 {
@@ -1712,7 +1712,7 @@
                                     "type": "Microsoft.Common.OptionsGroup",
                                     "label": "Specify Custom Version Information",
                                     "defaultValue": "No",
-                                    "toolTip": "Select 'Yes' to specify the Major.Minor.Patch version information or 'No' to generate the Image Version based on the Date and Time (i.e., yy.MMdd.mmss).",
+                                    "toolTip": "Select 'Yes' to specify the Major.Minor.Patch version information or 'No' to generate the Image Version based on the Date and Time (i.e., yyyy.MMdd.mmss).",
                                     "constraints": {
                                         "allowedValues": [
                                             {
@@ -2036,7 +2036,7 @@
                             "visible": true,
                             "options": {
                                 "style": "Info",
-                                "text": "Available VM sizes are filtered based on your image definition features selected on the <b>Image Distribution Options</b> page. <b>Feature Limitations:</b> Confidential VMs (DC/EC/NCC series) do NOT support Accelerated Networking, NVMe, or hibernation. Hibernation does NOT support NVMe disks and is only supported on B/D/E/NV-series v4/v5 with specific size limits. NVMe requires v6 or newer generation VMs. Incompatible VM sizes are automatically excluded from the list below."
+                                "text": "Available VM sizes are filtered based on your image definition features selected on the 'Image Distribution Options' page. Feature Limitations: Confidential VMs (DC/EC/NCC series) do NOT support Accelerated Networking, NVMe, or hibernation. Hibernation does NOT support NVMe disks and is only supported on B/D/E/NV-series v4/v5 with specific size limits. NVMe requires v6 or newer generation VMs. Incompatible VM sizes are automatically excluded from the list below."
                             }
                         },
                         {

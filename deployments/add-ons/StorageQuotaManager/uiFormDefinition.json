@@ -250,7 +250,7 @@
 									"name": "zeroTrustNetworkingInfoBox",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
-										"text": "<b>Zero Trust Networking for Function Apps and Azure Resources</b><br/><br/>This section configures network-level security controls to enforce Zero Trust Architecture principles for the Session Host Replacer function app and its dependencies (storage accounts, key vaults).<br/><br/><b>Private Endpoints:</b> Enable private connectivity to Platform as a Service (PaaS) resources (Blob Storage, File Storage, and Key Vaults) by assigning private IP addresses from your virtual network. This removes public internet exposure and routes traffic over the Microsoft backbone network.<br/><br/><b>Virtual Network Integration:</b> The function app requires outbound virtual network integration to communicate privately with resources protected by private endpoints. This requires a dedicated subnet with Microsoft.Web/serverFarms delegation.<br/><br/>Both features require Private DNS Zones for proper name resolution. For centralized DNS management in hub-and-spoke topologies, refer to the Private Link hub-and-spoke deployment guidance linked below.",
+										"text": "Zero Trust Networking for Function Apps and Azure Resources: This section configures network-level security controls to enforce Zero Trust Architecture principles for the Session Host Replacer function app and its dependencies (storage accounts, key vaults). Private Endpoints: Enable private connectivity to Platform as a Service (PaaS) resources (Blob Storage, File Storage, and Key Vaults) by assigning private IP addresses from your virtual network. This removes public internet exposure and routes traffic over the Microsoft backbone network. Virtual Network Integration: The function app requires outbound virtual network integration to communicate privately with resources protected by private endpoints. This requires a dedicated subnet with Microsoft.Web/serverFarms delegation. Both features require Private DNS Zones for proper name resolution. For centralized DNS management in hub-and-spoke topologies, refer to the Private Link hub-and-spoke deployment guidance linked below.",
 										"style": "Info",
 										"uri": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options?tabs=azure-portal"
 									}
@@ -278,7 +278,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
 									"options": {
-										"text": "<u>Subnets</u>"
+										"text": "Subnets"
 									}
 								},
 								{
@@ -338,7 +338,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
 									"options": {
-										"text": "<u>Private DNS Zones</u>"
+										"text": "Private DNS Zones"
 									}
 								},
 								{

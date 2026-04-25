@@ -47,23 +47,27 @@
 						},
 						{
 							"name": "deploymentType",
-							"type": "Microsoft.Common.OptionsGroup",
+							"type": "Microsoft.Common.DropDown",
 							"label": "Deployment Mode",
+							"multiLine": true,
 							"defaultValue": "Complete",
-							"toolTip": "Select the deployment type from:<br><ul><li><b>Complete</b>: This solution will deploy a fully functioning Azure Virtual Desktop hostpool along with associated resources depending on the options chosen. All resources and resource groups are named in accordance with Cloud Adoption Framework (CAF) naming standards.</li><br><li><b>Hostpool resources only</b>: The solution will deploy the resources necessary to support a hostpool including the hostpool object, desktop application group, virtual machines, and storage for FSLogix (if selected). You'll have the option to select existing management, monitoring, and control plane resources.</li><br><li><b>Add session hosts to an existing hostpool</b>: The solution will only add session hosts to an existing hostpool allowing you to select existing resources when required to customize your session hosts.</li></ul>",
+							"toolTip": "Select the deployment type",
 							"constraints": {
 								"allowedValues": [
 									{
 										"label": "Complete",
-										"value": "Complete"
+										"value": "Complete",
+										"description": "This solution will deploy a fully functioning Azure Virtual Desktop hostpool along with associated resources depending on the options chosen. All resources and resource groups are named in accordance with Cloud Adoption Framework (CAF) naming standards."
 									},
 									{
 										"label": "Hostpool resources only",
-										"value": "HostpoolOnly"
+										"value": "HostpoolOnly",
+										"description": "The solution will deploy the resources necessary to support a hostpool including the hostpool object, desktop application group, virtual machines, and storage for FSLogix (if selected). You'll have the option to select existing management, monitoring, and control plane resources."
 									},
 									{
 										"label": "Add session hosts to an existing hostpool",
-										"value": "SessionHostsOnly"
+										"value": "SessionHostsOnly",
+										"description": "The solution will only add session hosts to an existing hostpool allowing you to select existing resources when required to customize your session hosts."
 									}
 								]
 							},
@@ -132,7 +136,7 @@
 											"label": "User Personas | Microsoft Learn",
 											"uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/scenarios/azure-virtual-desktop/migrate-assess#user-personas"
 										},
-										"text": "Please provide the naming components below.<br><br>The <b>Persona Identifier</b> is required and represents the user group being served by this host pool. Define separate personas when user groups have different requirements. See the link below for detailed guidance on defining personas."
+										"text": "Please provide the naming components below. The 'Persona Identifier' is required and represents the user group being served by this host pool. Define separate personas when user groups have different requirements. See the link below for detailed guidance on defining personas."
 									}
 								},
 								{
@@ -221,33 +225,39 @@
 					"elements": [
 						{
 							"name": "solution",
-							"type": "Microsoft.Common.OptionsGroup",
+							"type": "Microsoft.Common.DropDown",
+							"multiLine": true,
 							"visible": true,
 							"label": "Identity Provider",
 							"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), 'Active Directory Domain Services (ADDS)', if(equals(steps('basics').hostsRGProps.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'CloudOnly'), 'Entra Kerberos (Cloud Only Identities) (Preview)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services')))))]",
-							"toolTip": "Choose the identity service provider for your users and session hosts. Your choices explained:</br></br><b>Active Directory Domain Services (ADDS)</b>: The users are sourced from ADDS and session hosts will be domain joined.</br></br><b>Entra Domain Services</b>: The users are sourced from Entra ID or ADDS and the session hosts are joined to Entra Domain Services.</br></br><b>Entra ID</b>: The users are sourced from Entra ID and the session hosts will join Entra ID.</br></br><b>Entra Kerberos (hybrid identities)</b>: The Users are sourced from ADDS, but the session hosts will be joined to Entra ID.",
+							"toolTip": "Choose the identity service provider for your users and session hosts.",
 							"constraints": {
 								"required": true,
 								"allowedValues": [
 									{
 										"label": "Active Directory Domain Services (ADDS)",
-										"value": "ActiveDirectoryDomainServices"
+										"value": "ActiveDirectoryDomainServices",
+										"description": "Users are sourced from ADDS and session hosts will be domain joined."
 									},
 									{
 										"label": "Entra Domain Services",
-										"value": "EntraDomainServices"
+										"value": "EntraDomainServices",
+										"description": "Users are sourced from Entra ID or ADDS and the session hosts are joined to Entra Domain Services."
 									},
 									{
 										"label": "Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)",
-										"value": "EntraId"
+										"value": "EntraId",
+										"description": "Users are sourced from Entra ID and the session hosts will join Entra ID. FSLogix will use Storage Account Keys for authentication."
 									},
 									{
 										"label": "Entra Kerberos (Cloud Only Identities) (Preview)",
-										"value": "EntraKerberos-CloudOnly"
+										"value": "EntraKerberos-CloudOnly",
+										"description": "Users are sourced from Entra ID and the session hosts will join Entra ID. FSLogix will use Entra Kerberos for authentication. This option is currently in preview and only available in Azure Commercial."
 									},
 									{
 										"label": "Entra Kerberos (Hybrid Identities)",
-										"value": "EntraKerberos-Hybrid"
+										"value": "EntraKerberos-Hybrid",
+										"description": "Users are sourced from ADDS, but the session hosts will be joined to Entra ID. FSLogix will use Entra Kerberos for authentication."
 									}
 								]
 							}
@@ -257,7 +267,7 @@
 							"type": "Microsoft.Common.InfoBox",
 							"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-CloudOnly'), and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('userProfiles').profileSolution, 'FSLogix'), equals(steps('userProfiles').deployStorage, true)))]",
 							"options": {
-								"text": "<b><span style='color:#c50f1f'>During Preview, enabling authentication to FSLogix storage accounts using Entra Kerberos for Cloud Only Identities is only supported in Azure Commercial.</span></b>",
+								"text": "During Preview, enabling authentication to FSLogix storage accounts using Entra Kerberos for Cloud Only Identities is only supported in Azure Commercial.",
 								"style": "Warning",
 								"uri": "https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune"
 							}
@@ -389,7 +399,7 @@
 									"type": "Microsoft.Common.InfoBox",
 									"visible": "[and(not(contains(steps('identity').solution, 'DomainServices')), equals(steps('identity').credentials.source, 'keyVault'))]",
 									"options": {
-										"text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below:</br><ul><li><b>VirtualMachineAdminUserName</b>: The virtual machine administrator username.</li><li><b>VirtualMachineAdminPassword</b>: The virtual machine administrator password.",
+										"text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below: 1. VirtualMachineAdminUserName: The virtual machine administrator username, and 2. VirtualMachineAdminPassword: The virtual machine administrator password.",
 										"style": "Info"
 									}
 								},
@@ -398,7 +408,7 @@
 									"type": "Microsoft.Common.InfoBox",
 									"visible": "[and(contains(steps('identity').solution, 'DomainServices'), equals(steps('identity').credentials.source, 'keyVault'))]",
 									"options": {
-										"text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below:</br><ul><li><b>DomainJoinUserPrincipalName</b>: The domain join account UserPrincipalName (i.e., domjoin@contoso.local).</li><li><b>DomainJoinUserPassword</b>: The password associated with the domain join user account.</li><li><b>VirtualMachineAdminUserName</b>: The virtual machine administrator username.</li><li><b>VirtualMachineAdminPassword</b>: The virtual machine administrator password.",
+										"text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below: 1. DomainJoinUserPrincipalName: The domain join account UserPrincipalName (i.e., domjoin@contoso.local), 2. DomainJoinUserPassword: The password associated with the domain join user account., 3. VirtualMachineAdminUserName: The virtual machine administrator username., and 4. VirtualMachineAdminPassword: The virtual machine administrator password.",
 										"style": "Info"
 									}
 								},
@@ -537,7 +547,7 @@
 									"visible": "[equals(steps('controlPlane').workspace.createOption, 'new')]",
 									"options": {
 										"style": "Warning",
-										"text": "When you choose create to create a new workspace this solution will overwrite any existing application group references <u>if the workspace already exists</u>. This could cause an outage if existing hostpools and application groups are already registered with this workspace."
+										"text": "When you choose create to create a new workspace this solution will overwrite any existing application group references (if the workspace already exists). This could cause an outage if existing hostpools and application groups are already registered with this workspace."
 									}
 								},
 								{
@@ -1462,7 +1472,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable IPv6",
 									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIPv6)), false, bool(steps('basics').hostsRGProps.tags.vmIPv6))]",
-									"toolTip": "Enables IPv6 support on the network interface. This is an edge case scenario and is not recommended for most deployments.</br></br><b>WARNING:</b> Without specific route table entries configured for IPv6 traffic, outbound communication will not work properly."
+									"toolTip": "Enables IPv6 support on the network interface. This is an edge case scenario and is not recommended for most deployments."
 								}
 							]
 						},
@@ -1683,7 +1693,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": true,
 									"options": {
-										"text": "<ul><li><b>Azure Disk Storage Server-Side Encryption</b> is always enabled and automatically encrypts your data stored on Azure managed disks (OS and data disks) when persisting on the storage clusters.</li></ul>"
+										"text": "Azure Disk Storage Server-Side Encryption is always enabled and automatically encrypts your data stored on Azure managed disks (OS and data disks) when persisting on the storage clusters."
 									}
 								},
 								{
@@ -1691,7 +1701,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": true,
 									"options": {
-										"text": "<ul><li><b>Encryption at host</b> enhances Azure Disk Storage Server-Side Encryption to ensure that all temp disks and disk caches are encrypted at rest and flow encrypted to the Storage clusters.</li></ul>",
+										"text": "Encryption at host enhances Azure Disk Storage Server-Side Encryption to ensure that all temp disks and disk caches are encrypted at rest and flow encrypted to the Storage clusters.",
 										"link": {
 											"label": "Learn more",
 											"uri": "http://go.microsoft.com/fwlink/?LinkId=2133517"
@@ -1721,7 +1731,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[equals(steps('hosts').security.securityType, 'ConfidentialVM')]",
 									"options": {
-										"text": "<ul><li><b>Confidential disk encryption</b> binds disk encryption keys to the virtual machine's TPM and makes the protected disk content accessible only to the VM. The TPM and VM guest state is always encrypted in attested code using keys released by a secure protocol that bypasses the hypervisor and host operating system. Currently only available for the OS disk. Encryption at host may be used for other disks on a Confidential VM in addition to Confidential Disk Encryption.</li></ul>",
+										"text": "Confidential disk encryption binds disk encryption keys to the virtual machine's TPM and makes the protected disk content accessible only to the VM. The TPM and VM guest state is always encrypted in attested code using keys released by a secure protocol that bypasses the hypervisor and host operating system. Currently only available for the OS disk. Encryption at host may be used for other disks on a Confidential VM in addition to Confidential Disk Encryption.",
 										"link": {
 											"label": "Learn more",
 											"uri": "https://learn.microsoft.com/en-us/azure/confidential-computing/confidential-vm-overview#confidential-os-disk-encryption"
@@ -1862,7 +1872,7 @@
 								{
 									"name": "confDiskEncryptionServicePrincipalSelector",
 									"type": "Microsoft.Common.Selector",
-									"label": "Select the <b>Confidential VM Orchestrator</b> Service Principal",
+									"label": "Select the Confidential VM Orchestrator Service Principal",
 									"keyPath": "displayName",
 									"value": "[steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection]",
 									"barColor": "[if(empty(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade), '#FF0000', '#7fba00')]",
@@ -2245,7 +2255,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
 									"options": {
-										"text": "<u>Artifacts Storage</u>"
+										"text": "Artifacts Storage"
 									}
 								},
 								{
@@ -2327,7 +2337,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('hosts').customizations.customizeAgentDownload]",
 									"options": {
-										"text": "<u>AVD Agent Downloads</u>"
+										"text": "AVD Agent Downloads"
 									}
 								},
 								{
@@ -2361,7 +2371,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('hosts').customizations.addCustomScripts]",
 									"options": {
-										"text": "<u>Custom Scripts and Software</u>"
+										"text": "Custom Scripts and Software"
 									}
 								},
 								{
@@ -2479,7 +2489,7 @@
 							"type": "Microsoft.Common.InfoBox",
 							"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('userProfiles').profileSolution, 'FSLogix'), equals(steps('userProfiles').deployStorage, true)))]",
 							"options": {
-								"text": "Enabling authentication to FSLogix storage accounts using Entra Kerberos requires the following post-deployment tasks:<ul><li>Grant admin consent to the new service principal</li><li>If desired, assign least privilege NTFS permissions to the file share</li><li>If using private endpoints, update the new storage account application's manifest to support private endpoint URIs</li><li>Disable multifactor authentication on the storage account</li></ul><br><b><span style='color:#107c10'>Automation Option:</span></b> You can select a User Assigned Identity with the following Microsoft Graph <b>application permissions</b> (not delegated) to automate all tasks except disabling multifactor authentication:<ul><li><b>Application.ReadWrite.All</b></li><li><b>DelegatedPermissionGrant.ReadWrite.All</b></li></ul><br>Disabling multifactor authentication must be completed manually.<br><br>Click anywhere on this infobox for the Github documentation with detailed instructions and PowerShell scripts.",
+								"text": "Enabling authentication to FSLogix storage accounts using Entra Kerberos requires the following post-deployment tasks: 1. Grant admin consent to the new service principal, 2. If desired, assign least privilege NTFS permissions to the file share, 3. If using private endpoints, update the new storage account application's manifest to support private endpoint URIs, 4. Disable multifactor authentication on the storage account. Automation Option: You can select a User Assigned Identity with the following Microsoft Graph application permissions (not delegated) to automate all tasks except disabling multifactor authentication: 1. Application.ReadWrite.All, 2. DelegatedPermissionGrant.ReadWrite.All. Disabling multifactor authentication must be completed manually. Click anywhere on this infobox for the Github documentation with detailed instructions and PowerShell scripts.",
 								"style": "Info",
 								"uri": "https://github.com/Azure/FederalAVD/blob/main/docs/entraKerberosHybrid.md"
 							}
@@ -2489,7 +2499,7 @@
 							"type": "Microsoft.Common.InfoBox",
 							"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-CloudOnly'), and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('userProfiles').profileSolution, 'FSLogix'), equals(steps('userProfiles').deployStorage, true)))]",
 							"options": {
-								"text": "<b><span style='color:#c50f1f'>Reminder: during preview, enabling authentication to FSLogix storage accounts using Entra Kerberos for Cloud Only Identities is only supported in Azure Commercial.</span></b><br><br>Enabling this authentication method requires the following post-deployment tasks:<ul><li>Grant admin consent to the new service principal</li><li>If desired, assign least privilege NTFS permissions to the file share</li><li>If using private endpoints, update the new storage account application's manifest to support private endpoint URIs</li><li>Update the tag in the new storage account application's manifest to support Entra ID group SIDs</li><li>Disable multifactor authentication on the storage account</li></ul><br><b><span style='color:#107c10'>Automation Option:</span></b> You can select a User Assigned Identity with the following Microsoft Graph <b>application permissions</b> (not delegated) to automate all tasks except disabling multifactor authentication:<ul><li><b>Application.ReadWrite.All</b></li><li><b>DelegatedPermissionGrant.ReadWrite.All</b></li></ul><b>Granting Permissions:</b> Click anywhere on this infobox for the Github documentation with detailed instructions and PowerShell scripts.<br><br><b>Important:</b> Disabling multifactor authentication must be completed manually.",
+								"text": "Reminder: during preview, enabling authentication to FSLogix storage accounts using Entra Kerberos for Cloud Only Identities is only supported in Azure Commercial. Enabling this authentication method requires the following post-deployment tasks: 1. Grant admin consent to the new service principal, 2. If desired, assign least privilege NTFS permissions to the file share, 3. If using private endpoints, update the new storage account application's manifest to support private endpoint URIs, 4. Update the tag in the new storage account application's manifest to support Entra ID group SIDs, and 5. Disable multifactor authentication on the storage account. Automation Option: You can select a User Assigned Identity with the following Microsoft Graph application permissions (not delegated) to automate all tasks except disabling multifactor authentication: 1. Application.ReadWrite.All and 2. DelegatedPermissionGrant.ReadWrite.All. Granting Permissions: Click anywhere on this infobox for the Github documentation with detailed instructions and PowerShell scripts. Important: Disabling multifactor authentication must be completed manually.",
 								"style": "Info",
 								"uri": "https://github.com/Azure/FederalAVD/blob/main/docs/entraKerberosCloudOnly.md"
 							}
@@ -2498,14 +2508,14 @@
 							"name": "automateEntraKerberosTasks",
 							"type": "Microsoft.Common.CheckBox",
 							"label": "Select a User Assigned Identity to automate most post-deployment tasks",
-							"toolTip": "If checked, you can select a User Assigned Identity with the following Microsoft Graph permissions to automate all post-deployment tasks except disabling multifactor authentication on the storage account:<br><ul><li>Application.ReadWrite.All</li><li>DelegatedPermissionGrant.ReadWrite.All</li></ul>",
+							"toolTip": "If checked, you can select a User Assigned Identity with the following Microsoft Graph permissions to automate all post-deployment tasks except disabling multifactor authentication on the storage account: 1. Application.ReadWrite.All and 2. DelegatedPermissionGrant.ReadWrite.All",
 							"visible": "[and(contains(steps('identity').solution, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true))]"
 						},
 						{
 							"name": "managedIdentity",
 							"type": "Microsoft.Solutions.ResourceSelector",
 							"label": "User Assigned Identity",
-							"toolTip": "Select an existing User Assigned Identity that has been granted the following Microsoft Graph permissions:<br><ul><li>Application.ReadWrite.All</li><li>DelegatedPermissionGrant.ReadWrite.All</li></ul>",
+							"toolTip": "Select an existing User Assigned Identity that has been granted the following Microsoft Graph permissions: 1. Application.ReadWrite.All and 2. DelegatedPermissionGrant.ReadWrite.All",
 							"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
 							"constraints": {
 								"required": true
@@ -2697,7 +2707,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[equals(steps('userProfiles').deployStorage, true)]",
 									"options": {
-										"text": "<b>NTFS Permissions</b>"
+										"text": "NTFS Permissions"
 									}
 								},
 								{
@@ -2773,7 +2783,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('hosts').configureSessionHosts]",
 									"options": {
-										"text": "<b>Session Host Configuration</b>"
+										"text": "Session Host Configuration"
 									}
 								},
 								{
@@ -2781,7 +2791,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)))]",
 									"options": {
-										"text": "<u>Local NetApp Volume</u>"
+										"text": "Local NetApp Volume"
 									}
 								},
 								{
@@ -2862,7 +2872,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'))]",
 									"options": {
-										"text": "<u>Remote Volume</u>"
+										"text": "Remote Volumes"
 									}
 								},
 								{
@@ -2870,7 +2880,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'))]",
 									"options": {
-										"text": "<u>Optionally</u>, use the drop down boxes below to select a remote NetApp account, capacity pool, and volume(s) to use with Cloud Cache profile containers and office containers."
+										"text": "Optionally, use the drop down boxes below to select a remote NetApp account, capacity pool, and volume(s) to use with Cloud Cache profile containers and office containers."
 									}
 								},
 								{
@@ -2989,7 +2999,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('identity').solution, 'EntraId')), if(contains(steps('identity').solution, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true))]",
 									"options": {
-										"text": "[if(equals(steps('userProfiles').deployStorage, true), '<u>Least Privilege, Sharding, and User Group(s) to Share Assignment(s)</u>', '<u>User Group(s) to Share Assignment(s)</u>')]"
+										"text": "[if(equals(steps('userProfiles').deployStorage, true), 'Least Privilege, Sharding, and User Group(s) to Share Assignment(s)', 'User Group(s) to Share Assignment(s)')]"
 									}
 								},
 								{
@@ -3048,7 +3058,7 @@
 									"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
 									"options": {
 										"style": "Warning",
-										"text": "When using Microsoft Entra Kerberos for hybrid identies and with least privilege NTFS permissions or sharding via permissions, a domain-joined deployment VM is required to configure the NTFS ACLs on the storage account. The following requirements must be met:<ul><li>The deployment VM will be domain-joined in the OU specified below using the account credentials provided</li><li>The deployment VM will be deployed on the same subnet as the session hosts with network line of sight to a domain controller</li></ul>",
+										"text": "When using Microsoft Entra Kerberos for hybrid identies and with least privilege NTFS permissions or sharding via permissions, a domain-joined deployment VM is required to configure the NTFS ACLs on the storage account. The deployment VM will be domain-joined in the OU specified below using the account credentials provided and the deployment VM will be deployed on the same subnet as the session hosts with network line of sight to a domain controller.",
 										"uri": "https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-configure-file-level-permissions"
 									}
 								},
@@ -3176,7 +3186,7 @@
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Domain Join Credential Source",
 									"defaultValue": "Key Vault",
-									"toolTip": "Select 'Manual Entry' to specify the secrets manually or 'Key Vault' to reference secrets from the Key Vault chosen on the <b>Identity</b> pane.<br>This key vault must also contain the following two secrets and values:<br><ul><li><b>DomainJoinUserPrincipalName</b>: The domain join account UserPrincipalName (i.e., domjoin@contoso.local).</li><li><b>DomainJoinUserPassword</b>: The password associated with the domain join user account.</li></ul>",
+									"toolTip": "Select 'Manual Entry' to specify the secrets manually or 'Key Vault' to reference secrets from the Key Vault chosen on the 'Identity' pane. This key vault must also contain the following two secrets and values: 1. DomainJoinUserPrincipalName: The domain join account UserPrincipalName (i.e., domjoin@contoso.local) and 2. DomainJoinUserPassword: The password associated with the domain join user account.",
 									"constraints": {
 										"allowedValues": [
 											{
@@ -3226,7 +3236,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[equals(steps('userProfiles').deployStorage, true)]",
 									"options": {
-										"text": "<u>Encryption Key Management</u>"
+										"text": "Encryption Key Management"
 									}
 								},
 								{
@@ -3281,7 +3291,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('userProfiles').configureSessionHosts, or(not(equals(steps('userProfiles').deployStorage, true)), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')))]",
 									"options": {
-										"text": "<b>Session Host Configuration</b>"
+										"text": "Session Host Configuration"
 									}
 								},
 								{
@@ -3301,7 +3311,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)))]",
 									"options": {
-										"text": "<u>Local Storage Accounts</u>"
+										"text": "Local Storage Accounts"
 									}
 								},
 								{
@@ -3348,7 +3358,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'))]",
 									"options": {
-										"text": "<u>Remote Storage Accounts</u>"
+										"text": "Remote Storage Accounts"
 									}
 								},
 								{
@@ -3356,7 +3366,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('userProfiles').configureSessionHosts, or(equals(steps('userProfiles').azureFiles.shardingOption, 'None'), equals(steps('identity').solution, 'EntraId')), contains(steps('userProfiles').fslogixContainerType, 'CloudCache'))]",
 									"options": {
-										"text": "<u>Optionally</u>, select a remote region (not in the same region as your session hosts) and then a single storage account from the selected region for active/active disaster recovery or high availability of user profiles using FSLogix Cloud Cache."
+										"text": "Optionally, select a remote region (not in the same region as your session hosts) and then a single storage account from the selected region for active/active disaster recovery or high availability of user profiles using FSLogix Cloud Cache."
 									}
 								},
 								{
@@ -3364,7 +3374,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(equals(steps('identity').solution, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None')))]",
 									"options": {
-										"text": "<u>Optionally</u>, select a remote region (not in the same region as your session hosts) and then the same number of storage accounts as the groups selected/provided above in the selected remote region. The session hosts will be configured to also store user profiles on these remote storage accounts using FSLogix Cloud Cache."
+										"text": "Optionally, select a remote region (not in the same region as your session hosts) and then the same number of storage accounts as the groups selected/provided above in the selected remote region. The session hosts will be configured to also store user profiles on these remote storage accounts using FSLogix Cloud Cache."
 									}
 								},
 								{
@@ -3551,7 +3561,7 @@
 								{
 									"name": "avdServicePrincipalSelector",
 									"type": "Microsoft.Common.Selector",
-									"label": "Select the <b>Azure Virtual Desktop</b> Microsoft Application",
+									"label": "Select the 'Azure Virtual Desktop' Microsoft Application",
 									"keyPath": "displayName",
 									"value": "[steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection]",
 									"barColor": "[if(empty(steps('management').servicePrincipals.avdServicePrincipalPickerBlade), '#FF0000', '#7fba00')]",
@@ -3574,7 +3584,7 @@
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
 										"style": "Info",
-										"text": "[concat('Based on your configuration choices, a deployment virtual machine is required to perform steps that cannot be completed via ARM templates. This virtual machine will be automatically deleted from Azure once the deployment is complete.', if(contains(steps('identity').solution, 'DomainServices'), '<br><br>Since you selected a Active Directory Domain Services or Entra Kerberos Domain Service as your identity solution and deployed FSLogix profile storage, the deployment virtual machine will also be joined to the domain and the same OU as the session hosts. You should remove the computer account for this VM once the deployment completes.', if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), '<br><br>Since you selected Entra Kerberos with Hybrid Identities as your identity solution, deployed FSLogix profile storage, and chose to either configure least privilege NTFS permissions or shard the storage, the deployment virtual machine will also be joined to the domain in the OU specified. The computer object for this virtual maachine should be deleted from the domain when the deployment is complete.','')))]"
+										"text": "[concat('Based on your configuration choices, a deployment virtual machine is required to perform steps that cannot be completed via ARM templates. This virtual machine will be automatically deleted from Azure once the deployment is complete.', if(contains(steps('identity').solution, 'DomainServices'), 'Since you selected a Active Directory Domain Services or Entra Kerberos Domain Service as your identity solution and deployed FSLogix profile storage, the deployment virtual machine will also be joined to the domain and the same OU as the session hosts. You should remove the computer account for this VM once the deployment completes.', if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), 'Since you selected Entra Kerberos with Hybrid Identities as your identity solution, deployed FSLogix profile storage, and chose to either configure least privilege NTFS permissions or shard the storage, the deployment virtual machine will also be joined to the domain in the OU specified. The computer object for this virtual maachine should be deleted from the domain when the deployment is complete.','')))]"
 									},
 									"visible": true
 								},
@@ -3930,7 +3940,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
 									"options": {
-										"text": "<u>Subnets</u>"
+										"text": "Subnets"
 									}
 								},
 								{
@@ -3938,7 +3948,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('management').keyVaults.deploySecretsKeyVault, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
 									"options": {
-										"text": "<i>Shared Management Resources (i.e., Key Vaults, Function Apps, etc.)</i>"
+										"text": "Shared Management Resources (i.e., Key Vaults, Function Apps, etc.)"
 									}
 								},
 								{
@@ -3947,7 +3957,7 @@
 									"label": "Virtual Network",
 									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
 									"multiLine": true,
-									"toolTip": "Select the virtual network for the key vault and/or function app private endpoints.<br><br><b>Important:</b> The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
+									"toolTip": "Select the virtual network for the key vault and/or function app private endpoints. Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
@@ -3979,7 +3989,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
 									"options": {
-										"text": "<i>Hostpool Resources (Storage or Recovery Services Vaults)</i>"
+										"text": "Hostpool Resources (Storage or Recovery Services Vaults)"
 									}
 								},
 								{
@@ -3988,7 +3998,7 @@
 									"label": "Virtual Network",
 									"multiLine": true,
 									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
-									"toolTip": "Select the virtual network for the storage account and/or recovery services vault private endpoints.<br><br><b>Important:</b> The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
+									"toolTip": "Select the virtual network for the storage account and/or recovery services vault private endpoints. Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
@@ -4020,7 +4030,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
 									"options": {
-										"text": "<u>Private DNS Zones</u>"
+										"text": "Private DNS Zones"
 									}
 								},
 								{
@@ -4223,7 +4233,7 @@
 											"label": "Microsoft Learn | AVD Private Link Overview",
 											"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/private-link-overview"
 										},
-										"text": "When enabling Private Link with Azure Virtual Desktop, you have the following supported scenarios to connect to Azure Virtual Desktop. Choose the configuration below to meet your requirements. <ol><li>All parts of the connection - initial feed discovery, feed download, and remote session connections - use private routes.</li><br/><li>Feed download and remote session connections use private routes, but initial feed discovery uses public routes.</li><br/><li>Only remote session connections use private routes, but initial feed discovery and feed download use public routes.</li></ol>"
+										"text": "When enabling Private Link with Azure Virtual Desktop, you have multiple supported scenarios to connect to Azure Virtual Desktop. Choose the option below to meet your requirements."
 									}
 								},
 								{
@@ -4243,7 +4253,7 @@
 									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'HostpoolOnly'), equals(steps('controlPlane').workspace.createOption, 'update')), 'Only remote session connections use private routes', 'Feed download and remote session connections use private routes')]",
 									"toolTip": "Chooose the AVD Private Link Configuration.",
 									"constraints": {
-										"allowedValues": "[if(or(equals(steps('basics').deploymentType, 'HostpoolOnly'), equals(steps('controlPlane').workspace.createOption, 'update')), parse('[{\"label\":\"Only remote session connections use private routes\",\"description\":\"Hostpool private endpoints are required\",\"value\":\"Hostpool\"}]'), if(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed'))), parse('[{\"label\":\"All parts of the connection use private routes\",\"description\":\"Global feed, Workspace feed, and hostpool private endpoints are required\",\"value\":\"All\"},{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Workspace feed and Hostpool private endpoints are required\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Hostpool private endpoints are required\",\"value\":\"Hostpool\"}]'), parse('[{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Workspace feed and Hostpool private endpoints are required\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Hostpool private endpoints are required\",\"value\":\"Hostpool\"}]')))]",
+										"allowedValues": "[if(or(equals(steps('basics').deploymentType, 'HostpoolOnly'), equals(steps('controlPlane').workspace.createOption, 'update')), parse('[{\"label\":\"Only remote session connections use private routes\",\"description\":\"Only remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), if(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed'))), parse('[{\"label\":\"All parts of the connection use private routes\",\"description\":\"Initial feed discovery, feed download, and remote session connections use private routes.\",\"value\":\"All\"},{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), parse('[{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]')))]",
 										"required": true
 									},
 									"visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]"
@@ -4253,7 +4263,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]",
 									"options": {
-										"text": "<u>Remote Session Connections</u>"
+										"text": "Remote Session Connections"
 									}
 								},
 								{
@@ -4333,7 +4343,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool')))]",
 									"options": {
-										"text": "<u>Workspace Feed</u>"
+										"text": "Workspace Feed"
 									}
 								},
 								{
@@ -4408,7 +4418,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'))]",
 									"options": {
-										"text": "<u>Global Feed</u>"
+										"text": "Global Feed"
 									}
 								},
 								{
@@ -4458,7 +4468,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]",
 									"options": {
-										"text": "<u>Private DNS Zones</u>"
+										"text": "Private DNS Zones"
 									}
 								},
 								{
