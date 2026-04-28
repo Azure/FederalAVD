@@ -643,13 +643,15 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
   }
 ]
 
-module updateOSDiskNetworkAccess 'updateOSDisk.bicep' = [
+module updateOSDiskNetworkAccess '../../../../../.common/bicepModules/custom/disableOSDiskPublicAccess/getOSDisk.bicep' = [
   for i in range(0, sessionHostCount): {
     name: '${virtualMachine[i].name}-disable-osDisk-PublicAccess-${deploymentSuffix}'
     params: {
       diskAccessId: diskAccessId
       diskName: virtualMachine[i].properties.storageProfile.osDisk.name
       location: location
+      deploymentSuffix: deploymentSuffix
+      vmName: virtualMachine[i].name
     }
   }
 ]

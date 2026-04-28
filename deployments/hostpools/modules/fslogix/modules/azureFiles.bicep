@@ -28,6 +28,7 @@ param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
 param recoveryServices bool
 param recoveryServicesVaultName string
+param recoveryServicesVaultStorageRedundancy string
 param deploymentResourceGroupName string
 param resourceGroupStorage string
 param shardingOptions string
@@ -54,16 +55,12 @@ var privateEndpointVnetId = length(privateEndpointVnetName) < 37
   ? privateEndpointVnetName
   : uniqueString(privateEndpointVnetName)
 
-var smbMultiChannel = {
-  multichannel: {
-    enabled: true
-  }
-}
-var smbSettings = {
+var smbSettingsValues = {
   versions: 'SMB3.0;SMB3.1.1;'
   authenticationMethods: 'NTLMv2;Kerberos;'
   kerberosTicketEncryption: kerberosEncryptionType == 'RC4' ? 'RC4-HMAC;' : 'AES-256;'
   channelEncryption: 'AES-128-CCM;AES-128-GCM;AES-256-GCM;'
+  multichannel: storageSku != 'Standard' ? { enabled: true } : null
 }
 var storageRedundancy = availability == 'availabilityZones' ? '_ZRS' : '_LRS'
 
@@ -75,285 +72,258 @@ var backupPrivateDNSZoneResourceIds = [
 
 var nonEmptyBackupPrivateDNSZoneResourceIds = filter(backupPrivateDNSZoneResourceIds, zone => !empty(zone))
 
+var graphEndpoint = environment().name == 'AzureUSGovernment'
+  ? 'https://graph.microsoft.us'
+  : startsWith(environment().name, 'us')
+      ? 'https://graph.${environment().suffixes.storage}'
+      : 'https://graph.microsoft.com'
 
-resource storageAccounts 'Microsoft.Storage/storageAccounts@2022-09-01' = [
+resource appUpdateUai 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = if (!empty(appUpdateUserAssignedIdentityResourceId)) {
+  name: last(split(appUpdateUserAssignedIdentityResourceId, '/'))!
+  scope: resourceGroup(
+    split(appUpdateUserAssignedIdentityResourceId, '/')[2],
+    split(appUpdateUserAssignedIdentityResourceId, '/')[4]
+  )
+}
+
+// ─── Storage Accounts ──────────────────────────────────────────────────────────
+module storageAccounts '../../../../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = [
   for i in range(0, storageCount): {
-    name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
-    kind: storageSku == 'Standard' ? 'StorageV2' : 'FileStorage'
-    location: location
-    identity: keyManagementStorageAccounts != 'MicrosoftManaged'
-      ? {
-          type: 'UserAssigned'
-          userAssignedIdentities: {
-            '${encryptionUserAssignedIdentityResourceId}': {}
-          }
-        }
-      : null
-    properties: {
-      accessTier: 'Hot'
-      allowBlobPublicAccess: false
-      allowCrossTenantReplication: false
+    name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}-${deploymentSuffix}'
+    params: {
+      name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
+      location: location
+      kind: storageSku == 'Standard' ? 'StorageV2' : 'FileStorage'
+      skuName: '${storageSku}${storageRedundancy}'
+      tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
       allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
       allowSharedKeyAccess: identitySolution == 'EntraId' ? true : false
+      largeFileSharesState: storageSku == 'Standard' ? 'Enabled' : ''
+      sasExpirationPeriod: '180.00:00:00'
+      publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+      networkAcls: {
+        bypass: 'AzureServices'
+        defaultAction: privateEndpoint ? 'Deny' : 'Allow'
+      }
       azureFilesIdentityBasedAuthentication: identitySolution != 'EntraId'
         ? {
             defaultSharePermission: defaultSharePermission
             directoryServiceOptions: contains(identitySolution, 'EntraKerberos')
               ? 'AADKERB'
-              : identitySolution == 'EntraDomainServices'
-                ? 'AADDS'
-                : 'None'
+              : identitySolution == 'EntraDomainServices' ? 'AADDS' : 'None'
+          }
+        : {}
+      encryptionKeyVaultUri: keyManagementStorageAccounts != 'MicrosoftManaged' ? encryptionKeyVaultUri : ''
+      encryptionKeyName: keyManagementStorageAccounts != 'MicrosoftManaged'
+        ? replace(fslogixEncryptionKeyNameConv, '##', padLeft(i + storageIndex, 2, '0'))
+        : ''
+      encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'MicrosoftManaged'
+        ? encryptionUserAssignedIdentityResourceId
+        : ''
+      diagnosticSettings: !empty(logAnalyticsWorkspaceId) ? { workspaceId: logAnalyticsWorkspaceId } : null
+    }
+  }
+]
+
+// ─── File Services ─────────────────────────────────────────────────────────────
+module fileServices '../../../../../.common/bicepModules/storage/storageAccounts/fileServices/deploy.bicep' = [
+  for i in range(0, storageCount): {
+    name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}-fileService-${deploymentSuffix}'
+    params: {
+      storageAccountName: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
+      smbSettings: smbSettingsValues
+      shareDeleteRetentionPolicyEnabled: false
+      diagnosticSettings: !empty(logAnalyticsWorkspaceId)
+        ? {
+            workspaceId: logAnalyticsWorkspaceId
+            logCategories: [{ category: 'StorageDelete', enabled: true }]
           }
         : null
-      defaultToOAuthAuthentication: false
-      dnsEndpointType: 'Standard'
-      encryption: {
-        identity: keyManagementStorageAccounts != 'MicrosoftManaged'
-          ? {
-              userAssignedIdentity: encryptionUserAssignedIdentityResourceId
-            }
-          : null
-        services: storageSku == 'Standard'
-          ? {
-              blob: {
-                keyType: 'Account'
-                enabled: true
-              }
-              file: {
-                keyType: 'Account'
-                enabled: true
-              }
-            }
-          : {
-              file: {
-                keyType: 'Account'
-                enabled: true
-              }
-            }
-        keySource: keyManagementStorageAccounts != 'MicrosoftManaged' ? 'Microsoft.KeyVault' : 'Microsoft.Storage'
-        keyvaultproperties: keyManagementStorageAccounts != 'MicrosoftManaged'
-          ? {
-              keyname: replace(fslogixEncryptionKeyNameConv, '##', padLeft(i + storageIndex, 2, '0'))
-              keyvaulturi: encryptionKeyVaultUri
-            }
-          : null
-        requireInfrastructureEncryption: true
-      }
-      largeFileSharesState: storageSku == 'Standard' ? 'Enabled' : null
-      minimumTlsVersion: 'TLS1_2'
-      networkAcls: {
-        bypass: 'AzureServices'
-        defaultAction: privateEndpoint ? 'Deny' : 'Allow'
-      }
-      publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
-      sasPolicy: {
-        expirationAction: 'Log'
-        sasExpirationPeriod: '180.00:00:00'
-      }
-      supportsHttpsTrafficOnly: true
     }
-    sku: {
-      name: '${storageSku}${storageRedundancy}'
-    }
-    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
+    dependsOn: [storageAccounts]
   }
 ]
 
-resource fileServices 'Microsoft.Storage/storageAccounts/fileServices@2022-09-01' = [
-  for i in range(0, storageCount): {
-    parent: storageAccounts[i]
-    name: 'default'
-    properties: {
-      protocolSettings: {
-        smb: storageSku == 'Standard' ? smbSettings : union(smbSettings, smbMultiChannel)
-      }
-      shareDeleteRetentionPolicy: {
-        enabled: false
-      }
-    }
-  }
-]
-
+// ─── File Shares ───────────────────────────────────────────────────────────────
 module shares 'shares.bicep' = [
   for i in range(0, storageCount): {
-    name: '${storageAccounts[i].name}-fileShares-${deploymentSuffix}'
+    name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}-fileShares-${deploymentSuffix}'
     params: {
       fileShares: fileShares
       shareSizeInGB: shareSizeInGB
-      StorageAccountName: storageAccounts[i].name
+      StorageAccountName: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
       storageSku: storageSku
     }
+    dependsOn: [storageAccounts, fileServices]
   }
 ]
 
-module privateEndpoints '../../../../sharedModules/resources/network/private-endpoint/main.bicep' = [
+// ─── Private Endpoints ─────────────────────────────────────────────────────────
+module storageAccountPes '../../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = [
   for i in range(0, storageCount): if (privateEndpoint) {
-    name: '${storageAccounts[i].name}-privateEndpoint-${deploymentSuffix}'
+    name: 'StorageAccount-PE-${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}-${deploymentSuffix}'
     params: {
-      customNetworkInterfaceName: replace(
-        replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'file'), 'RESOURCE', '${storageAccounts[i].name}'),
-        'VNETID',
-        privateEndpointVnetId
-      )
-      groupIds: [
-        'file'
-      ]
-      location: location
       name: replace(
-        replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'file'), 'RESOURCE', '${storageAccounts[i].name}'),
+        replace(
+          replace(privateEndpointNameConv, 'SUBRESOURCE', 'file'),
+          'RESOURCE',
+          '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
+        ),
         'VNETID',
         privateEndpointVnetId
       )
-      privateDnsZoneGroup: empty(azureFilePrivateDnsZoneResourceId)
-        ? null
-        : {
-            privateDNSResourceIds: [
-              azureFilePrivateDnsZoneResourceId
-            ]
-          }
-      serviceResourceId: storageAccounts[i].id
-      subnetResourceId: privateEndpointSubnetResourceId
-      tags: union(
-        {
-          'cm-resource-parent': hostPoolResourceId
-        },
-        tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+      customNetworkInterfaceName: replace(
+        replace(
+          replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'file'),
+          'RESOURCE',
+          '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
+        ),
+        'VNETID',
+        privateEndpointVnetId
       )
+      tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
+      subnetResourceId: privateEndpointSubnetResourceId
+      privateLinkServiceId: storageAccounts[i].outputs.resourceId
+      groupId: 'file'
+      privateDNSZoneIds: !empty(azureFilePrivateDnsZoneResourceId) ? [azureFilePrivateDnsZoneResourceId] : []
     }
   }
 ]
 
-resource storageAccounts_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = [
-  for i in range(0, storageCount): if (!empty(logAnalyticsWorkspaceId)) {
-    name: '${storageAccounts[i].name}-diagnosticSettings'
-    properties: {
-      metrics: [
-        {
-          category: 'Transaction'
-          enabled: true
-        }
-      ]
-      workspaceId: logAnalyticsWorkspaceId
-    }
-    scope: storageAccounts[i]
-  }
-]
-
-resource storageAccounts_file_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = [
-  for i in range(0, storageCount): if (!empty(logAnalyticsWorkspaceId)) {
-    name: '${storageAccounts[i].name}-file-diagnosticSettings'
-    scope: fileServices[i]
-    properties: {
-      workspaceId: logAnalyticsWorkspaceId
-      logs: [
-        {
-          category: 'StorageDelete'
-          enabled: true
-        }
-      ]
-      metrics: [
-        {
-          category: 'Transaction'
-          enabled: true
-        }
-      ]
-    }
-  }
-]
-
-// Assigns the Storage File Data Privileged Contributor role to the Storage Account for admins so they can adjust NTFS permissions if needed.
-module roleAssignmentsAdmins '../../../../sharedModules/resources/storage/storage-account/rbac.bicep' = [
-  for i in range(0, storageCount): if (!empty(shareAdminGroups)) {
-    name: '${storageAccounts[i].name}-AdminRoleAssignments-${deploymentSuffix}'
+// ─── Admin Role Assignments ────────────────────────────────────────────────────
+module roleAssignmentsAdmins '../../../../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = [
+  for (group, i) in shareAdminGroups: {
+    name: 'RoleAssignment-Admin-${i}-${deploymentSuffix}'
     params: {
-      principalIds: map(shareAdminGroups, group => group.id)
-      principalType: 'Group'
-      storageAccountResourceId: storageAccounts[i].id
-      roleDefinitionId: adminRoleDefinitionId
+      assignments: [
+        {
+          principalId: group.id
+          roleDefinitionId: adminRoleDefinitionId
+          principalType: 'Group'
+        }
+      ]
     }
   }
 ]
 
-module configureADDSAuth 'domainJoin.bicep' = if (identitySolution == 'ActiveDirectoryDomainServices') {
+// ─── ADDS Domain Join ──────────────────────────────────────────────────────────
+module configureADDSAuth '../../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution == 'ActiveDirectoryDomainServices') {
   name: 'Join-Domain-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
-    domainJoinUserPrincipalName: domainJoinUserPrincipalName
-    domainJoinUserPassword: domainJoinUserPassword
-    hostPoolName: last(split(hostPoolResourceId, '/'))
-    kerberosEncryptionType: kerberosEncryptionType
-    location: location
-    ouPath: ouPath
-    resourceGroupStorage: resourceGroupStorage
-    storageAccountNamePrefix: storageAccountNamePrefix
-    storageCount: storageCount
-    storageIndex: storageIndex
-    userAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     virtualMachineName: deploymentVirtualMachineName
+    name: 'Domain-Join'
+    location: location
+    script: loadTextContent('../../../../../.common/scripts/Configure-StorageAccountforADDS.ps1')
+    parameters: [
+      { name: 'HostPoolName', value: last(split(hostPoolResourceId, '/'))! }
+      { name: 'KerberosEncryptionType', value: kerberosEncryptionType }
+      { name: 'OuPath', value: ouPath }
+      { name: 'ResourceManagerUri', value: environment().resourceManager }
+      { name: 'StorageAccountPrefix', value: storageAccountNamePrefix }
+      { name: 'StorageAccountResourceGroupName', value: resourceGroupStorage }
+      { name: 'StorageCount', value: string(storageCount) }
+      { name: 'StorageIndex', value: string(storageIndex) }
+      { name: 'StorageSuffix', value: environment().suffixes.storage }
+      { name: 'SubscriptionId', value: subscription().subscriptionId }
+      { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
+    ]
+    protectedParameters: [
+      { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
+      { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
+    ]
+    treatFailureAsDeploymentFailure: true
   }
-  dependsOn: [
-    privateEndpoints
-    shares
-  ]
+  dependsOn: [storageAccountPes, shares]
 }
-// Configure Entra Kerberos Hybrid with Domain Info if domainName, domainJoinUserPrincipalName and domainJoinUserPassword are provided. If they were, the deployment helper VM is domain joined. If not, then the deployment helper VM is not domain joined and can't run this configuration.
-module configureEntraKerberosWithDomainInfo 'azureFilesEntraKerberosWithDomainInfo.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
+
+// ─── EntraKerberos Hybrid (with domain info) ───────────────────────────────────
+// Configure Entra Kerberos Hybrid with Domain Info if domainName, domainJoinUserPrincipalName and domainJoinUserPassword are provided.
+// If they were, the deployment helper VM is domain joined. If not, then the deployment helper VM is not domain joined and can't run this configuration.
+module configureEntraKerberosWithDomainInfo '../../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
   name: 'Configure-Entra-Kerberos-DomainInfo-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
-    defaultSharePermission: defaultSharePermission
-    domainJoinUserPrincipalName: domainJoinUserPrincipalName
-    domainJoinUserPassword: domainJoinUserPassword
-    location: location
-    resourceGroupStorage: resourceGroupStorage
-    storageAccountNamePrefix: storageAccountNamePrefix
-    storageCount: storageCount
-    storageIndex: storageIndex
-    userAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     virtualMachineName: deploymentVirtualMachineName
+    name: 'Configure-StorageAccountsforEntraHybrid'
+    location: location
+    script: loadTextContent('../../../../../.common/scripts/Configure-StorageAccountforEntraHybrid.ps1')
+    parameters: [
+      { name: 'DefaultSharePermission', value: defaultSharePermission }
+      { name: 'ResourceManagerUri', value: environment().resourceManager }
+      { name: 'StorageAccountPrefix', value: storageAccountNamePrefix }
+      { name: 'StorageAccountResourceGroupName', value: resourceGroupStorage }
+      { name: 'StorageCount', value: string(storageCount) }
+      { name: 'StorageIndex', value: string(storageIndex) }
+      { name: 'StorageSuffix', value: environment().suffixes.storage }
+      { name: 'SubscriptionId', value: subscription().subscriptionId }
+      { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
+    ]
+    protectedParameters: [
+      { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
+      { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
+    ]
+    treatFailureAsDeploymentFailure: true
   }
-  dependsOn: [
-    privateEndpoints
-    shares
-  ]
+  dependsOn: [storageAccountPes, shares]
 }
 
 // PHASE 1: Update application manifest with privatelink FQDNs and tags
 // This must happen BEFORE NTFS permissions are set so authentication works through private endpoints
-module updateStorageApplicationsManifest 'updateEntraIdStorageKerbAppsManifest.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+module updateStorageApplicationsManifest '../../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
   name: 'Update-Storage-App-Manifest-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
-    appDisplayNamePrefix: '[Storage Account] ${storageAccountNamePrefix}'
-    enableCloudGroupSids: identitySolution == 'EntraKerberos-CloudOnly' ? true : false
-    location: location
-    privateEndpoint: privateEndpoint
-    userAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
     virtualMachineName: deploymentVirtualMachineName
+    name: 'Update-Storage-Account-Application-Manifest'
+    location: location
+    script: loadTextContent('../../../../../.common/scripts/Update-StorageAccountApplicationManifest.ps1')
+    parameters: [
+      { name: 'AppDisplayNamePrefix', value: '[Storage Account] ${storageAccountNamePrefix}' }
+      { name: 'ClientId', value: appUpdateUai!.properties.clientId }
+      { name: 'GraphEndpoint', value: graphEndpoint }
+      { name: 'PrivateEndpoint', value: string(privateEndpoint) }
+      { name: 'EnableCloudGroupSids', value: string(identitySolution == 'EntraKerberos-CloudOnly') }
+    ]
+    treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
-    privateEndpoints
+    storageAccountPes
     shares
     configureEntraKerberosWithDomainInfo
   ]
 }
 
-module SetNTFSPermissions 'setNTFSPermissionsAzureFiles.bicep' = {
+// ─── Set NTFS Permissions ──────────────────────────────────────────────────────
+module SetNTFSPermissions '../../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Set-NTFS-Permissions-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
-    location: location
-    shardingOptions: shardingOptions
-    shares: fileShares
-    storageAccountNamePrefix: storageAccountNamePrefix
-    storageCount: storageCount
-    storageIndex: storageIndex
-    userAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
-    userGroups: identitySolution == 'EntraKerberos-CloudOnly' && !empty(appUpdateUserAssignedIdentityResourceId) ? map(shareUserGroups, group => group.id) : !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName) ? map(shareUserGroups, group => group.name) : []
     virtualMachineName: deploymentVirtualMachineName
+    name: 'Set-NTFS-Permissions'
+    location: location
+    script: loadTextContent('../../../../../.common/scripts/Set-NtfsPermissionsAzureFiles.ps1')
+    parameters: [
+      { name: 'Shares', value: string(fileShares) }
+      { name: 'ShardAzureFilesStorage', value: shardingOptions == 'None' ? 'false' : 'true' }
+      { name: 'StorageAccountPrefix', value: storageAccountNamePrefix }
+      { name: 'StorageCount', value: string(storageCount) }
+      { name: 'StorageIndex', value: string(storageIndex) }
+      { name: 'StorageSuffix', value: environment().suffixes.storage }
+      { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
+      {
+        name: 'UserGroups'
+        value: string(identitySolution == 'EntraKerberos-CloudOnly' && !empty(appUpdateUserAssignedIdentityResourceId)
+          ? map(shareUserGroups, group => group.id)
+          : !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)
+              ? map(shareUserGroups, group => group.name)
+              : [])
+      }
+    ]
+    treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
-    privateEndpoints
+    storageAccountPes
     shares
     configureEntraKerberosWithDomainInfo
     configureADDSAuth
@@ -363,111 +333,109 @@ module SetNTFSPermissions 'setNTFSPermissionsAzureFiles.bicep' = {
 
 // PHASE 2: Grant admin consent to storage account applications
 // This must happen AFTER NTFS permissions are set
-module grantStorageApplicationsConsent 'grantEntraIdStorageKerbAppsConsent.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+module grantStorageApplicationsConsent '../../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
   name: 'Grant-Storage-App-Consent-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
-    appDisplayNamePrefix: '[Storage Account] ${storageAccountNamePrefix}'
-    location: location
-    userAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
     virtualMachineName: deploymentVirtualMachineName
+    name: 'Grant-Storage-Account-Application-Consent'
+    location: location
+    script: loadTextContent('../../../../../.common/scripts/Grant-StorageAccountApplicationConsent.ps1')
+    parameters: [
+      { name: 'AppDisplayNamePrefix', value: '[Storage Account] ${storageAccountNamePrefix}' }
+      { name: 'ClientId', value: appUpdateUai!.properties.clientId }
+      { name: 'GraphEndpoint', value: graphEndpoint }
+    ]
+    treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
     SetNTFSPermissions
   ]
 }
 
-module recoveryServicesVault '../../../../sharedModules/resources/recovery-services/vault/main.bicep' = if (recoveryServices) {
+// ─── Recovery Services Vault ───────────────────────────────────────────────────
+module recoveryServicesVaultModule '../../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (recoveryServices) {
   name: 'RecoveryServices-AzureFiles-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupStorage)
   params: {
-    location: location
     name: recoveryServicesVaultName
-    backupPolicies: [
-      {
-        name: 'filesharepolicy'
-        type: 'Microsoft.RecoveryServices/vaults/backupPolicies'
-        properties: {
-          backupManagementType: 'AzureStorage'
-          workloadType: 'AzureFileShare'
-          schedulePolicy: {
-            schedulePolicyType: 'SimpleSchedulePolicy'
-            scheduleRunFrequency: 'Daily'
-            scheduleRunTimes: [
-              '23:00'
-            ]
-          }
-          retentionPolicy: {
-            retentionPolicyType: 'LongTermRetentionPolicy'
-            dailySchedule: {
-              retentionTimes: [
-                '23:00'
-              ]
-              retentionDuration: {
-                count: 30
-                durationType: 'Days'
-              }
-            }
-          }
-          timeZone: timeZone
-          workLoadType: 'AzureFileShare'
-        }
-      }
-    ]
-    diagnosticWorkspaceId: logAnalyticsWorkspaceId
-    privateEndpoints: privateEndpoint && !empty(privateEndpointSubnetResourceId)
-      ? [
-          {
-            customNetworkInterfaceName: replace(
-              replace(
-                replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'azurebackup'),
-                'RESOURCE',
-                recoveryServicesVaultName
-              ),
-              'VNETID',
-              '${split(privateEndpointSubnetResourceId, '/')[8]}'
-            )
-            name: replace(
-              replace(
-                replace(privateEndpointNameConv, 'SUBRESOURCE', 'azurebackup'),
-                'RESOURCE',
-                recoveryServicesVaultName
-              ),
-              'VNETID',
-              '${split(privateEndpointSubnetResourceId, '/')[8]}'
-            )
-            privateDnsZoneGroup: empty(nonEmptyBackupPrivateDNSZoneResourceIds)
-              ? null
-              : {
-                  privateDNSResourceIds: nonEmptyBackupPrivateDNSZoneResourceIds
-                }
-            service: 'AzureBackup'
-            subnetResourceId: privateEndpointSubnetResourceId
-            tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
-          }
-        ]
-      : null
-    protectionContainers: [
-      for i in range(0, storageCount): {
-        name: 'storagecontainer;Storage;${resourceGroupStorage};${storageAccounts[i].name}'
-        friendlyName: storageAccounts[i].name
-        sourceResourceId: storageAccounts[i].id
-        backupManagementType: 'AzureStorage'
-        containerType: 'StorageContainer'
-        location: location
-        protectedItems: [
-          {
-            name: 'AzureFileShare;${fileShares[0]}'
-            policyId: '${resourceGroup().id}/providers/Microsoft.RecoveryServices/vaults/${recoveryServicesVaultName}/backupPolicies/filesharepolicy'
-            protectedItemType: 'AzureFileShareProtectedItem'
-            sourceResourceId: storageAccounts[i].id
-          }
-        ]
-      }
-    ]
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    location: location
     tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.RecoveryServices/vaults'] ?? {})
+    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    storageType: recoveryServicesVaultStorageRedundancy
+    diagnosticSettings: !empty(logAnalyticsWorkspaceId) ? { workspaceId: logAnalyticsWorkspaceId } : null
   }
 }
 
-output storageAccountResourceIds array = [for i in range(0, storageCount): storageAccounts[i].id]
+resource backupPolicy 'Microsoft.RecoveryServices/vaults/backupPolicies@2024-04-01' = if (recoveryServices) {
+  name: '${recoveryServicesVaultName}/filesharepolicy'
+  properties: {
+    backupManagementType: 'AzureStorage'
+    workLoadType: 'AzureFileShare'
+    schedulePolicy: {
+      schedulePolicyType: 'SimpleSchedulePolicy'
+      scheduleRunFrequency: 'Daily'
+      scheduleRunTimes: ['23:00']
+    }
+    retentionPolicy: {
+      retentionPolicyType: 'LongTermRetentionPolicy'
+      dailySchedule: {
+        retentionTimes: ['23:00']
+        retentionDuration: {
+          count: 30
+          durationType: 'Days'
+        }
+      }
+    }
+    timeZone: timeZone
+  }
+  dependsOn: [recoveryServicesVaultModule]
+}
+
+resource protectionContainers 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers@2024-04-01' = [
+  for i in range(0, storageCount): if (recoveryServices) {
+    name: '${recoveryServicesVaultName}/Azure/storagecontainer;Storage;${resourceGroupStorage};${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
+    properties: {
+      friendlyName: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
+      sourceResourceId: storageAccounts[i].outputs.resourceId
+      backupManagementType: 'AzureStorage'
+      containerType: 'StorageContainer'
+    }
+    dependsOn: [backupPolicy]
+  }
+]
+
+resource protectedItems 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems@2024-04-01' = [
+  for i in range(0, storageCount): if (recoveryServices) {
+    name: '${recoveryServicesVaultName}/Azure/storagecontainer;Storage;${resourceGroupStorage};${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}/AzureFileShare;${fileShares[0]}'
+    location: location
+    properties: {
+      protectedItemType: 'AzureFileShareProtectedItem'
+      policyId: '${resourceGroup().id}/providers/Microsoft.RecoveryServices/vaults/${recoveryServicesVaultName}/backupPolicies/filesharepolicy'
+      sourceResourceId: storageAccounts[i].outputs.resourceId
+    }
+    dependsOn: [protectionContainers]
+  }
+]
+
+module backupVault_pe '../../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (recoveryServices && privateEndpoint && !empty(privateEndpointSubnetResourceId)) {
+  name: 'RecoveryServices-PE-${deploymentSuffix}'
+  params: {
+    name: replace(
+      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'azurebackup'), 'RESOURCE', recoveryServicesVaultName),
+      'VNETID',
+      split(privateEndpointSubnetResourceId, '/')[8]
+    )
+    customNetworkInterfaceName: replace(
+      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'azurebackup'), 'RESOURCE', recoveryServicesVaultName),
+      'VNETID',
+      split(privateEndpointSubnetResourceId, '/')[8]
+    )
+    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
+    subnetResourceId: privateEndpointSubnetResourceId
+    privateLinkServiceId: recoveryServicesVaultModule!.outputs.resourceId
+    groupId: 'AzureBackup'
+    privateDNSZoneIds: !empty(nonEmptyBackupPrivateDNSZoneResourceIds) ? nonEmptyBackupPrivateDNSZoneResourceIds : []
+  }
+}
+
+output storageAccountResourceIds array = [for i in range(0, storageCount): storageAccounts[i].outputs.resourceId]

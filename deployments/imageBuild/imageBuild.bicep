@@ -469,7 +469,7 @@ resource imageBuildRg 'Microsoft.Resources/resourceGroups@2023-07-01' = if (empt
 
 // * Managed Identity * //
 
-module userAssignedIdentity '../sharedModules/resources/managed-identity/user-assigned-identity/main.bicep' = if (empty(userAssignedIdentityResourceId)) {
+module userAssignedIdentity '../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (empty(userAssignedIdentityResourceId)) {
   name: '${depPrefix}ManagedIdentity-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -496,7 +496,7 @@ resource existingImageDefinition 'Microsoft.Compute/galleries/images@2024-03-03'
   scope: resourceGroup(split(imageDefinitionResourceId, '/')[2], split(imageDefinitionResourceId, '/')[4])
 }
 
-module imageDefinition '../sharedModules/resources/compute/gallery/image/main.bicep' = if (empty(imageDefinitionResourceId)) {
+module imageDefinition '../../.common/bicepModules/compute/galleries/images/deploy.bicep' = if (empty(imageDefinitionResourceId)) {
   name: '${depPrefix}Gallery-Image-Definition-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[4])
   params: {
@@ -519,7 +519,7 @@ resource remoteComputeGallery 'Microsoft.Compute/galleries@2024-03-03' existing 
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
 }
 
-module remoteImageDefinition '../sharedModules/resources/compute/gallery/image/main.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
+module remoteImageDefinition '../../.common/bicepModules/compute/galleries/images/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
   name: '${depPrefix}Remote-Gallery-Image-Definition-${deploymentSuffix}'
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {
@@ -547,36 +547,44 @@ module remoteImageDefinition '../sharedModules/resources/compute/gallery/image/m
 
 // * Role Assignments * //
 
-module roleAssignmentContributorBuildRg '../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = {
+module roleAssignmentContributorBuildRg '../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = {
   name: '${depPrefix}RA-MI-VirtMachContr-BuildRG-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
-    principalId: empty(userAssignedIdentityResourceId)
-      ? userAssignedIdentity!.outputs.principalId
-      : existingUserAssignedIdentity!.properties.principalId
-    roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
-    principalType: 'ServicePrincipal'
+    assignments: [
+      {
+        principalId: empty(userAssignedIdentityResourceId)
+          ? userAssignedIdentity!.outputs.principalId
+          : existingUserAssignedIdentity!.properties.principalId
+        roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
+        principalType: 'ServicePrincipal'
+      }
+    ]
   }
   dependsOn: [
     imageBuildRg
   ]
 }
 
-module roleAssignmentBlobDataContributorBuilderRg '../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = if (collectCustomizationLogs) {
+module roleAssignmentBlobDataContributorBuilderRg '../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = if (collectCustomizationLogs) {
   name: '${depPrefix}RA-MI-StorBlobDataContr-BuildRG-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
-    principalId: empty(userAssignedIdentityResourceId)
-      ? userAssignedIdentity!.outputs.principalId
-      : existingUserAssignedIdentity!.properties.principalId
-    roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
-    principalType: 'ServicePrincipal'
+    assignments: [
+      {
+        principalId: empty(userAssignedIdentityResourceId)
+          ? userAssignedIdentity!.outputs.principalId
+          : existingUserAssignedIdentity!.properties.principalId
+        roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
+        principalType: 'ServicePrincipal'
+      }
+    ]
   }
 }
 
 // * Logging * //
 
-module logsStorageAccount '../sharedModules/resources/storage/storage-account/main.bicep' = if (collectCustomizationLogs) {
+module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = if (collectCustomizationLogs) {
   name: '${depPrefix}Logs-StorageAccount-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -586,53 +594,7 @@ module logsStorageAccount '../sharedModules/resources/storage/storage-account/ma
     allowCrossTenantReplication: false
     allowSharedKeyAccess: true
     requireInfrastructureEncryption: true
-    blobServices: {
-      containers: [
-        {
-          name: logContainerName
-          publicAccess: 'None'
-        }
-      ]
-    }
     kind: 'StorageV2'
-    managementPolicyRules: [
-      {
-        enabled: true
-        name: 'Delete Blobs after 7 days'
-        type: 'Lifecycle'
-        definition: {
-          actions: {
-            baseBlob: {
-              delete: {
-                daysAfterModificationGreaterThan: 7
-              }
-            }
-          }
-          filters: {
-            blobTypes: [
-              'blockBlob'
-              'appendBlob'
-            ]
-          }
-        }
-      }
-    ]
-    privateEndpoints: logStorageAccountNetworkAccess == 'PrivateEndpoint' && !empty(privateEndpointSubnetResourceId)
-      ? [
-          {
-            name: privateEndpointName
-            customNetworkInterfaceName: customNetworkInterfaceName
-            privateDnsZoneGroup: empty(blobPrivateDnsZoneResourceId)
-              ? null
-              : {
-                  privateDNSResourceIds: ['${blobPrivateDnsZoneResourceId}']
-                }
-            service: 'blob'
-            subnetResourceId: privateEndpointSubnetResourceId
-            tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
-          }
-        ]
-      : null
     publicNetworkAccess: logStorageAccountNetworkAccess == 'PrivateEndpoint' ? 'Disabled' : 'Enabled'
     networkAcls: logStorageAccountNetworkAccess == 'PrivateEndpoint'
       ? {
@@ -643,7 +605,6 @@ module logsStorageAccount '../sharedModules/resources/storage/storage-account/ma
           ? {
               bypass: 'None'
               defaultAction: 'Deny'
-              ipRules: []
               virtualNetworkRules: [
                 {
                   id: subnetResourceId
@@ -664,23 +625,83 @@ module logsStorageAccount '../sharedModules/resources/storage/storage-account/ma
   ]
 }
 
+module logsStorageContainer '../../.common/bicepModules/storage/storageAccounts/blobServices/containers/deploy.bicep' = if (collectCustomizationLogs) {
+  name: '${depPrefix}Logs-BlobContainer-${deploymentSuffix}'
+  scope: resourceGroup(imageBuildResourceGroupName)
+  params: {
+    storageAccountName: logStorageAccountName
+    name: logContainerName
+    publicAccess: 'None'
+  }
+  dependsOn: [logsStorageAccount]
+}
+
+module logsStorageLifecyclePolicy '../../.common/bicepModules/storage/storageAccounts/managementPolicies/deploy.bicep' = if (collectCustomizationLogs) {
+  name: '${depPrefix}Logs-Storage-LifecyclePolicy-${deploymentSuffix}'
+  scope: resourceGroup(imageBuildResourceGroupName)
+  params: {
+    storageAccountName: logStorageAccountName
+    rules: [
+      {
+        enabled: true
+        name: 'Delete Blobs after 7 days'
+        type: 'Lifecycle'
+        definition: {
+          actions: {
+            baseBlob: {
+              delete: {
+                daysAfterModificationGreaterThan: 7
+              }
+            }
+          }
+          filters: {
+            blobTypes: ['blockBlob', 'appendBlob']
+          }
+        }
+      }
+    ]
+  }
+  dependsOn: [logsStorageAccount]
+}
+
+module logsStoragePrivateEndpoint '../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (collectCustomizationLogs && logStorageAccountNetworkAccess == 'PrivateEndpoint' && !empty(privateEndpointSubnetResourceId)) {
+  name: '${depPrefix}Logs-Storage-PE-${deploymentSuffix}'
+  scope: resourceGroup(imageBuildResourceGroupName)
+  params: {
+    name: privateEndpointName
+    customNetworkInterfaceName: customNetworkInterfaceName
+    location: computeLocation
+    subnetResourceId: privateEndpointSubnetResourceId
+    privateLinkServiceId: logsStorageAccount!.outputs.resourceId
+    groupId: 'blob'
+    privateDNSZoneIds: !empty(blobPrivateDnsZoneResourceId) ? [blobPrivateDnsZoneResourceId] : []
+    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+  }
+}
+
 // * Orchestration VM * //
 
-module orchestrationVm 'modules/orchestrationVm.bicep' = {
+module orchestrationVm '../../.common/bicepModules/compute/virtualMachines/deploy.bicep' = {
   name: '${depPrefix}Orchestration-VM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     location: computeLocation
     name: orchestrationVmName
+    nicName: '${orchestrationVmName}-nic-01'
+    osDiskName: '${orchestrationVmName}-osdisk'
     adminPassword: adminPw
     adminUsername: adminUserName
     enableAcceleratedNetworking: vmAcceleratedNetworking
     encryptionAtHost: encryptionAtHost
+    imagePublisher: 'MicrosoftWindowsServer'
+    imageOffer: 'WindowsServer'
+    imageSku: '2019-Datacenter'
+    securityType: 'Standard'
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
-    userAssignedIdentityResourceId: empty(userAssignedIdentityResourceId)
+    userAssignedIdentityResourceIds: [empty(userAssignedIdentityResourceId)
       ? userAssignedIdentity!.outputs.resourceId
-      : userAssignedIdentityResourceId
+      : userAssignedIdentityResourceId]
     vmSize: vmSize
   }
   dependsOn: [
@@ -691,7 +712,7 @@ module orchestrationVm 'modules/orchestrationVm.bicep' = {
 
 // * Image VM * //
 
-module imageVm '../sharedModules/resources/compute/virtual-machine/main.bicep' = {
+module imageVm '../../.common/bicepModules/compute/virtualMachines/deploy.bicep' = {
   name: '${depPrefix}Image-VM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -700,55 +721,27 @@ module imageVm '../sharedModules/resources/compute/virtual-machine/main.bicep' =
       : false
     location: computeLocation
     name: imageVmName
+    nicName: '${imageVmName}-nic-01'
+    osDiskName: '${imageVmName}-osdisk'
     adminPassword: adminPw
     adminUsername: adminUserName
-    bootDiagnostics: false
+    customImageResourceId: customSourceImageResourceId
+    imagePublisher: mpPublisher
+    imageOffer: mpOffer
+    imageSku: mpSku
+    osDiskSku: 'Premium_LRS'
+    osDiskSizeGB: diskSizeGB
     diskControllerType: vmDiskControllerType
     encryptionAtHost: encryptionAtHost
-    imageReference: empty(customSourceImageResourceId)
-      ? {
-          publisher: mpPublisher
-          offer: mpOffer
-          sku: mpSku
-          version: 'latest'
-        }
-      : {
-          id: customSourceImageResourceId
-        }
-    nicConfigurations: [
-      {
-        enableAcceleratedNetworking: vmAcceleratedNetworking
-        deleteOption: 'Delete'
-        ipConfigurations: [
-          {
-            name: 'ipconfig01'
-            subnetResourceId: subnetResourceId
-          }
-        ]
-        nicSuffix: '-nic-01'
-      }
-    ]
-    osDisk: {
-      caching: 'ReadWrite'
-      createOption: 'fromImage'
-      deleteOption: 'Delete'
-      diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
-      managedDisk: {
-        storageAccountType: 'Premium_LRS'
-      }
-    }
-    osType: 'Windows'
+    enableAcceleratedNetworking: vmAcceleratedNetworking
     securityType: vmSecurityType
     secureBootEnabled: vmSecurityType == 'TrustedLaunch' ? true : false
     vTpmEnabled: vmSecurityType == 'TrustedLaunch' ? true : false
+    subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
-    userAssignedIdentities: empty(userAssignedIdentityResourceId)
-      ? {
-          '${userAssignedIdentity!.outputs.resourceId}': {}
-        }
-      : {
-          '${userAssignedIdentityResourceId}': {}
-        }
+    userAssignedIdentityResourceIds: [empty(userAssignedIdentityResourceId)
+      ? userAssignedIdentity!.outputs.resourceId
+      : userAssignedIdentityResourceId]
     vmSize: vmSize
   }
   dependsOn: [
@@ -758,15 +751,15 @@ module imageVm '../sharedModules/resources/compute/virtual-machine/main.bicep' =
 
 // * Resize OS Disk Partition * //
 
-module resizeDisk '../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = if (diskSizeGB != 0 && diskSizeGB != 128) {
+module resizeDisk '../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = if (diskSizeGB != 0 && diskSizeGB != 128) {
   name: '${depPrefix}Resize-ImageVM-OSDisk-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     location: computeLocation
     name: 'ResizeDisk'
+    virtualMachineName: imageVm.outputs.name
     script: loadTextContent('../../.common/scripts/Resize-Disk.ps1')
     treatFailureAsDeploymentFailure: true
-    virtualMachineName: imageVm.outputs.name
   }
 }
 
@@ -776,7 +769,6 @@ module customizeImage 'modules/customizeImage.bicep' = {
   name: '${depPrefix}Customize-Image-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
-    adminPw: adminPw
     cloud: cloud
     appsToRemove: appsToRemove
     location: computeLocation
@@ -861,51 +853,39 @@ module captureImage 'modules/captureImage.bicep' = {
 
 // * Cleanup Temporary Resources * //
 
-module removeImageBuildResources '../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = {
+module removeImageBuildResources '../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: '${depPrefix}Remove-Image-Image-Build-Resources-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     asyncExecution: true
     location: computeLocation
     name: 'RemoveImageBuildResources'
+    virtualMachineName: orchestrationVm.outputs.name
+    script: loadTextContent('../../.common/scripts/Remove-ImageBuildResources.ps1')
+    treatFailureAsDeploymentFailure: false
     parameters: [
-      {
-        name: 'ResourceManagerUri'
-        value: environment().resourceManager
-      }
+      { name: 'ResourceManagerUri', value: environment().resourceManager }
       {
         name: 'UserAssignedIdentityClientId'
         value: empty(userAssignedIdentityResourceId)
           ? userAssignedIdentity!.outputs.clientId
           : existingUserAssignedIdentity!.properties.clientId
       }
-      {
-        name: 'ImageResourceId'
-        value: contains(galleryImageDefinitionSecurityType, 'Supported') ? captureImage.outputs.managedImageId : ''
-      }
-      {
-        name: 'ImageVmResourceId'
-        value: imageVm.outputs.resourceId
-      }
-      {
-        name: 'ManagementVmResourceId'
-        value: orchestrationVm.outputs.resourceId
-      }
+      { name: 'ImageResourceId', value: contains(galleryImageDefinitionSecurityType, 'Supported') ? captureImage.outputs.managedImageId : '' }
+      { name: 'ImageVmResourceId', value: imageVm.outputs.resourceId }
+      { name: 'ManagementVmResourceId', value: orchestrationVm.outputs.resourceId }
     ]
-    script: loadTextContent('../../.common/scripts/Remove-ImageBuildResources.ps1')
-    treatFailureAsDeploymentFailure: false
-    virtualMachineName: orchestrationVm.outputs.name
   }
 }
 
-module remoteImageVersion '../sharedModules/resources/compute/gallery/image/version/main.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
+module remoteImageVersion '../../.common/bicepModules/compute/galleries/images/versions/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
   name: '${depPrefix}Remote-ImageVersion-${deploymentSuffix}'
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {
     location: location
     name: imageVersionName
     galleryName: last(split(remoteComputeGalleryResourceId, '/'))
-    imageName: remoteImageDefinition!.outputs.name
+    imageDefinitionName: remoteImageDefinition!.outputs.name
     endOfLifeDate: imageVersionEndOfLifeDate
     excludeFromLatest: remoteImageVersionExcludeFromLatest
     replicaCount: remoteImageVersionDefaultReplicaCount

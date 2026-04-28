@@ -26,16 +26,16 @@ var diskEncryptionSetEncryptionType = confidentialVMOSDiskEncryption
       ? 'EncryptionAtRestWithCustomerKey'
       : 'EncryptionAtRestWithPlatformAndCustomerKeys')
 
-module key '../../../../sharedModules/resources/key-vault/vault/key/main.bicep' = if (!confidentialVMOSDiskEncryption) {
+module key '../../../../../.common/bicepModules/keyVault/vaults/keys/deploy.bicep' = if (!confidentialVMOSDiskEncryption) {
   name: 'Encryption-Key-${deploymentSuffix}'
   scope: resourceGroup(keyVaultResourceGroup)
   params: {
+    keyVaultName: keyVaultName
+    name: keyName
     attributesEnabled: true
     attributesExportable: false
     keySize: 4096
-    keyVaultName: keyVaultName
     kty: contains(keyManagementDisks, 'HSM') ? 'RSA-HSM' : 'RSA'
-    name: keyName
     rotationPolicy: {
       attributes: {
         expiryTime: 'P${string(keyExpirationInDays)}D'
@@ -63,51 +63,44 @@ module key '../../../../sharedModules/resources/key-vault/vault/key/main.bicep' 
   }
 }
 
-module confidentialVM_key '../../../../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = if (confidentialVMOSDiskEncryption) {
+module confidentialVM_key '../../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = if (confidentialVMOSDiskEncryption) {
   name: 'Set-EncryptionKey-ConfidentialVMOSDisk-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
-    name: 'Set-ConfidentialVM-Key-Disks'
-    parameters: [
-      {
-        name: 'KeyName'
-        value: keyName
-      }
-      {
-        name: 'Tags'
-        value: string({ 'cm-resource-parent': hostPoolResourceId })
-      }
-      {
-        name: 'UserAssignedIdentityClientId'
-        value: deploymentUserAssignedIdentityClientId
-      }
-      {
-        name: 'VaultUri'
-        value: keyVaultUri
-      }
-    ]
-    script: loadTextContent('../../../../../.common/scripts/Set-ConfidentialVMOSDiskEncryptionKey.ps1')
-    treatFailureAsDeploymentFailure: true
     virtualMachineName: deploymentVirtualMachineName
+    name: 'Set-ConfidentialVM-Key-Disks'
+    location: location
+    script: loadTextContent('../../../../../.common/scripts/Set-ConfidentialVMOSDiskEncryptionKey.ps1')
+    parameters: [
+      { name: 'KeyName', value: keyName }
+      { name: 'Tags', value: string({ 'cm-resource-parent': hostPoolResourceId }) }
+      { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
+      { name: 'VaultUri', value: keyVaultUri }
+    ]
+    treatFailureAsDeploymentFailure: true
   }
 }
 
-module roleAssignment_ConfVMOrchestrator_ReleaseUser '../../../../sharedModules/resources/key-vault/vault/key/rbac.bicep' = if (confidentialVMOSDiskEncryption) {
+module roleAssignment_ConfVMOrchestrator_ReleaseUser '../../../../../.common/bicepModules/keyVault/vaults/keys/roleAssignment.bicep' = if (confidentialVMOSDiskEncryption) {
   name: 'RoleAssignment-ConfVMOrchestrator-ReleaseUser-${deploymentSuffix}'
   scope: resourceGroup(keyVaultResourceGroup)
   params: {
-    keyName: keyName
     keyVaultName: keyVaultName
-    principalId: confidentialVMOrchestratorObjectId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: roleKeyVaultCryptoReleaseUser // Key Vault Crypto Service Release User 
+    keyName: keyName
+    assignments: [
+      {
+        principalId: confidentialVMOrchestratorObjectId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: roleKeyVaultCryptoReleaseUser
+      }
+    ]
   }
   dependsOn: [
     confidentialVM_key
   ]
 }
 
-module diskEncryptionSet '../../../../sharedModules/resources/compute/disk-encryption-set/main.bicep' = {
+module diskEncryptionSet '../../../../../.common/bicepModules/compute/diskEncryptionSets/deploy.bicep' = {
   name: 'DiskEncryptionSet-${deploymentSuffix}'
   params: {
     rotationToLatestKeyVersionEnabled: confidentialVMOSDiskEncryption ? false : true
@@ -128,46 +121,60 @@ module diskEncryptionSet '../../../../sharedModules/resources/compute/disk-encry
   ]
 }
 
-module roleAssignment_DiskEncryptionSet_EncryptUser '../../../../sharedModules/resources/key-vault/vault/key/rbac.bicep' = {
+module roleAssignment_DiskEncryptionSet_EncryptUser '../../../../../.common/bicepModules/keyVault/vaults/keys/roleAssignment.bicep' = {
   name: 'RA-DiskEncryptionSet-CryptoServiceEncryptionUser-${deploymentSuffix}'
   scope: resourceGroup(keyVaultResourceGroup)
   params: {
-    keyName: keyName
     keyVaultName: keyVaultName
-    principalId: diskEncryptionSet.outputs.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: roleKeyVaultCryptoUser
+    keyName: keyName
+    assignments: [
+      {
+        principalId: diskEncryptionSet.outputs.principalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: roleKeyVaultCryptoUser
+      }
+    ]
   }
 }
 
-module getDiskEncryptionSetCryptoUserRoleAssignment '../../../../sharedModules/custom/roleAssignments/get-RoleAssignments.bicep' = {
+module getDiskEncryptionSetCryptoUserRoleAssignment '../../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Get-DiskEncryptionSet-Crypto-User-RoleAssignment-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
-    location: location
-    principalId: diskEncryptionSet.outputs.principalId
-    resourceIds: ['${keyVaultResourceId}/keys/${keyName}']
-    roleDefinitionId: roleKeyVaultCryptoUser
-    runCommandName: 'Get-DiskEncryptionSetCryptoUserRoleAssignment' 
-    userAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     virtualMachineName: deploymentVirtualMachineName
+    name: 'Get-DiskEncryptionSetCryptoUserRoleAssignment'
+    location: location
+    script: loadTextContent('../../../../../.common/scripts/Get-RoleAssignments.ps1')
+    treatFailureAsDeploymentFailure: false
+    parameters: [
+      { name: 'ResourceManagerUri', value: environment().resourceManager }
+      { name: 'ResourceIds', value: string(['${keyVaultResourceId}/keys/${keyName}']) }
+      { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
+      { name: 'PrincipalId', value: diskEncryptionSet.outputs.principalId }
+      { name: 'RoleDefinitionId', value: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleKeyVaultCryptoUser) }
+    ]
   }
   dependsOn: [
     roleAssignment_DiskEncryptionSet_EncryptUser
   ]
 }
 
-module getDiskEncryptionSetCryptoReleaseUserRoleAssignment '../../../../sharedModules/custom/roleAssignments/get-RoleAssignments.bicep' = if (confidentialVMOSDiskEncryption) {
+module getDiskEncryptionSetCryptoReleaseUserRoleAssignment '../../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = if (confidentialVMOSDiskEncryption) {
   name: 'Get-DiskEncryptionSet-CryptoReleaseUser-RoleAssignment-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
-    location: location
-    principalId: confidentialVMOrchestratorObjectId
-    resourceIds: ['${keyVaultResourceId}/keys/${keyName}']
-    roleDefinitionId: roleKeyVaultCryptoReleaseUser
-    runCommandName: 'Get-DiskEncryptionSetCryptoReleaseUserRoleAssignment'
-    userAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     virtualMachineName: deploymentVirtualMachineName
+    name: 'Get-DiskEncryptionSetCryptoReleaseUserRoleAssignment'
+    location: location
+    script: loadTextContent('../../../../../.common/scripts/Get-RoleAssignments.ps1')
+    treatFailureAsDeploymentFailure: false
+    parameters: [
+      { name: 'ResourceManagerUri', value: environment().resourceManager }
+      { name: 'ResourceIds', value: string(['${keyVaultResourceId}/keys/${keyName}']) }
+      { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
+      { name: 'PrincipalId', value: confidentialVMOrchestratorObjectId }
+      { name: 'RoleDefinitionId', value: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleKeyVaultCryptoReleaseUser) }
+    ]
   }
   dependsOn: [
     roleAssignment_ConfVMOrchestrator_ReleaseUser

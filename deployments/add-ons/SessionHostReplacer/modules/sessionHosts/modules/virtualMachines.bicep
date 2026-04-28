@@ -121,7 +121,7 @@ var networkInterfaceNames = [for i in range(0, sessionHostCount): empty(networkI
 var virtualMachineNames = [for i in range(0, sessionHostCount): empty(virtualMachineNameConv) ? sessionHostNames[i] : replace(virtualMachineNameConv, 'SHNAME', sessionHostNames[i])]
 
 // Compute OS disk names once to avoid complex array access in resource loop
-var osDiskNames = [for i in range(0, sessionHostCount): empty(osDiskNameConv) ? null : replace(osDiskNameConv, 'SHNAME', sessionHostNames[i])]
+var osDiskNames = [for i in range(0, sessionHostCount): replace(osDiskNameConv, 'SHNAME', sessionHostNames[i])]
 
 // call on the host pool to get the registration token
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
@@ -610,15 +610,18 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
   }
 ]
 
-module updateOSDiskNetworkAccess 'getOSDisk.bicep' = [
+module updateOSDiskNetworkAccess '../../../../../../.common/bicepModules/custom/disableOSDiskPublicAccess/getOSDisk.bicep' = [
   for i in range(0, sessionHostCount): {
-    name: 'shr-${virtualMachine[i].name}-disableDiskPublicAccess-${deploymentSuffix}'
+    name: 'shr-${virtualMachineNames[i]}-disableDiskPublicAccess-${deploymentSuffix}'
     params: {
       diskAccessId: ''
-      diskName: virtualMachine[i].properties.storageProfile.osDisk.name
+      diskName: osDiskNames[i]
       location: location
       deploymentSuffix: deploymentSuffix
-      vmName: virtualMachine[i].name
+      vmName: virtualMachineNames[i]
     }
+    dependsOn: [
+      virtualMachine[i]
+    ]
   }
 ]

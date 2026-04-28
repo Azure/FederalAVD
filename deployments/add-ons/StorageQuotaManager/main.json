@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.41.2.15936",
-      "templateHash": "9353775284482708919"
+      "version": "0.42.1.51946",
+      "templateHash": "5688201607081273255"
     },
     "name": "FSLogix Storage Quota Manager Add-On",
     "description": "Automated quota management for FSLogix Azure Files Premium file shares",
@@ -463,9 +463,6 @@
           "hostingPlanType": {
             "value": "FunctionsPremium"
           },
-          "logAnalyticsWorkspaceId": {
-            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
-          },
           "location": {
             "value": "[parameters('location')]"
           },
@@ -488,8 +485,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.41.2.15936",
-              "templateHash": "10853238195944764783"
+              "version": "0.42.1.51946",
+              "templateHash": "13803309924329319254"
             }
           },
           "parameters": {
@@ -497,9 +494,6 @@
               "type": "string"
             },
             "location": {
-              "type": "string"
-            },
-            "logAnalyticsWorkspaceId": {
               "type": "string"
             },
             "functionAppKind": {
@@ -538,25 +532,6 @@
                 "reserved": "[if(contains(parameters('functionAppKind'), 'linux'), true(), false())]",
                 "zoneRedundant": "[parameters('zoneRedundant')]"
               }
-            },
-            {
-              "condition": "[not(empty(parameters('logAnalyticsWorkspaceId')))]",
-              "type": "Microsoft.Insights/diagnosticSettings",
-              "apiVersion": "2021-05-01-preview",
-              "scope": "[resourceId('Microsoft.Web/serverfarms', parameters('name'))]",
-              "name": "[format('{0}-diagnosticSettings', parameters('name'))]",
-              "properties": {
-                "metrics": [
-                  {
-                    "category": "AllMetrics",
-                    "enabled": true
-                  }
-                ],
-                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Web/serverfarms', parameters('name'))]"
-              ]
             }
           ],
           "outputs": {
@@ -664,8 +639,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.41.2.15936",
-              "templateHash": "18415933759729462591"
+              "version": "0.42.1.51946",
+              "templateHash": "9511001055971953797"
             }
           },
           "parameters": {
@@ -860,11 +835,11 @@
               "condition": "[and(parameters('privateEndpoint'), not(empty(variables('azureStoragePrivateDnsZoneResourceIds')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]])))]",
               "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
               "apiVersion": "2021-08-01",
-              "name": "[format('{0}/{1}', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')), parameters('storageAccountName'))]",
+              "name": "[format('{0}/{1}', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')), 'default')]",
               "properties": {
                 "privateDnsZoneConfigs": [
                   {
-                    "name": "ipconfig1",
+                    "name": "[replace(last(split(variables('azureStoragePrivateDnsZoneResourceIds')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]], '/')), '.', '-')]",
                     "properties": {
                       "privateDnsZoneId": "[variables('azureStoragePrivateDnsZoneResourceIds')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]]]"
                     }
@@ -872,33 +847,7 @@
                 ]
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Network/privateEndpoints', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')))]",
-                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
-              ]
-            },
-            {
-              "condition": "[parameters('enableApplicationInsights')]",
-              "type": "microsoft.insights/diagnosticSettings",
-              "apiVersion": "2017-05-01-preview",
-              "scope": "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]",
-              "name": "[format('{0}-blob-diagnosticSettings', parameters('storageAccountName'))]",
-              "properties": {
-                "logs": [
-                  {
-                    "category": "StorageWrite",
-                    "enabled": true
-                  }
-                ],
-                "metrics": [
-                  {
-                    "category": "Transaction",
-                    "enabled": true
-                  }
-                ],
-                "workspaceId": "[parameters('logAnalyticsWorkspaceResourceId')]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"
+                "[resourceId('Microsoft.Network/privateEndpoints', replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', variables('storageSubResources')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]]), 'RESOURCE', parameters('storageAccountName')), 'VNETID', variables('peVnetId')))]"
               ]
             },
             {
@@ -998,7 +947,7 @@
               "properties": {
                 "privateDnsZoneConfigs": [
                   {
-                    "name": "ipconfig1",
+                    "name": "[replace(last(split(parameters('azureFunctionAppPrivateDnsZoneResourceId'), '/')), '.', '-')]",
                     "properties": {
                       "privateDnsZoneId": "[parameters('azureFunctionAppPrivateDnsZoneResourceId')]"
                     }
@@ -1013,30 +962,57 @@
               "condition": "[not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))]",
+              "subscriptionId": "[split(parameters('encryptionKeyVaultResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('encryptionKeyVaultResourceId'), '/')[4]]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
                 },
                 "mode": "Incremental",
                 "parameters": {
-                  "encryptionKeyName": {
+                  "attributesExportable": {
+                    "value": false
+                  },
+                  "keySize": {
+                    "value": 4096
+                  },
+                  "keyVaultName": {
+                    "value": "[last(split(parameters('encryptionKeyVaultResourceId'), '/'))]"
+                  },
+                  "kty": "[if(contains(parameters('keyManagementStorageAccounts'), 'HSM'), createObject('value', 'RSA-HSM'), createObject('value', 'RSA'))]",
+                  "name": {
                     "value": "[parameters('encryptionKeyName')]"
                   },
-                  "hostPoolResourceId": {
-                    "value": "[parameters('hostPoolResourceId')]"
+                  "rotationPolicy": {
+                    "value": {
+                      "attributes": {
+                        "expiryTime": "P180D"
+                      },
+                      "lifetimeActions": [
+                        {
+                          "action": {
+                            "type": "Notify"
+                          },
+                          "trigger": {
+                            "timeBeforeExpiry": "P10D"
+                          }
+                        },
+                        {
+                          "action": {
+                            "type": "Rotate"
+                          },
+                          "trigger": {
+                            "timeAfterCreate": "P173D"
+                          }
+                        }
+                      ]
+                    }
                   },
-                  "deploymentSuffix": {
-                    "value": "[parameters('deploymentSuffix')]"
-                  },
-                  "keyManagementStorageAccounts": {
-                    "value": "[parameters('keyManagementStorageAccounts')]"
-                  },
-                  "keyVaultResourceId": {
-                    "value": "[parameters('encryptionKeyVaultResourceId')]"
-                  },
-                  "storageAccountPrincipalId": {
-                    "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').identity.principalId]"
+                  "tags": {
+                    "value": {
+                      "cm-resource-parent": "[toLower(parameters('hostPoolResourceId'))]"
+                    }
                   }
                 },
                 "template": {
@@ -1045,281 +1021,250 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.41.2.15936",
-                      "templateHash": "6685112461135941918"
+                      "version": "0.42.1.51946",
+                      "templateHash": "14514355323903729643"
                     }
                   },
                   "parameters": {
-                    "hostPoolResourceId": {
+                    "keyVaultName": {
                       "type": "string"
                     },
-                    "keyManagementStorageAccounts": {
+                    "name": {
                       "type": "string"
                     },
-                    "keyVaultResourceId": {
-                      "type": "string"
+                    "kty": {
+                      "type": "string",
+                      "defaultValue": "RSA",
+                      "allowedValues": [
+                        "RSA",
+                        "RSA-HSM",
+                        "EC",
+                        "EC-HSM"
+                      ],
+                      "metadata": {
+                        "description": "Key type."
+                      }
                     },
-                    "keyExpirationInDays": {
+                    "keySize": {
                       "type": "int",
-                      "defaultValue": 180
+                      "defaultValue": 4096,
+                      "allowedValues": [
+                        2048,
+                        3072,
+                        4096,
+                        0
+                      ],
+                      "metadata": {
+                        "description": "RSA key size in bits."
+                      }
                     },
-                    "storageAccountPrincipalId": {
-                      "type": "string"
+                    "attributesEnabled": {
+                      "type": "bool",
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Whether the key is enabled for use."
+                      }
                     },
-                    "encryptionKeyName": {
-                      "type": "string"
+                    "attributesExportable": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Whether the private key can be exported."
+                      }
                     },
-                    "deploymentSuffix": {
-                      "type": "string"
+                    "rotationPolicy": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Key rotation policy."
+                      }
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags to apply to the key."
+                      }
                     }
-                  },
-                  "variables": {
-                    "keyVaultName": "[last(split(parameters('keyVaultResourceId'), '/'))]",
-                    "keyVaultSubscriptionId": "[split(parameters('keyVaultResourceId'), '/')[2]]",
-                    "keyVaultResourceGroup": "[split(parameters('keyVaultResourceId'), '/')[4]]"
                   },
                   "resources": [
                     {
-                      "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2025-04-01",
-                      "name": "[format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))]",
-                      "subscriptionId": "[variables('keyVaultSubscriptionId')]",
-                      "resourceGroup": "[variables('keyVaultResourceGroup')]",
+                      "type": "Microsoft.KeyVault/vaults/keys",
+                      "apiVersion": "2023-07-01",
+                      "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('name'))]",
+                      "tags": "[parameters('tags')]",
                       "properties": {
-                        "expressionEvaluationOptions": {
-                          "scope": "inner"
+                        "kty": "[parameters('kty')]",
+                        "keySize": "[if(greater(parameters('keySize'), 0), parameters('keySize'), null())]",
+                        "attributes": {
+                          "enabled": "[parameters('attributesEnabled')]",
+                          "exportable": "[parameters('attributesExportable')]"
                         },
-                        "mode": "Incremental",
-                        "parameters": {
-                          "attributesExportable": {
-                            "value": false
-                          },
-                          "keySize": {
-                            "value": 4096
-                          },
-                          "keyVaultName": {
-                            "value": "[variables('keyVaultName')]"
-                          },
-                          "kty": "[if(contains(parameters('keyManagementStorageAccounts'), 'HSM'), createObject('value', 'RSA-HSM'), createObject('value', 'RSA'))]",
-                          "name": {
-                            "value": "[parameters('encryptionKeyName')]"
-                          },
-                          "rotationPolicy": {
-                            "value": {
-                              "attributes": {
-                                "expiryTime": "[format('P{0}D', string(parameters('keyExpirationInDays')))]"
-                              },
-                              "lifetimeActions": [
-                                {
-                                  "action": {
-                                    "type": "Notify"
-                                  },
-                                  "trigger": {
-                                    "timeBeforeExpiry": "P10D"
-                                  }
-                                },
-                                {
-                                  "action": {
-                                    "type": "Rotate"
-                                  },
-                                  "trigger": {
-                                    "timeAfterCreate": "[format('P{0}D', string(sub(parameters('keyExpirationInDays'), 7)))]"
-                                  }
-                                }
-                              ]
-                            }
-                          },
-                          "tags": {
-                            "value": {
-                              "cm-resource-parent": "[toLower(parameters('hostPoolResourceId'))]"
-                            }
-                          }
-                        },
-                        "template": {
-                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                          "contentVersion": "1.0.0.0",
-                          "metadata": {
-                            "_generator": {
-                              "name": "bicep",
-                              "version": "0.41.2.15936",
-                              "templateHash": "1394222621253148037"
-                            }
-                          },
-                          "parameters": {
-                            "keyVaultName": {
-                              "type": "string"
-                            },
-                            "name": {
-                              "type": "string"
-                            },
-                            "tags": {
-                              "type": "object",
-                              "defaultValue": {}
-                            },
-                            "attributesEnabled": {
-                              "type": "bool",
-                              "defaultValue": true
-                            },
-                            "attributesExp": {
-                              "type": "int",
-                              "defaultValue": -1
-                            },
-                            "attributesNbf": {
-                              "type": "int",
-                              "defaultValue": -1
-                            },
-                            "curveName": {
-                              "type": "string",
-                              "defaultValue": "P-256"
-                            },
-                            "attributesExportable": {
-                              "type": "bool",
-                              "defaultValue": false
-                            },
-                            "keyOps": {
-                              "type": "array",
-                              "defaultValue": []
-                            },
-                            "keySize": {
-                              "type": "int",
-                              "defaultValue": -1
-                            },
-                            "kty": {
-                              "type": "string",
-                              "defaultValue": "EC"
-                            },
-                            "release_policy": {
-                              "type": "object",
-                              "defaultValue": {}
-                            },
-                            "rotationPolicy": {
-                              "type": "object",
-                              "defaultValue": {}
-                            }
-                          },
-                          "resources": [
-                            {
-                              "type": "Microsoft.KeyVault/vaults/keys",
-                              "apiVersion": "2022-07-01",
-                              "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('name'))]",
-                              "tags": "[if(empty(parameters('tags')), null(), parameters('tags'))]",
-                              "properties": {
-                                "attributes": {
-                                  "enabled": "[parameters('attributesEnabled')]",
-                                  "exportable": "[parameters('attributesExportable')]",
-                                  "exp": "[if(not(equals(parameters('attributesExp'), -1)), parameters('attributesExp'), null())]",
-                                  "nbf": "[if(not(equals(parameters('attributesNbf'), -1)), parameters('attributesNbf'), null())]"
-                                },
-                                "curveName": "[parameters('curveName')]",
-                                "keyOps": "[parameters('keyOps')]",
-                                "keySize": "[if(not(equals(parameters('keySize'), -1)), parameters('keySize'), null())]",
-                                "kty": "[parameters('kty')]",
-                                "release_policy": "[if(empty(parameters('release_policy')), null(), parameters('release_policy'))]",
-                                "rotationPolicy": "[if(empty(parameters('rotationPolicy')), null(), parameters('rotationPolicy'))]"
-                              }
-                            }
-                          ],
-                          "outputs": {
-                            "name": {
-                              "type": "string",
-                              "value": "[parameters('name')]"
-                            },
-                            "resourceId": {
-                              "type": "string",
-                              "value": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('name'))]"
-                            }
-                          }
-                        }
-                      }
-                    },
-                    {
-                      "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2025-04-01",
-                      "name": "[format('RA-Encryption-Key-{0}', parameters('deploymentSuffix'))]",
-                      "subscriptionId": "[variables('keyVaultSubscriptionId')]",
-                      "resourceGroup": "[variables('keyVaultResourceGroup')]",
-                      "properties": {
-                        "expressionEvaluationOptions": {
-                          "scope": "inner"
-                        },
-                        "mode": "Incremental",
-                        "parameters": {
-                          "keyName": {
-                            "value": "[parameters('encryptionKeyName')]"
-                          },
-                          "keyVaultName": {
-                            "value": "[variables('keyVaultName')]"
-                          },
-                          "principalId": {
-                            "value": "[parameters('storageAccountPrincipalId')]"
-                          },
-                          "principalType": {
-                            "value": "ServicePrincipal"
-                          },
-                          "roleDefinitionId": {
-                            "value": "e147488a-f6f5-4113-8e2d-b22465e65bf6"
-                          }
-                        },
-                        "template": {
-                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                          "contentVersion": "1.0.0.0",
-                          "metadata": {
-                            "_generator": {
-                              "name": "bicep",
-                              "version": "0.41.2.15936",
-                              "templateHash": "12830647359452053359"
-                            }
-                          },
-                          "parameters": {
-                            "keyVaultName": {
-                              "type": "string"
-                            },
-                            "principalId": {
-                              "type": "string"
-                            },
-                            "principalType": {
-                              "type": "string"
-                            },
-                            "keyName": {
-                              "type": "string"
-                            },
-                            "roleDefinitionId": {
-                              "type": "string"
-                            }
-                          },
-                          "resources": [
-                            {
-                              "type": "Microsoft.Authorization/roleAssignments",
-                              "apiVersion": "2022-04-01",
-                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
-                              "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), parameters('principalId'), parameters('roleDefinitionId'))]",
-                              "properties": {
-                                "principalId": "[parameters('principalId')]",
-                                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
-                                "principalType": "[parameters('principalType')]"
-                              }
-                            }
-                          ],
-                          "outputs": {
-                            "roleAssignmentId": {
-                              "type": "string",
-                              "value": "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), parameters('principalId'), parameters('roleDefinitionId')))]"
-                            }
-                          }
-                        }
+                        "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]"
                       }
                     }
                   ],
                   "outputs": {
-                    "encryptionKeyName": {
+                    "resourceId": {
                       "type": "string",
-                      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSubscriptionId'), variables('keyVaultResourceGroup')), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.name.value]"
+                      "value": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "condition": "[not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('RA-StorageEncryptionKey-{0}', parameters('deploymentSuffix'))]",
+              "subscriptionId": "[split(parameters('encryptionKeyVaultResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('encryptionKeyVaultResourceId'), '/')[4]]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "keyVaultName": {
+                    "value": "[last(split(parameters('encryptionKeyVaultResourceId'), '/'))]"
+                  },
+                  "keyName": {
+                    "value": "[parameters('encryptionKeyName')]"
+                  },
+                  "assignments": {
+                    "value": [
+                      {
+                        "principalId": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').identity.principalId]",
+                        "principalType": "ServicePrincipal",
+                        "roleDefinitionId": "e147488a-f6f5-4113-8e2d-b22465e65bf6"
+                      }
+                    ]
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "15417536361766114856"
+                    }
+                  },
+                  "definitions": {
+                    "roleAssignmentType": {
+                      "type": "object",
+                      "properties": {
+                        "roleDefinitionId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
+                          }
+                        },
+                        "principalId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Object (principal) ID of the identity receiving the role."
+                          }
+                        },
+                        "principalType": {
+                          "type": "string",
+                          "allowedValues": [
+                            "",
+                            "Device",
+                            "ForeignGroup",
+                            "Group",
+                            "ServicePrincipal",
+                            "User"
+                          ],
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Type of the assigned principal. Defaults to ServicePrincipal."
+                          }
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional human-readable description for the assignment."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "description": "A single role assignment to apply to a specific resource.",
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "keyVaultName": {
+                      "type": "string"
+                    },
+                    "keyName": {
+                      "type": "string"
+                    },
+                    "assignments": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/roleAssignmentType"
+                      },
+                      "metadata": {
+                        "description": "Role assignments to apply to this key vault key."
+                      }
+                    }
+                  },
+                  "resources": {
+                    "keyVault::key": {
+                      "existing": true,
+                      "type": "Microsoft.KeyVault/vaults/keys",
+                      "apiVersion": "2023-07-01",
+                      "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('keyName'))]"
+                    },
+                    "keyVault": {
+                      "existing": true,
+                      "type": "Microsoft.KeyVault/vaults",
+                      "apiVersion": "2023-07-01",
+                      "name": "[parameters('keyVaultName')]"
+                    },
+                    "roleAssignment": {
+                      "copy": {
+                        "name": "roleAssignment",
+                        "count": "[length(parameters('assignments'))]"
+                      },
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                      "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), parameters('assignments')[copyIndex()].principalId, parameters('assignments')[copyIndex()].roleDefinitionId)]",
+                      "properties": {
+                        "roleDefinitionId": "[if(contains(parameters('assignments')[copyIndex()].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex()].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex()].roleDefinitionId))]",
+                        "principalId": "[parameters('assignments')[copyIndex()].principalId]",
+                        "principalType": "[coalesce(tryGet(parameters('assignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
+                        "description": "[tryGet(parameters('assignments')[copyIndex()], 'description')]"
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "resourceIds": {
+                      "type": "array",
+                      "copy": {
+                        "count": "[length(parameters('assignments'))]",
+                        "input": "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), parameters('assignments')[copyIndex()].principalId, parameters('assignments')[copyIndex()].roleDefinitionId))]"
+                      }
                     }
                   }
                 }
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix')))]"
               ]
             },
             {
@@ -1353,8 +1298,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.41.2.15936",
-                      "templateHash": "11930303770485753828"
+                      "version": "0.42.1.51946",
+                      "templateHash": "15989883095994339194"
                     }
                   },
                   "parameters": {
@@ -1394,8 +1339,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.41.2.15936",
-                              "templateHash": "15343113952619135541"
+                              "version": "0.42.1.51946",
+                              "templateHash": "15442985629329965407"
                             }
                           },
                           "parameters": {
@@ -1444,62 +1389,124 @@
                 },
                 "mode": "Incremental",
                 "parameters": {
-                  "principalIds": {
+                  "storageAccountName": {
+                    "value": "[parameters('storageAccountName')]"
+                  },
+                  "assignments": {
                     "value": [
-                      "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').principalId, reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2024-11-01', 'full').identity.principalId)]"
+                      {
+                        "principalId": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').principalId, reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2024-11-01', 'full').identity.principalId)]",
+                        "principalType": "ServicePrincipal",
+                        "roleDefinitionId": "[variables('storageAccountRoleDefinitions')[copyIndex()]]"
+                      }
                     ]
-                  },
-                  "principalType": {
-                    "value": "ServicePrincipal"
-                  },
-                  "roleDefinitionId": {
-                    "value": "[variables('storageAccountRoleDefinitions')[copyIndex()]]"
-                  },
-                  "storageAccountResourceId": {
-                    "value": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
                   }
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.41.2.15936",
-                      "templateHash": "18212431912123992271"
+                      "version": "0.42.1.51946",
+                      "templateHash": "16269426848885975711"
+                    }
+                  },
+                  "definitions": {
+                    "roleAssignmentType": {
+                      "type": "object",
+                      "properties": {
+                        "roleDefinitionId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
+                          }
+                        },
+                        "principalId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Object (principal) ID of the identity receiving the role."
+                          }
+                        },
+                        "principalType": {
+                          "type": "string",
+                          "allowedValues": [
+                            "",
+                            "Device",
+                            "ForeignGroup",
+                            "Group",
+                            "ServicePrincipal",
+                            "User"
+                          ],
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Type of the assigned principal. Defaults to ServicePrincipal."
+                          }
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional human-readable description for the assignment."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "description": "A single role assignment to apply to a specific resource.",
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                        }
+                      }
                     }
                   },
                   "parameters": {
-                    "principalIds": {
-                      "type": "array"
-                    },
-                    "principalType": {
+                    "storageAccountName": {
                       "type": "string"
                     },
-                    "storageAccountResourceId": {
-                      "type": "string"
-                    },
-                    "roleDefinitionId": {
-                      "type": "string"
-                    }
-                  },
-                  "resources": [
-                    {
-                      "copy": {
-                        "name": "roleAssignments",
-                        "count": "[length(range(0, length(parameters('principalIds'))))]"
+                    "assignments": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/roleAssignmentType"
                       },
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2020-04-01-preview",
-                      "scope": "[resourceId('Microsoft.Storage/storageAccounts', last(split(parameters('storageAccountResourceId'), '/')))]",
-                      "name": "[guid(parameters('principalIds')[range(0, length(parameters('principalIds')))[copyIndex()]], parameters('roleDefinitionId'), parameters('storageAccountResourceId'))]",
-                      "properties": {
-                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
-                        "principalId": "[parameters('principalIds')[range(0, length(parameters('principalIds')))[copyIndex()]]]",
-                        "principalType": "[parameters('principalType')]"
+                      "metadata": {
+                        "description": "Role assignments to apply to this storage account."
                       }
                     }
-                  ]
+                  },
+                  "resources": {
+                    "storageAccount": {
+                      "existing": true,
+                      "type": "Microsoft.Storage/storageAccounts",
+                      "apiVersion": "2023-05-01",
+                      "name": "[parameters('storageAccountName')]"
+                    },
+                    "roleAssignment": {
+                      "copy": {
+                        "name": "roleAssignment",
+                        "count": "[length(parameters('assignments'))]"
+                      },
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+                      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), parameters('assignments')[copyIndex()].principalId, parameters('assignments')[copyIndex()].roleDefinitionId)]",
+                      "properties": {
+                        "roleDefinitionId": "[if(contains(parameters('assignments')[copyIndex()].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex()].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex()].roleDefinitionId))]",
+                        "principalId": "[parameters('assignments')[copyIndex()].principalId]",
+                        "principalType": "[coalesce(tryGet(parameters('assignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
+                        "description": "[tryGet(parameters('assignments')[copyIndex()], 'description')]"
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "resourceIds": {
+                      "type": "array",
+                      "copy": {
+                        "count": "[length(parameters('assignments'))]",
+                        "input": "[extensionResourceId(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), parameters('assignments')[copyIndex()].principalId, parameters('assignments')[copyIndex()].roleDefinitionId))]"
+                      }
+                    }
+                  }
                 }
               },
               "dependsOn": [
@@ -1525,7 +1532,7 @@
                     "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01', 'full').sku]"
                   },
                   "encryptionKeyName": {
-                    "value": "[reference(resourceId('Microsoft.Resources/deployments', format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyName.value]"
+                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.name.value]"
                   },
                   "keyVaultResourceId": {
                     "value": "[parameters('encryptionKeyVaultResourceId')]"
@@ -1546,8 +1553,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.41.2.15936",
-                      "templateHash": "223485388202861050"
+                      "version": "0.42.1.51946",
+                      "templateHash": "4003181789316048129"
                     }
                   },
                   "parameters": {
@@ -1620,9 +1627,9 @@
                 }
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments', format('encryptionKey-storageAccount-{0}', parameters('deploymentSuffix')))]",
                 "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.Resources/deployments', format('StorageEncryptionKey-{0}', parameters('deploymentSuffix')))]"
               ]
             }
           ],
@@ -1658,91 +1665,109 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "principalId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.functionAppPrincipalId.value]"
-          },
-          "principalType": {
-            "value": "ServicePrincipal"
-          },
-          "roleDefinitionId": {
-            "value": "17d1049b-9a84-46fb-8f53-869881c3d3ab"
-          },
-          "resourceGroupName": {
-            "value": "[variables('storageResourceGroupName')]"
+          "assignments": {
+            "value": [
+              {
+                "principalId": "[reference(resourceId('Microsoft.Resources/deployments', format('StorageQuotaFunctionApp-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.functionAppPrincipalId.value]",
+                "roleDefinitionId": "17d1049b-9a84-46fb-8f53-869881c3d3ab",
+                "principalType": "ServicePrincipal"
+              }
+            ]
           }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.41.2.15936",
-              "templateHash": "6545014133739016602"
+              "version": "0.42.1.51946",
+              "templateHash": "10722405036893539804"
+            }
+          },
+          "definitions": {
+            "roleAssignmentType": {
+              "type": "object",
+              "properties": {
+                "roleDefinitionId": {
+                  "type": "string",
+                  "metadata": {
+                    "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
+                  }
+                },
+                "principalId": {
+                  "type": "string",
+                  "metadata": {
+                    "description": "Object (principal) ID of the identity receiving the role."
+                  }
+                },
+                "principalType": {
+                  "type": "string",
+                  "allowedValues": [
+                    "",
+                    "Device",
+                    "ForeignGroup",
+                    "Group",
+                    "ServicePrincipal",
+                    "User"
+                  ],
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Type of the assigned principal. Defaults to ServicePrincipal."
+                  }
+                },
+                "description": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Optional human-readable description for the assignment."
+                  }
+                }
+              },
+              "metadata": {
+                "description": "A single role assignment to apply to a specific resource.",
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                }
+              }
             }
           },
           "parameters": {
-            "roleDefinitionId": {
-              "type": "string",
+            "assignments": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/roleAssignmentType"
+              },
               "metadata": {
-                "description": "Required. You can provide either the role definition GUID or its fully qualified ID in the following format: \\'/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11\\'.\nYou can find the GUIDs in the ID column on the table at https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles.\n"
-              }
-            },
-            "principalId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. The Principal or Object ID of the Security Principal (User, Group, Service Principal, Managed Identity)."
-              }
-            },
-            "resourceGroupName": {
-              "type": "string",
-              "defaultValue": "[resourceGroup().name]",
-              "metadata": {
-                "description": "Optional. Name of the Resource Group to assign the RBAC role to. If not provided, will use the current scope for deployment."
-              }
-            },
-            "subscriptionId": {
-              "type": "string",
-              "defaultValue": "[subscription().subscriptionId]",
-              "metadata": {
-                "description": "Optional. Subscription ID of the subscription to assign the RBAC role to. If not provided, will use the current scope for deployment."
-              }
-            },
-            "principalType": {
-              "type": "string",
-              "defaultValue": "",
-              "allowedValues": [
-                "ServicePrincipal",
-                "Group",
-                "User",
-                "ForeignGroup",
-                "Device",
-                ""
-              ],
-              "metadata": {
-                "description": "Optional. The principal type of the assigned principal ID."
+                "description": "Role assignments to apply at resource group scope."
               }
             }
           },
-          "variables": {
-            "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-          },
-          "resources": [
-            {
+          "resources": {
+            "roleAssignment": {
+              "copy": {
+                "name": "roleAssignment",
+                "count": "[length(parameters('assignments'))]"
+              },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "name": "[guid(parameters('subscriptionId'), parameters('resourceGroupName'), variables('roleDefinitionIdVar'), parameters('principalId'))]",
+              "name": "[guid(resourceGroup().id, parameters('assignments')[copyIndex()].principalId, parameters('assignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
-                "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                "principalId": "[parameters('principalId')]",
-                "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]"
+                "roleDefinitionId": "[if(contains(parameters('assignments')[copyIndex()].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex()].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex()].roleDefinitionId))]",
+                "principalId": "[parameters('assignments')[copyIndex()].principalId]",
+                "principalType": "[coalesce(tryGet(parameters('assignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
+                "description": "[tryGet(parameters('assignments')[copyIndex()], 'description')]"
               }
             }
-          ],
+          },
           "outputs": {
-            "resourceId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(parameters('subscriptionId'), parameters('resourceGroupName'), variables('roleDefinitionIdVar'), parameters('principalId')))]"
+            "resourceIds": {
+              "type": "array",
+              "copy": {
+                "count": "[length(parameters('assignments'))]",
+                "input": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('assignments')[copyIndex()].principalId, parameters('assignments')[copyIndex()].roleDefinitionId))]"
+              }
             }
           }
         }
@@ -1784,8 +1809,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.41.2.15936",
-              "templateHash": "18305280013848113805"
+              "version": "0.42.1.51946",
+              "templateHash": "12676107211162244332"
             }
           },
           "parameters": {

@@ -697,7 +697,7 @@
 									}
 								},
 								{
-									"name": "startVmOnConnect",
+									"name": "startVMOnConnect",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Start VM on Connect",
 									"defaultValue": true,
@@ -3496,7 +3496,7 @@
 							"name": "servicePrincipals",
 							"type": "Microsoft.Common.Section",
 							"label": "Azure Virtual Desktop Service Principal RBAC Assignment",
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan))]",
+							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan))]",
 							"elements": [
 								{
 									"name": "avdServicePrincipalInfoBox",
@@ -3569,7 +3569,7 @@
 										"required": true
 									},
 									"link": "[if(empty(steps('management').servicePrincipals.avdServicePrincipalPickerBlade), 'Select the Azure Virtual Desktop Application', first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
-									"visible": "[and(steps('management').servicePrincipals.enableAVDSPRBAC, empty(first(steps('management').servicePrincipals.avdServicePrincipalApi.value)), or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan))]"
+									"visible": "[and(steps('management').servicePrincipals.enableAVDSPRBAC, empty(first(steps('management').servicePrincipals.avdServicePrincipalApi.value)), or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan))]"
 								}
 							]
 						},
@@ -3653,6 +3653,22 @@
 									"label": "Enable Recovery Services",
 									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), true, if(empty(steps('basics').recoveryServicesVaultApi), false, true))]",
 									"toolTip": "Choose to deploy backups for your solution. For a personal host pool, this will enable backups on the virtual machines. For a pooled host pool, this will enable backups on the FSLogix file share when using Azure Files."
+								},
+								{
+									"name": "recoveryServicesVaultStorageRedundancy",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Vault Storage Redundancy",
+									"defaultValue": "Locally Redundant",
+									"toolTip": "Controls how backup recovery points are stored in the vault. This is independent of the storage account redundancy. LocallyRedundant is lowest cost. ZoneRedundant survives a zone failure. GeoRedundant enables cross-region restore.",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{ "label": "Locally Redundant", "value": "LocallyRedundant" },
+											{ "label": "Zone Redundant", "value": "ZoneRedundant" },
+											{ "label": "Geo Redundant", "value": "GeoRedundant" }
+										]
+									},
+									"visible": "[and(steps('management').backup.recoveryServices, not(equals(steps('basics').deploymentType, 'SessionHostsOnly')))]"
 								},
 								{
 									"name": "recoveryServicesVault",
@@ -4601,7 +4617,7 @@
 				"hostPoolMaxSessionLimit": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('controlPlane').hostPool.type, 'Pooled')), steps('controlPlane').hostPool.maxSessions, 1)]",
 				"hostPoolValidationEnvironment": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').hostPool.validation, false)]",
 				"hostPoolRDPProperties": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').hostPool.rdpProperties, '')]",
-				"startVmOnConnect": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').hostPool.startVmOnConnect, false)]",
+				"startVMOnConnect": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').hostPool.startVMOnConnect, false)]",
 				"appGroupSecurityGroups": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').assignments.groupPickerBlade.transformed.groups, parse('[]'))]",
 				"deployScalingPlan": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').scalingPlan.deployScalingPlan, false)]",
 				"scalingPlanExclusionTag": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.exclusionTag, '')]",
@@ -4669,9 +4685,10 @@
 				"fslogixExistingRemoteStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
 				"fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('identity').solution, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true)), steps('userProfiles').managedIdentity.id, '')]",
 				"fslogixAdminGroups": "[if(steps('userProfiles').shareManagement.configureAdminAccess, steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups, parse('[]'))]",
-				"avdObjectId": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('management').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVmOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('management').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('management').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
+				"avdObjectId": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('management').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('management').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('management').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
 				"deploymentVmSize": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))), steps('management').deploymentVm.size, 'Standard_B2s')]",
 				"recoveryServices": "[steps('management').backup.recoveryServices]",
+				"recoveryServicesVaultStorageRedundancy": "[if(and(steps('management').backup.recoveryServices, not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))), steps('management').backup.recoveryServicesVaultStorageRedundancy, 'LocallyRedundant')]",
 				"existingRecoveryServicesVaultResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices), steps('management').backup.recoveryServicesVault, '')]",
 				"existingDiskAccessResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices, steps('management').backup.associateDiskAccessResource), steps('management').backup.diskAccess, '')]",
 				"deploySecretsKeyVault": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual')), steps('management').keyVaults.deploySecretsKeyVault, false)]",

@@ -16,15 +16,6 @@ param deploymentType string = 'Complete'
 
 @maxLength(9)
 @description('''Required. Identifier used to describe the persona of the hostpool(s).
-A persona refers to a detailed profile that represents a specific user type, considering their unique needs,
-usage patterns, and requirements. Essentially, it's a fictional character that helps IT professionals
-understand and address the varying demands of different users within an organization.
-Each persona might include details like:
-- Role: What job they perform within the organization.  
-- Applications: What applications they use regularly.
-- Workload: The intensity of resource usage, such as compute, storage, and network.
-- Access Needs: How they access the virtual desktop—remotely or on-premises.
-- Security Requirements: Specific security measures necessary for their role.
 This identifier combined with the index parameter (when provided) is used to create the host pool, desktop application group,
 and other host pool specific resource names.
 ''')
@@ -122,7 +113,7 @@ param hostPoolRDPProperties string = ''
 param hostPoolValidationEnvironment bool = false
 
 @description('Optional. Determines if the Start VM on Connect Feature is enabled for the Host Pool.')
-param startVmOnConnect bool = true
+param startVMOnConnect bool = true
 
 @description('''Optional.
 An array of objects, defining the security groups that are assigned permissions to the desktop application group created by this solution.
@@ -512,6 +503,10 @@ param keyManagementStorageAccounts string = 'MicrosoftManaged'
 
 @description('Optional. Enable backups to an Azure Recovery Services vault.  For a pooled host pool this will enable backups on the Azure file share.  For a personal host pool this will enable backups on the AVD sessions hosts.')
 param recoveryServices bool = false
+
+@description('Optional. Storage redundancy for the Recovery Services vault. Controls how backup recovery points are stored — independently of the storage account redundancy.')
+@allowed(['LocallyRedundant', 'ZoneRedundant', 'GeoRedundant'])
+param recoveryServicesVaultStorageRedundancy string = 'LocallyRedundant'
 
 @description('Optional. The resource Id of an existing Recovery Services Vault that will be used to store Virtual Machine Backups. Only used when "DeploymentType" is "SessionHostOnly".')
 param existingRecoveryServicesVaultResourceId string = ''
@@ -958,76 +953,76 @@ module resourceNames 'modules/resourceNames.bicep' = {
 }
 
 // Resource Groups
-module deploymentResourceGroup 'modules/resourceGroups.bicep' = if (createDeploymentVm) {
+module deploymentResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (createDeploymentVm) {
   scope: subscription(deploymentSubscription)
   name: 'Resource-Group-Deployment-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
-    resourceGroupName: resourceNames.outputs.resourceGroupDeployment
+    name: resourceNames.outputs.resourceGroupDeployment
     tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, {
       'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'
     })
   }
 }
 
-module monitoringResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType == 'Complete' && enableMonitoring) {
+module monitoringResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType == 'Complete' && enableMonitoring) {
   name: 'Resource-Group-Monitoring-${deploymentSuffix}'
   scope: subscription(monitoringSubscription)
   params: {
     location: virtualMachinesRegion
-    resourceGroupName: resourceNames.outputs.resourceGroupMonitoring
+    name: resourceNames.outputs.resourceGroupMonitoring
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
 }
 
-module managementResourceGroup 'modules/resourceGroups.bicep' = if (deployManagementResources) {
+module managementResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployManagementResources) {
   name: 'Resource-Group-Management-${deploymentSuffix}'
   scope: subscription(managementSubscription)
   params: {
     location: virtualMachinesRegion
-    resourceGroupName: resourceNames.outputs.resourceGroupManagement
+    name: resourceNames.outputs.resourceGroupManagement
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
 }
 
-module controlPlaneResourceGroup 'modules/resourceGroups.bicep' = if (deploymentType == 'Complete' && empty(existingFeedWorkspaceResourceId)) {
+module controlPlaneResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType == 'Complete' && empty(existingFeedWorkspaceResourceId)) {
   name: 'Resource-Group-Control-Plane-${deploymentSuffix}'
   scope: subscription(controlPlaneSubscription)
   params: {
     location: controlPlaneRegion
-    resourceGroupName: resourceNames.outputs.resourceGroupControlPlane
+    name: resourceNames.outputs.resourceGroupControlPlane
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
 }
 
-module globalFeedResourceGroup 'modules/resourceGroups.bicep' = if (avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) && empty(existingGlobalFeedResourceId)) {
+module globalFeedResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) && empty(existingGlobalFeedResourceId)) {
   name: 'Resource-Group-Global-Feed-${deploymentSuffix}'
   scope: subscription(controlPlaneSubscription)
   params: {
     location: globalFeedRegion!
-    resourceGroupName: resourceNames.outputs.resourceGroupGlobalFeed
+    name: resourceNames.outputs.resourceGroupGlobalFeed
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
 }
 
 // Host Resource Group without Tags to prevent circular dependency between deployment prerequisites and outputs from fslogix.
 
-module hostsResourceGroupNoTags 'modules/resourceGroups.bicep' = if (deploymentType != 'SessionHostsOnly') {
+module hostsResourceGroupNoTags '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType != 'SessionHostsOnly') {
   name: 'Resource-Group-Hosts-${deploymentSuffix}'
   scope: subscription(hostsSubscription)
   params: {
     location: virtualMachinesRegion
-    resourceGroupName: resourceNames.outputs.resourceGroupHosts
+    name: resourceNames.outputs.resourceGroupHosts
     tags: {}
   }
 }
 
-module hostsResourceGroupWithTags 'modules/resourceGroups.bicep' = if (deploymentType != 'SessionHostsOnly') {
+module hostsResourceGroupWithTags '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType != 'SessionHostsOnly') {
   name: 'Resource-Group-Hosts-Tags-${deploymentSuffix}'
   scope: subscription(hostsSubscription)
   params: {
     location: virtualMachinesRegion
-    resourceGroupName: resourceNames.outputs.resourceGroupHosts
+    name: resourceNames.outputs.resourceGroupHosts
     tags: union(
       tags[?'Microsoft.Resources/resourceGroups'] ?? {},
       vmConfigurationTags,
@@ -1039,12 +1034,12 @@ module hostsResourceGroupWithTags 'modules/resourceGroups.bicep' = if (deploymen
   }
 }
 
-module storageResourceGroup 'modules/resourceGroups.bicep' = if (deployFSLogixStorage) {
+module storageResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
   name: 'Resource-Group-FSLogix-Storage-${deploymentSuffix}'
   scope: subscription(storageSubscription)
   params: {
     location: virtualMachinesRegion
-    resourceGroupName: resourceNames.outputs.resourceGroupStorage
+    name: resourceNames.outputs.resourceGroupStorage
     tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, {
       'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'
     })
@@ -1053,13 +1048,13 @@ module storageResourceGroup 'modules/resourceGroups.bicep' = if (deployFSLogixSt
 
 // Subscrpiption Level RBAC Assignments
 module rbac 'modules/rbac/rbac.bicep' = [
-  for (subId, i) in rbacSubs: if (deploymentType != 'SessionHostsOnly' && !empty(avdObjectId) && (deployScalingPlan || startVmOnConnect)) {
+  for (subId, i) in rbacSubs: if (deploymentType != 'SessionHostsOnly' && !empty(avdObjectId) && (deployScalingPlan || startVMOnConnect)) {
     name: 'Subscription-Role-Assignment-${i}-${deploymentSuffix}'
     scope: subscription(subId)
     params: {
       avdObjectId: avdObjectId
       deployScalingPlan: deployScalingPlan
-      startVmOnConnect: startVmOnConnect
+      startVMOnConnect: startVMOnConnect
     }
   }
 ]
@@ -1228,7 +1223,7 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
     scalingPlanName: resourceNames.outputs.scalingPlanName
     scalingPlanSchedules: scalingPlanSchedules
     scalingPlanExclusionTag: scalingPlanExclusionTag
-    startVmOnConnect: startVmOnConnect
+    startVMOnConnect: startVMOnConnect
     tags: tags
     virtualMachinesTimeZone: virtualMachinesTimeZone
     workspaceFeedPrivateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
@@ -1300,6 +1295,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     recoveryServices: recoveryServices
     recoveryServicesVaultName: resourceNames.outputs.recoveryServicesVaultNames.fslogixStorage
+    recoveryServicesVaultStorageRedundancy: recoveryServicesVaultStorageRedundancy
     resourceGroupDeployment: resourceNames.outputs.resourceGroupDeployment
     resourceGroupStorage: resourceNames.outputs.resourceGroupStorage
     shareSizeInGB: fslogixShareSizeInGB
@@ -1436,6 +1432,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
       ? (contains(hostPoolType, 'Personal') ? recoveryServices : false)
       : recoveryServices
     recoveryServicesVaultName: resourceNames.outputs.recoveryServicesVaultNames.virtualMachines
+    recoveryServicesVaultStorageRedundancy: recoveryServicesVaultStorageRedundancy
     resourceGroupHosts: deploymentType != 'SessionHostsOnly'
       ? resourceNames.outputs.resourceGroupHosts
       : existingHostsResourceGroupName
@@ -1473,14 +1470,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     hostsResourceGroupWithTags
   ]
 }
-
-// Session Host Replacer has been moved to a separate add-on deployment.
-// See deployments/add-ons/SessionHostReplacer/ for deployment instructions.
-// To deploy the session host replacer, use the add-on template with the following parameters:
-// - hostPoolResourceId: The resource ID of the host pool
-// - sessionHostResourceGroupName: The name of the resource group containing session hosts
-// - sessionHostTemplateSpecVersionResourceId: The Template Spec version resource ID
-// - sessionHostReplacerUserAssignedIdentityResourceId: UAI with Graph API permissions
 
 // Clean Up Deployment VM and Role Assignments
 module cleanUp 'modules/cleanUp/cleanUp.bicep' = if (createDeploymentVm) {

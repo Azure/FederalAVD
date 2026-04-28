@@ -1,4 +1,4 @@
-targetScope = 'subscription' 
+targetScope = 'subscription'
 
 param location string
 param resourceGroupHosts string
@@ -9,46 +9,63 @@ param deploymentVirtualMachineName string
 param roleAssignmentIds array
 param virtualMachineNames array
 
-module removeRunCommands 'modules/removeRunCommands.bicep' = {
-  scope: resourceGroup(resourceGroupDeployment)
+// Remove run commands left on session host VMs from earlier deployment stages
+module removeRunCommands '../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Remove-RunCommands-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupDeployment)
   params: {
+    virtualMachineName: deploymentVirtualMachineName
+    name: 'Remove-RunCommands-${deploymentSuffix}'
     location: location
-    deploymentVmName: deploymentVirtualMachineName
-    deploymentSuffix: deploymentSuffix
-    userAssignedIdentityClientId: userAssignedIdentityClientId
-    virtualMachineNames: virtualMachineNames
-    virtualMachinesResourceGroup: resourceGroupHosts
+    script: loadTextContent('../../../../.common/scripts/Remove-RunCommands.ps1')
+    asyncExecution: true
+    parameters: [
+      { name: 'ResourceManagerUri', value: environment().resourceManager }
+      { name: 'SubscriptionId', value: subscription().subscriptionId }
+      { name: 'UserAssignedIdentityClientId', value: userAssignedIdentityClientId }
+      { name: 'VirtualMachineNames', value: string(virtualMachineNames) }
+      { name: 'virtualMachinesResourceGroup', value: resourceGroupHosts }
+    ]
   }
 }
 
-// Remove role assignments for the user Assigned Identity for resource groups other than the deployment resource group to allow the deletion of the resource group.
-module removeRoleAssignments 'modules/removeRoleAssignments.bicep' = {
-  scope: resourceGroup(resourceGroupDeployment)
+// Remove role assignments on other resource groups so the deployment resource group can be deleted
+module removeRoleAssignments '../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Remove-RoleAssignments-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupDeployment)
   params: {
+    virtualMachineName: deploymentVirtualMachineName
+    name: 'Remove-RoleAssignments-${deploymentSuffix}'
     location: location
-    managementVmName: deploymentVirtualMachineName
-    roleAssignmentIds: roleAssignmentIds
-    deploymentSuffix: deploymentSuffix
-    userAssignedIdentityClientId: userAssignedIdentityClientId
+    script: loadTextContent('../../../../.common/scripts/Remove-RoleAssignments.ps1')
+    asyncExecution: true
+    parameters: [
+      { name: 'ResourceManagerUri', value: environment().resourceManager }
+      { name: 'RoleAssignmentIds', value: string(roleAssignmentIds) }
+      { name: 'UserAssignedIdentityClientId', value: userAssignedIdentityClientId }
+    ]
   }
-  dependsOn: [
-    removeRunCommands
-  ]
+  dependsOn: [removeRunCommands]
 }
 
-module removeDeploymentResourceGroup 'modules/removeDeploymentResourceGroup.bicep' = {
-  scope: resourceGroup(resourceGroupDeployment)
+// Self-delete the deployment resource group (VM deletes itself and the RG via script)
+module removeDeploymentResourceGroup '../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Delete-DeploymentResourceGroup-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupDeployment)
   params: {
+    virtualMachineName: deploymentVirtualMachineName
+    name: 'Delete-DeploymentResourceGroup-${deploymentSuffix}'
     location: location
-    deploymentVmName: deploymentVirtualMachineName
-    deploymentSuffix: deploymentSuffix
-    userAssignedIdentityClientId: userAssignedIdentityClientId
+    script: loadTextContent('../../../../.common/scripts/Remove-ResourceGroup.ps1')
+    asyncExecution: true
+    parameters: [
+      {
+        name: 'ResourceGroupResourceId'
+        value: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupDeployment}'
+      }
+      { name: 'ResourceManagerUri', value: environment().resourceManager }
+      { name: 'UserAssignedIdentityClientId', value: userAssignedIdentityClientId }
+    ]
   }
-  dependsOn: [
-    removeRunCommands
-    removeRoleAssignments
-  ]
+  dependsOn: [removeRunCommands, removeRoleAssignments]
 }

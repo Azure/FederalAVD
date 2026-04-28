@@ -740,23 +740,25 @@ var sessionHostParameters = union(
 )
 
 // Conditional Template Spec for Session Host Deployment
-module templateSpec 'modules/sessionHosts/sessionHostTemplateSpec.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
+module templateSpec '../../../.common/bicepModules/resources/templateSpecs/deploy.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
   name: 'SessionHostTemplateSpec-${deploymentSuffix}'
   params: {
+    name: templateSpecNameFinal
     location: location
-    templateSpecName: templateSpecNameFinal
-    templateSpecVersion: templateSpecVersion
     tags: tags[?'Microsoft.Resources/templateSpecs'] ?? {}
+    version: templateSpecVersion
+    description: 'Template Spec for AVD Session Host deployment used by Session Host Replacer'
+    displayName: 'AVD Session Host Template'
+    mainTemplate: loadJsonContent('modules/sessionHosts/sessionHosts.json')
   }
 }
 
 // Conditional App Service Plan deployment
-module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
+module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
   params: {
     functionAppKind: 'functionApp'
     hostingPlanType: 'FunctionsPremium'
-    logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     location: location
     name: appServicePlanName
     planPricing: appServicePlanSku
@@ -803,92 +805,117 @@ var roleAssignmentsResourceGroups = union(
     : []
 )
 
-module roleAssignmentsKeyVault '../../sharedModules/resources/key-vault/vault/rbac.bicep' = {
+module roleAssignmentsKeyVault '../../../.common/bicepModules/keyVault/vaults/roleAssignment.bicep' = {
   name: 'RoleAssign-KeyVault-KVCont-${deploymentSuffix}'
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
   params: {
-    principalId: functionApp.outputs.functionAppPrincipalId
-    roleDefinitionId: 'f25e0fa2-a7c8-4377-a976-54943a77a395' // Key Vault Contributor
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        roleDefinitionId: 'f25e0fa2-a7c8-4377-a976-54943a77a395' // Key Vault Contributor
+        principalType: 'ServicePrincipal'
+      }
+    ]
     keyVaultName: last(split(credentialsKeyVaultResourceId, '/'))
-    principalType: 'ServicePrincipal'
   }
 }
 
-module roleAssignmentVirtualMachinesSubscription '../../sharedModules/resources/authorization/role-assignment/subscription/main.bicep' = {
+module roleAssignmentVirtualMachinesSubscription '../../../.common/bicepModules/authorization/roleAssignments/deploy.subscription.bicep' = {
   name: 'RoleAssign-Sub-VirtMachCont-${deploymentSuffix}'
   scope: subscription(virtualMachinesSubscriptionId)
   params: {
-    principalId: functionApp.outputs.functionAppPrincipalId
-    roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
-    subscriptionId: virtualMachinesSubscriptionId
-    principalType: 'ServicePrincipal'
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
+        principalType: 'ServicePrincipal'
+      }
+    ]
   }
 }
 
-module roleAssignmentHostPoolSubscription '../../sharedModules/resources/authorization/role-assignment/subscription/main.bicep' = {
+module roleAssignmentHostPoolSubscription '../../../.common/bicepModules/authorization/roleAssignments/deploy.subscription.bicep' = {
   name: 'RoleAssign-Sub-Reader-${deploymentSuffix}'
   scope: subscription(hostPoolSubscriptionId)
   params: {
-    principalId: functionApp.outputs.functionAppPrincipalId
-    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader - needed to read scaling plans that may be in different resource groups
-    subscriptionId: hostPoolSubscriptionId
-    principalType: 'ServicePrincipal'
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader - needed to read scaling plans that may be in different resource groups
+        principalType: 'ServicePrincipal'
+      }
+    ]
   }
 }
 
-module roleAssignmentsRGs '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
+module roleAssignmentsRGs '../../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = [
   for rgRole in roleAssignmentsResourceGroups: {
     name: 'RoleAssign-${last(split(rgRole.resourceGroupId, '/'))}-${rgRole.roleDescription}-${deploymentSuffix}'
     scope: resourceGroup(split(rgRole.resourceGroupId, '/')[2], split(rgRole.resourceGroupId, '/')[4])
     params: {
-      principalId: functionApp.outputs.functionAppPrincipalId
-      roleDefinitionId: rgRole.roleDefinitionId
-      resourceGroupName: last(split(rgRole.resourceGroupId, '/'))
-      principalType: 'ServicePrincipal'
+      assignments: [
+        {
+          principalId: functionApp.outputs.functionAppPrincipalId
+          roleDefinitionId: rgRole.roleDefinitionId
+          principalType: 'ServicePrincipal'
+        }
+      ]
     }
   }
 ]
 
-module roleAssignmentTemplateSpec '../../sharedModules/resources/resources/templateSpecs/rbac.bicep' = {
+module roleAssignmentTemplateSpec '../../../.common/bicepModules/resources/templateSpecs/roleAssignment.bicep' = {
   name: 'RoleAssign-TemplateSpec-Reader-${deploymentSuffix}'
   params: {
-    principalId: functionApp.outputs.functionAppPrincipalId
-    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
-    principalType: 'ServicePrincipal'
-    templateSpecResourceId: !empty(sessionHostTemplateSpecResourceId)
-      ? sessionHostTemplateSpecResourceId
-      : templateSpec!.outputs.templateSpecResourceId
+    templateSpecName: !empty(sessionHostTemplateSpecResourceId)
+      ? last(split(sessionHostTemplateSpecResourceId, '/'))
+      : templateSpec!.outputs.name
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
+        principalType: 'ServicePrincipal'
+      }
+    ]
   }
 }
 
-module roleAssignmentComputeGallery '../../sharedModules/resources/compute/gallery/rbac.bicep' = if (!empty(customImageResourceId)) {
+module roleAssignmentComputeGallery '../../../.common/bicepModules/compute/galleries/roleAssignment.bicep' = if (!empty(customImageResourceId)) {
   name: 'RoleAssign-ComputeGallery-Reader-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
-    principalId: functionApp.outputs.functionAppPrincipalId
-    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
     galleryName: empty(computeGalleryResourceId) ? '' : last(split(computeGalleryResourceId, '/'))
-    principalType: 'ServicePrincipal'
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
+        principalType: 'ServicePrincipal'
+      }
+    ]
   }
 }
 
-module roleAssignmentUaiArtifacts '../../sharedModules/resources/managed-identity/user-assigned-identity/rbac.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
+module roleAssignmentUaiArtifacts '../../../.common/bicepModules/managedIdentity/userAssignedIdentities/roleAssignment.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
   name: 'RoleAssign-UAI-Artifacts-MngdIdOperator-${deploymentSuffix}'
   scope: resourceGroup(
     split(artifactsUserAssignedIdentityResourceId, '/')[2],
     split(artifactsUserAssignedIdentityResourceId, '/')[4]
   )
   params: {
-    principalId: functionApp.outputs.functionAppPrincipalId
-    roleDefinitionId: 'f1a07417-d97a-45cb-824c-7a7467783830' // Managed Identity Operator
-    principalType: 'ServicePrincipal'
     identityName: empty(artifactsUserAssignedIdentityResourceId)
       ? ''
       : last(split(artifactsUserAssignedIdentityResourceId, '/'))
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        roleDefinitionId: 'f1a07417-d97a-45cb-824c-7a7467783830' // Managed Identity Operator
+        principalType: 'ServicePrincipal'
+      }
+    ]
   }
 }
 
-module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = {
+module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp.bicep' = {
   name: 'SessionHostReplacerFunctionApp-${deploymentSuffix}'
   params: {
     location: location
@@ -1034,7 +1061,7 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
           name: 'SessionHostTemplate'
           value: !empty(sessionHostTemplateSpecResourceId)
             ? sessionHostTemplateSpecResourceId
-            : templateSpec!.outputs.templateSpecResourceId
+            : templateSpec!.outputs.resourceId
         }
         {
           name: 'SubscriptionId'
@@ -1102,7 +1129,7 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
   }
 }
 
-module functionCode '../../sharedModules/custom/functionApp/function.bicep' = {
+module functionCode '../../../.common/bicepModules/custom/functionApp/function.bicep' = {
   name: 'SessionHostReplacerFunction-${deploymentSuffix}'
   params: {
     files: {

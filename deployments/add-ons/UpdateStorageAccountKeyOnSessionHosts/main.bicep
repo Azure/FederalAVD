@@ -3,7 +3,6 @@ param location string = resourceGroup().location
 param storageAccountResourceId string
 @allowed([1, 2])
 param storageAccountKey int
-param timeStamp string = utcNow('yyyyMMddHHmm')
 
 var keyIndex = storageAccountKey - 1
 
@@ -19,7 +18,7 @@ resource vms 'Microsoft.Compute/virtualMachines@2024-03-01' existing = [for (vm,
 
 resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = [for (vm, i) in vmNames: {
     location: location
-    name: 'RunCommand-${vm}-${timeStamp}'
+    name: 'Update-Storage-Account-Key'
     
     parent: vms[i]
     properties: {

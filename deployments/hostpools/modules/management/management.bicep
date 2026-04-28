@@ -35,9 +35,7 @@ var privateEndpointVnetId = length(privateEndpointVnetName) < 37
   : uniqueString(privateEndpointVnetName)
 
 var secretList = union(
-  !empty(domainJoinUserPassword)
-    ? [{ name: 'DomainJoinUserPassword', value: domainJoinUserPassword }]
-    : [],
+  !empty(domainJoinUserPassword) ? [{ name: 'DomainJoinUserPassword', value: domainJoinUserPassword }] : [],
   !empty(domainJoinUserPrincipalName)
     ? [{ name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }]
     : [],
@@ -49,92 +47,110 @@ var secretList = union(
     : []
 )
 
-module secretsKeyVault '../../../sharedModules/resources/key-vault/vault/main.bicep' = if (deploySecretsKeyVault && !empty(secretList)) {
+var deploySecretsKv = deploySecretsKeyVault && !empty(secretList)
+var deploySecretsKvPe = deploySecretsKv && privateEndpoint && !empty(privateEndpointSubnetResourceId)
+var deployEncryptionKvPe = deployEncryptionKeysKeyVault && privateEndpoint && !empty(privateEndpointSubnetResourceId)
+
+// ─── Secrets Key Vault ─────────────────────────────────────────────────────────
+module secretsKeyVault '../../../../.common/bicepModules/keyVault/vaults/deploy.bicep' = if (deploySecretsKv) {
   name: 'Secrets-KeyVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupManagement)
   params: {
     name: secretsKeyVaultName
-    diagnosticWorkspaceId: logAnalyticsWorkspaceResourceId
-    enablePurgeProtection: keyVaultEnablePurgeProtection
+    tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
+    sku: 'standard'
     enableSoftDelete: keyVaultEnableSoftDelete
     softDeleteRetentionInDays: keyVaultRetentionInDays
-    enableVaultForDeployment: false
-    enableVaultForDiskEncryption: false
-    enableVaultForTemplateDeployment: true
-    privateEndpoints: privateEndpoint && !empty(privateEndpointSubnetResourceId)
-      ? [
-          {
-            customNetworkInterfaceName: replace(
-              replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', secretsKeyVaultName),
-              'VNETID',
-              privateEndpointVnetId
-            )
-            name: replace(
-              replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', secretsKeyVaultName),
-              'VNETID',
-              privateEndpointVnetId
-            )
-            privateDnsZoneGroup: empty(azureKeyVaultPrivateDnsZoneResourceId)
-              ? null
-              : {
-                  privateDNSResourceIds: [
-                    azureKeyVaultPrivateDnsZoneResourceId
-                  ]
-                }
-            service: 'vault'
-            subnetResourceId: privateEndpointSubnetResourceId
-            tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
-          }
-        ]
+    enablePurgeProtection: keyVaultEnablePurgeProtection
+    enabledForTemplateDeployment: true
+    diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
+      ? { workspaceId: logAnalyticsWorkspaceResourceId }
       : null
-    secrets: {
-      secureList: secretList
+    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    networkAcls: {
+      bypass: 'AzureServices'
+      defaultAction: privateEndpoint ? 'Deny' : 'Allow'
     }
-    tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
-    vaultSku: 'standard'
   }
 }
 
-module encryptionKeyVault '../../../sharedModules/resources/key-vault/vault/main.bicep' = if (deployEncryptionKeysKeyVault) {
+module secretsKeyVault_pe '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deploySecretsKvPe) {
+  name: 'Secrets-KV-PE-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupManagement)
+  params: {
+    name: replace(
+      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', secretsKeyVaultName),
+      'VNETID',
+      privateEndpointVnetId
+    )
+    customNetworkInterfaceName: replace(
+      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', secretsKeyVaultName),
+      'VNETID',
+      privateEndpointVnetId
+    )
+    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+    subnetResourceId: privateEndpointSubnetResourceId
+    privateLinkServiceId: secretsKeyVault!.outputs.resourceId
+    groupId: 'vault'
+    privateDNSZoneIds: !empty(azureKeyVaultPrivateDnsZoneResourceId) ? [azureKeyVaultPrivateDnsZoneResourceId] : []
+  }
+}
+
+module secrets '../../../../.common/bicepModules/keyVault/vaults/secrets/deploy.bicep' = [
+  for secret in secretList: if (deploySecretsKv) {
+    name: 'Secret-${secret.name}-${deploymentSuffix}'
+    scope: resourceGroup(resourceGroupManagement)
+    params: {
+      keyVaultName: secretsKeyVaultName
+      name: secret.name
+      value: secret.value
+    }
+    dependsOn: [secretsKeyVault]
+  }
+]
+
+// ─── Encryption Keys Key Vault ─────────────────────────────────────────────────
+module encryptionKeyVault '../../../../.common/bicepModules/keyVault/vaults/deploy.bicep' = if (deployEncryptionKeysKeyVault) {
   name: 'Encryption-Keys-KeyVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupManagement)
   params: {
     name: encryptionKeysKeyVaultName
-    diagnosticWorkspaceId:logAnalyticsWorkspaceResourceId
-    enablePurgeProtection: true
+    tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
+    sku: 'premium'
     enableSoftDelete: true
     softDeleteRetentionInDays: keyVaultRetentionInDays
-    enableVaultForDeployment: false
-    enableVaultForDiskEncryption: true
-    enableVaultForTemplateDeployment: false
-    privateEndpoints: privateEndpoint && !empty(privateEndpointSubnetResourceId)
-      ? [
-          {
-            customNetworkInterfaceName: replace(
-              replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeysKeyVaultName),
-              'VNETID',
-              privateEndpointVnetId
-            )
-            name: replace(
-              replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeysKeyVaultName),
-              'VNETID',
-              privateEndpointVnetId
-            )
-            privateDnsZoneGroup: empty(azureKeyVaultPrivateDnsZoneResourceId)
-              ? null
-              : {
-                  privateDNSResourceIds: [
-                    azureKeyVaultPrivateDnsZoneResourceId
-                  ]
-                }
-            service: 'vault'
-            subnetResourceId: privateEndpointSubnetResourceId
-            tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
-          }
-        ]
+    enablePurgeProtection: true
+    enabledForDiskEncryption: true
+    diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
+      ? { workspaceId: logAnalyticsWorkspaceResourceId }
       : null
-    tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
-    vaultSku: 'premium'
+    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    networkAcls: {
+      bypass: 'AzureServices'
+      defaultAction: privateEndpoint ? 'Deny' : 'Allow'
+    }
+  }
+}
+
+module encryptionKeyVault_pe '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deployEncryptionKvPe) {
+  name: 'Encryption-KV-PE-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupManagement)
+  params: {
+    name: replace(
+      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeysKeyVaultName),
+      'VNETID',
+      privateEndpointVnetId
+    )
+    customNetworkInterfaceName: replace(
+      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeysKeyVaultName),
+      'VNETID',
+      privateEndpointVnetId
+    )
+    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+    subnetResourceId: privateEndpointSubnetResourceId
+    privateLinkServiceId: encryptionKeyVault!.outputs.resourceId
+    groupId: 'vault'
+    privateDNSZoneIds: !empty(azureKeyVaultPrivateDnsZoneResourceId) ? [azureKeyVaultPrivateDnsZoneResourceId] : []
   }
 }
 

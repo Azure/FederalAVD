@@ -184,12 +184,11 @@ var encryptionKeyName = '${hpBaseName}-encryption-key-${storageAccountName}'
 // ========== //
 
 // Conditional App Service Plan deployment
-module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
+module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
   params: {
     functionAppKind: 'functionApp'
     hostingPlanType: 'FunctionsPremium'
-    logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     location: location
     name: appServicePlanName
     planPricing: 'PremiumV3_P1v3'
@@ -199,7 +198,7 @@ module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPla
 }
 
 // Storage Quota Manager Function App
-module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = {
+module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp.bicep' = {
   name: 'StorageQuotaFunctionApp-${deploymentSuffix}'
   params: {
     applicationInsightsName: appInsightsName
@@ -238,19 +237,22 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
   }
 }
 
-module roleAssignment_StorageAccounts '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = {
+module roleAssignment_StorageAccounts '../../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = {
   name: 'RA-StorageAccounts-${deploymentSuffix}'
   scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
   params: {
-    principalId: functionApp.outputs.functionAppPrincipalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: '17d1049b-9a84-46fb-8f53-869881c3d3ab' // Storage Account Contributor
-    resourceGroupName: storageResourceGroupName
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        roleDefinitionId: '17d1049b-9a84-46fb-8f53-869881c3d3ab'
+        principalType: 'ServicePrincipal'
+      }
+    ]
   }
 }
 
 // Storage Quota Manager Function
-module storageQuotaFunction '../../sharedModules/custom/functionApp/function.bicep' = {
+module storageQuotaFunction '../../../.common/bicepModules/custom/functionApp/function.bicep' = {
   name: 'StorageQuotaFunction-${deploymentSuffix}'
   params: {
     files: {

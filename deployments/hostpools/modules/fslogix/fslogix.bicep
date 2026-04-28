@@ -39,6 +39,7 @@ param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
 param recoveryServices bool
 param recoveryServicesVaultName string
+param recoveryServicesVaultStorageRedundancy string
 param resourceGroupDeployment string
 param resourceGroupStorage string
 param shareSizeInGB int
@@ -142,6 +143,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     recoveryServices: recoveryServices
     recoveryServicesVaultName: recoveryServicesVaultName
+    recoveryServicesVaultStorageRedundancy: recoveryServicesVaultStorageRedundancy
     resourceGroupStorage: resourceGroupStorage
     shardingOptions: fslogixShardOptions
     shareAdminGroups: fslogixAdminGroups

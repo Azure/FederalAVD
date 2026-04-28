@@ -33,7 +33,6 @@ param remoteLocation string = ''
 param storageSkuName string = 'Standard_LRS'
 
 @allowed([
-  'Premium'
   'Hot'
   'Cool'
 ])
@@ -109,6 +108,8 @@ var privateEndpointName = replace(replace(privateEndpointNameConv, 'SUBRESOURCE'
 var customNetworkInterfaceName = nameConvResTypeAtEnd ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}' : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
 var storageName = take('${resourceAbbreviations.storageAccounts}imageassets${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}', 24)
 var storageKind = 'StorageV2'
+var ipRules = [for ip in storagePermittedIPs: { value: ip, action: 'Allow' }]
+var virtualNetworkRules = [for subnetId in storageServiceEndpointSubnetResourceIds: { id: subnetId, action: 'Allow' }]
 
 resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: resourceGroupName
@@ -116,60 +117,129 @@ resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   tags: tags.?resourceGroups ?? {}
 }
 
-module resources 'resources.bicep' = {
+module imageGallery '../../.common/bicepModules/compute/galleries/deploy.bicep' = {
+  name: 'Image-Gallery-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
-  name: 'Image-Management-Resources-${timeStamp}'
   params: {
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
+    name: galleryName
     location: location
-    logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
-    computeGalleryName: galleryName
-    customNetworkInterfaceName: customNetworkInterfaceName
-    storageAccountName: storageName
-    blobContainerName: blobContainerName
-    managedIdentityName: identityName
-    privateEndpointName: privateEndpointName
-    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
-    storageAccessTier: storageAccessTier
-    storageSASExpirationPeriod: storageSASExpirationPeriod
-    storageKind: storageKind
-    storageSkuName: storageSkuName
-    storagePermittedIPs: storagePermittedIPs
-    storageServiceEndpointSubnetResourceIds: storageServiceEndpointSubnetResourceIds
-    storageAllowPublicNetworkAccess: storagePublicNetworkAccess
-    storageAllowSharedKeyAccess: storageAllowSharedKeyAccess
-    tags: tags != {} ? tags : null
+    tags: tags[?'Microsoft.Compute/galleries'] ?? {}
   }
-  dependsOn: [
-    resourceGroup
-  ]
+  dependsOn: [resourceGroup]
+}
+
+module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
+  name: 'Managed-Identity-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    name: identityName
+    location: location
+    tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
+  }
+  dependsOn: [resourceGroup]
+}
+
+module storageAccount '../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = {
+  name: 'Storage-Account-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    name: storageName
+    location: location
+    kind: storageKind
+    skuName: storageSkuName
+    accessTier: storageAccessTier
+    allowSharedKeyAccess: storageAllowSharedKeyAccess
+    publicNetworkAccess: storagePublicNetworkAccess
+    networkAcls: !empty(ipRules) || !empty(storageServiceEndpointSubnetResourceIds)
+      ? { bypass: 'AzureServices', defaultAction: 'Deny', virtualNetworkRules: virtualNetworkRules, ipRules: ipRules }
+      : { bypass: 'AzureServices', defaultAction: 'Deny' }
+    sasExpirationPeriod: storageSASExpirationPeriod
+    tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
+    diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
+  }
+  dependsOn: [resourceGroup]
+}
+
+module blobService '../../.common/bicepModules/storage/storageAccounts/blobServices/deploy.bicep' = {
+  name: 'Blob-Service-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    storageAccountName: storageName
+    deleteRetentionPolicyEnabled: true
+    deleteRetentionPolicyDays: 7
+    containerDeleteRetentionPolicyEnabled: true
+    containerDeleteRetentionPolicyDays: 7
+    versioningEnabled: true
+    changeFeedEnabled: true
+  }
+  dependsOn: [storageAccount]
+}
+
+module blobContainer '../../.common/bicepModules/storage/storageAccounts/blobServices/containers/deploy.bicep' = {
+  name: 'Blob-Container-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    storageAccountName: storageName
+    name: blobContainerName
+    publicAccess: 'None'
+  }
+  dependsOn: [blobService]
+}
+
+module storagePrivateEndpoint '../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (!empty(privateEndpointSubnetResourceId)) {
+  name: 'Storage-PE-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    name: privateEndpointName
+    customNetworkInterfaceName: customNetworkInterfaceName
+    location: location
+    subnetResourceId: privateEndpointSubnetResourceId
+    privateLinkServiceId: storageAccount.outputs.resourceId
+    groupId: 'blob'
+    privateDNSZoneIds: !empty(azureBlobPrivateDnsZoneResourceId) ? [azureBlobPrivateDnsZoneResourceId] : []
+    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+  }
+}
+
+module storageBlobReaderAssignment '../../.common/bicepModules/storage/storageAccounts/roleAssignment.bicep' = {
+  name: 'RA-MI-BlobReader-SA-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    storageAccountName: storageName
+    assignments: [
+      {
+        principalId: managedIdentity.outputs.principalId
+        roleDefinitionId: '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1' // Storage Blob Data Reader
+        principalType: 'ServicePrincipal'
+      }
+    ]
+  }
+  dependsOn: [storageAccount]
 }
 
 resource remoteResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = if(!empty(remoteLocation)) {
   name: remoteResourceGroupName
   location: remoteLocation
-  tags: tags.?resourceGroups ?? {}
+  tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
 }
 
-module remoteImageGallery '../sharedModules/resources/compute/gallery/main.bicep' = if(!empty(remoteLocation)) {
+module remoteImageGallery '../../.common/bicepModules/compute/galleries/deploy.bicep' = if(!empty(remoteLocation)) {
   name: 'Remote-Image-Gallery-${timeStamp}'
   scope: az.resourceGroup(remoteResourceGroupName)
   params: {
-    location: location
+    location: remoteLocation
     name: remoteGalleryName
-    tags: tags.?computeGalleries ?? {}
+    tags: tags[?'Microsoft.Compute/galleries'] ?? {}
   }
-  dependsOn: [
-    remoteResourceGroup
-  ]
+  dependsOn: [remoteResourceGroup]
 }
 
-output storageAccountResourceId string    = resources.outputs.storageAccountResourceId
-output blobContainerName string           = resources.outputs.blobContainerName
-output blobContainerUrl string = resources.outputs.blobcontainerUrl
-output managedIdentityClientId string     = resources.outputs.managedIdentityClientId
-output managedIdentityResourceId string   = resources.outputs.managedIdentityResourceId
-output computeGalleryResourceId string   = resources.outputs.computeGalleryResourceId
-output computeGalleryName string         = resources.outputs.computeGalleryName
+output storageAccountResourceId string   = storageAccount.outputs.resourceId
+output blobContainerName string          = blobContainer.outputs.name
+output blobContainerUrl string           = '${storageAccount.outputs.primaryBlobEndpoint}${blobContainerName}'
+output managedIdentityClientId string    = managedIdentity.outputs.clientId
+output managedIdentityResourceId string  = managedIdentity.outputs.resourceId
+output computeGalleryResourceId string   = imageGallery.outputs.resourceId
+output computeGalleryName string         = imageGallery.outputs.name
 #disable-next-line BCP318
-output remoteComputeGalleryResourceId string = !empty(remoteLocation) ? remoteImageGallery.outputs.resourceId : ''
+output remoteComputeGalleryResourceId string = !empty(remoteLocation) ? remoteImageGallery!.outputs.resourceId : ''

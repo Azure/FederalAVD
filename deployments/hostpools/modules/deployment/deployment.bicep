@@ -36,7 +36,9 @@ param virtualMachineAdminUserName string
 param virtualMachineSubnetResourceId string
 
 var deploymentUserAssignedIdentityName = replace(userAssignedIdentityNameConv, 'TOKEN', 'avd-deployment')
+var hostPoolParentTag = '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
 
+// ─── Role assignment definitions ──────────────────────────────────────────────
 var roleDefinitions = {
   Contributor: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
   DesktopVirtualizationApplicationGroupContributor: '86240b0e-9422-4c43-887b-b61143f32ba8'
@@ -152,79 +154,119 @@ var roleAssignments = union(
   roleAssignmentsStorage
 )
 
-module deploymentUserAssignedIdentity '../../../sharedModules/resources/managed-identity/user-assigned-identity/main.bicep' = {
+// ─── Deployment user-assigned identity ────────────────────────────────────────
+module deploymentUserAssignedIdentity '../../../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
   name: 'UserAssignedIdentity-Deployment-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
-    location: location
     name: deploymentUserAssignedIdentityName
+    location: location
     tags: union(
-      {
-        'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
-      },
+      { 'cm-resource-parent': hostPoolParentTag },
       tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
     )
   }
 }
 
-module roleAssignments_deployment '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
+// ─── Role assignments (RG-scoped, one module call per entry) ──────────────────
+module roleAssignments_deployment '../../../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = [
   for i in range(0, length(roleAssignments)): {
     scope: resourceGroup(roleAssignments[i].resourceGroup)
     name: 'RA-${roleAssignments[i].depName}-${deploymentSuffix}'
     params: {
-      principalId: deploymentUserAssignedIdentity.outputs.principalId
-      principalType: 'ServicePrincipal'
-      roleDefinitionId: roleAssignments[i].roleDefinitionId
+      assignments: [
+        {
+          principalId: deploymentUserAssignedIdentity.outputs.principalId
+          principalType: 'ServicePrincipal'
+          roleDefinitionId: roleAssignments[i].roleDefinitionId
+        }
+      ]
     }
   }
 ]
 
-// Deployment VM
-module virtualMachine 'modules/virtualMachine.bicep' = {
+// ─── Deployment VM ─────────────────────────────────────────────────────────────
+module virtualMachine '../../../../.common/bicepModules/compute/virtualMachines/deploy.bicep' = {
   name: 'VirtualMachine-Deployment-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
-    deploymentSuffix: deploymentSuffix
-    diskName: virtualMachineDiskName
-    diskSku: diskSku
-    domainJoinUserPassword: domainJoinUserPassword
-    domainJoinUserPrincipalName: domainJoinUserPrincipalName
-    domainName: domainName
-    encryptionAtHost: encryptionAtHost
-    identitySolution: identitySolution
+    name: virtualMachineName
     location: location
-    networkInterfaceName: virtualMachineNICName
-    ouPath: ouPath
+    tags: union({ 'cm-resource-parent': hostPoolParentTag }, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
+    nicName: virtualMachineNICName
     subnetResourceId: virtualMachineSubnetResourceId
-    tagsNetworkInterfaces: union(
-      {
-        'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
-      },
-      tags[?'Microsoft.Network/networkInterfaces'] ?? {}
-    )
-    tagsVirtualMachines: union(
-      {
-        'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
-      },
-      tags[?'Microsoft.Compute/virtualMachines'] ?? {}
-    )
-
-    userAssignedIdentitiesResourceIds: !empty(fslogixAppUpdateUserAssignedIdentityResourceId) ? {
-      '${deploymentUserAssignedIdentity.outputs.resourceId}': {}
-      '${fslogixAppUpdateUserAssignedIdentityResourceId}': {}
-    } : {
-      '${deploymentUserAssignedIdentity.outputs.resourceId}': {}
-    }
-    virtualMachineName: virtualMachineName
-    virtualMachineAdminPassword: virtualMachineAdminPassword
-    virtualMachineAdminUserName: virtualMachineAdminUserName
+    enableAcceleratedNetworking: false
     vmSize: deploymentVmSize
+    imagePublisher: 'MicrosoftWindowsServer'
+    imageOffer: 'WindowsServer'
+    imageSku: '2019-datacenter-core-g2'
+    osDiskName: virtualMachineDiskName
+    osDiskSku: diskSku
+    adminUsername: virtualMachineAdminUserName
+    adminPassword: virtualMachineAdminPassword
+    licenseType: 'Windows_Server'
+    securityType: 'TrustedLaunch'
+    secureBootEnabled: true
+    vTpmEnabled: true
+    encryptionAtHost: encryptionAtHost
+    bootDiagnosticsEnabled: false
+    systemAssignedIdentity: true
+    userAssignedIdentityResourceIds: !empty(fslogixAppUpdateUserAssignedIdentityResourceId)
+      ? [
+          deploymentUserAssignedIdentity.outputs.resourceId
+          fslogixAppUpdateUserAssignedIdentityResourceId
+        ]
+      : [
+          deploymentUserAssignedIdentity.outputs.resourceId
+        ]
+    extensions: union(
+      [
+        {
+          name: 'GuestAttestation'
+          publisher: 'Microsoft.Azure.Security.WindowsAttestation'
+          type: 'GuestAttestation'
+          typeHandlerVersion: '1.0'
+          autoUpgradeMinorVersion: true
+          settings: {
+            AttestationConfig: {
+              MaaSettings: { maaEndpoint: '', maaTenantName: 'GuestAttestation' }
+              AscSettings: { ascReportingEndpoint: '', ascReportingFrequency: '' }
+              useCustomToken: 'false'
+              disableAlerts: 'false'
+            }
+          }
+        }
+      ],
+      (!empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName) && (contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'))
+        ? [
+            {
+              name: 'JsonADDomainExtension'
+              publisher: 'Microsoft.Compute'
+              type: 'JsonADDomainExtension'
+              typeHandlerVersion: '1.3'
+              autoUpgradeMinorVersion: true
+              forceUpdateTag: deploymentSuffix
+              settings: {
+                Name: domainName
+                User: domainJoinUserPrincipalName
+                Restart: 'true'
+                Options: '3'
+                OUPath: ouPath
+              }
+              protectedSettings: {
+                Password: domainJoinUserPassword
+              }
+              provisionAfterExtensions: ['GuestAttestation']
+            }
+          ]
+        : []
+    )
   }
 }
 
 output deploymentUserAssignedIdentityClientId string = deploymentUserAssignedIdentity.outputs.clientId
 output deploymentUserAssignedIdentityResourceId string = deploymentUserAssignedIdentity.outputs.resourceId
 output deploymentUserAssignedIdentityRoleAssignmentIds array = [
-  for i in filter(range(0, length(roleAssignments)), i => roleAssignments[i].resourceGroup != resourceGroupDeployment): roleAssignments_deployment[i].outputs.resourceId
+  for i in filter(range(0, length(roleAssignments)), i => roleAssignments[i].resourceGroup != resourceGroupDeployment): roleAssignments_deployment[i].outputs.resourceIds
 ]
-output virtualMachineName string = virtualMachine.outputs.Name
+output virtualMachineName string = virtualMachine.outputs.name

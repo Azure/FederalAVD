@@ -80,6 +80,7 @@ param ouPath string
 param pooledHostPool bool
 param recoveryServices bool
 param recoveryServicesVaultName string
+param recoveryServicesVaultStorageRedundancy string
 param resourceGroupDeployment string
 param resourceGroupHosts string
 param secureBootEnabled bool
@@ -165,14 +166,18 @@ resource hostPoolGet 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' exis
 }
 
 // Required for EntraID login
-module roleAssignment_VirtualMachineUserLogin '../../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
+module roleAssignment_VirtualMachineUserLogin '../../../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = [
   for i in range(0, length(appGroupSecurityGroups)): if (deploymentType != 'SessionHostsOnly' && !contains(identitySolution, 'DomainServices')) {
     name: 'RA-Hosts-VMLoginUser-${i}-${deploymentSuffix}'
     scope: resourceGroup(resourceGroupHosts)
     params: {
-      principalId: appGroupSecurityGroups[i]
-      principalType: 'Group'
-      roleDefinitionId: 'fb879df8-f326-4884-b1cf-06f3ad86be52' // Virtual Machine User Login
+      assignments: [
+        {
+          principalId: appGroupSecurityGroups[i]
+          principalType: 'Group'
+          roleDefinitionId: 'fb879df8-f326-4884-b1cf-06f3ad86be52' // Virtual Machine User Login
+        }
+      ]
     }
   }
 ]
@@ -189,35 +194,28 @@ module hostPoolUpdate 'modules/hostPoolUpdate.bicep' = if(deploymentType == 'Ses
   } 
 }
 
-module diskAccessResource '../../../sharedModules/resources/compute/disk-access/main.bicep' = if (deploymentType != 'SessionHostsOnly' && deployDiskAccessResource) {
+module diskAccessResource '../../../../.common/bicepModules/compute/diskAccesses/deploy.bicep' = if (deploymentType != 'SessionHostsOnly' && deployDiskAccessResource) {
   scope: resourceGroup(resourceGroupHosts)
   name: 'DiskAccess-${deploymentSuffix}'
   params: {
     name: diskAccessName
     location: location
-    privateEndpoints:[
-      {
-        customNetworkInterfaceName: replace(
-          replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'disks'), 'RESOURCE', diskAccessName),
-          'VNETID',
-          '${split(privateEndpointSubnetResourceId, '/')[8]}'
-        )
-        name: replace(
-          replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'disks'), 'RESOURCE', diskAccessName),
-          'VNETID',
-          '${split(privateEndpointSubnetResourceId, '/')[8]}'
-        )
-        privateDnsZoneGroup: empty(azureBlobPrivateDnsZoneResourceId) ? null : {
-          privateDNSResourceIds: [
-            azureBlobPrivateDnsZoneResourceId
-          ]
-        }
-        service: 'disks'
-        subnetResourceId: privateEndpointSubnetResourceId
-        tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
-      }
-    ]
     tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/diskAccesses'] ?? {})
+  }
+}
+
+module diskAccessPrivateEndpoint '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deploymentType != 'SessionHostsOnly' && deployDiskAccessResource && !empty(privateEndpointSubnetResourceId)) {
+  scope: resourceGroup(resourceGroupHosts)
+  name: 'PE-DiskAccess-${deploymentSuffix}'
+  params: {
+    name: replace(replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'disks'), 'RESOURCE', diskAccessName), 'VNETID', split(privateEndpointSubnetResourceId, '/')[8])
+    customNetworkInterfaceName: replace(replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'disks'), 'RESOURCE', diskAccessName), 'VNETID', split(privateEndpointSubnetResourceId, '/')[8])
+    location: location
+    subnetResourceId: privateEndpointSubnetResourceId
+    privateLinkServiceId: diskAccessResource!.outputs.resourceId
+    groupId: 'disks'
+    privateDNSZoneIds: !empty(azureBlobPrivateDnsZoneResourceId) ? [azureBlobPrivateDnsZoneResourceId] : []
+    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
   }
 }
 
@@ -257,14 +255,13 @@ resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-
   name: last(split(artifactsUserAssignedIdentityResourceId, '/'))
 }
 
-module availabilitySets '../../../sharedModules/resources/compute/availability-set/main.bicep' = [for i in range(0, availabilitySetsCount): if (pooledHostPool && availability == 'AvailabilitySets') {
+module availabilitySets '../../../../.common/bicepModules/compute/availabilitySets/deploy.bicep' = [for i in range(0, availabilitySetsCount): if (pooledHostPool && availability == 'AvailabilitySets') {
   name: 'AvailabilitySet-${padLeft((i + availabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     name: replace(availabilitySetNameConv, '##', padLeft((i + availabilitySetsIndex) + 1, 2, '0'))
     platformFaultDomainCount: 2
     platformUpdateDomainCount: 5
-    proximityPlacementGroupResourceId: ''
     location: location
     skuName: 'Aligned'
     tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/availabilitySets'] ?? {})
@@ -362,68 +359,64 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
   ]
 }]
 
-module recoveryServicesVault '../../../sharedModules/resources/recovery-services/vault/main.bicep' = if (deploymentType != 'SessionHostsOnly' && recoveryServices) {
+module recoveryServicesVault '../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (deploymentType != 'SessionHostsOnly' && recoveryServices) {
   name: 'RecoveryServicesVault-VirtualMachines-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
-    location: location
     name: recoveryServicesVaultName
-    backupPolicies: [
-      {
-        name: backupPolicyName
-        properties: {
-          backupManagementType: 'AzureIaasVM'
-          instantRpRetentionRangeInDays: 2
-          policyType: 'V2'
-          retentionPolicy: {
-            retentionPolicyType: 'LongTermRetentionPolicy'
-            dailySchedule: {
-              retentionDuration: {
-                count: 30
-                durationType: 'Days'
-              }
-              retentionTimes: [
-                '23:00'
-              ]
-            }
+    location: location
+    diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
+    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    storageType: recoveryServicesVaultStorageRedundancy
+    tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.recoveryServices/vaults'] ?? {})
+  }
+}
+
+module recoveryServicesVaultBackupPolicy '../../../../.common/bicepModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = if (deploymentType != 'SessionHostsOnly' && recoveryServices) {
+  name: 'RSV-BackupPolicy-VirtualMachines-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupHosts)
+  params: {
+    recoveryServicesVaultName: recoveryServicesVaultName
+    name: backupPolicyName
+    properties: {
+      backupManagementType: 'AzureIaasVM'
+      instantRpRetentionRangeInDays: 2
+      policyType: 'V2'
+      retentionPolicy: {
+        retentionPolicyType: 'LongTermRetentionPolicy'
+        dailySchedule: {
+          retentionDuration: {
+            count: 30
+            durationType: 'Days'
           }
-          schedulePolicy: {
-            schedulePolicyType: 'SimpleSchedulePolicyV2'
-            scheduleRunFrequency: 'Daily'
-            dailySchedule: {
-              scheduleRunTimes: [
-                '23:00'
-              ]
-            }
-          }     
-          timeZone: timeZone
+          retentionTimes: ['23:00']
         }
       }
-    ]
-    privateEndpoints: privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId) && !empty(azureBlobPrivateDnsZoneResourceId) && !empty(azureQueuePrivateDnsZoneResourceId)
-      ? [
-          {
-            customNetworkInterfaceName: replace(
-              replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', recoveryServicesVaultName),
-              'VNETID',
-              '${split(privateEndpointSubnetResourceId, '/')[8]}'
-            )            
-            name: replace(
-              replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', recoveryServicesVaultName),
-              'VNETID',
-              '${split(privateEndpointSubnetResourceId, '/')[8]}'
-            )
-            privateDnsZoneGroup: empty(nonEmptyBackupPrivateDNSZoneResourceIds) ? null :{
-              privateDNSResourceIds: nonEmptyBackupPrivateDNSZoneResourceIds
-            }
-            service: 'AzureBackup'
-            subnetResourceId: privateEndpointSubnetResourceId
-            tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
-          }
-        ]
-      : null
-    diagnosticWorkspaceId: logAnalyticsWorkspaceResourceId
-    tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.recoveryServices/vaults'] ?? {})
+      schedulePolicy: {
+        schedulePolicyType: 'SimpleSchedulePolicyV2'
+        scheduleRunFrequency: 'Daily'
+        dailySchedule: {
+          scheduleRunTimes: ['23:00']
+        }
+      }
+      timeZone: timeZone
+    }
+  }
+  dependsOn: [recoveryServicesVault]
+}
+
+module recoveryServicesVaultPrivateEndpoint '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deploymentType != 'SessionHostsOnly' && recoveryServices && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId) && !empty(azureBlobPrivateDnsZoneResourceId) && !empty(azureQueuePrivateDnsZoneResourceId)) {
+  name: 'PE-RSV-VirtualMachines-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupHosts)
+  params: {
+    name: replace(replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', recoveryServicesVaultName), 'VNETID', split(privateEndpointSubnetResourceId, '/')[8])
+    customNetworkInterfaceName: replace(replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', recoveryServicesVaultName), 'VNETID', split(privateEndpointSubnetResourceId, '/')[8])
+    location: location
+    subnetResourceId: privateEndpointSubnetResourceId
+    privateLinkServiceId: recoveryServicesVault!.outputs.resourceId
+    groupId: 'AzureBackup'
+    privateDNSZoneIds: nonEmptyBackupPrivateDNSZoneResourceIds
+    tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
   }
 }
 

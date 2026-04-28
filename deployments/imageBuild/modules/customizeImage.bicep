@@ -1,7 +1,5 @@
 targetScope = 'resourceGroup'
 
-@secure()
-param adminPw string
 param applyWindowsDesktopOptimizations bool
 param appsToRemove array
 param cloud string

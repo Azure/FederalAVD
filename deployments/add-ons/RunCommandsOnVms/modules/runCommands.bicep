@@ -9,62 +9,25 @@ param virtualMachineName string
 
 var apiVersion = startsWith(environment().name, 'USN') ? '2017-08-01' : '2018-02-01'
 
-resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-03-01' existing = {
-  name: virtualMachineName
-}
-
 @batchSize(1)
-resource runCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = [for script in scripts: {
+module runCommands '../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = [for script in scripts: {
   name: script.name
-  location: location
-  parent: virtualMachine
-  properties: {
-    asyncExecution: false
-    errorBlobManagedIdentity: empty(logsContainerUri)
-      ? null
-      : {
-          clientId: logsUserAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logsContainerUri)
-      ? null
-      : '${logsContainerUri}/${virtualMachineName}-${script.name}-error-${timeStamp}.log'
-    outputBlobManagedIdentity: empty(logsContainerUri)
-      ? null
-      : {
-          clientId: logsUserAssignedIdentityClientId
-        }
-    outputBlobUri: empty(logsContainerUri)
-      ? null
-      : '${logsContainerUri}/${virtualMachineName}-${script.name}-output-${timeStamp}.log'
+  params: {
+    virtualMachineName: virtualMachineName
+    location: location
+    name: script.name
+    script: loadTextContent('../functions/Execute-Script.ps1')
+    outputBlobUri: empty(logsContainerUri) ? '' : '${logsContainerUri}/${virtualMachineName}-${script.name}-output-${timeStamp}.log'
+    errorBlobUri: empty(logsContainerUri) ? '' : '${logsContainerUri}/${virtualMachineName}-${script.name}-error-${timeStamp}.log'
+    outputBlobManagedIdentityClientId: logsUserAssignedIdentityClientId
+    errorBlobManagedIdentityClientId: logsUserAssignedIdentityClientId
     parameters: [
-      {
-        name: 'APIVersion'
-        value: apiVersion
-      }
-      {
-        name: 'BlobStorageSuffix'
-        value: 'blob.${environment().suffixes.storage}'
-      }      
-      {
-        name: 'UserAssignedIdentityClientId'
-        value: scriptsUserAssignedIdentityClientId
-      }    
-      {
-        name: 'Name'
-        value: script.name
-      }
-      {
-        name: 'Uri'
-        value: script.uri
-      }
-      {
-        name: 'Arguments'
-        value: script.arguments
-      }
+      { name: 'APIVersion', value: apiVersion }
+      { name: 'BlobStorageSuffix', value: 'blob.${environment().suffixes.storage}' }
+      { name: 'UserAssignedIdentityClientId', value: scriptsUserAssignedIdentityClientId }
+      { name: 'Name', value: script.name }
+      { name: 'Uri', value: script.uri }
+      { name: 'Arguments', value: script.arguments }
     ]
-    source: {
-      script: loadTextContent('../functions/Execute-Script.ps1')
-    }
-    treatFailureAsDeploymentFailure: true
   }
 }]

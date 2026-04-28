@@ -14,7 +14,7 @@ resource imageVm 'Microsoft.Compute/virtualMachines@2022-11-01' existing = {
   name: imageVmName
 }
 
-resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing = {
+resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-11-01' existing = {
   name: orchestrationVmName
 }
 

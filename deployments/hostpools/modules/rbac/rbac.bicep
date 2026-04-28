@@ -2,10 +2,10 @@ targetScope = 'subscription'
 
 param avdObjectId string
 param deployScalingPlan bool
-param startVmOnConnect bool
+param startVMOnConnect bool
 
 // Role Assignment required for Start VM On Connect
-resource roleAssignment_PowerOnContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!deployScalingPlan && startVmOnConnect) {
+resource roleAssignment_PowerOnContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!deployScalingPlan && startVMOnConnect) {
   name: guid(avdObjectId, '489581de-a3bd-480d-9518-53dea7416b33', subscription().id)
   properties: {
     roleDefinitionId: resourceId(
