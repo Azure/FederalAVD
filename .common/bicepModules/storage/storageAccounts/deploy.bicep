@@ -163,4 +163,3 @@ resource diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-pre
 
 output resourceId string = storageAccount.id
 output name string = storageAccount.name
-output primaryBlobEndpoint string = !contains(kind, 'File') ? storageAccount.properties.primaryEndpoints.blob : ''

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "10490756439107047993"
+      "templateHash": "15271738218986218717"
     },
     "name": "Zero Trust Architecture Custom Windows Image Builder",
     "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
@@ -1278,6 +1278,7 @@
     "adminPw": "[format('1qaz@WSX{0}', uniqueString(subscription().id, variables('imageBuildResourceGroupName')))]",
     "adminUserName": "vmadmin",
     "logContainerName": "image-customization-logs",
+    "logContainerUri": "[if(parameters('collectCustomizationLogs'), format('{0}.blob.{1}/{2}/', variables('logStorageAccountName'), environment().suffixes.storage, variables('logContainerName')), '')]",
     "galleryImageDefinitionHyperVGeneration": "[if(or(endsWith(parameters('mpSku'), 'g2'), startsWith(parameters('mpSku'), 'win11')), 'V2', 'V1')]",
     "galleryImageDefinitionName": "[if(empty(parameters('imageDefinitionResourceId')), if(empty(parameters('customImageDefinitionName')), if(parameters('nameConvResTypeAtEnd'), replace(format('{0}-{1}-{2}-{3}', replace(variables('galleryImageDefinitionPublisher'), '-', ''), replace(variables('galleryImageDefinitionOffer'), '-', ''), replace(variables('galleryImageDefinitionSku'), '-', ''), variables('resourceAbbreviations').imageDefinitions), ' ', ''), replace(format('{0}-{1}-{2}-{3}', variables('resourceAbbreviations').imageDefinitions, replace(variables('galleryImageDefinitionPublisher'), '-', ''), replace(variables('galleryImageDefinitionOffer'), '-', ''), replace(variables('galleryImageDefinitionSku'), '-', '')), ' ', '')), parameters('customImageDefinitionName')), last(split(parameters('imageDefinitionResourceId'), '/')))]",
     "galleryImageDefinitionOffer": "[if(not(empty(parameters('imageDefinitionOffer'))), replace(parameters('imageDefinitionOffer'), ' ', ''), parameters('mpOffer'))]",
@@ -2021,7 +2022,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "226967552370976425"
+              "templateHash": "16301049299282143817"
             }
           },
           "definitions": {
@@ -2395,10 +2396,6 @@
             "name": {
               "type": "string",
               "value": "[parameters('name')]"
-            },
-            "primaryBlobEndpoint": {
-              "type": "string",
-              "value": "[reference('storageAccount').primaryEndpoints.blob]"
             }
           }
         }
@@ -3874,7 +3871,9 @@
           "teamsCloudType": {
             "value": "[parameters('teamsCloudType')]"
           },
-          "logBlobContainerUri": "[if(parameters('collectCustomizationLogs'), createObject('value', format('{0}{1}/', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Logs-StorageAccount-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.primaryBlobEndpoint.value, variables('logContainerName'))), createObject('value', ''))]",
+          "logBlobContainerUri": {
+            "value": "[variables('logContainerUri')]"
+          },
           "installUpdates": {
             "value": "[parameters('installUpdates')]"
           },
@@ -4772,7 +4771,6 @@
       },
       "dependsOn": [
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Image-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Logs-StorageAccount-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Orchestration-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Resize-ImageVM-OSDisk-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}ManagedIdentity-{1}', variables('depPrefix'), variables('deploymentSuffix')))]"
@@ -4802,7 +4800,9 @@
           "location": {
             "value": "[parameters('location')]"
           },
-          "logBlobContainerUri": "[if(parameters('collectCustomizationLogs'), createObject('value', format('{0}{1}/', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Logs-StorageAccount-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.primaryBlobEndpoint.value, variables('logContainerName'))), createObject('value', ''))]",
+          "logBlobContainerUri": {
+            "value": "[variables('logContainerUri')]"
+          },
           "orchestrationVmName": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Orchestration-VM-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.name.value]"
           },
@@ -4974,7 +4974,6 @@
       "dependsOn": [
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Customize-Image-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Image-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Logs-StorageAccount-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Orchestration-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}ManagedIdentity-{1}', variables('depPrefix'), variables('deploymentSuffix')))]"
       ]

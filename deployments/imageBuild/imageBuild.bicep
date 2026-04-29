@@ -354,7 +354,7 @@ var adminUserName = 'vmadmin'
 
 var logContainerName = 'image-customization-logs'
 var logContainerUri = collectCustomizationLogs
-  ? '${logsStorageAccount!.outputs.primaryBlobEndpoint}${logContainerName}/'
+  ? '${logStorageAccountName}.blob.${environment().suffixes.storage}/${logContainerName}/'
   : ''
 
 var imageDefinitionFeatures = empty(imageDefinitionResourceId)

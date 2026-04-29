@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "4946067219556111411"
+      "templateHash": "8433197455686680682"
     }
   },
   "parameters": {
@@ -950,7 +950,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "226967552370976425"
+              "templateHash": "16301049299282143817"
             }
           },
           "definitions": {
@@ -1324,10 +1324,6 @@
             "name": {
               "type": "string",
               "value": "[parameters('name')]"
-            },
-            "primaryBlobEndpoint": {
-              "type": "string",
-              "value": "[reference('storageAccount').primaryEndpoints.blob]"
             }
           }
         }
@@ -2048,7 +2044,7 @@
     },
     "blobContainerUrl": {
       "type": "string",
-      "value": "[format('{0}{1}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-Account-{0}', parameters('timeStamp'))), '2025-04-01').outputs.primaryBlobEndpoint.value, variables('blobContainerName'))]"
+      "value": "[format('{0}.blob.{1}/{2}', variables('storageName'), environment().suffixes.storage, variables('blobContainerName'))]"
     },
     "managedIdentityClientId": {
       "type": "string",

@@ -233,7 +233,7 @@ module remoteImageGallery '../../.common/bicepModules/compute/galleries/deploy.b
 
 output storageAccountResourceId string   = storageAccount.outputs.resourceId
 output blobContainerName string          = blobContainer.outputs.name
-output blobContainerUrl string           = '${storageAccount.outputs.primaryBlobEndpoint}${blobContainerName}'
+output blobContainerUrl string           = '${storageName}.blob.${environment().suffixes.storage}/${blobContainerName}'
 output managedIdentityClientId string    = managedIdentity.outputs.clientId
 output managedIdentityResourceId string  = managedIdentity.outputs.resourceId
 output computeGalleryResourceId string   = imageGallery.outputs.resourceId
