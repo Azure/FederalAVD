@@ -55,7 +55,7 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =
       }    
       {
         name: 'UserAssignedIdentityClientId'
-        value: !empty(userAssignedIdentityResourceId) ? userAssignedIdentity.properties.clientId : ''
+        value: !empty(userAssignedIdentityResourceId) ? userAssignedIdentity!.properties.clientId : ''
       }
     ]
     source: {

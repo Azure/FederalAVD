@@ -7,6 +7,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "azclix64.msi",
         "DestinationFolders": [
             "AzCLI"
@@ -20,6 +21,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "lgpo.zip",
         "DestinationFolders": [
             "Configure-DesktopBackground",
@@ -40,6 +42,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "FSLogix.zip",
         "DestinationFolders": [
             "",
@@ -54,6 +57,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "Office365DeploymentTool.exe",
         "DestinationFolders": [
             ""
@@ -67,6 +71,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "AdminTemplates_x64.exe",
         "DestinationFolders": [
             "Configure-Office365Policy"
@@ -80,6 +85,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "OneDriveSetup.exe",
         "DestinationFolders": [
             ""
@@ -93,6 +99,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "teamsbootstrapper.exe",
         "DestinationFolders": [
             ""
@@ -106,6 +113,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "MSTeams-x64.msix",
         "DestinationFolders": [
             ""
@@ -119,6 +127,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "WebView2.exe",
         "DestinationFolders": [
             ""
@@ -132,6 +141,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "MsRdcWebRTCSvc.msi",
         "DestinationFolders": [
             ""
@@ -145,6 +155,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "vc_redist.x64.exe",
         "DestinationFolders": [
             "",
@@ -159,6 +170,7 @@
         "APIUrl": "https://edgeupdates.microsoft.com/api/products?view=enterprise",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "EdgeEnterprisePolicyTemplates.cab",
         "DestinationFolders": [
             "Configure-EdgePolicy"
@@ -172,6 +184,7 @@
         "APIUrl": "",
         "GitHubRepo": "Azure/azure-powershell",
         "GitHubFileNamePattern": "Az-Cmdlets-*-x64.msi",
+        "WingetId": "",
         "DestinationFileName": "PowerShell-Az.msi",
         "DestinationFolders": [
             ""
@@ -185,6 +198,7 @@
         "APIUrl": "",
         "GitHubRepo": "PowerShell/PowerShell",
         "GitHubFileNamePattern": "*win-x64.msi",
+        "WingetId": "",
         "DestinationFileName": "Powershell.msi",
         "DestinationFolders": [
             ""
@@ -198,6 +212,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "VSCodesetup.exe",
         "DestinationFolders": [
             "VSCode"
@@ -211,6 +226,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "InstallRoot.msi",
         "DestinationFolders": [
             "InstallRoot"
@@ -224,6 +240,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "STIGs.zip",
         "DestinationFolders": [
             "STIGs"
@@ -237,6 +254,7 @@
         "APIUrl": "",
         "GitHubRepo": "",
         "GitHubFileNamePattern": "",
+        "WingetId": "",
         "DestinationFileName": "WDOT.zip",
         "DestinationFolders": [
             ""
@@ -250,6 +268,7 @@
         "APIUrl": "",
         "GitHubRepo": "git-for-windows/git",
         "GitHubFileNamePattern": "*64-bit.exe",
+        "WingetId": "",
         "DestinationFileName": "Git-64-bit.exe",
         "DestinationFolders": [
             "Git"

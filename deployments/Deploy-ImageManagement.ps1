@@ -179,27 +179,45 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         . "$FunctionsPath\Storage\Evergreen.ps1"
         Install-Evergreen
     }
+
+    # Check if any download requires winget
+    $RequiresWinget = $false
+    foreach ($key in $Downloads.PSObject.Properties.Name) {
+        if ($null -ne $Downloads.$key.WingetId -and $Downloads.$key.WingetId -ne '') {
+            $RequiresWinget = $true
+            break
+        }
+    }
+    If ($RequiresWinget -and -not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
+        Write-Warning "One or more downloads require winget, but winget was not found on this system. Winget-based downloads will be skipped."
+    }
     
     foreach ($key in $Downloads.PSObject.Properties.Name) {
         $Download = $Downloads.$key
         $SoftwareName = $key
         Write-Output "--------------------------------------------------"
         Write-Output "## Start - $SoftwareName ##"
-        if ($Download.WebSiteUrl -ne '' -and $Download.SearchString -ne '') {
+        $DownloadUrl = $null
+        $UseWinget = $false
+        If ($null -ne $Download.WingetId -and $Download.WingetId -ne '') {
+            $UseWinget = $true
+            Write-Output "Winget Id '$($Download.WingetId)' configured for '$SoftwareName'."
+        }
+        ElseIf (($null -ne $Download.WebSiteUrl -and $Download.WebSiteUrl -ne '') -and ($null -ne $Download.SearchString -and $Download.SearchString -ne '')) {
             $WebSiteUrl = $Download.WebSiteUrl
             $SearchString = $Download.SearchString
             Write-Output "Determining download Url for latest version of '$SoftwareName' from '$WebsiteUrl'."
             $DownloadUrl = Get-InternetUrl -WebSiteUrl $WebSiteUrl -searchstring $SearchString -ErrorAction SilentlyContinue
-            If ($null -eq $DownloadUrl -and $Download.DownloadUrl -ne '') {
+            If ($null -eq $DownloadUrl -and ($null -ne $Download.DownloadUrl -and $Download.DownloadUrl -ne '')) {
                 Write-Output "Download Url directly available."
                 $DownloadUrl = $Download.DownloadUrl
             }
         }
-        ElseIf ($Download.DownloadUrl -ne '') {
+        ElseIf ($null -ne $Download.DownloadUrl -and $Download.DownloadUrl -ne '') {
             Write-Output "Download Url directly available."
             $DownloadUrl = $Download.DownloadUrl
         }
-        Elseif ($Download.APIUrl -ne '') {
+        Elseif ($null -ne $Download.APIUrl -and $Download.APIUrl -ne '') {
             Write-Output "Retrieving the url of the latest version of the Edge Templates from API Url."
             $APIUrl = $Download.APIUrl
             $EdgeUpdatesJSON = Invoke-WebRequest -Uri $APIUrl -UseBasicParsing
@@ -214,7 +232,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             }
             $DownloadUrl = $latestpolicyfile.artifacts.Location   
         }
-        Elseif ($Download.GitHubRepo -ne '') {
+        Elseif ($null -ne $Download.GitHubRepo -and $Download.GitHubRepo -ne '') {
             $Repo = $Download.GitHubRepo
             $FileNamePattern = $Download.GitHubFileNamePattern
             $ReleasesUri = "https://api.github.com/repos/$Repo/releases/latest"
@@ -227,7 +245,64 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             $DownloadUrl = Get-EvergreenAppUri -Evergreen $Download.Evergreen
         }      
 
-        If (($DownloadUrl -ne '') -and ($null -ne $DownloadUrl)) {
+        If ($UseWinget) {
+            If (-not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
+                Write-Warning "Skipping '$SoftwareName': winget is not available on this system."
+            }
+            Else {
+                Write-Output "Downloading '$SoftwareName' via winget (Id: $($Download.WingetId))."
+                Try {
+                    $TempSoftwareDownloadDir = Join-Path -Path $DownloadDir -ChildPath ($SoftwareName.Replace(' ', '_'))
+                    New-Item -Path $TempSoftwareDownloadDir -ItemType Directory -Force
+                    $DestFileName = $Download.DestinationFileName
+                    $DestFileFullName = Join-Path $TempSoftwareDownloadDir -ChildPath $DestFileName
+                    # Build Version File for Artifacts Directory
+                    $VersionText = @()
+                    $VersionText += "SoftwareName = $SoftwareName"
+                    $VersionText += "WingetId = $($Download.WingetId)"
+                    & winget download --id $Download.WingetId --download-directory $TempSoftwareDownloadDir --accept-source-agreements --accept-package-agreements | Out-String | Write-Output
+                    # Find the downloaded installer file, preferring the extension that matches DestinationFileName
+                    $DestFileExtension = [System.IO.Path]::GetExtension($DestFileName)
+                    $DownloadedFileItem = Get-ChildItem -Path $TempSoftwareDownloadDir -File | Where-Object { $_.Extension -eq $DestFileExtension } | Select-Object -First 1
+                    If ($null -eq $DownloadedFileItem) {
+                        $DownloadedFileItem = Get-ChildItem -Path $TempSoftwareDownloadDir -File | Select-Object -First 1
+                    }
+                    If ($null -eq $DownloadedFileItem) {
+                        Throw "Winget did not download any files for '$SoftwareName'."
+                    }
+                    $VersionText += "Downloaded File = $($DownloadedFileItem.Name)"
+                    If ($DownloadedFileItem.FullName -ne $DestFileFullName) {
+                        Rename-Item -Path $DownloadedFileItem.FullName -NewName $DestFileName -Force
+                    }
+                    Write-Output "Finished downloading '$SoftwareName' via winget."
+                    Write-Output "Saving File Information to '$FileVersionInfoFile'"
+                    If ([System.IO.Path]::GetExtension($DestFileFullName) -eq '.msi') {
+                        $VersionText += Get-MSIInfo -Path $DestFileFullName
+                    }
+                    Elseif ([System.IO.Path]::GetExtension($DestFileFullName) -eq '.exe') {
+                        $Version = (Get-ItemProperty -Path $DestFileFullName).VersionInfo | Select-Object ProductVersion, FileVersion
+                        $VersionText += "$Version"
+                    }
+                    $VersionText += "Downloaded on = $(Get-Date)"
+                    $VersionText += "--------------------------------------------------"
+                    Add-Content -Path $FileVersionInfoFile -Value $VersionText
+                }
+                Catch {
+                    Write-Error "Error downloading '$SoftwareName' via winget: $_."
+                }
+                Write-Output "Copying downloaded files to Artifacts Directory."
+                $DestFolders = @()
+                $DestFolders = $Download.DestinationFolders
+                ForEach ($DestFolder in $DestFolders) {
+                    $DestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolder
+                    If (-not (Test-Path -Path $DestinationDir)) {
+                        New-Item -Path $DestinationDir -ItemType Directory -Force
+                    }
+                    Get-ChildItem -Path $TempSoftwareDownloadDir | Copy-Item -Destination $DestinationDir -Force
+                }
+            }
+        }
+        ElseIf (($DownloadUrl -ne '') -and ($null -ne $DownloadUrl)) {
             Write-Output "Downloading '$SoftwareName'."
             Try {
                 $TempSoftwareDownloadDir = Join-Path -Path $DownloadDir -ChildPath ($SoftwareName.Replace(' ', '_'))
