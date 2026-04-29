@@ -8,6 +8,9 @@ param keyVaultResourceId string
 @description('Name of the key in the Key Vault.')
 param keyName string
 
+@description('Version of the key to use. Leave empty to resolve the current version at deploy time.')
+param keyVersion string = ''
+
 @description('Encryption type.')
 @allowed([
   'EncryptionAtRestWithCustomerKey'
@@ -29,6 +32,9 @@ var keyVaultSub = split(keyVaultResourceId, '/')[2]
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
   scope: resourceGroup(keyVaultSub, keyVaultRG)
+  resource key 'keys' existing = {
+    name: keyName
+  }
 }
 
 resource diskEncryptionSet 'Microsoft.Compute/diskEncryptionSets@2023-04-02' = {
@@ -42,7 +48,7 @@ resource diskEncryptionSet 'Microsoft.Compute/diskEncryptionSets@2023-04-02' = {
     encryptionType: encryptionType
     rotationToLatestKeyVersionEnabled: rotationToLatestKeyVersionEnabled
     activeKey: {
-      keyUrl: '${keyVault.properties.vaultUri}keys/${keyName}'
+      keyUrl: empty(keyVersion) ? keyVault::key.properties.keyUriWithVersion : '${keyVault::key.properties.keyUri}/${keyVersion}'
       sourceVault: {
         id: keyVaultResourceId
       }

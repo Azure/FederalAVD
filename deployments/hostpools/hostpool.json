@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "12721097896358273490"
+      "templateHash": "14337457170158503885"
     }
   },
   "parameters": {
@@ -5385,7 +5385,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "12681280780485775602"
+              "templateHash": "15478121329555633211"
             }
           },
           "parameters": {
@@ -6027,7 +6027,8 @@
                   },
                   "applicationGroupType": {
                     "value": "Desktop"
-                  }
+                  },
+                  "diagnosticSettings": "[if(parameters('enableMonitoring'), createObject('value', createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]"
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -6988,7 +6989,7 @@
                   "schedules": {
                     "value": "[parameters('scalingPlanSchedules')]"
                   },
-                  "diagnosticSettings": "[if(parameters('enableMonitoring'), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]"
+                  "diagnosticSettings": "[if(parameters('enableMonitoring'), createObject('value', createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]"
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -7219,7 +7220,7 @@
                   "applicationGroupResourceIds": {
                     "value": []
                   },
-                  "diagnosticSettings": "[if(parameters('enableMonitoring'), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]"
+                  "diagnosticSettings": "[if(parameters('enableMonitoring'), createObject('value', createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]"
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -12619,7 +12620,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "11344190760421634444"
+              "templateHash": "2750957613031621968"
             }
           },
           "parameters": {
@@ -13600,7 +13601,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.42.1.51946",
-                      "templateHash": "14948854507063735394"
+                      "templateHash": "10699828058454620075"
                     }
                   },
                   "parameters": {
@@ -14197,7 +14198,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.42.1.51946",
-                              "templateHash": "7600625546352935399"
+                              "templateHash": "6718767308030891154"
                             }
                           },
                           "parameters": {
@@ -14222,6 +14223,13 @@
                               "type": "string",
                               "metadata": {
                                 "description": "Name of the key in the Key Vault."
+                              }
+                            },
+                            "keyVersion": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "Version of the key to use. Leave empty to resolve the current version at deploy time."
                               }
                             },
                             "encryptionType": {
@@ -14268,7 +14276,7 @@
                                 "encryptionType": "[parameters('encryptionType')]",
                                 "rotationToLatestKeyVersionEnabled": "[parameters('rotationToLatestKeyVersionEnabled')]",
                                 "activeKey": {
-                                  "keyUrl": "[format('{0}keys/{1}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSub'), variables('keyVaultRG')), 'Microsoft.KeyVault/vaults', variables('keyVaultName')), '2023-07-01').vaultUri, parameters('keyName'))]",
+                                  "keyUrl": "[if(empty(parameters('keyVersion')), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSub'), variables('keyVaultRG')), 'Microsoft.KeyVault/vaults/keys', variables('keyVaultName'), parameters('keyName')), '2023-07-01').keyUriWithVersion, format('{0}/{1}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSub'), variables('keyVaultRG')), 'Microsoft.KeyVault/vaults/keys', variables('keyVaultName'), parameters('keyName')), '2023-07-01').keyUri, parameters('keyVersion')))]",
                                   "sourceVault": {
                                     "id": "[parameters('keyVaultResourceId')]"
                                   }

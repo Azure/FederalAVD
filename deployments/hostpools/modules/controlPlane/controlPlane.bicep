@@ -179,6 +179,12 @@ module applicationGroup '../../../../.common/bicepModules/desktopVirtualization/
     )
     hostPoolResourceId: hostPool.outputs.resourceId
     applicationGroupType: 'Desktop'
+    diagnosticSettings: enableMonitoring
+      ? {
+          name: 'WVDInsights'
+          workspaceId: logAnalyticsWorkspaceResourceId
+        }
+      : null
   }
 }
 
@@ -287,7 +293,12 @@ module scalingPlan '../../../../.common/bicepModules/desktopVirtualization/scali
       }
     ]
     schedules: scalingPlanSchedules
-    diagnosticSettings: enableMonitoring ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
+    diagnosticSettings: enableMonitoring
+      ? {
+          name: 'WVDInsights'
+          workspaceId: logAnalyticsWorkspaceResourceId
+        }
+      : null
   }
 }
 
@@ -303,7 +314,12 @@ module globalWorkspace '../../../../.common/bicepModules/desktopVirtualization/w
     tags: tags[?'Microsoft.DesktopVirtualization/Workspaces'] ?? {}
     publicNetworkAccess: 'Enabled'
     applicationGroupResourceIds: []
-    diagnosticSettings: enableMonitoring ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
+    diagnosticSettings: enableMonitoring
+      ? {
+          name: 'WVDInsights'
+          workspaceId: logAnalyticsWorkspaceResourceId
+        }
+      : null
   }
   dependsOn: [feedWorkspace]
 }
