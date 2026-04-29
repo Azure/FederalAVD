@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "14609904559562298367"
+      "templateHash": "4946067219556111411"
     }
   },
   "parameters": {
@@ -80,16 +80,9 @@
     },
     "storageAllowSharedKeyAccess": {
       "type": "bool",
-      "defaultValue": true,
+      "defaultValue": false,
       "metadata": {
         "description": "Optional. Indicates whether the storage account permits requests to be authorized with the account access key via Shared Key. If false, then all requests, including shared access signatures, must be authorized with Azure Active Directory (Azure AD). The default value is null, which is equivalent to true."
-      }
-    },
-    "storageSASExpirationPeriod": {
-      "type": "string",
-      "defaultValue": "180.00:00:00",
-      "metadata": {
-        "description": "Optional. The SAS expiration period. DD.HH:MM:SS."
       }
     },
     "azureBlobPrivateDnsZoneResourceId": {
@@ -942,7 +935,7 @@
           },
           "networkAcls": "[if(or(not(empty(variables('ipRules'))), not(empty(parameters('storageServiceEndpointSubnetResourceIds')))), createObject('value', createObject('bypass', 'AzureServices', 'defaultAction', 'Deny', 'virtualNetworkRules', variables('virtualNetworkRules'), 'ipRules', variables('ipRules'))), createObject('value', createObject('bypass', 'AzureServices', 'defaultAction', 'Deny')))]",
           "sasExpirationPeriod": {
-            "value": "[parameters('storageSASExpirationPeriod')]"
+            "value": "180.00:00:00"
           },
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
@@ -957,7 +950,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "5601435779028086360"
+              "templateHash": "226967552370976425"
             }
           },
           "definitions": {
@@ -1227,7 +1220,7 @@
             },
             "sasExpirationPeriod": {
               "type": "string",
-              "defaultValue": "",
+              "defaultValue": "180.00:00:00",
               "metadata": {
                 "description": "Optional. SAS expiration period in format d.hh:mm:ss. Empty to disable."
               }

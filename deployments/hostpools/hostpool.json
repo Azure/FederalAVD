@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "6325466031499577914"
+      "templateHash": "12386745554400206028"
     }
   },
   "parameters": {
@@ -7760,7 +7760,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "15162537185487003450"
+              "templateHash": "2724773925281621916"
             }
           },
           "parameters": {
@@ -9463,7 +9463,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.42.1.51946",
-                      "templateHash": "16755844285686447403"
+                      "templateHash": "9840075750926490482"
                     }
                   },
                   "parameters": {
@@ -9748,7 +9748,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.42.1.51946",
-                              "templateHash": "5601435779028086360"
+                              "templateHash": "226967552370976425"
                             }
                           },
                           "definitions": {
@@ -10018,7 +10018,7 @@
                             },
                             "sasExpirationPeriod": {
                               "type": "string",
-                              "defaultValue": "",
+                              "defaultValue": "180.00:00:00",
                               "metadata": {
                                 "description": "Optional. SAS expiration period in format d.hh:mm:ss. Empty to disable."
                               }

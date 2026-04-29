@@ -36,7 +36,7 @@ module dataCollectionEndpoint '../../../../.common/bicepModules/insights/dataCol
 }
 
 // ─── AVD Insights Data Collection Rule ────────────────────────────────────────
-module avdInsightsDataCollectionRule '../../../../.common/bicepModules/custom/avdInsightsDataCollectionRule.bicep' = {
+module avdInsightsDataCollectionRule 'modules/avdInsightsDataCollectionRule.bicep' = {
   name: 'AVDInsights-DataCollectionRule-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupMonitoring)
   params: {
@@ -48,7 +48,7 @@ module avdInsightsDataCollectionRule '../../../../.common/bicepModules/custom/av
 }
 
 // ─── VM Insights Data Collection Rule ─────────────────────────────────────────
-module vmInsightsDataCollectionRule '../../../../.common/bicepModules/custom/vmInsightsDataCollectionRule.bicep' = {
+module vmInsightsDataCollectionRule 'modules/vmInsightsDataCollectionRule.bicep' = {
   name: 'VMInsights-DataCollectionRule-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupMonitoring)
   params: {

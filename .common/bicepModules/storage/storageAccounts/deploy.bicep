@@ -42,7 +42,7 @@ param publicNetworkAccess string = ''
 param allowedCopyScope string = ''
 
 @description('Optional. SAS expiration period in format d.hh:mm:ss. Empty to disable.')
-param sasExpirationPeriod string = ''
+param sasExpirationPeriod string = '180.00:00:00'
 
 @description('Optional. Azure Files identity-based authentication settings object.')
 param azureFilesIdentityBasedAuthentication object = {}

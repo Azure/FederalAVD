@@ -40,10 +40,7 @@ param storageSkuName string = 'Standard_LRS'
 param storageAccessTier string = 'Hot'
 
 @description('Optional. Indicates whether the storage account permits requests to be authorized with the account access key via Shared Key. If false, then all requests, including shared access signatures, must be authorized with Azure Active Directory (Azure AD). The default value is null, which is equivalent to true.')
-param storageAllowSharedKeyAccess bool = true
-
-@description('Optional. The SAS expiration period. DD.HH:MM:SS.')
-param storageSASExpirationPeriod string = '180.00:00:00'
+param storageAllowSharedKeyAccess bool = false
 
 @description('Optional. The Resource Id of the Private DNS Zone where the Private Endpoint (if configured) A record will be registered.')
 param azureBlobPrivateDnsZoneResourceId string = ''
@@ -153,7 +150,7 @@ module storageAccount '../../.common/bicepModules/storage/storageAccounts/deploy
     networkAcls: !empty(ipRules) || !empty(storageServiceEndpointSubnetResourceIds)
       ? { bypass: 'AzureServices', defaultAction: 'Deny', virtualNetworkRules: virtualNetworkRules, ipRules: ipRules }
       : { bypass: 'AzureServices', defaultAction: 'Deny' }
-    sasExpirationPeriod: storageSASExpirationPeriod
+    sasExpirationPeriod: '180.00:00:00'
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
   }

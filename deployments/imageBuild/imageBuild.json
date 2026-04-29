@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "15085552473393552579"
+      "templateHash": "10490756439107047993"
     },
     "name": "Zero Trust Architecture Custom Windows Image Builder",
     "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
@@ -1993,7 +1993,7 @@
             "value": false
           },
           "allowSharedKeyAccess": {
-            "value": true
+            "value": false
           },
           "requireInfrastructureEncryption": {
             "value": true
@@ -2021,7 +2021,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "5601435779028086360"
+              "templateHash": "226967552370976425"
             }
           },
           "definitions": {
@@ -2291,7 +2291,7 @@
             },
             "sasExpirationPeriod": {
               "type": "string",
-              "defaultValue": "",
+              "defaultValue": "180.00:00:00",
               "metadata": {
                 "description": "Optional. SAS expiration period in format d.hh:mm:ss. Empty to disable."
               }

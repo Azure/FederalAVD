@@ -18,10 +18,7 @@
       "value": "Hot"
     },
     "storageAllowSharedKeyAccess": {
-      "value": true
-    },
-    "storageSASExpirationPeriod": {
-      "value": "180.00:00:00"
+      "value": false
     },
     "azureBlobPrivateDnsZoneResourceId": {
       "value": ""

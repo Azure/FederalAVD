@@ -592,7 +592,7 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
     name: logStorageAccountName
     location: computeLocation
     allowCrossTenantReplication: false
-    allowSharedKeyAccess: true
+    allowSharedKeyAccess: false
     requireInfrastructureEncryption: true
     kind: 'StorageV2'
     publicNetworkAccess: logStorageAccountNetworkAccess == 'PrivateEndpoint' ? 'Disabled' : 'Enabled'
