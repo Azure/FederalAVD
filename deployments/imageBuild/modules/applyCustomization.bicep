@@ -1,4 +1,4 @@
-param customizer object
+param customization object
 param location string
 param imageVmName string
 param orchestrationVmName string
@@ -18,8 +18,8 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-11-01' existing
   name: orchestrationVmName
 }
 
-resource application 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
-  name: customizer.name
+resource applyCustomization 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
+  name: customization.name
   location: location
   parent: imageVm
   properties: {
@@ -31,7 +31,7 @@ resource application 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
         }
     errorBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-${customizer.name}-error-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-${customization.name}-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -39,19 +39,19 @@ resource application 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-${customizer.name}-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-${customization.name}-output-${deploymentSuffix}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Uri'
-        value: customizer.uri
+        value: customization.uri
       }
       {
         name: 'Name'
-        value: customizer.name
+        value: customization.name
       }
       {
         name: 'Arguments'
-        value: customizer.arguments
+        value: customization.arguments
       }
     ])
     source: {
@@ -61,8 +61,8 @@ resource application 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
   }
 }
 
-resource restart 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (customizer.restart) {
-  name: '${customizer.name}-restart'
+resource restart 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (customization.restart) {
+  name: '${customization.name}-restart'
   location: location
   parent: orchestrationVm
   properties: {
@@ -74,6 +74,6 @@ resource restart 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
-    application
+    applyCustomization
   ]
 }

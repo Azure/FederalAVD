@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "8433197455686680682"
+      "templateHash": "17049751639209276297"
     }
   },
   "parameters": {
@@ -108,6 +108,13 @@
       "defaultValue": "",
       "metadata": {
         "description": "Optional. The ResourceId of the private endpoint subnet."
+      }
+    },
+    "storageSASExpirationPeriod": {
+      "type": "string",
+      "defaultValue": "180.00:00:00",
+      "metadata": {
+        "description": "Optional. The SAS expiration period. DD.HH:MM:SS."
       }
     },
     "storagePermittedIPs": {
@@ -935,7 +942,7 @@
           },
           "networkAcls": "[if(or(not(empty(variables('ipRules'))), not(empty(parameters('storageServiceEndpointSubnetResourceIds')))), createObject('value', createObject('bypass', 'AzureServices', 'defaultAction', 'Deny', 'virtualNetworkRules', variables('virtualNetworkRules'), 'ipRules', variables('ipRules'))), createObject('value', createObject('bypass', 'AzureServices', 'defaultAction', 'Deny')))]",
           "sasExpirationPeriod": {
-            "value": "180.00:00:00"
+            "value": "[parameters('storageSASExpirationPeriod')]"
           },
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
@@ -950,7 +957,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "16301049299282143817"
+              "templateHash": "16136022840019090130"
             }
           },
           "definitions": {
@@ -1220,7 +1227,7 @@
             },
             "sasExpirationPeriod": {
               "type": "string",
-              "defaultValue": "180.00:00:00",
+              "defaultValue": "",
               "metadata": {
                 "description": "Optional. SAS expiration period in format d.hh:mm:ss. Empty to disable."
               }
@@ -1259,6 +1266,8 @@
             }
           },
           "variables": {
+            "supportsBlobService": "[or(or(or(equals(parameters('kind'), 'BlockBlobStorage'), equals(parameters('kind'), 'BlobStorage')), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
+            "supportsFileService": "[or(or(equals(parameters('kind'), 'FileStorage'), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
             "useCmk": "[and(not(empty(parameters('encryptionKeyVaultUri'))), not(empty(parameters('encryptionKeyName'))))]",
             "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
             "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
@@ -1285,12 +1294,27 @@
                 "minimumTlsVersion": "[parameters('minimumTlsVersion')]",
                 "dnsEndpointType": "[if(not(empty(parameters('dnsEndpointType'))), parameters('dnsEndpointType'), null())]",
                 "largeFileSharesState": "[if(not(empty(parameters('largeFileSharesState'))), parameters('largeFileSharesState'), null())]",
-                "networkAcls": "[parameters('networkAcls')]",
+                "networkAcls": "[if(not(empty(parameters('networkAcls'))), createObject('bypass', coalesce(tryGet(parameters('networkAcls'), 'bypass'), null()), 'defaultAction', coalesce(tryGet(parameters('networkAcls'), 'defaultAction'), null()), 'virtualNetworkRules', coalesce(tryGet(parameters('networkAcls'), 'virtualNetworkRules'), createArray()), 'ipRules', coalesce(tryGet(parameters('networkAcls'), 'ipRules'), createArray())), createObject('defaultAction', 'Deny', 'bypass', 'None'))]",
                 "publicNetworkAccess": "[if(not(empty(parameters('publicNetworkAccess'))), parameters('publicNetworkAccess'), null())]",
                 "allowedCopyScope": "[if(not(empty(parameters('allowedCopyScope'))), parameters('allowedCopyScope'), null())]",
                 "sasPolicy": "[if(not(empty(parameters('sasExpirationPeriod'))), createObject('expirationAction', 'Log', 'sasExpirationPeriod', parameters('sasExpirationPeriod')), null())]",
                 "azureFilesIdentityBasedAuthentication": "[if(not(empty(parameters('azureFilesIdentityBasedAuthentication'))), parameters('azureFilesIdentityBasedAuthentication'), null())]",
-                "encryption": "[if(variables('useCmk'), createObject('keySource', 'Microsoft.Keyvault', 'requireInfrastructureEncryption', parameters('requireInfrastructureEncryption'), 'keyvaultproperties', createObject('keyvaulturi', parameters('encryptionKeyVaultUri'), 'keyname', parameters('encryptionKeyName')), 'identity', if(not(empty(parameters('encryptionUserAssignedIdentityResourceId'))), createObject('userAssignedIdentity', parameters('encryptionUserAssignedIdentityResourceId')), null()), 'services', createObject('blob', createObject('enabled', true(), 'keyType', 'Account'), 'file', createObject('enabled', true(), 'keyType', 'Account'), 'queue', createObject('enabled', true(), 'keyType', 'Account'), 'table', createObject('enabled', true(), 'keyType', 'Account'))), createObject('keySource', 'Microsoft.Storage', 'requireInfrastructureEncryption', parameters('requireInfrastructureEncryption'), 'services', createObject('blob', createObject('enabled', true(), 'keyType', 'Account'), 'file', createObject('enabled', true(), 'keyType', 'Account'), 'queue', createObject('enabled', true(), 'keyType', 'Account'), 'table', createObject('enabled', true(), 'keyType', 'Account'))))]"
+                "encryption": {
+                  "keySource": "[if(variables('useCmk'), 'Microsoft.Keyvault', 'Microsoft.Storage')]",
+                  "services": {
+                    "blob": "[if(variables('supportsBlobService'), createObject('enabled', true()), null())]",
+                    "file": "[if(variables('supportsFileService'), createObject('enabled', true()), null())]",
+                    "table": {
+                      "enabled": true
+                    },
+                    "queue": {
+                      "enabled": true
+                    }
+                  },
+                  "requireInfrastructureEncryption": "[if(not(equals(parameters('kind'), 'Storage')), parameters('requireInfrastructureEncryption'), null())]",
+                  "keyvaultproperties": "[if(variables('useCmk'), createObject('keyname', parameters('encryptionKeyName'), 'keyvaulturi', parameters('encryptionKeyVaultUri')), null())]",
+                  "identity": "[if(variables('useCmk'), createObject('userAssignedIdentity', parameters('encryptionUserAssignedIdentityResourceId')), null())]"
+                }
               }
             },
             "diagnosticSetting": {
@@ -2044,23 +2068,11 @@
     },
     "blobContainerUrl": {
       "type": "string",
-      "value": "[format('{0}.blob.{1}/{2}', variables('storageName'), environment().suffixes.storage, variables('blobContainerName'))]"
-    },
-    "managedIdentityClientId": {
-      "type": "string",
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Managed-Identity-{0}', parameters('timeStamp'))), '2025-04-01').outputs.clientId.value]"
+      "value": "[format('https://{0}.blob.{1}/{2}', variables('storageName'), environment().suffixes.storage, variables('blobContainerName'))]"
     },
     "managedIdentityResourceId": {
       "type": "string",
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Managed-Identity-{0}', parameters('timeStamp'))), '2025-04-01').outputs.resourceId.value]"
-    },
-    "computeGalleryResourceId": {
-      "type": "string",
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Image-Gallery-{0}', parameters('timeStamp'))), '2025-04-01').outputs.resourceId.value]"
-    },
-    "computeGalleryName": {
-      "type": "string",
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Image-Gallery-{0}', parameters('timeStamp'))), '2025-04-01').outputs.name.value]"
     },
     "remoteComputeGalleryResourceId": {
       "type": "string",

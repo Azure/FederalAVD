@@ -354,7 +354,7 @@ var adminUserName = 'vmadmin'
 
 var logContainerName = 'image-customization-logs'
 var logContainerUri = collectCustomizationLogs
-  ? '${logStorageAccountName}.blob.${environment().suffixes.storage}/${logContainerName}/'
+  ? 'https://${logStorageAccountName}.blob.${environment().suffixes.storage}/${logContainerName}/'
   : ''
 
 var imageDefinitionFeatures = empty(imageDefinitionResourceId)
@@ -687,7 +687,7 @@ module orchestrationVm '../../.common/bicepModules/compute/virtualMachines/deplo
   params: {
     location: computeLocation
     name: orchestrationVmName
-    nicName: '${orchestrationVmName}-nic-01'
+    nicName: '${orchestrationVmName}-nic'
     osDiskName: '${orchestrationVmName}-osdisk'
     adminPassword: adminPw
     adminUsername: adminUserName
@@ -695,8 +695,12 @@ module orchestrationVm '../../.common/bicepModules/compute/virtualMachines/deplo
     encryptionAtHost: encryptionAtHost
     imagePublisher: 'MicrosoftWindowsServer'
     imageOffer: 'WindowsServer'
-    imageSku: '2019-Datacenter'
-    securityType: 'Standard'
+    imageSku: '2019-datacenter-core-g2'
+    licenseType: 'Windows_Server'
+    diskControllerType: vmDiskControllerType
+    securityType: 'TrustedLaunch'
+    secureBootEnabled: true
+    vTpmEnabled: true
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
     userAssignedIdentityResourceIds: [empty(userAssignedIdentityResourceId)
@@ -721,7 +725,7 @@ module imageVm '../../.common/bicepModules/compute/virtualMachines/deploy.bicep'
       : false
     location: computeLocation
     name: imageVmName
-    nicName: '${imageVmName}-nic-01'
+    nicName: '${imageVmName}-nic'
     osDiskName: '${imageVmName}-osdisk'
     adminPassword: adminPw
     adminUsername: adminUserName

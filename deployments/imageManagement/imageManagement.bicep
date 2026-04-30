@@ -55,6 +55,9 @@ param storagePublicNetworkAccess string = 'Enabled'
 @description('Optional. The ResourceId of the private endpoint subnet.')
 param privateEndpointSubnetResourceId string = ''
 
+@description('Optional. The SAS expiration period. DD.HH:MM:SS.')
+param storageSASExpirationPeriod string = '180.00:00:00'
+
 @description('Optional. Array of permitted IPs or IP CIDR blocks that can access the storage account using the Public Endpoint.')
 param storagePermittedIPs array = []
 
@@ -81,29 +84,80 @@ param timeStamp string = utcNow('yyyyMMddhhmm')
 var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes
 #disable-next-line BCP329
-var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location)-5) : location
+var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
 #disable-next-line BCP329
-var varRemoteLocation = !empty(remoteLocation) ? (startsWith(cloud, 'us') ? substring(remoteLocation, 5, length(remoteLocation)-5) : remoteLocation) : ''
-var locations = startsWith(cloud, 'us') ? (loadJsonContent('../../.common/data/locations.json')).other : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
+var varRemoteLocation = !empty(remoteLocation)
+  ? (startsWith(cloud, 'us') ? substring(remoteLocation, 5, length(remoteLocation) - 5) : remoteLocation)
+  : ''
+var locations = startsWith(cloud, 'us')
+  ? (loadJsonContent('../../.common/data/locations.json')).other
+  : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 var nameConv_Suffix_withoutResType = 'LOCATION'
-var nameConvSuffix = nameConvResTypeAtEnd ? '${nameConv_Suffix_withoutResType}-RESOURCETYPE' : nameConv_Suffix_withoutResType
+var nameConvSuffix = nameConvResTypeAtEnd
+  ? '${nameConv_Suffix_withoutResType}-RESOURCETYPE'
+  : nameConv_Suffix_withoutResType
 var identifier = empty(customIdentifier) ? 'image-management' : customIdentifier
-var nameConv_ImageManagement_ResGroup = nameConvResTypeAtEnd ? 'avd-${identifier}-${nameConvSuffix}' : 'RESOURCETYPE-avd-${identifier}-${nameConvSuffix}'
-var nameConv_ImageManagement_Resources = nameConvResTypeAtEnd ? 'avd-${identifier}-${nameConvSuffix}' : 'RESOURCETYPE-avd-${identifier}-${nameConvSuffix}'
+var nameConv_ImageManagement_ResGroup = nameConvResTypeAtEnd
+  ? 'avd-${identifier}-${nameConvSuffix}'
+  : 'RESOURCETYPE-avd-${identifier}-${nameConvSuffix}'
+var nameConv_ImageManagement_Resources = nameConvResTypeAtEnd
+  ? 'avd-${identifier}-${nameConvSuffix}'
+  : 'RESOURCETYPE-avd-${identifier}-${nameConvSuffix}'
 #disable-next-line BCP329
-var resourceGroupName = replace(replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varLocation].abbreviation), 'RESOURCETYPE', resourceAbbreviations.resourceGroups)
+var resourceGroupName = replace(
+  replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varLocation].abbreviation),
+  'RESOURCETYPE',
+  resourceAbbreviations.resourceGroups
+)
 #disable-next-line BCP329
-var remoteResourceGroupName = !empty(remoteLocation) ? replace(replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varRemoteLocation].abbreviation), 'RESOURCETYPE', resourceAbbreviations.resourceGroups) : ''
+var remoteResourceGroupName = !empty(remoteLocation)
+  ? replace(
+      replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varRemoteLocation].abbreviation),
+      'RESOURCETYPE',
+      resourceAbbreviations.resourceGroups
+    )
+  : ''
 var blobContainerName = replace(replace(toLower(artifactsContainerName), '_', '-'), ' ', '-')
-var galleryName = replace(replace(replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.computeGalleries), 'LOCATION', locations[varLocation].abbreviation), '-', '_')
-var remoteGalleryName = !empty(remoteLocation) ? replace(replace(replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.computeGalleries), 'LOCATION', locations[varRemoteLocation].abbreviation), '-', '_') : ''
-var identityName = replace(replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities), 'LOCATION', locations[varLocation].abbreviation)
+var galleryName = replace(
+  replace(
+    replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.computeGalleries),
+    'LOCATION',
+    locations[varLocation].abbreviation
+  ),
+  '-',
+  '_'
+)
+var remoteGalleryName = !empty(remoteLocation)
+  ? replace(
+      replace(
+        replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.computeGalleries),
+        'LOCATION',
+        locations[varRemoteLocation].abbreviation
+      ),
+      '-',
+      '_'
+    )
+  : ''
+var identityName = replace(
+  replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
+  'LOCATION',
+  locations[varLocation].abbreviation
+)
 var vnetName = !empty(privateEndpointSubnetResourceId) ? split(privateEndpointSubnetResourceId, '/')[8] : ''
-var privateEndpointNameConv = replace('${nameConvResTypeAtEnd ? 'RESOURCE-SUBRESOURCE-${vnetName}-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-${vnetName}'}', 'RESOURCETYPE', resourceAbbreviations.privateEndpoints)
+var privateEndpointNameConv = replace(
+  '${nameConvResTypeAtEnd ? 'RESOURCE-SUBRESOURCE-${vnetName}-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-${vnetName}'}',
+  'RESOURCETYPE',
+  resourceAbbreviations.privateEndpoints
+)
 var privateEndpointName = replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'), 'RESOURCE', storageName)
-var customNetworkInterfaceName = nameConvResTypeAtEnd ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}' : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
-var storageName = take('${resourceAbbreviations.storageAccounts}imageassets${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}', 24)
+var customNetworkInterfaceName = nameConvResTypeAtEnd
+  ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}'
+  : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
+var storageName = take(
+  '${resourceAbbreviations.storageAccounts}imageassets${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
+  24
+)
 var storageKind = 'StorageV2'
 var ipRules = [for ip in storagePermittedIPs: { value: ip, action: 'Allow' }]
 var virtualNetworkRules = [for subnetId in storageServiceEndpointSubnetResourceIds: { id: subnetId, action: 'Allow' }]
@@ -148,11 +202,23 @@ module storageAccount '../../.common/bicepModules/storage/storageAccounts/deploy
     allowSharedKeyAccess: storageAllowSharedKeyAccess
     publicNetworkAccess: storagePublicNetworkAccess
     networkAcls: !empty(ipRules) || !empty(storageServiceEndpointSubnetResourceIds)
-      ? { bypass: 'AzureServices', defaultAction: 'Deny', virtualNetworkRules: virtualNetworkRules, ipRules: ipRules }
-      : { bypass: 'AzureServices', defaultAction: 'Deny' }
-    sasExpirationPeriod: '180.00:00:00'
+      ? {
+          bypass: 'AzureServices'
+          defaultAction: 'Deny'
+          virtualNetworkRules: virtualNetworkRules
+          ipRules: ipRules
+        }
+      : {
+          bypass: 'AzureServices'
+          defaultAction: 'Deny'
+        }
+    sasExpirationPeriod: storageSASExpirationPeriod
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
-    diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
+    diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
+      ? {
+          workspaceId: logAnalyticsWorkspaceResourceId
+        }
+      : null
   }
   dependsOn: [resourceGroup]
 }
@@ -214,13 +280,13 @@ module storageBlobReaderAssignment '../../.common/bicepModules/storage/storageAc
   dependsOn: [storageAccount]
 }
 
-resource remoteResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = if(!empty(remoteLocation)) {
+resource remoteResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = if (!empty(remoteLocation)) {
   name: remoteResourceGroupName
   location: remoteLocation
   tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
 }
 
-module remoteImageGallery '../../.common/bicepModules/compute/galleries/deploy.bicep' = if(!empty(remoteLocation)) {
+module remoteImageGallery '../../.common/bicepModules/compute/galleries/deploy.bicep' = if (!empty(remoteLocation)) {
   name: 'Remote-Image-Gallery-${timeStamp}'
   scope: az.resourceGroup(remoteResourceGroupName)
   params: {
@@ -231,12 +297,9 @@ module remoteImageGallery '../../.common/bicepModules/compute/galleries/deploy.b
   dependsOn: [remoteResourceGroup]
 }
 
-output storageAccountResourceId string   = storageAccount.outputs.resourceId
-output blobContainerName string          = blobContainer.outputs.name
-output blobContainerUrl string           = '${storageName}.blob.${environment().suffixes.storage}/${blobContainerName}'
-output managedIdentityClientId string    = managedIdentity.outputs.clientId
-output managedIdentityResourceId string  = managedIdentity.outputs.resourceId
-output computeGalleryResourceId string   = imageGallery.outputs.resourceId
-output computeGalleryName string         = imageGallery.outputs.name
+output storageAccountResourceId string = storageAccount.outputs.resourceId
+output blobContainerName string = blobContainer.outputs.name
+output blobContainerUrl string = 'https://${storageName}.blob.${environment().suffixes.storage}/${blobContainerName}'
+output managedIdentityResourceId string = managedIdentity.outputs.resourceId
 #disable-next-line BCP318
 output remoteComputeGalleryResourceId string = !empty(remoteLocation) ? remoteImageGallery!.outputs.resourceId : ''

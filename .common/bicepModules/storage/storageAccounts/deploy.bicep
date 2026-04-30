@@ -42,7 +42,7 @@ param publicNetworkAccess string = ''
 param allowedCopyScope string = ''
 
 @description('Optional. SAS expiration period in format d.hh:mm:ss. Empty to disable.')
-param sasExpirationPeriod string = '180.00:00:00'
+param sasExpirationPeriod string = ''
 
 @description('Optional. Azure Files identity-based authentication settings object.')
 param azureFilesIdentityBasedAuthentication object = {}
@@ -57,6 +57,9 @@ param encryptionKeyName string = ''
 param encryptionUserAssignedIdentityResourceId string = ''
 
 param diagnosticSettings diagnosticSettingsType?
+
+var supportsBlobService = kind == 'BlockBlobStorage' || kind == 'BlobStorage' || kind == 'StorageV2' || kind == 'Storage'
+var supportsFileService = kind == 'FileStorage' || kind == 'StorageV2' || kind == 'Storage'
 
 var useCmk = !empty(encryptionKeyVaultUri) && !empty(encryptionKeyName)
 
@@ -86,7 +89,15 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     minimumTlsVersion: minimumTlsVersion
     dnsEndpointType: !empty(dnsEndpointType) ? dnsEndpointType : null
     largeFileSharesState: !empty(largeFileSharesState) ? largeFileSharesState : null
-    networkAcls: networkAcls
+    networkAcls: !empty(networkAcls) ? {
+      bypass: networkAcls.?bypass ?? null
+      defaultAction: networkAcls.?defaultAction ?? null
+      virtualNetworkRules: networkAcls.?virtualNetworkRules ?? []
+      ipRules: networkAcls.?ipRules ?? []
+    } : {
+      defaultAction: 'Deny'
+      bypass: 'None'
+    }
     publicNetworkAccess: !empty(publicNetworkAccess) ? publicNetworkAccess : null
     allowedCopyScope: !empty(allowedCopyScope) ? allowedCopyScope : null
     sasPolicy: !empty(sasExpirationPeriod)
@@ -98,54 +109,60 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     azureFilesIdentityBasedAuthentication: !empty(azureFilesIdentityBasedAuthentication)
       ? azureFilesIdentityBasedAuthentication
       : null
-    encryption: useCmk
-      ? {
-          keySource: 'Microsoft.Keyvault'
-          requireInfrastructureEncryption: requireInfrastructureEncryption
-          keyvaultproperties: {
-            keyvaulturi: encryptionKeyVaultUri
+    encryption: {
+      keySource: useCmk ? 'Microsoft.Keyvault' : 'Microsoft.Storage'
+      services: {
+        blob: supportsBlobService
+          ? {
+              enabled: true
+            }
+          : null
+        file: supportsFileService
+          ? {
+              enabled: true
+            }
+          : null
+        table: {
+          enabled: true
+        }
+        queue: {
+          enabled: true
+        }
+      }
+      requireInfrastructureEncryption: kind != 'Storage' ? requireInfrastructureEncryption : null
+      keyvaultproperties: useCmk
+        ? {
             keyname: encryptionKeyName
+            keyvaulturi: encryptionKeyVaultUri
           }
-          identity: !empty(encryptionUserAssignedIdentityResourceId)
-            ? {
-                userAssignedIdentity: encryptionUserAssignedIdentityResourceId
-              }
-            : null
-          services: {
-            blob: { enabled: true, keyType: 'Account' }
-            file: { enabled: true, keyType: 'Account' }
-            queue: { enabled: true, keyType: 'Account' }
-            table: { enabled: true, keyType: 'Account' }
+        : null
+      identity: useCmk
+        ? {
+            userAssignedIdentity: encryptionUserAssignedIdentityResourceId
           }
-        }
-      : {
-          keySource: 'Microsoft.Storage'
-          requireInfrastructureEncryption: requireInfrastructureEncryption
-          services: {
-            blob: { enabled: true, keyType: 'Account' }
-            file: { enabled: true, keyType: 'Account' }
-            queue: { enabled: true, keyType: 'Account' }
-            table: { enabled: true, keyType: 'Account' }
-          }
-        }
+        : null
+    }
   }
 }
 
-var diagTargetNames = filter([
-  !empty(diagnosticSettings.?workspaceId ?? '') ? last(split(diagnosticSettings.?workspaceId!, '/')) : ''
-  !empty(diagnosticSettings.?storageAccountId ?? '') ? last(split(diagnosticSettings.?storageAccountId!, '/')) : ''
-  !empty(diagnosticSettings.?eventHubAuthorizationRuleId ?? '')
-    ? (!empty(diagnosticSettings.?eventHubName ?? '') ? diagnosticSettings!.eventHubName! : split(diagnosticSettings.?eventHubAuthorizationRuleId!, '/')[8])
-    : ''
-], t => !empty(t))
+var diagTargetNames = filter(
+  [
+    !empty(diagnosticSettings.?workspaceId ?? '') ? last(split(diagnosticSettings.?workspaceId!, '/')) : ''
+    !empty(diagnosticSettings.?storageAccountId ?? '') ? last(split(diagnosticSettings.?storageAccountId!, '/')) : ''
+    !empty(diagnosticSettings.?eventHubAuthorizationRuleId ?? '')
+      ? (!empty(diagnosticSettings.?eventHubName ?? '')
+          ? diagnosticSettings!.eventHubName!
+          : split(diagnosticSettings.?eventHubAuthorizationRuleId!, '/')[8])
+      : ''
+  ],
+  t => !empty(t)
+)
 
 var diagnosticSettingName = !empty(diagnosticSettings.?name ?? '')
   ? diagnosticSettings!.name!
   : length(diagTargetNames) > 1
       ? 'diag-${uniqueString(join(diagTargetNames, '-'))}'
-      : length(diagTargetNames) == 1
-          ? 'diag-${diagTargetNames[0]}'
-          : 'diagnostics'
+      : length(diagTargetNames) == 1 ? 'diag-${diagTargetNames[0]}' : 'diagnostics'
 
 resource diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (diagnosticSettings != null && (!empty(diagnosticSettings.?workspaceId ?? '') || !empty(diagnosticSettings.?storageAccountId ?? '') || !empty(diagnosticSettings.?eventHubAuthorizationRuleId ?? ''))) {
   scope: storageAccount
