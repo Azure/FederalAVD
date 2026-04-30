@@ -101,3 +101,9 @@ Download File = Git-2.54.0-64-bit.exe
 @{ProductVersion=2.54.0                                            ; FileVersion=2.54.0.1            }
 Downloaded on = 04/29/2026 22:08:54
 --------------------------------------------------
+SoftwareName = PowerBIDesktop
+WingetId = Microsoft.PowerBI
+Downloaded File = Microsoft PowerBI Desktop_2.153.910.0_Machine_X64_burn_en-US.exe
+@{ProductVersion=2.153.910.0; FileVersion=2.153.910.0}
+Downloaded on = 04/29/2026 22:09:36
+--------------------------------------------------

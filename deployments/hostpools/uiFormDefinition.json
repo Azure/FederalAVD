@@ -1343,13 +1343,11 @@
 								"method": "GET",
 								"path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('hosts').scope.location.name, decodeUriComponent('%27'))]",
 								"transforms": {
-									"confidentialVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'ConfidentialComputingType'].value | [0] != null]|[*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])])}",
-									"hibernationVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'HibernationSupported'].value | [0] == 'True'].name",
-									"nvmeVMSizes": "value[?resourceType == 'virtualMachines' && contains(capabilities[?name == 'DiskControllerTypes'].value | [0] || '', 'NVMe')].name",
-									"acceleratedNetworkingVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'].name",
-									"hibernationAccelNetVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'HibernationSupported'].value | [0] == 'True' && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'].name",
-									"nvmeAccelNetVMSizes": "value[?resourceType == 'virtualMachines' && contains(capabilities[?name == 'DiskControllerTypes'].value | [0] || '', 'NVMe') && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'].name",
-									"defaultVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'ConfidentialComputingType'].value | [0] == null && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'].name"
+									"confidentialVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'ConfidentialComputingType'].value | [0] != null] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] |[*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])])}",
+									"hibernationVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'HibernationSupported'].value | [0] == 'True'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [*].name",
+									"genericVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] |[*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])])}",
+									"deploymentVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'vCPUs'].value | [0] == '2'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] |[*].{label:name, value:name}",
+									"genericVMSizesNames": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [*].name"
 								}
 							}
 						},
@@ -1614,8 +1612,7 @@
 										"transforms": {
 											"IsHibernateSupported": "properties.features[?name=='IsHibernateSupported'].value | [0]",
 											"IsAcceleratedNetworkSupported": "properties.features[?name=='IsAcceleratedNetworkSupported'].value | [0]",
-											"SecurityType": "properties.features[?name=='SecurityType'].value | [0]",
-											"DiskControllerTypes": "properties.features[?name=='DiskControllerTypes'].value | [0]"
+											"SecurityType": "properties.features[?name=='SecurityType'].value | [0]"
 										}
 									}
 								}
@@ -2074,35 +2071,15 @@
 								},
 								{
 									"name": "sizeGeneric",
-									"type": "Microsoft.Compute.SizeSelector",
+									"type": "Microsoft.Common.DropDown",
 									"label": "Size",
+									"multiLine": true,
+									"filter": true,
 									"toolTip": "Select the size of the virtual machines. Multi-session hosts should have 4 - 24 vCPUs. Single session host should have 2 or more vCPUs.",
-									"recommendedSizes": [
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D4ads_v5', 'Standard_D4ads_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D4ads_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D8ads_v5', 'Standard_D8ads_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D8ads_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D16ads_v5', 'Standard_D16ads_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D16ads_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D32ads_v5', 'Standard_D32ads_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D32ads_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D4as_v5', 'Standard_D4as_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D4as_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D8as_v5', 'Standard_D8as_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D8as_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D16as_v5', 'Standard_D16as_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D16as_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D32as_v5', 'Standard_D32as_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D32as_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D4ds_v5', 'Standard_D4ds_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D4ds_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D8ds_v5', 'Standard_D8ds_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D8ds_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D16ds_v5', 'Standard_D16ds_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D16ds_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D32ds_v5', 'Standard_D32ds_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D32ds_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D4s_v5', 'Standard_D4s_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D4s_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D8s_v5', 'Standard_D8s_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D8s_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D16s_v5', 'Standard_D16s_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D16s_v6'))]",
-										"[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D32s_v5', 'Standard_D32s_v6'), coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D32s_v6'))]"
-									],
-									"options": {
-										"hideDiskTypeFilter": "[if(equals(steps('hosts').specs.diskSku, 'Premium_LRS'), true, false)]"
-									},
-									"osPlatform": "Windows",
-									"count": "[steps('hosts').specs.count]",
-									"scope": {
-										"location": "[steps('hosts').scope.location.name]",
-										"subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]"
+									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D4ads_v5', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v7'), 'Standard_D16s_v7', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v6'), 'Standard_D16s_v6', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v5'), 'Standard_D16s_v5', 'Standard_D16s_v3')))), coalesce(steps('basics').hostsRGProps.tags.vmSize, if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v7'), 'Standard_D16s_v7', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v6'), 'Standard_D16s_v6', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v5'), 'Standard_D16s_v5', 'Standard_D16s_v3')))))]",
+									"constraints": {
+										"allowedValues": "[steps('hosts').resourceSkusApi.transformed.genericVMSizes]",
+										"required": true
 									},
 									"visible": "[not(equals(steps('hosts').security.securityType, 'ConfidentialVM'))]"
 								},
@@ -3590,40 +3567,14 @@
 								},
 								{
 									"name": "size",
-									"type": "Microsoft.Compute.SizeSelector",
+									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Machine Size",
-									"toolTip": "Select the virtual machine size for deployment resources. Recommended to start with 2 CPU sizes like Standard_B2s or Standard_B2ms for cost efficiency.",
-									"recommendedSizes": [
-										"Standard_B2s",
-										"Standard_B2ms",
-										"Standard_D2s_v3"
-									],
+									"filter": true,
+									"toolTip": "Select the size of the temporary deployment virtual machine (2 vCPUs, available in your subscription). This VM is automatically deleted after deployment completes.",
+									"defaultValue": "Standard_D2ads_v5",
 									"constraints": {
-										"allowedSizes": [
-											"Standard_B2s",
-											"Standard_B2ms",
-											"Standard_B4ms",
-											"Standard_D2s_v3",
-											"Standard_D2s_v4",
-											"Standard_D2s_v5",
-											"Standard_D4s_v3",
-											"Standard_D4s_v4",
-											"Standard_D4s_v5"
-										]
-									},
-									"options": {
-										"hideDiskTypeFilter": false
-									},
-									"osPlatform": "Windows",
-									"imageReference": {
-										"publisher": "MicrosoftWindowsServer",
-										"offer": "WindowsServer",
-										"sku": "2022-datacenter-azure-edition"
-									},
-									"count": 1,
-									"scope": {
-										"location": "[steps('hosts').scope.location.name]",
-										"subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]"
+										"allowedValues": "[steps('hosts').resourceSkusApi.transformed.deploymentVMSizes]",
+										"required": true
 									},
 									"visible": true
 								}

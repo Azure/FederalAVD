@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "11891396862663310622"
+      "templateHash": "1290292898854667116"
     }
   },
   "parameters": {
@@ -12637,7 +12637,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "2750957613031621968"
+              "templateHash": "9026738113215550706"
             }
           },
           "parameters": {
@@ -15275,7 +15275,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.42.1.51946",
-                      "templateHash": "2202139991890411753"
+                      "templateHash": "14179236617910406938"
                     }
                   },
                   "parameters": {
@@ -15604,140 +15604,6 @@
                     },
                     {
                       "copy": {
-                        "name": "extension_JsonADDomainExtension",
-                        "count": "[length(range(0, parameters('sessionHostCount')))]"
-                      },
-                      "condition": "[contains(parameters('identitySolution'), 'DomainServices')]",
-                      "type": "Microsoft.Compute/virtualMachines/extensions",
-                      "apiVersion": "2021-03-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'JsonADDomainExtension')]",
-                      "location": "[parameters('location')]",
-                      "properties": {
-                        "forceUpdateTag": "[parameters('deploymentSuffix')]",
-                        "publisher": "Microsoft.Compute",
-                        "type": "JsonADDomainExtension",
-                        "typeHandlerVersion": "1.3",
-                        "autoUpgradeMinorVersion": true,
-                        "settings": {
-                          "Name": "[parameters('domainName')]",
-                          "User": "[parameters('domainJoinUserPrincipalName')]",
-                          "Restart": "true",
-                          "Options": "3",
-                          "OUPath": "[parameters('ouPath')]"
-                        },
-                        "protectedSettings": {
-                          "Password": "[parameters('domainJoinUserPassword')]"
-                        }
-                      },
-                      "dependsOn": [
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
-                      ]
-                    },
-                    {
-                      "copy": {
-                        "name": "extension_AADLoginForWindows",
-                        "count": "[length(range(0, parameters('sessionHostCount')))]"
-                      },
-                      "condition": "[or(startsWith(parameters('identitySolution'), 'EntraKerberos'), equals(parameters('identitySolution'), 'EntraId'))]",
-                      "type": "Microsoft.Compute/virtualMachines/extensions",
-                      "apiVersion": "2021-03-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AADLoginForWindows')]",
-                      "location": "[parameters('location')]",
-                      "properties": {
-                        "publisher": "Microsoft.Azure.ActiveDirectory",
-                        "type": "AADLoginForWindows",
-                        "typeHandlerVersion": "1.0",
-                        "autoUpgradeMinorVersion": true,
-                        "settings": "[if(parameters('intuneEnrollment'), createObject('mdmId', '0000000a-0000-0000-c000-000000000000'), null())]"
-                      },
-                      "dependsOn": [
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
-                      ]
-                    },
-                    {
-                      "copy": {
-                        "name": "extension_AzureMonitorWindowsAgent",
-                        "count": "[length(range(0, parameters('sessionHostCount')))]"
-                      },
-                      "condition": "[parameters('enableMonitoring')]",
-                      "type": "Microsoft.Compute/virtualMachines/extensions",
-                      "apiVersion": "2023-03-01",
-                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AzureMonitorWindowsAgent')]",
-                      "location": "[parameters('location')]",
-                      "properties": {
-                        "publisher": "Microsoft.Azure.Monitor",
-                        "type": "AzureMonitorWindowsAgent",
-                        "typeHandlerVersion": "1.1",
-                        "autoUpgradeMinorVersion": true,
-                        "enableAutomaticUpgrade": true
-                      },
-                      "dependsOn": [
-                        "extension_AADLoginForWindows",
-                        "extension_JsonADDomainExtension",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
-                      ]
-                    },
-                    {
-                      "copy": {
-                        "name": "dataCollectionEndpointAssociation",
-                        "count": "[length(range(0, parameters('sessionHostCount')))]"
-                      },
-                      "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('dataCollectionEndpointResourceId'))))]",
-                      "type": "Microsoft.Insights/dataCollectionRuleAssociations",
-                      "apiVersion": "2022-06-01",
-                      "scope": "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
-                      "name": "configurationAccessEndpoint",
-                      "properties": {
-                        "dataCollectionEndpointId": "[parameters('dataCollectionEndpointResourceId')]",
-                        "description": "Data Collection Endpoint Association"
-                      },
-                      "dependsOn": [
-                        "extension_AzureMonitorWindowsAgent",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
-                      ]
-                    },
-                    {
-                      "copy": {
-                        "name": "avdInsightsDataCollectionRuleAssociation",
-                        "count": "[length(range(0, parameters('sessionHostCount')))]"
-                      },
-                      "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('avdInsightsDataCollectionRulesResourceId'))))]",
-                      "type": "Microsoft.Insights/dataCollectionRuleAssociations",
-                      "apiVersion": "2022-06-01",
-                      "scope": "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
-                      "name": "[format('{0}-avdInsights-data-coll-rule-assoc', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
-                      "properties": {
-                        "dataCollectionRuleId": "[parameters('avdInsightsDataCollectionRulesResourceId')]",
-                        "description": "AVD Insights data collection rule association"
-                      },
-                      "dependsOn": [
-                        "extension_AzureMonitorWindowsAgent",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
-                      ]
-                    },
-                    {
-                      "copy": {
-                        "name": "vmInsightsDataCollectionRuleAssociation",
-                        "count": "[length(range(0, parameters('sessionHostCount')))]"
-                      },
-                      "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('vmInsightsDataCollectionRulesResourceId'))))]",
-                      "type": "Microsoft.Insights/dataCollectionRuleAssociations",
-                      "apiVersion": "2022-06-01",
-                      "scope": "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
-                      "name": "[format('{0}-vmInsights-data-coll-rule-assoc', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
-                      "properties": {
-                        "dataCollectionRuleId": "[parameters('vmInsightsDataCollectionRulesResourceId')]",
-                        "description": "VM Insights data collection rule association"
-                      },
-                      "dependsOn": [
-                        "extension_AzureMonitorWindowsAgent",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
-                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
-                      ]
-                    },
-                    {
-                      "copy": {
                         "name": "extension_GuestAttestation",
                         "count": "[length(range(0, parameters('sessionHostCount')))]"
                       },
@@ -15767,9 +15633,143 @@
                         }
                       },
                       "dependsOn": [
-                        "extension_AADLoginForWindows",
-                        "extension_AzureMonitorWindowsAgent",
-                        "extension_JsonADDomainExtension",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
+                      ]
+                    },
+                    {
+                      "copy": {
+                        "name": "extension_JsonADDomainExtension",
+                        "count": "[length(range(0, parameters('sessionHostCount')))]"
+                      },
+                      "condition": "[contains(parameters('identitySolution'), 'DomainServices')]",
+                      "type": "Microsoft.Compute/virtualMachines/extensions",
+                      "apiVersion": "2024-03-01",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'JsonADDomainExtension')]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "forceUpdateTag": "[parameters('deploymentSuffix')]",
+                        "publisher": "Microsoft.Compute",
+                        "type": "JsonADDomainExtension",
+                        "typeHandlerVersion": "1.3",
+                        "autoUpgradeMinorVersion": true,
+                        "settings": {
+                          "Name": "[parameters('domainName')]",
+                          "User": "[parameters('domainJoinUserPrincipalName')]",
+                          "Restart": "true",
+                          "Options": "3",
+                          "OUPath": "[parameters('ouPath')]"
+                        },
+                        "protectedSettings": {
+                          "Password": "[parameters('domainJoinUserPassword')]"
+                        }
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'GuestAttestation')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
+                      ]
+                    },
+                    {
+                      "copy": {
+                        "name": "extension_AADLoginForWindows",
+                        "count": "[length(range(0, parameters('sessionHostCount')))]"
+                      },
+                      "condition": "[or(startsWith(parameters('identitySolution'), 'EntraKerberos'), equals(parameters('identitySolution'), 'EntraId'))]",
+                      "type": "Microsoft.Compute/virtualMachines/extensions",
+                      "apiVersion": "2024-03-01",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AADLoginForWindows')]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "publisher": "Microsoft.Azure.ActiveDirectory",
+                        "type": "AADLoginForWindows",
+                        "typeHandlerVersion": "1.0",
+                        "autoUpgradeMinorVersion": true,
+                        "settings": "[if(parameters('intuneEnrollment'), createObject('mdmId', '0000000a-0000-0000-c000-000000000000'), null())]"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'GuestAttestation')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
+                      ]
+                    },
+                    {
+                      "copy": {
+                        "name": "extension_AzureMonitorWindowsAgent",
+                        "count": "[length(range(0, parameters('sessionHostCount')))]"
+                      },
+                      "condition": "[parameters('enableMonitoring')]",
+                      "type": "Microsoft.Compute/virtualMachines/extensions",
+                      "apiVersion": "2024-03-01",
+                      "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AzureMonitorWindowsAgent')]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "publisher": "Microsoft.Azure.Monitor",
+                        "type": "AzureMonitorWindowsAgent",
+                        "typeHandlerVersion": "1.1",
+                        "autoUpgradeMinorVersion": true,
+                        "enableAutomaticUpgrade": true
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AADLoginForWindows')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'GuestAttestation')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'JsonADDomainExtension')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
+                      ]
+                    },
+                    {
+                      "copy": {
+                        "name": "dataCollectionEndpointAssociation",
+                        "count": "[length(range(0, parameters('sessionHostCount')))]"
+                      },
+                      "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('dataCollectionEndpointResourceId'))))]",
+                      "type": "Microsoft.Insights/dataCollectionRuleAssociations",
+                      "apiVersion": "2022-06-01",
+                      "scope": "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                      "name": "configurationAccessEndpoint",
+                      "properties": {
+                        "dataCollectionEndpointId": "[parameters('dataCollectionEndpointResourceId')]",
+                        "description": "Data Collection Endpoint Association"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AzureMonitorWindowsAgent')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
+                      ]
+                    },
+                    {
+                      "copy": {
+                        "name": "avdInsightsDataCollectionRuleAssociation",
+                        "count": "[length(range(0, parameters('sessionHostCount')))]"
+                      },
+                      "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('avdInsightsDataCollectionRulesResourceId'))))]",
+                      "type": "Microsoft.Insights/dataCollectionRuleAssociations",
+                      "apiVersion": "2022-06-01",
+                      "scope": "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                      "name": "[format('{0}-avdInsights-data-coll-rule-assoc', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                      "properties": {
+                        "dataCollectionRuleId": "[parameters('avdInsightsDataCollectionRulesResourceId')]",
+                        "description": "AVD Insights data collection rule association"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AzureMonitorWindowsAgent')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
+                      ]
+                    },
+                    {
+                      "copy": {
+                        "name": "vmInsightsDataCollectionRuleAssociation",
+                        "count": "[length(range(0, parameters('sessionHostCount')))]"
+                      },
+                      "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('vmInsightsDataCollectionRulesResourceId'))))]",
+                      "type": "Microsoft.Insights/dataCollectionRuleAssociations",
+                      "apiVersion": "2022-06-01",
+                      "scope": "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                      "name": "[format('{0}-vmInsights-data-coll-rule-assoc', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
+                      "properties": {
+                        "dataCollectionRuleId": "[parameters('vmInsightsDataCollectionRulesResourceId')]",
+                        "description": "VM Insights data collection rule association"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AzureMonitorWindowsAgent')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
                         "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
@@ -15780,7 +15780,7 @@
                       },
                       "condition": "[parameters('hasAmdGpu')]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
-                      "apiVersion": "2021-03-01",
+                      "apiVersion": "2024-03-01",
                       "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AmdGpuDriverWindows')]",
                       "location": "[parameters('location')]",
                       "properties": {
@@ -15791,9 +15791,10 @@
                         "settings": {}
                       },
                       "dependsOn": [
-                        "extension_AADLoginForWindows",
-                        "extension_AzureMonitorWindowsAgent",
-                        "extension_JsonADDomainExtension",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AADLoginForWindows')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AzureMonitorWindowsAgent')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'GuestAttestation')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'JsonADDomainExtension')]",
                         "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
@@ -15804,7 +15805,7 @@
                       },
                       "condition": "[parameters('hasNvidiaGpu')]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
-                      "apiVersion": "2021-03-01",
+                      "apiVersion": "2024-03-01",
                       "name": "[format('{0}/{1}', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'NvidiaGpuDriverWindows')]",
                       "location": "[parameters('location')]",
                       "properties": {
@@ -15815,9 +15816,10 @@
                         "settings": "[if(empty(parameters('nvidiaDriverVersion')), createObject(), createObject('driverVersion', parameters('nvidiaDriverVersion')))]"
                       },
                       "dependsOn": [
-                        "extension_AADLoginForWindows",
-                        "extension_AzureMonitorWindowsAgent",
-                        "extension_JsonADDomainExtension",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AADLoginForWindows')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AzureMonitorWindowsAgent')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'GuestAttestation')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'JsonADDomainExtension')]",
                         "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
                     },
@@ -16063,12 +16065,12 @@
                         }
                       },
                       "dependsOn": [
-                        "extension_AADLoginForWindows",
-                        "extension_AmdGpuDriverWindows",
-                        "extension_AzureMonitorWindowsAgent",
-                        "extension_GuestAttestation",
-                        "extension_JsonADDomainExtension",
-                        "extension_NvidiaGpuDriverWindows",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AADLoginForWindows')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AmdGpuDriverWindows')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AzureMonitorWindowsAgent')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'GuestAttestation')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'JsonADDomainExtension')]",
+                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'NvidiaGpuDriverWindows')]",
                         "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]",
                         "[resourceId('Microsoft.Compute/virtualMachines', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')))]"
                       ]
