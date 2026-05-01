@@ -32,6 +32,10 @@ param functionAppNameOverride string = ''
 @maxLength(24)
 param storageAccountNameOverride string = ''
 
+@description('Optional. Explicit name for the storage encryption user-assigned identity. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments where a CMK identity was previously created with a specific name. Must follow Azure naming rules (3-128 chars, alphanumeric, hyphens, underscores).')
+@maxLength(128)
+param storageEncryptionIdentityNameOverride string = ''
+
 @description('Optional. Explicit name for the Application Insights instance. If not provided, name is derived from shared naming convention. Use this for brownfield deployments with non-standard naming. Must follow Azure naming rules (1-260 chars, alphanumeric, hyphens, underscores, parentheses, periods).')
 @maxLength(260)
 param applicationInsightsNameOverride string = ''
@@ -566,6 +570,17 @@ var storageAccountName = !empty(storageAccountNameOverride)
 // For brownfield deployments with non-standard host pool names, use storageAccountNameOverride parameter
 
 var encryptionKeyName = '${hpBaseName}-encryption-key-${storageAccountName}'
+var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)
+  ? storageEncryptionIdentityNameOverride
+  : replace(
+      replace(
+        replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
+        'TOKEN-',
+        'shr${uniqueStringHosts}-encryption-'
+      ),
+      'LOCATION',
+      functionAppRegionAbbreviation
+    )
 var templateSpecNameFinal = !empty(templateSpecName)
   ? templateSpecName
   : replace(
@@ -820,46 +835,34 @@ module roleAssignmentsKeyVault '../../../.common/bicepModules/keyVault/vaults/ro
   }
 }
 
-module roleAssignmentVirtualMachinesSubscription '../../../.common/bicepModules/authorization/roleAssignments/deploy.subscription.bicep' = {
+module roleAssignmentVirtualMachinesSubscription '../../../.common/bicepModules/authorization/roleAssignments/subscription/deploy.bicep' = {
   name: 'RoleAssign-Sub-VirtMachCont-${deploymentSuffix}'
   scope: subscription(virtualMachinesSubscriptionId)
   params: {
-    assignments: [
-      {
-        principalId: functionApp.outputs.functionAppPrincipalId
-        roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
-        principalType: 'ServicePrincipal'
-      }
-    ]
+    principalId: functionApp.outputs.functionAppPrincipalId
+    roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
+    principalType: 'ServicePrincipal'
   }
 }
 
-module roleAssignmentHostPoolSubscription '../../../.common/bicepModules/authorization/roleAssignments/deploy.subscription.bicep' = {
+module roleAssignmentHostPoolSubscription '../../../.common/bicepModules/authorization/roleAssignments/subscription/deploy.bicep' = {
   name: 'RoleAssign-Sub-Reader-${deploymentSuffix}'
   scope: subscription(hostPoolSubscriptionId)
   params: {
-    assignments: [
-      {
-        principalId: functionApp.outputs.functionAppPrincipalId
-        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader - needed to read scaling plans that may be in different resource groups
-        principalType: 'ServicePrincipal'
-      }
-    ]
+    principalId: functionApp.outputs.functionAppPrincipalId
+    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader - needed to read scaling plans that may be in different resource groups
+    principalType: 'ServicePrincipal'
   }
 }
 
-module roleAssignmentsRGs '../../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = [
+module roleAssignmentsRGs '../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for rgRole in roleAssignmentsResourceGroups: {
     name: 'RoleAssign-${last(split(rgRole.resourceGroupId, '/'))}-${rgRole.roleDescription}-${deploymentSuffix}'
     scope: resourceGroup(split(rgRole.resourceGroupId, '/')[2], split(rgRole.resourceGroupId, '/')[4])
     params: {
-      assignments: [
-        {
-          principalId: functionApp.outputs.functionAppPrincipalId
-          roleDefinitionId: rgRole.roleDefinitionId
-          principalType: 'ServicePrincipal'
-        }
-      ]
+      principalId: functionApp.outputs.functionAppPrincipalId
+      roleDefinitionId: rgRole.roleDefinitionId
+      principalType: 'ServicePrincipal'
     }
   }
 ]
@@ -1125,6 +1128,7 @@ module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp
     storageAccountRoleDefinitionIds: [
       '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor (for deployment state management)
     ]
+    storageEncryptionIdentityName: storageEncryptionIdentityName
     tags: tags
   }
 }

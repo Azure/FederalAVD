@@ -547,38 +547,30 @@ module remoteImageDefinition '../../.common/bicepModules/compute/galleries/image
 
 // * Role Assignments * //
 
-module roleAssignmentContributorBuildRg '../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = {
+module roleAssignmentContributorBuildRg '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   name: '${depPrefix}RA-MI-VirtMachContr-BuildRG-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
-    assignments: [
-      {
-        principalId: empty(userAssignedIdentityResourceId)
-          ? userAssignedIdentity!.outputs.principalId
-          : existingUserAssignedIdentity!.properties.principalId
-        roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
-        principalType: 'ServicePrincipal'
-      }
-    ]
+    principalId: empty(userAssignedIdentityResourceId)
+      ? userAssignedIdentity!.outputs.principalId
+      : existingUserAssignedIdentity!.properties.principalId
+    roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
+    principalType: 'ServicePrincipal'
   }
   dependsOn: [
     imageBuildRg
   ]
 }
 
-module roleAssignmentBlobDataContributorBuilderRg '../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = if (collectCustomizationLogs) {
+module roleAssignmentBlobDataContributorBuilderRg '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (collectCustomizationLogs) {
   name: '${depPrefix}RA-MI-StorBlobDataContr-BuildRG-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
-    assignments: [
-      {
-        principalId: empty(userAssignedIdentityResourceId)
-          ? userAssignedIdentity!.outputs.principalId
-          : existingUserAssignedIdentity!.properties.principalId
-        roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
-        principalType: 'ServicePrincipal'
-      }
-    ]
+    principalId: empty(userAssignedIdentityResourceId)
+      ? userAssignedIdentity!.outputs.principalId
+      : existingUserAssignedIdentity!.properties.principalId
+    roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
+    principalType: 'ServicePrincipal'
   }
 }
 

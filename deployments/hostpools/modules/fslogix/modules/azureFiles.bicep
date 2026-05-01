@@ -191,17 +191,13 @@ module storageAccountPes '../../../../../.common/bicepModules/network/privateEnd
 ]
 
 // ─── Admin Role Assignments ────────────────────────────────────────────────────
-module roleAssignmentsAdmins '../../../../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = [
+module roleAssignmentsAdmins '../../../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for (group, i) in shareAdminGroups: {
     name: 'RoleAssignment-Admin-${i}-${deploymentSuffix}'
     params: {
-      assignments: [
-        {
-          principalId: group.id
-          roleDefinitionId: adminRoleDefinitionId
-          principalType: 'Group'
-        }
-      ]
+      principalId: group.id
+      roleDefinitionId: adminRoleDefinitionId
+      principalType: 'Group'
     }
   }
 ]

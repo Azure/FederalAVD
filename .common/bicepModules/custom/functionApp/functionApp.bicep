@@ -29,6 +29,8 @@ param privateEndpointSubnetResourceId string
 param privateLinkScopeResourceId string
 param storageAccountRoleDefinitionIds array = []
 param serverFarmId string
+@description('Optional. Name for the storage encryption user-assigned identity to create when CMK is selected and functionAppUserAssignedIdentityResourceId is not provided. Computed by caller using naming convention. Required when keyManagementStorageAccounts != MicrosoftManaged and functionAppUserAssignedIdentityResourceId is empty.')
+param storageEncryptionIdentityName string = ''
 param storageAccountName string
 param tags object
 
@@ -61,7 +63,99 @@ resource functionAppUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-1
   )
 }
 
-// Create the Function App Storage Account with Microsoft Managed Keys first
+// Resolve Key Vault URI when CMK is requested so the storage account can be deployed in a single PUT
+// when a UAI is provided (principal ID is known before storage creation, avoiding the two-step SAI pattern
+// that fails when an Azure Policy deny effect requires CMK on initial PUT).
+resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = if (keyManagementStorageAccounts != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)) {
+  name: last(split(encryptionKeyVaultResourceId, '/'))
+  scope: resourceGroup(
+    split(encryptionKeyVaultResourceId, '/')[2],
+    split(encryptionKeyVaultResourceId, '/')[4]
+  )
+}
+
+var useCmk = keyManagementStorageAccounts != 'MicrosoftManaged'
+// Create a dedicated storage encryption UAI when CMK is selected but no existing UAI is supplied.
+// When an existing functionAppUserAssignedIdentityResourceId is provided, reuse it for CMK instead.
+var createStorageEncryptionUai = useCmk && empty(functionAppUserAssignedIdentityResourceId)
+
+// Create the encryption key in Key Vault before the storage account so it is available for the CMK reference.
+module storageAccountEncryptionKey '../../keyVault/vaults/keys/deploy.bicep' = if (useCmk) {
+  name: 'StorageEncryptionKey-${deploymentSuffix}'
+  scope: resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
+  params: {
+    attributesExportable: false
+    keySize: 4096
+    keyVaultName: last(split(encryptionKeyVaultResourceId, '/'))
+    kty: contains(keyManagementStorageAccounts, 'HSM') ? 'RSA-HSM' : 'RSA'
+    name: encryptionKeyName
+    rotationPolicy: {
+      attributes: {
+        expiryTime: 'P180D'
+      }
+      lifetimeActions: [
+        {
+          action: { type: 'Notify' }
+          trigger: { timeBeforeExpiry: 'P10D' }
+        }
+        {
+          action: { type: 'Rotate' }
+          trigger: { timeAfterCreate: 'P173D' }
+        }
+      ]
+    }
+    tags: { 'cm-resource-parent': toLower(hostPoolResourceId) }
+  }
+}
+
+// Create the storage encryption UAI when CMK is selected and no existing UAI is provided.
+module storageEncryptionUai '../../managedIdentity/userAssignedIdentities/deploy.bicep' = if (createStorageEncryptionUai) {
+  name: 'StorageEncryptionUAI-${deploymentSuffix}'
+  params: {
+    name: storageEncryptionIdentityName
+    location: location
+    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {})
+  }
+}
+
+// Resolved CMK identity — either the provided function app UAI or the newly created storage encryption UAI.
+// The resource ID is computed from parameters (not module output) so it can be used as a userAssignedIdentities
+// property key, which ARM requires to be calculable at deployment start.
+var storageEncryptionUaiResourceId = createStorageEncryptionUai
+  ? resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', storageEncryptionIdentityName)
+  : ''
+
+var cmkUaiResourceId = useCmk
+  ? !empty(functionAppUserAssignedIdentityResourceId)
+      ? functionAppUserAssignedIdentityResourceId
+      : storageEncryptionUaiResourceId
+  : ''
+
+var cmkPrincipalId = useCmk
+  ? !empty(functionAppUserAssignedIdentityResourceId)
+      ? functionAppUAI!.properties.principalId
+      : storageEncryptionUai!.outputs.principalId
+  : ''
+
+// Assign Key Vault Crypto Service Encryption User to the CMK identity before storage account creation.
+// The principal ID is always known at this point (UAI), so CMK is embedded in the initial storage PUT.
+module storageAccountEncryptionKeyRA '../../keyVault/vaults/keys/roleAssignment.bicep' = if (useCmk) {
+  name: 'RA-StorageEncryptionKey-${deploymentSuffix}'
+  scope: resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
+  params: {
+    keyVaultName: last(split(encryptionKeyVaultResourceId, '/'))
+    keyName: encryptionKeyName
+    assignments: [
+      {
+        principalId: cmkPrincipalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6' // Key Vault Crypto Service Encryption User
+      }
+    ]
+  }
+  dependsOn: [storageAccountEncryptionKey]
+}
+
 resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   name: storageAccountName
   location: location
@@ -70,9 +164,12 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     name: 'Standard_LRS'
   }
   kind: 'StorageV2'
-  identity: keyManagementStorageAccounts != 'MicrosoftManaged'
+  identity: useCmk
     ? {
-        type: 'SystemAssigned'
+        type: 'UserAssigned'
+        userAssignedIdentities: {
+          '${cmkUaiResourceId}': {}
+        }
       }
     : null
   properties: {
@@ -84,6 +181,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     defaultToOAuthAuthentication: true
     dnsEndpointType: 'Standard'
     encryption: {
+      keySource: useCmk ? 'Microsoft.Keyvault' : 'Microsoft.Storage'
       requireInfrastructureEncryption: true
       services: union(
         {
@@ -109,6 +207,17 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
             }
           : {}
       )
+      keyvaultproperties: useCmk
+        ? {
+            keyname: encryptionKeyName
+            keyvaulturi: encryptionKeyVault!.properties.vaultUri
+          }
+        : null
+      identity: useCmk
+        ? {
+            userAssignedIdentity: cmkUaiResourceId
+          }
+        : null
     }
     minimumTlsVersion: 'TLS1_2'
     networkAcls: {
@@ -127,6 +236,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   resource blobService 'blobServices' = {
     name: 'default'
   }
+  dependsOn: [storageAccountEncryptionKeyRA]
 }
 
 resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01' = [
@@ -183,51 +293,6 @@ resource privateDnsZoneGroups_storage 'Microsoft.Network/privateEndpoints/privat
     }
   }
 ]
-
-module storageAccountEncryptionKey '../../keyVault/vaults/keys/deploy.bicep' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
-  name: 'StorageEncryptionKey-${deploymentSuffix}'
-  scope: resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
-  params: {
-    attributesExportable: false
-    keySize: 4096
-    keyVaultName: last(split(encryptionKeyVaultResourceId, '/'))
-    kty: contains(keyManagementStorageAccounts, 'HSM') ? 'RSA-HSM' : 'RSA'
-    name: encryptionKeyName
-    rotationPolicy: {
-      attributes: {
-        expiryTime: 'P180D'
-      }
-      lifetimeActions: [
-        {
-          action: { type: 'Notify' }
-          trigger: { timeBeforeExpiry: 'P10D' }
-        }
-        {
-          action: { type: 'Rotate' }
-          trigger: { timeAfterCreate: 'P173D' }
-        }
-      ]
-    }
-    tags: { 'cm-resource-parent': toLower(hostPoolResourceId) }
-  }
-}
-
-module storageAccountEncryptionKeyRA '../../keyVault/vaults/keys/roleAssignment.bicep' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
-  name: 'RA-StorageEncryptionKey-${deploymentSuffix}'
-  scope: resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
-  params: {
-    keyVaultName: last(split(encryptionKeyVaultResourceId, '/'))
-    keyName: encryptionKeyName
-    assignments: [
-      {
-        principalId: storageAccount.identity.principalId
-        principalType: 'ServicePrincipal'
-        roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6' // Key Vault Crypto Service Encryption User
-      }
-    ]
-  }
-  dependsOn: [storageAccountEncryptionKey]
-}
 
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (enableApplicationInsights) {
   name: applicationInsightsName
@@ -479,37 +544,18 @@ var storageAccountRoleDefinitions = union(
   storageAccountRoleDefinitionIds
 )
 
-module roleAssignment_storageAccount '../../storage/storageAccounts/roleAssignment.bicep' = [
-  for roleDefinitionId in storageAccountRoleDefinitions: {
-    name: 'set-role-assignment-storage-${uniqueString(roleDefinitionId)}-${deploymentSuffix}'
-    params: {
-      storageAccountName: storageAccount.name
-      assignments: [
-        {
-          principalId: functionAppPrincipalId
-          principalType: 'ServicePrincipal'
-          roleDefinitionId: roleDefinitionId
-        }
-      ]
-    }
-  }
-]
-
-// Update storage account with customer managed key encryption. Force this to end to allow time for RBAC to propagate.
-module updateStorageAccount 'updateStorageAccountKey.bicep' = if (keyManagementStorageAccounts != 'MicrosoftManaged') {
-  name: 'update-encryptionKey-storageAccount-${deploymentSuffix}'
+module roleAssignment_storageAccount '../../storage/storageAccounts/roleAssignment.bicep' = {
+  name: 'set-role-assignments-storage-${deploymentSuffix}'
   params: {
     storageAccountName: storageAccount.name
-    storageAccountSku: storageAccount.sku
-    encryptionKeyName: storageAccountEncryptionKey!.outputs.name
-    keyVaultResourceId: encryptionKeyVaultResourceId
-    location: location
-    privateEndpoint: privateEndpoint
-    storageAccountKind: storageAccount.kind
+    assignments: [
+      for roleDefinitionId in storageAccountRoleDefinitions: {
+        principalId: functionAppPrincipalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: roleDefinitionId
+      }
+    ]
   }
-  dependsOn: [
-    functionApp
-  ]
 }
 
 output functionAppName string = functionApp.name

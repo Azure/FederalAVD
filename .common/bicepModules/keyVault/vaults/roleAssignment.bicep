@@ -10,14 +10,18 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
 }
 
+var formattedAssignments = [for assignment in assignments: union(assignment, {
+  roleDefinitionId: contains(assignment.roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/')
+    ? assignment.roleDefinitionId
+    : '/providers/Microsoft.Authorization/roleDefinitions/${assignment.roleDefinitionId}'
+})]
+
 resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for (assignment, i) in assignments: {
+  for (assignment, i) in formattedAssignments: {
     scope: keyVault
     name: guid(keyVault.id, assignment.principalId, assignment.roleDefinitionId)
     properties: {
-      roleDefinitionId: contains(assignment.roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/')
-        ? assignment.roleDefinitionId
-        : '/providers/Microsoft.Authorization/roleDefinitions/${assignment.roleDefinitionId}'
+      roleDefinitionId: assignment.roleDefinitionId
       principalId: assignment.principalId
       principalType: assignment.?principalType ?? 'ServicePrincipal'
       description: assignment.?description
@@ -25,4 +29,4 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
   }
 ]
 
-output resourceIds array = [for (assignment, i) in assignments: roleAssignment[i].id]
+output resourceIds array = [for (assignment, i) in formattedAssignments: roleAssignment[i].id]

@@ -166,18 +166,14 @@ resource hostPoolGet 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' exis
 }
 
 // Required for EntraID login
-module roleAssignment_VirtualMachineUserLogin '../../../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = [
+module roleAssignment_VirtualMachineUserLogin '../../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for i in range(0, length(appGroupSecurityGroups)): if (deploymentType != 'SessionHostsOnly' && !contains(identitySolution, 'DomainServices')) {
     name: 'RA-Hosts-VMLoginUser-${i}-${deploymentSuffix}'
     scope: resourceGroup(resourceGroupHosts)
     params: {
-      assignments: [
-        {
-          principalId: appGroupSecurityGroups[i]
-          principalType: 'Group'
-          roleDefinitionId: 'fb879df8-f326-4884-b1cf-06f3ad86be52' // Virtual Machine User Login
-        }
-      ]
+      principalId: appGroupSecurityGroups[i]
+      principalType: 'Group'
+      roleDefinitionId: 'fb879df8-f326-4884-b1cf-06f3ad86be52' // Virtual Machine User Login
     }
   }
 ]

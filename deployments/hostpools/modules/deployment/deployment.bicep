@@ -169,18 +169,14 @@ module deploymentUserAssignedIdentity '../../../../.common/bicepModules/managedI
 }
 
 // ─── Role assignments (RG-scoped, one module call per entry) ──────────────────
-module roleAssignments_deployment '../../../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = [
+module roleAssignments_deployment '../../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for i in range(0, length(roleAssignments)): {
     scope: resourceGroup(roleAssignments[i].resourceGroup)
     name: 'RA-${roleAssignments[i].depName}-${deploymentSuffix}'
     params: {
-      assignments: [
-        {
-          principalId: deploymentUserAssignedIdentity.outputs.principalId
-          principalType: 'ServicePrincipal'
-          roleDefinitionId: roleAssignments[i].roleDefinitionId
-        }
-      ]
+      principalId: deploymentUserAssignedIdentity.outputs.principalId
+      principalType: 'ServicePrincipal'
+      roleDefinitionId: roleAssignments[i].roleDefinitionId
     }
   }
 ]
@@ -267,6 +263,6 @@ module virtualMachine '../../../../.common/bicepModules/compute/virtualMachines/
 output deploymentUserAssignedIdentityClientId string = deploymentUserAssignedIdentity.outputs.clientId
 output deploymentUserAssignedIdentityResourceId string = deploymentUserAssignedIdentity.outputs.resourceId
 output deploymentUserAssignedIdentityRoleAssignmentIds array = [
-  for i in filter(range(0, length(roleAssignments)), i => roleAssignments[i].resourceGroup != resourceGroupDeployment): roleAssignments_deployment[i].outputs.resourceIds
+  for i in filter(range(0, length(roleAssignments)), i => roleAssignments[i].resourceGroup != resourceGroupDeployment): roleAssignments_deployment[i].outputs.resourceId
 ]
 output virtualMachineName string = virtualMachine.outputs.name

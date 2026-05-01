@@ -178,6 +178,15 @@ var storageAccountName = toLower(replace(
   ''
 ))
 var encryptionKeyName = '${hpBaseName}-encryption-key-${storageAccountName}'
+var storageEncryptionIdentityName = replace(
+  replace(
+    replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
+    'TOKEN-',
+    'sqm-${uniqueStringStorage}-storage-encryption-'
+  ),
+  'LOCATION',
+  functionAppRegionAbbreviation
+)
 
 // ========== //
 // Resources  //
@@ -233,21 +242,18 @@ module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp
     privateLinkScopeResourceId: privateLinkScopeResourceId
     serverFarmId: empty(appServicePlanResourceId) ? hostingPlan!.outputs.hostingPlanId : appServicePlanResourceId
     storageAccountName: storageAccountName
+    storageEncryptionIdentityName: storageEncryptionIdentityName
     tags: tags
   }
 }
 
-module roleAssignment_StorageAccounts '../../../.common/bicepModules/authorization/roleAssignments/deploy.resourceGroup.bicep' = {
+module roleAssignment_StorageAccounts '../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   name: 'RA-StorageAccounts-${deploymentSuffix}'
   scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
   params: {
-    assignments: [
-      {
-        principalId: functionApp.outputs.functionAppPrincipalId
-        roleDefinitionId: '17d1049b-9a84-46fb-8f53-869881c3d3ab'
-        principalType: 'ServicePrincipal'
-      }
-    ]
+    principalId: functionApp.outputs.functionAppPrincipalId
+    roleDefinitionId: '17d1049b-9a84-46fb-8f53-869881c3d3ab'
+    principalType: 'ServicePrincipal'
   }
 }
 

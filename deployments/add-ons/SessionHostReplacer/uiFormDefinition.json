@@ -3145,6 +3145,23 @@
 									}
 								},
 								{
+									"name": "storageEncryptionIdentityNameOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Storage Encryption Identity Name",
+									"placeholder": "uai-avdshr-prod-encryption-eus2",
+									"toolTip": "Optional. Explicit name for the user-assigned identity used for storage account CMK encryption. Only relevant when Customer-Managed Keys are selected. Leave blank to derive from naming convention. Example: uai-avdshr-prod-encryption-eus2",
+									"visible": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
+									"constraints": {
+										"required": false,
+										"validations": [
+											{
+												"regex": "^$|^[a-zA-Z0-9-_]{3,128}$",
+												"message": "Identity name must be 3-128 characters, alphanumeric, hyphens, and underscores only."
+											}
+										]
+									}
+								},
+								{
 									"name": "applicationInsightsNameOverride",
 									"type": "Microsoft.Common.TextBox",
 									"label": "Application Insights Name",
@@ -3357,6 +3374,7 @@
 				"privateLinkScopeResourceId": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.enableAMPLS), steps('monitoring').functionAppMonitoringSection.privateLinkScope.id, '')]",
 				"functionAppNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.functionAppNameOverride, ''), '')]",
 				"storageAccountNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.storageAccountNameOverride, ''), '')]",
+				"storageEncryptionIdentityNameOverride": "[if(and(steps('customNaming').enableCustomNaming, contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')), coalesce(steps('customNaming').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
 				"applicationInsightsNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
 				"virtualMachineNameConvOverride": "[if(steps('customNaming').enableCustomNaming, steps('customNaming').sessionHostNaming.virtualMachineNameConvOverride, '')]",
 				"diskNameConvOverride": "[if(steps('customNaming').enableCustomNaming, steps('customNaming').sessionHostNaming.diskNameConvOverride, '')]",
