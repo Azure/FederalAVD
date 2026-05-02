@@ -489,6 +489,157 @@
 					]
 				},
 				{
+					"name": "customNaming",
+					"label": "Custom Naming (Advanced)",
+					"elements": [
+						{
+							"name": "infoBox1",
+							"type": "Microsoft.Common.InfoBox",
+							"options": {
+								"style": "Info",
+								"text": "This step is only needed for brownfield deployments where your host pool uses non-standard naming conventions. Leave 'Use Custom Naming' unchecked to automatically derive names from your host pool naming pattern."
+							}
+						},
+						{
+							"name": "enableCustomNaming",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Use Custom Naming Overrides",
+							"defaultValue": false,
+							"toolTip": "Check this box to explicitly define resource names. Required for brownfield deployments with non-standard host pool naming (e.g., 'prod-avd-hostpool-01' instead of 'hp-avd-prod-eus'). If unchecked, names are automatically derived from the host pool name."
+						},
+						{
+							"name": "functionApp_checkNameAvailability",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(steps('customNaming').enableCustomNaming, not(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride)))]",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Web/checkNameAvailability?api-version=2022-03-01')]",
+								"body": {
+									"name": "[steps('customNaming').infrastructureNaming.functionAppNameOverride]",
+									"type": "Microsoft.Web/sites"
+								}
+							}
+						},
+						{
+							"name": "functionAppName_rePUT",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(steps('customNaming').enableCustomNaming, not(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride)))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
+								"body": {}
+							}
+						},
+						{
+							"name": "storageAccount_checkNameAvailability",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(steps('customNaming').enableCustomNaming, not(empty(steps('customNaming').infrastructureNaming.storageAccountNameOverride)))]",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Storage/checkNameAvailability?api-version=2023-05-01')]",
+								"body": {
+									"name": "[steps('customNaming').infrastructureNaming.storageAccountNameOverride]",
+									"type": "Microsoft.Storage/storageAccounts"
+								}
+							}
+						},
+						{
+							"name": "infrastructureNaming",
+							"type": "Microsoft.Common.Section",
+							"label": "Function App Infrastructure Naming",
+							"visible": "[steps('customNaming').enableCustomNaming]",
+							"elements": [
+								{
+									"name": "infoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "These names are used for the Azure Function App and its supporting resources. All fields are required when custom naming is enabled."
+									}
+								},
+								{
+									"name": "functionAppNameOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Function App Name",
+									"placeholder": "func-avdsqm-prod-eus2",
+									"toolTip": "Required. Explicit name for the Function App. Must be globally unique in the azurewebsites.net namespace, 2-60 characters, alphanumeric and hyphens. Example: func-avdsqm-prod-eus2",
+									"constraints": {
+										"required": true,
+										"validations": [
+											{
+												"regex": "^[a-zA-Z0-9-]{2,60}$",
+												"message": "Function app name must be 2-60 characters, containing only alphanumeric characters and hyphens."
+											},
+											{
+												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride), steps('customNaming').functionApp_checkNameAvailability.nameAvailable, equals(steps('customNaming').functionApp_checkNameAvailability.reason, 'AlreadyExists'))]",
+												"message": "[steps('customNaming').functionApp_checkNameAvailability.message]"
+											},
+											{
+												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride), steps('customNaming').functionApp_checkNameAvailability.nameAvailable, equals(steps('customNaming').functionAppName_rePUT.id, concat(steps('basics').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride)), not(equals(steps('customNaming').functionApp_checkNameAvailability.reason, 'AlreadyExists')))]",
+												"message": "[steps('customNaming').functionApp_checkNameAvailability.message]"
+											}
+										]
+									}
+								},
+								{
+									"name": "storageAccountNameOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Storage Account Name",
+									"placeholder": "stavdsqmprod",
+									"toolTip": "Required. Explicit name for the Storage Account (used by Function App). Must be globally unique in Azure, 3-24 characters, lowercase alphanumeric only. Example: stavdsqmprod",
+									"constraints": {
+										"required": true,
+										"validations": [
+											{
+												"regex": "^[a-z0-9]{3,24}$",
+												"message": "Storage account name must be 3-24 characters, lowercase alphanumeric only (no hyphens or special characters)."
+											},
+											{
+												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.storageAccountNameOverride), steps('customNaming').storageAccount_checkNameAvailability.nameAvailable)]",
+												"message": "[steps('customNaming').storageAccount_checkNameAvailability.message]"
+											}
+										]
+									}
+								},
+								{
+									"name": "storageEncryptionIdentityNameOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Storage Encryption Identity Name",
+									"placeholder": "uai-avdsqm-prod-encryption-eus2",
+									"toolTip": "Optional. Explicit name for the user-assigned identity used for storage account CMK encryption. Only relevant when Customer-Managed Keys are selected. Leave blank to derive from naming convention. Example: uai-avdsqm-prod-encryption-eus2",
+									"visible": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
+									"constraints": {
+										"required": false,
+										"validations": [
+											{
+												"regex": "^$|^[a-zA-Z0-9-_]{3,128}$",
+												"message": "Identity name must be 3-128 characters, alphanumeric, hyphens, and underscores only."
+											}
+										]
+									}
+								},
+								{
+									"name": "applicationInsightsNameOverride",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Application Insights Name",
+									"placeholder": "appi-avdsqm-prod-eus2",
+									"toolTip": "Required. Explicit name for the Application Insights instance. Must be unique within the resource group, 1-260 characters, alphanumeric, hyphens, underscores, parentheses, and periods. Example: appi-avdsqm-prod-eus2",
+									"visible": "[steps('monitoring').enableMonitoring]",
+									"constraints": {
+										"required": true,
+										"validations": [
+											{
+												"regex": "^[a-zA-Z0-9-_().]{1,260}$",
+												"message": "Application Insights name must be 1-260 characters, containing alphanumeric characters, hyphens, underscores, parentheses, and periods."
+											}
+										]
+									}
+								}
+							]
+						}
+					]
+				},
+				{
 					"name": "tags",
 					"label": "Tags",
 					"elements": [
@@ -524,6 +675,10 @@
 				"azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureFunctionAppPrivateDnsZone, '')]",
 				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
 				"privateLinkScopeResourceId": "[if(steps('monitoring').enableAMPLS, steps('monitoring').privateLinkScope.id, '')]",
+				"functionAppNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.functionAppNameOverride, ''), '')]",
+				"storageAccountNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.storageAccountNameOverride, ''), '')]",
+				"storageEncryptionIdentityNameOverride": "[if(and(steps('customNaming').enableCustomNaming, contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')), coalesce(steps('customNaming').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
+				"applicationInsightsNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
 				"tags": "[steps('tags')]"
 			},
 			"kind": "ResourceGroup",

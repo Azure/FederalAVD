@@ -18,6 +18,29 @@ param location string = resourceGroup().location
 param tags object = {}
 
 // ================================================================================================
+// Brownfield Naming Override Parameters
+// These parameters allow explicit control over resource naming for brownfield deployments where
+// the existing host pool naming convention does not follow standard patterns. When specified,
+// these override the automatic naming convention detection.
+// ================================================================================================
+
+@description('Optional. Explicit name for the Function App. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique and follow Azure naming rules (2-60 chars, alphanumeric and hyphens).')
+@maxLength(60)
+param functionAppNameOverride string = ''
+
+@description('Optional. Explicit name for the Storage Account (used by Function App). If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique, 3-24 chars, lowercase alphanumeric only.')
+@maxLength(24)
+param storageAccountNameOverride string = ''
+
+@description('Optional. Explicit name for the storage encryption user-assigned identity. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments where a CMK identity was previously created with a specific name. Must follow Azure naming rules (3-128 chars, alphanumeric, hyphens, underscores).')
+@maxLength(128)
+param storageEncryptionIdentityNameOverride string = ''
+
+@description('Optional. Explicit name for the Application Insights instance. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard naming. Must follow Azure naming rules (1-260 chars, alphanumeric, hyphens, underscores, parentheses, periods).')
+@maxLength(260)
+param applicationInsightsNameOverride string = ''
+
+// ================================================================================================
 // Function App Infrastructure Parameters
 // These parameters configure the Azure Function App infrastructure including networking, 
 // security, encryption, and monitoring capabilities.
@@ -146,47 +169,67 @@ var privateEndpointNICNameConv = replace(
 )
 
 // quota management resource names
-var appInsightsName = replace(
-  replace(
-    replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
-    'LOCATION',
-    functionAppRegionAbbreviation
-  ),
-  'TOKEN-',
-  'sqm-${uniqueStringStorage}-'
-)
-var functionAppName = replace(
-  replace(
-    replace(
-      replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
+// Use explicit override if provided, otherwise derive from host pool naming convention
+var appInsightsName = !empty(applicationInsightsNameOverride)
+  ? applicationInsightsNameOverride
+  : replace(
+      replace(
+        replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
+        'LOCATION',
+        functionAppRegionAbbreviation
+      ),
+      'TOKEN-',
+      'sqm-${uniqueStringStorage}-'
+    )
+
+// Use explicit override if provided, otherwise derive from host pool naming convention
+var functionAppName = !empty(functionAppNameOverride)
+  ? functionAppNameOverride
+  : replace(
+      replace(
+        replace(
+          replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
+          'LOCATION',
+          functionAppRegionAbbreviation
+        ),
+        'TOKEN-',
+        'sqm-${uniqueStringStorage}-'
+      ),
       'LOCATION',
       functionAppRegionAbbreviation
-    ),
-    'TOKEN-',
-    'sqm-${uniqueStringStorage}-'
-  ),
-  'LOCATION',
-  functionAppRegionAbbreviation
-)
-var storageAccountName = toLower(replace(
-  replace(
-    replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', functionAppRegionAbbreviation),
-    'TOKEN-',
-    'sqm-${uniqueStringStorage}'
-  ),
-  '-',
-  ''
-))
+    )
+
+// Storage Account naming - use explicit override if provided, otherwise derive from naming convention
+var storageAccountName = !empty(storageAccountNameOverride)
+  ? toLower(storageAccountNameOverride)
+  : toLower(replace(
+      replace(
+        replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', functionAppRegionAbbreviation),
+        'TOKEN-',
+        'sqm-${uniqueStringStorage}'
+      ),
+      '-',
+      ''
+    ))
+
+// Storage account name validation: Azure enforces 3-24 chars, lowercase alphanumeric only
+// If the derived name fails validation, deployment will error at storage account module
+// For brownfield deployments with non-standard host pool names, use storageAccountNameOverride parameter
+
 var encryptionKeyName = '${hpBaseName}-encryption-key-${storageAccountName}'
-var storageEncryptionIdentityName = replace(
-  replace(
-    replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
-    'TOKEN-',
-    'sqm-${uniqueStringStorage}-storage-encryption-'
-  ),
-  'LOCATION',
-  functionAppRegionAbbreviation
-)
+
+// Use explicit override if provided, otherwise derive from host pool naming convention
+var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)
+  ? storageEncryptionIdentityNameOverride
+  : replace(
+      replace(
+        replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
+        'TOKEN-',
+        'sqm-${uniqueStringStorage}-storage-encryption-'
+      ),
+      'LOCATION',
+      functionAppRegionAbbreviation
+    )
 
 // ========== //
 // Resources  //
