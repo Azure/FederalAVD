@@ -1,5 +1,9 @@
 targetScope = 'subscription'
 
+// Deploys an Azure Virtual Desktop host pool including the AVD control plane (host pool, workspace, application groups),
+// session host VMs, FSLogix storage, monitoring, private networking, and optional Customer Managed Key encryption.
+// Subscription-scoped; creates and manages multiple resource groups for compute, storage, and operations resources.
+
 // Basics
 
 @allowed([
@@ -511,19 +515,19 @@ param recoveryServicesVaultStorageRedundancy string = 'LocallyRedundant'
 @description('Optional. The resource Id of an existing Recovery Services Vault that will be used to store Virtual Machine Backups. Only used when "DeploymentType" is "SessionHostOnly".')
 param existingRecoveryServicesVaultResourceId string = ''
 
-@description('Optional. The resource Id of an existing Key Vault that contains the customer managed keys for disk encryption and/or FSLogix storage account encryption. Only used when "DeploymentType" is "HostpoolOnly".')
-param existingEncryptionKeyVaultResourceId string = ''
+@description('Optional. The resource ID of an existing Encryption Key Vault containing customer-managed keys. Provide this from the Foundation deployment, or leave empty to have the host pool deployment create one automatically when CMK is enabled with deploymentType = Complete.')
+param encryptionKeyVaultResourceId string = ''
 
-@description('Optional. Deploys the secrets Key Vault.')
+@description('Optional. Deploys the Secrets Key Vault as part of this deployment. Only applies when deploymentType is Complete. When using the Foundation deployment, leave this false and provide credentialsKeyVaultResourceId instead.')
 param deploySecretsKeyVault bool = false
 
-@description('Optional. Enables soft delete on the secrets key vault.')
+@description('Optional. Enables soft delete on the inline-created Secrets Key Vault.')
 param secretsKeyVaultEnableSoftDelete bool = true
 
-@description('Optional. Enables soft delete on the secrets key vault.')
+@description('Optional. Enables purge protection on the inline-created Secrets Key Vault.')
 param secretsKeyVaultEnablePurgeProtection bool = true
 
-@description('Optional. The retention period for the Azure Key Vault.')
+@description('Optional. The retention period in days for soft-deleted objects in the inline-created Key Vaults.')
 @minValue(7)
 @maxValue(90)
 param keyVaultRetentionInDays int = 90
@@ -556,7 +560,7 @@ param existingDiskAccessResourceId string = ''
 @description('Optional. Create private endpoints for all deployed management and storage resources where applicable.')
 param deployPrivateEndpoints bool = false
 
-@description('Conditional. The Resource Id of the subnet on which to create the secrets Key Vault private endpoint. Required when "deployPrivateEndpoints" = true and "deploySecretsKeyVault" = true.')
+@description('Conditional. The Resource Id of the subnet on which to create the Key Vault private endpoints. Required when "deployPrivateEndpoints" = true and Key Vaults are deployed inline (deploySecretsKeyVault = true or CMK with no encryptionKeyVaultResourceId).')
 param keyVaultPrivateEndpointSubnetResourceId string = ''
 
 @description('Conditional. The Resource Id of the subnet on which to create the storage account and other resources private link. Required when "deployPrivateEndpoints" = true.')
@@ -571,7 +575,7 @@ param azureBlobPrivateDnsZoneResourceId string = ''
 @description('Conditional. If using private endpoints with Azure files, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
 param azureFilesPrivateDnsZoneResourceId string = ''
 
-@description('Conditional. If using private endpoints with Key Vaults, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
+@description('Conditional. The resource ID of the Azure Key Vault Private DNS Zone. Required when "deployPrivateEndpoints" is true and Key Vaults are deployed inline.')
 param azureKeyVaultPrivateDnsZoneResourceId string = ''
 
 @description('Conditional. If using private endpoints with Azure files, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
@@ -668,14 +672,21 @@ var globalFeedRegion = !empty(globalFeedPrivateEndpointSubnetResourceId)
 var virtualMachinesRegion = vmVirtualNetwork.location
 var controlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
 
-var createDeploymentVm = deploymentType != 'SessionHostsOnly' && (deployFSLogixStorage || contains(
-  keyManagementDisks,
-  'CustomerManaged'
-) || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName))
-var deployManagementResources = deploymentType == 'Complete' && (deploySecretsKeyVault || contains(
-  keyManagementStorageAccounts,
-  'CustomerManaged'
-) || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption)
+var createDeploymentVm = deploymentType != 'SessionHostsOnly' && (deployFSLogixStorage || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName))
+
+// deployKeyVaults controls inline KV creation within this deployment.
+// It fires only when deploymentType == 'Complete' AND either:
+//   (a) the user requested a secrets KV to be deployed inline, OR
+//   (b) CMK is needed but no external encryptionKeyVaultResourceId was provided (e.g., portal all-in-one)
+// When using the Foundation deployment, encryptionKeyVaultResourceId will be non-empty so this stays false.
+var cmkIsRequested = contains(keyManagementStorageAccounts, 'CustomerManaged') || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption
+var deployInlineEncryptionKv = deploymentType == 'Complete' && empty(encryptionKeyVaultResourceId) && cmkIsRequested
+var deployKeyVaults = deploymentType == 'Complete' && (deploySecretsKeyVault || deployInlineEncryptionKv)
+
+// Top-level CMK: run keys + DES/UAI + role assignments early so RBAC propagation
+// completes during the monitoring/controlPlane phases — well before VMs or storage deploy.
+var deployTopLevelDiskCmk = deploymentType != 'SessionHostsOnly' && contains(keyManagementDisks, 'CustomerManaged') && !confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
+var deployTopLevelStorageCmk = deploymentType != 'SessionHostsOnly' && deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && keyManagementStorageAccounts != 'MicrosoftManaged' && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
 
 var hostPoolVmTemplate = deploymentType != 'SessionHostsOnly'
   ? {
@@ -885,23 +896,20 @@ var storageResourceGroupIdTag = deployFSLogixStorage
     }
   : {}
 
-var encryptionKeyVaultResourceId = contains(keyManagementStorageAccounts, 'Customer') || contains(
-    keyManagementDisks,
-    'Customer'
-  )
-  ? (deploymentType == 'Complete'
-      ? management!.outputs.encryptionKeyVaultResourceId
-      : existingEncryptionKeyVaultResourceId)
-  : ''
+// Effective encryption KV resource ID: prefer the externally-provided value (from Foundation or existing KV),
+// fall back to the inline-created one if the management module ran.
+var effectiveEncryptionKeyVaultResourceId = !empty(encryptionKeyVaultResourceId)
+  ? encryptionKeyVaultResourceId
+  : (deployInlineEncryptionKv ? keyVaults!.outputs.encryptionKeyVaultResourceId : '')
 #disable-next-line BCP318
-var encryptionKeyVaultUri = contains(keyManagementStorageAccounts, 'Customer') || contains(
-    keyManagementDisks,
-    'Customer'
-  )
-  ? (deploymentType == 'Complete'
-      ? management!.outputs.encryptionKeyVaultUri
-      : (empty(existingEncryptionKeyVaultResourceId) ? '' : kvEncryption!.properties.vaultUri))
-  : ''
+var encryptionKeyVaultUri = !empty(encryptionKeyVaultResourceId)
+  ? kvEncryption!.properties.vaultUri
+  : (deployInlineEncryptionKv ? keyVaults!.outputs.encryptionKeyVaultUri : '')
+
+// Effective DES resource ID: top-level CMK output takes precedence over a user-provided pre-existing DES.
+var effectiveDiskEncryptionSetResourceId = deployTopLevelDiskCmk
+  ? diskCmk!.outputs.diskEncryptionSetResourceId
+  : existingDiskEncryptionSetResourceId
 
 // Existing Session Host Virtual Network location
 resource vmVirtualNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existing = {
@@ -924,12 +932,13 @@ resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!em
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
 }
 
-// Existing Key Vault for Customer Managed Keys
-resource kvEncryption 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(existingEncryptionKeyVaultResourceId)) {
-  name: last(split(existingEncryptionKeyVaultResourceId, '/'))
+// Existing Encryption Key Vault — provided from Foundation deployment or pre-existing KV.
+// Only referenced when encryptionKeyVaultResourceId is non-empty (not when inline creation is used).
+resource kvEncryption 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(encryptionKeyVaultResourceId)) {
+  name: last(split(encryptionKeyVaultResourceId, '/'))
   scope: resourceGroup(
-    split(existingEncryptionKeyVaultResourceId, '/')[2],
-    split(existingEncryptionKeyVaultResourceId, '/')[4]
+    split(encryptionKeyVaultResourceId, '/')[2],
+    split(encryptionKeyVaultResourceId, '/')[4]
   )
 }
 
@@ -971,16 +980,6 @@ module monitoringResourceGroup '../../.common/bicepModules/resources/resourceGro
   params: {
     location: virtualMachinesRegion
     name: resourceNames.outputs.resourceGroupMonitoring
-    tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
-  }
-}
-
-module managementResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployManagementResources) {
-  name: 'Resource-Group-Management-${deploymentSuffix}'
-  scope: subscription(managementSubscription)
-  params: {
-    location: virtualMachinesRegion
-    name: resourceNames.outputs.resourceGroupManagement
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
 }
@@ -1031,6 +1030,16 @@ module hostsResourceGroupWithTags '../../.common/bicepModules/resources/resource
         'cm-resource-parent': '${subscription().id}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostpools/${resourceNames.outputs.hostPoolName}'
       }
     )
+  }
+}
+
+module operationsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults) {
+  name: 'Resource-Group-Operations-${deploymentSuffix}'
+  scope: subscription(managementSubscription)
+  params: {
+    location: virtualMachinesRegion
+    name: resourceNames.outputs.resourceGroupOperations
+    tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
 }
 
@@ -1098,7 +1107,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     resourceGroupHosts: deploymentType != 'SessionHostsOnly'
       ? resourceNames.outputs.resourceGroupHosts
       : existingHostsResourceGroupName
-    resourceGroupManagement: resourceNames.outputs.resourceGroupManagement
+    resourceGroupSecurity: resourceNames.outputs.resourceGroupOperations
     resourceGroupStorage: resourceNames.outputs.resourceGroupStorage
     tags: tags
     userAssignedIdentityNameConv: resourceNames.outputs.userAssignedIdentityNameConv
@@ -1120,6 +1129,90 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
   ]
 }
 
+// KeyVaults: Inline Key Vault creation — only runs when Security KVs were not provided.
+// For all-in-one portal deployments: deploys encryption KV when CMK is requested, secrets KV when deploySecretsKeyVault=true.
+// For Security-first deployments: skipped entirely because encryptionKeyVaultResourceId will be non-empty.
+module keyVaults 'modules/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
+  name: 'KeyVaults-${deploymentSuffix}'
+  scope: subscription(managementSubscription)
+  params: {
+    azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
+    deploymentSuffix: deploymentSuffix
+    encryptionKeyVaultName: resourceNames.outputs.keyVaultNames.encryptionKeys
+    domainJoinUserPassword: domainJoinUserPassword
+    domainJoinUserPrincipalName: domainJoinUserPrincipalName
+    deployEncryptionKeyVault: deployInlineEncryptionKv
+    deploySecretsKeyVault: deploySecretsKeyVault
+    keyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
+    keyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
+    secretsKeyVaultName: resourceNames.outputs.keyVaultNames.secrets
+    keyVaultRetentionInDays: keyVaultRetentionInDays
+    logAnalyticsWorkspaceResourceId: enableMonitoring
+      ? (deploymentType == 'Complete'
+          ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
+          : existingLogAnalyticsWorkspaceResourceId)
+      : ''
+    privateEndpointSubnetResourceId: keyVaultPrivateEndpointSubnetResourceId
+    privateEndpoint: deployPrivateEndpoints
+    privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
+    privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
+    resourceGroupSecurity: resourceNames.outputs.resourceGroupOperations
+    tags: tags
+    virtualMachineAdminPassword: virtualMachineAdminPassword
+    virtualMachineAdminUserName: virtualMachineAdminUserName
+  }
+  dependsOn: [
+    operationsResourceGroup
+  ]
+}
+
+// Disk CMK: DES + key + role assignment — runs in parallel with monitoring/controlPlane,
+// giving sufficient RBAC propagation buffer before sessionHosts needs the DES.
+// Confidential VM disk encryption is excluded here; it still uses a run command inside sessionHosts.
+module diskCmk 'modules/diskCmk/diskCmk.bicep' = if (deployTopLevelDiskCmk) {
+  name: 'Disk-CMK-${deploymentSuffix}'
+  scope: subscription(hostsSubscription)
+  params: {
+    resourceGroupName: resourceNames.outputs.resourceGroupHosts
+    keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
+    keyManagementType: contains(keyManagementDisks, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyExpirationInDays: keyExpirationInDays
+    location: virtualMachinesRegion
+    tags: tags
+    deploymentSuffix: deploymentSuffix
+    keyName: resourceNames.outputs.encryptionKeyNames.virtualMachines
+    diskEncryptionSetName: !contains(keyManagementDisks, 'Platform')
+      ? resourceNames.outputs.diskEncryptionSetNames.customerManaged
+      : resourceNames.outputs.diskEncryptionSetNames.platformAndCustomerManaged
+  }
+  dependsOn: [
+    hostsResourceGroupNoTags
+  ]
+}
+
+// Storage CMK: UAI + keys + role assignments for FSLogix AzureFiles storage accounts.
+// Runs in parallel with monitoring/controlPlane so role assignments propagate before azureFiles deploys.
+module storageCmk 'modules/storageCmk/storageCmk.bicep' = if (deployTopLevelStorageCmk) {
+  name: 'Storage-CMK-${deploymentSuffix}'
+  scope: subscription(storageSubscription)
+  params: {
+    resourceGroupName: resourceNames.outputs.resourceGroupStorage
+    keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
+    keyManagementType: contains(keyManagementStorageAccounts, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyExpirationInDays: keyExpirationInDays
+    location: virtualMachinesRegion
+    tags: tags
+    deploymentSuffix: deploymentSuffix
+    storageKeyNameConv: resourceNames.outputs.encryptionKeyNames.fslogix
+    storageCount: fslogixStorageCount
+    storageIndex: fslogixStorageIndex
+    storageIdentityName: replace(resourceNames.outputs.userAssignedIdentityNameConv, 'TOKEN', 'storage-encryption')
+  }
+  dependsOn: [
+    storageResourceGroup
+  ]
+}
+
 // Monitoring: Log Analytics Workspace, Data Collection Endpoint, Data Collection Rules, Automation Account
 module monitoring 'modules/monitoring/monitoring.bicep' = if (deploymentType == 'Complete' && enableMonitoring) {
   name: 'Monitoring-${deploymentSuffix}'
@@ -1135,44 +1228,6 @@ module monitoring 'modules/monitoring/monitoring.bicep' = if (deploymentType == 
   }
   dependsOn: [
     monitoringResourceGroup
-  ]
-}
-
-// Management Services: Monitoring, secrets, and App Service Plan (if needed)
-module management 'modules/management/management.bicep' = if (deployManagementResources) {
-  name: 'Management-${deploymentSuffix}'
-  scope: subscription(managementSubscription)
-  params: {
-    azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
-    deploymentSuffix: deploymentSuffix
-    encryptionKeysKeyVaultName: resourceNames.outputs.keyVaultNames.encryptionKeys
-    domainJoinUserPassword: domainJoinUserPassword
-    domainJoinUserPrincipalName: domainJoinUserPrincipalName
-    deployEncryptionKeysKeyVault: deploymentType == 'Complete' && (contains(keyManagementDisks, 'Customer') || contains(
-      keyManagementStorageAccounts,
-      'Customer'
-    ))
-    deploySecretsKeyVault: deploySecretsKeyVault
-    keyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
-    keyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
-    secretsKeyVaultName: resourceNames.outputs.keyVaultNames.secrets
-    keyVaultRetentionInDays: keyVaultRetentionInDays
-    logAnalyticsWorkspaceResourceId: enableMonitoring
-      ? (deploymentType == 'Complete'
-          ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
-          : existingLogAnalyticsWorkspaceResourceId)
-      : ''
-    privateEndpointSubnetResourceId: keyVaultPrivateEndpointSubnetResourceId
-    privateEndpoint: deployPrivateEndpoints
-    privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
-    resourceGroupManagement: resourceNames.outputs.resourceGroupManagement
-    tags: tags
-    virtualMachineAdminPassword: virtualMachineAdminPassword
-    virtualMachineAdminUserName: virtualMachineAdminUserName
-  }
-  dependsOn: [
-    managementResourceGroup
   ]
 }
 
@@ -1265,7 +1320,6 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
           : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
-    encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
     encryptionKeyVaultUri: encryptionKeyVaultUri
     fslogixAdminGroups: fslogixAdminGroups
     fslogixEncryptionKeyNameConv: resourceNames.outputs.encryptionKeyNames.fslogix
@@ -1277,7 +1331,6 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
       : controlPlane!.outputs.hostPoolResourceId
     identitySolution: identitySolution
     kerberosEncryptionType: fslogixStorageKerberosEncryptionType
-    keyExpirationInDays: keyExpirationInDays
     keyManagementStorageAccounts: keyManagementStorageAccounts
     location: virtualMachinesRegion
     logAnalyticsWorkspaceResourceId: enableMonitoring
@@ -1308,7 +1361,9 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     tags: tags
     deploymentSuffix: deploymentSuffix
     timeZone: virtualMachinesTimeZone
-    userAssignedIdentityNameConv: resourceNames.outputs.userAssignedIdentityNameConv
+    encryptionUserAssignedIdentityResourceId: deployTopLevelStorageCmk
+      ? storageCmk!.outputs.storageIdentityResourceId
+      : ''
   }
   dependsOn: [
     storageResourceGroup
@@ -1383,10 +1438,10 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     encryptionKeyName: confidentialVMOSDiskEncryption
       ? resourceNames.outputs.encryptionKeyNames.confidentialVMs
       : resourceNames.outputs.encryptionKeyNames.virtualMachines
-    encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
+    encryptionKeyVaultResourceId: effectiveEncryptionKeyVaultResourceId
     encryptionKeyVaultUri: encryptionKeyVaultUri
     existingDiskAccessResourceId: existingDiskAccessResourceId
-    existingDiskEncryptionSetResourceId: existingDiskEncryptionSetResourceId
+    existingDiskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     existingRecoveryServicesVaultResourceId: existingRecoveryServicesVaultResourceId
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType

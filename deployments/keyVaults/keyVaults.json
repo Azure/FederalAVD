@@ -1,0 +1,2005 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.42.1.51946",
+      "templateHash": "10987343670548594857"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[deployment().location]",
+      "metadata": {
+        "description": "Required. The Azure region for all foundation resources."
+      }
+    },
+    "customIdentifier": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Custom workload identifier used when naming the resource group and resources. Defaults to \"foundation\"."
+      }
+    },
+    "nameConvResTypeAtEnd": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name."
+      }
+    },
+    "deploySecretsKeyVault": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Deploy the Secrets Key Vault (Standard SKU) for storing AVD credentials (VM admin password, domain join credentials)."
+      }
+    },
+    "secretsKeyVaultNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 24,
+      "metadata": {
+        "description": "Optional. Override the auto-generated Secrets Key Vault name. Must be globally unique, 3-24 chars, alphanumeric and hyphens only."
+      }
+    },
+    "secretsKeyVaultEnableSoftDelete": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable soft delete on the Secrets Key Vault."
+      }
+    },
+    "secretsKeyVaultEnablePurgeProtection": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable purge protection on the Secrets Key Vault. Recommended for production environments."
+      }
+    },
+    "keyVaultRetentionInDays": {
+      "type": "int",
+      "defaultValue": 90,
+      "minValue": 7,
+      "maxValue": 90,
+      "metadata": {
+        "description": "Optional. The retention period in days for soft-deleted objects in the Key Vaults."
+      }
+    },
+    "virtualMachineAdminPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Virtual machine local administrator password. Stored as VirtualMachineAdminPassword in the Secrets Key Vault."
+      }
+    },
+    "virtualMachineAdminUserName": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Virtual machine local administrator username. Stored as VirtualMachineAdminUserName in the Secrets Key Vault."
+      }
+    },
+    "domainJoinUserPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Domain join user password. Stored as DomainJoinUserPassword in the Secrets Key Vault."
+      }
+    },
+    "domainJoinUserPrincipalName": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Domain join user principal name (UPN). Stored as DomainJoinUserPrincipalName in the Secrets Key Vault."
+      }
+    },
+    "deployEncryptionKeyVault": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Deploy the Encryption Key Vault (Premium SKU) for Customer-Managed Keys. Required when using CMK in any AVD solution."
+      }
+    },
+    "encryptionKeyVaultNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 24,
+      "metadata": {
+        "description": "Optional. Override the auto-generated Encryption Key Vault name. Must be globally unique, 3-24 chars, alphanumeric and hyphens only."
+      }
+    },
+    "privateEndpoint": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Deploy private endpoints for the Key Vaults. When true, public network access is disabled on both Key Vaults."
+      }
+    },
+    "privateEndpointSubnetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Conditional. The resource ID of the subnet for Key Vault private endpoints. Required when privateEndpoint is true."
+      }
+    },
+    "azureKeyVaultPrivateDnsZoneResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Conditional. The resource ID of the Azure Key Vault Private DNS Zone. Required when privateEndpoint is true."
+      }
+    },
+    "logAnalyticsWorkspaceResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The resource ID of an existing Log Analytics Workspace for Key Vault diagnostic logs."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional. Tags to apply to deployed resources, keyed by resource type (e.g., \"Microsoft.KeyVault/vaults\", \"Microsoft.Resources/resourceGroups\")."
+      }
+    },
+    "timeStamp": {
+      "type": "string",
+      "defaultValue": "[utcNow('yyyyMMddHHmmss')]",
+      "metadata": {
+        "description": "DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter."
+      }
+    }
+  },
+  "variables": {
+    "$fxv#0": {
+      "AzureCloud": {
+        "australiacentral": {
+          "abbreviation": "auc",
+          "recoveryServicesGeo": "acl"
+        },
+        "australiacentral2": {
+          "abbreviation": "auc2",
+          "recoveryServicesGeo": "acl2"
+        },
+        "australiaeast": {
+          "abbreviation": "aue",
+          "recoveryServicesGeo": "ae"
+        },
+        "australiasoutheast": {
+          "abbreviation": "ause",
+          "recoveryServicesGeo": "ase"
+        },
+        "brazilsouth": {
+          "abbreviation": "brs",
+          "recoveryServicesGeo": "brs"
+        },
+        "brazilsoutheast": {
+          "abbreviation": "brse",
+          "recoveryServicesGeo": "bse"
+        },
+        "canadacentral": {
+          "abbreviation": "cac",
+          "recoveryServicesGeo": "cnc"
+        },
+        "canadaeast": {
+          "abbreviation": "cae",
+          "recoveryServicesGeo": "cne"
+        },
+        "centralindia": {
+          "abbreviation": "inc",
+          "recoveryServicesGeo": "inc"
+        },
+        "centralus": {
+          "abbreviation": "usc",
+          "recoveryServicesGeo": "cus"
+        },
+        "eastasia": {
+          "abbreviation": "ase",
+          "recoveryServicesGeo": "ea"
+        },
+        "eastus": {
+          "abbreviation": "use",
+          "recoveryServicesGeo": "eus"
+        },
+        "eastus2": {
+          "abbreviation": "use2",
+          "recoveryServicesGeo": "eus2"
+        },
+        "francecentral": {
+          "abbreviation": "frc",
+          "recoveryServicesGeo": "frc"
+        },
+        "francesouth": {
+          "abbreviation": "frs",
+          "recoveryServicesGeo": "frs"
+        },
+        "germanynorth": {
+          "abbreviation": "den",
+          "recoveryServicesGeo": "gn"
+        },
+        "germanywestcentral": {
+          "abbreviation": "dewc",
+          "recoveryServicesGeo": "gwc"
+        },
+        "israelcentral": {
+          "abbreviation": "ilc",
+          "recoveryServicesGeo": "ilc"
+        },
+        "italynorth": {
+          "abbreviation": "itn",
+          "recoveryServicesGeo": "itn"
+        },
+        "japaneast": {
+          "abbreviation": "jpe",
+          "recoveryServicesGeo": "jpe"
+        },
+        "japanwest": {
+          "abbreviation": "jpw",
+          "recoveryServicesGeo": "jpw"
+        },
+        "jioindiacentral": {
+          "abbreviation": "injc",
+          "recoveryServicesGeo": "jic"
+        },
+        "jioindiawest": {
+          "abbreviation": "injw",
+          "recoveryServicesGeo": "jiw"
+        },
+        "koreacentral": {
+          "abbreviation": "krc",
+          "recoveryServicesGeo": "krc"
+        },
+        "koreasouth": {
+          "abbreviation": "krs",
+          "recoveryServicesGeo": "krs"
+        },
+        "northcentralus": {
+          "abbreviation": "usnc",
+          "recoveryServicesGeo": "ncus"
+        },
+        "northeurope": {
+          "abbreviation": "eun",
+          "recoveryServicesGeo": "ne"
+        },
+        "norwayeast": {
+          "abbreviation": "noe",
+          "recoveryServicesGeo": "nwe"
+        },
+        "norwaywest": {
+          "abbreviation": "now",
+          "recoveryServicesGeo": "nww"
+        },
+        "polandcentral": {
+          "abbreviation": "plc",
+          "recoveryServicesGeo": "plc"
+        },
+        "qatarcentral": {
+          "abbreviation": "qac",
+          "recoveryServicesGeo": "qac"
+        },
+        "southafricanorth": {
+          "abbreviation": "zan",
+          "recoveryServicesGeo": "san"
+        },
+        "southafricawest": {
+          "abbreviation": "zaw",
+          "recoveryServicesGeo": "saw"
+        },
+        "southcentralus": {
+          "abbreviation": "ussc",
+          "recoveryServicesGeo": "scus"
+        },
+        "southeastasia": {
+          "abbreviation": "asse",
+          "recoveryServicesGeo": "sea"
+        },
+        "southindia": {
+          "abbreviation": "ins",
+          "recoveryServicesGeo": "ins"
+        },
+        "swedencentral": {
+          "abbreviation": "sec",
+          "recoveryServicesGeo": "sdc"
+        },
+        "switzerlandnorth": {
+          "abbreviation": "chn",
+          "recoveryServicesGeo": "szn"
+        },
+        "switzerlandwest": {
+          "abbreviation": "chw",
+          "recoveryServicesGeo": "szw"
+        },
+        "uaecentral": {
+          "abbreviation": "aec",
+          "recoveryServicesGeo": "uac"
+        },
+        "uaenorth": {
+          "abbreviation": "aen",
+          "recoveryServicesGeo": "uan"
+        },
+        "uksouth": {
+          "abbreviation": "uks",
+          "recoveryServicesGeo": "uks"
+        },
+        "ukwest": {
+          "abbreviation": "ukw",
+          "recoveryServicesGeo": "ukw"
+        },
+        "westcentralus": {
+          "abbreviation": "uswc",
+          "recoveryServicesGeo": "wcus"
+        },
+        "westeurope": {
+          "abbreviation": "euw",
+          "recoveryServicesGeo": "we"
+        },
+        "westindia": {
+          "abbreviation": "inw",
+          "recoveryServicesGeo": "inw"
+        },
+        "westus": {
+          "abbreviation": "usw",
+          "recoveryServicesGeo": "wus"
+        },
+        "westus2": {
+          "abbreviation": "usw2",
+          "recoveryServicesGeo": "wus2"
+        },
+        "westus3": {
+          "abbreviation": "usw3",
+          "recoveryServicesGeo": "wus3"
+        }
+      },
+      "AzureUSGovernment": {
+        "usdodcentral": {
+          "abbreviation": "dodc",
+          "recoveryServicesGeo": "udc"
+        },
+        "usdodeast": {
+          "abbreviation": "dode",
+          "recoveryServicesGeo": "ude"
+        },
+        "usgovarizona": {
+          "abbreviation": "az",
+          "recoveryServicesGeo": "uga"
+        },
+        "usgovtexas": {
+          "abbreviation": "tx",
+          "recoveryServicesGeo": "ugt"
+        },
+        "usgovvirginia": {
+          "abbreviation": "va",
+          "recoveryServicesGeo": "ugv"
+        }
+      },
+      "other": {
+        "north": {
+          "abbreviation": "no"
+        },
+        "east": {
+          "abbreviation": "ea"
+        },
+        "south": {
+          "abbreviation": "so"
+        },
+        "west": {
+          "abbreviation": "we"
+        },
+        "central": {
+          "abbreviation": "ce"
+        },
+        "northcentral": {
+          "abbreviation": "noce"
+        },
+        "eastcentral": {
+          "abbreviation": "wece"
+        },
+        "southcentral": {
+          "abbreviation": "soce"
+        },
+        "westcentral": {
+          "abbreviation": "wece"
+        }
+      }
+    },
+    "$fxv#1": {
+      "AzureCloud": {
+        "australiacentral": {
+          "abbreviation": "auc",
+          "recoveryServicesGeo": "acl"
+        },
+        "australiacentral2": {
+          "abbreviation": "auc2",
+          "recoveryServicesGeo": "acl2"
+        },
+        "australiaeast": {
+          "abbreviation": "aue",
+          "recoveryServicesGeo": "ae"
+        },
+        "australiasoutheast": {
+          "abbreviation": "ause",
+          "recoveryServicesGeo": "ase"
+        },
+        "brazilsouth": {
+          "abbreviation": "brs",
+          "recoveryServicesGeo": "brs"
+        },
+        "brazilsoutheast": {
+          "abbreviation": "brse",
+          "recoveryServicesGeo": "bse"
+        },
+        "canadacentral": {
+          "abbreviation": "cac",
+          "recoveryServicesGeo": "cnc"
+        },
+        "canadaeast": {
+          "abbreviation": "cae",
+          "recoveryServicesGeo": "cne"
+        },
+        "centralindia": {
+          "abbreviation": "inc",
+          "recoveryServicesGeo": "inc"
+        },
+        "centralus": {
+          "abbreviation": "usc",
+          "recoveryServicesGeo": "cus"
+        },
+        "eastasia": {
+          "abbreviation": "ase",
+          "recoveryServicesGeo": "ea"
+        },
+        "eastus": {
+          "abbreviation": "use",
+          "recoveryServicesGeo": "eus"
+        },
+        "eastus2": {
+          "abbreviation": "use2",
+          "recoveryServicesGeo": "eus2"
+        },
+        "francecentral": {
+          "abbreviation": "frc",
+          "recoveryServicesGeo": "frc"
+        },
+        "francesouth": {
+          "abbreviation": "frs",
+          "recoveryServicesGeo": "frs"
+        },
+        "germanynorth": {
+          "abbreviation": "den",
+          "recoveryServicesGeo": "gn"
+        },
+        "germanywestcentral": {
+          "abbreviation": "dewc",
+          "recoveryServicesGeo": "gwc"
+        },
+        "israelcentral": {
+          "abbreviation": "ilc",
+          "recoveryServicesGeo": "ilc"
+        },
+        "italynorth": {
+          "abbreviation": "itn",
+          "recoveryServicesGeo": "itn"
+        },
+        "japaneast": {
+          "abbreviation": "jpe",
+          "recoveryServicesGeo": "jpe"
+        },
+        "japanwest": {
+          "abbreviation": "jpw",
+          "recoveryServicesGeo": "jpw"
+        },
+        "jioindiacentral": {
+          "abbreviation": "injc",
+          "recoveryServicesGeo": "jic"
+        },
+        "jioindiawest": {
+          "abbreviation": "injw",
+          "recoveryServicesGeo": "jiw"
+        },
+        "koreacentral": {
+          "abbreviation": "krc",
+          "recoveryServicesGeo": "krc"
+        },
+        "koreasouth": {
+          "abbreviation": "krs",
+          "recoveryServicesGeo": "krs"
+        },
+        "northcentralus": {
+          "abbreviation": "usnc",
+          "recoveryServicesGeo": "ncus"
+        },
+        "northeurope": {
+          "abbreviation": "eun",
+          "recoveryServicesGeo": "ne"
+        },
+        "norwayeast": {
+          "abbreviation": "noe",
+          "recoveryServicesGeo": "nwe"
+        },
+        "norwaywest": {
+          "abbreviation": "now",
+          "recoveryServicesGeo": "nww"
+        },
+        "polandcentral": {
+          "abbreviation": "plc",
+          "recoveryServicesGeo": "plc"
+        },
+        "qatarcentral": {
+          "abbreviation": "qac",
+          "recoveryServicesGeo": "qac"
+        },
+        "southafricanorth": {
+          "abbreviation": "zan",
+          "recoveryServicesGeo": "san"
+        },
+        "southafricawest": {
+          "abbreviation": "zaw",
+          "recoveryServicesGeo": "saw"
+        },
+        "southcentralus": {
+          "abbreviation": "ussc",
+          "recoveryServicesGeo": "scus"
+        },
+        "southeastasia": {
+          "abbreviation": "asse",
+          "recoveryServicesGeo": "sea"
+        },
+        "southindia": {
+          "abbreviation": "ins",
+          "recoveryServicesGeo": "ins"
+        },
+        "swedencentral": {
+          "abbreviation": "sec",
+          "recoveryServicesGeo": "sdc"
+        },
+        "switzerlandnorth": {
+          "abbreviation": "chn",
+          "recoveryServicesGeo": "szn"
+        },
+        "switzerlandwest": {
+          "abbreviation": "chw",
+          "recoveryServicesGeo": "szw"
+        },
+        "uaecentral": {
+          "abbreviation": "aec",
+          "recoveryServicesGeo": "uac"
+        },
+        "uaenorth": {
+          "abbreviation": "aen",
+          "recoveryServicesGeo": "uan"
+        },
+        "uksouth": {
+          "abbreviation": "uks",
+          "recoveryServicesGeo": "uks"
+        },
+        "ukwest": {
+          "abbreviation": "ukw",
+          "recoveryServicesGeo": "ukw"
+        },
+        "westcentralus": {
+          "abbreviation": "uswc",
+          "recoveryServicesGeo": "wcus"
+        },
+        "westeurope": {
+          "abbreviation": "euw",
+          "recoveryServicesGeo": "we"
+        },
+        "westindia": {
+          "abbreviation": "inw",
+          "recoveryServicesGeo": "inw"
+        },
+        "westus": {
+          "abbreviation": "usw",
+          "recoveryServicesGeo": "wus"
+        },
+        "westus2": {
+          "abbreviation": "usw2",
+          "recoveryServicesGeo": "wus2"
+        },
+        "westus3": {
+          "abbreviation": "usw3",
+          "recoveryServicesGeo": "wus3"
+        }
+      },
+      "AzureUSGovernment": {
+        "usdodcentral": {
+          "abbreviation": "dodc",
+          "recoveryServicesGeo": "udc"
+        },
+        "usdodeast": {
+          "abbreviation": "dode",
+          "recoveryServicesGeo": "ude"
+        },
+        "usgovarizona": {
+          "abbreviation": "az",
+          "recoveryServicesGeo": "uga"
+        },
+        "usgovtexas": {
+          "abbreviation": "tx",
+          "recoveryServicesGeo": "ugt"
+        },
+        "usgovvirginia": {
+          "abbreviation": "va",
+          "recoveryServicesGeo": "ugv"
+        }
+      },
+      "other": {
+        "north": {
+          "abbreviation": "no"
+        },
+        "east": {
+          "abbreviation": "ea"
+        },
+        "south": {
+          "abbreviation": "so"
+        },
+        "west": {
+          "abbreviation": "we"
+        },
+        "central": {
+          "abbreviation": "ce"
+        },
+        "northcentral": {
+          "abbreviation": "noce"
+        },
+        "eastcentral": {
+          "abbreviation": "wece"
+        },
+        "southcentral": {
+          "abbreviation": "soce"
+        },
+        "westcentral": {
+          "abbreviation": "wece"
+        }
+      }
+    },
+    "$fxv#2": {
+      "applicationInsights": "appi",
+      "appServicePlans": "asp",
+      "availabilitySets": "as",
+      "computeGalleries": "gal",
+      "dataCollectionEndpoints": "dce",
+      "dataCollectionRules": "dcr",
+      "desktopApplicationGroups": "vddag",
+      "diskAccesses": "da",
+      "remoteApplicationGroups": "vdrag",
+      "diskEncryptionSets": "des",
+      "functionApps": "fa",
+      "hostPools": "vdpool",
+      "keyVaults": "kv",
+      "logAnalyticsWorkspaces": "law",
+      "natGateways": "ng",
+      "netAppAccounts": "naa",
+      "netAppCapacityPools": "nacp",
+      "networkInterfaces": "nic",
+      "networkSecurityGroups": "nsg",
+      "osdisks": "osdisk",
+      "privateEndpoints": "pe",
+      "privateLinkScopes": "pls",
+      "publicIPAddresses": "pip",
+      "recoveryServicesVaults": "rsv",
+      "resourceGroups": "rg",
+      "routeTables": "rt",
+      "scalingPlans": "vdscaling",
+      "storageAccounts": "sa",
+      "templateSpecs": "ts",
+      "userAssignedIdentities": "uai",
+      "virtualMachines": "vm",
+      "workbooks": "wb",
+      "workspaces": "vdws",
+      "imageDefinitions": "vmid"
+    },
+    "cloud": "[toLower(environment().name)]",
+    "varLocation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), parameters('location'))]",
+    "locations": "[if(startsWith(variables('cloud'), 'us'), variables('$fxv#0').other, variables('$fxv#1')[environment().name])]",
+    "resourceAbbreviations": "[variables('$fxv#2')]",
+    "deploymentSuffix": "[parameters('timeStamp')]",
+    "identifier": "[if(empty(parameters('customIdentifier')), 'operations', parameters('customIdentifier'))]",
+    "locationAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
+    "nameConv_Foundation_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-LOCATION-RESOURCETYPE', variables('identifier')), format('RESOURCETYPE-avd-{0}-LOCATION', variables('identifier')))]",
+    "nameConv_Foundation_Resources": "[if(parameters('nameConvResTypeAtEnd'), 'avd-TOKEN-LOCATION-RESOURCETYPE', 'RESOURCETYPE-avd-TOKEN-LOCATION')]",
+    "privateEndpointNameConv": "[if(parameters('nameConvResTypeAtEnd'), format('RESOURCE-SUBRESOURCE-VNETID-{0}', variables('resourceAbbreviations').privateEndpoints), format('{0}-RESOURCE-SUBRESOURCE-VNETID', variables('resourceAbbreviations').privateEndpoints))]",
+    "privateEndpointNICNameConv": "[if(parameters('nameConvResTypeAtEnd'), format('RESOURCE-SUBRESOURCE-VNETID-{0}-{1}', variables('resourceAbbreviations').privateEndpoints, variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}-RESOURCE-SUBRESOURCE-VNETID', variables('resourceAbbreviations').networkInterfaces, variables('resourceAbbreviations').privateEndpoints))]",
+    "operationsResourceGroupName": "[replace(replace(variables('nameConv_Foundation_ResGroup'), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
+    "uniqueStringOperations": "[take(uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName')), 6)]",
+    "secretsKeyVaultNameGenerated": "[take(replace(replace(replace(variables('nameConv_Foundation_Resources'), 'TOKEN', format('sec-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24)]",
+    "encryptionKeyVaultNameGenerated": "[take(replace(replace(replace(variables('nameConv_Foundation_Resources'), 'TOKEN', format('enc-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24)]",
+    "secretsKeyVaultName": "[if(empty(parameters('secretsKeyVaultNameOverride')), variables('secretsKeyVaultNameGenerated'), parameters('secretsKeyVaultNameOverride'))]",
+    "encryptionKeyVaultName": "[if(empty(parameters('encryptionKeyVaultNameOverride')), variables('encryptionKeyVaultNameGenerated'), parameters('encryptionKeyVaultNameOverride'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('Operations-ResourceGroup-{0}', variables('deploymentSuffix'))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "name": {
+            "value": "[variables('operationsResourceGroupName')]"
+          },
+          "tags": {
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.42.1.51946",
+              "templateHash": "12238949619726489623"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Resources/resourceGroups",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('Operations-KeyVaults-{0}', variables('deploymentSuffix'))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "resourceGroupName": {
+            "value": "[variables('operationsResourceGroupName')]"
+          },
+          "deploySecretsKeyVault": {
+            "value": "[parameters('deploySecretsKeyVault')]"
+          },
+          "secretsKeyVaultName": {
+            "value": "[variables('secretsKeyVaultName')]"
+          },
+          "keyVaultEnableSoftDelete": {
+            "value": "[parameters('secretsKeyVaultEnableSoftDelete')]"
+          },
+          "keyVaultEnablePurgeProtection": {
+            "value": "[parameters('secretsKeyVaultEnablePurgeProtection')]"
+          },
+          "keyVaultRetentionInDays": {
+            "value": "[parameters('keyVaultRetentionInDays')]"
+          },
+          "domainJoinUserPassword": {
+            "value": "[parameters('domainJoinUserPassword')]"
+          },
+          "domainJoinUserPrincipalName": {
+            "value": "[parameters('domainJoinUserPrincipalName')]"
+          },
+          "virtualMachineAdminPassword": {
+            "value": "[parameters('virtualMachineAdminPassword')]"
+          },
+          "virtualMachineAdminUserName": {
+            "value": "[parameters('virtualMachineAdminUserName')]"
+          },
+          "deployEncryptionKeyVault": {
+            "value": "[parameters('deployEncryptionKeyVault')]"
+          },
+          "encryptionKeyVaultName": {
+            "value": "[variables('encryptionKeyVaultName')]"
+          },
+          "privateEndpoint": {
+            "value": "[parameters('privateEndpoint')]"
+          },
+          "privateEndpointSubnetResourceId": {
+            "value": "[parameters('privateEndpointSubnetResourceId')]"
+          },
+          "azureKeyVaultPrivateDnsZoneResourceId": {
+            "value": "[parameters('azureKeyVaultPrivateDnsZoneResourceId')]"
+          },
+          "privateEndpointNameConv": {
+            "value": "[variables('privateEndpointNameConv')]"
+          },
+          "privateEndpointNICNameConv": {
+            "value": "[variables('privateEndpointNICNameConv')]"
+          },
+          "logAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "deploymentSuffix": {
+            "value": "[variables('deploymentSuffix')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.42.1.51946",
+              "templateHash": "4595131076035545713"
+            }
+          },
+          "parameters": {
+            "resourceGroupName": {
+              "type": "string"
+            },
+            "azureKeyVaultPrivateDnsZoneResourceId": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "deploySecretsKeyVault": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "secretsKeyVaultName": {
+              "type": "string"
+            },
+            "domainJoinUserPassword": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "domainJoinUserPrincipalName": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "keyVaultEnableSoftDelete": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "keyVaultEnablePurgeProtection": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "keyVaultRetentionInDays": {
+              "type": "int",
+              "defaultValue": 90
+            },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "privateEndpoint": {
+              "type": "bool",
+              "defaultValue": false
+            },
+            "privateEndpointSubnetResourceId": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "privateEndpointNameConv": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "privateEndpointNICNameConv": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            },
+            "deploymentSuffix": {
+              "type": "string"
+            },
+            "virtualMachineAdminPassword": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "virtualMachineAdminUserName": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "deployEncryptionKeyVault": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "encryptionKeyVaultName": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
+            "privateEndpointVnetId": "[if(less(length(variables('privateEndpointVnetName')), 37), variables('privateEndpointVnetName'), uniqueString(variables('privateEndpointVnetName')))]",
+            "secretList": "[union(if(not(empty(parameters('domainJoinUserPassword'))), createArray(createObject('name', 'DomainJoinUserPassword', 'value', parameters('domainJoinUserPassword'))), createArray()), if(not(empty(parameters('domainJoinUserPrincipalName'))), createArray(createObject('name', 'DomainJoinUserPrincipalName', 'value', parameters('domainJoinUserPrincipalName'))), createArray()), if(not(empty(parameters('virtualMachineAdminPassword'))), createArray(createObject('name', 'VirtualMachineAdminPassword', 'value', parameters('virtualMachineAdminPassword'))), createArray()), if(not(empty(parameters('virtualMachineAdminUserName'))), createArray(createObject('name', 'VirtualMachineAdminUserName', 'value', parameters('virtualMachineAdminUserName'))), createArray()))]",
+            "deploySecretsKv": "[parameters('deploySecretsKeyVault')]",
+            "deploySecretsKvPe": "[and(and(variables('deploySecretsKv'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
+            "deployEncryptionKvPe": "[and(and(parameters('deployEncryptionKeyVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]"
+          },
+          "resources": [
+            {
+              "condition": "[variables('deploySecretsKv')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('Secrets-KeyVault-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[parameters('secretsKeyVaultName')]"
+                  },
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"
+                  },
+                  "sku": {
+                    "value": "standard"
+                  },
+                  "enableSoftDelete": {
+                    "value": "[parameters('keyVaultEnableSoftDelete')]"
+                  },
+                  "softDeleteRetentionInDays": {
+                    "value": "[parameters('keyVaultRetentionInDays')]"
+                  },
+                  "enablePurgeProtection": {
+                    "value": "[parameters('keyVaultEnablePurgeProtection')]"
+                  },
+                  "enabledForTemplateDeployment": {
+                    "value": true
+                  },
+                  "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
+                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+                  "networkAcls": {
+                    "value": {
+                      "bypass": "AzureServices",
+                      "defaultAction": "[if(parameters('privateEndpoint'), 'Deny', 'Allow')]"
+                    }
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "9340235821535799809"
+                    }
+                  },
+                  "definitions": {
+                    "_1.logCategoryType": {
+                      "type": "object",
+                      "properties": {
+                        "categoryGroup": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Category group name, e.g. \"allLogs\". Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "category": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Individual log category name. Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "enabled": {
+                          "type": "bool"
+                        },
+                        "retentionPolicy": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "int"
+                            },
+                            "enabled": {
+                              "type": "bool"
+                            }
+                          },
+                          "nullable": true
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    },
+                    "diagnosticSettingsType": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                          }
+                        },
+                        "workspaceId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Log Analytics workspace to send logs to."
+                          }
+                        },
+                        "storageAccountId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the storage account to archive logs to."
+                          }
+                        },
+                        "eventHubAuthorizationRuleId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Event Hub authorization rule."
+                          }
+                        },
+                        "eventHubName": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Name of the Event Hub. If omitted, a hub is created for each log category."
+                          }
+                        },
+                        "logCategories": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/_1.logCategoryType"
+                          },
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Log categories to stream. Defaults to allLogs when omitted."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "sku": {
+                      "type": "string",
+                      "defaultValue": "premium",
+                      "allowedValues": [
+                        "standard",
+                        "premium"
+                      ],
+                      "metadata": {
+                        "description": "Standard supports software-protected keys. Premium adds HSM-backed key support."
+                      }
+                    },
+                    "enableRbacAuthorization": {
+                      "type": "bool",
+                      "defaultValue": true
+                    },
+                    "enableSoftDelete": {
+                      "type": "bool",
+                      "defaultValue": true
+                    },
+                    "softDeleteRetentionInDays": {
+                      "type": "int",
+                      "defaultValue": 90
+                    },
+                    "enablePurgeProtection": {
+                      "type": "bool",
+                      "defaultValue": true
+                    },
+                    "enabledForDeployment": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Allow ARM to retrieve secrets during deployments. Required if using KV secrets in parameter files."
+                      }
+                    },
+                    "enabledForTemplateDeployment": {
+                      "type": "bool",
+                      "defaultValue": false
+                    },
+                    "enabledForDiskEncryption": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Allow disk encryption operations (Azure Disk Encryption / Disk Encryption Sets) to access the vault."
+                      }
+                    },
+                    "publicNetworkAccess": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "allowedValues": [
+                        "Enabled",
+                        "Disabled",
+                        ""
+                      ]
+                    },
+                    "networkAcls": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Network ACLs. When omitted the vault defaults to Deny with AzureServices bypass."
+                      }
+                    },
+                    "diagnosticSettings": {
+                      "$ref": "#/definitions/diagnosticSettingsType",
+                      "nullable": true
+                    }
+                  },
+                  "variables": {
+                    "requiresAzureServicesBypass": "[or(or(parameters('enabledForDeployment'), parameters('enabledForTemplateDeployment')), parameters('enabledForDiskEncryption'))]",
+                    "resolvedNetworkAcls": "[if(not(empty(parameters('networkAcls'))), parameters('networkAcls'), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Deny'), null()))]",
+                    "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
+                    "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
+                  },
+                  "resources": {
+                    "keyVault": {
+                      "type": "Microsoft.KeyVault/vaults",
+                      "apiVersion": "2023-07-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "sku": {
+                          "family": "A",
+                          "name": "[parameters('sku')]"
+                        },
+                        "tenantId": "[subscription().tenantId]",
+                        "enableRbacAuthorization": "[parameters('enableRbacAuthorization')]",
+                        "enableSoftDelete": "[parameters('enableSoftDelete')]",
+                        "softDeleteRetentionInDays": "[parameters('softDeleteRetentionInDays')]",
+                        "enablePurgeProtection": "[if(parameters('enablePurgeProtection'), true(), null())]",
+                        "enabledForDeployment": "[parameters('enabledForDeployment')]",
+                        "enabledForTemplateDeployment": "[parameters('enabledForTemplateDeployment')]",
+                        "enabledForDiskEncryption": "[parameters('enabledForDiskEncryption')]",
+                        "publicNetworkAccess": "[if(not(empty(parameters('publicNetworkAccess'))), parameters('publicNetworkAccess'), null())]",
+                        "networkAcls": "[variables('resolvedNetworkAcls')]"
+                      }
+                    },
+                    "diagnosticSetting": {
+                      "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
+                      "type": "Microsoft.Insights/diagnosticSettings",
+                      "apiVersion": "2021-05-01-preview",
+                      "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                      "name": "[variables('diagnosticSettingName')]",
+                      "properties": {
+                        "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
+                        "storageAccountId": "[tryGet(parameters('diagnosticSettings'), 'storageAccountId')]",
+                        "eventHubAuthorizationRuleId": "[tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId')]",
+                        "eventHubName": "[tryGet(parameters('diagnosticSettings'), 'eventHubName')]",
+                        "logs": "[coalesce(tryGet(parameters('diagnosticSettings'), 'logCategories'), createArray(createObject('categoryGroup', 'allLogs', 'enabled', true())))]",
+                        "metrics": [
+                          {
+                            "category": "AllMetrics",
+                            "enabled": true
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "keyVault"
+                      ]
+                    }
+                  },
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    },
+                    "uri": {
+                      "type": "string",
+                      "value": "[reference('keyVault').vaultUri]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "condition": "[variables('deploySecretsKvPe')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('Secrets-KV-PE-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'vault'), 'RESOURCE', parameters('secretsKeyVaultName')), 'VNETID', variables('privateEndpointVnetId'))]"
+                  },
+                  "customNetworkInterfaceName": {
+                    "value": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'vault'), 'RESOURCE', parameters('secretsKeyVaultName')), 'VNETID', variables('privateEndpointVnetId'))]"
+                  },
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"
+                  },
+                  "subnetResourceId": {
+                    "value": "[parameters('privateEndpointSubnetResourceId')]"
+                  },
+                  "privateLinkServiceId": {
+                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Secrets-KeyVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                  },
+                  "groupId": {
+                    "value": "vault"
+                  },
+                  "privateDNSZoneIds": "[if(not(empty(parameters('azureKeyVaultPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('azureKeyVaultPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "9589415449045104821"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "subnetResourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subnet to deploy the private endpoint into."
+                      }
+                    },
+                    "privateLinkServiceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource to create the private endpoint for."
+                      }
+                    },
+                    "groupId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Group ID (sub-resource) of the private link service."
+                      }
+                    },
+                    "customNetworkInterfaceName": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Custom name for the network interface created for this endpoint."
+                      }
+                    },
+                    "privateDNSZoneIds": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "copy": [
+                      {
+                        "name": "privateDnsZoneConfigs",
+                        "count": "[length(parameters('privateDNSZoneIds'))]",
+                        "input": {
+                          "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
+                          "properties": {
+                            "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2023-09-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "subnet": {
+                          "id": "[parameters('subnetResourceId')]"
+                        },
+                        "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[parameters('name')]",
+                            "properties": {
+                              "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('name'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                      ]
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Secrets-KeyVault-{0}', parameters('deploymentSuffix')))]"
+              ]
+            },
+            {
+              "copy": {
+                "name": "secrets",
+                "count": "[length(variables('secretList'))]"
+              },
+              "condition": "[variables('deploySecretsKv')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('Secret-{0}-{1}', variables('secretList')[copyIndex()].name, parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "keyVaultName": {
+                    "value": "[parameters('secretsKeyVaultName')]"
+                  },
+                  "name": {
+                    "value": "[variables('secretList')[copyIndex()].name]"
+                  },
+                  "value": {
+                    "value": "[variables('secretList')[copyIndex()].value]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "12585196334588463350"
+                    }
+                  },
+                  "parameters": {
+                    "keyVaultName": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "securestring"
+                    },
+                    "contentType": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Content type of the secret (e.g. \"text/plain\")."
+                      }
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.KeyVault/vaults/secrets",
+                      "apiVersion": "2023-07-01",
+                      "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('name'))]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "value": "[parameters('value')]",
+                        "contentType": "[if(not(empty(parameters('contentType'))), parameters('contentType'), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Secrets-KeyVault-{0}', parameters('deploymentSuffix')))]"
+              ]
+            },
+            {
+              "condition": "[parameters('deployEncryptionKeyVault')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('Encryption-KeyVault-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[parameters('encryptionKeyVaultName')]"
+                  },
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"
+                  },
+                  "sku": {
+                    "value": "premium"
+                  },
+                  "enableSoftDelete": {
+                    "value": true
+                  },
+                  "softDeleteRetentionInDays": {
+                    "value": "[parameters('keyVaultRetentionInDays')]"
+                  },
+                  "enablePurgeProtection": {
+                    "value": true
+                  },
+                  "enabledForDiskEncryption": {
+                    "value": true
+                  },
+                  "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
+                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+                  "networkAcls": {
+                    "value": {
+                      "bypass": "AzureServices",
+                      "defaultAction": "[if(parameters('privateEndpoint'), 'Deny', 'Allow')]"
+                    }
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "9340235821535799809"
+                    }
+                  },
+                  "definitions": {
+                    "_1.logCategoryType": {
+                      "type": "object",
+                      "properties": {
+                        "categoryGroup": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Category group name, e.g. \"allLogs\". Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "category": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Individual log category name. Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "enabled": {
+                          "type": "bool"
+                        },
+                        "retentionPolicy": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "int"
+                            },
+                            "enabled": {
+                              "type": "bool"
+                            }
+                          },
+                          "nullable": true
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    },
+                    "diagnosticSettingsType": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                          }
+                        },
+                        "workspaceId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Log Analytics workspace to send logs to."
+                          }
+                        },
+                        "storageAccountId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the storage account to archive logs to."
+                          }
+                        },
+                        "eventHubAuthorizationRuleId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Event Hub authorization rule."
+                          }
+                        },
+                        "eventHubName": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Name of the Event Hub. If omitted, a hub is created for each log category."
+                          }
+                        },
+                        "logCategories": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/_1.logCategoryType"
+                          },
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Log categories to stream. Defaults to allLogs when omitted."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "sku": {
+                      "type": "string",
+                      "defaultValue": "premium",
+                      "allowedValues": [
+                        "standard",
+                        "premium"
+                      ],
+                      "metadata": {
+                        "description": "Standard supports software-protected keys. Premium adds HSM-backed key support."
+                      }
+                    },
+                    "enableRbacAuthorization": {
+                      "type": "bool",
+                      "defaultValue": true
+                    },
+                    "enableSoftDelete": {
+                      "type": "bool",
+                      "defaultValue": true
+                    },
+                    "softDeleteRetentionInDays": {
+                      "type": "int",
+                      "defaultValue": 90
+                    },
+                    "enablePurgeProtection": {
+                      "type": "bool",
+                      "defaultValue": true
+                    },
+                    "enabledForDeployment": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Allow ARM to retrieve secrets during deployments. Required if using KV secrets in parameter files."
+                      }
+                    },
+                    "enabledForTemplateDeployment": {
+                      "type": "bool",
+                      "defaultValue": false
+                    },
+                    "enabledForDiskEncryption": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Allow disk encryption operations (Azure Disk Encryption / Disk Encryption Sets) to access the vault."
+                      }
+                    },
+                    "publicNetworkAccess": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "allowedValues": [
+                        "Enabled",
+                        "Disabled",
+                        ""
+                      ]
+                    },
+                    "networkAcls": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Network ACLs. When omitted the vault defaults to Deny with AzureServices bypass."
+                      }
+                    },
+                    "diagnosticSettings": {
+                      "$ref": "#/definitions/diagnosticSettingsType",
+                      "nullable": true
+                    }
+                  },
+                  "variables": {
+                    "requiresAzureServicesBypass": "[or(or(parameters('enabledForDeployment'), parameters('enabledForTemplateDeployment')), parameters('enabledForDiskEncryption'))]",
+                    "resolvedNetworkAcls": "[if(not(empty(parameters('networkAcls'))), parameters('networkAcls'), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Deny'), null()))]",
+                    "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
+                    "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
+                  },
+                  "resources": {
+                    "keyVault": {
+                      "type": "Microsoft.KeyVault/vaults",
+                      "apiVersion": "2023-07-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "sku": {
+                          "family": "A",
+                          "name": "[parameters('sku')]"
+                        },
+                        "tenantId": "[subscription().tenantId]",
+                        "enableRbacAuthorization": "[parameters('enableRbacAuthorization')]",
+                        "enableSoftDelete": "[parameters('enableSoftDelete')]",
+                        "softDeleteRetentionInDays": "[parameters('softDeleteRetentionInDays')]",
+                        "enablePurgeProtection": "[if(parameters('enablePurgeProtection'), true(), null())]",
+                        "enabledForDeployment": "[parameters('enabledForDeployment')]",
+                        "enabledForTemplateDeployment": "[parameters('enabledForTemplateDeployment')]",
+                        "enabledForDiskEncryption": "[parameters('enabledForDiskEncryption')]",
+                        "publicNetworkAccess": "[if(not(empty(parameters('publicNetworkAccess'))), parameters('publicNetworkAccess'), null())]",
+                        "networkAcls": "[variables('resolvedNetworkAcls')]"
+                      }
+                    },
+                    "diagnosticSetting": {
+                      "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
+                      "type": "Microsoft.Insights/diagnosticSettings",
+                      "apiVersion": "2021-05-01-preview",
+                      "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                      "name": "[variables('diagnosticSettingName')]",
+                      "properties": {
+                        "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
+                        "storageAccountId": "[tryGet(parameters('diagnosticSettings'), 'storageAccountId')]",
+                        "eventHubAuthorizationRuleId": "[tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId')]",
+                        "eventHubName": "[tryGet(parameters('diagnosticSettings'), 'eventHubName')]",
+                        "logs": "[coalesce(tryGet(parameters('diagnosticSettings'), 'logCategories'), createArray(createObject('categoryGroup', 'allLogs', 'enabled', true())))]",
+                        "metrics": [
+                          {
+                            "category": "AllMetrics",
+                            "enabled": true
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "keyVault"
+                      ]
+                    }
+                  },
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    },
+                    "uri": {
+                      "type": "string",
+                      "value": "[reference('keyVault').vaultUri]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "condition": "[variables('deployEncryptionKvPe')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('Encryption-KV-PE-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'vault'), 'RESOURCE', parameters('encryptionKeyVaultName')), 'VNETID', variables('privateEndpointVnetId'))]"
+                  },
+                  "customNetworkInterfaceName": {
+                    "value": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'vault'), 'RESOURCE', parameters('encryptionKeyVaultName')), 'VNETID', variables('privateEndpointVnetId'))]"
+                  },
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"
+                  },
+                  "subnetResourceId": {
+                    "value": "[parameters('privateEndpointSubnetResourceId')]"
+                  },
+                  "privateLinkServiceId": {
+                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Encryption-KeyVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                  },
+                  "groupId": {
+                    "value": "vault"
+                  },
+                  "privateDNSZoneIds": "[if(not(empty(parameters('azureKeyVaultPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('azureKeyVaultPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "9589415449045104821"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "subnetResourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subnet to deploy the private endpoint into."
+                      }
+                    },
+                    "privateLinkServiceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource to create the private endpoint for."
+                      }
+                    },
+                    "groupId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Group ID (sub-resource) of the private link service."
+                      }
+                    },
+                    "customNetworkInterfaceName": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Custom name for the network interface created for this endpoint."
+                      }
+                    },
+                    "privateDNSZoneIds": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "copy": [
+                      {
+                        "name": "privateDnsZoneConfigs",
+                        "count": "[length(parameters('privateDNSZoneIds'))]",
+                        "input": {
+                          "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
+                          "properties": {
+                            "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2023-09-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "subnet": {
+                          "id": "[parameters('subnetResourceId')]"
+                        },
+                        "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[parameters('name')]",
+                            "properties": {
+                              "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('name'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                      ]
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Encryption-KeyVault-{0}', parameters('deploymentSuffix')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "secretsKeyVaultResourceId": {
+              "type": "string",
+              "value": "[if(variables('deploySecretsKv'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Secrets-KeyVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value, '')]"
+            },
+            "encryptionKeyVaultResourceId": {
+              "type": "string",
+              "value": "[if(parameters('deployEncryptionKeyVault'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Encryption-KeyVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value, '')]"
+            },
+            "encryptionKeyVaultUri": {
+              "type": "string",
+              "value": "[if(parameters('deployEncryptionKeyVault'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Encryption-KeyVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.uri.value, '')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Operations-ResourceGroup-{0}', variables('deploymentSuffix')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "resourceGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the security resource group."
+      },
+      "value": "[variables('operationsResourceGroupName')]"
+    },
+    "secretsKeyVaultName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Secrets Key Vault. Empty if not deployed."
+      },
+      "value": "[if(parameters('deploySecretsKeyVault'), variables('secretsKeyVaultName'), '')]"
+    },
+    "secretsKeyVaultResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the Secrets Key Vault. Pass as \"credentialsKeyVaultResourceId\" to the host pool and Session Host Replacer deployments."
+      },
+      "value": "[if(parameters('deploySecretsKeyVault'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Operations-KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.secretsKeyVaultResourceId.value, '')]"
+    },
+    "encryptionKeyVaultName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Encryption Key Vault. Empty if not deployed."
+      },
+      "value": "[if(parameters('deployEncryptionKeyVault'), variables('encryptionKeyVaultName'), '')]"
+    },
+    "encryptionKeyVaultResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the Encryption Key Vault. Pass as \"encryptionKeyVaultResourceId\" to any AVD solution using Customer-Managed Keys."
+      },
+      "value": "[if(parameters('deployEncryptionKeyVault'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Operations-KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultResourceId.value, '')]"
+    },
+    "encryptionKeyVaultUri": {
+      "type": "string",
+      "metadata": {
+        "description": "The URI of the Encryption Key Vault."
+      },
+      "value": "[if(parameters('deployEncryptionKeyVault'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Operations-KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultUri.value, '')]"
+    }
+  }
+}

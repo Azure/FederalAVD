@@ -1,5 +1,8 @@
 targetScope = 'subscription'
 
+// Deploys the core networking infrastructure for Azure Virtual Desktop: Virtual Network, subnets,
+// Network Security Groups, route tables, and optional Azure Firewall or NVA routing configuration.
+
 @description('The region to deploy the network resources to.')
 param location string = deployment().location
 

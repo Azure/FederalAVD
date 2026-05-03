@@ -1,107 +1,206 @@
 targetScope = 'subscription'
 
+@description('Required. Deployment mode: "Complete" creates all AVD resources from scratch; "SessionHostsOnly" adds session hosts to an existing host pool.')
 param deploymentType string
+@description('Optional. Override download URL for the AVD Agent Boot Loader installer. Leave empty to use the default Microsoft-hosted URL for the current cloud.')
 param agentBootLoaderDownloadUrl string
+@description('Optional. Override download URL for the AVD Agent installer. Leave empty to use the default Microsoft-hosted URL for the current cloud.')
 param agentDownloadUrl string
+@description('Required. File name of the AVD Agent DSC configuration package blob (e.g. "Configuration_01-20-2023.zip"). Used during session host registration.')
 param avdAgentDscPackage string
+@description('Required. Array of Entra ID group object IDs assigned to the AVD application group. Members receive the Virtual Machine User Login role on the hosts resource group.')
 param appGroupSecurityGroups array
+@description('Required. URI of the blob storage container holding scripts and artifacts for session host customizations.')
 param artifactsContainerUri string
+@description('Required. Resource ID of the user-assigned managed identity with Storage Blob Data Reader access to the artifacts container.')
 param artifactsUserAssignedIdentityResourceId string
+@description('Required. VM availability strategy: "None", "AvailabilitySets", or "AvailabilityZones".')
 param availability string
+@description('Required. Name convention string for availability sets, containing RESOURCETYPE, TOKEN, and LOCATION placeholders.')
 param availabilitySetNameConv string
+@description('Required. Total number of availability sets to create for this host pool deployment.')
 param availabilitySetsCount int
+@description('Required. Starting index used when naming availability sets.')
 param availabilitySetsIndex int
+@description('Required. List of availability zones (e.g. ["1","2","3"]) across which session hosts are distributed. Used when availability is "AvailabilityZones".')
 param availabilityZones array
+@description('Required. Resource ID of the AVD Insights data collection rule for session host diagnostics.')
 param avdInsightsDataCollectionRulesResourceId string
+@description('Required. Resource ID of the private DNS zone for Azure Backup private endpoints.')
 param azureBackupPrivateDnsZoneResourceId string
+@description('Required. Resource ID of the private DNS zone for Azure Blob Storage private endpoints.')
 param azureBlobPrivateDnsZoneResourceId string
+@description('Required. Resource ID of the private DNS zone for Azure Queue Storage private endpoints.')
 param azureQueuePrivateDnsZoneResourceId string
+@description('Required. Object ID of the Confidential VM Orchestrator service principal. Required when deploying confidential VMs with VMGuestState encryption.')
 param confidentialVMOrchestratorObjectId string
+@description('Required. When true, enables OS disk encryption with VMGuestState for confidential VMs, protecting disk contents from the host.')
 param confidentialVMOSDiskEncryption bool
+@description('Optional. Resource ID of an Azure Compute Gallery image version to use as the VM OS image. Leave empty to use a marketplace image defined by imagePublisher, imageOffer, and imageSku.')
 param customImageResourceId string
+@description('Required. Resource ID of the Azure Monitor data collection endpoint for custom log ingestion.')
 param dataCollectionEndpointResourceId string
+@description('Optional. Resource ID of an Azure Dedicated Host Group to deploy session hosts onto. Mutually exclusive with dedicatedHostResourceId.')
 param dedicatedHostGroupResourceId string
+@description('Optional. Resource ID of a specific Azure Dedicated Host. When set, all VMs in this deployment are pinned to this host.')
 param dedicatedHostResourceId string
+@description('Required. When true, deploys a disk access policy restricting managed disk export and import to approved networks.')
 param deployDiskAccessPolicy bool
+@description('Required. When true, creates a new DiskAccess resource to enforce managed disk network access restrictions.')
 param deployDiskAccessResource bool
+@description('Required. Client ID of the deployment user-assigned identity. Used by Run Command scripts that authenticate during deployment.')
 param deploymentUserAssignedIdentityClientId string
+@description('Required. Name of the temporary deployment VM used for domain join preparation and confidential VM key operations.')
 param deploymentVirtualMachineName string
+@description('Required. Password for the domain join service account.')
 @secure()
 param domainJoinUserPassword string
+@description('Required. User principal name of the domain join service account (e.g. "domainjoin@contoso.com").')
 @secure()
 param domainJoinUserPrincipalName string
+@description('Required. Object containing disk encryption set names keyed by key management type. Used to resolve the correct DES resource for this deployment.')
 param diskEncryptionSetNames object
+@description('Required. Name of the DiskAccess resource used to enforce managed disk network access restrictions.')
 param diskAccessName string
+@description('Required. OS disk size in GB. Set to 0 to inherit the default size from the source image.')
 param diskSizeGB int
+@description('Required. Storage SKU for the OS disk (e.g. "Premium_LRS", "StandardSSD_LRS").')
 param diskSku string
+@description('Required. Active Directory domain name for domain join (e.g. "contoso.com"). Leave empty for Entra ID join.')
 param domainName string
+@description('Required. When true, enables accelerated networking on session host NICs for lower latency and higher throughput.')
 param enableAcceleratedNetworking bool
+@description('Required. When true, adds an IPv6 IP configuration to session host network interfaces.')
 param enableIPv6 bool
+@description('Required. When true, enables encryption at the VM host for all disks and cache (host-based encryption).')
 param encryptionAtHost bool
+@description('Required. Name of the Customer Managed Key in the Key Vault used for disk encryption set configuration.')
 param encryptionKeyName string
+@description('Required. When true, installs the AMD GPU driver extension on session host VMs.')
 param hasAmdGpu bool
+@description('Required. When true, installs the NVIDIA GPU driver extension on session host VMs.')
 param hasNvidiaGpu bool
+@description('Optional. NVIDIA GPU driver version string. Leave empty to install the latest supported version.')
 param nvidiaDriverVersion string
+@description('Required. Resource ID of the Key Vault containing Customer Managed Keys for disk encryption set configuration.')
 param encryptionKeyVaultResourceId string
+@description('Required. URI of the Key Vault (e.g. "https://kv-avd-enc-xxxx.vault.azure.net/") for CMK disk encryption set references.')
 param encryptionKeyVaultUri string
+@description('Optional. Resource ID of a pre-existing DiskAccess resource. Used instead of creating a new resource when deployDiskAccessResource is false.')
 param existingDiskAccessResourceId string
+@description('Optional. Resource ID of a pre-existing Disk Encryption Set. When provided, bypasses inline DES creation.')
 param existingDiskEncryptionSetResourceId string
+@description('Optional. Resource ID of a pre-existing Recovery Services Vault to register session hosts with for backup.')
 param existingRecoveryServicesVaultResourceId string
+@description('Required. Array of Azure Files share names to mount on session hosts for FSLogix profile containers.')
 param fslogixFileShareNames array
+@description('Required. When true, configures FSLogix profile container settings on session hosts via DSC.')
 param fslogixConfigureSessionHosts bool
+@description('Required. FSLogix container type: "CloudCacheProfileContainer", "ProfileContainer", "CloudCacheProfileOfficeContainer", or "ProfileOfficeContainer".')
 param fslogixContainerType string
+@description('Required. Resource IDs of NetApp volumes in the session host region for FSLogix profile storage or cloud cache primary location.')
 param fslogixLocalNetAppVolumeResourceIds array
+@description('Required. Resource IDs of Azure Storage accounts in the session host region for FSLogix profile storage or cloud cache primary location.')
 param fslogixLocalStorageAccountResourceIds array
+@description('Required. Entra ID group object IDs for FSLogix Office container separation (users with Microsoft 365 subscriptions).')
 param fslogixOSSGroups array
+@description('Required. Resource IDs of NetApp volumes in a remote region for FSLogix cloud cache failover or cross-region replication.')
 param fslogixRemoteNetAppVolumeResourceIds array
+@description('Required. Resource IDs of Azure Storage accounts in a remote region for FSLogix cloud cache failover or cross-region replication.')
 param fslogixRemoteStorageAccountResourceIds array
+@description('Required. Maximum size of the FSLogix profile VHD/VHDX in megabytes.')
 param fslogixSizeInMBs int
+@description('Required. Storage service backing FSLogix containers: "AzureStorageAccount Premium", "AzureStorageAccount Standard", "AzureNetAppFiles Premium", or "AzureNetAppFiles Standard".')
 param fslogixStorageService string
+@description('Required. When true, enables VM hibernation on session hosts. Not compatible with all VM sizes or availability configurations.')
 param hibernationEnabled bool
+@description('Required. Resource ID of the AVD host pool that session hosts will be registered with.')
 param hostPoolResourceId string
+@description('Required. Identity join method for session hosts: "ActiveDirectoryDomainServices", "EntraId", or "EntraIdIntuneEnrollment".')
 param identitySolution string
+@description('Required. Marketplace image offer (e.g. "windows-11"). Used when customImageResourceId is empty.')
 param imageOffer string
+@description('Required. Marketplace image publisher (e.g. "MicrosoftWindowsDesktop"). Used when customImageResourceId is empty.')
 param imagePublisher string
+@description('Required. Marketplace image SKU (e.g. "win11-24h2-avd"). Used when customImageResourceId is empty.')
 param imageSku string
+@description('Required. When true, deploys the Guest Attestation extension to enable boot integrity monitoring for Trusted Launch VMs.')
 param integrityMonitoring bool
+@description('Required. When true, enrolls session hosts into Microsoft Intune during provisioning (requires EntraIdIntuneEnrollment identity solution).')
 param intuneEnrollment bool
+@description('Required. Number of days before Customer Managed Keys expire and must be rotated. Only relevant when keyManagementDisks is not "PlatformManaged".')
 param keyExpirationInDays int
+@description('Required. Key management type for OS disks: "PlatformManaged", "CustomerManaged", or "CustomerManagedHSM".')
 param keyManagementDisks string
+@description('Required. Azure region where session host VMs and compute resources are deployed.')
 param location string
+@description('Required. Resource ID of the Log Analytics workspace for Azure Monitor diagnostics and AVD Insights.')
 param logAnalyticsWorkspaceResourceId string
+@description('Required. When true, creates private endpoints for supported resources such as Key Vaults and storage accounts.')
 param privateEndpoint bool
+@description('Required. Name convention string for private endpoint resources, containing RESOURCETYPE, SUBRESOURCE, and RESOURCE placeholders.')
 param privateEndpointNameConv string
+@description('Required. Name convention string for private endpoint network interface cards.')
 param privateEndpointNICNameConv string
+@description('Required. Resource ID of the subnet where private endpoint NICs are placed.')
 param privateEndpointSubnetResourceId string
+@description('Required. When true, deploys Azure Monitor Agent and data collection rules on session hosts for diagnostics and VM Insights.')
 param enableMonitoring bool
+@description('Required. Name convention string for session host network interfaces, containing RESOURCETYPE and VMNAME placeholders.')
 param networkInterfaceNameConv string
+@description('Required. Name convention string for session host OS disks.')
 param osDiskNameConv string
+@description('Required. Distinguished name of the Active Directory OU for session host computer accounts (e.g. "OU=AVD,DC=contoso,DC=com"). Leave empty for Entra ID join.')
 param ouPath string
+@description('Required. When true, this is a pooled (shared, multi-session) host pool. When false, personal (dedicated) assignment.')
 param pooledHostPool bool
+@description('Required. When true, deploys a Recovery Services Vault and configures daily VM backup for session hosts.')
 param recoveryServices bool
+@description('Required. Name of the Recovery Services Vault to create or reference for session host VM backup.')
 param recoveryServicesVaultName string
+@description('Required. Storage replication type for the Recovery Services Vault: "LocallyRedundant", "GeoRedundant", or "ZoneRedundant".')
 param recoveryServicesVaultStorageRedundancy string
+@description('Required. Name of the temporary deployment resource group used to host the deployment VM.')
 param resourceGroupDeployment string
+@description('Required. Name of the resource group where session host VMs and compute resources are deployed.')
 param resourceGroupHosts string
+@description('Required. When true, enables Secure Boot on session host VMs as part of Trusted Launch or Confidential VM security configuration.')
 param secureBootEnabled bool
+@description('Required. VM security profile type: "Standard", "TrustedLaunch", or "ConfidentialVM".')
 param securityType string
+@description('Required. Total number of session host VMs to deploy.')
 param sessionHostCount int
+@description('Optional. Array of customization objects, each specifying a script and parameters to execute on session hosts after provisioning.')
 param sessionHostCustomizations array
+@description('Required. Starting VM index number for this deployment batch. Used to generate unique VM names when deploying in multiple batches.')
 param sessionHostIndex int
+@description('Required. Number of digits in the zero-padded VM index (e.g. 2 → vm-01, 3 → vm-001).')
 param vmNameIndexLength int
+@description('Required. Azure Storage endpoint suffix for the current cloud (e.g. "core.windows.net" for Azure Commercial).')
 param storageSuffix string
+@description('Required. Resource ID of the virtual network subnet where session host NICs are connected.')
 param subnetResourceId string
+@description('Required. Azure resource tags applied to all deployed resources, keyed by resource type.')
 param tags object
+@description('Required. Short unique suffix appended to deployment names to prevent naming collisions across concurrent deployments.')
 param deploymentSuffix string
+@description('Required. Windows time zone for session host VMs (e.g. "Eastern Standard Time").')
 param timeZone string
+@description('Required. Full name convention string for VM names, containing RESOURCETYPE, TOKEN, and LOCATION placeholders.')
 param virtualMachineNameConv string
+@description('Required. Short prefix for VM names used as the TOKEN segment in the name convention (e.g. "avd", "vdi").')
 param virtualMachineNamePrefix string
+@description('Required. Azure VM SKU for session hosts (e.g. "Standard_D4s_v5").')
 param virtualMachineSize string
+@description('Required. Local administrator password for all session host VMs.')
 @secure()
 param virtualMachineAdminPassword string
+@description('Required. Local administrator username for all session host VMs.')
 @secure()
 param virtualMachineAdminUserName string
+@description('Required. When true, enables virtual TPM on session host VMs. Required for Trusted Launch and Confidential VM security types.')
 param vTpmEnabled bool
+@description('Required. Resource ID of the VM Insights data collection rule for performance counters and dependency map data.')
 param vmInsightsDataCollectionRulesResourceId string
 
 var backupPolicyName = 'AvdPolicyVm'
@@ -224,25 +323,29 @@ module diskAccessPolicy 'modules/diskNetworkAccessPolicy.bicep' = if (deployment
   }
 }
 
-module customerManagedKeys 'modules/customerManagedKeys.bicep' =  if (deploymentType != 'SessionHostsOnly' && keyManagementDisks != 'PlatformManaged') {
+module customerManagedKeys '../../../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (deploymentType != 'SessionHostsOnly' && confidentialVMOSDiskEncryption) {
   name: 'Customer-Managed-Keys-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
-  params: {    
-    confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
-    confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
-    deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
-    deploymentVirtualMachineName: deploymentVirtualMachineName
-    diskEncryptionSetNames: diskEncryptionSetNames
-    hostPoolResourceId: hostPoolResourceId
-    keyExpirationInDays: keyExpirationInDays
-    keyManagementDisks: keyManagementDisks
-    keyName: encryptionKeyName
+  params: {
     keyVaultResourceId: encryptionKeyVaultResourceId
-    keyVaultUri: encryptionKeyVaultUri
+    keyManagementType: contains(keyManagementDisks, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyExpirationInDays: keyExpirationInDays
     location: location
-    deploymentResourceGroupName: resourceGroupDeployment
     tags: tags
+    parentResourceId: hostPoolResourceId
     deploymentSuffix: deploymentSuffix
+    diskEncryptionConfigs: [
+      {
+        keyName: encryptionKeyName
+        diskEncryptionSetName: confidentialVMOSDiskEncryption
+          ? diskEncryptionSetNames.confidentialVMs
+          : (!contains(keyManagementDisks, 'Platform')
+              ? diskEncryptionSetNames.customerManaged
+              : diskEncryptionSetNames.platformAndCustomerManaged)
+        confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
+        confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
+      }
+    ]
   }
 }
 
@@ -296,7 +399,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     dedicatedHostGroupZones: !empty(dedicatedHostGroupName) ? dedicatedHostGroup!.zones : []
     dedicatedHostResourceId: dedicatedHostResourceId
     diskAccessId: deploymentType != 'SessionHostsOnly' ? deployDiskAccessResource ? diskAccessResource!.outputs.resourceId : '' : existingDiskAccessResourceId
-    diskEncryptionSetResourceId: ( deploymentType != 'SessionHostsOnly' && keyManagementDisks != 'PlatformManaged' ) ? customerManagedKeys!.outputs.diskEncryptionSetResourceId : !empty(existingDiskEncryptionSetResourceId) ? existingDiskEncryptionSetResourceId : ''
+    diskEncryptionSetResourceId: ( deploymentType != 'SessionHostsOnly' && confidentialVMOSDiskEncryption ) ? customerManagedKeys!.outputs.diskResults[0].diskEncryptionSetResourceId : !empty(existingDiskEncryptionSetResourceId) ? existingDiskEncryptionSetResourceId : ''
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     domainJoinUserPassword: domainJoinUserPassword

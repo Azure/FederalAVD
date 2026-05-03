@@ -74,7 +74,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Region",
 									"toolTip": "Select the region where you want to deploy the function app.",
-									"defaultValue": "[first(map(filter(steps('basics').scope.locationsApi.value, (loc) => equals(loc.name, steps('basics').scope.resourceGroup.location)), (loc) => loc.displayName))]",
+
 									"constraints": {
 										"allowedValues": "[steps('basics').scope.locationsApi.transformed.list]"
 									}
@@ -195,8 +195,21 @@
 									"label": "Enable Zone Redundancy",
 									"toolTip": "Deploy the App Service Plan with zone redundancy. Only applies when creating a new plan."
 								},
-								{
-									"name": "encryptionTextBlock",
+							{
+								"name": "hostingPlanResourceGroup",
+								"type": "Microsoft.Common.ResourceGroupSelector",
+								"label": "App Service Plan Resource Group",
+								"allowedMode": "Existing",
+																"required": false,
+								"toolTip": "Select the resource group to deploy the new App Service Plan into. Leave blank to use the same resource group as the function app. Select a shared operations resource group to reuse the plan across multiple add-ons.",
+								"scope": {
+									"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
+									"location": "[steps('basics').scope.location.name]"
+								},
+								"visible": "[not(steps('functionApp').infrastructure.useExistingHostingPlan)]"
+							},
+							{
+								"name": "encryptionTextBlock",
 									"type": "Microsoft.Common.TextBlock",
 									"options": {
 										"text": "Configure encryption for the function app storage account."
@@ -526,7 +539,7 @@
 							"condition": "[and(steps('customNaming').enableCustomNaming, not(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride)))]",
 							"request": {
 								"method": "GET",
-								"path": "[concat(steps('basics').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
+						"path": "[concat(steps('functionApp').executionSettings.storageResourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
 								"body": {}
 							}
 						},
@@ -575,7 +588,7 @@
 												"message": "[steps('customNaming').functionApp_checkNameAvailability.message]"
 											},
 											{
-												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride), steps('customNaming').functionApp_checkNameAvailability.nameAvailable, equals(steps('customNaming').functionAppName_rePUT.id, concat(steps('basics').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride)), not(equals(steps('customNaming').functionApp_checkNameAvailability.reason, 'AlreadyExists')))]",
+												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride), steps('customNaming').functionApp_checkNameAvailability.nameAvailable, equals(steps('customNaming').functionAppName_rePUT.id, concat(steps('functionApp').executionSettings.storageResourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride)), not(equals(steps('customNaming').functionApp_checkNameAvailability.reason, 'AlreadyExists')))]",
 												"message": "[steps('customNaming').functionApp_checkNameAvailability.message]"
 											}
 										]
@@ -662,9 +675,11 @@
 		"outputs": {
 			"parameters": {
 				"location": "[steps('basics').scope.location.name]",
+				"functionAppResourceGroupName": "[last(split(steps('functionApp').executionSettings.storageResourceGroup.id, '/'))]",
 				"hostPoolResourceId": "[steps('functionApp').executionSettings.hostPool.id]",
 				"storageResourceGroupId": "[steps('functionApp').executionSettings.storageResourceGroup.id]",
 				"appServicePlanResourceId": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, steps('functionApp').infrastructure.appServicePlan, '')]",
+				"appServicePlanResourceGroupName": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, '', coalesce(steps('functionApp').infrastructure.hostingPlanResourceGroup.name, ''))]",
 				"zoneRedundant": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.zoneRedundant, false)]",
 				"keyManagementStorageAccounts": "[steps('functionApp').infrastructure.keyManagementStorageAccounts]",
 				"encryptionKeyVaultResourceId": "[if(contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'), steps('functionApp').infrastructure.encryptionKeyVault, '')]",
@@ -681,9 +696,9 @@
 				"applicationInsightsNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
 				"tags": "[steps('tags')]"
 			},
-			"kind": "ResourceGroup",
+			"kind": "Subscription",
 			"location": "[steps('basics').scope.location.name]",
-			"resourceGroupId": "[steps('basics').scope.resourceGroup.id]"
+			"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
 		}
 	}
 }

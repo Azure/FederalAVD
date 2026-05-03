@@ -3707,19 +3707,27 @@
 									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault))]"
 								},
 								{
+									"name": "useExistingEncryptionKv",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Use Existing Encryption Key Vault",
+									"defaultValue": false,
+									"toolTip": "Check to select an existing Encryption Key Vault (e.g., from the Security deployment) instead of creating one inline in the management resource group.",
+									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
+								},
+								{
 									"name": "existingEncryptionKeyVault",
 									"type": "Microsoft.Solutions.ResourceSelector",
-									"label": "Existing Encryption Keyvault",
+									"label": "Existing Encryption Key Vault",
 									"resourceType": "Microsoft.KeyVault/vaults",
-									"toolTip": "Select an existing Key Vault to use for Customer Managed Keys. Note that only key vaults in the Virtual Machine location are shown.",
+									"toolTip": "Select an existing Key Vault to use for Customer Managed Keys. Only key vaults in the session host location are shown.",
 									"constraints": {
-										"required": true
+										"required": "[or(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').keyVaults.useExistingEncryptionKv)]"
 									},
 									"scope": {
 										"subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]",
 										"location": "[steps('hosts').scope.location.name]"
 									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'HostpoolOnly'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
+									"visible": "[or(and(equals(steps('basics').deploymentType, 'HostpoolOnly'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('management').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))))]"
 								},
 								{
 									"name": "keyExpirationInDays",
@@ -4646,7 +4654,7 @@
 				"secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault), steps('management').keyVaults.enableSoftDelete, false)]",
 				"secretsKeyVaultEnablePurgeProtection": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault, steps('management').keyVaults.enableSoftDelete), steps('management').keyVaults.enablePurgeProtection, false)]",
 				"keyVaultRetentionInDays": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(steps('management').keyVaults.deploySecretsKeyVault, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.keyVaultRetentionInDays, 7)]",
-				"existingEncryptionKeyVaultResourceId": "[if(and(equals(steps('basics').deploymentType, 'HostpoolOnly'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.existingEncryptionKeyVault.id, '')]",
+				"encryptionKeyVaultResourceId": "[if(or(and(equals(steps('basics').deploymentType, 'HostpoolOnly'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('management').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))), steps('management').keyVaults.existingEncryptionKeyVault.id, '')]",
 				"keyExpirationInDays": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.keyExpirationInDays, 180)]",
 				"enableMonitoring": "[steps('management').monitoring.enableMonitoring]",
 				"monitoringSubscriptionId": "[if(steps('management').monitoring.enableMonitoring, steps('management').monitoring.subscription.subscriptionId, '')]",

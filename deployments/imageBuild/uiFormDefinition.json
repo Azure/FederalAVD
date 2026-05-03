@@ -1469,6 +1469,66 @@
                                         "required": true,
                                         "allowedValues": "[map(filter(steps('imageCustomizations').logging.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
                                     }
+                                },
+                                {
+                                    "name": "cmkHeader",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "visible": "[steps('imageCustomizations').logging.collectLogs]",
+                                    "options": {
+                                        "text": "Encryption Key Management",
+                                        "style": "Heading"
+                                    }
+                                },
+                                {
+                                    "name": "keyManagement",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Key Management",
+                                    "defaultValue": "Microsoft-Managed Keys",
+                                    "toolTip": "Select how the logs storage account encryption key is managed. Customer-Managed Keys require an existing Key Vault.",
+                                    "visible": "[steps('imageCustomizations').logging.collectLogs]",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "Microsoft-Managed Keys",
+                                                "value": "MicrosoftManaged"
+                                            },
+                                            {
+                                                "label": "Customer-Managed Keys",
+                                                "value": "CustomerManaged"
+                                            },
+                                            {
+                                                "label": "Customer-Managed Keys protected by HSM",
+                                                "value": "CustomerManagedHSM"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "encryptionKeyVault",
+                                    "type": "Microsoft.Solutions.ResourceSelector",
+                                    "label": "Encryption Key Vault",
+                                    "resourceType": "Microsoft.KeyVault/vaults",
+                                    "toolTip": "Select the Key Vault that contains or will contain the customer-managed key for the logs storage account.",
+                                    "constraints": {
+                                        "required": true
+                                    },
+                                    "scope": {
+                                        "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
+                                        "location": "[steps('basics').scope.location.name]"
+                                    },
+                                    "visible": "[and(steps('imageCustomizations').logging.collectLogs, not(equals(steps('imageCustomizations').logging.keyManagement, 'MicrosoftManaged')))]"
+                                },
+                                {
+                                    "name": "keyExpirationInDays",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Encryption Key Rotation (in Days)",
+                                    "defaultValue": 180,
+                                    "showStepMarkers": false,
+                                    "toolTip": "The number of days before a new key version is automatically generated in the Key Vault.",
+                                    "min": 7,
+                                    "max": 365,
+                                    "visible": "[and(steps('imageCustomizations').logging.collectLogs, not(equals(steps('imageCustomizations').logging.keyManagement, 'MicrosoftManaged')))]"
                                 }
                             ]
                         }
@@ -2152,6 +2212,9 @@
                 "wsusServer": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), steps('imageCustomizations').updates.wsusServer, '')]",
                 "collectCustomizationLogs": "[steps('imageCustomizations').logging.collectLogs]",
                 "logStorageAccountNetworkAccess": "[if(steps('imageCustomizations').logging.collectLogs, steps('imageCustomizations').logging.networkAccess, 'PublicEndpoint')]",
+                "keyManagementLogsStorageAccount": "[if(steps('imageCustomizations').logging.collectLogs, steps('imageCustomizations').logging.keyManagement, 'MicrosoftManaged')]",
+                "encryptionKeyVaultResourceId": "[if(and(steps('imageCustomizations').logging.collectLogs, not(equals(steps('imageCustomizations').logging.keyManagement, 'MicrosoftManaged'))), steps('imageCustomizations').logging.encryptionKeyVault.id, '')]",
+                "keyExpirationInDays": "[if(and(steps('imageCustomizations').logging.collectLogs, not(equals(steps('imageCustomizations').logging.keyManagement, 'MicrosoftManaged'))), steps('imageCustomizations').logging.keyExpirationInDays, 180)]",
                 "privateEndpointSubnetResourceId": "[if(and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint')), steps('imageCustomizations').logging.subnet, '')]",
                 "blobPrivateDnsZoneResourceId": "[if(and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint'), steps('imageCustomizations').logging.enablePrivateDNSIntegration), steps('imageCustomizations').logging.blobPrivateDnsZone, '')]",
                 "imageDefinitionResourceId": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, true), steps('imageDest').imageDefinition.existingImageDefinition.id, '')]",

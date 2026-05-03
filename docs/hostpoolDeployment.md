@@ -16,7 +16,7 @@ A complete host pool deployment includes:
 |-----------|------------------|
 | **🖥️ AVD Control Plane** | Host pool, workspace, application groups, session hosts |
 | **💾 Storage** | FSLogix profile storage (Azure Files or NetApp Files) |
-| **🔐 Security** | Key Vault for secrets, managed identities, RBAC assignments |
+| **🔐 Security** | Secrets Key Vault (optional inline), Encryption Key Vault (optional inline), disk encryption sets, storage encryption UAI, RBAC assignments |
 | **📊 Monitoring** | Log Analytics workspace, diagnostic settings, Application Insights |
 | **🌐 Networking** | Private endpoints, network security (Zero Trust option) |
 | **💿 Backup** | Recovery Services Vault for VM backups (optional) |
@@ -57,6 +57,32 @@ Before deploying a host pool, ensure you have completed these prerequisites from
 ✅ **Identity Solution** - Microsoft Entra ID or Active Directory Domain Services  
 ✅ **Security Group** - Group containing AVD users  
 ✅ **Desktop Virtualization Provider** - Enabled in subscription
+
+### Key Vault Prerequisites (Optional) {#security-prerequisites-optional}
+
+For production deployments or any deployment using Customer Managed Keys (CMK), deploy the Key Vaults first:
+
+**🔒 [Key Vaults Deployment Guide](quickStart.md#step-2a-deploy-key-vaults-recommended-for-production)**
+
+The key vault deployment creates `rg-avd-operations-{loc}` with:
+
+- **Secrets Key Vault** (`kv-avd-sec-{unique}-{loc}`) — stores VM admin password, domain join credentials
+- **Encryption Key Vault** (`kv-avd-enc-{unique}-{loc}`) — Premium SKU, purge-protected, holds CMK keys
+
+**When to deploy Key Vaults first:**
+
+| Scenario | Recommendation |
+|----------|---------------|
+| Using CMK for disks or FSLogix storage | 🔒 **Deploy Security first** — pass `encryptionKeyVaultResourceId` to host pool |
+| Pre-provisioning credentials in a KV | 🔒 **Deploy Security first** — pass `credentialsKeyVaultResourceId` to host pool |
+| Multiple host pools sharing one encryption KV | 🔒 **Deploy Security first** — all host pools reference the same KV |
+| Simple PoC / dev with platform-managed keys | ✅ **Skip** — deploy host pool directly with `deploymentType = Complete` |
+
+**Inline fallback:** If `encryptionKeyVaultResourceId` is empty and CMK is requested, the `Complete` deployment type creates both KVs inline in `rg-avd-operations-{loc}`. The inline KV names are derived using the same seed as the standalone security deployment, so the names will match if you later run the security deployment separately.
+
+> **Required RBAC on the Encryption KV** for the deploying identity: `Key Vault Crypto Officer`. This allows creating encryption keys via ARM. It may be removed after initial deployment if key rotation is managed separately by the security team.
+
+> ⚠️ **Confidential VM + HSM constraint:** If `confidentialVMOSDiskEncryption = true` and `keyManagementDisks = CustomerManagedHSM`, the deploying identity also needs `Role Based Access Control Administrator` on the security resource group. This is because the deployment VM executes a Run Command to create the confidential VM encryption key idempotently — a step that cannot be expressed in ARM/Bicep alone — and must then self-assign `Key Vault Crypto Officer` to the dynamically-created deployment identity. This combination requires the deploying identity to own both the KV and the RG. The Security Prereq path is primarily intended for standard CMK (non-confidential VM) scenarios where the same KV is shared across host pools, add-ons (SHR, SQM), and image build deployments.
 
 ### Optional Prerequisites
 
@@ -299,6 +325,29 @@ Run post-deployment scripts on session hosts using the `sessionHostCustomization
 ---
 
 ## Deployment Process
+
+### Deployment Sequence
+
+When deploying a `Complete` host pool, resources are created in this order to maximize parallelism and ensure RBAC assignments propagate before dependent resources need them:
+
+```mermaid
+graph TD
+    RG[Resource Groups<br/>all in parallel]
+    RG --> KV[Key Vaults<br/>inline - if no security prereq]
+    RG --> PREREQ[Deployment VM<br/>prereqs]
+    KV --> CMK[Disk CMK + Storage CMK<br/>keys · DES · UAI · role assignments]
+    PREREQ --> CMK
+    CMK --> MON[Monitoring]
+    CMK --> CP[Control Plane]
+    MON --> FSL[FSLogix Storage<br/>uses pre-created UAI]
+    CP --> FSL
+    MON --> SH[Session Hosts<br/>uses pre-created DES]
+    CP --> SH
+    FSL --> CU[Clean Up]
+    SH --> CU
+```
+
+> **CMK timing:** Disk Encryption Sets and the storage encryption User-Assigned Identity are created in the same phase as Monitoring and Control Plane (~5–15 minutes before VMs and storage accounts deploy). This gives Azure RBAC propagation time to complete before the resources that depend on those role assignments are created, without requiring any polling or deployment VM dependency.
 
 ### Step-by-Step Deployment
 

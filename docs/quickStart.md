@@ -18,9 +18,11 @@ graph TD
     D -->|No| F[Use Marketplace<br/>Image]
     E --> G{Build<br/>Custom Image?}
     G -->|Yes<br/>Pre-install software| H[🎨 Step 2: Build<br/>Custom Image]
-    G -->|No<br/>Install at runtime| I[🏢 Step 3: Deploy<br/>Host Pool]
-    H --> I
-    F --> I
+    G -->|No<br/>Install at runtime| SEC[🔒 Step 2a: Deploy<br/>Key Vaults]
+    H --> SEC
+    F --> SEC
+    SEC -->|CMK or credentials KV| I[🏢 Step 3: Deploy<br/>Host Pool]
+    SEC -->|Skip if no CMK<br/>and no credential KV| I
     I --> J[✅ Complete]
 ```
 
@@ -34,6 +36,7 @@ graph TD
 - **Simple PoC with marketplace images?** → Jump directly to [Step 3: Deploy Host Pool](#step-3-deploy-host-pool)
 - **Need custom software, install at session host runtime?** → [Step 1](#step-1-deploy-image-management-resources) → [Step 3](#step-3-deploy-host-pool)
 - **Want pre-configured images with software pre-installed?** → [Step 1](#step-1-deploy-image-management-resources) → [Step 2](#step-2-build-custom-image-optional) → [Step 3](#step-3-deploy-host-pool)
+- **Using Customer Managed Keys (CMK) or pre-provisioned credentials KV?** → Add [Step 2a: Deploy Key Vaults](#step-2a-deploy-key-vaults-recommended-for-production) before Step 3
 
 ---
 
@@ -44,6 +47,7 @@ Most components support multiple deployment methods:
 | Component | Blue Button | Template Spec | PowerShell/CLI |
 |-----------|-------------|---------------|----------------|
 | **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Key Vaults** (Secrets & Encryption) | ❌ | ✅ All clouds | ✅ All clouds |
 | **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
@@ -84,6 +88,7 @@ Before deploying, ensure you have these essentials ready:
 - 🔒 **Domain Services** for hybrid identity (AD DS or Entra Domain Services)
 - 🔒 **Domain Join Account** with permissions ([setup guide](hostpoolDeployment.md#domain-permissions))
 - 🔒 **Entra Kerberos** for Azure Files - [Hybrid Guide](entraKerberosHybrid.md) | [Cloud-Only Guide](entraKerberosCloudOnly.md)
+- 🔒 **Key Vaults** (Secrets & Encryption) for CMK or pre-provisioned credentials — see [Step 2a](#step-2a-deploy-key-vaults-recommended-for-production)
 
 <details>
 <summary><b>📖 Detailed Prerequisites & Setup Guides</b></summary>
@@ -365,6 +370,61 @@ cd deployments
 - **[imageBuild.md](imageBuild.md)** - Full image build documentation with parameters, monitoring, and troubleshooting
 
 **⏱️ Typical build time:** 45-90 minutes depending on customizations
+
+---
+
+## Step 2a: Deploy Key Vaults (Recommended for Production)
+
+**⏭️ Skip this step if:** You are not using Customer Managed Keys (CMK) and do not need a pre-provisioned credentials Key Vault for your host pool.
+
+**Recommended for:** Any production deployment using CMK for disk or storage encryption, or any deployment that references a pre-existing credentials Key Vault.
+
+The Key Vaults deployment creates a **dedicated operations resource group** (`rg-avd-operations-{loc}`) containing:
+
+| Resource | Name Pattern | Purpose |
+|----------|-------------|---------|
+| **Secrets Key Vault** | `kv-avd-sec-{unique}-{loc}` | Stores VM admin credentials and domain join credentials referenced by the host pool deployment |
+| **Encryption Key Vault** | `kv-avd-enc-{unique}-{loc}` | Stores CMK encryption keys for disk encryption sets and FSLogix storage accounts (Premium SKU, purge-protected) |
+
+> **Why deploy this separately?** Deploying Key Vaults before the host pool lets you:
+> - Pre-populate credential secrets so the portal form can reference them
+> - Give your security team time to review KV access policies before host pool deployment begins
+> - Use the same KVs across multiple host pool deployments (e.g., multiple personas sharing one encryption KV)
+> - Avoid the host pool needing Owner-level access just to create Key Vaults
+
+### Deploy Key Vaults
+
+**Option 1: PowerShell** — All clouds
+
+```powershell
+Connect-AzAccount -Environment AzureUSGovernment
+Set-AzContext -Subscription "<subscription-id>"
+
+cd deployments
+.\Deploy-KeyVaults.ps1 -Location "usgovvirginia"
+```
+
+**Option 2: Template Spec + Portal UI** — All clouds including air-gapped
+
+```powershell
+# Create the Template Spec (one-time)
+.\New-TemplateSpecs.ps1 -Location "usgovvirginia"
+```
+
+Then navigate to **Template Specs** → **AVD Security** → **Deploy**.
+
+### Pass Outputs to Host Pool
+
+After deployment, note the Key Vault resource IDs from the deployment outputs and pass them to the host pool:
+
+| Security Output | Host Pool Parameter |
+|----------------|---------------------|
+| `secretsKeyVaultResourceId` | `credentialsKeyVaultResourceId` |
+| `encryptionKeyVaultResourceId` | `encryptionKeyVaultResourceId` |
+
+> **If using the portal form:** The host pool UI includes a resource selector to pick your existing encryption Key Vault. When `encryptionKeyVaultResourceId` is provided, the host pool skips inline KV creation entirely.
+
+> **Required RBAC on the Encryption KV** for the deploying identity: `Key Vault Crypto Officer` (to create encryption keys). This role can be removed after initial deployment once key rotation is handled separately.
 
 ---
 

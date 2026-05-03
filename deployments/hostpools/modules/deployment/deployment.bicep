@@ -21,7 +21,7 @@ param ouPath string
 param resourceGroupControlPlane string
 param resourceGroupDeployment string
 param resourceGroupHosts string
-param resourceGroupManagement string
+param resourceGroupSecurity string
 param resourceGroupStorage string
 param tags object
 param deploymentSuffix string
@@ -89,8 +89,8 @@ var roleAssignmentsManagementConfidentialVMDiskEncryption = confidentialVMOSDisk
   ? [
       {
         roleDefinitionId: roleDefinitions.KeyVaultCryptoOfficer // (Purpose: Retrieve the customer managed keys from the key vault for idempotent deployment)
-        depName: 'Management-KVCryptoOff'
-        resourceGroup: resourceGroupManagement
+        depName: 'Security-KVCryptoOff'
+        resourceGroup: resourceGroupSecurity
       }
     ]
   : []
@@ -101,9 +101,9 @@ var roleAssignmentsManagementRBACAdmin = contains(keyManagementDisks, 'CustomMan
   ) || !empty(roleAssignmentsManagementConfidentialVMDiskEncryption)
   ? [
       {
-        roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the management resource group role assignments for the deployment identity. This role assignment must remain last in the list if assignments are made.)
-        depName: 'Management-RBACAdmin'
-        resourceGroup: resourceGroupManagement
+        roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the security resource group role assignments for the deployment identity. This role assignment must remain last in the list if assignments are made.)
+        depName: 'Security-RBACAdmin'
+        resourceGroup: resourceGroupSecurity
       }
     ]
   : []

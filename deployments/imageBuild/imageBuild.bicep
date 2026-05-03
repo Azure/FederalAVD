@@ -1,8 +1,8 @@
 targetScope = 'subscription'
 
-metadata name = 'Zero Trust Architecture Custom Windows Image Builder'
-metadata description = 'This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.'
-metadata author = 'shawn.meyer@microsoft.com'
+// Builds a custom Windows image for Azure Virtual Desktop using a zero-trust architecture.
+// Creates a temporary build VM, applies software customizations, captures the result to an Azure Compute Gallery,
+// and cleans up all temporary resources. Does not require the Azure VM Image Builder service.
 
 @description('Value appended to the deployment names.')
 param timeStamp string = utcNow('yyyyMMddHHmmss')
@@ -155,6 +155,23 @@ param collectCustomizationLogs bool = false
   'ServiceEndpoint'
 ])
 param logStorageAccountNetworkAccess string = 'PublicEndpoint'
+
+// ── Customer-Managed Key parameters for the logs storage account ──────────────
+
+@description('Optional. Key management solution for the log storage account.')
+@allowed([
+  'MicrosoftManaged'
+  'CustomerManaged'
+  'CustomerManagedHSM'
+])
+param keyManagementLogsStorageAccount string = 'MicrosoftManaged'
+
+@description('Optional. Resource ID of the Key Vault containing the CMK for the logs storage account. Required when keyManagementLogsStorageAccount is CustomerManaged or CustomerManagedHSM.')
+param encryptionKeyVaultResourceId string = ''
+
+@description('Optional. Number of days before the CMK expires and auto-rotates.')
+@minValue(7)
+param keyExpirationInDays int = 180
 
 @description('Optional. Determines if the latest updates from the specified update service will be installed.')
 param installUpdates bool = true
@@ -356,6 +373,11 @@ var logContainerName = 'image-customization-logs'
 var logContainerUri = collectCustomizationLogs
   ? 'https://${logStorageAccountName}.blob.${environment().suffixes.storage}/${logContainerName}/'
   : ''
+
+var logsStorageEncryptionKeyName = 'key-imagebuild-logstorage-${deploymentSuffix}'
+var logsStorageEncryptionIdentityName = nameConvResTypeAtEnd
+  ? 'imagebuild-logstorage-encryption-${resourceAbbreviations.userAssignedIdentities}'
+  : '${resourceAbbreviations.userAssignedIdentities}-imagebuild-logstorage-encryption'
 
 var imageDefinitionFeatures = empty(imageDefinitionResourceId)
   ? filter([
@@ -574,6 +596,26 @@ module roleAssignmentBlobDataContributorBuilderRg '../../.common/bicepModules/au
   }
 }
 
+// ── Customer-Managed Keys for the logs storage account ───────────────────────
+// Must complete before storage account deployment so the role assignment has
+// time to propagate before the storage account PUT includes the CMK reference.
+
+module logsStorageCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (collectCustomizationLogs && keyManagementLogsStorageAccount != 'MicrosoftManaged') {
+  name: '${depPrefix}Logs-Storage-CMK-${deploymentSuffix}'
+  scope: resourceGroup(imageBuildResourceGroupName)
+  params: {
+    keyVaultResourceId: encryptionKeyVaultResourceId
+    keyManagementType: keyManagementLogsStorageAccount == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyExpirationInDays: keyExpirationInDays
+    location: computeLocation
+    tags: tags
+    deploymentSuffix: deploymentSuffix
+    storageKeyNames: [logsStorageEncryptionKeyName]
+    storageIdentityName: logsStorageEncryptionIdentityName
+  }
+  dependsOn: [imageBuildRg]
+}
+
 // * Logging * //
 
 module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = if (collectCustomizationLogs) {
@@ -610,10 +652,18 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
             }
     sasExpirationPeriod: '180.00:00:00'
     skuName: 'Standard_LRS'
+    encryptionKeyVaultUri: keyManagementLogsStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)
+      ? 'https://${last(split(encryptionKeyVaultResourceId, '/'))}.vault.${environment().suffixes.keyvaultDns}/'
+      : null
+    encryptionKeyName: keyManagementLogsStorageAccount != 'MicrosoftManaged' ? logsStorageEncryptionKeyName : null
+    encryptionUserAssignedIdentityResourceId: keyManagementLogsStorageAccount != 'MicrosoftManaged'
+      ? resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', logsStorageEncryptionIdentityName)
+      : null
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
   }
   dependsOn: [
     imageBuildRg
+    logsStorageCmk
   ]
 }
 

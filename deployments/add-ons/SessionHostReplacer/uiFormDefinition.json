@@ -39,25 +39,6 @@
 									}
 								},
 								{
-									"name": "resourceGroupsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('basics').scope.subscription.id))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/resourcegroups?api-version=2021-04-01')]"
-									}
-								},
-								{
-									"name": "resourceGroup",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Management Resource Group",
-									"multiLine": true,
-									"constraints": {
-										"allowedValues": "[map(steps('basics').scope.resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
-										"required": true
-									}
-								},
-								{
 									"name": "locationsApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"condition": "[not(empty(steps('basics').scope.subscription.id))]",
@@ -74,7 +55,6 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Region",
 									"toolTip": "Select the region where you want to deploy the function app.",
-									"defaultValue": "[first(map(filter(steps('basics').scope.locationsApi.value, (loc) => equals(loc.name, steps('basics').scope.resourceGroup.location)), (loc) => loc.displayName))]",
 									"constraints": {
 										"allowedValues": "[steps('basics').scope.locationsApi.transformed.list]"
 									}
@@ -953,6 +933,19 @@
 									"visible": "[not(steps('functionApp').infrastructure.useExistingHostingPlan)]",
 									"label": "Enable Zone Redundancy",
 									"toolTip": "Deploy the App Service Plan with zone redundancy. Only applies when creating a new plan."
+								},
+								{
+									"name": "hostingPlanResourceGroup",
+									"type": "Microsoft.Common.ResourceGroupSelector",
+									"label": "App Service Plan Resource Group",
+									"allowedMode": "Existing",
+									"required": false,
+									"toolTip": "Select the resource group to deploy the new App Service Plan into. Leave blank to use the same resource group as the function app. Select a shared operations resource group to reuse the plan across multiple add-ons.",
+									"scope": {
+										"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
+										"location": "[steps('basics').scope.location.name]"
+									},
+									"visible": "[not(steps('functionApp').infrastructure.useExistingHostingPlan)]"
 								},
 								{
 									"name": "encryptionTextBlock",
@@ -3069,7 +3062,7 @@
 							"condition": "[and(steps('customNaming').enableCustomNaming, not(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride)))]",
 							"request": {
 								"method": "GET",
-								"path": "[concat(steps('basics').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
+								"path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
 								"body": {}
 							}
 						},
@@ -3118,7 +3111,7 @@
 												"message": "[steps('customNaming').functionApp_checkNameAvailability.message]"
 											},
 											{
-												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride), steps('customNaming').functionApp_checkNameAvailability.nameAvailable, equals(steps('customNaming').functionAppName_rePUT.id, concat(steps('basics').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride)), not(equals(steps('customNaming').functionApp_checkNameAvailability.reason, 'AlreadyExists')))]",
+												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride), steps('customNaming').functionApp_checkNameAvailability.nameAvailable, equals(steps('customNaming').functionAppName_rePUT.id, concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride)), not(equals(steps('customNaming').functionApp_checkNameAvailability.reason, 'AlreadyExists')))]",
 												"message": "[steps('customNaming').functionApp_checkNameAvailability.message]"
 											}
 										]
@@ -3280,6 +3273,7 @@
 		"outputs": {
 			"parameters": {
 				"location": "[steps('basics').scope.location.name]",
+				"functionAppResourceGroupName": "[last(split(steps('hosts').scope.resourceGroup.id, '/'))]",
 				"hostPoolResourceId": "[steps('functionApp').executionSettings.hostPool.id]",
 				"sessionHostTemplateSpecResourceId": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing'), steps('functionApp').executionSettings.templateSpecResourceSelector.id, '')]",
 				"templateSpecName": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecName, '')]",
@@ -3312,6 +3306,7 @@
 				"successfulRunsBeforeScaleUp": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.successfulRunsBeforeScaleUp, 1)]",
 				"sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), equals(steps('functionApp').executionSettings.identityType, 'UserAssigned')), steps('functionApp').executionSettings.sessionHostReplacerUserAssignedIdentity.id, '')]",
 				"appServicePlanResourceId": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, steps('functionApp').infrastructure.appServicePlan, '')]",
+				"appServicePlanResourceGroupName": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, '', coalesce(steps('functionApp').infrastructure.hostingPlanResourceGroup.name, ''))]",
 				"appServicePlanSku": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.planSku, 'PremiumV3_P0v3')]",
 				"zoneRedundant": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.zoneRedundant, false)]",
 				"keyManagementStorageAccounts": "[steps('functionApp').infrastructure.keyManagementStorageAccounts]",
@@ -3382,9 +3377,9 @@
 				"availabilitySetNameConvOverride": "[if(steps('customNaming').enableCustomNaming, steps('customNaming').sessionHostNaming.availabilitySetNameConvOverride, '')]",
 				"tags": "[steps('tags').tags]"
 			},
-			"kind": "ResourceGroup",
+			"kind": "Subscription",
 			"location": "[steps('basics').scope.location.name]",
-			"resourceGroupId": "[steps('basics').scope.resourceGroup.id]"
+			"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
 		}
 	}
 }

@@ -1,35 +1,40 @@
 targetScope = 'subscription'
 
-param azureKeyVaultPrivateDnsZoneResourceId string
-param deploySecretsKeyVault bool
-param encryptionKeysKeyVaultName string
-param deployEncryptionKeysKeyVault bool
-@secure()
-param domainJoinUserPassword string
-@secure()
-param domainJoinUserPrincipalName string
+// Shared module: deploys AVD Secrets Key Vault and/or Encryption Key Vault into an existing resource group.
+// Called by both the standalone Security deployment and the hostpool inline fallback.
+// The caller is responsible for creating the resource group before calling this module.
+
+param resourceGroupName string
+
+param azureKeyVaultPrivateDnsZoneResourceId string = ''
+param deploySecretsKeyVault bool = true
 #disable-next-line secure-secrets-in-params
 param secretsKeyVaultName string
-param keyVaultEnableSoftDelete bool
-param keyVaultEnablePurgeProtection bool
-param keyVaultRetentionInDays int
-param logAnalyticsWorkspaceResourceId string
-param privateEndpointSubnetResourceId string
-param privateEndpoint bool
-param privateEndpointNameConv string
-param privateEndpointNICNameConv string
-param resourceGroupManagement string
-param tags object
+@secure()
+param domainJoinUserPassword string = ''
+@secure()
+param domainJoinUserPrincipalName string = ''
+param keyVaultEnableSoftDelete bool = true
+param keyVaultEnablePurgeProtection bool = true
+param keyVaultRetentionInDays int = 90
+param logAnalyticsWorkspaceResourceId string = ''
+param privateEndpoint bool = false
+param privateEndpointSubnetResourceId string = ''
+param privateEndpointNameConv string = ''
+param privateEndpointNICNameConv string = ''
+param tags object = {}
 param deploymentSuffix string
 @secure()
-param virtualMachineAdminPassword string
+param virtualMachineAdminPassword string = ''
 @secure()
-param virtualMachineAdminUserName string
+param virtualMachineAdminUserName string = ''
+
+param deployEncryptionKeyVault bool = true
+param encryptionKeyVaultName string
 
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
-
 var privateEndpointVnetId = length(privateEndpointVnetName) < 37
   ? privateEndpointVnetName
   : uniqueString(privateEndpointVnetName)
@@ -47,14 +52,15 @@ var secretList = union(
     : []
 )
 
-var deploySecretsKv = deploySecretsKeyVault && !empty(secretList)
+var deploySecretsKv = deploySecretsKeyVault
 var deploySecretsKvPe = deploySecretsKv && privateEndpoint && !empty(privateEndpointSubnetResourceId)
-var deployEncryptionKvPe = deployEncryptionKeysKeyVault && privateEndpoint && !empty(privateEndpointSubnetResourceId)
+var deployEncryptionKvPe = deployEncryptionKeyVault && privateEndpoint && !empty(privateEndpointSubnetResourceId)
 
 // ─── Secrets Key Vault ─────────────────────────────────────────────────────────
-module secretsKeyVault '../../../../.common/bicepModules/keyVault/vaults/deploy.bicep' = if (deploySecretsKv) {
+
+module secretsKeyVault '../../keyVault/vaults/deploy.bicep' = if (deploySecretsKv) {
   name: 'Secrets-KeyVault-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupManagement)
+  scope: resourceGroup(resourceGroupName)
   params: {
     name: secretsKeyVaultName
     tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
@@ -74,9 +80,9 @@ module secretsKeyVault '../../../../.common/bicepModules/keyVault/vaults/deploy.
   }
 }
 
-module secretsKeyVault_pe '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deploySecretsKvPe) {
+module secretsKeyVault_pe '../../network/privateEndpoints/deploy.bicep' = if (deploySecretsKvPe) {
   name: 'Secrets-KV-PE-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupManagement)
+  scope: resourceGroup(resourceGroupName)
   params: {
     name: replace(
       replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', secretsKeyVaultName),
@@ -96,10 +102,10 @@ module secretsKeyVault_pe '../../../../.common/bicepModules/network/privateEndpo
   }
 }
 
-module secrets '../../../../.common/bicepModules/keyVault/vaults/secrets/deploy.bicep' = [
+module secrets '../../keyVault/vaults/secrets/deploy.bicep' = [
   for secret in secretList: if (deploySecretsKv) {
     name: 'Secret-${secret.name}-${deploymentSuffix}'
-    scope: resourceGroup(resourceGroupManagement)
+    scope: resourceGroup(resourceGroupName)
     params: {
       keyVaultName: secretsKeyVaultName
       name: secret.name
@@ -109,12 +115,13 @@ module secrets '../../../../.common/bicepModules/keyVault/vaults/secrets/deploy.
   }
 ]
 
-// ─── Encryption Keys Key Vault ─────────────────────────────────────────────────
-module encryptionKeyVault '../../../../.common/bicepModules/keyVault/vaults/deploy.bicep' = if (deployEncryptionKeysKeyVault) {
-  name: 'Encryption-Keys-KeyVault-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupManagement)
+// ─── Encryption Key Vault ──────────────────────────────────────────────────────
+
+module encryptionKeyVault '../../keyVault/vaults/deploy.bicep' = if (deployEncryptionKeyVault) {
+  name: 'Encryption-KeyVault-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupName)
   params: {
-    name: encryptionKeysKeyVaultName
+    name: encryptionKeyVaultName
     tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
     sku: 'premium'
     enableSoftDelete: true
@@ -132,17 +139,17 @@ module encryptionKeyVault '../../../../.common/bicepModules/keyVault/vaults/depl
   }
 }
 
-module encryptionKeyVault_pe '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deployEncryptionKvPe) {
+module encryptionKeyVault_pe '../../network/privateEndpoints/deploy.bicep' = if (deployEncryptionKvPe) {
   name: 'Encryption-KV-PE-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupManagement)
+  scope: resourceGroup(resourceGroupName)
   params: {
     name: replace(
-      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeysKeyVaultName),
+      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeyVaultName),
       'VNETID',
       privateEndpointVnetId
     )
     customNetworkInterfaceName: replace(
-      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeysKeyVaultName),
+      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeyVaultName),
       'VNETID',
       privateEndpointVnetId
     )
@@ -154,5 +161,8 @@ module encryptionKeyVault_pe '../../../../.common/bicepModules/network/privateEn
   }
 }
 
-output encryptionKeyVaultResourceId string = deployEncryptionKeysKeyVault ? encryptionKeyVault!.outputs.resourceId : ''
-output encryptionKeyVaultUri string = deployEncryptionKeysKeyVault ? encryptionKeyVault!.outputs.uri : ''
+// ─── Outputs ───────────────────────────────────────────────────────────────────
+
+output secretsKeyVaultResourceId string = deploySecretsKv ? secretsKeyVault!.outputs.resourceId : ''
+output encryptionKeyVaultResourceId string = deployEncryptionKeyVault ? encryptionKeyVault!.outputs.resourceId : ''
+output encryptionKeyVaultUri string = deployEncryptionKeyVault ? encryptionKeyVault!.outputs.uri : ''

@@ -1,6 +1,7 @@
-metadata name = 'AVD Session Host Replacer Add-On'
-metadata description = 'Deploys automated session host lifecycle management for Azure Virtual Desktop'
-metadata owner = 'FederalAVD'
+// AVD Session Host Replacer Add-On
+// Deploys automated session host lifecycle management for Azure Virtual Desktop
+
+targetScope = 'subscription'
 
 // ========== //
 // Parameters //
@@ -11,8 +12,11 @@ metadata owner = 'FederalAVD'
 // These parameters apply to the overall deployment and are shared across multiple resources.
 // ================================================================================================
 
-@description('Optional. The location for all resources. Defaults to deployment location.')
-param location string = resourceGroup().location
+@description('Required. The location for all resources.')
+param location string
+
+@description('Required. Name of the resource group where the function app and its supporting resources are deployed. Defaults to the virtual machines resource group.')
+param functionAppResourceGroupName string
 
 @description('Optional. Tags for all resources.')
 param tags object = {}
@@ -63,6 +67,9 @@ param sessionHostReplacerUserAssignedIdentityResourceId string = ''
 
 @description('Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed.')
 param appServicePlanResourceId string = ''
+
+@description('Optional. The name of the resource group to deploy the new App Service Plan into. Leave empty to deploy into the same resource group as the function app. Useful when sharing a single App Service Plan across multiple add-ons in a central operations resource group.')
+param appServicePlanResourceGroupName string = ''
 
 @description('Optional. The SKU for the App Service Plan. Only applies if appServicePlanResourceId is not provided. Default is P0v3 for cost optimization.')
 @allowed([
@@ -436,13 +443,20 @@ param sessionHostCustomizations array = []
 // Variables  //
 // ========== //
 
-var deploymentSuffix = uniqueString(resourceGroup().id, deployment().name)
+var deploymentSuffix = uniqueString(subscription().subscriptionId, functionAppResourceGroupName, deployment().name)
+var aspResourceGroupName = empty(appServicePlanResourceGroupName) ? functionAppResourceGroupName : appServicePlanResourceGroupName
 var hostPoolName = last(split(hostPoolResourceId, '/'))
 var hostPoolResourceGroupName = split(hostPoolResourceId, '/')[4]
 var hostPoolSubscriptionId = split(hostPoolResourceId, '/')[2]
 var virtualMachineResourceGroupLocation = reference(virtualMachinesResourceGroupId, '2021-04-01', 'Full').location
 var virtualMachinesResourceGroupName = last(split(virtualMachinesResourceGroupId, '/'))
 var virtualMachinesSubscriptionId = split(virtualMachinesResourceGroupId, '/')[2]
+var templateSpecResourceGroupName = !empty(sessionHostTemplateSpecResourceId)
+  ? split(sessionHostTemplateSpecResourceId, '/')[4]
+  : functionAppResourceGroupName
+var templateSpecSubscriptionId = !empty(sessionHostTemplateSpecResourceId)
+  ? split(sessionHostTemplateSpecResourceId, '/')[2]
+  : subscription().subscriptionId
 
 // Naming Convention Logic (derived from resourceNames.bicep)
 var cloud = toLower(environment().name)
@@ -757,6 +771,7 @@ var sessionHostParameters = union(
 // Conditional Template Spec for Session Host Deployment
 module templateSpec '../../../.common/bicepModules/resources/templateSpecs/deploy.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
   name: 'SessionHostTemplateSpec-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
     name: templateSpecNameFinal
     location: location
@@ -771,6 +786,7 @@ module templateSpec '../../../.common/bicepModules/resources/templateSpecs/deplo
 // Conditional App Service Plan deployment
 module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
+  scope: resourceGroup(aspResourceGroupName)
   params: {
     functionAppKind: 'functionApp'
     hostingPlanType: 'FunctionsPremium'
@@ -869,6 +885,7 @@ module roleAssignmentsRGs '../../../.common/bicepModules/authorization/roleAssig
 
 module roleAssignmentTemplateSpec '../../../.common/bicepModules/resources/templateSpecs/roleAssignment.bicep' = {
   name: 'RoleAssign-TemplateSpec-Reader-${deploymentSuffix}'
+  scope: resourceGroup(templateSpecSubscriptionId, templateSpecResourceGroupName)
   params: {
     templateSpecName: !empty(sessionHostTemplateSpecResourceId)
       ? last(split(sessionHostTemplateSpecResourceId, '/'))
@@ -920,6 +937,7 @@ module roleAssignmentUaiArtifacts '../../../.common/bicepModules/managedIdentity
 
 module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp.bicep' = {
   name: 'SessionHostReplacerFunctionApp-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
     location: location
     applicationInsightsName: appInsightsName
@@ -1135,6 +1153,7 @@ module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp
 
 module functionCode '../../../.common/bicepModules/custom/functionApp/function.bicep' = {
   name: 'SessionHostReplacerFunction-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
     files: {
       'run.ps1': loadTextContent('functions/run.ps1')
@@ -1158,6 +1177,7 @@ module functionCode '../../../.common/bicepModules/custom/functionApp/function.b
 
 module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId)) {
   name: 'SessionHostReplacerWorkbook-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
     workbookName: workbookName
     location: workbookLocation

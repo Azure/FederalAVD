@@ -1,5 +1,8 @@
 targetScope = 'subscription'
 
+// Deploys the Azure Virtual Desktop image management infrastructure: storage account for build artifacts,
+// Azure Compute Gallery, and image definitions. Required before running any custom image build.
+
 @minLength(3)
 @maxLength(63)
 @description('Optional. Blob Container Name. Must start with a letter. Can only contain lower case letters, numbers, and -.')
@@ -76,6 +79,23 @@ tags = {
 }
 */
 param tags object = {}
+
+// ── Customer-Managed Key parameters for the artifacts storage account ─────────
+
+@description('Optional. Key management solution for the artifacts storage account.')
+@allowed([
+  'MicrosoftManaged'
+  'CustomerManaged'
+  'CustomerManagedHSM'
+])
+param keyManagementStorageAccount string = 'MicrosoftManaged'
+
+@description('Optional. Resource ID of the Key Vault for CMK encryption of the artifacts storage account. Required when keyManagementStorageAccount is CustomerManaged or CustomerManagedHSM.')
+param encryptionKeyVaultResourceId string = ''
+
+@description('Optional. Number of days before the CMK expires and auto-rotates.')
+@minValue(7)
+param keyExpirationInDays int = 180
 
 @description('DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddhhmm')
@@ -162,6 +182,20 @@ var storageKind = 'StorageV2'
 var ipRules = [for ip in storagePermittedIPs: { value: ip, action: 'Allow' }]
 var virtualNetworkRules = [for subnetId in storageServiceEndpointSubnetResourceIds: { id: subnetId, action: 'Allow' }]
 
+var storageEncryptionKeyName = 'key-imagemgmt-storage-${timeStamp}'
+var storageEncryptionIdentityName = replace(
+  replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
+  'LOCATION',
+  locations[varLocation].abbreviation
+) == identityName
+  // Avoid name collision with the artifacts-access UAI by appending '-encryption'
+  ? '${identityName}-encryption'
+  : replace(
+      replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
+      'LOCATION',
+      '${locations[varLocation].abbreviation}-encryption'
+    )
+
 resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: resourceGroupName
   location: location
@@ -190,6 +224,24 @@ module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedI
   dependsOn: [resourceGroup]
 }
 
+// CMK must complete before storage account deployment so the role assignment
+// propagates before the storage PUT includes the CMK reference.
+module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccount != 'MicrosoftManaged') {
+  name: 'Storage-CMK-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    keyVaultResourceId: encryptionKeyVaultResourceId
+    keyManagementType: keyManagementStorageAccount == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyExpirationInDays: keyExpirationInDays
+    location: location
+    tags: tags
+    deploymentSuffix: timeStamp
+    storageKeyNames: [storageEncryptionKeyName]
+    storageIdentityName: storageEncryptionIdentityName
+  }
+  dependsOn: [resourceGroup]
+}
+
 module storageAccount '../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = {
   name: 'Storage-Account-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
@@ -213,6 +265,13 @@ module storageAccount '../../.common/bicepModules/storage/storageAccounts/deploy
           defaultAction: 'Deny'
         }
     sasExpirationPeriod: storageSASExpirationPeriod
+    encryptionKeyVaultUri: keyManagementStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)
+      ? 'https://${last(split(encryptionKeyVaultResourceId, '/'))}.vault.${environment().suffixes.keyvaultDns}/'
+      : ''
+    encryptionKeyName: keyManagementStorageAccount != 'MicrosoftManaged' ? storageEncryptionKeyName : ''
+    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccount != 'MicrosoftManaged'
+      ? resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', storageEncryptionIdentityName)
+      : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
       ? {
@@ -220,7 +279,7 @@ module storageAccount '../../.common/bicepModules/storage/storageAccounts/deploy
         }
       : null
   }
-  dependsOn: [resourceGroup]
+  dependsOn: [resourceGroup, storageCmk]
 }
 
 module blobService '../../.common/bicepModules/storage/storageAccounts/blobServices/deploy.bicep' = {

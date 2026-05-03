@@ -1,6 +1,7 @@
-metadata name = 'FSLogix Storage Quota Manager Add-On'
-metadata description = 'Automated quota management for FSLogix Azure Files Premium file shares'
-metadata owner = 'FederalAVD'
+// FSLogix Storage Quota Manager Add-On
+// Automated quota management for FSLogix Azure Files Premium file shares
+
+targetScope = 'subscription'
 
 // ========== //
 // Parameters //
@@ -11,8 +12,11 @@ metadata owner = 'FederalAVD'
 // These parameters apply to the overall deployment and are shared across multiple resources.
 // ================================================================================================
 
-@description('Optional. The location for all resources. Defaults to deployment location.')
-param location string = resourceGroup().location
+@description('Required. The location for all resources.')
+param location string
+
+@description('Required. Name of the resource group where the function app and its supporting resources are deployed. Defaults to the storage account resource group.')
+param functionAppResourceGroupName string
 
 @description('Optional. Tags for all resources.')
 param tags object = {}
@@ -48,6 +52,9 @@ param applicationInsightsNameOverride string = ''
 
 @description('Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed.')
 param appServicePlanResourceId string = ''
+
+@description('Optional. The name of the resource group to deploy the new App Service Plan into. Leave empty to deploy into the same resource group as the function app. Useful when sharing a single App Service Plan across multiple add-ons in a central operations resource group.')
+param appServicePlanResourceGroupName string = ''
 
 @description('Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if appServicePlanResourceId is not provided. Default is false.')
 param zoneRedundant bool = false
@@ -99,7 +106,8 @@ param timerSchedule string = '0 */15 * * * *'
 // Variables  //
 // ========== //
 
-var deploymentSuffix = uniqueString(resourceGroup().id, deployment().name)
+var deploymentSuffix = uniqueString(subscription().subscriptionId, functionAppResourceGroupName, deployment().name)
+var aspResourceGroupName = empty(appServicePlanResourceGroupName) ? functionAppResourceGroupName : appServicePlanResourceGroupName
 var storageSubscriptionId = split(storageResourceGroupId, '/')[2]
 var storageResourceGroupName = split(storageResourceGroupId, '/')[4]
 var hostPoolName = last(split(hostPoolResourceId, '/'))
@@ -238,6 +246,7 @@ var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride
 // Conditional App Service Plan deployment
 module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
+  scope: resourceGroup(aspResourceGroupName)
   params: {
     functionAppKind: 'functionApp'
     hostingPlanType: 'FunctionsPremium'
@@ -252,6 +261,7 @@ module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionApp
 // Storage Quota Manager Function App
 module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp.bicep' = {
   name: 'StorageQuotaFunctionApp-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
     applicationInsightsName: appInsightsName
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
@@ -303,6 +313,7 @@ module roleAssignment_StorageAccounts '../../../.common/bicepModules/authorizati
 // Storage Quota Manager Function
 module storageQuotaFunction '../../../.common/bicepModules/custom/functionApp/function.bicep' = {
   name: 'StorageQuotaFunction-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
     files: {
       'run.ps1': loadTextContent('functions/run.ps1')

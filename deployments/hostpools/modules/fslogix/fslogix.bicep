@@ -15,7 +15,6 @@ param domainJoinUserPassword string
 @secure()
 param domainJoinUserPrincipalName string
 param domainName string
-param encryptionKeyVaultResourceId string
 param encryptionKeyVaultUri string
 param fslogixAdminGroups array
 param appUpdateUserAssignedIdentityResourceId string
@@ -25,7 +24,6 @@ param fslogixShardOptions string
 param fslogixUserGroups array
 param hostPoolResourceId string
 param kerberosEncryptionType string
-param keyExpirationInDays int
 param keyManagementStorageAccounts string
 param location string
 param logAnalyticsWorkspaceResourceId string
@@ -51,28 +49,9 @@ param storageSku string
 param storageSolution string
 param tags object
 param timeZone string
-param userAssignedIdentityNameConv string
 
-module customerManagedKeys 'modules/customerManagedKeys.bicep' = if (storageSolution == 'AzureFiles' && keyManagementStorageAccounts != 'MicrosoftManaged') {
-  name: 'Customer-Managed-Keys-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupStorage)
-  params: {
-    deploymentResourceGroupName: resourceGroupDeployment
-    deploymentVirtualMachineName: deploymentVirtualMachineName
-    deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
-    hostPoolResourceId: hostPoolResourceId
-    keyExpirationInDays: keyExpirationInDays
-    keyManagementStorageAccounts: keyManagementStorageAccounts
-    keyVaultResourceId: encryptionKeyVaultResourceId
-    location: location
-    storageCount: storageCount
-    storageIndex: storageIndex
-    tags: tags
-    deploymentSuffix: deploymentSuffix
-    userAssignedIdentityNameConv: userAssignedIdentityNameConv
-    fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
-  }
-}
+@description('Optional. Resource ID of the pre-created storage encryption UAI (from top-level storageCmk module). When provided, the internal CMK step is skipped.')
+param encryptionUserAssignedIdentityResourceId string = ''
 
 // Azure NetApp files for fslogix
 module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution == 'AzureNetAppFiles' && contains(
@@ -129,7 +108,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     encryptionKeyVaultUri: encryptionKeyVaultUri
     encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'MicrosoftManaged'
       ? ''
-      : customerManagedKeys!.outputs.userAssignedIdentityResourceId
+      : encryptionUserAssignedIdentityResourceId
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
     kerberosEncryptionType: kerberosEncryptionType
@@ -159,9 +138,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   }
 }
 
-output encryptionUserAssignedIdentityResourceId string = keyManagementStorageAccounts != 'MicrosoftManaged'
-  ? customerManagedKeys!.outputs.userAssignedIdentityResourceId
-  : ''
+output encryptionUserAssignedIdentityResourceId string = encryptionUserAssignedIdentityResourceId
 output netAppVolumeResourceIds array = storageSolution == 'AzureNetAppFiles'
   ? azureNetAppFiles!.outputs.volumeResourceIds
   : []

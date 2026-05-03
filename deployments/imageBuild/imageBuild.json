@@ -5,11 +5,8 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "9268555676789225000"
-    },
-    "name": "Zero Trust Architecture Custom Windows Image Builder",
-    "description": "This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.",
-    "author": "shawn.meyer@microsoft.com"
+      "templateHash": "17972703372980278183"
+    }
   },
   "parameters": {
     "timeStamp": {
@@ -238,6 +235,33 @@
       ],
       "metadata": {
         "description": "Optional. Log Storage Account Network Access Configuration."
+      }
+    },
+    "keyManagementLogsStorageAccount": {
+      "type": "string",
+      "defaultValue": "MicrosoftManaged",
+      "allowedValues": [
+        "MicrosoftManaged",
+        "CustomerManaged",
+        "CustomerManagedHSM"
+      ],
+      "metadata": {
+        "description": "Optional. Key management solution for the log storage account."
+      }
+    },
+    "encryptionKeyVaultResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Resource ID of the Key Vault containing the CMK for the logs storage account. Required when keyManagementLogsStorageAccount is CustomerManaged or CustomerManagedHSM."
+      }
+    },
+    "keyExpirationInDays": {
+      "type": "int",
+      "defaultValue": 180,
+      "minValue": 7,
+      "metadata": {
+        "description": "Optional. Number of days before the CMK expires and auto-rotates."
       }
     },
     "installUpdates": {
@@ -1108,6 +1132,8 @@
     "adminUserName": "vmadmin",
     "logContainerName": "image-customization-logs",
     "logContainerUri": "[if(parameters('collectCustomizationLogs'), format('https://{0}.blob.{1}/{2}/', variables('logStorageAccountName'), environment().suffixes.storage, variables('logContainerName')), '')]",
+    "logsStorageEncryptionKeyName": "[format('key-imagebuild-logstorage-{0}', variables('deploymentSuffix'))]",
+    "logsStorageEncryptionIdentityName": "[if(parameters('nameConvResTypeAtEnd'), format('imagebuild-logstorage-encryption-{0}', variables('resourceAbbreviations').userAssignedIdentities), format('{0}-imagebuild-logstorage-encryption', variables('resourceAbbreviations').userAssignedIdentities))]",
     "galleryImageDefinitionHyperVGeneration": "[if(or(endsWith(parameters('mpSku'), 'g2'), startsWith(parameters('mpSku'), 'win11')), 'V2', 'V1')]",
     "galleryImageDefinitionName": "[if(empty(parameters('imageDefinitionResourceId')), if(empty(parameters('customImageDefinitionName')), if(parameters('nameConvResTypeAtEnd'), replace(format('{0}-{1}-{2}-{3}', replace(variables('galleryImageDefinitionPublisher'), '-', ''), replace(variables('galleryImageDefinitionOffer'), '-', ''), replace(variables('galleryImageDefinitionSku'), '-', ''), variables('resourceAbbreviations').imageDefinitions), ' ', ''), replace(format('{0}-{1}-{2}-{3}', variables('resourceAbbreviations').imageDefinitions, replace(variables('galleryImageDefinitionPublisher'), '-', ''), replace(variables('galleryImageDefinitionOffer'), '-', ''), replace(variables('galleryImageDefinitionSku'), '-', '')), ' ', '')), parameters('customImageDefinitionName')), last(split(parameters('imageDefinitionResourceId'), '/')))]",
     "galleryImageDefinitionOffer": "[if(not(empty(parameters('imageDefinitionOffer'))), replace(parameters('imageDefinitionOffer'), ' ', ''), parameters('mpOffer'))]",
@@ -1566,109 +1592,80 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "assignments": {
-            "value": [
-              {
-                "principalId": "[if(empty(parameters('userAssignedIdentityResourceId')), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}ManagedIdentity-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value, reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('userAssignedIdentityResourceId'), '/')[2], split(parameters('userAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('userAssignedIdentityResourceId'), '/'))), '2023-01-31').principalId)]",
-                "roleDefinitionId": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c",
-                "principalType": "ServicePrincipal"
-              }
-            ]
+          "principalId": "[if(empty(parameters('userAssignedIdentityResourceId')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}ManagedIdentity-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('userAssignedIdentityResourceId'), '/')[2], split(parameters('userAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('userAssignedIdentityResourceId'), '/'))), '2023-01-31').principalId))]",
+          "roleDefinitionId": {
+            "value": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c"
+          },
+          "principalType": {
+            "value": "ServicePrincipal"
           }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "10722405036893539804"
-            }
-          },
-          "definitions": {
-            "roleAssignmentType": {
-              "type": "object",
-              "properties": {
-                "roleDefinitionId": {
-                  "type": "string",
-                  "metadata": {
-                    "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
-                  }
-                },
-                "principalId": {
-                  "type": "string",
-                  "metadata": {
-                    "description": "Object (principal) ID of the identity receiving the role."
-                  }
-                },
-                "principalType": {
-                  "type": "string",
-                  "allowedValues": [
-                    "",
-                    "Device",
-                    "ForeignGroup",
-                    "Group",
-                    "ServicePrincipal",
-                    "User"
-                  ],
-                  "nullable": true,
-                  "metadata": {
-                    "description": "Type of the assigned principal. Defaults to ServicePrincipal."
-                  }
-                },
-                "description": {
-                  "type": "string",
-                  "nullable": true,
-                  "metadata": {
-                    "description": "Optional human-readable description for the assignment."
-                  }
-                }
-              },
-              "metadata": {
-                "description": "A single role assignment to apply to a specific resource.",
-                "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
-                }
-              }
+              "templateHash": "3208226987569419861"
             }
           },
           "parameters": {
-            "assignments": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/roleAssignmentType"
-              },
+            "roleDefinitionId": {
+              "type": "string",
               "metadata": {
-                "description": "Role assignments to apply at resource group scope."
+                "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+              }
+            },
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID of the identity receiving the role."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "ServicePrincipal",
+                "Group",
+                "User",
+                "ForeignGroup",
+                "Device",
+                ""
+              ],
+              "metadata": {
+                "description": "Principal type of the assigned principal."
+              }
+            },
+            "assignmentDescription": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional description for the assignment."
               }
             }
           },
-          "resources": {
-            "roleAssignment": {
-              "copy": {
-                "name": "roleAssignment",
-                "count": "[length(parameters('assignments'))]"
-              },
+          "variables": {
+            "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+          },
+          "resources": [
+            {
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "name": "[guid(resourceGroup().id, parameters('assignments')[copyIndex()].principalId, parameters('assignments')[copyIndex()].roleDefinitionId)]",
+              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
               "properties": {
-                "roleDefinitionId": "[if(contains(parameters('assignments')[copyIndex()].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex()].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex()].roleDefinitionId))]",
-                "principalId": "[parameters('assignments')[copyIndex()].principalId]",
-                "principalType": "[coalesce(tryGet(parameters('assignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
-                "description": "[tryGet(parameters('assignments')[copyIndex()], 'description')]"
+                "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
               }
             }
-          },
+          ],
           "outputs": {
-            "resourceIds": {
-              "type": "array",
-              "copy": {
-                "count": "[length(parameters('assignments'))]",
-                "input": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('assignments')[copyIndex()].principalId, parameters('assignments')[copyIndex()].roleDefinitionId))]"
-              }
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
             }
           }
         }
@@ -1690,14 +1687,123 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "assignments": {
-            "value": [
-              {
-                "principalId": "[if(empty(parameters('userAssignedIdentityResourceId')), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}ManagedIdentity-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value, reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('userAssignedIdentityResourceId'), '/')[2], split(parameters('userAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('userAssignedIdentityResourceId'), '/'))), '2023-01-31').principalId)]",
-                "roleDefinitionId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
-                "principalType": "ServicePrincipal"
+          "principalId": "[if(empty(parameters('userAssignedIdentityResourceId')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}ManagedIdentity-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('userAssignedIdentityResourceId'), '/')[2], split(parameters('userAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('userAssignedIdentityResourceId'), '/'))), '2023-01-31').principalId))]",
+          "roleDefinitionId": {
+            "value": "ba92f5b4-2d11-453d-a403-e96b0029c9fe"
+          },
+          "principalType": {
+            "value": "ServicePrincipal"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.42.1.51946",
+              "templateHash": "3208226987569419861"
+            }
+          },
+          "parameters": {
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
               }
+            },
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID of the identity receiving the role."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "ServicePrincipal",
+                "Group",
+                "User",
+                "ForeignGroup",
+                "Device",
+                ""
+              ],
+              "metadata": {
+                "description": "Principal type of the assigned principal."
+              }
+            },
+            "assignmentDescription": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional description for the assignment."
+              }
+            }
+          },
+          "variables": {
+            "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
+              "properties": {
+                "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
+              }
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}ManagedIdentity-{1}', variables('depPrefix'), variables('deploymentSuffix')))]"
+      ]
+    },
+    {
+      "condition": "[and(parameters('collectCustomizationLogs'), not(equals(parameters('keyManagementLogsStorageAccount'), 'MicrosoftManaged')))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('{0}Logs-Storage-CMK-{1}', variables('depPrefix'), variables('deploymentSuffix'))]",
+      "resourceGroup": "[variables('imageBuildResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "keyVaultResourceId": {
+            "value": "[parameters('encryptionKeyVaultResourceId')]"
+          },
+          "keyManagementType": "[if(equals(parameters('keyManagementLogsStorageAccount'), 'CustomerManagedHSM'), createObject('value', 'CustomerManagedHSM'), createObject('value', 'CustomerManaged'))]",
+          "keyExpirationInDays": {
+            "value": "[parameters('keyExpirationInDays')]"
+          },
+          "location": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('subnetResourceId'), '/')[2], split(parameters('subnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('subnetResourceId'), '/')[8]), '2023-05-01', 'full').location]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "deploymentSuffix": {
+            "value": "[variables('deploymentSuffix')]"
+          },
+          "storageKeyNames": {
+            "value": [
+              "[variables('logsStorageEncryptionKeyName')]"
             ]
+          },
+          "storageIdentityName": {
+            "value": "[variables('logsStorageEncryptionIdentityName')]"
           }
         },
         "template": {
@@ -1708,97 +1814,1179 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "10722405036893539804"
+              "templateHash": "16504344645162195401"
             }
           },
           "definitions": {
-            "roleAssignmentType": {
+            "diskEncryptionConfigType": {
               "type": "object",
               "properties": {
-                "roleDefinitionId": {
-                  "type": "string",
-                  "metadata": {
-                    "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
-                  }
+                "keyName": {
+                  "type": "string"
                 },
-                "principalId": {
-                  "type": "string",
-                  "metadata": {
-                    "description": "Object (principal) ID of the identity receiving the role."
-                  }
+                "diskEncryptionSetName": {
+                  "type": "string"
                 },
-                "principalType": {
-                  "type": "string",
-                  "allowedValues": [
-                    "",
-                    "Device",
-                    "ForeignGroup",
-                    "Group",
-                    "ServicePrincipal",
-                    "User"
-                  ],
-                  "nullable": true,
-                  "metadata": {
-                    "description": "Type of the assigned principal. Defaults to ServicePrincipal."
-                  }
+                "confidentialVMOSDiskEncryption": {
+                  "type": "bool",
+                  "nullable": true
                 },
-                "description": {
+                "confidentialVMOrchestratorObjectId": {
                   "type": "string",
-                  "nullable": true,
-                  "metadata": {
-                    "description": "Optional human-readable description for the assignment."
-                  }
+                  "nullable": true
                 }
-              },
-              "metadata": {
-                "description": "A single role assignment to apply to a specific resource.",
-                "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+              }
+            },
+            "diskResultType": {
+              "type": "object",
+              "properties": {
+                "diskEncryptionSetResourceId": {
+                  "type": "string"
                 }
               }
             }
           },
           "parameters": {
-            "assignments": {
+            "keyVaultResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Key Vault in which keys will be created."
+              }
+            },
+            "keyManagementType": {
+              "type": "string",
+              "allowedValues": [
+                "CustomerManaged",
+                "CustomerManagedHSM"
+              ],
+              "metadata": {
+                "description": "Required. CMK type — drives key type (RSA vs RSA-HSM) and disk encryption type."
+              }
+            },
+            "keyExpirationInDays": {
+              "type": "int",
+              "defaultValue": 180,
+              "minValue": 7,
+              "metadata": {
+                "description": "Optional. Key expiration in days. Also controls auto-rotation: keys rotate 7 days before expiry."
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for UAIs and DiskEncryptionSets. Defaults to resource group location."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags to apply to created resources. Uses standard Azure resource-type tag bag pattern."
+              }
+            },
+            "parentResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID to stamp as the cm-resource-parent tag on keys and identities."
+              }
+            },
+            "deploymentSuffix": {
+              "type": "string",
+              "defaultValue": "[uniqueString(resourceGroup().id, deployment().name)]",
+              "metadata": {
+                "description": "Optional. Suffix appended to deployment names for uniqueness."
+              }
+            },
+            "storageKeyNames": {
               "type": "array",
               "items": {
-                "$ref": "#/definitions/roleAssignmentType"
+                "type": "string"
               },
+              "defaultValue": [],
               "metadata": {
-                "description": "Role assignments to apply at resource group scope."
+                "description": "Optional. Names of Key Vault keys to create for storage account CMK encryption.\nOne key is created per entry. All keys are assigned to the single storageIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
+              }
+            },
+            "storageIdentityName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Name of the user-assigned identity to create for storage CMK. Required when storageKeyNames is not empty."
+              }
+            },
+            "diskEncryptionConfigs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/diskEncryptionConfigType"
+              },
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Array of disk encryption set CMK configurations.\nEach entry produces: one KV key (unless confidentialVM), one DiskEncryptionSet,\none key-scoped role assignment (Crypto Service Encryption User).\n  keyName                       — name of the key to create\n  diskEncryptionSetName         — name of the DiskEncryptionSet to create\n  confidentialVMOSDiskEncryption — when true, skips key creation (key is created\n                                   via run command by the Confidential VM\n                                   infrastructure) and uses ConfidentialVmEncryptedWithCustomerKey\n  confidentialVMOrchestratorObjectId — required when confidentialVMOSDiskEncryption is true;\n                                       object ID of the Confidential VM Orchestrator\n                                       enterprise application (bf7b6499-ff71-4aa2-97a4-f372087be7f0)\n"
               }
             }
           },
-          "resources": {
-            "roleAssignment": {
-              "copy": {
-                "name": "roleAssignment",
-                "count": "[length(parameters('assignments'))]"
+          "variables": {
+            "keyVaultName": "[last(split(parameters('keyVaultResourceId'), '/'))]",
+            "keyVaultSubscriptionId": "[split(parameters('keyVaultResourceId'), '/')[2]]",
+            "keyVaultResourceGroup": "[split(parameters('keyVaultResourceId'), '/')[4]]",
+            "kty": "[if(contains(parameters('keyManagementType'), 'HSM'), 'RSA-HSM', 'RSA')]",
+            "rotationPolicy": {
+              "attributes": {
+                "expiryTime": "[format('P{0}D', string(parameters('keyExpirationInDays')))]"
               },
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2022-04-01",
-              "name": "[guid(resourceGroup().id, parameters('assignments')[copyIndex()].principalId, parameters('assignments')[copyIndex()].roleDefinitionId)]",
+              "lifetimeActions": [
+                {
+                  "action": {
+                    "type": "Notify"
+                  },
+                  "trigger": {
+                    "timeBeforeExpiry": "P10D"
+                  }
+                },
+                {
+                  "action": {
+                    "type": "Rotate"
+                  },
+                  "trigger": {
+                    "timeAfterCreate": "[format('P{0}D', string(sub(parameters('keyExpirationInDays'), 7)))]"
+                  }
+                }
+              ]
+            },
+            "parentTag": "[if(not(empty(parameters('parentResourceId'))), createObject('cm-resource-parent', parameters('parentResourceId')), createObject())]",
+            "roleKeyVaultCryptoEncryptionUser": "e147488a-f6f5-4113-8e2d-b22465e65bf6",
+            "roleKeyVaultCryptoReleaseUser": "08bbd89e-9f13-488c-ac41-acfcb10c90ab"
+          },
+          "resources": {
+            "storageKeys": {
+              "copy": {
+                "name": "storageKeys",
+                "count": "[length(parameters('storageKeyNames'))]"
+              },
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('CMK-StorageKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "subscriptionId": "[variables('keyVaultSubscriptionId')]",
+              "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
-                "roleDefinitionId": "[if(contains(parameters('assignments')[copyIndex()].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex()].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex()].roleDefinitionId))]",
-                "principalId": "[parameters('assignments')[copyIndex()].principalId]",
-                "principalType": "[coalesce(tryGet(parameters('assignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
-                "description": "[tryGet(parameters('assignments')[copyIndex()], 'description')]"
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "keyVaultName": {
+                    "value": "[variables('keyVaultName')]"
+                  },
+                  "name": {
+                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                  },
+                  "kty": {
+                    "value": "[variables('kty')]"
+                  },
+                  "keySize": {
+                    "value": 4096
+                  },
+                  "attributesEnabled": {
+                    "value": true
+                  },
+                  "attributesExportable": {
+                    "value": false
+                  },
+                  "rotationPolicy": {
+                    "value": "[variables('rotationPolicy')]"
+                  },
+                  "tags": {
+                    "value": "[variables('parentTag')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "14514355323903729643"
+                    }
+                  },
+                  "parameters": {
+                    "keyVaultName": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "kty": {
+                      "type": "string",
+                      "defaultValue": "RSA",
+                      "allowedValues": [
+                        "RSA",
+                        "RSA-HSM",
+                        "EC",
+                        "EC-HSM"
+                      ],
+                      "metadata": {
+                        "description": "Key type."
+                      }
+                    },
+                    "keySize": {
+                      "type": "int",
+                      "defaultValue": 4096,
+                      "allowedValues": [
+                        2048,
+                        3072,
+                        4096,
+                        0
+                      ],
+                      "metadata": {
+                        "description": "RSA key size in bits."
+                      }
+                    },
+                    "attributesEnabled": {
+                      "type": "bool",
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Whether the key is enabled for use."
+                      }
+                    },
+                    "attributesExportable": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Whether the private key can be exported."
+                      }
+                    },
+                    "rotationPolicy": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Key rotation policy."
+                      }
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags to apply to the key."
+                      }
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.KeyVault/vaults/keys",
+                      "apiVersion": "2023-07-01",
+                      "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('name'))]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "kty": "[parameters('kty')]",
+                        "keySize": "[if(greater(parameters('keySize'), 0), parameters('keySize'), null())]",
+                        "attributes": {
+                          "enabled": "[parameters('attributesEnabled')]",
+                          "exportable": "[parameters('attributesExportable')]"
+                        },
+                        "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              }
+            },
+            "storageIdentity": {
+              "condition": "[not(empty(parameters('storageKeyNames')))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('CMK-StorageUAI-{0}', parameters('deploymentSuffix'))]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[parameters('storageIdentityName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "tags": {
+                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.ManagedIdentity/userAssignedIdentities'), createObject()))]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "8509303238056875595"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+                      "apiVersion": "2023-01-31",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]"
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    },
+                    "clientId": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').clientId]"
+                    },
+                    "principalId": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').principalId]"
+                    }
+                  }
+                }
+              }
+            },
+            "storageKeyRoleAssignments": {
+              "copy": {
+                "name": "storageKeyRoleAssignments",
+                "count": "[length(parameters('storageKeyNames'))]"
+              },
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('CMK-StorageKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "subscriptionId": "[variables('keyVaultSubscriptionId')]",
+              "resourceGroup": "[variables('keyVaultResourceGroup')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "keyVaultName": {
+                    "value": "[variables('keyVaultName')]"
+                  },
+                  "keyName": {
+                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                  },
+                  "assignments": {
+                    "value": [
+                      {
+                        "principalId": "[reference('storageIdentity').outputs.principalId.value]",
+                        "principalType": "ServicePrincipal",
+                        "roleDefinitionId": "[variables('roleKeyVaultCryptoEncryptionUser')]"
+                      }
+                    ]
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "13075540108381172885"
+                    }
+                  },
+                  "definitions": {
+                    "roleAssignmentType": {
+                      "type": "object",
+                      "properties": {
+                        "roleDefinitionId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
+                          }
+                        },
+                        "principalId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Object (principal) ID of the identity receiving the role."
+                          }
+                        },
+                        "principalType": {
+                          "type": "string",
+                          "allowedValues": [
+                            "",
+                            "Device",
+                            "ForeignGroup",
+                            "Group",
+                            "ServicePrincipal",
+                            "User"
+                          ],
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Type of the assigned principal. Defaults to ServicePrincipal."
+                          }
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional human-readable description for the assignment."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "description": "A single role assignment to apply to a specific resource.",
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "keyVaultName": {
+                      "type": "string"
+                    },
+                    "keyName": {
+                      "type": "string"
+                    },
+                    "assignments": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/roleAssignmentType"
+                      },
+                      "metadata": {
+                        "description": "Role assignments to apply to this key vault key."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "copy": [
+                      {
+                        "name": "formattedAssignments",
+                        "count": "[length(parameters('assignments'))]",
+                        "input": "[union(parameters('assignments')[copyIndex('formattedAssignments')], createObject('roleDefinitionId', if(contains(parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId))))]"
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "keyVault::key": {
+                      "existing": true,
+                      "type": "Microsoft.KeyVault/vaults/keys",
+                      "apiVersion": "2023-07-01",
+                      "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('keyName'))]"
+                    },
+                    "keyVault": {
+                      "existing": true,
+                      "type": "Microsoft.KeyVault/vaults",
+                      "apiVersion": "2023-07-01",
+                      "name": "[parameters('keyVaultName')]"
+                    },
+                    "roleAssignment": {
+                      "copy": {
+                        "name": "roleAssignment",
+                        "count": "[length(variables('formattedAssignments'))]"
+                      },
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                      "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
+                      "properties": {
+                        "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
+                        "principalId": "[variables('formattedAssignments')[copyIndex()].principalId]",
+                        "principalType": "[coalesce(tryGet(variables('formattedAssignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
+                        "description": "[tryGet(variables('formattedAssignments')[copyIndex()], 'description')]"
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "resourceIds": {
+                      "type": "array",
+                      "copy": {
+                        "count": "[length(variables('formattedAssignments'))]",
+                        "input": "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId))]"
+                      }
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "storageIdentity",
+                "[format('storageKeys[{0}]', copyIndex())]"
+              ]
+            },
+            "diskKeys": {
+              "copy": {
+                "name": "diskKeys",
+                "count": "[length(parameters('diskEncryptionConfigs'))]"
+              },
+              "condition": "[not(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('CMK-DiskKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "subscriptionId": "[variables('keyVaultSubscriptionId')]",
+              "resourceGroup": "[variables('keyVaultResourceGroup')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "keyVaultName": {
+                    "value": "[variables('keyVaultName')]"
+                  },
+                  "name": {
+                    "value": "[parameters('diskEncryptionConfigs')[copyIndex()].keyName]"
+                  },
+                  "kty": {
+                    "value": "[variables('kty')]"
+                  },
+                  "keySize": {
+                    "value": 4096
+                  },
+                  "attributesEnabled": {
+                    "value": true
+                  },
+                  "attributesExportable": {
+                    "value": false
+                  },
+                  "rotationPolicy": {
+                    "value": "[variables('rotationPolicy')]"
+                  },
+                  "tags": {
+                    "value": "[variables('parentTag')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "14514355323903729643"
+                    }
+                  },
+                  "parameters": {
+                    "keyVaultName": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "kty": {
+                      "type": "string",
+                      "defaultValue": "RSA",
+                      "allowedValues": [
+                        "RSA",
+                        "RSA-HSM",
+                        "EC",
+                        "EC-HSM"
+                      ],
+                      "metadata": {
+                        "description": "Key type."
+                      }
+                    },
+                    "keySize": {
+                      "type": "int",
+                      "defaultValue": 4096,
+                      "allowedValues": [
+                        2048,
+                        3072,
+                        4096,
+                        0
+                      ],
+                      "metadata": {
+                        "description": "RSA key size in bits."
+                      }
+                    },
+                    "attributesEnabled": {
+                      "type": "bool",
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Whether the key is enabled for use."
+                      }
+                    },
+                    "attributesExportable": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Whether the private key can be exported."
+                      }
+                    },
+                    "rotationPolicy": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Key rotation policy."
+                      }
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags to apply to the key."
+                      }
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.KeyVault/vaults/keys",
+                      "apiVersion": "2023-07-01",
+                      "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('name'))]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "kty": "[parameters('kty')]",
+                        "keySize": "[if(greater(parameters('keySize'), 0), parameters('keySize'), null())]",
+                        "attributes": {
+                          "enabled": "[parameters('attributesEnabled')]",
+                          "exportable": "[parameters('attributesExportable')]"
+                        },
+                        "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              }
+            },
+            "diskEncryptionSets": {
+              "copy": {
+                "name": "diskEncryptionSets",
+                "count": "[length(parameters('diskEncryptionConfigs'))]"
+              },
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('CMK-DiskEncryptionSet-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[parameters('diskEncryptionConfigs')[copyIndex()].diskEncryptionSetName]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "keyVaultResourceId": {
+                    "value": "[parameters('keyVaultResourceId')]"
+                  },
+                  "keyName": {
+                    "value": "[parameters('diskEncryptionConfigs')[copyIndex()].keyName]"
+                  },
+                  "encryptionType": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', 'ConfidentialVmEncryptedWithCustomerKey'), if(not(contains(parameters('keyManagementType'), 'Platform')), createObject('value', 'EncryptionAtRestWithCustomerKey'), createObject('value', 'EncryptionAtRestWithPlatformAndCustomerKeys')))]",
+                  "rotationToLatestKeyVersionEnabled": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', false()), createObject('value', true()))]",
+                  "systemAssignedIdentity": {
+                    "value": true
+                  },
+                  "tags": {
+                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/diskEncryptionSets'), createObject()))]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "6718767308030891154"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "keyVaultResourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Key Vault resource ID containing the encryption key."
+                      }
+                    },
+                    "keyName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Name of the key in the Key Vault."
+                      }
+                    },
+                    "keyVersion": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Version of the key to use. Leave empty to resolve the current version at deploy time."
+                      }
+                    },
+                    "encryptionType": {
+                      "type": "string",
+                      "defaultValue": "EncryptionAtRestWithCustomerKey",
+                      "allowedValues": [
+                        "EncryptionAtRestWithCustomerKey",
+                        "EncryptionAtRestWithPlatformAndCustomerKeys",
+                        "ConfidentialVmEncryptedWithCustomerKey"
+                      ],
+                      "metadata": {
+                        "description": "Encryption type."
+                      }
+                    },
+                    "rotationToLatestKeyVersionEnabled": {
+                      "type": "bool",
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Automatically rotate to the latest key version."
+                      }
+                    },
+                    "systemAssignedIdentity": {
+                      "type": "bool",
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Assign a system-assigned managed identity to the disk encryption set."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "keyVaultName": "[last(split(parameters('keyVaultResourceId'), '/'))]",
+                    "keyVaultRG": "[split(parameters('keyVaultResourceId'), '/')[4]]",
+                    "keyVaultSub": "[split(parameters('keyVaultResourceId'), '/')[2]]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Compute/diskEncryptionSets",
+                      "apiVersion": "2023-04-02",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "identity": "[if(parameters('systemAssignedIdentity'), createObject('type', 'SystemAssigned'), createObject('type', 'None'))]",
+                      "properties": {
+                        "encryptionType": "[parameters('encryptionType')]",
+                        "rotationToLatestKeyVersionEnabled": "[parameters('rotationToLatestKeyVersionEnabled')]",
+                        "activeKey": {
+                          "keyUrl": "[if(empty(parameters('keyVersion')), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSub'), variables('keyVaultRG')), 'Microsoft.KeyVault/vaults/keys', variables('keyVaultName'), parameters('keyName')), '2023-07-01').keyUriWithVersion, format('{0}/{1}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('keyVaultSub'), variables('keyVaultRG')), 'Microsoft.KeyVault/vaults/keys', variables('keyVaultName'), parameters('keyName')), '2023-07-01').keyUri, parameters('keyVersion')))]",
+                          "sourceVault": {
+                            "id": "[parameters('keyVaultResourceId')]"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Compute/diskEncryptionSets', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    },
+                    "principalId": {
+                      "type": "string",
+                      "value": "[if(parameters('systemAssignedIdentity'), reference(resourceId('Microsoft.Compute/diskEncryptionSets', parameters('name')), '2023-04-02', 'full').identity.principalId, '')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[format('diskKeys[{0}]', copyIndex())]"
+              ]
+            },
+            "diskKeyRoleAssignments": {
+              "copy": {
+                "name": "diskKeyRoleAssignments",
+                "count": "[length(parameters('diskEncryptionConfigs'))]"
+              },
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('CMK-DiskKeyRA-EncryptUser-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "subscriptionId": "[variables('keyVaultSubscriptionId')]",
+              "resourceGroup": "[variables('keyVaultResourceGroup')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "keyVaultName": {
+                    "value": "[variables('keyVaultName')]"
+                  },
+                  "keyName": {
+                    "value": "[parameters('diskEncryptionConfigs')[copyIndex()].keyName]"
+                  },
+                  "assignments": {
+                    "value": [
+                      {
+                        "principalId": "[reference(format('diskEncryptionSets[{0}]', copyIndex())).outputs.principalId.value]",
+                        "principalType": "ServicePrincipal",
+                        "roleDefinitionId": "[variables('roleKeyVaultCryptoEncryptionUser')]"
+                      }
+                    ]
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "13075540108381172885"
+                    }
+                  },
+                  "definitions": {
+                    "roleAssignmentType": {
+                      "type": "object",
+                      "properties": {
+                        "roleDefinitionId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
+                          }
+                        },
+                        "principalId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Object (principal) ID of the identity receiving the role."
+                          }
+                        },
+                        "principalType": {
+                          "type": "string",
+                          "allowedValues": [
+                            "",
+                            "Device",
+                            "ForeignGroup",
+                            "Group",
+                            "ServicePrincipal",
+                            "User"
+                          ],
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Type of the assigned principal. Defaults to ServicePrincipal."
+                          }
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional human-readable description for the assignment."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "description": "A single role assignment to apply to a specific resource.",
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "keyVaultName": {
+                      "type": "string"
+                    },
+                    "keyName": {
+                      "type": "string"
+                    },
+                    "assignments": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/roleAssignmentType"
+                      },
+                      "metadata": {
+                        "description": "Role assignments to apply to this key vault key."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "copy": [
+                      {
+                        "name": "formattedAssignments",
+                        "count": "[length(parameters('assignments'))]",
+                        "input": "[union(parameters('assignments')[copyIndex('formattedAssignments')], createObject('roleDefinitionId', if(contains(parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId))))]"
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "keyVault::key": {
+                      "existing": true,
+                      "type": "Microsoft.KeyVault/vaults/keys",
+                      "apiVersion": "2023-07-01",
+                      "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('keyName'))]"
+                    },
+                    "keyVault": {
+                      "existing": true,
+                      "type": "Microsoft.KeyVault/vaults",
+                      "apiVersion": "2023-07-01",
+                      "name": "[parameters('keyVaultName')]"
+                    },
+                    "roleAssignment": {
+                      "copy": {
+                        "name": "roleAssignment",
+                        "count": "[length(variables('formattedAssignments'))]"
+                      },
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                      "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
+                      "properties": {
+                        "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
+                        "principalId": "[variables('formattedAssignments')[copyIndex()].principalId]",
+                        "principalType": "[coalesce(tryGet(variables('formattedAssignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
+                        "description": "[tryGet(variables('formattedAssignments')[copyIndex()], 'description')]"
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "resourceIds": {
+                      "type": "array",
+                      "copy": {
+                        "count": "[length(variables('formattedAssignments'))]",
+                        "input": "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId))]"
+                      }
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[format('diskEncryptionSets[{0}]', copyIndex())]"
+              ]
+            },
+            "diskKeyReleaseUserRoleAssignments": {
+              "copy": {
+                "name": "diskKeyReleaseUserRoleAssignments",
+                "count": "[length(parameters('diskEncryptionConfigs'))]"
+              },
+              "condition": "[coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false())]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('CMK-DiskKeyRA-ReleaseUser-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "subscriptionId": "[variables('keyVaultSubscriptionId')]",
+              "resourceGroup": "[variables('keyVaultResourceGroup')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "keyVaultName": {
+                    "value": "[variables('keyVaultName')]"
+                  },
+                  "keyName": {
+                    "value": "[parameters('diskEncryptionConfigs')[copyIndex()].keyName]"
+                  },
+                  "assignments": {
+                    "value": [
+                      {
+                        "principalId": "[parameters('diskEncryptionConfigs')[copyIndex()].confidentialVMOrchestratorObjectId]",
+                        "principalType": "ServicePrincipal",
+                        "roleDefinitionId": "[variables('roleKeyVaultCryptoReleaseUser')]"
+                      }
+                    ]
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "13075540108381172885"
+                    }
+                  },
+                  "definitions": {
+                    "roleAssignmentType": {
+                      "type": "object",
+                      "properties": {
+                        "roleDefinitionId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
+                          }
+                        },
+                        "principalId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Object (principal) ID of the identity receiving the role."
+                          }
+                        },
+                        "principalType": {
+                          "type": "string",
+                          "allowedValues": [
+                            "",
+                            "Device",
+                            "ForeignGroup",
+                            "Group",
+                            "ServicePrincipal",
+                            "User"
+                          ],
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Type of the assigned principal. Defaults to ServicePrincipal."
+                          }
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional human-readable description for the assignment."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "description": "A single role assignment to apply to a specific resource.",
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "keyVaultName": {
+                      "type": "string"
+                    },
+                    "keyName": {
+                      "type": "string"
+                    },
+                    "assignments": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/roleAssignmentType"
+                      },
+                      "metadata": {
+                        "description": "Role assignments to apply to this key vault key."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "copy": [
+                      {
+                        "name": "formattedAssignments",
+                        "count": "[length(parameters('assignments'))]",
+                        "input": "[union(parameters('assignments')[copyIndex('formattedAssignments')], createObject('roleDefinitionId', if(contains(parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId))))]"
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "keyVault::key": {
+                      "existing": true,
+                      "type": "Microsoft.KeyVault/vaults/keys",
+                      "apiVersion": "2023-07-01",
+                      "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('keyName'))]"
+                    },
+                    "keyVault": {
+                      "existing": true,
+                      "type": "Microsoft.KeyVault/vaults",
+                      "apiVersion": "2023-07-01",
+                      "name": "[parameters('keyVaultName')]"
+                    },
+                    "roleAssignment": {
+                      "copy": {
+                        "name": "roleAssignment",
+                        "count": "[length(variables('formattedAssignments'))]"
+                      },
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                      "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
+                      "properties": {
+                        "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
+                        "principalId": "[variables('formattedAssignments')[copyIndex()].principalId]",
+                        "principalType": "[coalesce(tryGet(variables('formattedAssignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
+                        "description": "[tryGet(variables('formattedAssignments')[copyIndex()], 'description')]"
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "resourceIds": {
+                      "type": "array",
+                      "copy": {
+                        "count": "[length(variables('formattedAssignments'))]",
+                        "input": "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId))]"
+                      }
+                    }
+                  }
+                }
               }
             }
           },
           "outputs": {
-            "resourceIds": {
+            "storageIdentityResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+              },
+              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.resourceId.value, '')]"
+            },
+            "storageIdentityPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+              },
+              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.principalId.value, '')]"
+            },
+            "diskResults": {
               "type": "array",
+              "items": {
+                "$ref": "#/definitions/diskResultType"
+              },
+              "metadata": {
+                "description": "Disk CMK results — one entry per diskEncryptionConfigs element."
+              },
               "copy": {
-                "count": "[length(parameters('assignments'))]",
-                "input": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('assignments')[copyIndex()].principalId, parameters('assignments')[copyIndex()].roleDefinitionId))]"
+                "count": "[length(parameters('diskEncryptionConfigs'))]",
+                "input": {
+                  "diskEncryptionSetResourceId": "[reference(format('diskEncryptionSets[{0}]', copyIndex())).outputs.resourceId.value]"
+                }
               }
             }
           }
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}ManagedIdentity-{1}', variables('depPrefix'), variables('deploymentSuffix')))]"
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('imageBuildResourceGroupName'))]"
       ]
     },
     {
@@ -1839,6 +3027,9 @@
           "skuName": {
             "value": "Standard_LRS"
           },
+          "encryptionKeyVaultUri": "[if(and(not(equals(parameters('keyManagementLogsStorageAccount'), 'MicrosoftManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', format('https://{0}.vault.{1}/', last(split(parameters('encryptionKeyVaultResourceId'), '/')), environment().suffixes.keyvaultDns)), createObject('value', null()))]",
+          "encryptionKeyName": "[if(not(equals(parameters('keyManagementLogsStorageAccount'), 'MicrosoftManaged')), createObject('value', variables('logsStorageEncryptionKeyName')), createObject('value', null()))]",
+          "encryptionUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementLogsStorageAccount'), 'MicrosoftManaged')), createObject('value', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('logsStorageEncryptionIdentityName'))), createObject('value', null()))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
           }
@@ -2247,7 +3438,8 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('imageBuildResourceGroupName'))]"
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('imageBuildResourceGroupName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Logs-Storage-CMK-{1}', variables('depPrefix'), variables('deploymentSuffix')))]"
       ]
     },
     {

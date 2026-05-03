@@ -1,14 +1,24 @@
 targetScope = 'subscription'
 
+@description('Required. Resource ID of an existing host pool. When provided, naming conventions are derived from the existing host pool name rather than constructed from scratch.')
 param existingHostPoolResourceId string
+@description('Optional. Resource ID of an existing global feed workspace to register this host pool with. Leave empty to skip global feed registration.')
 param existingFeedWorkspaceResourceId string = ''
+@description('Optional. Custom prefix for FSLogix storage account names. Overrides the default naming convention when set.')
 param fslogixStorageCustomPrefix string = ''
+@description('Optional. Short label for this host pool (e.g. "finance", "dev"). Used as the base segment in all generated resource names. Ignored when existingHostPoolResourceId is provided.')
 param identifier string = ''
+@description('Required. Numeric index for this host pool (e.g. 1 produces a -01 suffix). Used to differentiate multiple host pools sharing the same identifier.')
 param index int
+@description('Required. Azure region for AVD control plane resources: host pool, workspace, and application groups.')
 param controlPlaneRegion string
+@description('Optional. Azure region for the global feed workspace. Required only when creating a new global feed workspace resource.')
 param globalFeedRegion string = ''
+@description('Required. Azure region where session host VMs and associated compute and storage resources are deployed.')
 param virtualMachinesRegion string
+@description('Optional. When true, the resource type abbreviation is placed at the end of names (e.g. avd-01-eus-vm). When false, at the beginning (e.g. vm-avd-01-eus). Ignored when existingHostPoolResourceId is provided — convention is detected automatically from the existing name.')
 param nameConvResTypeAtEnd bool = false
+@description('Optional. Override prefix for virtual machine names. When empty, derived from the naming convention and identifier.')
 param virtualMachineNamePrefix string = ''
 
 var cloud = toLower(environment().name)
@@ -88,9 +98,11 @@ var depVirtualMachineName = take('${depVirtualMachineNameTemp}${uniqueString(dep
 var depVirtualMachineDiskName = '${depVirtualMachineName}-${resourceAbbreviations.osdisks}'
 var depVirtualMachineNicName = '${depVirtualMachineName}-${resourceAbbreviations.networkInterfaces}'
 
-// KeyVaults, App Service Plan, Log Analytics Workspace, and Data Collection Endpoint Resource Naming Conventions
-var resourceGroupManagement = replace(
-  replace(replace(nameConv_Shared_ResGroup, 'TOKEN', 'management'), 'LOCATION', virtualMachinesRegionAbbreviation),
+// Operations RG: Key Vaults, App Service Plan, Template Specs, App Attach storage — shared infrastructure
+// The standalone keyVaults.bicep deployment also targets this RG (identifier defaults to 'operations')
+// so both the inline fallback and the standalone path produce KVs in the same RG with identical names.
+var resourceGroupOperations = replace(
+  replace(replace(nameConv_Shared_ResGroup, 'TOKEN', 'operations'), 'LOCATION', virtualMachinesRegionAbbreviation),
   'RESOURCETYPE',
   resourceAbbreviations.resourceGroups
 )
@@ -99,7 +111,7 @@ var resourceGroupMonitoring = replace(
   'RESOURCETYPE',
   resourceAbbreviations.resourceGroups
 )
-var uniqueStringManagement = take(uniqueString(subscription().subscriptionId, resourceGroupManagement), 6)
+var uniqueStringOperations = take(uniqueString(subscription().subscriptionId, resourceGroupOperations), 6)
 var appServicePlanName = replace(
   replace(
     replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
@@ -120,24 +132,31 @@ var sessionHostTemplateSpecName = replace(
   'session-host-'
 )
 
-// key vaults must be named with a length of 3 - 24 characters and must be globally unique.
-var keyVaultNameSecrets = replace(
+// Key Vault names are seeded on resourceGroupOperations so both the inline fallback
+// and the standalone keyVaults.bicep deployment produce identical names, preventing duplicates.
+var keyVaultNameSecrets = take(
   replace(
-    replace(nameConv_Shared_Resources, 'TOKEN', 'sec-${uniqueStringManagement}'),
-    'LOCATION',
-    virtualMachinesRegionAbbreviation
+    replace(
+      replace(nameConv_Shared_Resources, 'TOKEN', 'sec-${uniqueStringOperations}'),
+      'LOCATION',
+      virtualMachinesRegionAbbreviation
+    ),
+    'RESOURCETYPE',
+    resourceAbbreviations.keyVaults
   ),
-  'RESOURCETYPE',
-  resourceAbbreviations.keyVaults
+  24
 )
-var keyVaultNameEncryption = replace(
+var keyVaultNameEncryption = take(
   replace(
-    replace(nameConv_Shared_Resources, 'TOKEN', 'enc-${uniqueStringManagement}'),
-    'LOCATION',
-    virtualMachinesRegionAbbreviation
+    replace(
+      replace(nameConv_Shared_Resources, 'TOKEN', 'enc-${uniqueStringOperations}'),
+      'LOCATION',
+      virtualMachinesRegionAbbreviation
+    ),
+    'RESOURCETYPE',
+    resourceAbbreviations.keyVaults
   ),
-  'RESOURCETYPE',
-  resourceAbbreviations.keyVaults
+  24
 )
 
 var dataCollectionEndpointName = replace(
@@ -308,7 +327,7 @@ var netAppCapacityPoolName = replace(
 )
 
 // App Attach and FSLogix Storage Account Naming Convention (max 15 characters for domain join)
-var appAttachStorageAccountName = take('appattach${uniqueStringManagement}', 15)
+var appAttachStorageAccountName = take('appattach${uniqueStringOperations}', 15)
 var uniqueStringStorage = take(uniqueString(subscription().subscriptionId, resourceGroupStorage), 6)
 var fslogixStorageAccountNamePrefix = empty(fslogixStorageCustomPrefix)
   ? 'fslogix${uniqueStringStorage}'
@@ -375,7 +394,7 @@ output resourceGroupControlPlane string = resourceGroupControlPlane
 output resourceGroupGlobalFeed string = globalFeedResourceGroupName
 output resourceGroupHosts string = resourceGroupHosts
 output resourceGroupDeployment string = resourceGroupDeployment
-output resourceGroupManagement string = resourceGroupManagement
+output resourceGroupOperations string = resourceGroupOperations
 output resourceGroupMonitoring string = resourceGroupMonitoring
 output resourceGroupStorage string = resourceGroupStorage
 output scalingPlanName string = scalingPlanName

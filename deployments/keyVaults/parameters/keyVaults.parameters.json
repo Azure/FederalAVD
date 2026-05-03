@@ -1,0 +1,80 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "nameConvResTypeAtEnd": {
+      "value": false
+    },
+    "customIdentifier": {
+      "value": ""
+    },
+    "deploySecretsKeyVault": {
+      "value": true
+    },
+    "secretsKeyVaultNameOverride": {
+      "value": ""
+    },
+    "secretsKeyVaultEnableSoftDelete": {
+      "value": true
+    },
+    "secretsKeyVaultEnablePurgeProtection": {
+      "value": true
+    },
+    "keyVaultRetentionInDays": {
+      "value": 90
+    },
+    "virtualMachineAdminPassword": {
+      "reference": {
+        "keyVault": {
+          "id": ""
+        },
+        "secretName": "VirtualMachineAdminPassword"
+      }
+    },
+    "virtualMachineAdminUserName": {
+      "reference": {
+        "keyVault": {
+          "id": ""
+        },
+        "secretName": "VirtualMachineAdminUserName"
+      }
+    },
+    "domainJoinUserPassword": {
+      "reference": {
+        "keyVault": {
+          "id": ""
+        },
+        "secretName": "DomainJoinUserPassword"
+      }
+    },
+    "domainJoinUserPrincipalName": {
+      "reference": {
+        "keyVault": {
+          "id": ""
+        },
+        "secretName": "DomainJoinUserPrincipalName"
+      }
+    },
+    "deployEncryptionKeyVault": {
+      "value": true
+    },
+    "encryptionKeyVaultNameOverride": {
+      "value": ""
+    },
+    "privateEndpoint": {
+      "value": false
+    },
+    "privateEndpointSubnetResourceId": {
+      "value": ""
+    },
+    "azureKeyVaultPrivateDnsZoneResourceId": {
+      "value": ""
+    },
+    "logAnalyticsWorkspaceResourceId": {
+      "value": ""
+    },
+    "tags": {
+      "value": {}
+    }
+  }
+}

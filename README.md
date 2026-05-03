@@ -16,6 +16,7 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 | Component | Description | Documentation |
 | --------- | ----------- | ------------- |
 | 🌐 **Networking** | Virtual network, subnets, NSGs, NAT gateway, hub peering, route tables, private DNS zones | [Quick Start - Networking](docs/quickStart.md#step-0-deploy-networking-infrastructure-greenfield) |
+| 🔒 **Security Prereqs** | Secrets Key Vault (credentials) and Encryption Key Vault (CMK keys) deployed to a shared security resource group. Deploy before host pools when using CMK or pre-provisioned credentials storage. | [Security Prereqs Guide](docs/hostpoolDeployment.md#security-prerequisites-optional) |
 | 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpoolDeployment.md) |
 | 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifactsGuide.md) |
 | 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/imageBuild.md) |
@@ -43,9 +44,10 @@ graph TD
     D -->|No| F[Use Marketplace<br/>Image]
     E --> G{Build<br/>Custom Image?}
     G -->|Yes<br/>Pre-install| H[🎨 Build Custom<br/>Image]
-    G -->|No<br/>Runtime install| I[🏢 Deploy<br/>Host Pool]
-    H --> I
-    F --> I
+    G -->|No<br/>Runtime install| SEC
+    H --> SEC
+    F --> SEC
+    SEC[🔒 Deploy Security<br/>Prereqs - Optional] --> I[🏢 Deploy<br/>Host Pool]
     I --> J[✅ Complete]
 ```
 
@@ -54,6 +56,7 @@ graph TD
 | Component | Blue Button | Template Spec | PowerShell/CLI |
 | --------- | ----------- | ------------- | -------------- |
 | **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Security Prereqs** (Key Vaults) | ❌ | ✅ All clouds | ✅ All clouds |
 | **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
@@ -117,9 +120,10 @@ Complete AVD environment deployment with enterprise features.
 - Session host virtual machines (pooled or personal)
 - FSLogix profile storage (Azure Files or NetApp Files)
 - Monitoring with Log Analytics and Application Insights
-- Key Vault for secrets management
+- Key Vault for secrets management (inline or pre-deployed via Security Prereqs)
 - Private endpoints and network security (Zero Trust)
 - Backup and recovery configuration
+- Customer Managed Keys: disk encryption sets and storage encryption UAIs deployed early in the deployment chain, giving RBAC propagation time before VMs are created
 
 **Learn More:**
 
