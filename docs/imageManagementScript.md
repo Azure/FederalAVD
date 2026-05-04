@@ -34,7 +34,7 @@ Before running this script, ensure you have:
 ### Required Permissions
 
 - **Contributor** role on the target Azure subscription
-- **Storage Blob Data Contributor** role for image management operations (Microsoft Secure Future Initiative compliance)
+- **Storage Blob Data Contributor** role on the image management storage account — the storage account disables shared key access by default, so blob upload operations require a **data plane role** rather than an ARM-level role. `Contributor` or `Owner` on the subscription or resource group does not grant access to blob data; Azure enforces a strict separation between ARM control plane permissions (resource management) and storage data plane permissions (blob read/write). See [full explanation](hostpoolDeployment.md#security-prerequisites-optional).
 - Role assignment permissions without conditions that prevent assigning 'Role-Based Access Control Administrator' role
 
 ### Required Tools

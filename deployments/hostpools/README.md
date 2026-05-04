@@ -46,9 +46,11 @@ Subscription
 │   ├── OS Disks
 │   ├── Availability Set (optional)
 │   └── Disk Encryption Set (optional)
-├── Management Resource Group
+├── Operations Resource Group
 │   ├── Key Vaults
-│   └── Private Endpoints (Key Vaults)
+│   ├── Recovery Services Vault (optional, when backup enabled)
+│   ├── Backup Policies (file share policy for pooled, VM policy for personal)
+│   └── Private Endpoints (Key Vaults, Recovery Services Vault)
 ├── Storage Resource Group
 │   ├── Azure NetApp Files Account (optional)
 │   ├── Capacity Pool (optional)

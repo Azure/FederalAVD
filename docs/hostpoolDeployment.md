@@ -19,7 +19,7 @@ A complete host pool deployment includes:
 | **🔐 Security** | Secrets Key Vault (optional inline), Encryption Key Vault (optional inline), disk encryption sets, storage encryption UAI, RBAC assignments |
 | **📊 Monitoring** | Log Analytics workspace, diagnostic settings, Application Insights |
 | **🌐 Networking** | Private endpoints, network security (Zero Trust option) |
-| **💿 Backup** | Recovery Services Vault for VM backups (optional) |
+| **💿 Backup** | Recovery Services Vault (optional) — file share backup for pooled host pools, VM backup for personal host pools |
 
 ---
 
@@ -80,9 +80,18 @@ The key vault deployment creates `rg-avd-operations-{loc}` with:
 
 **Inline fallback:** If `encryptionKeyVaultResourceId` is empty and CMK is requested, the `Complete` deployment type creates both KVs inline in `rg-avd-operations-{loc}`. The inline KV names are derived using the same seed as the standalone security deployment, so the names will match if you later run the security deployment separately.
 
-> **Required RBAC on the Encryption KV** for the deploying identity: `Key Vault Crypto Officer`. This allows creating encryption keys via ARM. It may be removed after initial deployment if key rotation is managed separately by the security team.
-
-> ⚠️ **Confidential VM + HSM constraint:** If `confidentialVMOSDiskEncryption = true` and `keyManagementDisks = CustomerManagedHSM`, the deploying identity also needs `Role Based Access Control Administrator` on the security resource group. This is because the deployment VM executes a Run Command to create the confidential VM encryption key idempotently — a step that cannot be expressed in ARM/Bicep alone — and must then self-assign `Key Vault Crypto Officer` to the dynamically-created deployment identity. This combination requires the deploying identity to own both the KV and the RG. The Security Prereq path is primarily intended for standard CMK (non-confidential VM) scenarios where the same KV is shared across host pools, add-ons (SHR, SQM), and image build deployments.
+> **Why data plane roles are required separately from ARM roles**
+>
+> Azure enforces a strict separation between the ARM control plane (resource management) and service data planes (key operations, blob operations). `Owner` or `Contributor` on a subscription or resource group grants full control over ARM resources but **zero access** to data plane operations. This applies consistently across services:
+>
+> - **Key Vault keys** — creating or reading keys requires a data plane role (`Key Vault Crypto Officer`, `Key Vault Crypto User`, etc.), regardless of who owns or created the vault.
+> - **Storage blobs** — uploading or reading blobs requires a data plane role (`Storage Blob Data Contributor`, `Storage Blob Data Reader`, etc.) when shared key access is disabled. This is why the `Deploy-ImageManagement.ps1` script requires `Storage Blob Data Contributor` on the deploying identity — the storage account disables shared key access by default so SAS tokens and account keys are unavailable.
+>
+> **Required RBAC depends on CMK type:**
+>
+> - **Standard CMK** (disk or storage encryption, non-confidential VM): The **deploying identity** needs `Key Vault Crypto Officer` on the encryption Key Vault. ARM creates the encryption keys directly during deployment. This applies whether the KV was pre-deployed or created inline — creating the vault does not grant the deploying identity any key operation rights. This role may be removed after initial deployment if key rotation is managed separately.
+>
+> - **Confidential VM + HSM** (`confidentialVMOSDiskEncryption = true` and `keyManagementDisks = CustomerManagedHSM`): Encryption keys cannot be created via ARM for this scenario. Instead, a Run Command on the deployment VM creates the key, and the **deployment VM's user-assigned identity** is automatically assigned `Key Vault Crypto Officer` by the deployment. The deploying identity does **not** need Crypto Officer — it only needs `Role Based Access Control Administrator` on the operations resource group so the deployment can grant that role to the deployment VM's identity.
 
 ### Optional Prerequisites
 

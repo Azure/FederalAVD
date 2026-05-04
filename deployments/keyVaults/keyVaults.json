@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "10987343670548594857"
+      "templateHash": "10545617109141181738"
     }
   },
   "parameters": {
@@ -14,13 +14,6 @@
       "defaultValue": "[deployment().location]",
       "metadata": {
         "description": "Required. The Azure region for all foundation resources."
-      }
-    },
-    "customIdentifier": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Custom workload identifier used when naming the resource group and resources. Defaults to \"foundation\"."
       }
     },
     "nameConvResTypeAtEnd": {
@@ -35,14 +28,6 @@
       "defaultValue": true,
       "metadata": {
         "description": "Optional. Deploy the Secrets Key Vault (Standard SKU) for storing AVD credentials (VM admin password, domain join credentials)."
-      }
-    },
-    "secretsKeyVaultNameOverride": {
-      "type": "string",
-      "defaultValue": "",
-      "maxLength": 24,
-      "metadata": {
-        "description": "Optional. Override the auto-generated Secrets Key Vault name. Must be globally unique, 3-24 chars, alphanumeric and hyphens only."
       }
     },
     "secretsKeyVaultEnableSoftDelete": {
@@ -101,14 +86,6 @@
       "defaultValue": true,
       "metadata": {
         "description": "Optional. Deploy the Encryption Key Vault (Premium SKU) for Customer-Managed Keys. Required when using CMK in any AVD solution."
-      }
-    },
-    "encryptionKeyVaultNameOverride": {
-      "type": "string",
-      "defaultValue": "",
-      "maxLength": 24,
-      "metadata": {
-        "description": "Optional. Override the auto-generated Encryption Key Vault name. Must be globally unique, 3-24 chars, alphanumeric and hyphens only."
       }
     },
     "privateEndpoint": {
@@ -698,18 +675,16 @@
     "locations": "[if(startsWith(variables('cloud'), 'us'), variables('$fxv#0').other, variables('$fxv#1')[environment().name])]",
     "resourceAbbreviations": "[variables('$fxv#2')]",
     "deploymentSuffix": "[parameters('timeStamp')]",
-    "identifier": "[if(empty(parameters('customIdentifier')), 'operations', parameters('customIdentifier'))]",
+    "identifier": "operations",
     "locationAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
-    "nameConv_Foundation_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-LOCATION-RESOURCETYPE', variables('identifier')), format('RESOURCETYPE-avd-{0}-LOCATION', variables('identifier')))]",
-    "nameConv_Foundation_Resources": "[if(parameters('nameConvResTypeAtEnd'), 'avd-TOKEN-LOCATION-RESOURCETYPE', 'RESOURCETYPE-avd-TOKEN-LOCATION')]",
+    "nameConv_Operations_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-LOCATION-RESOURCETYPE', variables('identifier')), format('RESOURCETYPE-avd-{0}-LOCATION', variables('identifier')))]",
+    "nameConv_Operations_Resources": "[if(parameters('nameConvResTypeAtEnd'), 'avd-TOKEN-LOCATION-RESOURCETYPE', 'RESOURCETYPE-avd-TOKEN-LOCATION')]",
     "privateEndpointNameConv": "[if(parameters('nameConvResTypeAtEnd'), format('RESOURCE-SUBRESOURCE-VNETID-{0}', variables('resourceAbbreviations').privateEndpoints), format('{0}-RESOURCE-SUBRESOURCE-VNETID', variables('resourceAbbreviations').privateEndpoints))]",
     "privateEndpointNICNameConv": "[if(parameters('nameConvResTypeAtEnd'), format('RESOURCE-SUBRESOURCE-VNETID-{0}-{1}', variables('resourceAbbreviations').privateEndpoints, variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}-RESOURCE-SUBRESOURCE-VNETID', variables('resourceAbbreviations').networkInterfaces, variables('resourceAbbreviations').privateEndpoints))]",
-    "operationsResourceGroupName": "[replace(replace(variables('nameConv_Foundation_ResGroup'), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
+    "operationsResourceGroupName": "[replace(replace(variables('nameConv_Operations_ResGroup'), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
     "uniqueStringOperations": "[take(uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName')), 6)]",
-    "secretsKeyVaultNameGenerated": "[take(replace(replace(replace(variables('nameConv_Foundation_Resources'), 'TOKEN', format('sec-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24)]",
-    "encryptionKeyVaultNameGenerated": "[take(replace(replace(replace(variables('nameConv_Foundation_Resources'), 'TOKEN', format('enc-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24)]",
-    "secretsKeyVaultName": "[if(empty(parameters('secretsKeyVaultNameOverride')), variables('secretsKeyVaultNameGenerated'), parameters('secretsKeyVaultNameOverride'))]",
-    "encryptionKeyVaultName": "[if(empty(parameters('encryptionKeyVaultNameOverride')), variables('encryptionKeyVaultNameGenerated'), parameters('encryptionKeyVaultNameOverride'))]"
+    "secretsKeyVaultName": "[take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('sec-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24)]",
+    "encryptionKeyVaultName": "[take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('enc-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24)]"
   },
   "resources": [
     {

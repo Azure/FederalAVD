@@ -26,12 +26,8 @@ param availabilitySetsIndex int
 param availabilityZones array
 @description('Required. Resource ID of the AVD Insights data collection rule for session host diagnostics.')
 param avdInsightsDataCollectionRulesResourceId string
-@description('Required. Resource ID of the private DNS zone for Azure Backup private endpoints.')
-param azureBackupPrivateDnsZoneResourceId string
 @description('Required. Resource ID of the private DNS zone for Azure Blob Storage private endpoints.')
 param azureBlobPrivateDnsZoneResourceId string
-@description('Required. Resource ID of the private DNS zone for Azure Queue Storage private endpoints.')
-param azureQueuePrivateDnsZoneResourceId string
 @description('Required. Object ID of the Confidential VM Orchestrator service principal. Required when deploying confidential VMs with VMGuestState encryption.')
 param confidentialVMOrchestratorObjectId string
 @description('Required. When true, enables OS disk encryption with VMGuestState for confidential VMs, protecting disk contents from the host.')
@@ -156,10 +152,6 @@ param ouPath string
 param pooledHostPool bool
 @description('Required. When true, deploys a Recovery Services Vault and configures daily VM backup for session hosts.')
 param recoveryServices bool
-@description('Required. Name of the Recovery Services Vault to create or reference for session host VM backup.')
-param recoveryServicesVaultName string
-@description('Required. Storage replication type for the Recovery Services Vault: "LocallyRedundant", "GeoRedundant", or "ZoneRedundant".')
-param recoveryServicesVaultStorageRedundancy string
 @description('Required. Name of the temporary deployment resource group used to host the deployment VM.')
 param resourceGroupDeployment string
 @description('Required. Name of the resource group where session host VMs and compute resources are deployed.')
@@ -203,7 +195,6 @@ param vTpmEnabled bool
 @description('Required. Resource ID of the VM Insights data collection rule for performance counters and dependency map data.')
 param vmInsightsDataCollectionRulesResourceId string
 
-var backupPolicyName = 'AvdPolicyVm'
 var confidentialVMOSDiskEncryptionType = confidentialVMOSDiskEncryption ? 'DiskWithVMGuestState' : 'VMGuestStateOnly'
 
 // Batching logic: Dynamically calculate max VMs per batch based on resources per VM
@@ -235,12 +226,6 @@ var dscStorageAccount = startsWith(environment().name, 'USN')
   : 'wvdportalstorageblob'
 var dscUrl = 'https://${dscStorageAccount}.blob.${environment().suffixes.storage}/galleryartifacts/${avdAgentDscPackage}'
 
-var backupPrivateDNSZoneResourceIds = [
-  azureBackupPrivateDnsZoneResourceId
-  azureBlobPrivateDnsZoneResourceId
-  azureQueuePrivateDnsZoneResourceId
-]
-
 var dedicatedHostGroupName = !empty(dedicatedHostResourceId)
   ? split(dedicatedHostResourceId, '/')[8]
   : !empty(dedicatedHostGroupResourceId) ? last(split(dedicatedHostGroupResourceId, '/')) : ''
@@ -255,8 +240,6 @@ resource dedicatedHostGroup 'Microsoft.Compute/hostGroups@2024-11-01' existing =
   scope: resourceGroup(dedicatedHostSub, dedicatedHostRG)
   name: dedicatedHostGroupName
 }
-
-var nonEmptyBackupPrivateDNSZoneResourceIds = filter(backupPrivateDNSZoneResourceIds, zone => !empty(zone))
 
 // Call on the hotspool
 resource hostPoolGet 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = if(deploymentType == 'SessionHostsOnly') {
@@ -458,74 +441,13 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
   ]
 }]
 
-module recoveryServicesVault '../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (deploymentType != 'SessionHostsOnly' && recoveryServices) {
-  name: 'RecoveryServicesVault-VirtualMachines-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupHosts)
-  params: {
-    name: recoveryServicesVaultName
-    location: location
-    diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
-    storageType: recoveryServicesVaultStorageRedundancy
-    tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.recoveryServices/vaults'] ?? {})
-  }
-}
-
-module recoveryServicesVaultBackupPolicy '../../../../.common/bicepModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = if (deploymentType != 'SessionHostsOnly' && recoveryServices) {
-  name: 'RSV-BackupPolicy-VirtualMachines-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupHosts)
-  params: {
-    recoveryServicesVaultName: recoveryServicesVaultName
-    name: backupPolicyName
-    properties: {
-      backupManagementType: 'AzureIaasVM'
-      instantRpRetentionRangeInDays: 2
-      policyType: 'V2'
-      retentionPolicy: {
-        retentionPolicyType: 'LongTermRetentionPolicy'
-        dailySchedule: {
-          retentionDuration: {
-            count: 30
-            durationType: 'Days'
-          }
-          retentionTimes: ['23:00']
-        }
-      }
-      schedulePolicy: {
-        schedulePolicyType: 'SimpleSchedulePolicyV2'
-        scheduleRunFrequency: 'Daily'
-        dailySchedule: {
-          scheduleRunTimes: ['23:00']
-        }
-      }
-      timeZone: timeZone
-    }
-  }
-  dependsOn: [recoveryServicesVault]
-}
-
-module recoveryServicesVaultPrivateEndpoint '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deploymentType != 'SessionHostsOnly' && recoveryServices && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId) && !empty(azureBlobPrivateDnsZoneResourceId) && !empty(azureQueuePrivateDnsZoneResourceId)) {
-  name: 'PE-RSV-VirtualMachines-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupHosts)
-  params: {
-    name: replace(replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', recoveryServicesVaultName), 'VNETID', split(privateEndpointSubnetResourceId, '/')[8])
-    customNetworkInterfaceName: replace(replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', recoveryServicesVaultName), 'VNETID', split(privateEndpointSubnetResourceId, '/')[8])
-    location: location
-    subnetResourceId: privateEndpointSubnetResourceId
-    privateLinkServiceId: recoveryServicesVault!.outputs.resourceId
-    groupId: 'AzureBackup'
-    privateDNSZoneIds: nonEmptyBackupPrivateDNSZoneResourceIds
-    tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
-  }
-}
-
 /* Disabled temporarily until we can figure out why protected Items fail via ARM/Bicep.
 module protectedItems_Vm 'modules/protectedItems.bicep' = [for i in range(1, sessionHostBatchCount): if (recoveryServices && (deploymentType != 'SessionHostsOnly' || !empty(existingRecoveryServicesVaultResourceId))) {
   name: 'BackupProtectedItems-VirtualMachines-${i-1}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
-    policyName: backupPolicyName
-    recoveryServicesVaultName: deploymentType == 'Complete' ? recoveryServicesVault!.outputs.name : last(split(existingRecoveryServicesVaultResourceId, '/'))
+    policyName: 'AvdPolicyVm'
+    recoveryServicesVaultName: last(split(existingRecoveryServicesVaultResourceId, '/'))
     sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment
     sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxVMsPerDeployment) + sessionHostIndex
     virtualMachineNamePrefix: virtualMachineNamePrefix

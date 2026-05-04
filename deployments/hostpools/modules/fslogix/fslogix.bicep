@@ -3,10 +3,7 @@ targetScope = 'subscription'
 param activeDirectoryConnection bool
 param identitySolution string
 param availability string
-param azureBackupPrivateDnsZoneResourceId string
-param azureBlobPrivateDnsZoneResourceId string
 param azureFilePrivateDnsZoneResourceId string
-param azureQueuePrivateDnsZoneResourceId string
 param deploymentSuffix string
 param deploymentUserAssignedIdentityClientId string
 param deploymentVirtualMachineName string
@@ -35,9 +32,6 @@ param privateEndpoint bool
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
-param recoveryServices bool
-param recoveryServicesVaultName string
-param recoveryServicesVaultStorageRedundancy string
 param resourceGroupDeployment string
 param resourceGroupStorage string
 param shareSizeInGB int
@@ -48,10 +42,12 @@ param storageIndex int
 param storageSku string
 param storageSolution string
 param tags object
-param timeZone string
 
 @description('Optional. Resource ID of the pre-created storage encryption UAI (from top-level storageCmk module). When provided, the internal CMK step is skipped.')
 param encryptionUserAssignedIdentityResourceId string = ''
+
+@description('Optional. Resource ID of the Recovery Services Vault to register Azure Files backup items against. When provided and storageSolution is AzureFiles, protection containers and items are registered after storage deployment.')
+param recoveryServicesVaultResourceId string = ''
 
 // Azure NetApp files for fslogix
 module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution == 'AzureNetAppFiles' && contains(
@@ -93,10 +89,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   params: {
     appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
     availability: availability
-    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     deploymentVirtualMachineName: deploymentVirtualMachineName
     deploymentResourceGroupName: resourceGroupDeployment
@@ -120,9 +113,6 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
-    recoveryServices: recoveryServices
-    recoveryServicesVaultName: recoveryServicesVaultName
-    recoveryServicesVaultStorageRedundancy: recoveryServicesVaultStorageRedundancy
     resourceGroupStorage: resourceGroupStorage
     shardingOptions: fslogixShardOptions
     shareAdminGroups: fslogixAdminGroups
@@ -134,7 +124,26 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     storageSku: storageSku
     tags: tags
     deploymentSuffix: deploymentSuffix
-    timeZone: timeZone
+  }
+}
+
+// ─── FSLogix Azure Files Backup Registration ──────────────────────────────────
+// Runs after azureFiles so storage account IDs are available. Scoped to the
+// vault's resource group so ARM child resources (containers, items) compile correctly.
+module fslogixBackupRegistration '../operations/recoveryServices/fslogixBackupItems.bicep' = if (storageSolution == 'AzureFiles' && !empty(recoveryServicesVaultResourceId)) {
+  name: 'FSLogix-BackupRegistration-${deploymentSuffix}'
+  scope: resourceGroup(split(recoveryServicesVaultResourceId, '/')[2], split(recoveryServicesVaultResourceId, '/')[4])
+  params: {
+    vaultName: last(split(recoveryServicesVaultResourceId, '/'))!
+    location: location
+    resourceGroupStorage: resourceGroupStorage
+    storageAccountNamePrefix: storageAccountNamePrefix
+    storageCount: storageCount
+    storageIndex: storageIndex
+    fileShares: fslogixFileShares
+    storageAccountResourceIds: azureFiles!.outputs.storageAccountResourceIds
+    tags: tags
+    hostPoolResourceId: hostPoolResourceId
   }
 }
 

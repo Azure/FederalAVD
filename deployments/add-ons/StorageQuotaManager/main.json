@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "920081940779981127"
+      "templateHash": "5585337239760145217"
     }
   },
   "parameters": {
@@ -148,8 +148,9 @@
     },
     "hostPoolResourceId": {
       "type": "string",
+      "defaultValue": "",
       "metadata": {
-        "description": "Required. The resource id of the hostPool utilizing the FSLogix storage accounts. Used for tagging"
+        "description": "Optional. The resource id of the hostPool utilizing the FSLogix storage accounts. Used for tagging and naming convention detection. Leave empty for non-host pool storage scenarios (e.g., App Attach). When empty, custom naming overrides must be provided."
       }
     },
     "storageResourceGroupId": {
@@ -460,19 +461,19 @@
     "aspResourceGroupName": "[if(empty(parameters('appServicePlanResourceGroupName')), parameters('functionAppResourceGroupName'), parameters('appServicePlanResourceGroupName'))]",
     "storageSubscriptionId": "[split(parameters('storageResourceGroupId'), '/')[2]]",
     "storageResourceGroupName": "[split(parameters('storageResourceGroupId'), '/')[4]]",
-    "hostPoolName": "[last(split(parameters('hostPoolResourceId'), '/'))]",
     "cloud": "[toLower(environment().name)]",
     "locationsObject": "[variables('$fxv#0')]",
     "locationsEnvProperty": "[if(startsWith(variables('cloud'), 'us'), 'other', variables('cloud'))]",
     "locations": "[variables('locationsObject')[variables('locationsEnvProperty')]]",
     "functionAppRegionAbbreviation": "[variables('locations')[parameters('location')].abbreviation]",
     "resourceAbbreviations": "[variables('$fxv#1')]",
-    "nameConvReversed": "[if(startsWith(variables('hostPoolName'), variables('resourceAbbreviations').hostPools), false(), if(endsWith(variables('hostPoolName'), variables('resourceAbbreviations').hostPools), true(), false()))]",
-    "arrHostPoolName": "[split(variables('hostPoolName'), '-')]",
+    "nameConvSourceName": "[if(empty(parameters('hostPoolResourceId')), variables('storageResourceGroupName'), last(split(parameters('hostPoolResourceId'), '/')))]",
+    "nameConvReversed": "[if(or(startsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').hostPools), startsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').resourceGroups)), false(), if(or(endsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').hostPools), endsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').resourceGroups)), true(), false()))]",
+    "arrHostPoolName": "[split(last(split(parameters('hostPoolResourceId'), '/')), '-')]",
     "lengthArrHostPoolName": "[length(variables('arrHostPoolName'))]",
     "hpIdentifier": "[if(variables('nameConvReversed'), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[0], format('{0}-{1}', variables('arrHostPoolName')[0], variables('arrHostPoolName')[1])), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[1], format('{0}-{1}', variables('arrHostPoolName')[1], variables('arrHostPoolName')[2])))]",
     "hpIndex": "[if(equals(variables('lengthArrHostPoolName'), 3), '', if(variables('nameConvReversed'), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[1], variables('arrHostPoolName')[2]), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[2], variables('arrHostPoolName')[3])))]",
-    "hpBaseName": "[if(empty(variables('hpIndex')), variables('hpIdentifier'), format('{0}-{1}', variables('hpIdentifier'), variables('hpIndex')))]",
+    "hpBaseName": "[if(empty(parameters('hostPoolResourceId')), 'sqm', if(empty(variables('hpIndex')), variables('hpIdentifier'), format('{0}-{1}', variables('hpIdentifier'), variables('hpIndex'))))]",
     "hpResPrfx": "[if(variables('nameConvReversed'), variables('hpBaseName'), format('RESOURCETYPE-{0}', variables('hpBaseName')))]",
     "nameConvSuffix": "[if(variables('nameConvReversed'), 'LOCATION-RESOURCETYPE', 'LOCATION')]",
     "nameConv_HP_Resources": "[format('{0}-TOKEN-{1}', variables('hpResPrfx'), variables('nameConvSuffix'))]",
@@ -485,7 +486,7 @@
     "appInsightsName": "[if(not(empty(parameters('applicationInsightsNameOverride'))), parameters('applicationInsightsNameOverride'), replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').applicationInsights), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', format('sqm-{0}-', variables('uniqueStringStorage'))))]",
     "functionAppName": "[if(not(empty(parameters('functionAppNameOverride'))), parameters('functionAppNameOverride'), replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').functionApps), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', format('sqm-{0}-', variables('uniqueStringStorage'))), 'LOCATION', variables('functionAppRegionAbbreviation')))]",
     "storageAccountName": "[if(not(empty(parameters('storageAccountNameOverride'))), toLower(parameters('storageAccountNameOverride')), toLower(replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', ''), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', format('sqm-{0}', variables('uniqueStringStorage'))), '-', '')))]",
-    "encryptionKeyName": "[format('{0}-encryption-key-{1}', variables('hpBaseName'), variables('storageAccountName'))]",
+    "encryptionKeyName": "[if(empty(parameters('hostPoolResourceId')), format('encryption-key-{0}', variables('storageAccountName')), format('{0}-encryption-key-{1}', variables('hpBaseName'), variables('storageAccountName')))]",
     "storageEncryptionIdentityName": "[if(not(empty(parameters('storageEncryptionIdentityNameOverride'))), parameters('storageEncryptionIdentityNameOverride'), replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'TOKEN-', format('sqm-{0}-storage-encryption-', variables('uniqueStringStorage'))), 'LOCATION', variables('functionAppRegionAbbreviation')))]"
   },
   "resources": [

@@ -93,8 +93,8 @@ param privateLinkScopeResourceId string = ''
 // Function App Execution Parameters
 // These parameters control the behavior and execution logic of the storage quota manager function.
 // ================================================================================================
-@description('Required. The resource id of the hostPool utilizing the FSLogix storage accounts. Used for tagging')
-param hostPoolResourceId string
+@description('Optional. The resource id of the hostPool utilizing the FSLogix storage accounts. Used for tagging and naming convention detection. Leave empty for non-host pool storage scenarios (e.g., App Attach). When empty, custom naming overrides must be provided.')
+param hostPoolResourceId string = ''
 
 @description('Required. The resource id of the resource group containing the FSLogix storage accounts.')
 param storageResourceGroupId string
@@ -110,7 +110,6 @@ var deploymentSuffix = uniqueString(subscription().subscriptionId, functionAppRe
 var aspResourceGroupName = empty(appServicePlanResourceGroupName) ? functionAppResourceGroupName : appServicePlanResourceGroupName
 var storageSubscriptionId = split(storageResourceGroupId, '/')[2]
 var storageResourceGroupName = split(storageResourceGroupId, '/')[4]
-var hostPoolName = last(split(hostPoolResourceId, '/'))
 
 var cloud = toLower(environment().name)
 var locationsObject = loadJsonContent('../../../.common/data/locations.json')
@@ -118,14 +117,21 @@ var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : cloud
 var locations = locationsObject[locationsEnvProperty]
 var functionAppRegionAbbreviation = locations[location].abbreviation
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
-// Dynamically determine naming convention from existing host pool name
-var nameConvReversed = startsWith(hostPoolName, resourceAbbreviations.hostPools)
-  ? false // Resource type is at the beginning (e.g., "hp-avd-01")
-  : endsWith(hostPoolName, resourceAbbreviations.hostPools)
-      ? true // Resource type is at the end (e.g., "avd-01-hp")
+
+// Dynamically determine naming convention.
+// When a host pool is provided, detect from its name. Otherwise detect from the storage RG name.
+var nameConvSourceName = empty(hostPoolResourceId)
+  ? storageResourceGroupName
+  : last(split(hostPoolResourceId, '/'))
+var nameConvReversed = startsWith(nameConvSourceName, resourceAbbreviations.hostPools) || startsWith(nameConvSourceName, resourceAbbreviations.resourceGroups)
+  ? false // Resource type is at the beginning (e.g., "hp-avd-01" or "rg-avd-storage-eus")
+  : endsWith(nameConvSourceName, resourceAbbreviations.hostPools) || endsWith(nameConvSourceName, resourceAbbreviations.resourceGroups)
+      ? true // Resource type is at the end (e.g., "avd-01-hp" or "avd-storage-eus-rg")
       : false // Default fallback
 
-var arrHostPoolName = split(hostPoolName, '-')
+// When a host pool is provided, extract base name from its name segments.
+// When no host pool, use 'sqm' as the fixed base token.
+var arrHostPoolName = split(last(split(hostPoolResourceId, '/')), '-')
 var lengthArrHostPoolName = length(arrHostPoolName)
 
 var hpIdentifier = nameConvReversed
@@ -138,7 +144,9 @@ var hpIndex = lengthArrHostPoolName == 3
       ? lengthArrHostPoolName < 5 ? arrHostPoolName[1] : arrHostPoolName[2]
       : lengthArrHostPoolName < 5 ? arrHostPoolName[2] : arrHostPoolName[3]
 
-var hpBaseName = empty(hpIndex) ? hpIdentifier : '${hpIdentifier}-${hpIndex}'
+var hpBaseName = empty(hostPoolResourceId)
+  ? 'sqm'
+  : empty(hpIndex) ? hpIdentifier : '${hpIdentifier}-${hpIndex}'
 var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
 
 var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
@@ -224,7 +232,9 @@ var storageAccountName = !empty(storageAccountNameOverride)
 // If the derived name fails validation, deployment will error at storage account module
 // For brownfield deployments with non-standard host pool names, use storageAccountNameOverride parameter
 
-var encryptionKeyName = '${hpBaseName}-encryption-key-${storageAccountName}'
+var encryptionKeyName = empty(hostPoolResourceId)
+  ? 'encryption-key-${storageAccountName}'
+  : '${hpBaseName}-encryption-key-${storageAccountName}'
 
 // Use explicit override if provided, otherwise derive from host pool naming convention
 var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)

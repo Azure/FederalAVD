@@ -30,7 +30,7 @@ param virtualMachineAdminPassword string
 @secure()
 param virtualMachineAdminUserName string
 
-module keyVaults '../../../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' = {
+module keyVaults '../../../../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' = {
   name: 'KeyVaults-${deploymentSuffix}'
   scope: subscription()
   params: {

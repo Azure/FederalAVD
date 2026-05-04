@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "9046136558770384808"
+      "templateHash": "15237946791083541606"
     }
   },
   "parameters": {
@@ -794,7 +794,7 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. The resource Id of an existing Recovery Services Vault that will be used to store Virtual Machine Backups. Only used when \"DeploymentType\" is \"SessionHostOnly\"."
+        "description": "Optional. The resource Id of an existing Recovery Services Vault used for backup. Required when DeploymentType is HostPoolOnly or SessionHostsOnly and recoveryServices is true."
       }
     },
     "encryptionKeyVaultResourceId": {
@@ -1088,7 +1088,8 @@
     "beginAvSetRange": "[div(parameters('sessionHostIndex'), variables('maxAvSetMembers'))]",
     "endAvSetRange": "[div(add(parameters('sessionHostCount'), parameters('sessionHostIndex')), variables('maxAvSetMembers'))]",
     "availabilitySetsCount": "[length(range(variables('beginAvSetRange'), add(sub(variables('endAvSetRange'), variables('beginAvSetRange')), 1)))]",
-    "deployDiskAccessResource": "[if(and(and(contains(parameters('hostPoolType'), 'Personal'), parameters('recoveryServices')), parameters('deployPrivateEndpoints')), true(), false())]"
+    "deployDiskAccessResource": "[if(and(and(contains(parameters('hostPoolType'), 'Personal'), parameters('recoveryServices')), parameters('deployPrivateEndpoints')), true(), false())]",
+    "deployRecoveryServices": "[and(and(parameters('recoveryServices'), not(equals(parameters('deploymentType'), 'SessionHostsOnly'))), or(equals(parameters('deploymentType'), 'Complete'), not(empty(parameters('existingRecoveryServicesVaultResourceId')))))]"
   },
   "resources": [
     {
@@ -1136,7 +1137,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "3963055961017950945"
+              "templateHash": "17694042337365407921"
             }
           },
           "parameters": {
@@ -1540,7 +1541,7 @@
             "privateEndpointNameConv": "[replace(if(variables('nameConvReversed'), 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE', 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID'), 'RESOURCETYPE', variables('resourceAbbreviations').privateEndpoints)]",
             "privateEndpointNICNameConvTemp": "[if(variables('nameConvReversed'), format('{0}-RESOURCETYPE', variables('privateEndpointNameConv')), format('RESOURCETYPE-{0}', variables('privateEndpointNameConv')))]",
             "privateEndpointNICNameConv": "[replace(variables('privateEndpointNICNameConvTemp'), 'RESOURCETYPE', variables('resourceAbbreviations').networkInterfaces)]",
-            "recoveryServicesVaultsNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').recoveryServicesVaults), 'LOCATION', variables('virtualMachinesRegionAbbreviation'))]",
+            "recoveryServicesVaultName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').recoveryServicesVaults), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', '')]",
             "userAssignedIdentityNameConv": "[replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'LOCATION', variables('virtualMachinesRegionAbbreviation'))]",
             "resourceGroupHosts": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('virtualMachinesRegionAbbreviation'))), 'RESOURCETYPE', format('{0}', variables('resourceAbbreviations').resourceGroups))]",
             "availabilitySetNameConv": "[if(variables('nameConvReversed'), replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', ''), format('{0}-##', replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('virtualMachinesRegionAbbreviation')), 'TOKEN-', '')))]",
@@ -1670,12 +1671,9 @@
               "type": "string",
               "value": "[variables('privateEndpointNICNameConv')]"
             },
-            "recoveryServicesVaultNames": {
-              "type": "object",
-              "value": {
-                "fslogixStorage": "[replace(variables('recoveryServicesVaultsNameConv'), 'TOKEN-', 'fslogix-')]",
-                "virtualMachines": "[replace(variables('recoveryServicesVaultsNameConv'), 'TOKEN-', 'vms-')]"
-              }
+            "recoveryServicesVaultName": {
+              "type": "string",
+              "value": "[variables('recoveryServicesVaultName')]"
             },
             "resourceGroupControlPlane": {
               "type": "string",
@@ -2164,7 +2162,7 @@
       ]
     },
     {
-      "condition": "[variables('deployKeyVaults')]",
+      "condition": "[or(variables('deployKeyVaults'), and(equals(parameters('deploymentType'), 'Complete'), parameters('recoveryServices')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Resource-Group-Operations-{0}', variables('deploymentSuffix'))]",
@@ -10520,6 +10518,835 @@
       ]
     },
     {
+      "condition": "[variables('deployRecoveryServices')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('RecoveryServices-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('managementSubscription')]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "createVault": {
+            "value": "[equals(parameters('deploymentType'), 'Complete')]"
+          },
+          "existingRecoveryServicesVaultResourceId": {
+            "value": "[parameters('existingRecoveryServicesVaultResourceId')]"
+          },
+          "vaultName": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultName.value]"
+          },
+          "resourceGroupOperations": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupOperations.value]"
+          },
+          "location": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
+          },
+          "storageRedundancy": {
+            "value": "[parameters('recoveryServicesVaultStorageRedundancy')]"
+          },
+          "deploymentSuffix": {
+            "value": "[variables('deploymentSuffix')]"
+          },
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "privateEndpoint": {
+            "value": "[parameters('deployPrivateEndpoints')]"
+          },
+          "privateEndpointSubnetResourceId": {
+            "value": "[parameters('hostPoolResourcesPrivateEndpointSubnetResourceId')]"
+          },
+          "azureBackupPrivateDnsZoneResourceId": {
+            "value": "[parameters('azureBackupPrivateDnsZoneResourceId')]"
+          },
+          "azureBlobPrivateDnsZoneResourceId": {
+            "value": "[parameters('azureBlobPrivateDnsZoneResourceId')]"
+          },
+          "azureQueuePrivateDnsZoneResourceId": {
+            "value": "[parameters('azureQueuePrivateDnsZoneResourceId')]"
+          },
+          "privateEndpointNameConv": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.privateEndpointNameConv.value]"
+          },
+          "privateEndpointNICNameConv": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.privateEndpointNICNameConv.value]"
+          },
+          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "timeZone": {
+            "value": "[parameters('virtualMachinesTimeZone')]"
+          },
+          "pooledHostPool": {
+            "value": "[equals(split(parameters('hostPoolType'), ' ')[0], 'Pooled')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.42.1.51946",
+              "templateHash": "17072504313235781286"
+            }
+          },
+          "parameters": {
+            "createVault": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to create a new Recovery Services Vault. True on Complete deployments; false when using an existing vault."
+              }
+            },
+            "existingRecoveryServicesVaultResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Conditional. Resource ID of an existing Recovery Services Vault. Required when createVault is false."
+              }
+            },
+            "vaultName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name for the Recovery Services Vault (used only when createVault is true)."
+              }
+            },
+            "resourceGroupOperations": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the operations resource group where the vault is (or will be) deployed."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for all resources."
+              }
+            },
+            "storageRedundancy": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Storage replication type for a new vault: LocallyRedundant, GeoRedundant, or ZoneRedundant."
+              }
+            },
+            "deploymentSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Short unique deployment suffix."
+              }
+            },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the Log Analytics workspace for vault diagnostics."
+              }
+            },
+            "privateEndpoint": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to deploy private endpoints for the vault."
+              }
+            },
+            "privateEndpointSubnetResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the subnet for the vault private endpoint."
+              }
+            },
+            "azureBackupPrivateDnsZoneResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the Azure Backup private DNS zone."
+              }
+            },
+            "azureBlobPrivateDnsZoneResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the Azure Blob private DNS zone (needed for backup PE)."
+              }
+            },
+            "azureQueuePrivateDnsZoneResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the Azure Queue private DNS zone (needed for backup PE)."
+              }
+            },
+            "privateEndpointNameConv": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name convention for private endpoints."
+              }
+            },
+            "privateEndpointNICNameConv": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name convention for private endpoint NICs."
+              }
+            },
+            "hostPoolResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the host pool (used for the cm-resource-parent tag)."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Required. Resource tags object."
+              }
+            },
+            "timeZone": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Backup policy time zone (e.g. \"Eastern Standard Time\")."
+              }
+            },
+            "pooledHostPool": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. True when the host pool is pooled (file share backup). False when personal (VM backup)."
+              }
+            }
+          },
+          "variables": {
+            "backupPrivateDnsZoneResourceIds": "[filter(createArray(parameters('azureBackupPrivateDnsZoneResourceId'), parameters('azureBlobPrivateDnsZoneResourceId'), parameters('azureQueuePrivateDnsZoneResourceId')), lambda('z', not(empty(lambdaVariables('z')))))]",
+            "effectiveVaultSub": "[if(parameters('createVault'), subscription().subscriptionId, split(parameters('existingRecoveryServicesVaultResourceId'), '/')[2])]",
+            "effectiveVaultRG": "[if(parameters('createVault'), parameters('resourceGroupOperations'), split(parameters('existingRecoveryServicesVaultResourceId'), '/')[4])]",
+            "effectiveVaultName": "[if(parameters('createVault'), parameters('vaultName'), last(split(parameters('existingRecoveryServicesVaultResourceId'), '/')))]"
+          },
+          "resources": [
+            {
+              "condition": "[parameters('createVault')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('RecoveryServicesVault-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupOperations')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[parameters('vaultName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
+                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+                  "storageType": {
+                    "value": "[parameters('storageRedundancy')]"
+                  },
+                  "tags": {
+                    "value": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults'), createObject()))]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "15287313447643996939"
+                    }
+                  },
+                  "definitions": {
+                    "_1.logCategoryType": {
+                      "type": "object",
+                      "properties": {
+                        "categoryGroup": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Category group name, e.g. \"allLogs\". Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "category": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Individual log category name. Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "enabled": {
+                          "type": "bool"
+                        },
+                        "retentionPolicy": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "int"
+                            },
+                            "enabled": {
+                              "type": "bool"
+                            }
+                          },
+                          "nullable": true
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    },
+                    "diagnosticSettingsType": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                          }
+                        },
+                        "workspaceId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Log Analytics workspace to send logs to."
+                          }
+                        },
+                        "storageAccountId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the storage account to archive logs to."
+                          }
+                        },
+                        "eventHubAuthorizationRuleId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Event Hub authorization rule."
+                          }
+                        },
+                        "eventHubName": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Name of the Event Hub. If omitted, a hub is created for each log category."
+                          }
+                        },
+                        "logCategories": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/_1.logCategoryType"
+                          },
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Log categories to stream. Defaults to allLogs when omitted."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "publicNetworkAccess": {
+                      "type": "string",
+                      "defaultValue": "Disabled"
+                    },
+                    "storageType": {
+                      "type": "string",
+                      "defaultValue": "GeoRedundant",
+                      "metadata": {
+                        "description": "Storage replication type for the vault. GeoRedundant, LocallyRedundant, or ZoneRedundant."
+                      }
+                    },
+                    "crossRegionRestoreFlag": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Enable cross-region restore (requires GeoRedundant storage)."
+                      }
+                    },
+                    "softDeleteFeatureState": {
+                      "type": "string",
+                      "defaultValue": "Enabled",
+                      "metadata": {
+                        "description": "Soft-delete feature state for the vault."
+                      }
+                    },
+                    "enhancedSecurityState": {
+                      "type": "string",
+                      "defaultValue": "Enabled",
+                      "metadata": {
+                        "description": "Enhanced security state for the vault."
+                      }
+                    },
+                    "diagnosticSettings": {
+                      "$ref": "#/definitions/diagnosticSettingsType",
+                      "nullable": true
+                    }
+                  },
+                  "variables": {
+                    "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
+                    "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
+                  },
+                  "resources": {
+                    "recoveryServicesVault": {
+                      "type": "Microsoft.RecoveryServices/vaults",
+                      "apiVersion": "2023-04-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "sku": {
+                        "name": "RS0",
+                        "tier": "Standard"
+                      },
+                      "properties": {
+                        "publicNetworkAccess": "[parameters('publicNetworkAccess')]"
+                      }
+                    },
+                    "backupStorageConfig": {
+                      "type": "Microsoft.RecoveryServices/vaults/backupstorageconfig",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('name'), 'vaultstorageconfig')]",
+                      "properties": {
+                        "storageType": "[parameters('storageType')]",
+                        "crossRegionRestoreFlag": "[parameters('crossRegionRestoreFlag')]"
+                      },
+                      "dependsOn": [
+                        "recoveryServicesVault"
+                      ]
+                    },
+                    "backupConfig": {
+                      "type": "Microsoft.RecoveryServices/vaults/backupconfig",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('name'), 'vaultconfig')]",
+                      "properties": {
+                        "softDeleteFeatureState": "[parameters('softDeleteFeatureState')]",
+                        "enhancedSecurityState": "[parameters('enhancedSecurityState')]"
+                      },
+                      "dependsOn": [
+                        "recoveryServicesVault"
+                      ]
+                    },
+                    "diagnosticSetting": {
+                      "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
+                      "type": "Microsoft.Insights/diagnosticSettings",
+                      "apiVersion": "2021-05-01-preview",
+                      "scope": "[resourceId('Microsoft.RecoveryServices/vaults', parameters('name'))]",
+                      "name": "[variables('diagnosticSettingName')]",
+                      "properties": {
+                        "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
+                        "storageAccountId": "[tryGet(parameters('diagnosticSettings'), 'storageAccountId')]",
+                        "eventHubAuthorizationRuleId": "[tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId')]",
+                        "eventHubName": "[tryGet(parameters('diagnosticSettings'), 'eventHubName')]",
+                        "logs": "[coalesce(tryGet(parameters('diagnosticSettings'), 'logCategories'), createArray(createObject('categoryGroup', 'allLogs', 'enabled', true())))]"
+                      },
+                      "dependsOn": [
+                        "recoveryServicesVault"
+                      ]
+                    }
+                  },
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.RecoveryServices/vaults', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "condition": "[not(parameters('pooledHostPool'))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('RSV-BackupPolicy-VirtualMachines-{0}', parameters('deploymentSuffix'))]",
+              "subscriptionId": "[variables('effectiveVaultSub')]",
+              "resourceGroup": "[variables('effectiveVaultRG')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "recoveryServicesVaultName": {
+                    "value": "[variables('effectiveVaultName')]"
+                  },
+                  "name": {
+                    "value": "AvdPolicyVm"
+                  },
+                  "properties": {
+                    "value": {
+                      "backupManagementType": "AzureIaasVM",
+                      "instantRpRetentionRangeInDays": 2,
+                      "policyType": "V2",
+                      "retentionPolicy": {
+                        "retentionPolicyType": "LongTermRetentionPolicy",
+                        "dailySchedule": {
+                          "retentionDuration": {
+                            "count": 30,
+                            "durationType": "Days"
+                          },
+                          "retentionTimes": [
+                            "23:00"
+                          ]
+                        }
+                      },
+                      "schedulePolicy": {
+                        "schedulePolicyType": "SimpleSchedulePolicyV2",
+                        "scheduleRunFrequency": "Daily",
+                        "dailySchedule": {
+                          "scheduleRunTimes": [
+                            "23:00"
+                          ]
+                        }
+                      },
+                      "timeZone": "[parameters('timeZone')]"
+                    }
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "12295517163086517454"
+                    }
+                  },
+                  "parameters": {
+                    "recoveryServicesVaultName": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "properties": {
+                      "type": "object",
+                      "metadata": {
+                        "description": "Backup policy properties. The schema varies by workload type (AzureIaasVM, AzureStorage, etc.)."
+                      }
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.RecoveryServices/vaults/backupPolicies",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('recoveryServicesVaultName'), parameters('name'))]",
+                      "properties": "[parameters('properties')]"
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies', parameters('recoveryServicesVaultName'), parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupOperations')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-{0}', parameters('deploymentSuffix')))]"
+              ]
+            },
+            {
+              "condition": "[parameters('pooledHostPool')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('RSV-BackupPolicy-FileShares-{0}', parameters('deploymentSuffix'))]",
+              "subscriptionId": "[variables('effectiveVaultSub')]",
+              "resourceGroup": "[variables('effectiveVaultRG')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "recoveryServicesVaultName": {
+                    "value": "[variables('effectiveVaultName')]"
+                  },
+                  "name": {
+                    "value": "filesharepolicy"
+                  },
+                  "properties": {
+                    "value": {
+                      "backupManagementType": "AzureStorage",
+                      "workLoadType": "AzureFileShare",
+                      "schedulePolicy": {
+                        "schedulePolicyType": "SimpleSchedulePolicy",
+                        "scheduleRunFrequency": "Daily",
+                        "scheduleRunTimes": [
+                          "23:00"
+                        ]
+                      },
+                      "retentionPolicy": {
+                        "retentionPolicyType": "LongTermRetentionPolicy",
+                        "dailySchedule": {
+                          "retentionTimes": [
+                            "23:00"
+                          ],
+                          "retentionDuration": {
+                            "count": 30,
+                            "durationType": "Days"
+                          }
+                        }
+                      },
+                      "timeZone": "[parameters('timeZone')]"
+                    }
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "12295517163086517454"
+                    }
+                  },
+                  "parameters": {
+                    "recoveryServicesVaultName": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "properties": {
+                      "type": "object",
+                      "metadata": {
+                        "description": "Backup policy properties. The schema varies by workload type (AzureIaasVM, AzureStorage, etc.)."
+                      }
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.RecoveryServices/vaults/backupPolicies",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('recoveryServicesVaultName'), parameters('name'))]",
+                      "properties": "[parameters('properties')]"
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies', parameters('recoveryServicesVaultName'), parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupOperations')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-{0}', parameters('deploymentSuffix')))]"
+              ]
+            },
+            {
+              "condition": "[and(and(and(parameters('createVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId')))), not(empty(parameters('azureBackupPrivateDnsZoneResourceId'))))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('PE-RecoveryServicesVault-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupOperations')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', parameters('vaultName')), 'VNETID', split(parameters('privateEndpointSubnetResourceId'), '/')[8])]"
+                  },
+                  "customNetworkInterfaceName": {
+                    "value": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', parameters('vaultName')), 'VNETID', split(parameters('privateEndpointSubnetResourceId'), '/')[8])]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "subnetResourceId": {
+                    "value": "[parameters('privateEndpointSubnetResourceId')]"
+                  },
+                  "privateLinkServiceId": {
+                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupOperations')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                  },
+                  "groupId": {
+                    "value": "AzureBackup"
+                  },
+                  "privateDNSZoneIds": {
+                    "value": "[variables('backupPrivateDnsZoneResourceIds')]"
+                  },
+                  "tags": {
+                    "value": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "9589415449045104821"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "subnetResourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subnet to deploy the private endpoint into."
+                      }
+                    },
+                    "privateLinkServiceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource to create the private endpoint for."
+                      }
+                    },
+                    "groupId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Group ID (sub-resource) of the private link service."
+                      }
+                    },
+                    "customNetworkInterfaceName": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Custom name for the network interface created for this endpoint."
+                      }
+                    },
+                    "privateDNSZoneIds": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "copy": [
+                      {
+                        "name": "privateDnsZoneConfigs",
+                        "count": "[length(parameters('privateDNSZoneIds'))]",
+                        "input": {
+                          "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
+                          "properties": {
+                            "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2023-09-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "subnet": {
+                          "id": "[parameters('subnetResourceId')]"
+                        },
+                        "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[parameters('name')]",
+                            "properties": {
+                              "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('name'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                      ]
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupOperations')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-{0}', parameters('deploymentSuffix')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "recoveryServicesVaultResourceId": {
+              "type": "string",
+              "value": "[if(parameters('createVault'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupOperations')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value, parameters('existingRecoveryServicesVaultResourceId'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Operations-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
+      ]
+    },
+    {
       "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -10541,17 +11368,8 @@
           "availability": {
             "value": "[parameters('availability')]"
           },
-          "azureBackupPrivateDnsZoneResourceId": {
-            "value": "[parameters('azureBackupPrivateDnsZoneResourceId')]"
-          },
-          "azureBlobPrivateDnsZoneResourceId": {
-            "value": "[parameters('azureBlobPrivateDnsZoneResourceId')]"
-          },
           "azureFilePrivateDnsZoneResourceId": {
             "value": "[parameters('azureFilesPrivateDnsZoneResourceId')]"
-          },
-          "azureQueuePrivateDnsZoneResourceId": {
-            "value": "[parameters('azureQueuePrivateDnsZoneResourceId')]"
           },
           "deploymentUserAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
           "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineName.value), createObject('value', ''))]",
@@ -10612,15 +11430,6 @@
           "privateEndpointSubnetResourceId": {
             "value": "[parameters('hostPoolResourcesPrivateEndpointSubnetResourceId')]"
           },
-          "recoveryServices": {
-            "value": "[parameters('recoveryServices')]"
-          },
-          "recoveryServicesVaultName": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultNames.value.fslogixStorage]"
-          },
-          "recoveryServicesVaultStorageRedundancy": {
-            "value": "[parameters('recoveryServicesVaultStorageRedundancy')]"
-          },
           "resourceGroupDeployment": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupDeployment.value]"
           },
@@ -10652,10 +11461,8 @@
           "deploymentSuffix": {
             "value": "[variables('deploymentSuffix')]"
           },
-          "timeZone": {
-            "value": "[parameters('virtualMachinesTimeZone')]"
-          },
-          "encryptionUserAssignedIdentityResourceId": "[if(variables('deployTopLevelStorageCmk'), createObject('value', reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageIdentityResourceId.value), createObject('value', ''))]"
+          "encryptionUserAssignedIdentityResourceId": "[if(variables('deployTopLevelStorageCmk'), createObject('value', reference(subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageIdentityResourceId.value), createObject('value', ''))]",
+          "recoveryServicesVaultResourceId": "[if(parameters('recoveryServices'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('RecoveryServices-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultResourceId.value), createObject('value', parameters('existingRecoveryServicesVaultResourceId'))), createObject('value', ''))]"
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
@@ -10664,7 +11471,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "7575888190987713331"
+              "templateHash": "6311800834984149090"
             }
           },
           "parameters": {
@@ -10677,16 +11484,7 @@
             "availability": {
               "type": "string"
             },
-            "azureBackupPrivateDnsZoneResourceId": {
-              "type": "string"
-            },
-            "azureBlobPrivateDnsZoneResourceId": {
-              "type": "string"
-            },
             "azureFilePrivateDnsZoneResourceId": {
-              "type": "string"
-            },
-            "azureQueuePrivateDnsZoneResourceId": {
               "type": "string"
             },
             "deploymentSuffix": {
@@ -10767,15 +11565,6 @@
             "privateEndpointSubnetResourceId": {
               "type": "string"
             },
-            "recoveryServices": {
-              "type": "bool"
-            },
-            "recoveryServicesVaultName": {
-              "type": "string"
-            },
-            "recoveryServicesVaultStorageRedundancy": {
-              "type": "string"
-            },
             "resourceGroupDeployment": {
               "type": "string"
             },
@@ -10806,14 +11595,18 @@
             "tags": {
               "type": "object"
             },
-            "timeZone": {
-              "type": "string"
-            },
             "encryptionUserAssignedIdentityResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
                 "description": "Optional. Resource ID of the pre-created storage encryption UAI (from top-level storageCmk module). When provided, the internal CMK step is skipped."
+              }
+            },
+            "recoveryServicesVaultResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the Recovery Services Vault to register Azure Files backup items against. When provided and storageSolution is AzureFiles, protection containers and items are registered after storage deployment."
               }
             }
           },
@@ -11515,17 +12308,8 @@
                   "availability": {
                     "value": "[parameters('availability')]"
                   },
-                  "azureBackupPrivateDnsZoneResourceId": {
-                    "value": "[parameters('azureBackupPrivateDnsZoneResourceId')]"
-                  },
-                  "azureBlobPrivateDnsZoneResourceId": {
-                    "value": "[parameters('azureBlobPrivateDnsZoneResourceId')]"
-                  },
                   "azureFilePrivateDnsZoneResourceId": {
                     "value": "[parameters('azureFilePrivateDnsZoneResourceId')]"
-                  },
-                  "azureQueuePrivateDnsZoneResourceId": {
-                    "value": "[parameters('azureQueuePrivateDnsZoneResourceId')]"
                   },
                   "deploymentUserAssignedIdentityClientId": {
                     "value": "[parameters('deploymentUserAssignedIdentityClientId')]"
@@ -11588,15 +12372,6 @@
                   "privateEndpointSubnetResourceId": {
                     "value": "[parameters('privateEndpointSubnetResourceId')]"
                   },
-                  "recoveryServices": {
-                    "value": "[parameters('recoveryServices')]"
-                  },
-                  "recoveryServicesVaultName": {
-                    "value": "[parameters('recoveryServicesVaultName')]"
-                  },
-                  "recoveryServicesVaultStorageRedundancy": {
-                    "value": "[parameters('recoveryServicesVaultStorageRedundancy')]"
-                  },
                   "resourceGroupStorage": {
                     "value": "[parameters('resourceGroupStorage')]"
                   },
@@ -11629,9 +12404,6 @@
                   },
                   "deploymentSuffix": {
                     "value": "[parameters('deploymentSuffix')]"
-                  },
-                  "timeZone": {
-                    "value": "[parameters('timeZone')]"
                   }
                 },
                 "template": {
@@ -11641,7 +12413,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.42.1.51946",
-                      "templateHash": "14829515171011932319"
+                      "templateHash": "15862646121477121790"
                     }
                   },
                   "parameters": {
@@ -11651,16 +12423,7 @@
                     "availability": {
                       "type": "string"
                     },
-                    "azureBackupPrivateDnsZoneResourceId": {
-                      "type": "string"
-                    },
-                    "azureBlobPrivateDnsZoneResourceId": {
-                      "type": "string"
-                    },
                     "azureFilePrivateDnsZoneResourceId": {
-                      "type": "string"
-                    },
-                    "azureQueuePrivateDnsZoneResourceId": {
                       "type": "string"
                     },
                     "deploymentUserAssignedIdentityClientId": {
@@ -11723,15 +12486,6 @@
                     "privateEndpointSubnetResourceId": {
                       "type": "string"
                     },
-                    "recoveryServices": {
-                      "type": "bool"
-                    },
-                    "recoveryServicesVaultName": {
-                      "type": "string"
-                    },
-                    "recoveryServicesVaultStorageRedundancy": {
-                      "type": "string"
-                    },
                     "deploymentResourceGroupName": {
                       "type": "string"
                     },
@@ -11767,9 +12521,6 @@
                     },
                     "deploymentSuffix": {
                       "type": "string"
-                    },
-                    "timeZone": {
-                      "type": "string"
                     }
                   },
                   "variables": {
@@ -11790,88 +12541,9 @@
                       "multichannel": "[if(not(equals(parameters('storageSku'), 'Standard')), createObject('enabled', true()), null())]"
                     },
                     "storageRedundancy": "[if(equals(parameters('availability'), 'availabilityZones'), '_ZRS', '_LRS')]",
-                    "backupPrivateDNSZoneResourceIds": [
-                      "[parameters('azureBackupPrivateDnsZoneResourceId')]",
-                      "[parameters('azureBlobPrivateDnsZoneResourceId')]",
-                      "[parameters('azureQueuePrivateDnsZoneResourceId')]"
-                    ],
-                    "nonEmptyBackupPrivateDNSZoneResourceIds": "[filter(variables('backupPrivateDNSZoneResourceIds'), lambda('zone', not(empty(lambdaVariables('zone')))))]",
                     "graphEndpoint": "[if(equals(environment().name, 'AzureUSGovernment'), 'https://graph.microsoft.us', if(startsWith(environment().name, 'us'), format('https://graph.{0}', environment().suffixes.storage), 'https://graph.microsoft.com'))]"
                   },
                   "resources": [
-                    {
-                      "condition": "[parameters('recoveryServices')]",
-                      "type": "Microsoft.RecoveryServices/vaults/backupPolicies",
-                      "apiVersion": "2024-04-01",
-                      "name": "[format('{0}/filesharepolicy', parameters('recoveryServicesVaultName'))]",
-                      "properties": {
-                        "backupManagementType": "AzureStorage",
-                        "workLoadType": "AzureFileShare",
-                        "schedulePolicy": {
-                          "schedulePolicyType": "SimpleSchedulePolicy",
-                          "scheduleRunFrequency": "Daily",
-                          "scheduleRunTimes": [
-                            "23:00"
-                          ]
-                        },
-                        "retentionPolicy": {
-                          "retentionPolicyType": "LongTermRetentionPolicy",
-                          "dailySchedule": {
-                            "retentionTimes": [
-                              "23:00"
-                            ],
-                            "retentionDuration": {
-                              "count": 30,
-                              "durationType": "Days"
-                            }
-                          }
-                        },
-                        "timeZone": "[parameters('timeZone')]"
-                      },
-                      "dependsOn": [
-                        "[resourceId('Microsoft.Resources/deployments', format('RecoveryServices-AzureFiles-{0}', parameters('deploymentSuffix')))]"
-                      ]
-                    },
-                    {
-                      "copy": {
-                        "name": "protectionContainers",
-                        "count": "[length(range(0, parameters('storageCount')))]"
-                      },
-                      "condition": "[parameters('recoveryServices')]",
-                      "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers",
-                      "apiVersion": "2024-04-01",
-                      "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}{3}', parameters('recoveryServicesVaultName'), parameters('resourceGroupStorage'), parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))]",
-                      "properties": {
-                        "friendlyName": "[format('{0}{1}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))]",
-                        "sourceResourceId": "[reference(resourceId('Microsoft.Resources/deployments', format('{0}{1}-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[range(0, parameters('storageCount'))[copyIndex()]], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]",
-                        "backupManagementType": "AzureStorage",
-                        "containerType": "StorageContainer"
-                      },
-                      "dependsOn": [
-                        "[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies', split(format('{0}/filesharepolicy', parameters('recoveryServicesVaultName')), '/')[0], split(format('{0}/filesharepolicy', parameters('recoveryServicesVaultName')), '/')[1])]",
-                        "[resourceId('Microsoft.Resources/deployments', format('{0}{1}-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[range(0, parameters('storageCount'))[copyIndex()]], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix')))]"
-                      ]
-                    },
-                    {
-                      "copy": {
-                        "name": "protectedItems",
-                        "count": "[length(range(0, parameters('storageCount')))]"
-                      },
-                      "condition": "[parameters('recoveryServices')]",
-                      "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
-                      "apiVersion": "2024-04-01",
-                      "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}{3}/AzureFileShare;{4}', parameters('recoveryServicesVaultName'), parameters('resourceGroupStorage'), parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')), parameters('fileShares')[0])]",
-                      "location": "[parameters('location')]",
-                      "properties": {
-                        "protectedItemType": "AzureFileShareProtectedItem",
-                        "policyId": "[format('{0}/providers/Microsoft.RecoveryServices/vaults/{1}/backupPolicies/filesharepolicy', resourceGroup().id, parameters('recoveryServicesVaultName'))]",
-                        "sourceResourceId": "[reference(resourceId('Microsoft.Resources/deployments', format('{0}{1}-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[range(0, parameters('storageCount'))[copyIndex()]], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
-                      },
-                      "dependsOn": [
-                        "protectionContainers",
-                        "[resourceId('Microsoft.Resources/deployments', format('{0}{1}-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[range(0, parameters('storageCount'))[copyIndex()]], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix')))]"
-                      ]
-                    },
                     {
                       "copy": {
                         "name": "storageAccounts",
@@ -14060,415 +14732,6 @@
                       "dependsOn": [
                         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('deploymentResourceGroupName')), 'Microsoft.Resources/deployments', format('Set-NTFS-Permissions-{0}', parameters('deploymentSuffix')))]"
                       ]
-                    },
-                    {
-                      "condition": "[parameters('recoveryServices')]",
-                      "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2025-04-01",
-                      "name": "[format('RecoveryServices-AzureFiles-{0}', parameters('deploymentSuffix'))]",
-                      "properties": {
-                        "expressionEvaluationOptions": {
-                          "scope": "inner"
-                        },
-                        "mode": "Incremental",
-                        "parameters": {
-                          "name": {
-                            "value": "[parameters('recoveryServicesVaultName')]"
-                          },
-                          "location": {
-                            "value": "[parameters('location')]"
-                          },
-                          "tags": {
-                            "value": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults'), createObject()))]"
-                          },
-                          "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
-                          "storageType": {
-                            "value": "[parameters('recoveryServicesVaultStorageRedundancy')]"
-                          },
-                          "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceId'))), createObject('value', null()))]"
-                        },
-                        "template": {
-                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                          "languageVersion": "2.0",
-                          "contentVersion": "1.0.0.0",
-                          "metadata": {
-                            "_generator": {
-                              "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "15287313447643996939"
-                            }
-                          },
-                          "definitions": {
-                            "_1.logCategoryType": {
-                              "type": "object",
-                              "properties": {
-                                "categoryGroup": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "Category group name, e.g. \"allLogs\". Use either categoryGroup or category, not both."
-                                  }
-                                },
-                                "category": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "Individual log category name. Use either categoryGroup or category, not both."
-                                  }
-                                },
-                                "enabled": {
-                                  "type": "bool"
-                                },
-                                "retentionPolicy": {
-                                  "type": "object",
-                                  "properties": {
-                                    "days": {
-                                      "type": "int"
-                                    },
-                                    "enabled": {
-                                      "type": "bool"
-                                    }
-                                  },
-                                  "nullable": true
-                                }
-                              },
-                              "metadata": {
-                                "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../types/diagnosticSettings.bicep"
-                                }
-                              }
-                            },
-                            "diagnosticSettingsType": {
-                              "type": "object",
-                              "properties": {
-                                "name": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
-                                  }
-                                },
-                                "workspaceId": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "Resource ID of the Log Analytics workspace to send logs to."
-                                  }
-                                },
-                                "storageAccountId": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "Resource ID of the storage account to archive logs to."
-                                  }
-                                },
-                                "eventHubAuthorizationRuleId": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "Resource ID of the Event Hub authorization rule."
-                                  }
-                                },
-                                "eventHubName": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "Name of the Event Hub. If omitted, a hub is created for each log category."
-                                  }
-                                },
-                                "logCategories": {
-                                  "type": "array",
-                                  "items": {
-                                    "$ref": "#/definitions/_1.logCategoryType"
-                                  },
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "Log categories to stream. Defaults to allLogs when omitted."
-                                  }
-                                }
-                              },
-                              "metadata": {
-                                "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../types/diagnosticSettings.bicep"
-                                }
-                              }
-                            }
-                          },
-                          "parameters": {
-                            "name": {
-                              "type": "string"
-                            },
-                            "location": {
-                              "type": "string",
-                              "defaultValue": "[resourceGroup().location]"
-                            },
-                            "tags": {
-                              "type": "object",
-                              "defaultValue": {}
-                            },
-                            "publicNetworkAccess": {
-                              "type": "string",
-                              "defaultValue": "Disabled"
-                            },
-                            "storageType": {
-                              "type": "string",
-                              "defaultValue": "GeoRedundant",
-                              "metadata": {
-                                "description": "Storage replication type for the vault. GeoRedundant, LocallyRedundant, or ZoneRedundant."
-                              }
-                            },
-                            "crossRegionRestoreFlag": {
-                              "type": "bool",
-                              "defaultValue": false,
-                              "metadata": {
-                                "description": "Enable cross-region restore (requires GeoRedundant storage)."
-                              }
-                            },
-                            "softDeleteFeatureState": {
-                              "type": "string",
-                              "defaultValue": "Enabled",
-                              "metadata": {
-                                "description": "Soft-delete feature state for the vault."
-                              }
-                            },
-                            "enhancedSecurityState": {
-                              "type": "string",
-                              "defaultValue": "Enabled",
-                              "metadata": {
-                                "description": "Enhanced security state for the vault."
-                              }
-                            },
-                            "diagnosticSettings": {
-                              "$ref": "#/definitions/diagnosticSettingsType",
-                              "nullable": true
-                            }
-                          },
-                          "variables": {
-                            "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
-                            "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
-                          },
-                          "resources": {
-                            "recoveryServicesVault": {
-                              "type": "Microsoft.RecoveryServices/vaults",
-                              "apiVersion": "2023-04-01",
-                              "name": "[parameters('name')]",
-                              "location": "[parameters('location')]",
-                              "tags": "[parameters('tags')]",
-                              "sku": {
-                                "name": "RS0",
-                                "tier": "Standard"
-                              },
-                              "properties": {
-                                "publicNetworkAccess": "[parameters('publicNetworkAccess')]"
-                              }
-                            },
-                            "backupStorageConfig": {
-                              "type": "Microsoft.RecoveryServices/vaults/backupstorageconfig",
-                              "apiVersion": "2023-04-01",
-                              "name": "[format('{0}/{1}', parameters('name'), 'vaultstorageconfig')]",
-                              "properties": {
-                                "storageType": "[parameters('storageType')]",
-                                "crossRegionRestoreFlag": "[parameters('crossRegionRestoreFlag')]"
-                              },
-                              "dependsOn": [
-                                "recoveryServicesVault"
-                              ]
-                            },
-                            "backupConfig": {
-                              "type": "Microsoft.RecoveryServices/vaults/backupconfig",
-                              "apiVersion": "2023-04-01",
-                              "name": "[format('{0}/{1}', parameters('name'), 'vaultconfig')]",
-                              "properties": {
-                                "softDeleteFeatureState": "[parameters('softDeleteFeatureState')]",
-                                "enhancedSecurityState": "[parameters('enhancedSecurityState')]"
-                              },
-                              "dependsOn": [
-                                "recoveryServicesVault"
-                              ]
-                            },
-                            "diagnosticSetting": {
-                              "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
-                              "type": "Microsoft.Insights/diagnosticSettings",
-                              "apiVersion": "2021-05-01-preview",
-                              "scope": "[resourceId('Microsoft.RecoveryServices/vaults', parameters('name'))]",
-                              "name": "[variables('diagnosticSettingName')]",
-                              "properties": {
-                                "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
-                                "storageAccountId": "[tryGet(parameters('diagnosticSettings'), 'storageAccountId')]",
-                                "eventHubAuthorizationRuleId": "[tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId')]",
-                                "eventHubName": "[tryGet(parameters('diagnosticSettings'), 'eventHubName')]",
-                                "logs": "[coalesce(tryGet(parameters('diagnosticSettings'), 'logCategories'), createArray(createObject('categoryGroup', 'allLogs', 'enabled', true())))]"
-                              },
-                              "dependsOn": [
-                                "recoveryServicesVault"
-                              ]
-                            }
-                          },
-                          "outputs": {
-                            "resourceId": {
-                              "type": "string",
-                              "value": "[resourceId('Microsoft.RecoveryServices/vaults', parameters('name'))]"
-                            },
-                            "name": {
-                              "type": "string",
-                              "value": "[parameters('name')]"
-                            }
-                          }
-                        }
-                      }
-                    },
-                    {
-                      "condition": "[and(and(parameters('recoveryServices'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
-                      "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2025-04-01",
-                      "name": "[format('RecoveryServices-PE-{0}', parameters('deploymentSuffix'))]",
-                      "properties": {
-                        "expressionEvaluationOptions": {
-                          "scope": "inner"
-                        },
-                        "mode": "Incremental",
-                        "parameters": {
-                          "name": {
-                            "value": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'azurebackup'), 'RESOURCE', parameters('recoveryServicesVaultName')), 'VNETID', split(parameters('privateEndpointSubnetResourceId'), '/')[8])]"
-                          },
-                          "customNetworkInterfaceName": {
-                            "value": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'azurebackup'), 'RESOURCE', parameters('recoveryServicesVaultName')), 'VNETID', split(parameters('privateEndpointSubnetResourceId'), '/')[8])]"
-                          },
-                          "tags": {
-                            "value": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]"
-                          },
-                          "subnetResourceId": {
-                            "value": "[parameters('privateEndpointSubnetResourceId')]"
-                          },
-                          "privateLinkServiceId": {
-                            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('RecoveryServices-AzureFiles-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
-                          },
-                          "groupId": {
-                            "value": "AzureBackup"
-                          },
-                          "privateDNSZoneIds": "[if(not(empty(variables('nonEmptyBackupPrivateDNSZoneResourceIds'))), createObject('value', variables('nonEmptyBackupPrivateDNSZoneResourceIds')), createObject('value', createArray()))]"
-                        },
-                        "template": {
-                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                          "contentVersion": "1.0.0.0",
-                          "metadata": {
-                            "_generator": {
-                              "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "9589415449045104821"
-                            }
-                          },
-                          "parameters": {
-                            "name": {
-                              "type": "string"
-                            },
-                            "location": {
-                              "type": "string",
-                              "defaultValue": "[resourceGroup().location]"
-                            },
-                            "tags": {
-                              "type": "object",
-                              "defaultValue": {}
-                            },
-                            "subnetResourceId": {
-                              "type": "string",
-                              "metadata": {
-                                "description": "Resource ID of the subnet to deploy the private endpoint into."
-                              }
-                            },
-                            "privateLinkServiceId": {
-                              "type": "string",
-                              "metadata": {
-                                "description": "Resource ID of the resource to create the private endpoint for."
-                              }
-                            },
-                            "groupId": {
-                              "type": "string",
-                              "metadata": {
-                                "description": "Group ID (sub-resource) of the private link service."
-                              }
-                            },
-                            "customNetworkInterfaceName": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Optional. Custom name for the network interface created for this endpoint."
-                              }
-                            },
-                            "privateDNSZoneIds": {
-                              "type": "array",
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
-                              }
-                            }
-                          },
-                          "variables": {
-                            "copy": [
-                              {
-                                "name": "privateDnsZoneConfigs",
-                                "count": "[length(parameters('privateDNSZoneIds'))]",
-                                "input": {
-                                  "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
-                                  "properties": {
-                                    "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "resources": [
-                            {
-                              "type": "Microsoft.Network/privateEndpoints",
-                              "apiVersion": "2023-09-01",
-                              "name": "[parameters('name')]",
-                              "location": "[parameters('location')]",
-                              "tags": "[parameters('tags')]",
-                              "properties": {
-                                "subnet": {
-                                  "id": "[parameters('subnetResourceId')]"
-                                },
-                                "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
-                                "privateLinkServiceConnections": [
-                                  {
-                                    "name": "[parameters('name')]",
-                                    "properties": {
-                                      "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
-                                      "groupIds": [
-                                        "[parameters('groupId')]"
-                                      ]
-                                    }
-                                  }
-                                ]
-                              }
-                            },
-                            {
-                              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
-                              "apiVersion": "2023-04-01",
-                              "name": "[format('{0}/{1}', parameters('name'), 'default')]",
-                              "properties": {
-                                "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
-                              },
-                              "dependsOn": [
-                                "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
-                              ]
-                            }
-                          ],
-                          "outputs": {
-                            "resourceId": {
-                              "type": "string",
-                              "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
-                            },
-                            "name": {
-                              "type": "string",
-                              "value": "[parameters('name')]"
-                            }
-                          }
-                        }
-                      },
-                      "dependsOn": [
-                        "[resourceId('Microsoft.Resources/deployments', format('RecoveryServices-AzureFiles-{0}', parameters('deploymentSuffix')))]"
-                      ]
                     }
                   ],
                   "outputs": {
@@ -14482,6 +14745,136 @@
                   }
                 }
               }
+            },
+            {
+              "condition": "[and(equals(parameters('storageSolution'), 'AzureFiles'), not(empty(parameters('recoveryServicesVaultResourceId'))))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('FSLogix-BackupRegistration-{0}', parameters('deploymentSuffix'))]",
+              "subscriptionId": "[split(parameters('recoveryServicesVaultResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('recoveryServicesVaultResourceId'), '/')[4]]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "vaultName": {
+                    "value": "[last(split(parameters('recoveryServicesVaultResourceId'), '/'))]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "resourceGroupStorage": {
+                    "value": "[parameters('resourceGroupStorage')]"
+                  },
+                  "storageAccountNamePrefix": {
+                    "value": "[parameters('storageAccountNamePrefix')]"
+                  },
+                  "storageCount": {
+                    "value": "[parameters('storageCount')]"
+                  },
+                  "storageIndex": {
+                    "value": "[parameters('storageIndex')]"
+                  },
+                  "fileShares": {
+                    "value": "[parameters('fslogixFileShares')]"
+                  },
+                  "storageAccountResourceIds": {
+                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupStorage')), 'Microsoft.Resources/deployments', format('Azure-Files-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value]"
+                  },
+                  "tags": {
+                    "value": "[parameters('tags')]"
+                  },
+                  "hostPoolResourceId": {
+                    "value": "[parameters('hostPoolResourceId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "5649859241221842568"
+                    }
+                  },
+                  "parameters": {
+                    "vaultName": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "resourceGroupStorage": {
+                      "type": "string"
+                    },
+                    "storageAccountNamePrefix": {
+                      "type": "string"
+                    },
+                    "storageCount": {
+                      "type": "int"
+                    },
+                    "storageIndex": {
+                      "type": "int"
+                    },
+                    "fileShares": {
+                      "type": "array"
+                    },
+                    "storageAccountResourceIds": {
+                      "type": "array"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "hostPoolResourceId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "copy": {
+                        "name": "protectionContainers",
+                        "count": "[length(range(0, parameters('storageCount')))]"
+                      },
+                      "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers",
+                      "apiVersion": "2024-04-01",
+                      "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}{3}', parameters('vaultName'), parameters('resourceGroupStorage'), parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))]",
+                      "properties": {
+                        "friendlyName": "[format('{0}{1}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))]",
+                        "sourceResourceId": "[parameters('storageAccountResourceIds')[range(0, parameters('storageCount'))[copyIndex()]]]",
+                        "backupManagementType": "AzureStorage",
+                        "containerType": "StorageContainer"
+                      },
+                      "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers'), createObject()))]"
+                    },
+                    {
+                      "copy": {
+                        "name": "protectedItems",
+                        "count": "[length(range(0, parameters('storageCount')))]"
+                      },
+                      "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
+                      "apiVersion": "2024-04-01",
+                      "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}{3}/AzureFileShare;{4}', parameters('vaultName'), parameters('resourceGroupStorage'), parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')), parameters('fileShares')[0])]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "protectedItemType": "AzureFileShareProtectedItem",
+                        "policyId": "[format('{0}/providers/Microsoft.RecoveryServices/vaults/{1}/backupPolicies/filesharepolicy', resourceGroup().id, parameters('vaultName'))]",
+                        "sourceResourceId": "[parameters('storageAccountResourceIds')[range(0, parameters('storageCount'))[copyIndex()]]]"
+                      },
+                      "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems'), createObject()))]",
+                      "dependsOn": [
+                        "protectionContainers"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupStorage')), 'Microsoft.Resources/deployments', format('Azure-Files-{0}', parameters('deploymentSuffix')))]"
+              ]
             }
           ],
           "outputs": {
@@ -14505,6 +14898,7 @@
         "[subscriptionResourceId(variables('deploymentSubscription'), 'Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('KeyVaults-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('RecoveryServices-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId(variables('storageSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-FSLogix-Storage-{0}', variables('deploymentSuffix')))]"
@@ -14554,14 +14948,8 @@
           "availabilityZones": {
             "value": "[parameters('availabilityZones')]"
           },
-          "azureBackupPrivateDnsZoneResourceId": {
-            "value": "[parameters('azureBackupPrivateDnsZoneResourceId')]"
-          },
           "azureBlobPrivateDnsZoneResourceId": {
             "value": "[parameters('azureBlobPrivateDnsZoneResourceId')]"
-          },
-          "azureQueuePrivateDnsZoneResourceId": {
-            "value": "[parameters('azureQueuePrivateDnsZoneResourceId')]"
           },
           "confidentialVMOrchestratorObjectId": {
             "value": "[parameters('confidentialVMOrchestratorObjectId')]"
@@ -14635,9 +15023,7 @@
             "value": "[parameters('existingDiskAccessResourceId')]"
           },
           "existingDiskEncryptionSetResourceId": "[if(variables('deployTopLevelDiskCmk'), createObject('value', reference(subscriptionResourceId(variables('hostsSubscription'), 'Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('existingDiskEncryptionSetResourceId')))]",
-          "existingRecoveryServicesVaultResourceId": {
-            "value": "[parameters('existingRecoveryServicesVaultResourceId')]"
-          },
+          "existingRecoveryServicesVaultResourceId": "[if(parameters('recoveryServices'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('RecoveryServices-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultResourceId.value), createObject('value', parameters('existingRecoveryServicesVaultResourceId'))), createObject('value', ''))]",
           "fslogixConfigureSessionHosts": {
             "value": "[parameters('fslogixConfigureSessionHosts')]"
           },
@@ -14717,12 +15103,6 @@
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNicNameConv.value]"
           },
           "recoveryServices": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), if(contains(parameters('hostPoolType'), 'Personal'), createObject('value', parameters('recoveryServices')), createObject('value', false())), createObject('value', parameters('recoveryServices')))]",
-          "recoveryServicesVaultName": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultNames.value.virtualMachines]"
-          },
-          "recoveryServicesVaultStorageRedundancy": {
-            "value": "[parameters('recoveryServicesVaultStorageRedundancy')]"
-          },
           "resourceGroupHosts": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupHosts.value), createObject('value', parameters('existingHostsResourceGroupName')))]",
           "resourceGroupDeployment": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupDeployment.value]"
@@ -14783,7 +15163,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "14255143626938517400"
+              "templateHash": "14953177517129776394"
             }
           },
           "parameters": {
@@ -14865,22 +15245,10 @@
                 "description": "Required. Resource ID of the AVD Insights data collection rule for session host diagnostics."
               }
             },
-            "azureBackupPrivateDnsZoneResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the private DNS zone for Azure Backup private endpoints."
-              }
-            },
             "azureBlobPrivateDnsZoneResourceId": {
               "type": "string",
               "metadata": {
                 "description": "Required. Resource ID of the private DNS zone for Azure Blob Storage private endpoints."
-              }
-            },
-            "azureQueuePrivateDnsZoneResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the private DNS zone for Azure Queue Storage private endpoints."
               }
             },
             "confidentialVMOrchestratorObjectId": {
@@ -15249,18 +15617,6 @@
                 "description": "Required. When true, deploys a Recovery Services Vault and configures daily VM backup for session hosts."
               }
             },
-            "recoveryServicesVaultName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the Recovery Services Vault to create or reference for session host VM backup."
-              }
-            },
-            "recoveryServicesVaultStorageRedundancy": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Storage replication type for the Recovery Services Vault: \"LocallyRedundant\", \"GeoRedundant\", or \"ZoneRedundant\"."
-              }
-            },
             "resourceGroupDeployment": {
               "type": "string",
               "metadata": {
@@ -15383,7 +15739,6 @@
             }
           },
           "variables": {
-            "backupPolicyName": "AvdPolicyVm",
             "confidentialVMOSDiskEncryptionType": "[if(parameters('confidentialVMOSDiskEncryption'), 'DiskWithVMGuestState', 'VMGuestStateOnly')]",
             "baseResourcesPerVM": 11,
             "monitoringResourcesPerVM": "[if(parameters('enableMonitoring'), 4, 0)]",
@@ -15402,15 +15757,9 @@
             "agentUrl": "[if(not(empty(parameters('agentDownloadUrl'))), parameters('agentDownloadUrl'), if(startsWith(variables('cloud'), 'us'), format('https://aka.{0}/avdRDAgent', variables('cloudSuffix')), 'https://go.microsoft.com/fwlink/?linkid=2310011'))]",
             "dscStorageAccount": "[if(startsWith(environment().name, 'USN'), 'wvdexportalcontainer', 'wvdportalstorageblob')]",
             "dscUrl": "[format('https://{0}.blob.{1}/galleryartifacts/{2}', variables('dscStorageAccount'), environment().suffixes.storage, parameters('avdAgentDscPackage'))]",
-            "backupPrivateDNSZoneResourceIds": [
-              "[parameters('azureBackupPrivateDnsZoneResourceId')]",
-              "[parameters('azureBlobPrivateDnsZoneResourceId')]",
-              "[parameters('azureQueuePrivateDnsZoneResourceId')]"
-            ],
             "dedicatedHostGroupName": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[8], if(not(empty(parameters('dedicatedHostGroupResourceId'))), last(split(parameters('dedicatedHostGroupResourceId'), '/')), ''))]",
             "dedicatedHostSub": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[2], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[2], ''))]",
-            "dedicatedHostRG": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[4], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[4], ''))]",
-            "nonEmptyBackupPrivateDNSZoneResourceIds": "[filter(variables('backupPrivateDNSZoneResourceIds'), lambda('zone', not(empty(lambdaVariables('zone')))))]"
+            "dedicatedHostRG": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[4], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[4], ''))]"
           },
           "resources": [
             {
@@ -18543,518 +18892,6 @@
               ]
             },
             {
-              "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('recoveryServices'))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('RecoveryServicesVault-VirtualMachines-{0}', parameters('deploymentSuffix'))]",
-              "resourceGroup": "[parameters('resourceGroupHosts')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "name": {
-                    "value": "[parameters('recoveryServicesVaultName')]"
-                  },
-                  "location": {
-                    "value": "[parameters('location')]"
-                  },
-                  "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
-                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
-                  "storageType": {
-                    "value": "[parameters('recoveryServicesVaultStorageRedundancy')]"
-                  },
-                  "tags": {
-                    "value": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.recoveryServices/vaults'), createObject()))]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "languageVersion": "2.0",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "15287313447643996939"
-                    }
-                  },
-                  "definitions": {
-                    "_1.logCategoryType": {
-                      "type": "object",
-                      "properties": {
-                        "categoryGroup": {
-                          "type": "string",
-                          "nullable": true,
-                          "metadata": {
-                            "description": "Category group name, e.g. \"allLogs\". Use either categoryGroup or category, not both."
-                          }
-                        },
-                        "category": {
-                          "type": "string",
-                          "nullable": true,
-                          "metadata": {
-                            "description": "Individual log category name. Use either categoryGroup or category, not both."
-                          }
-                        },
-                        "enabled": {
-                          "type": "bool"
-                        },
-                        "retentionPolicy": {
-                          "type": "object",
-                          "properties": {
-                            "days": {
-                              "type": "int"
-                            },
-                            "enabled": {
-                              "type": "bool"
-                            }
-                          },
-                          "nullable": true
-                        }
-                      },
-                      "metadata": {
-                        "__bicep_imported_from!": {
-                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
-                        }
-                      }
-                    },
-                    "diagnosticSettingsType": {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "nullable": true,
-                          "metadata": {
-                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
-                          }
-                        },
-                        "workspaceId": {
-                          "type": "string",
-                          "nullable": true,
-                          "metadata": {
-                            "description": "Resource ID of the Log Analytics workspace to send logs to."
-                          }
-                        },
-                        "storageAccountId": {
-                          "type": "string",
-                          "nullable": true,
-                          "metadata": {
-                            "description": "Resource ID of the storage account to archive logs to."
-                          }
-                        },
-                        "eventHubAuthorizationRuleId": {
-                          "type": "string",
-                          "nullable": true,
-                          "metadata": {
-                            "description": "Resource ID of the Event Hub authorization rule."
-                          }
-                        },
-                        "eventHubName": {
-                          "type": "string",
-                          "nullable": true,
-                          "metadata": {
-                            "description": "Name of the Event Hub. If omitted, a hub is created for each log category."
-                          }
-                        },
-                        "logCategories": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/definitions/_1.logCategoryType"
-                          },
-                          "nullable": true,
-                          "metadata": {
-                            "description": "Log categories to stream. Defaults to allLogs when omitted."
-                          }
-                        }
-                      },
-                      "metadata": {
-                        "__bicep_imported_from!": {
-                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
-                        }
-                      }
-                    }
-                  },
-                  "parameters": {
-                    "name": {
-                      "type": "string"
-                    },
-                    "location": {
-                      "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
-                    },
-                    "tags": {
-                      "type": "object",
-                      "defaultValue": {}
-                    },
-                    "publicNetworkAccess": {
-                      "type": "string",
-                      "defaultValue": "Disabled"
-                    },
-                    "storageType": {
-                      "type": "string",
-                      "defaultValue": "GeoRedundant",
-                      "metadata": {
-                        "description": "Storage replication type for the vault. GeoRedundant, LocallyRedundant, or ZoneRedundant."
-                      }
-                    },
-                    "crossRegionRestoreFlag": {
-                      "type": "bool",
-                      "defaultValue": false,
-                      "metadata": {
-                        "description": "Enable cross-region restore (requires GeoRedundant storage)."
-                      }
-                    },
-                    "softDeleteFeatureState": {
-                      "type": "string",
-                      "defaultValue": "Enabled",
-                      "metadata": {
-                        "description": "Soft-delete feature state for the vault."
-                      }
-                    },
-                    "enhancedSecurityState": {
-                      "type": "string",
-                      "defaultValue": "Enabled",
-                      "metadata": {
-                        "description": "Enhanced security state for the vault."
-                      }
-                    },
-                    "diagnosticSettings": {
-                      "$ref": "#/definitions/diagnosticSettingsType",
-                      "nullable": true
-                    }
-                  },
-                  "variables": {
-                    "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
-                    "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
-                  },
-                  "resources": {
-                    "recoveryServicesVault": {
-                      "type": "Microsoft.RecoveryServices/vaults",
-                      "apiVersion": "2023-04-01",
-                      "name": "[parameters('name')]",
-                      "location": "[parameters('location')]",
-                      "tags": "[parameters('tags')]",
-                      "sku": {
-                        "name": "RS0",
-                        "tier": "Standard"
-                      },
-                      "properties": {
-                        "publicNetworkAccess": "[parameters('publicNetworkAccess')]"
-                      }
-                    },
-                    "backupStorageConfig": {
-                      "type": "Microsoft.RecoveryServices/vaults/backupstorageconfig",
-                      "apiVersion": "2023-04-01",
-                      "name": "[format('{0}/{1}', parameters('name'), 'vaultstorageconfig')]",
-                      "properties": {
-                        "storageType": "[parameters('storageType')]",
-                        "crossRegionRestoreFlag": "[parameters('crossRegionRestoreFlag')]"
-                      },
-                      "dependsOn": [
-                        "recoveryServicesVault"
-                      ]
-                    },
-                    "backupConfig": {
-                      "type": "Microsoft.RecoveryServices/vaults/backupconfig",
-                      "apiVersion": "2023-04-01",
-                      "name": "[format('{0}/{1}', parameters('name'), 'vaultconfig')]",
-                      "properties": {
-                        "softDeleteFeatureState": "[parameters('softDeleteFeatureState')]",
-                        "enhancedSecurityState": "[parameters('enhancedSecurityState')]"
-                      },
-                      "dependsOn": [
-                        "recoveryServicesVault"
-                      ]
-                    },
-                    "diagnosticSetting": {
-                      "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
-                      "type": "Microsoft.Insights/diagnosticSettings",
-                      "apiVersion": "2021-05-01-preview",
-                      "scope": "[resourceId('Microsoft.RecoveryServices/vaults', parameters('name'))]",
-                      "name": "[variables('diagnosticSettingName')]",
-                      "properties": {
-                        "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
-                        "storageAccountId": "[tryGet(parameters('diagnosticSettings'), 'storageAccountId')]",
-                        "eventHubAuthorizationRuleId": "[tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId')]",
-                        "eventHubName": "[tryGet(parameters('diagnosticSettings'), 'eventHubName')]",
-                        "logs": "[coalesce(tryGet(parameters('diagnosticSettings'), 'logCategories'), createArray(createObject('categoryGroup', 'allLogs', 'enabled', true())))]"
-                      },
-                      "dependsOn": [
-                        "recoveryServicesVault"
-                      ]
-                    }
-                  },
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.RecoveryServices/vaults', parameters('name'))]"
-                    },
-                    "name": {
-                      "type": "string",
-                      "value": "[parameters('name')]"
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('recoveryServices'))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('RSV-BackupPolicy-VirtualMachines-{0}', parameters('deploymentSuffix'))]",
-              "resourceGroup": "[parameters('resourceGroupHosts')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "recoveryServicesVaultName": {
-                    "value": "[parameters('recoveryServicesVaultName')]"
-                  },
-                  "name": {
-                    "value": "[variables('backupPolicyName')]"
-                  },
-                  "properties": {
-                    "value": {
-                      "backupManagementType": "AzureIaasVM",
-                      "instantRpRetentionRangeInDays": 2,
-                      "policyType": "V2",
-                      "retentionPolicy": {
-                        "retentionPolicyType": "LongTermRetentionPolicy",
-                        "dailySchedule": {
-                          "retentionDuration": {
-                            "count": 30,
-                            "durationType": "Days"
-                          },
-                          "retentionTimes": [
-                            "23:00"
-                          ]
-                        }
-                      },
-                      "schedulePolicy": {
-                        "schedulePolicyType": "SimpleSchedulePolicyV2",
-                        "scheduleRunFrequency": "Daily",
-                        "dailySchedule": {
-                          "scheduleRunTimes": [
-                            "23:00"
-                          ]
-                        }
-                      },
-                      "timeZone": "[parameters('timeZone')]"
-                    }
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "12295517163086517454"
-                    }
-                  },
-                  "parameters": {
-                    "recoveryServicesVaultName": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "properties": {
-                      "type": "object",
-                      "metadata": {
-                        "description": "Backup policy properties. The schema varies by workload type (AzureIaasVM, AzureStorage, etc.)."
-                      }
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.RecoveryServices/vaults/backupPolicies",
-                      "apiVersion": "2023-04-01",
-                      "name": "[format('{0}/{1}', parameters('recoveryServicesVaultName'), parameters('name'))]",
-                      "properties": "[parameters('properties')]"
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies', parameters('recoveryServicesVaultName'), parameters('name'))]"
-                    },
-                    "name": {
-                      "type": "string",
-                      "value": "[parameters('name')]"
-                    }
-                  }
-                }
-              },
-              "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-VirtualMachines-{0}', parameters('deploymentSuffix')))]"
-              ]
-            },
-            {
-              "condition": "[and(and(and(and(and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('recoveryServices')), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId')))), not(empty(parameters('azureBackupPrivateDnsZoneResourceId')))), not(empty(parameters('azureBlobPrivateDnsZoneResourceId')))), not(empty(parameters('azureQueuePrivateDnsZoneResourceId'))))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('PE-RSV-VirtualMachines-{0}', parameters('deploymentSuffix'))]",
-              "resourceGroup": "[parameters('resourceGroupHosts')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "name": {
-                    "value": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', parameters('recoveryServicesVaultName')), 'VNETID', split(parameters('privateEndpointSubnetResourceId'), '/')[8])]"
-                  },
-                  "customNetworkInterfaceName": {
-                    "value": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', parameters('recoveryServicesVaultName')), 'VNETID', split(parameters('privateEndpointSubnetResourceId'), '/')[8])]"
-                  },
-                  "location": {
-                    "value": "[parameters('location')]"
-                  },
-                  "subnetResourceId": {
-                    "value": "[parameters('privateEndpointSubnetResourceId')]"
-                  },
-                  "privateLinkServiceId": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-VirtualMachines-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
-                  },
-                  "groupId": {
-                    "value": "AzureBackup"
-                  },
-                  "privateDNSZoneIds": {
-                    "value": "[variables('nonEmptyBackupPrivateDNSZoneResourceIds')]"
-                  },
-                  "tags": {
-                    "value": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "9589415449045104821"
-                    }
-                  },
-                  "parameters": {
-                    "name": {
-                      "type": "string"
-                    },
-                    "location": {
-                      "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
-                    },
-                    "tags": {
-                      "type": "object",
-                      "defaultValue": {}
-                    },
-                    "subnetResourceId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Resource ID of the subnet to deploy the private endpoint into."
-                      }
-                    },
-                    "privateLinkServiceId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Resource ID of the resource to create the private endpoint for."
-                      }
-                    },
-                    "groupId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Group ID (sub-resource) of the private link service."
-                      }
-                    },
-                    "customNetworkInterfaceName": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. Custom name for the network interface created for this endpoint."
-                      }
-                    },
-                    "privateDNSZoneIds": {
-                      "type": "array",
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "copy": [
-                      {
-                        "name": "privateDnsZoneConfigs",
-                        "count": "[length(parameters('privateDNSZoneIds'))]",
-                        "input": {
-                          "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
-                          "properties": {
-                            "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
-                          }
-                        }
-                      }
-                    ]
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Network/privateEndpoints",
-                      "apiVersion": "2023-09-01",
-                      "name": "[parameters('name')]",
-                      "location": "[parameters('location')]",
-                      "tags": "[parameters('tags')]",
-                      "properties": {
-                        "subnet": {
-                          "id": "[parameters('subnetResourceId')]"
-                        },
-                        "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
-                        "privateLinkServiceConnections": [
-                          {
-                            "name": "[parameters('name')]",
-                            "properties": {
-                              "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
-                              "groupIds": [
-                                "[parameters('groupId')]"
-                              ]
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
-                      "apiVersion": "2023-04-01",
-                      "name": "[format('{0}/{1}', parameters('name'), 'default')]",
-                      "properties": {
-                        "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
-                      },
-                      "dependsOn": [
-                        "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
-                      ]
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
-                    },
-                    "name": {
-                      "type": "string",
-                      "value": "[parameters('name')]"
-                    }
-                  }
-                }
-              },
-              "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-VirtualMachines-{0}', parameters('deploymentSuffix')))]"
-              ]
-            },
-            {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('Flatten-VirtualMachine-Names-{0}', parameters('deploymentSuffix'))]",
@@ -19120,6 +18957,7 @@
         "[subscriptionResourceId(variables('hostsSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Hosts-Tags-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('KeyVaults-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('managementSubscription'), 'Microsoft.Resources/deployments', format('RecoveryServices-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },

@@ -512,7 +512,7 @@ param recoveryServices bool = false
 @allowed(['LocallyRedundant', 'ZoneRedundant', 'GeoRedundant'])
 param recoveryServicesVaultStorageRedundancy string = 'LocallyRedundant'
 
-@description('Optional. The resource Id of an existing Recovery Services Vault that will be used to store Virtual Machine Backups. Only used when "DeploymentType" is "SessionHostOnly".')
+@description('Optional. The resource Id of an existing Recovery Services Vault used for backup. Required when DeploymentType is HostPoolOnly or SessionHostsOnly and recoveryServices is true.')
 param existingRecoveryServicesVaultResourceId string = ''
 
 @description('Optional. The resource ID of an existing Encryption Key Vault containing customer-managed keys. Provide this from the Foundation deployment, or leave empty to have the host pool deployment create one automatically when CMK is enabled with deploymentType = Complete.')
@@ -1033,7 +1033,7 @@ module hostsResourceGroupWithTags '../../.common/bicepModules/resources/resource
   }
 }
 
-module operationsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults) {
+module operationsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults || (deploymentType == 'Complete' && recoveryServices)) {
   name: 'Resource-Group-Operations-${deploymentSuffix}'
   scope: subscription(managementSubscription)
   params: {
@@ -1132,7 +1132,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
 // KeyVaults: Inline Key Vault creation — only runs when Security KVs were not provided.
 // For all-in-one portal deployments: deploys encryption KV when CMK is requested, secrets KV when deploySecretsKeyVault=true.
 // For Security-first deployments: skipped entirely because encryptionKeyVaultResourceId will be non-empty.
-module keyVaults 'modules/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
+module keyVaults 'modules/operations/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
   name: 'KeyVaults-${deploymentSuffix}'
   scope: subscription(managementSubscription)
   params: {
@@ -1291,6 +1291,51 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
   ]
 }
 
+// Recovery Services — vault + policies + PE (Complete only, or HostPoolOnly with existing vault)
+// Deployed BEFORE fslogix and sessionHosts so the vault is ready for both phases to register items.
+var deployRecoveryServices = recoveryServices && deploymentType != 'SessionHostsOnly' && (deploymentType == 'Complete' || !empty(existingRecoveryServicesVaultResourceId))
+
+module recoveryServicesModule 'modules/operations/recoveryServices/recoveryServices.bicep' = if (deployRecoveryServices) {
+  name: 'RecoveryServices-${deploymentSuffix}'
+  scope: subscription(managementSubscription)
+  params: {
+    createVault: deploymentType == 'Complete'
+    existingRecoveryServicesVaultResourceId: existingRecoveryServicesVaultResourceId
+    vaultName: resourceNames.outputs.recoveryServicesVaultName
+    resourceGroupOperations: resourceNames.outputs.resourceGroupOperations
+    location: virtualMachinesRegion
+    storageRedundancy: recoveryServicesVaultStorageRedundancy
+    deploymentSuffix: deploymentSuffix
+    logAnalyticsWorkspaceResourceId: enableMonitoring
+      ? (deploymentType == 'Complete'
+          ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
+          : existingLogAnalyticsWorkspaceResourceId)
+      : ''
+    privateEndpoint: deployPrivateEndpoints
+    privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
+    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
+    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
+    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
+    privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
+    privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
+    hostPoolResourceId: deploymentType == 'SessionHostsOnly'
+      ? existingHostPoolResourceId
+      : controlPlane!.outputs.hostPoolResourceId
+    tags: tags
+    timeZone: virtualMachinesTimeZone
+    pooledHostPool: split(hostPoolType, ' ')[0] == 'Pooled'
+  }
+  dependsOn: [
+    operationsResourceGroup
+  ]
+}
+
+var effectiveRecoveryServicesVaultResourceId = recoveryServices
+  ? (deploymentType == 'Complete'
+      ? recoveryServicesModule!.outputs.recoveryServicesVaultResourceId
+      : existingRecoveryServicesVaultResourceId)
+  : ''
+
 // FSLogix Storage
 module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionHostsOnly' && deployFSLogixStorage) {
   name: 'FSLogix-${deploymentSuffix}'
@@ -1299,10 +1344,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     activeDirectoryConnection: existingSharedActiveDirectoryConnection
     appUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
     availability: availability
-    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFilePrivateDnsZoneResourceId: azureFilesPrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: createDeploymentVm
       ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
       : ''
@@ -1346,9 +1388,6 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
-    recoveryServices: recoveryServices
-    recoveryServicesVaultName: resourceNames.outputs.recoveryServicesVaultNames.fslogixStorage
-    recoveryServicesVaultStorageRedundancy: recoveryServicesVaultStorageRedundancy
     resourceGroupDeployment: resourceNames.outputs.resourceGroupDeployment
     resourceGroupStorage: resourceNames.outputs.resourceGroupStorage
     shareSizeInGB: fslogixShareSizeInGB
@@ -1360,10 +1399,10 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     storageSolution: split(fslogixStorageService, ' ')[0]
     tags: tags
     deploymentSuffix: deploymentSuffix
-    timeZone: virtualMachinesTimeZone
     encryptionUserAssignedIdentityResourceId: deployTopLevelStorageCmk
       ? storageCmk!.outputs.storageIdentityResourceId
       : ''
+    recoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
   }
   dependsOn: [
     storageResourceGroup
@@ -1391,9 +1430,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     availabilitySetsCount: availabilitySetsCount
     availabilitySetsIndex: beginAvSetRange
     availabilityZones: availabilityZones
-    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
     customImageResourceId: customImageResourceId
@@ -1442,7 +1479,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     encryptionKeyVaultUri: encryptionKeyVaultUri
     existingDiskAccessResourceId: existingDiskAccessResourceId
     existingDiskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
-    existingRecoveryServicesVaultResourceId: existingRecoveryServicesVaultResourceId
+    existingRecoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames
@@ -1486,8 +1523,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     recoveryServices: deploymentType != 'SessionHostsOnly'
       ? (contains(hostPoolType, 'Personal') ? recoveryServices : false)
       : recoveryServices
-    recoveryServicesVaultName: resourceNames.outputs.recoveryServicesVaultNames.virtualMachines
-    recoveryServicesVaultStorageRedundancy: recoveryServicesVaultStorageRedundancy
     resourceGroupHosts: deploymentType != 'SessionHostsOnly'
       ? resourceNames.outputs.resourceGroupHosts
       : existingHostsResourceGroupName

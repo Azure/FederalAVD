@@ -42,19 +42,6 @@
 							"label": "Naming Convention",
 							"elements": [
 								{
-									"name": "customIdentifier",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Custom Identifier",
-									"defaultValue": "",
-									"placeholder": "security",
-									"toolTip": "Optional identifier used in resource names. Defaults to 'security', producing names like 'rg-avd-security-eus' or 'kv-avd-sec-abc123-eus'.",
-									"constraints": {
-										"required": false,
-										"regex": "^[a-z0-9-]{0,20}$",
-										"validationMessage": "Only lowercase letters, numbers, and hyphens. Maximum 20 characters."
-									}
-								},
-								{
 									"name": "nameConvResTypeAtEnd",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Resource Type Abbreviation at End of Name",
@@ -129,73 +116,59 @@
 									}
 								},
 								{
-									"name": "vmAdminSection",
-									"type": "Microsoft.Common.Section",
-									"label": "Virtual Machine Local Administrator",
-									"elements": [
-										{
-											"name": "virtualMachineAdminUserName",
-											"type": "Microsoft.Common.TextBox",
-											"label": "Admin Username",
-											"toolTip": "Local administrator username for AVD session hosts. Stored as 'VirtualMachineAdminUserName' in the Key Vault.",
-											"constraints": {
-												"required": false,
-												"regex": "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,19}$",
-												"validationMessage": "Must start with a letter. Alphanumeric, underscores, hyphens allowed. Maximum 20 characters."
-											}
-										},
-										{
-											"name": "virtualMachineAdminPassword",
-											"type": "Microsoft.Common.PasswordBox",
-											"label": {
-												"password": "Admin Password",
-												"confirmPassword": "Confirm Admin Password"
-											},
-											"toolTip": "Local administrator password for AVD session hosts. Stored as 'VirtualMachineAdminPassword' in the Key Vault. Must meet Windows password complexity requirements.",
-											"constraints": {
-												"required": false,
-												"regex": "^$|^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z\\d]).{12,123}$",
-												"validationMessage": "Must be 12-123 characters and include uppercase, lowercase, a digit, and a special character."
-											},
-											"options": {
-												"hideConfirmation": false
-											}
-										}
-									]
+									"name": "virtualMachineAdminUserName",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Admin Username",
+									"toolTip": "Local administrator username for AVD session hosts. Stored as 'VirtualMachineAdminUserName' in the Key Vault.",
+									"constraints": {
+										"required": false,
+										"regex": "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,19}$",
+										"validationMessage": "Must start with a letter. Alphanumeric, underscores, hyphens allowed. Maximum 20 characters."
+									}
 								},
 								{
-									"name": "domainJoinSection",
-									"type": "Microsoft.Common.Section",
-									"label": "Domain Join Account (ADDS / Entra Kerberos Hybrid Only)",
-									"elements": [
-										{
-											"name": "domainJoinUserPrincipalName",
-											"type": "Microsoft.Common.TextBox",
-											"label": "Domain Join UPN",
-											"placeholder": "svc-avd-join@contoso.com",
-											"toolTip": "UPN of the privileged account used to domain join session hosts. Stored as 'DomainJoinUserPrincipalName' in the Key Vault.",
-											"constraints": {
-												"required": false,
-												"regex": "^$|^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
-												"validationMessage": "Must be a valid UPN format (user@domain.tld)."
-											}
-										},
-										{
-											"name": "domainJoinUserPassword",
-											"type": "Microsoft.Common.PasswordBox",
-											"label": {
-												"password": "Domain Join Password",
-												"confirmPassword": "Confirm Domain Join Password"
-											},
-											"toolTip": "Password for the domain join account. Stored as 'DomainJoinUserPassword' in the Key Vault.",
-											"constraints": {
-												"required": false
-											},
-											"options": {
-												"hideConfirmation": false
-											}
-										}
-									]
+									"name": "virtualMachineAdminPassword",
+									"type": "Microsoft.Common.PasswordBox",
+									"label": {
+										"password": "Admin Password",
+										"confirmPassword": "Confirm Admin Password"
+									},
+									"toolTip": "Local administrator password for AVD session hosts. Stored as 'VirtualMachineAdminPassword' in the Key Vault. Must meet Windows password complexity requirements.",
+									"constraints": {
+										"required": false,
+										"regex": "^$|^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z\\d]).{12,123}$",
+										"validationMessage": "Must be 12-123 characters and include uppercase, lowercase, a digit, and a special character."
+									},
+									"options": {
+										"hideConfirmation": false
+									}
+								},
+								{
+									"name": "domainJoinUserPrincipalName",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Domain Join UPN",
+									"placeholder": "svc-avd-join@contoso.com",
+									"toolTip": "UPN of the privileged account used to domain join session hosts. Stored as 'DomainJoinUserPrincipalName' in the Key Vault.",
+									"constraints": {
+										"required": false,
+										"regex": "^$|^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+										"validationMessage": "Must be a valid UPN format (user@domain.tld)."
+									}
+								},
+								{
+									"name": "domainJoinUserPassword",
+									"type": "Microsoft.Common.PasswordBox",
+									"label": {
+										"password": "Domain Join Password",
+										"confirmPassword": "Confirm Domain Join Password"
+									},
+									"toolTip": "Password for the domain join account. Stored as 'DomainJoinUserPassword' in the Key Vault.",
+									"constraints": {
+										"required": false
+									},
+									"options": {
+										"hideConfirmation": false
+									}
 								}
 							]
 						}
@@ -390,83 +363,6 @@
 					]
 				},
 				{
-					"name": "customNaming",
-					"label": "Custom Naming (Advanced)",
-					"elements": [
-						{
-							"name": "infoBox",
-							"type": "Microsoft.Common.InfoBox",
-							"options": {
-								"style": "Info",
-								"text": "Override the auto-generated Key Vault names. Use this when your organization requires specific names for compliance, policy, or to match an existing naming scheme. Key Vault names must be globally unique across Azure, 3-24 characters, alphanumeric and hyphens only."
-							}
-						},
-						{
-							"name": "enableCustomNaming",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Use Custom Names"
-						},
-						{
-							"name": "nameOverrides",
-							"type": "Microsoft.Common.Section",
-							"label": "Name Overrides",
-							"visible": "[steps('customNaming').enableCustomNaming]",
-							"elements": [
-								{
-									"name": "secretsKvAvailabilityApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(steps('customNaming').enableCustomNaming, steps('secretsKeyVault').deploySecretsKeyVault, not(empty(steps('customNaming').nameOverrides.secretsKeyVaultNameOverride)))]",
-									"request": {
-										"method": "POST",
-										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.KeyVault/checkNameAvailability?api-version=2023-07-01')]",
-										"body": {
-											"name": "[steps('customNaming').nameOverrides.secretsKeyVaultNameOverride]",
-											"type": "Microsoft.KeyVault/vaults"
-										}
-									}
-								},
-								{
-									"name": "secretsKeyVaultNameOverride",
-									"type": "Microsoft.Common.TextBox",
-									"visible": "[steps('secretsKeyVault').deploySecretsKeyVault]",
-									"label": "Secrets Key Vault Name",
-									"toolTip": "Override the auto-generated Secrets Key Vault name. Must be globally unique.",
-									"constraints": {
-										"required": false,
-										"regex": "^$|^[a-zA-Z][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$",
-										"validationMessage": "3-24 characters, must start with a letter, alphanumeric and hyphens only, cannot end with a hyphen."
-									}
-								},
-								{
-									"name": "encryptionKvAvailabilityApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(steps('customNaming').enableCustomNaming, steps('encryptionKeyVault').deployEncryptionKeyVault, not(empty(steps('customNaming').nameOverrides.encryptionKeyVaultNameOverride)))]",
-									"request": {
-										"method": "POST",
-										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.KeyVault/checkNameAvailability?api-version=2023-07-01')]",
-										"body": {
-											"name": "[steps('customNaming').nameOverrides.encryptionKeyVaultNameOverride]",
-											"type": "Microsoft.KeyVault/vaults"
-										}
-									}
-								},
-								{
-									"name": "encryptionKeyVaultNameOverride",
-									"type": "Microsoft.Common.TextBox",
-									"visible": "[steps('encryptionKeyVault').deployEncryptionKeyVault]",
-									"label": "Encryption Key Vault Name",
-									"toolTip": "Override the auto-generated Encryption Key Vault name. Must be globally unique.",
-									"constraints": {
-										"required": false,
-										"regex": "^$|^[a-zA-Z][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$",
-										"validationMessage": "3-24 characters, must start with a letter, alphanumeric and hyphens only, cannot end with a hyphen."
-									}
-								}
-							]
-						}
-					]
-				},
-				{
 					"name": "tags",
 					"label": "Tags",
 					"elements": [
@@ -488,32 +384,29 @@
 						}
 					]
 				}
-			],
-			"outputs": {
-				"kind": "Subscription",
+			]
+		},
+		"outputs": {
+			"kind": "Subscription",
+			"location": "[steps('basics').scope.location.name]",
+			"subscriptionId": "[steps('basics').scope.subscription.id]",
+			"parameters": {
 				"location": "[steps('basics').scope.location.name]",
-				"subscriptionId": "[steps('basics').scope.subscription.id]",
-				"parameters": {
-					"location": "[steps('basics').scope.location.name]",
-					"customIdentifier": "[steps('basics').naming.customIdentifier]",
-					"nameConvResTypeAtEnd": "[steps('basics').naming.nameConvResTypeAtEnd]",
-					"deploySecretsKeyVault": "[steps('secretsKeyVault').deploySecretsKeyVault]",
-					"secretsKeyVaultEnableSoftDelete": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enableSoftDelete, true)]",
-					"secretsKeyVaultEnablePurgeProtection": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enablePurgeProtection, true)]",
-					"keyVaultRetentionInDays": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.retentionDays, 90)]",
-					"virtualMachineAdminUserName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.vmAdminSection.virtualMachineAdminUserName, '')]",
-					"virtualMachineAdminPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.vmAdminSection.virtualMachineAdminPassword, '')]",
-					"domainJoinUserPrincipalName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinSection.domainJoinUserPrincipalName, '')]",
-					"domainJoinUserPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinSection.domainJoinUserPassword, '')]",
-					"deployEncryptionKeyVault": "[steps('encryptionKeyVault').deployEncryptionKeyVault]",
-					"privateEndpoint": "[steps('zeroTrust').privateEndpoint]",
-					"privateEndpointSubnetResourceId": "[if(steps('zeroTrust').privateEndpoint, steps('zeroTrust').networkSection.privateEndpointSubnet, '')]",
-					"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoint, steps('zeroTrust').privateDnsSection.enablePrivateDNSIntegration), steps('zeroTrust').privateDnsSection.keyVaultPrivateDnsZone, '')]",
-					"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
-					"secretsKeyVaultNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').nameOverrides.secretsKeyVaultNameOverride, ''), '')]",
-					"encryptionKeyVaultNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').nameOverrides.encryptionKeyVaultNameOverride, ''), '')]",
-					"tags": "[steps('tags').resourceTags]"
-				}
+				"nameConvResTypeAtEnd": "[steps('basics').naming.nameConvResTypeAtEnd]",
+				"deploySecretsKeyVault": "[steps('secretsKeyVault').deploySecretsKeyVault]",
+				"secretsKeyVaultEnableSoftDelete": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enableSoftDelete, true)]",
+				"secretsKeyVaultEnablePurgeProtection": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enablePurgeProtection, true)]",
+				"keyVaultRetentionInDays": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.retentionDays, 90)]",
+				"virtualMachineAdminUserName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.virtualMachineAdminUserName, '')]",
+				"virtualMachineAdminPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.virtualMachineAdminPassword, '')]",
+				"domainJoinUserPrincipalName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPrincipalName, '')]",
+				"domainJoinUserPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPassword, '')]",
+				"deployEncryptionKeyVault": "[steps('encryptionKeyVault').deployEncryptionKeyVault]",
+				"privateEndpoint": "[steps('zeroTrust').privateEndpoint]",
+				"privateEndpointSubnetResourceId": "[if(steps('zeroTrust').privateEndpoint, steps('zeroTrust').networkSection.privateEndpointSubnet, '')]",
+				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoint, steps('zeroTrust').privateDnsSection.enablePrivateDNSIntegration), steps('zeroTrust').privateDnsSection.keyVaultPrivateDnsZone, '')]",
+				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
+				"tags": "[steps('tags').resourceTags]"
 			}
 		}
 	}

@@ -1,9 +1,6 @@
 param appUpdateUserAssignedIdentityResourceId string
 param availability string
-param azureBackupPrivateDnsZoneResourceId string
-param azureBlobPrivateDnsZoneResourceId string
 param azureFilePrivateDnsZoneResourceId string
-param azureQueuePrivateDnsZoneResourceId string
 param deploymentUserAssignedIdentityClientId string
 param deploymentVirtualMachineName string
 @secure()
@@ -26,9 +23,6 @@ param privateEndpoint bool
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
-param recoveryServices bool
-param recoveryServicesVaultName string
-param recoveryServicesVaultStorageRedundancy string
 param deploymentResourceGroupName string
 param resourceGroupStorage string
 param shardingOptions string
@@ -41,7 +35,6 @@ param storageIndex int
 param storageSku string
 param tags object
 param deploymentSuffix string
-param timeZone string
 
 var adminRoleDefinitionId = '69566ab7-960f-475b-8e7c-b3118f30c6bd' // Storage File Data Privileged Contributor
 
@@ -63,14 +56,6 @@ var smbSettingsValues = {
   multichannel: storageSku != 'Standard' ? { enabled: true } : null
 }
 var storageRedundancy = availability == 'availabilityZones' ? '_ZRS' : '_LRS'
-
-var backupPrivateDNSZoneResourceIds = [
-  azureBackupPrivateDnsZoneResourceId
-  azureBlobPrivateDnsZoneResourceId
-  azureQueuePrivateDnsZoneResourceId
-]
-
-var nonEmptyBackupPrivateDNSZoneResourceIds = filter(backupPrivateDNSZoneResourceIds, zone => !empty(zone))
 
 var graphEndpoint = environment().name == 'AzureUSGovernment'
   ? 'https://graph.microsoft.us'
@@ -347,91 +332,6 @@ module grantStorageApplicationsConsent '../../../../../.common/bicepModules/comp
   dependsOn: [
     SetNTFSPermissions
   ]
-}
-
-// ─── Recovery Services Vault ───────────────────────────────────────────────────
-module recoveryServicesVaultModule '../../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (recoveryServices) {
-  name: 'RecoveryServices-AzureFiles-${deploymentSuffix}'
-  params: {
-    name: recoveryServicesVaultName
-    location: location
-    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.RecoveryServices/vaults'] ?? {})
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
-    storageType: recoveryServicesVaultStorageRedundancy
-    diagnosticSettings: !empty(logAnalyticsWorkspaceId) ? { workspaceId: logAnalyticsWorkspaceId } : null
-  }
-}
-
-resource backupPolicy 'Microsoft.RecoveryServices/vaults/backupPolicies@2024-04-01' = if (recoveryServices) {
-  name: '${recoveryServicesVaultName}/filesharepolicy'
-  properties: {
-    backupManagementType: 'AzureStorage'
-    workLoadType: 'AzureFileShare'
-    schedulePolicy: {
-      schedulePolicyType: 'SimpleSchedulePolicy'
-      scheduleRunFrequency: 'Daily'
-      scheduleRunTimes: ['23:00']
-    }
-    retentionPolicy: {
-      retentionPolicyType: 'LongTermRetentionPolicy'
-      dailySchedule: {
-        retentionTimes: ['23:00']
-        retentionDuration: {
-          count: 30
-          durationType: 'Days'
-        }
-      }
-    }
-    timeZone: timeZone
-  }
-  dependsOn: [recoveryServicesVaultModule]
-}
-
-resource protectionContainers 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers@2024-04-01' = [
-  for i in range(0, storageCount): if (recoveryServices) {
-    name: '${recoveryServicesVaultName}/Azure/storagecontainer;Storage;${resourceGroupStorage};${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
-    properties: {
-      friendlyName: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
-      sourceResourceId: storageAccounts[i].outputs.resourceId
-      backupManagementType: 'AzureStorage'
-      containerType: 'StorageContainer'
-    }
-    dependsOn: [backupPolicy]
-  }
-]
-
-resource protectedItems 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems@2024-04-01' = [
-  for i in range(0, storageCount): if (recoveryServices) {
-    name: '${recoveryServicesVaultName}/Azure/storagecontainer;Storage;${resourceGroupStorage};${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}/AzureFileShare;${fileShares[0]}'
-    location: location
-    properties: {
-      protectedItemType: 'AzureFileShareProtectedItem'
-      policyId: '${resourceGroup().id}/providers/Microsoft.RecoveryServices/vaults/${recoveryServicesVaultName}/backupPolicies/filesharepolicy'
-      sourceResourceId: storageAccounts[i].outputs.resourceId
-    }
-    dependsOn: [protectionContainers]
-  }
-]
-
-module backupVault_pe '../../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (recoveryServices && privateEndpoint && !empty(privateEndpointSubnetResourceId)) {
-  name: 'RecoveryServices-PE-${deploymentSuffix}'
-  params: {
-    name: replace(
-      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'azurebackup'), 'RESOURCE', recoveryServicesVaultName),
-      'VNETID',
-      split(privateEndpointSubnetResourceId, '/')[8]
-    )
-    customNetworkInterfaceName: replace(
-      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'azurebackup'), 'RESOURCE', recoveryServicesVaultName),
-      'VNETID',
-      split(privateEndpointSubnetResourceId, '/')[8]
-    )
-    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
-    subnetResourceId: privateEndpointSubnetResourceId
-    privateLinkServiceId: recoveryServicesVaultModule!.outputs.resourceId
-    groupId: 'AzureBackup'
-    privateDNSZoneIds: !empty(nonEmptyBackupPrivateDNSZoneResourceIds) ? nonEmptyBackupPrivateDNSZoneResourceIds : []
-  }
 }
 
 output storageAccountResourceIds array = [for i in range(0, storageCount): storageAccounts[i].outputs.resourceId]

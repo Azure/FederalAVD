@@ -20,7 +20,7 @@ The FSLogix Storage Quota Manager is an automated Azure Function that monitors a
 
 ## How It Works
 
-1. **Timer Trigger**: Azure Function runs on a configurable schedule (default: every 60 minutes)
+1. **Timer Trigger**: Azure Function runs on a configurable schedule (default: every 15 minutes)
 2. **Storage Discovery**: Lists all storage accounts in the specified resource group
 3. **Share Analysis**: For each storage account, enumerates all file shares and checks usage
 4. **Intelligent Scaling**: Applies tiered logic based on current quota and remaining capacity
@@ -54,35 +54,35 @@ Click the button for your target cloud to open the deployment UI in Azure Portal
 3. Select **Build your own template in the editor**
 4. Upload `main.bicep` from this directory
 5. Fill in the required parameters:
-   - **hostPoolResourceId**: Select your AVD hostpool (used for tagging and naming conventions)
    - **storageResourceGroupId**: Full resource ID of the resource group containing your FSLogix storage accounts
+   - **functionAppResourceGroupName**: Name of the resource group where the function app will be deployed
    - **location**: Azure region for the function app
-6. Configure optional parameters as needed
+6. Configure optional parameters as needed (host pool association, networking, encryption, monitoring)
 7. Review and create
 
 ### Azure CLI
 
 ```bash
-az deployment group create \
-  --resource-group <management-rg-name> \
+az deployment sub create \
+  --location eastus \
   --template-file main.bicep \
   --parameters \
-    hostPoolResourceId='/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.DesktopVirtualization/hostPools/{hp-name}' \
+    functionAppResourceGroupName='rg-avd-sqm' \
     storageResourceGroupId='/subscriptions/{sub-id}/resourceGroups/{storage-rg-name}' \
     location='eastus' \
-    timerSchedule='0 */30 * * * *'
+    hostPoolResourceId='/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.DesktopVirtualization/hostPools/{hp-name}'
 ```
 
 ### Azure PowerShell
 
 ```powershell
-New-AzResourceGroupDeployment `
-  -ResourceGroupName '<management-rg-name>' `
+New-AzSubscriptionDeployment `
+  -Location 'eastus' `
   -TemplateFile '.\main.bicep' `
-  -hostPoolResourceId '/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.DesktopVirtualization/hostPools/{hp-name}' `
+  -functionAppResourceGroupName 'rg-avd-sqm' `
   -storageResourceGroupId '/subscriptions/{sub-id}/resourceGroups/{storage-rg-name}' `
   -location 'eastus' `
-  -timerSchedule '0 */30 * * * *'
+  -hostPoolResourceId '/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.DesktopVirtualization/hostPools/{hp-name}'
 ```
 
 ## Parameters
@@ -91,8 +91,14 @@ New-AzResourceGroupDeployment `
 
 | Parameter | Description |
 |-----------|-------------|
-| `hostPoolResourceId` | **Required.** Resource ID of an AVD hostpool. Used for tagging and naming convention discovery. |
+| `functionAppResourceGroupName` | **Required.** Name of the resource group where the function app and its supporting resources are deployed. |
 | `storageResourceGroupId` | **Required.** Full resource ID of the resource group containing FSLogix storage accounts. The function will monitor ALL storage accounts and file shares in this resource group. |
+
+#### Optional — but required together
+
+| Parameter | Description |
+|-----------|-------------|
+| `hostPoolResourceId` | Resource ID of an AVD host pool. Used for tagging and automatic naming convention detection. Leave empty for standalone storage scenarios (e.g., App Attach); when empty, `functionAppNameOverride` and `storageAccountNameOverride` must be provided. |
 
 ### Optional Parameters
 
@@ -102,7 +108,7 @@ New-AzResourceGroupDeployment `
 |-----------|------|---------|-------------|
 | `location` | string | Resource group location | Azure region for function app deployment |
 | `tags` | object | {} | Tags to apply to all deployed resources |
-| `appServicePlanResourceId` | string | '' | Resource ID of existing App Service Plan. Leave empty to create a new S1 Standard plan. |
+| `appServicePlanResourceId` | string | '' | Resource ID of existing App Service Plan. Leave empty to create a new PremiumV3 P1v3 plan. |
 | `zoneRedundant` | bool | false | Enable zone redundancy for new App Service Plan (requires 3 instances). Only applies if creating new plan. |
 
 #### Networking Configuration
@@ -113,9 +119,6 @@ New-AzResourceGroupDeployment `
 | `privateEndpointSubnetResourceId` | string | '' | Subnet for private endpoints. **Required if** `privateEndpoint=true`. |
 | `functionAppDelegatedSubnetResourceId` | string | '' | Subnet delegated to `Microsoft.Web/serverFarms` for VNet integration. **Required if** `privateEndpoint=true`. |
 | `azureBlobPrivateDnsZoneResourceId` | string | '' | Private DNS Zone for blob storage. Required for private endpoint DNS resolution. |
-| `azureFilePrivateDnsZoneResourceId` | string | '' | Private DNS Zone for file storage. Required for private endpoint DNS resolution. |
-| `azureQueuePrivateDnsZoneResourceId` | string | '' | Private DNS Zone for queue storage. Required for private endpoint DNS resolution. |
-| `azureTablePrivateDnsZoneResourceId` | string | '' | Private DNS Zone for table storage. Required for private endpoint DNS resolution. |
 | `azureFunctionAppPrivateDnsZoneResourceId` | string | '' | Private DNS Zone for function app. Required for private endpoint DNS resolution. |
 
 #### Encryption Configuration
@@ -136,7 +139,7 @@ New-AzResourceGroupDeployment `
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `timerSchedule` | string | '0 */60 * * * *' | Timer trigger CRON expression. Default runs every 60 minutes. Common values:<br>• `0 */30 * * * *` - Every 30 minutes<br>• `0 0 */6 * * *` - Every 6 hours<br>• `0 0 8 * * *` - Daily at 8:00 AM UTC |
+| `timerSchedule` | string | '0 */15 * * * *' | Timer trigger CRON expression. Default runs every 15 minutes. Common values:<br>• `0 */5 * * * *` - Every 5 minutes<br>• `0 */30 * * * *` - Every 30 minutes<br>• `0 0 * * * *` - Every hour |
 
 ## Architecture
 
@@ -152,11 +155,11 @@ New-AzResourceGroupDeployment `
 2. **Function App Storage Account** (Standard_LRS)
    - Purpose: Function app backend (code, state, logs)
    - Encryption: Platform-managed or customer-managed keys
-   - Private endpoints: Optional (blob, file, queue, table)
+   - Private endpoints: Optional (blob only; queue and table storage are disabled)
 
-3. **App Service Plan** (S1 Standard, optional)
+3. **App Service Plan** (PremiumV3 P1v3, optional)
    - Created only if `appServicePlanResourceId` is empty
-   - SKU: S1 (1 vCPU, 1.75 GB RAM)
+   - Default SKU: P1v3 (2 vCPU, 8 GB RAM); configurable via UI (P0v3–P3v3)
    - Zone redundancy: Optional
 
 4. **Application Insights** (optional)

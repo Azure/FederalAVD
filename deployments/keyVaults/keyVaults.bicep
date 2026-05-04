@@ -9,9 +9,6 @@ targetScope = 'subscription'
 @description('Required. The Azure region for all foundation resources.')
 param location string = deployment().location
 
-@description('Optional. Custom workload identifier used when naming the resource group and resources. Defaults to "foundation".')
-param customIdentifier string = ''
-
 @description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
 param nameConvResTypeAtEnd bool = false
 
@@ -19,11 +16,6 @@ param nameConvResTypeAtEnd bool = false
 
 @description('Optional. Deploy the Secrets Key Vault (Standard SKU) for storing AVD credentials (VM admin password, domain join credentials).')
 param deploySecretsKeyVault bool = true
-
-@description('Optional. Override the auto-generated Secrets Key Vault name. Must be globally unique, 3-24 chars, alphanumeric and hyphens only.')
-@maxLength(24)
-#disable-next-line secure-secrets-in-params
-param secretsKeyVaultNameOverride string = ''
 
 @description('Optional. Enable soft delete on the Secrets Key Vault.')
 param secretsKeyVaultEnableSoftDelete bool = true
@@ -74,10 +66,6 @@ param domainJoinUserPrincipalName string = ''
 @description('Optional. Deploy the Encryption Key Vault (Premium SKU) for Customer-Managed Keys. Required when using CMK in any AVD solution.')
 param deployEncryptionKeyVault bool = true
 
-@description('Optional. Override the auto-generated Encryption Key Vault name. Must be globally unique, 3-24 chars, alphanumeric and hyphens only.')
-@maxLength(24)
-param encryptionKeyVaultNameOverride string = ''
-
 // ── Private Endpoints ──────────────────────────────────────────────────────────
 
 @description('Optional. Deploy private endpoints for the Key Vaults. When true, public network access is disabled on both Key Vaults.')
@@ -116,18 +104,18 @@ var locations = startsWith(cloud, 'us')
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 
 var deploymentSuffix = timeStamp
-var identifier = empty(customIdentifier) ? 'operations' : customIdentifier
+var identifier = 'operations'
 
 #disable-next-line BCP329
 var locationAbbreviation = locations[varLocation].abbreviation
 
 // Resource group naming: rg-avd-foundation-eus (not reversed) or avd-foundation-eus-rg (reversed)
-var nameConv_Foundation_ResGroup = nameConvResTypeAtEnd
+var nameConv_Operations_ResGroup = nameConvResTypeAtEnd
   ? 'avd-${identifier}-LOCATION-RESOURCETYPE'
   : 'RESOURCETYPE-avd-${identifier}-LOCATION'
 
 // Shared resource naming with TOKEN placeholder for sub-type differentiation (sec, enc)
-var nameConv_Foundation_Resources = nameConvResTypeAtEnd
+var nameConv_Operations_Resources = nameConvResTypeAtEnd
   ? 'avd-TOKEN-LOCATION-RESOURCETYPE'
   : 'RESOURCETYPE-avd-TOKEN-LOCATION'
 
@@ -140,7 +128,7 @@ var privateEndpointNICNameConv = nameConvResTypeAtEnd
   : '${resourceAbbreviations.networkInterfaces}-${resourceAbbreviations.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
 
 var operationsResourceGroupName = replace(
-  replace(nameConv_Foundation_ResGroup, 'LOCATION', locationAbbreviation),
+  replace(nameConv_Operations_ResGroup, 'LOCATION', locationAbbreviation),
   'RESOURCETYPE',
   resourceAbbreviations.resourceGroups
 )
@@ -149,10 +137,10 @@ var operationsResourceGroupName = replace(
 var uniqueStringOperations = take(uniqueString(subscription().subscriptionId, operationsResourceGroupName), 6)
 
 // Key Vault names are capped at 24 chars to satisfy Azure naming constraints
-var secretsKeyVaultNameGenerated = take(
+var secretsKeyVaultName = take(
   replace(
     replace(
-      replace(nameConv_Foundation_Resources, 'TOKEN', 'sec-${uniqueStringOperations}'),
+      replace(nameConv_Operations_Resources, 'TOKEN', 'sec-${uniqueStringOperations}'),
       'LOCATION',
       locationAbbreviation
     ),
@@ -162,10 +150,10 @@ var secretsKeyVaultNameGenerated = take(
   24
 )
 
-var encryptionKeyVaultNameGenerated = take(
+var encryptionKeyVaultName = take(
   replace(
     replace(
-      replace(nameConv_Foundation_Resources, 'TOKEN', 'enc-${uniqueStringOperations}'),
+      replace(nameConv_Operations_Resources, 'TOKEN', 'enc-${uniqueStringOperations}'),
       'LOCATION',
       locationAbbreviation
     ),
@@ -175,14 +163,6 @@ var encryptionKeyVaultNameGenerated = take(
   24
 )
 
-var secretsKeyVaultName = empty(secretsKeyVaultNameOverride) ? secretsKeyVaultNameGenerated : secretsKeyVaultNameOverride
-var encryptionKeyVaultName = empty(encryptionKeyVaultNameOverride)
-  ? encryptionKeyVaultNameGenerated
-  : encryptionKeyVaultNameOverride
-
-// ── Derived Variables ──────────────────────────────────────────────────────────
-
-// Shorten VNet names > 36 chars to keep private endpoint names within limits
 // ── Resource Group ─────────────────────────────────────────────────────────────
 
 module operationsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = {
