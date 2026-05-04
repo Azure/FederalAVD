@@ -25,47 +25,79 @@
 							}
 						},
 						{
-							"name": "scope",
-							"type": "Microsoft.Common.Section",
-							"label": "Subscription and Location Details",
-							"elements": [
-								{
-									"name": "subscription",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Subscription",
-									"constraints": {
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-										"required": true
-									}
-								},
-								{
-									"name": "locationsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('basics').scope.subscription.id))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/locations?api-version=2022-12-01')]",
-										"transforms": {
-											"list": "sort_by(value, &displayName)[?name!='global' && !contains(displayName, '(Stage)')] | [*].{label: displayName, value: { displayName: displayName, name: name }}"
-										}
-									}
-								},
-								{
-									"name": "location",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Region",
-									"toolTip": "Select the region where you want to deploy the function app.",
-									"constraints": {
-										"allowedValues": "[steps('basics').scope.locationsApi.transformed.list]"
-									}
+							"name": "subscription",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Host Pool Subscription",
+							"constraints": {
+								"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+								"required": true
+							}
+						},
+						{
+							"name": "hostPoolsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('basics').subscription.id))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.DesktopVirtualization/hostPools?api-version=2024-04-03')]"
+							}
+						},
+						{
+							"name": "hostPool",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Host Pool",
+							"multiLine": true,
+							"toolTip": "Select the host pool to automate with Session Host Replacer.",
+							"constraints": {
+								"allowedValues": "[map(steps('basics').hostPoolsApi.value, (hp) => parse(concat('{\"label\":\"', hp.name, '\",\"description\":\"Resource Group: ', first(skip(split(hp.id, '/'), 4)), '\",\"value\":{\"id\":\"', hp.id, '\",\"name\":\"', hp.name, '\"}}')))]",
+								"required": true
+							}
+						},
+						{
+							"name": "hostPoolProps",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('basics').hostPool))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').hostPool.id, '?api-version=2024-04-03')]"
+							}
+						},
+						{
+							"name": "locationsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('basics').subscription.id))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').subscription.id, '/locations?api-version=2022-12-01')]",
+								"transforms": {
+									"list": "sort_by(value, &displayName)[?name!='global' && !contains(displayName, '(Stage)')] | [*].{label: displayName, value: { displayName: displayName, name: name }}"
 								}
-							]
+							}
+						},
+						{
+							"name": "location",
+							"type": "Microsoft.Common.DropDown",
+							"defaultValue": "[first(map(filter(steps('basics').locationsApi.value, (loc) => equals(loc.name, steps('basics').hostPoolProps.location)), (loc) => loc.displayName))]",
+							"label": "Deployment Region",
+							"toolTip": "Select the region where you want to deploy the function app.",
+							"constraints": {
+								"allowedValues": "[steps('basics').locationsApi.transformed.list]"
+							}
+						},
+						{
+							"name": "hostsRGProps",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(not(empty(steps('basics').hostPool)), not(empty(steps('basics').hostPoolProps.tags.hostsResourceGroupId)))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').hostPoolProps.tags.hostsResourceGroupId, '?api-version=2021-04-01')]"
+							}
 						}
 					]
 				},
 				{
-					"name": "functionApp",
-					"label": "Function App Configuration",
+					"name": "replacerConfig",
+					"label": "Replacer Configuration",
 					"elements": [
 						{
 							"name": "infoBox1",
@@ -75,1118 +107,720 @@
 							}
 						},
 						{
-							"name": "executionSettings",
-							"type": "Microsoft.Common.Section",
-							"label": "Function App Settings",
-							"elements": [
-								{
-									"name": "existingHostPoolTextBlock",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Select the hostpool that you wish to automate below."
-									}
-								},
-								{
-									"name": "hostPoolSubscription",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Host Pool Subscription",
-									"defaultValue": "[steps('basics').scope.subscription.displayName]",
-									"toolTip": "Select the subscription containing the host pool you want to manage.",
-									"constraints": {
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-										"required": true
-									}
-								},
-								{
-									"name": "hostPoolsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('functionApp').executionSettings.hostPoolSubscription.id))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('functionApp').executionSettings.hostPoolSubscription.id, '/providers/Microsoft.DesktopVirtualization/hostPools?api-version=2024-04-03')]"
-									}
-								},
-								{
-									"name": "hostPool",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Host Pool",
-									"multiLine": true,
-									"toolTip": "Select the host pool to automate with Session Host Replacer.",
-									"constraints": {
-										"allowedValues": "[map(steps('functionApp').executionSettings.hostPoolsApi.value, (hp) => parse(concat('{\"label\":\"', hp.name, '\",\"description\":\"Resource Group: ', first(skip(split(hp.id, '/'), 4)), '\",\"value\":{\"id\":\"', hp.id, '\",\"name\":\"', hp.name, '\"}}')))]",
-										"required": true
-									}
-								},
-								{
-									"name": "hostPoolProps",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('functionApp').executionSettings.hostPool))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('functionApp').executionSettings.hostPool.id, '?api-version=2024-04-03')]"
-									}
-								},
-								{
-									"name": "hostsRGProps",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(not(empty(steps('functionApp').executionSettings.hostPool)), not(empty(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId)))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId, '?api-version=2021-04-01')]"
-									}
-								},
-								{
-									"name": "templateSpecOptionsGroup",
-									"type": "Microsoft.Common.OptionsGroup",
-									"label": "Session Host Template Spec",
-									"toolTip": "Choose whether to use an existing template spec or create a new one.",
-									"defaultValue": "Create new",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Create new",
-												"value": "new"
-											},
-											{
-												"label": "Use existing",
-												"value": "existing"
-											}
-										]
-									}
-								},
-								{
-									"name": "templateSpecResourceSelector",
-									"type": "Microsoft.Solutions.ResourceSelector",
-									"label": "Existing Template Spec",
-									"toolTip": "Select the existing template spec for session host deployments.",
-									"resourceType": "Microsoft.Resources/templateSpecs",
-									"visible": "[equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing')]",
-									"constraints": {
-										"required": "[equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing')]"
-									}
-								},
-								{
-									"name": "templateSpecName",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Custom Template Spec Name",
-									"toolTip": "Custom Name for the new template spec. Leave empty for auto-generated name.",
-									"visible": "[equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new')]",
-									"constraints": {
-										"required": false,
-										"regex": "^[a-zA-Z0-9-_]{0,90}$",
-										"validationMessage": "Template spec name must be 0-90 characters and can contain letters, numbers, hyphens, and underscores."
-									}
-								},
-								{
-									"name": "templateSpecVersion",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Template Spec Version",
-									"toolTip": "Version number for the template spec.",
-									"defaultValue": "1.0.0",
-									"visible": "[equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new')]",
-									"constraints": {
-										"required": true,
-										"regex": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-										"validationMessage": "Version must be in the format X.Y.Z (e.g., 1.0.0)."
-									}
-								},
-								{
-									"name": "scheduleHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Schedule"
-									}
-								},
-								{
-									"name": "scheduleInfoBox",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"text": "The function will run every 30 minutes during the selected hours on the selected days of the week. For example, selecting 8 AM to 5 PM with Monday-Friday will run the function at :00 and :30 of each hour from 8 AM to 5 PM on weekdays only. Use the Start Minute to offset the schedule (e.g., :15 and :45). The schedule uses the timezone selected in the 'Session Hosts' blade.",
-										"style": "Info"
-									}
-								},
-								{
-									"name": "bestPracticesInfoBox1",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"text": "Best Practices: Schedule replacements during off-peak hours (typically overnight or early morning, e.g., 12 AM - 6 AM) when Azure Virtual Desktop Scaling Plans have already powered off most VMs for cost savings. The Session Host Replacer prioritizes powered-off VMs for replacement, resulting in zero user impact and optimal cost efficiency.",
-										"style": "Success"
-									}
-								},								
-								{
-									"name": "scheduleHours",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Schedule Hours",
-									"toolTip": "Select the hours when the function should run. You can select multiple hours.",
-									"defaultValue": [
-										"12 AM",
-										"1 AM",
-										"2 AM",
-										"3 AM",
-										"4 AM",
-										"5 AM",
-										"6 AM",
-										"7 AM",
-										"8 AM",
-										"9 AM",
-										"10 AM",
-										"11 AM",
-										"12 PM",
-										"1 PM",
-										"2 PM",
-										"3 PM",
-										"4 PM",
-										"5 PM",
-										"6 PM",
-										"7 PM",
-										"8 PM",
-										"9 PM",
-										"10 PM",
-										"11 PM"
-									],
-									"multiselect": true,
-									"selectAll": true,
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "12 AM",
-												"value": "0"
-											},
-											{
-												"label": "1 AM",
-												"value": "1"
-											},
-											{
-												"label": "2 AM",
-												"value": "2"
-											},
-											{
-												"label": "3 AM",
-												"value": "3"
-											},
-											{
-												"label": "4 AM",
-												"value": "4"
-											},
-											{
-												"label": "5 AM",
-												"value": "5"
-											},
-											{
-												"label": "6 AM",
-												"value": "6"
-											},
-											{
-												"label": "7 AM",
-												"value": "7"
-											},
-											{
-												"label": "8 AM",
-												"value": "8"
-											},
-											{
-												"label": "9 AM",
-												"value": "9"
-											},
-											{
-												"label": "10 AM",
-												"value": "10"
-											},
-											{
-												"label": "11 AM",
-												"value": "11"
-											},
-											{
-												"label": "12 PM",
-												"value": "12"
-											},
-											{
-												"label": "1 PM",
-												"value": "13"
-											},
-											{
-												"label": "2 PM",
-												"value": "14"
-											},
-											{
-												"label": "3 PM",
-												"value": "15"
-											},
-											{
-												"label": "4 PM",
-												"value": "16"
-											},
-											{
-												"label": "5 PM",
-												"value": "17"
-											},
-											{
-												"label": "6 PM",
-												"value": "18"
-											},
-											{
-												"label": "7 PM",
-												"value": "19"
-											},
-											{
-												"label": "8 PM",
-												"value": "20"
-											},
-											{
-												"label": "9 PM",
-												"value": "21"
-											},
-											{
-												"label": "10 PM",
-												"value": "22"
-											},
-											{
-												"label": "11 PM",
-												"value": "23"
-											}
-										]
-									}
-								},
-								{
-									"name": "scheduleDaysOfWeek",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Days of Week",
-									"toolTip": "Select which days of the week the function should run.",
-									"defaultValue": [
-										"Sunday",
-										"Monday",
-										"Tuesday",
-										"Wednesday",
-										"Thursday",
-										"Friday",
-										"Saturday"
-									],
-									"multiselect": true,
-									"selectAll": true,
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Sunday",
-												"value": "0"
-											},
-											{
-												"label": "Monday",
-												"value": "1"
-											},
-											{
-												"label": "Tuesday",
-												"value": "2"
-											},
-											{
-												"label": "Wednesday",
-												"value": "3"
-											},
-											{
-												"label": "Thursday",
-												"value": "4"
-											},
-											{
-												"label": "Friday",
-												"value": "5"
-											},
-											{
-												"label": "Saturday",
-												"value": "6"
-											}
-										]
-									}
-								},
-								{
-									"name": "bestPracticesInfoBox2",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"text": "Best Practices: If managing multiple host pools, stagger the execution time by setting different start minutes for each deployment to prevent simultaneous runs and avoid API throttling. The function executes twice per hour: at the start minute and 30 minutes later (e.g., :15 and :45 if start minute is 15).",
-										"style": "Success"
-									}
-								},
-								{
-									"name": "scheduleMinuteOffset",
-									"type": "Microsoft.Common.Slider",
-									"label": "Start Minute",
-									"toolTip": "The function executes twice per hour at this minute and 30 minutes later. For example, if set to 15, the function runs at :15 and :45 of each scheduled hour (8:15, 8:45, 9:15, 9:45, etc.). Set to 0 to run at :00 and :30. Use different values across deployments to stagger execution.",
-									"min": 0,
-									"max": 29,
-									"defaultValue": 0,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "lifecyleManagementTextBlock",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Lifecycle Settings"
-									}
-								},								
-								{
-									"name": "replacementModeTextBlock",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Session hosts are automatically replaced when a new image version is available. You can optionally specify a delay period before triggering replacements after a new image is published to allow for testing."
-									}
-								},
-								{
-									"name": "replaceSessionHostOnNewImageVersionDelayDays",
-									"type": "Microsoft.Common.Slider",
-									"label": "New Image Version Delay (days)",
-									"toolTip": "Number of days to wait after a new image is published before triggering replacements. This allows for ringed deployments and testing before widespread replacements occur. Set to 0 for immediate replacements upon new image detection.",
-									"min": 0,
-									"max": 30,
-									"defaultValue": 0,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": false
-									}
-								},
-								{
-									"name": "allowImageVersionRollback",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Allow Image Version Rollback",
-									"toolTip": "When enabled, allows session hosts to be replaced even if their current image version is newer than the latest available version. When disabled (recommended), prevents unintended rollbacks to older images.",
-									"constraints": {
-										"required": false
-									}
-								},
-								{
-									"name": "replacementMode",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Replacement Mode",
-									"toolTip": "Select the Replacement Mode Option. Side-by-Side (Add then Delete): Adds new session hosts before deleting old ones resulting in zero downtime during updates, but higher cost during update cycles (can temporarily double host pool size). This mode does NOT support dedicated hosts. Requires sufficient vCPU quota and subnet IP space for both old and new hosts simultaneously. Delete-First (Delete then Add): Deletes idle session hosts before adding replacements resulting in lower cost (maintains approximately target capacity throughout), but temporary capacity reduction during replacements. Supports dedicated hosts - preserves dedicated host assignments and zones. Reuses hostnames for seamless transitions",
-									"defaultValue": "SideBySide",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Side-by-Side (Add then Delete)",
-												"value": "SideBySide"
-											},
-											{
-												"label": "Delete-First (Delete then Add)",
-												"value": "DeleteFirst"
-											}
-										]
-									}
-								},
-								{
-									"name": "sideBySideWarning",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
-									"options": {
-										"style": "Warning",
-										"text": "Side-By-Side mode does NOT support dedicated hosts. Dedicated host properties from existing VMs will not be preserved during replacements. Use Delete-First mode if you require dedicated host support."
-									}
-								},
-								{
-									"name": "sideBySideCapacityWarning",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
-									"options": {
-										"style": "Warning",
-										"text": "Side-By-Side mode can temporarily DOUBLE your host pool size during replacements. Ensure you have sufficient vCPU quota and subnet IP address space to accommodate both old and new session hosts simultaneously."
-									}
-								},
-								{
-									"name": "drainGracePeriodHours",
-									"type": "Microsoft.Common.Slider",
-									"label": "Drain Grace Period for Active Sessions (hours)",
-									"toolTip": "Session hosts WITH active sessions will remain in drain mode for this duration before shutdown or deletion. This protects user sessions.",
-									"min": 1,
-									"max": 168,
-									"defaultValue": 24,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "minimumDrainMinutes",
-									"type": "Microsoft.Common.Slider",
-									"label": "Minimum Drain Time for Idle Hosts (minutes)",
-									"toolTip": "Session hosts with ZERO sessions require only this minimum drain time before deletion. With hourly scheduling: 0=current run, 1-60=next run (~1hr), 61-120=second run (~2hrs). Values >0 provide safety buffer for API lag and race conditions.",
-									"min": 0,
-									"max": 120,
-									"defaultValue": 15,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": true
+							"name": "templateSpecOptionsGroup",
+							"type": "Microsoft.Common.OptionsGroup",
+							"label": "Session Host Template Spec",
+							"toolTip": "Choose whether to use an existing template spec or create a new one.",
+							"defaultValue": "Create new",
+							"constraints": {
+								"required": true,
+								"allowedValues": [
+									{
+										"label": "Create new",
+										"value": "new"
 									},
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst')]"
-								},
-								{
-									"name": "minimumCapacityPercentage",
-									"type": "Microsoft.Common.Slider",
-									"label": "Availability Safety Floor (%)",
-									"toolTip": "Availability Safety Floor: Prevents pool capacity from dropping below this percentage during replacements, ensuring minimum availability. Smart Scaling Plan Integration (Phase-Aware): If a scaling plan is assigned to your host pool: RampUp/Peak phases: This configured value acts as a safety floor (whichever is higher: this config or scaling plan target). RampDown/OffPeak phases: Scaling plan percentage used directly (can go below this value for aggressive off-hours replacements). This allows safe, aggressive replacements during off-peak when users aren't active, while maintaining your safety floor during business hours. Falls back to this static value if no scaling plan configured. Example: Config=70%, Scaling Plan Peak=90%, OffPeak=50%. Result: Peak uses 90%, OffPeak uses 50% (aggressive off-hours updates). Guidance: 80% = very conservative, 50% = balanced. This works with 'Blast Radius Limit' to control replacement pace.",
-									"min": 20,
-									"max": 100,
-									"defaultValue": 80,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": true
-									},
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst')]"
-								},
-								{
-									"name": "maxDeletionsPerCycle",
-									"type": "Microsoft.Common.Slider",
-									"label": "Blast Radius Limit (VMs per cycle)",
-									"toolTip": "Blast Radius Limit: Caps the absolute number of VMs deleted/deployed per cycle, regardless of available headroom above the safety floor. Limits impact if issues occur during replacement. Example: With 500 target VMs and 50% floor (250 minimum), you have 250 VM headroom. Setting this to 50 means max 50 deleted per cycle despite having 250 of headroom. Guidance: Small pools (< 100 VMs): 20-50. Large pools (> 200 VMs): 50-100. Lower = slower/safer, higher = faster replacement. Works with Progressive Scale-Up which further limits initial cycles.",
-									"min": 1,
-									"max": 100,
-									"defaultValue": 50,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": true
-									},
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst')]"
-								},
-								{
-									"name": "targetSessionHostCount",
-									"type": "Microsoft.Common.Slider",
-									"label": "Target Session Host Count",
-									"toolTip": "The target number of session hosts to maintain. Set to 0 for auto-detect mode: automatically maintains current count during each replacement cycle, allowing manual scaling between image updates.",
-									"min": 0,
-									"max": 1000,
-									"defaultValue": 0,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": true
+									{
+										"label": "Use existing",
+										"value": "existing"
 									}
-								},
-								{
-									"name": "sideBySideBufferInfoBox",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
-									"options": {
-										"text": "Automatic Capacity Buffer: Side-by-Side mode automatically allows your pool to grow up to 2× the target count during replacements. Example: 100 target VMs → up to 200 total VMs temporarily (100 old + 100 new). Ensure you have sufficient vCPU quota and subnet IP address space for double your target capacity. The pool returns to target size after old hosts are deleted.",
-										"style": "Info"
-									}
-								},
-								{
-									"name": "maxDeploymentBatchSize",
-									"type": "Microsoft.Common.Slider",
-									"label": "Deployment Batch Size Ceiling",
-									"toolTip": "Deployment Ceiling: Maximum number of VMs that can be deployed in a single cycle, but actual deployments are controlled by Progressive Scale-Up which starts conservatively and increases gradually. How it works: With Progressive Scale-Up enabled (default), initial cycles deploy a small percentage (e.g., 20%), then gradually increase (50%, 80%, 100%) after successful runs. This ceiling prevents deploying more than this limit even at 100%. Example: 100 target VMs, ceiling set to 100, Progressive Scale-Up at 20%: Cycle 1 deploys ~20 VMs (not 100), then 40 VMs, then 64 VMs, then up to 100 VM ceiling. Guidance: Set to maximum you're comfortable deploying simultaneously. Progressive Scale-Up provides safety for initial cycles.",
-									"min": 1,
-									"max": 1000,
-									"defaultValue": 100,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": true
-									},
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]"
-								},
-								{
-									"name": "minimumHostIndex",
-									"type": "Microsoft.Common.Slider",
-									"visible": true,
-									"label": "Minimum Host Index",
-									"toolTip": "The minimum starting index for hostname numbering. Gap-filling logic starts from this index when deploying new hosts (e.g., 1 allows host01, host02; 10 allows host10, host11). Applies to both DeleteFirst and SideBySide modes.",
-									"min": 1,
-									"max": 999,
-									"defaultValue": 1,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": false
-									}
-								},
-								{
-									"name": "progressiveScaleUpHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Progressive Scale-Up"
-									}
-								},
-								{
-									"name": "progressiveScaleUpTextBlock",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Progressive scale-up starts with a small percentage of hosts and gradually increases after successful deployments. This helps identify issues before deploying to all hosts."
-									}
-								},
-								{
-									"name": "enableProgressiveScaleUp",
-									"type": "Microsoft.Common.CheckBox",
-									"defaultValue": true,
-									"label": "Enable Progressive Scale-Up",
-									"toolTip": "Enable percentage-based progressive deployment of session host replacements."
-								},
-								{
-									"name": "initialDeploymentPercentage",
-									"type": "Microsoft.Common.Slider",
-									"visible": "[steps('functionApp').executionSettings.enableProgressiveScaleUp]",
-									"label": "Initial Deployment Percentage",
-									"toolTip": "Percentage of total needed hosts to deploy in the first run.",
-									"min": 1,
-									"max": 100,
-									"defaultValue": 20,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "scaleUpIncrementPercentage",
-									"type": "Microsoft.Common.Slider",
-									"visible": "[steps('functionApp').executionSettings.enableProgressiveScaleUp]",
-									"label": "Scale-Up Increment Percentage",
-									"toolTip": "Percentage added after each successful deployment run.",
-									"min": 5,
-									"max": 50,
-									"defaultValue": 40,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "successfulRunsBeforeScaleUp",
-									"type": "Microsoft.Common.Slider",
-									"visible": "[steps('functionApp').executionSettings.enableProgressiveScaleUp]",
-									"label": "Successful Runs Before Scale-Up",
-									"toolTip": "Number of consecutive successful deployment runs required before increasing the deployment percentage.",
-									"min": 1,
-									"max": 5,
-									"defaultValue": 1,
-									"showStepMarkers": false,
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "shutdownRetentionHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
-									"options": {
-										"text": "Shutdown Retention for Rollback"
-									}
-								},
-								{
-									"name": "shutdownRetentionInfoBox",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
-									"options": {
-										"text": "Enable shutdown retention to deallocate replaced session hosts instead of deleting them immediately. VMs remain in the host pool (in drain mode) for a configurable period, allowing you to power them on for rollback if issues are discovered. After the retention period expires, VMs are automatically removed from the host pool and deleted.",
-										"style": "Info"
-									}
-								},
-								{
-									"name": "enableShutdownRetention",
-									"type": "Microsoft.Common.CheckBox",
-									"visible": "[equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide')]",
-									"label": "Enable Shutdown Retention",
-									"toolTip": "Deallocate replaced session hosts instead of deleting them immediately, keeping them available for rollback.",
-									"defaultValue": false
-								},
-								{
-									"name": "shutdownRetentionDays",
-									"type": "Microsoft.Common.Slider",
-									"visible": "[and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention)]",
-									"label": "Shutdown Retention Period (Days)",
-									"toolTip": "Number of days to retain shutdown session hosts before automatic deletion. VMs incur only storage costs while deallocated.",
-									"min": 1,
-									"max": 7,
-									"defaultValue": 3,
-									"showStepMarkers": true,
-									"constraints": {
-										"required": false
-									}
-								},
-								{
-									"name": "tagManagementHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Tag Management"
-									}
-								},
-								{
-									"name": "fixSessionHostTags",
-									"type": "Microsoft.Common.CheckBox",
-									"defaultValue": true,
-									"label": "Fix Session Host Tags",
-									"toolTip": "Automatically correct session host tags during execution."
-								},
-								{
-									"name": "includePreExistingSessionHosts",
-									"type": "Microsoft.Common.CheckBox",
-									"defaultValue": true,
-									"label": "Include Pre-Existing Session Hosts",
-									"toolTip": "Include session hosts that existed before this solution was deployed."
-								},
-								{
-									"name": "tagIncludeInAutomation",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Include in Automation Tag Name",
-									"defaultValue": "IncludeInAutoReplace",
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "tagDeployTimestamp",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Deploy Timestamp Tag Name",
-									"defaultValue": "AutoReplaceDeployTimestamp",
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "tagPendingDrainTimestamp",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Pending Drain Timestamp Tag Name",
-									"defaultValue": "AutoReplacePendingDrainTimestamp",
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "tagScalingPlanExclusionTag",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Scaling Plan Exclusion Tag Name",
-									"defaultValue": "ScalingPlanExclusion",
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "tagShutdownTimestamp",
-									"type": "Microsoft.Common.TextBox",
-									"visible": "[and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention)]",
-									"label": "Shutdown Timestamp Tag Name",
-									"toolTip": "Tag name used to track when a session host was shutdown for retention period calculation.",
-									"defaultValue": "AutoReplaceShutdownTimestamp",
-									"constraints": {
-										"required": false
-									}
-								},
-								{
-									"name": "deviceCleanupHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Device Cleanup"
-									}
-								},
-								{
-									"name": "deviceCleanupInfoBox",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"text": "Device Cleanup Automation Overview: Device cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. This is especially important when session hosts are Entra ID-joined (i.e., not joined to Active Directory Domain Services or Entra Domain Services) to prevent accumulation of orphaned device records. Required Microsoft Graph API Permissions: The function app's managed identity requires the following permissions: 'Device.ReadWrite.All' - Required for Entra ID device deletion and 'DeviceManagementManagedDevices.ReadWrite.All' - Required for Intune device deletion. Air-Gapped Cloud Limitations: Intune is not currently available in Air-Gapped Clouds such as Azure Government Secret and Azure Government Top Secret. In these environments, the Intune Device Cleanup option will be automatically disabled.",
-										"style": "Info",
-										"uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
-									}
-								},
-								{
-									"name": "removeEntraDevice",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Remove Entra ID Device Records",
-									"toolTip": "Remove Entra ID device records when deleting session hosts.",
-									"defaultValue": true
-								},
-								{
-									"name": "removeIntuneDevice",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Remove Intune Device Records",
-									"toolTip": "Remove Intune device records when deleting session hosts.",
-									"defaultValue": true
-								},
-								{
-									"name": "identityTypeHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice)]",
-									"options": {
-										"text": "Function App Managed Identity"
-									}
-								},
-								{
-									"name": "identityTypeInfoBox",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice)]",
-									"options": {
-										"text": "Choose the type of managed identity the function app will use for authentication. 'System-Assigned' is simpler (created automatically), while 'User-Assigned' allows pre-granting Graph permissions before deployment (required for immediate device cleanup in DeleteFirst mode).",
-										"style": "Info"
-									}
-								},
-								{
-									"name": "identityType",
-									"type": "Microsoft.Common.DropDown",
-									"visible": "[or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice)]",
-									"label": "Managed Identity Type",
-									"multiLine": true,
-									"defaultValue": "System-Assigned",
-									"toolTip": "Select the type of managed identity for the function app. System-Assigned is automatically created during deployment. User-Assigned must be pre-created with Graph API permissions already granted.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "System-Assigned (Automatic)",
-												"value": "SystemAssigned",
-												"description": "Function app creates and manages its own identity. Grant Graph API permissions after deployment and restart the function app."
-											},
-											{
-												"label": "User-Assigned (Pre-configured)",
-												"value": "UserAssigned",
-												"description": "Use a pre-existing user-assigned managed identity with Graph API permissions already granted. Required for DeleteFirst mode with immediate device cleanup."
-											}
-										]
-									}
-								},
-								{
-									"name": "sessionHostReplacerUserAssignedIdentity",
-									"type": "Microsoft.Solutions.ResourceSelector",
-									"visible": "[and(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), equals(steps('functionApp').executionSettings.identityType, 'UserAssigned'))]",
-									"label": "User-Assigned Managed Identity",
-									"toolTip": "Select the pre-existing User-Assigned Managed Identity that has been granted the required Microsoft Graph API permissions (Device.ReadWrite.All and/or DeviceManagementManagedDevices.ReadWrite.All).",
-									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
-									"constraints": {
-										"required": "[and(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), equals(steps('functionApp').executionSettings.identityType, 'UserAssigned'))]"
-									}
-								}
-							]
+								]
+							}
 						},
 						{
-							"name": "infrastructure",
-							"type": "Microsoft.Common.Section",
-							"label": "Infrastructure",
-							"elements": [						
-								{
-									"name": "useExistingHostingPlan",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Use Existing App Service Plan",
-									"toolTip": "Select an existing App Service Plan instead of creating a new one."
-								},
-								{
-									"name": "appServicePlanSubscription",
-									"type": "Microsoft.Common.DropDown",
-									"label": "App Service Plan Subscription",
-									"placeholder": "",
-									"defaultValue": "[steps('basics').scope.subscription.displayName]",
-									"toolTip": "Select the subscription that contains your app service plan.",
-									"constraints": {
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-										"required": true
+							"name": "templateSpecResourceSelector",
+							"type": "Microsoft.Solutions.ResourceSelector",
+							"label": "Existing Template Spec",
+							"toolTip": "Select the existing template spec for session host deployments.",
+							"resourceType": "Microsoft.Resources/templateSpecs",
+							"visible": "[equals(steps('replacerConfig').templateSpecOptionsGroup, 'existing')]",
+							"constraints": {
+								"required": "[equals(steps('replacerConfig').templateSpecOptionsGroup, 'existing')]"
+							}
+						},
+						{
+							"name": "templateSpecName",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Custom Template Spec Name",
+							"toolTip": "Custom Name for the new template spec. Leave empty for auto-generated name.",
+							"visible": "[equals(steps('replacerConfig').templateSpecOptionsGroup, 'new')]",
+							"constraints": {
+								"required": false,
+								"regex": "^[a-zA-Z0-9-_]{0,90}$",
+								"validationMessage": "Template spec name must be 0-90 characters and can contain letters, numbers, hyphens, and underscores."
+							}
+						},
+						{
+							"name": "templateSpecVersion",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Template Spec Version",
+							"toolTip": "Version number for the template spec.",
+							"defaultValue": "1.0.0",
+							"visible": "[equals(steps('replacerConfig').templateSpecOptionsGroup, 'new')]",
+							"constraints": {
+								"required": true,
+								"regex": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+								"validationMessage": "Version must be in the format X.Y.Z (e.g., 1.0.0)."
+							}
+						},
+						{
+							"name": "scheduleHeader",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Schedule"
+							}
+						},
+						{
+							"name": "scheduleInfoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"options": {
+								"text": "The function will run every 30 minutes during the selected hours on the selected days of the week. For example, selecting 8 AM to 5 PM with Monday-Friday will run the function at :00 and :30 of each hour from 8 AM to 5 PM on weekdays only. Use the Start Minute to offset the schedule (e.g., :15 and :45). The schedule uses the timezone selected in the 'Session Hosts' blade.",
+								"style": "Info"
+							}
+						},
+						{
+							"name": "bestPracticesInfoBox1",
+							"type": "Microsoft.Common.InfoBox",
+							"options": {
+								"text": "Best Practices: Schedule replacements during off-peak hours (typically overnight or early morning, e.g., 12 AM - 6 AM) when Azure Virtual Desktop Scaling Plans have already powered off most VMs for cost savings. The Session Host Replacer prioritizes powered-off VMs for replacement, resulting in zero user impact and optimal cost efficiency.",
+								"style": "Success"
+							}
+						},
+						{
+							"name": "scheduleHours",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Schedule Hours",
+							"toolTip": "Select the hours when the function should run. You can select multiple hours.",
+							"defaultValue": [
+								"12 AM",
+								"1 AM",
+								"2 AM",
+								"3 AM",
+								"4 AM",
+								"5 AM",
+								"6 AM",
+								"7 AM",
+								"8 AM",
+								"9 AM",
+								"10 AM",
+								"11 AM",
+								"12 PM",
+								"1 PM",
+								"2 PM",
+								"3 PM",
+								"4 PM",
+								"5 PM",
+								"6 PM",
+								"7 PM",
+								"8 PM",
+								"9 PM",
+								"10 PM",
+								"11 PM"
+							],
+							"multiselect": true,
+							"selectAll": true,
+							"constraints": {
+								"required": true,
+								"allowedValues": [
+									{
+										"label": "12 AM",
+										"value": "0"
 									},
-									"visible": "[steps('functionApp').infrastructure.useExistingHostingPlan]"
-								},
-								{
-									"name": "serverFarmsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(not(empty(steps('functionApp').infrastructure.appServicePlanSubscription)), steps('functionApp').infrastructure.useExistingHostingPlan)]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('functionApp').infrastructure.appServicePlanSubscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2024-11-01')]"
-									}
-								},
-								{
-									"name": "appServicePlan",
-									"type": "Microsoft.Common.DropDown",
-									"visible": "[steps('functionApp').infrastructure.useExistingHostingPlan]",
-									"label": "App Service Plan",
-									"multiLine": true,
-									"toolTip": "Select the existing App Service Plan. Only plans in the selected subscription and location are shown.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('functionApp').infrastructure.serverFarmsApi.value, (sf) => equals(sf.location, steps('basics').scope.location.displayName)), (sf) => parse(concat('{\"label\":\"', sf.name, '\",\"description\":\"Location: ', sf.location, ' | Resource Group: ', first(skip(split(sf.id, '/'), 4)), '\",\"value\":\"', sf.id, '\"}')))]",
-										"required": true
-									}
-								},
-								{
-									"name": "planSku",
-									"type": "Microsoft.Common.DropDown",
-									"visible": "[not(steps('functionApp').infrastructure.useExistingHostingPlan)]",
-									"label": "App Service Plan SKU",
-									"defaultValue": "P0v3 (1 vCPU, 4 GB RAM) - Most Cost-Effective",
-									"toolTip": "Select the SKU for the new App Service Plan. P0v3 is recommended for cost optimization and fully supports all required features (Always On, VNet integration, PowerShell 7.4).",
-									"constraints": {
-										"allowedValues": [
-											{
-												"label": "P0v3 (1 vCPU, 4 GB RAM) - Most Cost-Effective",
-												"value": "PremiumV3_P0v3"
-											},
-											{
-												"label": "P1v3 (2 vCPU, 8 GB RAM)",
-												"value": "PremiumV3_P1v3"
-											},
-											{
-												"label": "P2v3 (4 vCPU, 16 GB RAM)",
-												"value": "PremiumV3_P2v3"
-											},
-											{
-												"label": "P3v3 (8 vCPU, 32 GB RAM)",
-												"value": "PremiumV3_P3v3"
-											}
-										],
-										"required": true
-									}
-								},
-								{
-									"name": "zoneRedundant",
-									"type": "Microsoft.Common.CheckBox",
-									"visible": "[not(steps('functionApp').infrastructure.useExistingHostingPlan)]",
-									"label": "Enable Zone Redundancy",
-									"toolTip": "Deploy the App Service Plan with zone redundancy. Only applies when creating a new plan."
-								},
-								{
-									"name": "hostingPlanResourceGroup",
-									"type": "Microsoft.Common.ResourceGroupSelector",
-									"label": "App Service Plan Resource Group",
-									"allowedMode": "Existing",
-									"required": false,
-									"toolTip": "Select the resource group to deploy the new App Service Plan into. Leave blank to use the same resource group as the function app. Select a shared operations resource group to reuse the plan across multiple add-ons.",
-									"scope": {
-										"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
-										"location": "[steps('basics').scope.location.name]"
+									{
+										"label": "1 AM",
+										"value": "1"
 									},
-									"visible": "[not(steps('functionApp').infrastructure.useExistingHostingPlan)]"
-								},
-								{
-									"name": "encryptionTextBlock",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Configure encryption for the function app storage account."
-									}
-								},
-								{
-									"name": "keyManagementStorageAccounts",
-									"type": "Microsoft.Common.OptionsGroup",
-									"label": "Storage Account Key Management",
-									"defaultValue": "Microsoft-Managed Keys",
-									"toolTip": "Choose between platform-managed or customer-managed keys for storage encryption.",
-									"constraints": {
-										"allowedValues": [
-											{
-												"label": "Microsoft-Managed Keys",
-												"value": "MicrosoftManaged"
-											},
-											{
-												"label": "Customer-Managed Keys",
-												"value": "CustomerManaged"
-											},
-											{
-												"label": "Customer-Managed Keys backed by HSM",
-												"value": "CustomerManagedHSM"
-											}
-										]
-									}
-								},
-								{
-									"name": "keyVaultSubscription",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Key Vault Subscription",
-									"defaultValue": "[steps('basics').scope.subscription.displayName]",
-									"toolTip": "Select the subscription containing the Key Vault with customer-managed encryption keys. For brownfield deployments, this allows selecting Key Vaults from centralized security subscriptions.",
-									"constraints": {
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-										"required": true
+									{
+										"label": "2 AM",
+										"value": "2"
 									},
-									"visible": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]"
-								},
-								{
-									"name": "keyVaultsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(not(empty(steps('functionApp').infrastructure.keyVaultSubscription.id)), contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('functionApp').infrastructure.keyVaultSubscription.id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
-									}
-								},
-								{
-									"name": "encryptionKeyVault",
-									"type": "Microsoft.Common.DropDown",
-									"visible": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
-									"label": "Encryption Key Vault",
-									"multiLine": true,
-									"toolTip": "Select the Key Vault containing the customer-managed encryption key. Only Key Vaults in the selected location are shown.",
-									"constraints": {
-										"required": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
-										"allowedValues": "[map(filter(steps('functionApp').infrastructure.keyVaultsApi.value, (kv) => equals(kv.location, steps('basics').scope.location.name)), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Location: ', kv.location, ' | Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
-									}
-								},
-								{
-									"name": "zeroTrustNetworkingInfoBox",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"text": "Zero Trust Networking for Function Apps and Azure Resources: This section configures network-level security controls to enforce Zero Trust Architecture principles for the Session Host Replacer function app and its dependencies (storage accounts, key vaults). Private Endpoints: Enable private connectivity to Platform as a Service (PaaS) resources (Blob Storage, File Storage, and Key Vaults) by assigning private IP addresses from your virtual network. This removes public internet exposure and routes traffic over the Microsoft backbone network. Virtual Network Integration: The function app requires outbound virtual network integration to communicate privately with resources protected by private endpoints. This requires a dedicated subnet with Microsoft.Web/serverFarms delegation. Both features require Private DNS Zones for proper name resolution. For centralized DNS management in hub-and-spoke topologies, refer to the Private Link hub-and-spoke deployment guidance linked below.",
-										"style": "Info",
-										"uri": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options?tabs=azure-portal"
-									}
-								},
-								{
-									"name": "configureZeroTrustNetworking",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Configure Zero Trust Networking",
-									"defaultValue": true
-								},
-								{
-									"name": "zeroTrustNetworkingTextBlock2",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
-									"options": {
-										"link": {
-											"label": "Microsoft Learn | Private Link Deployment in a Hub and Spoke Network",
-											"uri": "https://learn.microsoft.com/en-us/azure/architecture/networking/guide/private-link-hub-spoke-network"
-										},
-										"text": "When deploying function app zero trust networking, you must select the subnet and Private DNS Zones required for DNS resolution. The available virtual networks are dynamically filtered according to the regions specified for the resource types in earlier configuration screens. The drop-down menus will present only the virtual networks, subnets, and Private DNS Zones that match your prior selections, ensuring that you can choose the appropriate resources for your Zero Trust implementation."
-									}
-								},
-								{
-									"name": "subnetsHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
-									"options": {
-										"text": "Subnets"
-									}
-								},
-								{
-									"name": "virtualNetworksApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('basics').scope.subscription.id))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
-									}
-								},
-								{
-									"name": "virtualNetwork",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Virtual Network",
-									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
-									"multiLine": true,
-									"toolTip": "Select the virtual network to which the function app will be integrated. The list is filtered based on the subscription and location selected on the 'Deployment Basics' page.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('functionApp').infrastructure.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
-										"required": true
-									}
-								},
-								{
-									"name": "subnetsApi",
-									"condition": "[not(empty(steps('functionApp').infrastructure.virtualNetwork.id))]",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('functionApp').infrastructure.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-									}
-								},
-								{
-									"name": "functionAppOutboundSubnet",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Function App Outbound subnet",
-									"toolTip": "Select an existing subnet for function App Outbound access. This subnet must have a delegation for Microsoft.Web/serverFarms.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('functionApp').infrastructure.subnetsApi.value, (snet) => equals(first(map(snet.properties.delegations, (del) => del.properties.serviceName)), 'Microsoft.Web/serverFarms')), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+									{
+										"label": "3 AM",
+										"value": "3"
 									},
-									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]"
-								},
-								{
-									"name": "functionAppPrivateEndpointSubnet",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Function App Private Endpoint Subnet",
-									"toolTip": "Select the subnet for function app private endpoints (inbound access and storage account). This subnet must NOT have any delegations and must be different from the outbound subnet.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('functionApp').infrastructure.subnetsApi.value, (snet) => and(empty(snet.properties.delegations), not(equals(snet.id, steps('functionApp').infrastructure.functionAppOutboundSubnet)))), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+									{
+										"label": "4 AM",
+										"value": "4"
 									},
-									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]"
-								},
-								{
-									"name": "privateDNSZonesHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
-									"options": {
-										"text": "Private DNS Zones"
-									}
-								},
-								{
-									"name": "privateDNSZoneIntegrationTextBlock",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
-									"options": {
-										"text": "To connect privately with your function app and private endpoints, you need DNS records. We recommend that you integrate your function app private endpoints with private DNS zones. If you select the checkbox below, you'll be asked to select the appropriate Private DNS Zone for each resource type deployed by this solution and the deployment will automatically create the Private DNS integration when creating the private endpoints. Alternatively, you can assign policies to private endpoints to automatically register the endpoints with the appropriate private DNS zones. Uncheck the box below if that is the method you are using.",
-										"link": {
-											"label": "Learn more",
-											"uri": "https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview#dns-configuration"
-										}
-									}
-								},
-								{
-									"name": "enablePrivateDNSIntegration",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Private DNS Zone Integration",
-									"toolTip": "To connect privately with your private endpoint, you need a DNS record. Check this box to select the appropriate private DNS zones so that the deployment automatically integrates each private endpoint with Azure private DNS.",
-									"defaultValue": true,
-									"visible": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]"
-								},
-								{
-									"name": "privateDNSZonesSubscription",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Private DNS Zone Subscription",
-									"placeholder": "",
-									"defaultValue": "[steps('basics').scope.subscription.displayName]",
-									"toolTip": "Select the subscription that contains your Private DNS Zones.",
-									"constraints": {
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-										"required": true
+									{
+										"label": "5 AM",
+										"value": "5"
 									},
-									"visible": "[and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration)]"
-								},
-								{
-									"name": "privateDNSZonesApi",
-									"condition": "[and(steps('functionApp').infrastructure.enablePrivateDNSIntegration, not(empty(steps('functionApp').infrastructure.privateDNSZonesSubscription)))]",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('functionApp').infrastructure.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+									{
+										"label": "6 AM",
+										"value": "6"
+									},
+									{
+										"label": "7 AM",
+										"value": "7"
+									},
+									{
+										"label": "8 AM",
+										"value": "8"
+									},
+									{
+										"label": "9 AM",
+										"value": "9"
+									},
+									{
+										"label": "10 AM",
+										"value": "10"
+									},
+									{
+										"label": "11 AM",
+										"value": "11"
+									},
+									{
+										"label": "12 PM",
+										"value": "12"
+									},
+									{
+										"label": "1 PM",
+										"value": "13"
+									},
+									{
+										"label": "2 PM",
+										"value": "14"
+									},
+									{
+										"label": "3 PM",
+										"value": "15"
+									},
+									{
+										"label": "4 PM",
+										"value": "16"
+									},
+									{
+										"label": "5 PM",
+										"value": "17"
+									},
+									{
+										"label": "6 PM",
+										"value": "18"
+									},
+									{
+										"label": "7 PM",
+										"value": "19"
+									},
+									{
+										"label": "8 PM",
+										"value": "20"
+									},
+									{
+										"label": "9 PM",
+										"value": "21"
+									},
+									{
+										"label": "10 PM",
+										"value": "22"
+									},
+									{
+										"label": "11 PM",
+										"value": "23"
 									}
-								},
-								{
-									"name": "azureFunctionAppPrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => zone.name))]",
-									"visible": "[and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration)]",
-									"label": "Azure Function App",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Function Apps",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": true
+								]
+							}
+						},
+						{
+							"name": "scheduleDaysOfWeek",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Days of Week",
+							"toolTip": "Select which days of the week the function should run.",
+							"defaultValue": [
+								"Sunday",
+								"Monday",
+								"Tuesday",
+								"Wednesday",
+								"Thursday",
+								"Friday",
+								"Saturday"
+							],
+							"multiselect": true,
+							"selectAll": true,
+							"constraints": {
+								"required": true,
+								"allowedValues": [
+									{
+										"label": "Sunday",
+										"value": "0"
+									},
+									{
+										"label": "Monday",
+										"value": "1"
+									},
+									{
+										"label": "Tuesday",
+										"value": "2"
+									},
+									{
+										"label": "Wednesday",
+										"value": "3"
+									},
+									{
+										"label": "Thursday",
+										"value": "4"
+									},
+									{
+										"label": "Friday",
+										"value": "5"
+									},
+									{
+										"label": "Saturday",
+										"value": "6"
 									}
-								},
-								{
-									"name": "azureBlobPrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
-									"visible": "[and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration)]",
-									"label": "Azure Blob Storage",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Blob Storage.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": true
+								]
+							}
+						},
+						{
+							"name": "bestPracticesInfoBox2",
+							"type": "Microsoft.Common.InfoBox",
+							"options": {
+								"text": "Best Practices: If managing multiple host pools, stagger the execution time by setting different start minutes for each deployment to prevent simultaneous runs and avoid API throttling. The function executes twice per hour: at the start minute and 30 minutes later (e.g., :15 and :45 if start minute is 15).",
+								"style": "Success"
+							}
+						},
+						{
+							"name": "scheduleMinuteOffset",
+							"type": "Microsoft.Common.Slider",
+							"label": "Start Minute",
+							"toolTip": "The function executes twice per hour at this minute and 30 minutes later. For example, if set to 15, the function runs at :15 and :45 of each scheduled hour (8:15, 8:45, 9:15, 9:45, etc.). Set to 0 to run at :00 and :30. Use different values across deployments to stagger execution.",
+							"min": 0,
+							"max": 29,
+							"defaultValue": 0,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "lifecyleManagementTextBlock",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Lifecycle Settings"
+							}
+						},
+						{
+							"name": "replacementModeTextBlock",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Session hosts are automatically replaced when a new image version is available. You can optionally specify a delay period before triggering replacements after a new image is published to allow for testing."
+							}
+						},
+						{
+							"name": "replaceSessionHostOnNewImageVersionDelayDays",
+							"type": "Microsoft.Common.Slider",
+							"label": "New Image Version Delay (days)",
+							"toolTip": "Number of days to wait after a new image is published before triggering replacements. This allows for ringed deployments and testing before widespread replacements occur. Set to 0 for immediate replacements upon new image detection.",
+							"min": 0,
+							"max": 30,
+							"defaultValue": 0,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": false
+							}
+						},
+						{
+							"name": "allowImageVersionRollback",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Allow Image Version Rollback",
+							"toolTip": "When enabled, allows session hosts to be replaced even if their current image version is newer than the latest available version. When disabled (recommended), prevents unintended rollbacks to older images.",
+							"constraints": {
+								"required": false
+							}
+						},
+						{
+							"name": "replacementMode",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Replacement Mode",
+							"toolTip": "Select the Replacement Mode Option. Side-by-Side (Add then Delete): Adds new session hosts before deleting old ones resulting in zero downtime during updates, but higher cost during update cycles (can temporarily double host pool size). This mode does NOT support dedicated hosts. Requires sufficient vCPU quota and subnet IP space for both old and new hosts simultaneously. Delete-First (Delete then Add): Deletes idle session hosts before adding replacements resulting in lower cost (maintains approximately target capacity throughout), but temporary capacity reduction during replacements. Supports dedicated hosts - preserves dedicated host assignments and zones. Reuses hostnames for seamless transitions",
+							"defaultValue": "SideBySide",
+							"constraints": {
+								"required": true,
+								"allowedValues": [
+									{
+										"label": "Side-by-Side (Add then Delete)",
+										"value": "SideBySide"
+									},
+									{
+										"label": "Delete-First (Delete then Add)",
+										"value": "DeleteFirst"
 									}
-								},								
-								{
-									"name": "azureTablePrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => zone.name))]",
-									"visible": "[and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration)]",
-									"label": "Azure Table Storage",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Table Storage.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('functionApp').infrastructure.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": true
+								]
+							}
+						},
+						{
+							"name": "sideBySideWarning",
+							"type": "Microsoft.Common.InfoBox",
+							"visible": "[equals(steps('replacerConfig').replacementMode, 'SideBySide')]",
+							"options": {
+								"style": "Warning",
+								"text": "Side-By-Side mode does NOT support dedicated hosts. Dedicated host properties from existing VMs will not be preserved during replacements. Use Delete-First mode if you require dedicated host support."
+							}
+						},
+						{
+							"name": "sideBySideCapacityWarning",
+							"type": "Microsoft.Common.InfoBox",
+							"visible": "[equals(steps('replacerConfig').replacementMode, 'SideBySide')]",
+							"options": {
+								"style": "Warning",
+								"text": "Side-By-Side mode can temporarily DOUBLE your host pool size during replacements. Ensure you have sufficient vCPU quota and subnet IP address space to accommodate both old and new session hosts simultaneously."
+							}
+						},
+						{
+							"name": "drainGracePeriodHours",
+							"type": "Microsoft.Common.Slider",
+							"label": "Drain Grace Period for Active Sessions (hours)",
+							"toolTip": "Session hosts WITH active sessions will remain in drain mode for this duration before shutdown or deletion. This protects user sessions.",
+							"min": 1,
+							"max": 168,
+							"defaultValue": 24,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "minimumDrainMinutes",
+							"type": "Microsoft.Common.Slider",
+							"label": "Minimum Drain Time for Idle Hosts (minutes)",
+							"toolTip": "Session hosts with ZERO sessions require only this minimum drain time before deletion. With hourly scheduling: 0=current run, 1-60=next run (~1hr), 61-120=second run (~2hrs). Values >0 provide safety buffer for API lag and race conditions.",
+							"min": 0,
+							"max": 120,
+							"defaultValue": 15,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": true
+							},
+							"visible": "[equals(steps('replacerConfig').replacementMode, 'DeleteFirst')]"
+						},
+						{
+							"name": "minimumCapacityPercentage",
+							"type": "Microsoft.Common.Slider",
+							"label": "Availability Safety Floor (%)",
+							"toolTip": "Availability Safety Floor: Prevents pool capacity from dropping below this percentage during replacements, ensuring minimum availability. Smart Scaling Plan Integration (Phase-Aware): If a scaling plan is assigned to your host pool: RampUp/Peak phases: This configured value acts as a safety floor (whichever is higher: this config or scaling plan target). RampDown/OffPeak phases: Scaling plan percentage used directly (can go below this value for aggressive off-hours replacements). This allows safe, aggressive replacements during off-peak when users aren't active, while maintaining your safety floor during business hours. Falls back to this static value if no scaling plan configured. Example: Config=70%, Scaling Plan Peak=90%, OffPeak=50%. Result: Peak uses 90%, OffPeak uses 50% (aggressive off-hours updates). Guidance: 80% = very conservative, 50% = balanced. This works with 'Blast Radius Limit' to control replacement pace.",
+							"min": 20,
+							"max": 100,
+							"defaultValue": 80,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": true
+							},
+							"visible": "[equals(steps('replacerConfig').replacementMode, 'DeleteFirst')]"
+						},
+						{
+							"name": "maxDeletionsPerCycle",
+							"type": "Microsoft.Common.Slider",
+							"label": "Blast Radius Limit (VMs per cycle)",
+							"toolTip": "Blast Radius Limit: Caps the absolute number of VMs deleted/deployed per cycle, regardless of available headroom above the safety floor. Limits impact if issues occur during replacement. Example: With 500 target VMs and 50% floor (250 minimum), you have 250 VM headroom. Setting this to 50 means max 50 deleted per cycle despite having 250 of headroom. Guidance: Small pools (< 100 VMs): 20-50. Large pools (> 200 VMs): 50-100. Lower = slower/safer, higher = faster replacement. Works with Progressive Scale-Up which further limits initial cycles.",
+							"min": 1,
+							"max": 100,
+							"defaultValue": 50,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": true
+							},
+							"visible": "[equals(steps('replacerConfig').replacementMode, 'DeleteFirst')]"
+						},
+						{
+							"name": "targetSessionHostCount",
+							"type": "Microsoft.Common.Slider",
+							"label": "Target Session Host Count",
+							"toolTip": "The target number of session hosts to maintain. Set to 0 for auto-detect mode: automatically maintains current count during each replacement cycle, allowing manual scaling between image updates.",
+							"min": 0,
+							"max": 1000,
+							"defaultValue": 0,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "sideBySideBufferInfoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"visible": "[equals(steps('replacerConfig').replacementMode, 'SideBySide')]",
+							"options": {
+								"text": "Automatic Capacity Buffer: Side-by-Side mode automatically allows your pool to grow up to 2× the target count during replacements. Example: 100 target VMs → up to 200 total VMs temporarily (100 old + 100 new). Ensure you have sufficient vCPU quota and subnet IP address space for double your target capacity. The pool returns to target size after old hosts are deleted.",
+								"style": "Info"
+							}
+						},
+						{
+							"name": "maxDeploymentBatchSize",
+							"type": "Microsoft.Common.Slider",
+							"label": "Deployment Batch Size Ceiling",
+							"toolTip": "Deployment Ceiling: Maximum number of VMs that can be deployed in a single cycle, but actual deployments are controlled by Progressive Scale-Up which starts conservatively and increases gradually. How it works: With Progressive Scale-Up enabled (default), initial cycles deploy a small percentage (e.g., 20%), then gradually increase (50%, 80%, 100%) after successful runs. This ceiling prevents deploying more than this limit even at 100%. Example: 100 target VMs, ceiling set to 100, Progressive Scale-Up at 20%: Cycle 1 deploys ~20 VMs (not 100), then 40 VMs, then 64 VMs, then up to 100 VM ceiling. Guidance: Set to maximum you're comfortable deploying simultaneously. Progressive Scale-Up provides safety for initial cycles.",
+							"min": 1,
+							"max": 1000,
+							"defaultValue": 100,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": true
+							},
+							"visible": "[equals(steps('replacerConfig').replacementMode, 'SideBySide')]"
+						},
+						{
+							"name": "minimumHostIndex",
+							"type": "Microsoft.Common.Slider",
+							"visible": true,
+							"label": "Minimum Host Index",
+							"toolTip": "The minimum starting index for hostname numbering. Gap-filling logic starts from this index when deploying new hosts (e.g., 1 allows host01, host02; 10 allows host10, host11). Applies to both DeleteFirst and SideBySide modes.",
+							"min": 1,
+							"max": 999,
+							"defaultValue": 1,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": false
+							}
+						},
+						{
+							"name": "progressiveScaleUpHeader",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Progressive Scale-Up"
+							}
+						},
+						{
+							"name": "progressiveScaleUpTextBlock",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Progressive scale-up starts with a small percentage of hosts and gradually increases after successful deployments. This helps identify issues before deploying to all hosts."
+							}
+						},
+						{
+							"name": "enableProgressiveScaleUp",
+							"type": "Microsoft.Common.CheckBox",
+							"defaultValue": true,
+							"label": "Enable Progressive Scale-Up",
+							"toolTip": "Enable percentage-based progressive deployment of session host replacements."
+						},
+						{
+							"name": "initialDeploymentPercentage",
+							"type": "Microsoft.Common.Slider",
+							"visible": "[steps('replacerConfig').enableProgressiveScaleUp]",
+							"label": "Initial Deployment Percentage",
+							"toolTip": "Percentage of total needed hosts to deploy in the first run.",
+							"min": 1,
+							"max": 100,
+							"defaultValue": 20,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "scaleUpIncrementPercentage",
+							"type": "Microsoft.Common.Slider",
+							"visible": "[steps('replacerConfig').enableProgressiveScaleUp]",
+							"label": "Scale-Up Increment Percentage",
+							"toolTip": "Percentage added after each successful deployment run.",
+							"min": 5,
+							"max": 50,
+							"defaultValue": 40,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "successfulRunsBeforeScaleUp",
+							"type": "Microsoft.Common.Slider",
+							"visible": "[steps('replacerConfig').enableProgressiveScaleUp]",
+							"label": "Successful Runs Before Scale-Up",
+							"toolTip": "Number of consecutive successful deployment runs required before increasing the deployment percentage.",
+							"min": 1,
+							"max": 5,
+							"defaultValue": 1,
+							"showStepMarkers": false,
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "shutdownRetentionHeader",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[equals(steps('replacerConfig').replacementMode, 'SideBySide')]",
+							"options": {
+								"text": "Shutdown Retention for Rollback"
+							}
+						},
+						{
+							"name": "shutdownRetentionInfoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"visible": "[equals(steps('replacerConfig').replacementMode, 'SideBySide')]",
+							"options": {
+								"text": "Enable shutdown retention to deallocate replaced session hosts instead of deleting them immediately. VMs remain in the host pool (in drain mode) for a configurable period, allowing you to power them on for rollback if issues are discovered. After the retention period expires, VMs are automatically removed from the host pool and deleted.",
+								"style": "Info"
+							}
+						},
+						{
+							"name": "enableShutdownRetention",
+							"type": "Microsoft.Common.CheckBox",
+							"visible": "[equals(steps('replacerConfig').replacementMode, 'SideBySide')]",
+							"label": "Enable Shutdown Retention",
+							"toolTip": "Deallocate replaced session hosts instead of deleting them immediately, keeping them available for rollback.",
+							"defaultValue": false
+						},
+						{
+							"name": "shutdownRetentionDays",
+							"type": "Microsoft.Common.Slider",
+							"visible": "[and(equals(steps('replacerConfig').replacementMode, 'SideBySide'), steps('replacerConfig').enableShutdownRetention)]",
+							"label": "Shutdown Retention Period (Days)",
+							"toolTip": "Number of days to retain shutdown session hosts before automatic deletion. VMs incur only storage costs while deallocated.",
+							"min": 1,
+							"max": 7,
+							"defaultValue": 3,
+							"showStepMarkers": true,
+							"constraints": {
+								"required": false
+							}
+						},
+						{
+							"name": "tagManagementHeader",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Tag Management"
+							}
+						},
+						{
+							"name": "fixSessionHostTags",
+							"type": "Microsoft.Common.CheckBox",
+							"defaultValue": true,
+							"label": "Fix Session Host Tags",
+							"toolTip": "Automatically correct session host tags during execution."
+						},
+						{
+							"name": "includePreExistingSessionHosts",
+							"type": "Microsoft.Common.CheckBox",
+							"defaultValue": true,
+							"label": "Include Pre-Existing Session Hosts",
+							"toolTip": "Include session hosts that existed before this solution was deployed."
+						},
+						{
+							"name": "tagIncludeInAutomation",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Include in Automation Tag Name",
+							"defaultValue": "IncludeInAutoReplace",
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "tagDeployTimestamp",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Deploy Timestamp Tag Name",
+							"defaultValue": "AutoReplaceDeployTimestamp",
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "tagPendingDrainTimestamp",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Pending Drain Timestamp Tag Name",
+							"defaultValue": "AutoReplacePendingDrainTimestamp",
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "tagScalingPlanExclusionTag",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Scaling Plan Exclusion Tag Name",
+							"defaultValue": "ScalingPlanExclusion",
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "tagShutdownTimestamp",
+							"type": "Microsoft.Common.TextBox",
+							"visible": "[and(equals(steps('replacerConfig').replacementMode, 'SideBySide'), steps('replacerConfig').enableShutdownRetention)]",
+							"label": "Shutdown Timestamp Tag Name",
+							"toolTip": "Tag name used to track when a session host was shutdown for retention period calculation.",
+							"defaultValue": "AutoReplaceShutdownTimestamp",
+							"constraints": {
+								"required": false
+							}
+						},
+						{
+							"name": "deviceCleanupHeader",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Device Cleanup"
+							}
+						},
+						{
+							"name": "deviceCleanupInfoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"options": {
+								"text": "Device Cleanup Automation Overview: Device cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. This is especially important when session hosts are Entra ID-joined (i.e., not joined to Active Directory Domain Services or Entra Domain Services) to prevent accumulation of orphaned device records. Required Microsoft Graph API Permissions: The function app's managed identity requires the following permissions: 'Device.ReadWrite.All' - Required for Entra ID device deletion and 'DeviceManagementManagedDevices.ReadWrite.All' - Required for Intune device deletion. Air-Gapped Cloud Limitations: Intune is not currently available in Air-Gapped Clouds such as Azure Government Secret and Azure Government Top Secret. In these environments, the Intune Device Cleanup option will be automatically disabled.",
+								"style": "Info",
+								"uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
+							}
+						},
+						{
+							"name": "removeEntraDevice",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Remove Entra ID Device Records",
+							"toolTip": "Remove Entra ID device records when deleting session hosts.",
+							"defaultValue": true
+						},
+						{
+							"name": "removeIntuneDevice",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Remove Intune Device Records",
+							"toolTip": "Remove Intune device records when deleting session hosts.",
+							"defaultValue": true
+						},
+						{
+							"name": "identityTypeHeader",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice)]",
+							"options": {
+								"text": "Function App Managed Identity"
+							}
+						},
+						{
+							"name": "identityTypeInfoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice)]",
+							"options": {
+								"text": "Choose the type of managed identity the function app will use for authentication. 'System-Assigned' is simpler (created automatically), while 'User-Assigned' allows pre-granting Graph permissions before deployment (required for immediate device cleanup in DeleteFirst mode).",
+								"style": "Info"
+							}
+						},
+						{
+							"name": "identityType",
+							"type": "Microsoft.Common.DropDown",
+							"visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice)]",
+							"label": "Managed Identity Type",
+							"multiLine": true,
+							"defaultValue": "System-Assigned",
+							"toolTip": "Select the type of managed identity for the function app. System-Assigned is automatically created during deployment. User-Assigned must be pre-created with Graph API permissions already granted.",
+							"constraints": {
+								"required": true,
+								"allowedValues": [
+									{
+										"label": "System-Assigned (Automatic)",
+										"value": "SystemAssigned",
+										"description": "Function app creates and manages its own identity. Grant Graph API permissions after deployment and restart the function app."
+									},
+									{
+										"label": "User-Assigned (Pre-configured)",
+										"value": "UserAssigned",
+										"description": "Use a pre-existing user-assigned managed identity with Graph API permissions already granted. Required for DeleteFirst mode with immediate device cleanup."
 									}
-								}
-							]
+								]
+							}
+						},
+						{
+							"name": "sessionHostReplacerUserAssignedIdentity",
+							"type": "Microsoft.Solutions.ResourceSelector",
+							"visible": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
+							"label": "User-Assigned Managed Identity",
+							"toolTip": "Select the pre-existing User-Assigned Managed Identity that has been granted the required Microsoft Graph API permissions (Device.ReadWrite.All and/or DeviceManagementManagedDevices.ReadWrite.All).",
+							"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+							"constraints": {
+								"required": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]"
+							}
 						}
 					]
 				},
@@ -1199,7 +833,7 @@
 							"type": "Microsoft.Common.OptionsGroup",
 							"visible": true,
 							"label": "Identity Provider",
-							"defaultValue": "[if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)', if(contains(steps('functionApp').executionSettings.hostsRGProps.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('functionApp').executionSettings.hostsRGProps.tags.vmIdentityType, 'CloudOnly'), 'Entra Kerberos (Cloud Only Identities) (Preview)', if(contains(steps('functionApp').executionSettings.hostsRGProps.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services'))))]",
+							"defaultValue": "[if(equals(steps('basics').hostsRGProps.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'CloudOnly'), 'Entra Kerberos (Cloud Only Identities) (Preview)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services'))))]",
 							"toolTip": "Choose the identity service provider for your users and session hosts.",
 							"constraints": {
 								"required": true,
@@ -1236,7 +870,7 @@
 									"name": "domainName",
 									"type": "Microsoft.Common.TextBox",
 									"visible": "[contains(steps('identity').solution, 'DomainServices')]",
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmDomain, '')]",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmDomain, '')]",
 									"label": "Domain Name",
 									"toolTip": "Provide domain name for the selected Virtual Machine Identity solution.",
 									"placeholder": "Example: contoso.com",
@@ -1249,7 +883,7 @@
 								{
 									"name": "ouPath",
 									"type": "Microsoft.Common.TextBox",
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmOUPath , '')]",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmOUPath , '')]",
 									"visible": "[or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraDomainServices'))]",
 									"label": "OU Path",
 									"toolTip": "Input the distinguished name of the desired organization unit for the AVD session hosts.",
@@ -1313,7 +947,7 @@
 									"name": "subscription",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Subscription",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId), steps('functionApp').executionSettings.hostPoolSubscription.displayName, first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, first(skip(split(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId, '/'), 2))))).displayName)]",
+									"defaultValue": "[if(empty(steps('basics').hostPoolProps.tags.hostsResourceGroupId), steps('basics').subscription.displayName, first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, first(skip(split(steps('basics').hostPoolProps.tags.hostsResourceGroupId, '/'), 2))))).displayName)]",
 									"toolTip": "Select the subscription containing the session host VMs. Defaults to the host pool subscription, but can be changed if VMs are in a different subscription.",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
@@ -1333,7 +967,7 @@
 									"name": "resourceGroup",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Machine Resource Group",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId), '', last(split(steps('functionApp').executionSettings.hostPoolProps.tags.hostsResourceGroupId, '/')))]",
+									"defaultValue": "[if(empty(steps('basics').hostPoolProps.tags.hostsResourceGroupId), '', last(split(steps('basics').hostPoolProps.tags.hostsResourceGroupId, '/')))]",
 									"multiLine": true,
 									"toolTip": "Select the resource group containing the session host VMs. For greenfield deployments from this solution, resource groups are automatically tagged. For brownfield deployments, any resource group in the selected subscription can be chosen.",
 									"constraints": {
@@ -1484,7 +1118,7 @@
 									"name": "sessionHostNamePrefix",
 									"type": "Microsoft.Common.TextBox",
 									"label": "Virtual Machine Name Prefix",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmNamePrefix), '', steps('functionApp').executionSettings.hostsRGProps.tags.vmNamePrefix)]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmNamePrefix), '', steps('basics').hostsRGProps.tags.vmNamePrefix)]",
 									"toolTip": "Provide a Virtual Machine name prefix consisting of alphanumeric and dashes up to 12 characters long. A three character numeric suffix will be appended to the name padded with zeros (0).",
 									"constraints": {
 										"required": true,
@@ -1505,7 +1139,7 @@
 									"name": "indexPadding",
 									"type": "Microsoft.Common.Slider",
 									"label": "Index Padding (number of digits)",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmIndexPadding), 2, int(steps('functionApp').executionSettings.hostsRGProps.tags.vmIndexPadding))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmIndexPadding), 2, int(steps('basics').hostsRGProps.tags.vmIndexPadding))]",
 									"toolTip": "Select the number of digits used by the index. This value determines the max length of the prefix and also the max number of hosts",
 									"min": 1,
 									"max": 3,
@@ -1537,7 +1171,7 @@
 									"name": "virtualNetwork",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Network",
-									"defaultValue": "[coalesce(first(skip(split(steps('functionApp').executionSettings.hostsRGProps.tags.vmSubnetId, '/'), 8)), '')]",
+									"defaultValue": "[coalesce(first(skip(split(steps('basics').hostsRGProps.tags.vmSubnetId, '/'), 8)), '')]",
 									"multiLine": true,
 									"toolTip": "Select the virtual network to which the session hosts will be attached. The list of virtual networks is filtered to those in the same region and subscription selected in the 'Subscription and Region Details' section above.",
 									"constraints": {
@@ -1559,7 +1193,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"visible": true,
 									"label": "Subnet",
-									"defaultValue": "[coalesce(last(split(steps('functionApp').executionSettings.hostsRGProps.tags.vmSubnetId, '/')), '')]",
+									"defaultValue": "[coalesce(last(split(steps('basics').hostsRGProps.tags.vmSubnetId, '/')), '')]",
 									"toolTip": "Select an existing subnet for the AVD session hosts.",
 									"constraints": {
 										"required": true,
@@ -1570,7 +1204,7 @@
 									"name": "enableIPv6",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable IPv6",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmIPv6), false, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmIPv6))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmIPv6), false, bool(steps('basics').hostsRGProps.tags.vmIPv6))]",
 									"toolTip": "Enables IPv6 support on the network interface. This is an edge case scenario and is not recommended for most deployments. WARNING: Without specific route table entries configured for IPv6 traffic, outbound communication will not work properly."
 								}
 							]
@@ -1586,7 +1220,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Image Source",
 									"filter": true,
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmImageType), 'Marketplace', if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.vmImageType, 'CustomImage'), 'Compute Gallery', 'Marketplace'))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageType), 'Marketplace', if(equals(steps('basics').hostsRGProps.tags.vmImageType, 'CustomImage'), 'Compute Gallery', 'Marketplace'))]",
 									"toolTip": "Select the type of image to deploy on the session hosts.",
 									"constraints": {
 										"required": true,
@@ -1606,7 +1240,7 @@
 									"name": "offer",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Offer",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmImageOffer), 'Office-365', steps('functionApp').executionSettings.hostsRGProps.tags.vmImageOffer)]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), 'Office-365', steps('basics').hostsRGProps.tags.vmImageOffer)]",
 									"toolTip": "Select the desired marketplace image offer.",
 									"constraints": {
 										"allowedValues": [
@@ -1640,7 +1274,7 @@
 									"name": "sku",
 									"type": "Microsoft.Common.DropDown",
 									"label": "SKU",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmImageSku), 'win11-25h2-avd-m365', steps('functionApp').executionSettings.hostsRGProps.tags.vmImageSku)]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageSku), 'win11-25h2-avd-m365', steps('basics').hostsRGProps.tags.vmImageSku)]",
 									"toolTip": "Select the desired marketplace image SKU.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('hosts').image.skuApi, (sku) => and(startsWith(sku.name, 'win'), or(contains(sku.name, 'ent'), contains(sku.name, 'avd')))), (sku) => parse(concat('{\"label\":\"', sku.name, '\",\"value\":\"', sku.name, '\"}')))]",
@@ -1671,7 +1305,7 @@
 								{
 									"name": "computeGallery",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmCustomImageId), '', first(skip(split(steps('functionApp').executionSettings.hostsRGProps.tags.vmCustomImageId, '/'), 8)))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmCustomImageId), '', first(skip(split(steps('basics').hostsRGProps.tags.vmCustomImageId, '/'), 8)))]",
 									"label": "Compute Gallery",
 									"multiLine": true,
 									"constraints": {
@@ -1695,7 +1329,7 @@
 								{
 									"name": "imageDefinition",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmCustomImageId), '', last(split(steps('functionApp').executionSettings.hostsRGProps.tags.vmCustomImageId, '/')))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmCustomImageId), '', last(split(steps('basics').hostsRGProps.tags.vmCustomImageId, '/')))]",
 									"label": "Image Definition",
 									"constraints": {
 										"allowedValues": "[steps('hosts').image.imageDefinitionsApi.transformed.list]",
@@ -1729,7 +1363,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Security Type",
 									"placeholder": "",
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmSecurityType, 'TrustedLaunch')]",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmSecurityType, 'TrustedLaunch')]",
 									"toolTip": "Select the appropriate Security Type configuration for the Virtual Machine. Note that 'ConfidentialVMs' are not available in all regions and the option may not appear.",
 									"constraints": {
 										"allowedValues": "[if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), or(equals(steps('hosts').image.source, 'marketplace'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunchAndConfidentialVmSupported'))), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVM')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch')), parse('[{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'Supported'))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), or(equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported'), empty(steps('hosts').image.imageDefinitionApi.transformed.SecurityType))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"}]'), parse('[]')))))))]",
@@ -1742,7 +1376,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Secure Boot",
 									"toolTip": "Secure boot helps protect your VMs against boot kits, rootkits, and kernel-level malware.",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmSecureBoot), true, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmSecureBoot))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmSecureBoot), true, bool(steps('basics').hostsRGProps.tags.vmSecureBoot))]",
 									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
 								},
 								{
@@ -1750,7 +1384,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable vTPM",
 									"toolTip": "Virtual Trusted Platform Module (vTPM) is TPM2.0 compliant and validates your VM boot integrity apart from securely storing keys and secrets.",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmVirtualTPM), true, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmVirtualTPM))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmVirtualTPM), true, bool(steps('basics').hostsRGProps.tags.vmVirtualTPM))]",
 									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
 								},
 								{
@@ -1758,7 +1392,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Integrity Monitoring",
 									"toolTip": "Integrity monitoring enables cryptographic attestation and verification of VM boot integrity along with monitoring alerts if the VM didn't boot because attestation failed with the defined baseline.",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntegrityMonitoring), true, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntegrityMonitoring))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmIntegrityMonitoring), true, bool(steps('basics').hostsRGProps.tags.vmIntegrityMonitoring))]",
 									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
 								}
 							]
@@ -1767,7 +1401,7 @@
 							"name": "diskEncryption",
 							"type": "Microsoft.Common.Section",
 							"label": "Disk Encryption Options",
-							"elements": [								
+							"elements": [
 								{
 									"name": "encryptionAtHostTextBlock",
 									"type": "Microsoft.Common.TextBlock",
@@ -1785,7 +1419,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Encryption At Host",
 									"toolTip": "Check to enable Encryption At Host",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmEncryptionAtHost), true, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmEncryptionAtHost))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmEncryptionAtHost), true, bool(steps('basics').hostsRGProps.tags.vmEncryptionAtHost))]",
 									"visible": "[not(equals(steps('hosts').security.securityType, 'ConfidentialVM'))]"
 								},
 								{
@@ -1829,7 +1463,7 @@
 									"name": "selectDiskEncryptionSet",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Customer-Managed Keys on OS Disk",
-									"defaultValue": "[not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName))]",
+									"defaultValue": "[not(empty(steps('basics').hostsRGProps.tags.vmDiskEncryptionSetName))]",
 									"toolTip": "Enables a zero trust configuration on the session host disks."
 								},
 								{
@@ -1842,12 +1476,12 @@
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(steps('hosts').diskEncryption.selectDiskEncryptionSet, empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName))]"
+									"visible": "[and(steps('hosts').diskEncryption.selectDiskEncryptionSet, empty(steps('basics').hostsRGProps.tags.vmDiskEncryptionSetName))]"
 								},
 								{
 									"name": "diskEncryptionSetResourceGroupsApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(steps('hosts').diskEncryption.selectDiskEncryptionSet, empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName), not(empty(steps('hosts').diskEncryption.diskEncryptionSetSubscription.id)))]",
+									"condition": "[and(steps('hosts').diskEncryption.selectDiskEncryptionSet, empty(steps('basics').hostsRGProps.tags.vmDiskEncryptionSetName), not(empty(steps('hosts').diskEncryption.diskEncryptionSetSubscription.id)))]",
 									"request": {
 										"method": "GET",
 										"path": "[concat(steps('hosts').diskEncryption.diskEncryptionSetSubscription.id, '/resourcegroups?api-version=2021-04-01')]"
@@ -1864,7 +1498,7 @@
 										"allowedValues": "[map(steps('hosts').diskEncryption.diskEncryptionSetResourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(steps('hosts').diskEncryption.selectDiskEncryptionSet, empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName))]"
+									"visible": "[and(steps('hosts').diskEncryption.selectDiskEncryptionSet, empty(steps('basics').hostsRGProps.tags.vmDiskEncryptionSetName))]"
 								},
 								{
 									"name": "diskEncryptionSetsApi",
@@ -1872,7 +1506,7 @@
 									"condition": "[and(not(empty(steps('hosts').scope.resourceGroup)), steps('hosts').diskEncryption.selectDiskEncryptionSet)]",
 									"request": {
 										"method": "GET",
-										"path": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName), concat(steps('hosts').diskEncryption.diskEncryptionSetResourceGroup.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02'), concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02'))]",
+										"path": "[if(empty(steps('basics').hostsRGProps.tags.vmDiskEncryptionSetName), concat(steps('hosts').diskEncryption.diskEncryptionSetResourceGroup.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02'), concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02'))]",
 										"transforms": {
 											"list": "value|[*].{label:name, value:id}"
 										}
@@ -1881,7 +1515,7 @@
 								{
 									"name": "existingDiskEncryptionSet",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskEncryptionSetName]",
+									"defaultValue": "[steps('basics').hostsRGProps.tags.vmDiskEncryptionSetName]",
 									"label": "Disk Encryption Set",
 									"constraints": {
 										"allowedValues": "[steps('hosts').diskEncryption.diskEncryptionSetsApi.transformed.list]",
@@ -1901,7 +1535,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "OS Disk SKU",
 									"filter": true,
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmOSDiskType, 'Premium_LRS')]",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmOSDiskType, 'Premium_LRS')]",
 									"toolTip": "Select the disk SKU for the operating system disk.",
 									"constraints": {
 										"required": true,
@@ -1926,7 +1560,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "OS Disk Size (GB)",
 									"placeholder": "",
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmDiskSizeGB, '128')]",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmDiskSizeGB, '128')]",
 									"toolTip": "",
 									"constraints": {
 										"allowedValues": [
@@ -1961,7 +1595,7 @@
 									"label": "Size",
 									"toolTip": "Select the size of the virtual machines. Multi-session hosts should have 4 - 24 vCPUs. Single session host should have 2 or more vCPUs.",
 									"recommendedSizes": [
-										"[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmSize, 'Standard_D4ads_v6')]",
+										"[coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D4ads_v6')]",
 										"Standard_D8ads_v6",
 										"Standard_D16ads_v6",
 										"Standard_D32ads_v6",
@@ -2006,17 +1640,17 @@
 									"name": "enableAcceleratedNetworking",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable accelerated networking",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmAcceleratedNetworking), true, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmAcceleratedNetworking))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking), true, bool(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking))]",
 									"toolTip": "Enables low latency and high throughput on the network interface.",
 									"visible": "[and(bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported)))]"
-								},								
+								},
 								{
 									"name": "hibernationEnabled",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Hibernation",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmHibernate), false, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmHibernate))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmHibernate), false, bool(steps('basics').hostsRGProps.tags.vmHibernate))]",
 									"toolTip": "Hibernation allows you to pause VMs that aren't being used and save on compute costs where the VMs don't need to run 24/7.",
-									"visible": "[and(equals(steps('functionApp').executionSettings.hostsRGProps.type, 'Personal'), bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'HibernationSupported')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)))]"
+									"visible": "[and(equals(steps('basics').hostsRGProps.type, 'Personal'), bool(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'HibernationSupported')), (sku) => sku.value))), or(equals(steps('hosts').image.source, 'marketplace'), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)))]"
 								}
 							]
 						},
@@ -2028,7 +1662,7 @@
 								{
 									"name": "availability",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.vmAvailability, 'No infrastructure redundancy required')]",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmAvailability, 'No infrastructure redundancy required')]",
 									"label": "Availability Options",
 									"toolTip": "Select the redundancy / resiliency for the virtual machines.",
 									"constraints": {
@@ -2074,11 +1708,11 @@
 									"name": "intune",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Intune Enrollment",
-									"defaultValue": "[if(empty(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntuneEnrollment), false, bool(steps('functionApp').executionSettings.hostsRGProps.tags.vmIntuneEnrollment))]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment), false, bool(steps('basics').hostsRGProps.tags.vmIntuneEnrollment))]",
 									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting this checkbox.",
 									"visible": "[not(contains(steps('identity').solution, 'DomainServices'))]"
 								}
-							]							
+							]
 						},
 						{
 							"name": "customizations",
@@ -2349,7 +1983,7 @@
 							"type": "Microsoft.Common.DropDown",
 							"visible": "[steps('userProfiles').configureSessionHosts]",
 							"label": "FSLogix Container Type(s)",
-							"defaultValue": "[coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.fslContainerType, 'Profile Container')]",
+							"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.fslContainerType, 'Profile Container')]",
 							"toolTip": "Select the container type(s) for the FSLogix profiles.",
 							"constraints": {
 								"required": true,
@@ -2377,7 +2011,7 @@
 							"name": "sizeInMBs",
 							"type": "Microsoft.Common.Slider",
 							"label": "FSLogix VHD Size (MB)",
-							"defaultValue": "[coalesce(int(steps('functionApp').executionSettings.hostsRGProps.tags.fslContainerSizeInMBs), 30720)]",
+							"defaultValue": "[coalesce(int(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs), 30720)]",
 							"toolTip": "Input the max size of the users fslogix containers.",
 							"min": 10240,
 							"max": 1048576,
@@ -2392,7 +2026,7 @@
 							"type": "Microsoft.Common.DropDown",
 							"visible": "[steps('userProfiles').configureSessionHosts]",
 							"label": "Storage Service",
-							"defaultValue": "[if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.fslStorageService, 'AzureNetAppFiles'), 'Azure NetApp Files', if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.fslStorageService, 'AzureFiles'), 'Azure Files', 'Azure Files'))]",
+							"defaultValue": "[if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureNetAppFiles'), 'Azure NetApp Files', if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureFiles'), 'Azure Files', 'Azure Files'))]",
 							"toolTip": "Select the storage service that provides the SMB file share to support the use of FSLogix.",
 							"constraints": {
 								"allowedValues": "[if(not(equals(steps('identity').solution, 'ActiveDirectoryDomainServices')), parse('[{\"label\":\"Azure Files\",\"value\":\"AzureFiles\"}]'), parse('[{\"label\":\"Azure Files\",\"value\":\"AzureFiles\"},{\"label\":\"Azure NetApp Files\",\"value\":\"AzureNetAppFiles\"}]'))]"
@@ -2409,7 +2043,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "NetApp Files Subscription",
 									"placeholder": "",
-									"defaultValue": "[if(and(not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, split(first(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[2]))).displayName, steps('hosts').scope.subscription.displayName)]",
+									"defaultValue": "[if(and(not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, split(first(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[2]))).displayName, steps('hosts').scope.subscription.displayName)]",
 									"toolTip": "",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
@@ -2454,7 +2088,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Existing Local NetApp Account",
 									"toolTip": "Select the existing local NetApp account to use for the FSLogix profile storage.",
-									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.netAppAccountsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), split(first(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[8], '')]",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.netAppAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[8], '')]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => equals(account.location, steps('hosts').scope.location.name)), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Resource Group: ', first(skip(split(account.id, '/'), 4)), '\", \"value\":\"', account.id, '\"}')))]",
 										"required": true
@@ -2476,7 +2110,7 @@
 									"label": "Local Capacity Pool",
 									"multiLine": false,
 									"toolTip": "Select an existing capacity pool from the selected NetApp Account.",
-									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.localCapacityPoolsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), split(first(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[10], '')]",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.localCapacityPoolsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[10], '')]",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.localCapacityPoolsApi.value, (pool) => parse(concat('{\"label\":\"', last(split(pool.name, '/')), '\",\"value\":\"', pool.id, '\"}')))]",
 										"required": true
@@ -2498,7 +2132,7 @@
 									"label": "Local Volume(s)",
 									"multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
 									"toolTip": "Select the existing volume from the selected NetApp capacity pool.",
-									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.localVolumesApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), map(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.localVolumesApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.localVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
 										"required": true
@@ -2527,7 +2161,7 @@
 									"label": "Remote NetApp Account",
 									"toolTip": "Select the existing remote NetApp account to use for the FSLogix profile storage.",
 									"multiLine": true,
-									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.netAppAccountsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), split(first(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds)), '/')[8], '')]",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.netAppAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds)), '/')[8], '')]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => not(equals(account.location, steps('hosts').scope.location.name))), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Location: ', account.location, ', Resource Group: ', first(skip(split(account.id, '/'), 4)), '\", \"value\":\"', account.id, '\"}')))]",
 										"required": false
@@ -2548,7 +2182,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Remote Capacity Pool",
 									"toolTip": "Select an existing capacity pool from the selected NetApp Account.",
-									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.remoteCapacityPoolsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), split(first(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds)), '/')[10], '')]",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.remoteCapacityPoolsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds)), '/')[10], '')]",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.remoteCapacityPoolsApi.value, (pool) => parse(concat('{\"label\":\"', last(split(pool.name, '/')), '\",\"value\":\"', pool.id, '\"}')))]",
 										"required": false
@@ -2569,7 +2203,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Remote Volume(s)",
 									"multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
-									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumesApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), map(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumesApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
 									"toolTip": "Select the office-containers and profile-containers volumes from the selected NetApp capacity pool.",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.remoteVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
@@ -2607,7 +2241,7 @@
 									"name": "shardingOption",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Sharding Options",
-									"defaultValue": "[if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.fslSharding, 'ShardPerms'), 'Sharding via Permissions', if(equals(steps('functionApp').executionSettings.hostsRGProps.tags.fslSharding, 'ShardOSS'), 'Sharding via Object Specific Settings', 'No Sharding'))]",
+									"defaultValue": "[if(equals(steps('basics').hostsRGProps.tags.fslSharding, 'ShardPerms'), 'Sharding via Permissions', if(equals(steps('basics').hostsRGProps.tags.fslSharding, 'ShardOSS'), 'Sharding via Object Specific Settings', 'No Sharding'))]",
 									"constraints": {
 										"allowedValues": "[if(contains(steps('identity').solution, 'EntraKerberos'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
 									},
@@ -2745,9 +2379,9 @@
 									"multiLine": true,
 									"multiselect": true,
 									"toolTip": "",
-									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslLocalStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => and(equals(sa.location, steps('hosts').scope.location.name), or(and(not(empty(coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.storageResourceGroup, ''))), equals(first(skip(split(sa.id, '/'), 4)), steps('functionApp').executionSettings.hostsRGProps.tags.storageResourceGroup)), empty(coalesce(steps('functionApp').executionSettings.hostsRGProps.tags.storageResourceGroup, ''))))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => and(equals(sa.location, steps('hosts').scope.location.name), or(and(not(empty(coalesce(steps('basics').hostsRGProps.tags.storageResourceGroup, ''))), equals(first(skip(split(sa.id, '/'), 4)), steps('basics').hostsRGProps.tags.storageResourceGroup)), empty(coalesce(steps('basics').hostsRGProps.tags.storageResourceGroup, ''))))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
 										"required": true
 									},
 									"visible": "[steps('userProfiles').configureSessionHosts]"
@@ -2804,7 +2438,7 @@
 									"multiLine": true,
 									"multiselect": true,
 									"toolTip": "",
-									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags)), not(empty(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('functionApp').executionSettings.hostsRGProps.tags.fslRemoteStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.location, steps('userProfiles').azureFiles.remoteLocation)), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\", \"value\":\"', sa.id, '\"}')))]",
 										"required": false
@@ -2821,6 +2455,346 @@
 									}
 								}
 							]
+						}
+					]
+				},
+				{
+					"name": "infrastructure",
+					"label": "Infrastructure",
+					"elements": [
+						{
+							"name": "useExistingHostingPlan",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Use Existing App Service Plan",
+							"toolTip": "Select an existing App Service Plan instead of creating a new one."
+						},
+						{
+							"name": "appServicePlanSubscription",
+							"type": "Microsoft.Common.DropDown",
+							"label": "App Service Plan Subscription",
+							"defaultValue": "[steps('basics').subscription.displayName]",
+							"toolTip": "Select the subscription that contains your app service plan.",
+							"constraints": {
+								"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+								"required": true
+							}
+						},
+						{
+							"name": "resourceGroupsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('infrastructure').appServicePlanSubscription.id))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('infrastructure').appServicePlanSubscription.id, '/resourcegroups?api-version=2021-04-01')]"
+							}
+						},
+						{
+							"name": "resourceGroup",
+							"type": "Microsoft.Common.DropDown",
+							"label": "App Service Plan Resource Group",
+							"multiLine": true,
+							"toolTip": "Select the shared operations group containing resources used to manage all host pools.",
+							"constraints": {
+								"allowedValues": "[map(steps('infrastructure').resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
+								"required": true
+							},
+							"visible": "[not(steps('infrastructure').useExistingHostingPlan)]"
+						},
+						{
+							"name": "serverFarmsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(not(empty(steps('infrastructure').appServicePlanSubscription)), steps('infrastructure').useExistingHostingPlan)]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('infrastructure').appServicePlanSubscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2024-11-01')]"
+							}
+						},
+						{
+							"name": "appServicePlan",
+							"type": "Microsoft.Common.DropDown",
+							"visible": "[steps('infrastructure').useExistingHostingPlan]",
+							"label": "App Service Plan",
+							"multiLine": true,
+							"toolTip": "Select the existing App Service Plan. Only plans in the selected subscription and location are shown.",
+							"constraints": {
+								"allowedValues": "[map(filter(steps('infrastructure').serverFarmsApi.value, (sf) => equals(sf.location, steps('basics').location.displayName)), (sf) => parse(concat('{\"label\":\"', sf.name, '\",\"description\":\"Location: ', sf.location, ' | Resource Group: ', first(skip(split(sf.id, '/'), 4)), '\",\"value\":\"', sf.id, '\"}')))]",
+								"required": true
+							}
+						},
+						{
+							"name": "planSku",
+							"type": "Microsoft.Common.DropDown",
+							"visible": "[not(steps('infrastructure').useExistingHostingPlan)]",
+							"label": "App Service Plan SKU",
+							"defaultValue": "P0v3 (1 vCPU, 4 GB RAM) - Most Cost-Effective",
+							"toolTip": "Select the SKU for the new App Service Plan. P0v3 is recommended for cost optimization and fully supports all required features (Always On, VNet integration, PowerShell 7.4).",
+							"constraints": {
+								"allowedValues": [
+									{
+										"label": "P0v3 (1 vCPU, 4 GB RAM) - Most Cost-Effective",
+										"value": "PremiumV3_P0v3"
+									},
+									{
+										"label": "P1v3 (2 vCPU, 8 GB RAM)",
+										"value": "PremiumV3_P1v3"
+									},
+									{
+										"label": "P2v3 (4 vCPU, 16 GB RAM)",
+										"value": "PremiumV3_P2v3"
+									},
+									{
+										"label": "P3v3 (8 vCPU, 32 GB RAM)",
+										"value": "PremiumV3_P3v3"
+									}
+								],
+								"required": true
+							}
+						},
+						{
+							"name": "zoneRedundant",
+							"type": "Microsoft.Common.CheckBox",
+							"visible": "[not(steps('infrastructure').useExistingHostingPlan)]",
+							"label": "Enable Zone Redundancy",
+							"toolTip": "Deploy the App Service Plan with zone redundancy. Only applies when creating a new plan."
+						},
+						{
+							"name": "encryptionTextBlock",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Configure encryption for the function app storage account."
+							}
+						},
+						{
+							"name": "keyManagementStorageAccounts",
+							"type": "Microsoft.Common.OptionsGroup",
+							"label": "Storage Account Key Management",
+							"defaultValue": "Microsoft-Managed Keys",
+							"toolTip": "Choose between platform-managed or customer-managed keys for storage encryption.",
+							"constraints": {
+								"allowedValues": [
+									{
+										"label": "Microsoft-Managed Keys",
+										"value": "MicrosoftManaged"
+									},
+									{
+										"label": "Customer-Managed Keys",
+										"value": "CustomerManaged"
+									},
+									{
+										"label": "Customer-Managed Keys backed by HSM",
+										"value": "CustomerManagedHSM"
+									}
+								]
+							}
+						},
+						{
+							"name": "keyVaultSubscription",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Key Vault Subscription",
+							"defaultValue": "[steps('basics').subscription.displayName]",
+							"toolTip": "Select the subscription containing the Key Vault with customer-managed encryption keys. For brownfield deployments, this allows selecting Key Vaults from centralized security subscriptions.",
+							"constraints": {
+								"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+								"required": true
+							},
+							"visible": "[contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')]"
+						},
+						{
+							"name": "keyVaultsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(not(empty(steps('infrastructure').keyVaultSubscription.id)), contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer'))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('infrastructure').keyVaultSubscription.id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
+							}
+						},
+						{
+							"name": "encryptionKeyVault",
+							"type": "Microsoft.Common.DropDown",
+							"visible": "[contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')]",
+							"label": "Encryption Key Vault",
+							"multiLine": true,
+							"toolTip": "Select the Key Vault containing the customer-managed encryption key. Only Key Vaults in the selected location are shown.",
+							"constraints": {
+								"required": "[contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')]",
+								"allowedValues": "[map(filter(steps('infrastructure').keyVaultsApi.value, (kv) => equals(kv.location, steps('basics').location.name)), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Location: ', kv.location, ' | Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
+							}
+						},
+						{
+							"name": "zeroTrustNetworkingInfoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"options": {
+								"text": "Zero Trust Networking for Function Apps and Azure Resources: This section configures network-level security controls to enforce Zero Trust Architecture principles for the Session Host Replacer function app and its dependencies (storage accounts, key vaults). Private Endpoints: Enable private connectivity to Platform as a Service (PaaS) resources (Blob Storage, File Storage, and Key Vaults) by assigning private IP addresses from your virtual network. This removes public internet exposure and routes traffic over the Microsoft backbone network. Virtual Network Integration: The function app requires outbound virtual network integration to communicate privately with resources protected by private endpoints. This requires a dedicated subnet with Microsoft.Web/serverFarms delegation. Both features require Private DNS Zones for proper name resolution. For centralized DNS management in hub-and-spoke topologies, refer to the Private Link hub-and-spoke deployment guidance linked below.",
+								"style": "Info",
+								"uri": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options?tabs=azure-portal"
+							}
+						},
+						{
+							"name": "configureZeroTrustNetworking",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Configure Zero Trust Networking",
+							"defaultValue": true
+						},
+						{
+							"name": "zeroTrustNetworkingTextBlock2",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[steps('infrastructure').configureZeroTrustNetworking]",
+							"options": {
+								"link": {
+									"label": "Microsoft Learn | Private Link Deployment in a Hub and Spoke Network",
+									"uri": "https://learn.microsoft.com/en-us/azure/architecture/networking/guide/private-link-hub-spoke-network"
+								},
+								"text": "When deploying function app zero trust networking, you must select the subnet and Private DNS Zones required for DNS resolution. The available virtual networks are dynamically filtered according to the regions specified for the resource types in earlier configuration screens. The drop-down menus will present only the virtual networks, subnets, and Private DNS Zones that match your prior selections, ensuring that you can choose the appropriate resources for your Zero Trust implementation."
+							}
+						},
+						{
+							"name": "subnetsHeader",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[steps('infrastructure').configureZeroTrustNetworking]",
+							"options": {
+								"text": "Subnets"
+							}
+						},
+						{
+							"name": "virtualNetworksApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('basics').subscription.id))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+							}
+						},
+						{
+							"name": "virtualNetwork",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Virtual Network",
+							"visible": "[steps('infrastructure').configureZeroTrustNetworking]",
+							"multiLine": true,
+							"toolTip": "Select the virtual network to which the function app will be integrated. The list is filtered based on the subscription and location selected on the 'Deployment Basics' page.",
+							"constraints": {
+								"allowedValues": "[map(filter(steps('infrastructure').virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
+								"required": true
+							}
+						},
+						{
+							"name": "subnetsApi",
+							"condition": "[not(empty(steps('infrastructure').virtualNetwork.id))]",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('infrastructure').virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+							}
+						},
+						{
+							"name": "functionAppOutboundSubnet",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Function App Outbound subnet",
+							"toolTip": "Select an existing subnet for function App Outbound access. This subnet must have a delegation for Microsoft.Web/serverFarms.",
+							"constraints": {
+								"required": true,
+								"allowedValues": "[map(filter(steps('infrastructure').subnetsApi.value, (snet) => equals(first(map(snet.properties.delegations, (del) => del.properties.serviceName)), 'Microsoft.Web/serverFarms')), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+							},
+							"visible": "[steps('infrastructure').configureZeroTrustNetworking]"
+						},
+						{
+							"name": "functionAppPrivateEndpointSubnet",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Function App Private Endpoint Subnet",
+							"toolTip": "Select the subnet for function app private endpoints (inbound access and storage account). This subnet must NOT have any delegations and must be different from the outbound subnet.",
+							"constraints": {
+								"required": true,
+								"allowedValues": "[map(filter(steps('infrastructure').subnetsApi.value, (snet) => and(empty(snet.properties.delegations), not(equals(snet.id, steps('infrastructure').functionAppOutboundSubnet)))), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+							},
+							"visible": "[steps('infrastructure').configureZeroTrustNetworking]"
+						},
+						{
+							"name": "privateDNSZonesHeader",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[steps('infrastructure').configureZeroTrustNetworking]",
+							"options": {
+								"text": "Private DNS Zones"
+							}
+						},
+						{
+							"name": "privateDNSZoneIntegrationTextBlock",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": "[steps('infrastructure').configureZeroTrustNetworking]",
+							"options": {
+								"text": "To connect privately with your function app and private endpoints, you need DNS records. We recommend that you integrate your function app private endpoints with private DNS zones. If you select the checkbox below, you'll be asked to select the appropriate Private DNS Zone for each resource type deployed by this solution and the deployment will automatically create the Private DNS integration when creating the private endpoints. Alternatively, you can assign policies to private endpoints to automatically register the endpoints with the appropriate private DNS zones. Uncheck the box below if that is the method you are using.",
+								"link": {
+									"label": "Learn more",
+									"uri": "https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview#dns-configuration"
+								}
+							}
+						},
+						{
+							"name": "enablePrivateDNSIntegration",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Enable Private DNS Zone Integration",
+							"toolTip": "To connect privately with your private endpoint, you need a DNS record. Check this box to select the appropriate private DNS zones so that the deployment automatically integrates each private endpoint with Azure private DNS.",
+							"defaultValue": true,
+							"visible": "[steps('infrastructure').configureZeroTrustNetworking]"
+						},
+						{
+							"name": "privateDNSZonesSubscription",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Private DNS Zone Subscription",
+							"placeholder": "",
+							"defaultValue": "[steps('basics').subscription.displayName]",
+							"toolTip": "Select the subscription that contains your Private DNS Zones.",
+							"constraints": {
+								"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+								"required": true
+							},
+							"visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration)]"
+						},
+						{
+							"name": "privateDNSZonesApi",
+							"condition": "[and(steps('infrastructure').enablePrivateDNSIntegration, not(empty(steps('infrastructure').privateDNSZonesSubscription)))]",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('infrastructure').privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+							}
+						},
+						{
+							"name": "azureFunctionAppPrivateDnsZone",
+							"type": "Microsoft.Common.DropDown",
+							"defaultValue": "[first(map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => zone.name))]",
+							"visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration)]",
+							"label": "Azure Function App",
+							"multiLine": true,
+							"toolTip": "Select the existing Private DNS Zone for Azure Function Apps",
+							"constraints": {
+								"allowedValues": "[map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+								"required": true
+							}
+						},
+						{
+							"name": "azureBlobPrivateDnsZone",
+							"type": "Microsoft.Common.DropDown",
+							"defaultValue": "[first(map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
+							"visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration)]",
+							"label": "Azure Blob Storage",
+							"multiLine": true,
+							"toolTip": "Select the existing Private DNS Zone for Azure Blob Storage.",
+							"constraints": {
+								"allowedValues": "[map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+								"required": true
+							}
+						},
+						{
+							"name": "azureTablePrivateDnsZone",
+							"type": "Microsoft.Common.DropDown",
+							"defaultValue": "[first(map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => zone.name))]",
+							"visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration)]",
+							"label": "Azure Table Storage",
+							"multiLine": true,
+							"toolTip": "Select the existing Private DNS Zone for Azure Table Storage.",
+							"constraints": {
+								"allowedValues": "[map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+								"required": true
+							}
 						}
 					]
 				},
@@ -2845,7 +2819,7 @@
 									"name": "subscription",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Monitoring Subscription",
-									"defaultValue": "[steps('basics').scope.subscription.displayName]",
+									"defaultValue": "[steps('basics').subscription.displayName]",
 									"toolTip": "Select the subscription where monitoring resources are located",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
@@ -2909,7 +2883,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"visible": "[and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook)]",
 									"label": "Workbook Location",
-									"defaultValue": "[steps('basics').scope.location.displayName]",
+									"defaultValue": "[steps('basics').location.displayName]",
 									"toolTip": "Select the Azure region where the workbook will be deployed. The workbook's location does not affect its ability to query cross-region Application Insights instances. This should match the location of your first deployment to ensure idempotency.",
 									"constraints": {
 										"allowedValues": "[steps('monitoring').functionAppMonitoringSection.locationsApi.transformed.list]",
@@ -3025,8 +2999,8 @@
 					]
 				},
 				{
-					"name": "customNaming",
-					"label": "Custom Naming (Advanced)",
+					"name": "advanced",
+					"label": "Advanced",
 					"elements": [
 						{
 							"name": "infoBox1",
@@ -3046,12 +3020,12 @@
 						{
 							"name": "functionApp_checkNameAvailability",
 							"type": "Microsoft.Solutions.ArmApiControl",
-							"condition": "[and(steps('customNaming').enableCustomNaming, not(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride)))]",
+							"condition": "[and(steps('advanced').enableCustomNaming, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
 							"request": {
 								"method": "POST",
-								"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Web/checkNameAvailability?api-version=2022-03-01')]",
+								"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Web/checkNameAvailability?api-version=2022-03-01')]",
 								"body": {
-									"name": "[steps('customNaming').infrastructureNaming.functionAppNameOverride]",
+									"name": "[steps('advanced').infrastructureNaming.functionAppNameOverride]",
 									"type": "Microsoft.Web/sites"
 								}
 							}
@@ -3059,22 +3033,22 @@
 						{
 							"name": "functionAppName_rePUT",
 							"type": "Microsoft.Solutions.ArmApiControl",
-							"condition": "[and(steps('customNaming').enableCustomNaming, not(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride)))]",
+							"condition": "[and(steps('advanced').enableCustomNaming, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
 							"request": {
 								"method": "GET",
-								"path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
+								"path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
 								"body": {}
 							}
 						},
 						{
 							"name": "storageAccount_checkNameAvailability",
 							"type": "Microsoft.Solutions.ArmApiControl",
-							"condition": "[and(steps('customNaming').enableCustomNaming, not(empty(steps('customNaming').infrastructureNaming.storageAccountNameOverride)))]",
+							"condition": "[and(steps('advanced').enableCustomNaming, not(empty(steps('advanced').infrastructureNaming.storageAccountNameOverride)))]",
 							"request": {
 								"method": "POST",
-								"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Storage/checkNameAvailability?api-version=2023-05-01')]",
+								"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Storage/checkNameAvailability?api-version=2023-05-01')]",
 								"body": {
-									"name": "[steps('customNaming').infrastructureNaming.storageAccountNameOverride]",
+									"name": "[steps('advanced').infrastructureNaming.storageAccountNameOverride]",
 									"type": "Microsoft.Storage/storageAccounts"
 								}
 							}
@@ -3083,7 +3057,7 @@
 							"name": "infrastructureNaming",
 							"type": "Microsoft.Common.Section",
 							"label": "Function App Infrastructure Naming",
-							"visible": "[steps('customNaming').enableCustomNaming]",
+							"visible": "[steps('advanced').enableCustomNaming]",
 							"elements": [
 								{
 									"name": "infoBox",
@@ -3107,12 +3081,12 @@
 												"message": "Function app name must be 2-60 characters, containing only alphanumeric characters and hyphens."
 											},
 											{
-												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride), steps('customNaming').functionApp_checkNameAvailability.nameAvailable, equals(steps('customNaming').functionApp_checkNameAvailability.reason, 'AlreadyExists'))]",
-												"message": "[steps('customNaming').functionApp_checkNameAvailability.message]"
+												"isValid": "[or(empty(steps('advanced').infrastructureNaming.functionAppNameOverride), steps('advanced').functionApp_checkNameAvailability.nameAvailable, equals(steps('advanced').functionApp_checkNameAvailability.reason, 'AlreadyExists'))]",
+												"message": "[steps('advanced').functionApp_checkNameAvailability.message]"
 											},
 											{
-												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.functionAppNameOverride), steps('customNaming').functionApp_checkNameAvailability.nameAvailable, equals(steps('customNaming').functionAppName_rePUT.id, concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('customNaming').infrastructureNaming.functionAppNameOverride)), not(equals(steps('customNaming').functionApp_checkNameAvailability.reason, 'AlreadyExists')))]",
-												"message": "[steps('customNaming').functionApp_checkNameAvailability.message]"
+												"isValid": "[or(empty(steps('advanced').infrastructureNaming.functionAppNameOverride), steps('advanced').functionApp_checkNameAvailability.nameAvailable, equals(steps('advanced').functionAppName_rePUT.id, concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride)), not(equals(steps('advanced').functionApp_checkNameAvailability.reason, 'AlreadyExists')))]",
+												"message": "[steps('advanced').functionApp_checkNameAvailability.message]"
 											}
 										]
 									}
@@ -3131,8 +3105,8 @@
 												"message": "Storage account name must be 3-24 characters, lowercase alphanumeric only (no hyphens or special characters)."
 											},
 											{
-												"isValid": "[or(empty(steps('customNaming').infrastructureNaming.storageAccountNameOverride), steps('customNaming').storageAccount_checkNameAvailability.nameAvailable)]",
-												"message": "[steps('customNaming').storageAccount_checkNameAvailability.message]"
+												"isValid": "[or(empty(steps('advanced').infrastructureNaming.storageAccountNameOverride), steps('advanced').storageAccount_checkNameAvailability.nameAvailable)]",
+												"message": "[steps('advanced').storageAccount_checkNameAvailability.message]"
 											}
 										]
 									}
@@ -3143,7 +3117,7 @@
 									"label": "Storage Encryption Identity Name",
 									"placeholder": "uai-avdshr-prod-encryption-eus2",
 									"toolTip": "Optional. Explicit name for the user-assigned identity used for storage account CMK encryption. Only relevant when Customer-Managed Keys are selected. Leave blank to derive from naming convention. Example: uai-avdshr-prod-encryption-eus2",
-									"visible": "[contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')]",
+									"visible": "[contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')]",
 									"constraints": {
 										"required": false,
 										"validations": [
@@ -3177,7 +3151,7 @@
 							"name": "sessionHostNaming",
 							"type": "Microsoft.Common.Section",
 							"label": "Session Host Resource Naming",
-							"visible": "[steps('customNaming').enableCustomNaming]",
+							"visible": "[steps('advanced').enableCustomNaming]",
 							"elements": [
 								{
 									"name": "infoBox",
@@ -3247,23 +3221,24 @@
 									}
 								}
 							]
-						}
-					]
-				},
-				{
-					"name": "tags",
-					"label": "Tags",
-					"elements": [
+						},
 						{
-							"name": "tags",
-							"type": "Microsoft.Common.TagsByResource",
-							"resources": [
-								"Microsoft.ManagedIdentity/userAssignedIdentities",
-								"Microsoft.Network/networkInterfaces",
-								"Microsoft.Network/privateEndpoints",
-								"Microsoft.Storage/storageAccounts",
-								"Microsoft.Web/serverFarms",
-								"Microsoft.Web/sites"
+							"name": "tagsSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Resource Tags",
+							"elements": [
+								{
+									"name": "tags",
+									"type": "Microsoft.Common.TagsByResource",
+									"resources": [
+										"Microsoft.ManagedIdentity/userAssignedIdentities",
+										"Microsoft.Network/networkInterfaces",
+										"Microsoft.Network/privateEndpoints",
+										"Microsoft.Storage/storageAccounts",
+										"Microsoft.Web/serverFarms",
+										"Microsoft.Web/sites"
+									]
+								}
 							]
 						}
 					]
@@ -3272,51 +3247,51 @@
 		},
 		"outputs": {
 			"parameters": {
-				"location": "[steps('basics').scope.location.name]",
+				"location": "[steps('basics').location.name]",
 				"functionAppResourceGroupName": "[last(split(steps('hosts').scope.resourceGroup.id, '/'))]",
-				"hostPoolResourceId": "[steps('functionApp').executionSettings.hostPool.id]",
-				"sessionHostTemplateSpecResourceId": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'existing'), steps('functionApp').executionSettings.templateSpecResourceSelector.id, '')]",
-				"templateSpecName": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecName, '')]",
-				"templateSpecVersion": "[if(equals(steps('functionApp').executionSettings.templateSpecOptionsGroup, 'new'), steps('functionApp').executionSettings.templateSpecVersion, '1.0.0')]",
-				"timerSchedule": "[concat('0 ', string(steps('functionApp').executionSettings.scheduleMinuteOffset), ',', string(add(steps('functionApp').executionSettings.scheduleMinuteOffset, 30)), ' ', if(equals(length(steps('functionApp').executionSettings.scheduleHours), 24), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('functionApp').executionSettings.scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('functionApp').executionSettings.scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]",
-				"replaceSessionHostOnNewImageVersionDelayDays": "[steps('functionApp').executionSettings.replaceSessionHostOnNewImageVersionDelayDays]",
-				"allowImageVersionRollback": "[steps('functionApp').executionSettings.allowImageVersionRollback]",
-				"replacementMode": "[steps('functionApp').executionSettings.replacementMode]",
-				"drainGracePeriodHours": "[steps('functionApp').executionSettings.drainGracePeriodHours]",
-				"minimumDrainMinutes": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst'), steps('functionApp').executionSettings.minimumDrainMinutes, 0)]",
-				"minimumCapacityPercentage": "[steps('functionApp').executionSettings.minimumCapacityPercentage]",
-				"maxDeletionsPerCycle": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'DeleteFirst'), steps('functionApp').executionSettings.maxDeletionsPerCycle, 5)]",
-				"minimumHostIndex": "[steps('functionApp').executionSettings.minimumHostIndex]",
-				"enableShutdownRetention": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention, false)]",
-				"shutdownRetentionDays": "[if(and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention), steps('functionApp').executionSettings.shutdownRetentionDays, 3)]",
-				"tagShutdownTimestamp": "[if(and(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.enableShutdownRetention), steps('functionApp').executionSettings.tagShutdownTimestamp, 'AutoReplaceShutdownTimestamp')]",
-				"targetSessionHostCount": "[steps('functionApp').executionSettings.targetSessionHostCount]",
-				"maxDeploymentBatchSize": "[if(equals(steps('functionApp').executionSettings.replacementMode, 'SideBySide'), steps('functionApp').executionSettings.maxDeploymentBatchSize, 100)]",
-				"fixSessionHostTags": "[steps('functionApp').executionSettings.fixSessionHostTags]",
-				"includePreExistingSessionHosts": "[steps('functionApp').executionSettings.includePreExistingSessionHosts]",
-				"tagIncludeInAutomation": "[steps('functionApp').executionSettings.tagIncludeInAutomation]",
-				"tagDeployTimestamp": "[steps('functionApp').executionSettings.tagDeployTimestamp]",
-				"tagPendingDrainTimestamp": "[steps('functionApp').executionSettings.tagPendingDrainTimestamp]",
-				"tagScalingPlanExclusionTag": "[steps('functionApp').executionSettings.tagScalingPlanExclusionTag]",
-				"removeEntraDevice": "[steps('functionApp').executionSettings.removeEntraDevice]",
-				"removeIntuneDevice": "[steps('functionApp').executionSettings.removeIntuneDevice]",
-				"enableProgressiveScaleUp": "[steps('functionApp').executionSettings.enableProgressiveScaleUp]",
-				"initialDeploymentPercentage": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.initialDeploymentPercentage, 10)]",
-				"scaleUpIncrementPercentage": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.scaleUpIncrementPercentage, 20)]",
-				"successfulRunsBeforeScaleUp": "[if(steps('functionApp').executionSettings.enableProgressiveScaleUp, steps('functionApp').executionSettings.successfulRunsBeforeScaleUp, 1)]",
-				"sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('functionApp').executionSettings.removeEntraDevice, steps('functionApp').executionSettings.removeIntuneDevice), equals(steps('functionApp').executionSettings.identityType, 'UserAssigned')), steps('functionApp').executionSettings.sessionHostReplacerUserAssignedIdentity.id, '')]",
-				"appServicePlanResourceId": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, steps('functionApp').infrastructure.appServicePlan, '')]",
-				"appServicePlanResourceGroupName": "[if(steps('functionApp').infrastructure.useExistingHostingPlan, '', coalesce(steps('functionApp').infrastructure.hostingPlanResourceGroup.name, ''))]",
-				"appServicePlanSku": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.planSku, 'PremiumV3_P0v3')]",
-				"zoneRedundant": "[if(not(steps('functionApp').infrastructure.useExistingHostingPlan), steps('functionApp').infrastructure.zoneRedundant, false)]",
-				"keyManagementStorageAccounts": "[steps('functionApp').infrastructure.keyManagementStorageAccounts]",
-				"encryptionKeyVaultResourceId": "[if(contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer'), steps('functionApp').infrastructure.encryptionKeyVault, '')]",
-				"privateEndpoint": "[steps('functionApp').infrastructure.configureZeroTrustNetworking]",
-				"functionAppDelegatedSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppOutboundSubnet, '')]",
-				"privateEndpointSubnetResourceId": "[if(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.functionAppPrivateEndpointSubnet, '')]",
-				"azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureFunctionAppPrivateDnsZone, '')]",
-				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureBlobPrivateDnsZone, '')]",
-				"azureTablePrivateDnsZoneResourceId": "[if(and(steps('functionApp').infrastructure.configureZeroTrustNetworking, steps('functionApp').infrastructure.enablePrivateDNSIntegration), steps('functionApp').infrastructure.azureTablePrivateDnsZone, '')]",
+				"hostPoolResourceId": "[steps('basics').hostPool.id]",
+				"sessionHostTemplateSpecResourceId": "[if(equals(steps('replacerConfig').templateSpecOptionsGroup, 'existing'), steps('replacerConfig').templateSpecResourceSelector.id, '')]",
+				"templateSpecName": "[if(equals(steps('replacerConfig').templateSpecOptionsGroup, 'new'), steps('replacerConfig').templateSpecName, '')]",
+				"templateSpecVersion": "[if(equals(steps('replacerConfig').templateSpecOptionsGroup, 'new'), steps('replacerConfig').templateSpecVersion, '1.0.0')]",
+				"timerSchedule": "[concat('0 ', string(steps('replacerConfig').scheduleMinuteOffset), ',', string(add(steps('replacerConfig').scheduleMinuteOffset, 30)), ' ', if(equals(length(steps('replacerConfig').scheduleHours), 24), '*', replace(replace(replace(string(steps('replacerConfig').scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('replacerConfig').scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('replacerConfig').scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]",
+				"replaceSessionHostOnNewImageVersionDelayDays": "[steps('replacerConfig').replaceSessionHostOnNewImageVersionDelayDays]",
+				"allowImageVersionRollback": "[steps('replacerConfig').allowImageVersionRollback]",
+				"replacementMode": "[steps('replacerConfig').replacementMode]",
+				"drainGracePeriodHours": "[steps('replacerConfig').drainGracePeriodHours]",
+				"minimumDrainMinutes": "[if(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), steps('replacerConfig').minimumDrainMinutes, 0)]",
+				"minimumCapacityPercentage": "[steps('replacerConfig').minimumCapacityPercentage]",
+				"maxDeletionsPerCycle": "[if(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), steps('replacerConfig').maxDeletionsPerCycle, 5)]",
+				"minimumHostIndex": "[steps('replacerConfig').minimumHostIndex]",
+				"enableShutdownRetention": "[if(equals(steps('replacerConfig').replacementMode, 'SideBySide'), steps('replacerConfig').enableShutdownRetention, false)]",
+				"shutdownRetentionDays": "[if(and(equals(steps('replacerConfig').replacementMode, 'SideBySide'), steps('replacerConfig').enableShutdownRetention), steps('replacerConfig').shutdownRetentionDays, 3)]",
+				"tagShutdownTimestamp": "[if(and(equals(steps('replacerConfig').replacementMode, 'SideBySide'), steps('replacerConfig').enableShutdownRetention), steps('replacerConfig').tagShutdownTimestamp, 'AutoReplaceShutdownTimestamp')]",
+				"targetSessionHostCount": "[steps('replacerConfig').targetSessionHostCount]",
+				"maxDeploymentBatchSize": "[if(equals(steps('replacerConfig').replacementMode, 'SideBySide'), steps('replacerConfig').maxDeploymentBatchSize, 100)]",
+				"fixSessionHostTags": "[steps('replacerConfig').fixSessionHostTags]",
+				"includePreExistingSessionHosts": "[steps('replacerConfig').includePreExistingSessionHosts]",
+				"tagIncludeInAutomation": "[steps('replacerConfig').tagIncludeInAutomation]",
+				"tagDeployTimestamp": "[steps('replacerConfig').tagDeployTimestamp]",
+				"tagPendingDrainTimestamp": "[steps('replacerConfig').tagPendingDrainTimestamp]",
+				"tagScalingPlanExclusionTag": "[steps('replacerConfig').tagScalingPlanExclusionTag]",
+				"removeEntraDevice": "[steps('replacerConfig').removeEntraDevice]",
+				"removeIntuneDevice": "[steps('replacerConfig').removeIntuneDevice]",
+				"enableProgressiveScaleUp": "[steps('replacerConfig').enableProgressiveScaleUp]",
+				"initialDeploymentPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').initialDeploymentPercentage, 10)]",
+				"scaleUpIncrementPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').scaleUpIncrementPercentage, 20)]",
+				"successfulRunsBeforeScaleUp": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').successfulRunsBeforeScaleUp, 1)]",
+				"sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned')), steps('replacerConfig').sessionHostReplacerUserAssignedIdentity.id, '')]",
+				"appServicePlanResourceId": "[if(steps('infrastructure').useExistingHostingPlan, steps('infrastructure').appServicePlan, '')]",
+				"appServicePlanResourceGroupName": "[if(steps('infrastructure').useExistingHostingPlan, '', coalesce(steps('infrastructure').resourceGroup.name, ''))]",
+				"appServicePlanSku": "[if(not(steps('infrastructure').useExistingHostingPlan), steps('infrastructure').planSku, 'PremiumV3_P0v3')]",
+				"zoneRedundant": "[if(not(steps('infrastructure').useExistingHostingPlan), steps('infrastructure').zoneRedundant, false)]",
+				"keyManagementStorageAccounts": "[steps('infrastructure').keyManagementStorageAccounts]",
+				"encryptionKeyVaultResourceId": "[if(contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer'), steps('infrastructure').encryptionKeyVault, '')]",
+				"privateEndpoint": "[steps('infrastructure').configureZeroTrustNetworking]",
+				"functionAppDelegatedSubnetResourceId": "[if(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').functionAppOutboundSubnet, '')]",
+				"privateEndpointSubnetResourceId": "[if(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').functionAppPrivateEndpointSubnet, '')]",
+				"azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureFunctionAppPrivateDnsZone, '')]",
+				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureBlobPrivateDnsZone, '')]",
+				"azureTablePrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureTablePrivateDnsZone, '')]",
 				"identitySolution": "[steps('identity').solution]",
 				"domainName": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.domainName, '')]",
 				"ouPath": "[if(or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraDomainServices')), steps('identity').virtualMachines.ouPath, '')]",
@@ -3341,7 +3316,7 @@
 				"virtualMachineSize": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric)]",
 				"diskSizeGB": "[steps('hosts').specs.diskSizeGB]",
 				"diskSku": "[steps('hosts').specs.diskSku]",
-				"enableAcceleratedNetworking": "[steps('hosts').specs.enableAcceleratedNetworking]",				
+				"enableAcceleratedNetworking": "[steps('hosts').specs.enableAcceleratedNetworking]",
 				"availability": "[steps('hosts').availability.availability]",
 				"availabilityZones": "[if(equals(steps('hosts').availability.availability, 'AvailabilityZones'), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
@@ -3362,24 +3337,24 @@
 				"enableMonitoring": "[steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring]",
 				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.logAnalyticsWorkspace, '')]",
 				"deployWorkbook": "[if(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook, false)]",
-				"workbookLocation": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook), steps('monitoring').functionAppMonitoringSection.workbookLocation.name, steps('basics').scope.location.name)]",
+				"workbookLocation": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook), steps('monitoring').functionAppMonitoringSection.workbookLocation.name, steps('basics').location.name)]",
 				"avdInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.avdInsightsDataCollectionRule, ''), '')]",
 				"vmInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.vmInsightsDataCollectionRule, ''), '')]",
 				"dataCollectionEndpointResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.dataCollectionEndpoint, ''), '')]",
 				"privateLinkScopeResourceId": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.enableAMPLS), steps('monitoring').functionAppMonitoringSection.privateLinkScope.id, '')]",
-				"functionAppNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.functionAppNameOverride, ''), '')]",
-				"storageAccountNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.storageAccountNameOverride, ''), '')]",
-				"storageEncryptionIdentityNameOverride": "[if(and(steps('customNaming').enableCustomNaming, contains(steps('functionApp').infrastructure.keyManagementStorageAccounts, 'Customer')), coalesce(steps('customNaming').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
-				"applicationInsightsNameOverride": "[if(steps('customNaming').enableCustomNaming, coalesce(steps('customNaming').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
-				"virtualMachineNameConvOverride": "[if(steps('customNaming').enableCustomNaming, steps('customNaming').sessionHostNaming.virtualMachineNameConvOverride, '')]",
-				"diskNameConvOverride": "[if(steps('customNaming').enableCustomNaming, steps('customNaming').sessionHostNaming.diskNameConvOverride, '')]",
-				"networkInterfaceNameConvOverride": "[if(steps('customNaming').enableCustomNaming, steps('customNaming').sessionHostNaming.networkInterfaceNameConvOverride, '')]",
-				"availabilitySetNameConvOverride": "[if(steps('customNaming').enableCustomNaming, steps('customNaming').sessionHostNaming.availabilitySetNameConvOverride, '')]",
-				"tags": "[steps('tags').tags]"
+				"functionAppNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
+				"storageAccountNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.storageAccountNameOverride, ''), '')]",
+				"storageEncryptionIdentityNameOverride": "[if(and(steps('advanced').enableCustomNaming, contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
+				"applicationInsightsNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
+				"virtualMachineNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, '')]",
+				"diskNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.diskNameConvOverride, '')]",
+				"networkInterfaceNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, '')]",
+				"availabilitySetNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '')]",
+				"tags": "[steps('advanced').tagsSection.tags]"
 			},
 			"kind": "Subscription",
-			"location": "[steps('basics').scope.location.name]",
-			"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
+			"location": "[steps('basics').location.name]",
+			"subscriptionId": "[steps('basics').subscription.subscriptionId]"
 		}
 	}
 }
