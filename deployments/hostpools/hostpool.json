@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.42.1.51946",
-      "templateHash": "3487012209881105500"
+      "version": "0.43.8.12551",
+      "templateHash": "18028730893554154267"
     }
   },
   "parameters": {
@@ -1055,9 +1055,9 @@
   },
   "variables": {
     "deploymentSuffix": "[if(startsWith(deployment().name, 'Microsoft.Template-'), substring(deployment().name, 19, 14), parameters('timeStamp'))]",
-    "controlPlaneSubscription": "[if(empty(parameters('controlPlaneSubscriptionId')), subscription().subscriptionId, parameters('controlPlaneSubscriptionId'))]",
-    "monitoringSubscription": "[if(empty(parameters('monitoringSubscriptionId')), subscription().subscriptionId, parameters('monitoringSubscriptionId'))]",
-    "rbacSubs": "[union(createArray(variables('controlPlaneSubscription')), createArray(subscription().subscriptionId))]",
+    "effectiveControlPlaneSubscription": "[if(empty(parameters('controlPlaneSubscriptionId')), subscription().subscriptionId, parameters('controlPlaneSubscriptionId'))]",
+    "effectiveMonitoringSubscription": "[if(empty(parameters('monitoringSubscriptionId')), subscription().subscriptionId, parameters('monitoringSubscriptionId'))]",
+    "rbacSubs": "[union(createArray(variables('effectiveControlPlaneSubscription')), createArray(subscription().subscriptionId))]",
     "createDeploymentVm": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), or(or(parameters('deployFSLogixStorage'), parameters('confidentialVMOSDiskEncryption')), not(empty(parameters('desktopFriendlyName')))))]",
     "cmkIsRequested": "[or(or(contains(parameters('keyManagementStorageAccounts'), 'CustomerManaged'), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption'))]",
     "deployInlineEncryptionKv": "[and(and(equals(parameters('deploymentType'), 'Complete'), empty(parameters('encryptionKeyVaultResourceId'))), variables('cmkIsRequested'))]",
@@ -1132,8 +1132,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "3586487363661057939"
+              "version": "0.43.8.12551",
+              "templateHash": "16921387153928487203"
             }
           },
           "parameters": {
@@ -1772,8 +1772,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "12238949619726489623"
+              "version": "0.43.8.12551",
+              "templateHash": "921857994108552741"
             }
           },
           "parameters": {
@@ -1818,7 +1818,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Resource-Group-Monitoring-{0}', variables('deploymentSuffix'))]",
-      "subscriptionId": "[variables('monitoringSubscription')]",
+      "subscriptionId": "[variables('effectiveMonitoringSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1842,8 +1842,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "12238949619726489623"
+              "version": "0.43.8.12551",
+              "templateHash": "921857994108552741"
             }
           },
           "parameters": {
@@ -1888,7 +1888,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Resource-Group-Control-Plane-{0}', variables('deploymentSuffix'))]",
-      "subscriptionId": "[variables('controlPlaneSubscription')]",
+      "subscriptionId": "[variables('effectiveControlPlaneSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1910,8 +1910,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "12238949619726489623"
+              "version": "0.43.8.12551",
+              "templateHash": "921857994108552741"
             }
           },
           "parameters": {
@@ -1956,7 +1956,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Resource-Group-Global-Feed-{0}', variables('deploymentSuffix'))]",
-      "subscriptionId": "[variables('controlPlaneSubscription')]",
+      "subscriptionId": "[variables('effectiveControlPlaneSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1978,8 +1978,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "12238949619726489623"
+              "version": "0.43.8.12551",
+              "templateHash": "921857994108552741"
             }
           },
           "parameters": {
@@ -2047,8 +2047,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "12238949619726489623"
+              "version": "0.43.8.12551",
+              "templateHash": "921857994108552741"
             }
           },
           "parameters": {
@@ -2116,8 +2116,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "12238949619726489623"
+              "version": "0.43.8.12551",
+              "templateHash": "921857994108552741"
             }
           },
           "parameters": {
@@ -2186,8 +2186,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "12238949619726489623"
+              "version": "0.43.8.12551",
+              "templateHash": "921857994108552741"
             }
           },
           "parameters": {
@@ -2255,8 +2255,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "12238949619726489623"
+              "version": "0.43.8.12551",
+              "templateHash": "921857994108552741"
             }
           },
           "parameters": {
@@ -2329,8 +2329,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "9283839458231674130"
+              "version": "0.43.8.12551",
+              "templateHash": "14991474665091958444"
             }
           },
           "parameters": {
@@ -2466,8 +2466,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "13462471252061719689"
+              "version": "0.43.8.12551",
+              "templateHash": "12800820890127300731"
             }
           },
           "parameters": {
@@ -2628,8 +2628,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "8509303238056875595"
+                      "version": "0.43.8.12551",
+                      "templateHash": "3176829335966308983"
                     }
                   },
                   "parameters": {
@@ -2706,8 +2706,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "3208226987569419861"
+                      "version": "0.43.8.12551",
+                      "templateHash": "11766629778045529073"
                     }
                   },
                   "parameters": {
@@ -2860,8 +2860,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "2419731940109136172"
+                      "version": "0.43.8.12551",
+                      "templateHash": "16191324328596288404"
                     }
                   },
                   "definitions": {
@@ -3322,7 +3322,7 @@
           "keyVaultRetentionInDays": {
             "value": "[parameters('keyVaultRetentionInDays')]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpointSubnetResourceId": {
             "value": "[parameters('keyVaultPrivateEndpointSubnetResourceId')]"
           },
@@ -3354,8 +3354,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "4595131076035545713"
+              "version": "0.43.8.12551",
+              "templateHash": "17847415462397604679"
             }
           },
           "parameters": {
@@ -3494,8 +3494,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "9340235821535799809"
+                      "version": "0.43.8.12551",
+                      "templateHash": "13243993667817163573"
                     }
                   },
                   "definitions": {
@@ -3781,8 +3781,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "9589415449045104821"
+                      "version": "0.43.8.12551",
+                      "templateHash": "9215232199660468920"
                     }
                   },
                   "parameters": {
@@ -3929,8 +3929,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "12585196334588463350"
+                      "version": "0.43.8.12551",
+                      "templateHash": "17245339863889522044"
                     }
                   },
                   "parameters": {
@@ -4032,8 +4032,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "9340235821535799809"
+                      "version": "0.43.8.12551",
+                      "templateHash": "13243993667817163573"
                     }
                   },
                   "definitions": {
@@ -4319,8 +4319,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "9589415449045104821"
+                      "version": "0.43.8.12551",
+                      "templateHash": "9215232199660468920"
                     }
                   },
                   "parameters": {
@@ -4453,7 +4453,7 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Operations-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
@@ -4498,8 +4498,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "11704159157049851647"
+              "version": "0.43.8.12551",
+              "templateHash": "2054928261845274778"
             }
           },
           "parameters": {
@@ -4610,8 +4610,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "16504344645162195401"
+                      "version": "0.43.8.12551",
+                      "templateHash": "15990894903977712372"
                     }
                   },
                   "definitions": {
@@ -4804,8 +4804,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "14514355323903729643"
+                              "version": "0.43.8.12551",
+                              "templateHash": "8442619122949581268"
                             }
                           },
                           "parameters": {
@@ -4927,8 +4927,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "8509303238056875595"
+                              "version": "0.43.8.12551",
+                              "templateHash": "3176829335966308983"
                             }
                           },
                           "parameters": {
@@ -5013,8 +5013,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "13075540108381172885"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -5184,8 +5184,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "14514355323903729643"
+                              "version": "0.43.8.12551",
+                              "templateHash": "8442619122949581268"
                             }
                           },
                           "parameters": {
@@ -5321,8 +5321,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "6718767308030891154"
+                              "version": "0.43.8.12551",
+                              "templateHash": "1494202011118404825"
                             }
                           },
                           "parameters": {
@@ -5467,8 +5467,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "13075540108381172885"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -5629,8 +5629,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "13075540108381172885"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -5849,8 +5849,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "16982578581555302792"
+              "version": "0.43.8.12551",
+              "templateHash": "17393598230399402069"
             }
           },
           "parameters": {
@@ -5979,8 +5979,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "16504344645162195401"
+                      "version": "0.43.8.12551",
+                      "templateHash": "15990894903977712372"
                     }
                   },
                   "definitions": {
@@ -6173,8 +6173,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "14514355323903729643"
+                              "version": "0.43.8.12551",
+                              "templateHash": "8442619122949581268"
                             }
                           },
                           "parameters": {
@@ -6296,8 +6296,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "8509303238056875595"
+                              "version": "0.43.8.12551",
+                              "templateHash": "3176829335966308983"
                             }
                           },
                           "parameters": {
@@ -6382,8 +6382,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "13075540108381172885"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -6553,8 +6553,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "14514355323903729643"
+                              "version": "0.43.8.12551",
+                              "templateHash": "8442619122949581268"
                             }
                           },
                           "parameters": {
@@ -6690,8 +6690,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "6718767308030891154"
+                              "version": "0.43.8.12551",
+                              "templateHash": "1494202011118404825"
                             }
                           },
                           "parameters": {
@@ -6836,8 +6836,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "13075540108381172885"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -6998,8 +6998,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "13075540108381172885"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -7175,7 +7175,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Monitoring-{0}', variables('deploymentSuffix'))]",
-      "subscriptionId": "[variables('monitoringSubscription')]",
+      "subscriptionId": "[variables('effectiveMonitoringSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -7211,8 +7211,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "11804157498598068077"
+              "version": "0.43.8.12551",
+              "templateHash": "13825656750057051261"
             }
           },
           "parameters": {
@@ -7281,8 +7281,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "14820794919977762940"
+                      "version": "0.43.8.12551",
+                      "templateHash": "4375215726447674967"
                     }
                   },
                   "definitions": {
@@ -7502,8 +7502,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "1062496452375296708"
+                      "version": "0.43.8.12551",
+                      "templateHash": "15649618545454460663"
                     }
                   },
                   "parameters": {
@@ -7584,8 +7584,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "9409122578130261519"
+                      "version": "0.43.8.12551",
+                      "templateHash": "12484024376617149145"
                     }
                   },
                   "parameters": {
@@ -7743,8 +7743,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "10048223292284601078"
+                      "version": "0.43.8.12551",
+                      "templateHash": "18014681457178699785"
                     }
                   },
                   "parameters": {
@@ -7871,8 +7871,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "15989883095994339194"
+                      "version": "0.43.8.12551",
+                      "templateHash": "15107852728170180576"
                     }
                   },
                   "parameters": {
@@ -7912,8 +7912,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "15442985629329965407"
+                              "version": "0.43.8.12551",
+                              "templateHash": "10817860410374762026"
                             }
                           },
                           "parameters": {
@@ -7971,7 +7971,7 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },
@@ -7980,7 +7980,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('ControlPlane-{0}', variables('deploymentSuffix'))]",
-      "subscriptionId": "[variables('controlPlaneSubscription')]",
+      "subscriptionId": "[variables('effectiveControlPlaneSubscription')]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -8061,7 +8061,7 @@
           "virtualMachinesRegion": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpointNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.privateEndpointNameConv.value]"
           },
@@ -8114,8 +8114,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "2721448847353030505"
+              "version": "0.43.8.12551",
+              "templateHash": "8067398443467110329"
             }
           },
           "parameters": {
@@ -8326,8 +8326,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "4107067493529248372"
+                      "version": "0.43.8.12551",
+                      "templateHash": "14735015851747227384"
                     }
                   },
                   "definitions": {
@@ -8616,8 +8616,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "9589415449045104821"
+                      "version": "0.43.8.12551",
+                      "templateHash": "9215232199660468920"
                     }
                   },
                   "parameters": {
@@ -8767,8 +8767,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "854652109993803519"
+                      "version": "0.43.8.12551",
+                      "templateHash": "6571685996324787080"
                     }
                   },
                   "definitions": {
@@ -9021,8 +9021,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "11251645360607682588"
+                      "version": "0.43.8.12551",
+                      "templateHash": "13568062785559810859"
                     }
                   },
                   "parameters": {
@@ -9192,8 +9192,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "6115185709794160339"
+                      "version": "0.43.8.12551",
+                      "templateHash": "15508551366920229040"
                     }
                   },
                   "definitions": {
@@ -9334,8 +9334,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "11355776661264331448"
+                      "version": "0.43.8.12551",
+                      "templateHash": "15505675348932087640"
                     }
                   },
                   "definitions": {
@@ -9574,8 +9574,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "9589415449045104821"
+                      "version": "0.43.8.12551",
+                      "templateHash": "9215232199660468920"
                     }
                   },
                   "parameters": {
@@ -9737,8 +9737,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "6908137648759552201"
+                      "version": "0.43.8.12551",
+                      "templateHash": "1396972359446850372"
                     }
                   },
                   "definitions": {
@@ -9968,8 +9968,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "11355776661264331448"
+                      "version": "0.43.8.12551",
+                      "templateHash": "15505675348932087640"
                     }
                   },
                   "definitions": {
@@ -10212,8 +10212,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "9589415449045104821"
+                      "version": "0.43.8.12551",
+                      "templateHash": "9215232199660468920"
                     }
                   },
                   "parameters": {
@@ -10343,9 +10343,9 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Control-Plane-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('Resource-Group-Control-Plane-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
     },
@@ -10380,7 +10380,7 @@
           "deploymentSuffix": {
             "value": "[variables('deploymentSuffix')]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpoint": {
             "value": "[parameters('deployPrivateEndpoints')]"
           },
@@ -10402,7 +10402,7 @@
           "privateEndpointNICNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.privateEndpointNICNameConv.value]"
           },
-          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
+          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
           "tags": {
             "value": "[parameters('tags')]"
           },
@@ -10419,8 +10419,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "12058292006458299383"
+              "version": "0.43.8.12551",
+              "templateHash": "16601192754597272325"
             }
           },
           "parameters": {
@@ -10586,8 +10586,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "15287313447643996939"
+                      "version": "0.43.8.12551",
+                      "templateHash": "671361045610266402"
                     }
                   },
                   "definitions": {
@@ -10864,8 +10864,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "12295517163086517454"
+                      "version": "0.43.8.12551",
+                      "templateHash": "8676113211917955970"
                     }
                   },
                   "parameters": {
@@ -10958,8 +10958,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "12295517163086517454"
+                      "version": "0.43.8.12551",
+                      "templateHash": "8676113211917955970"
                     }
                   },
                   "parameters": {
@@ -11043,8 +11043,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "9589415449045104821"
+                      "version": "0.43.8.12551",
+                      "templateHash": "9215232199660468920"
                     }
                   },
                   "parameters": {
@@ -11169,8 +11169,8 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Operations-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
@@ -11222,7 +11222,7 @@
           "fslogixUserGroups": {
             "value": "[parameters('fslogixUserGroups')]"
           },
-          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
+          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
           "identitySolution": {
             "value": "[parameters('identitySolution')]"
           },
@@ -11235,7 +11235,7 @@
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "netAppVolumesSubnetResourceId": {
             "value": "[parameters('netAppVolumesSubnetResourceId')]"
           },
@@ -11298,8 +11298,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "4356045484354207369"
+              "version": "0.43.8.12551",
+              "templateHash": "15213655234544672331"
             }
           },
           "parameters": {
@@ -11515,8 +11515,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "401140429463480729"
+                      "version": "0.43.8.12551",
+                      "templateHash": "7529437149606890837"
                     }
                   },
                   "parameters": {
@@ -11611,8 +11611,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "14886307490596086768"
+                              "version": "0.43.8.12551",
+                              "templateHash": "12518477279248287557"
                             }
                           },
                           "parameters": {
@@ -11692,8 +11692,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "8355494635799001865"
+                              "version": "0.43.8.12551",
+                              "templateHash": "11082593364488778650"
                             }
                           },
                           "parameters": {
@@ -11802,8 +11802,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "16466680701080845989"
+                              "version": "0.43.8.12551",
+                              "templateHash": "11865597405794492921"
                             }
                           },
                           "parameters": {
@@ -11965,8 +11965,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "11251645360607682588"
+                              "version": "0.43.8.12551",
+                              "templateHash": "13568062785559810859"
                             }
                           },
                           "parameters": {
@@ -12243,8 +12243,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "13949452203678314850"
+                      "version": "0.43.8.12551",
+                      "templateHash": "4384633392211259057"
                     }
                   },
                   "parameters": {
@@ -12432,8 +12432,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "16136022840019090130"
+                              "version": "0.43.8.12551",
+                              "templateHash": "3672633721809441936"
                             }
                           },
                           "definitions": {
@@ -12861,8 +12861,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "6648355997797081787"
+                              "version": "0.43.8.12551",
+                              "templateHash": "4094495432521241105"
                             }
                           },
                           "definitions": {
@@ -13127,8 +13127,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "7392276928727074008"
+                              "version": "0.43.8.12551",
+                              "templateHash": "2130790515324573392"
                             }
                           },
                           "parameters": {
@@ -13177,8 +13177,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.42.1.51946",
-                                      "templateHash": "17212052198850569296"
+                                      "version": "0.43.8.12551",
+                                      "templateHash": "11294952401195969466"
                                     }
                                   },
                                   "parameters": {
@@ -13292,8 +13292,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "9589415449045104821"
+                              "version": "0.43.8.12551",
+                              "templateHash": "9215232199660468920"
                             }
                           },
                           "parameters": {
@@ -13438,8 +13438,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "3208226987569419861"
+                              "version": "0.43.8.12551",
+                              "templateHash": "11766629778045529073"
                             }
                           },
                           "parameters": {
@@ -13597,8 +13597,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "11251645360607682588"
+                              "version": "0.43.8.12551",
+                              "templateHash": "13568062785559810859"
                             }
                           },
                           "parameters": {
@@ -13824,8 +13824,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "11251645360607682588"
+                              "version": "0.43.8.12551",
+                              "templateHash": "13568062785559810859"
                             }
                           },
                           "parameters": {
@@ -14023,8 +14023,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "11251645360607682588"
+                              "version": "0.43.8.12551",
+                              "templateHash": "13568062785559810859"
                             }
                           },
                           "parameters": {
@@ -14234,8 +14234,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "11251645360607682588"
+                              "version": "0.43.8.12551",
+                              "templateHash": "13568062785559810859"
                             }
                           },
                           "parameters": {
@@ -14428,8 +14428,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "11251645360607682588"
+                              "version": "0.43.8.12551",
+                              "templateHash": "13568062785559810859"
                             }
                           },
                           "parameters": {
@@ -14631,8 +14631,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "5649859241221842568"
+                      "version": "0.43.8.12551",
+                      "templateHash": "2180995609648216390"
                     }
                   },
                   "parameters": {
@@ -14729,10 +14729,10 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('KeyVaults-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('RecoveryServices-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Storage-CMK-{0}', variables('deploymentSuffix')))]",
@@ -14766,7 +14766,7 @@
           "artifactsUserAssignedIdentityResourceId": {
             "value": "[parameters('artifactsUserAssignedIdentityResourceId')]"
           },
-          "avdInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.avdInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingAVDInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
+          "avdInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.avdInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingAVDInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
           "availability": {
             "value": "[parameters('availability')]"
           },
@@ -14794,7 +14794,7 @@
           "customImageResourceId": {
             "value": "[parameters('customImageResourceId')]"
           },
-          "dataCollectionEndpointResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointResourceId.value), createObject('value', parameters('existingDataCollectionEndpointResourceId'))), createObject('value', ''))]",
+          "dataCollectionEndpointResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointResourceId.value), createObject('value', parameters('existingDataCollectionEndpointResourceId'))), createObject('value', ''))]",
           "dedicatedHostGroupResourceId": {
             "value": "[parameters('dedicatedHostGroupResourceId')]"
           },
@@ -14810,8 +14810,6 @@
           "deploymentType": {
             "value": "[parameters('deploymentType')]"
           },
-          "deploymentUserAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
-          "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineName.value), createObject('value', ''))]",
           "diskAccessName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskAccessName.value]"
           },
@@ -14852,7 +14850,6 @@
           },
           "encryptionKeyName": "[if(parameters('confidentialVMOSDiskEncryption'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyNames.value.confidentialVMs), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyNames.value.virtualMachines))]",
           "encryptionKeyVaultResourceId": "[if(not(empty(parameters('encryptionKeyVaultResourceId'))), createObject('value', parameters('encryptionKeyVaultResourceId')), if(variables('deployInlineEncryptionKv'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultResourceId.value), createObject('value', '')))]",
-          "encryptionKeyVaultUri": "[if(not(empty(parameters('encryptionKeyVaultResourceId'))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('encryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri), if(variables('deployInlineEncryptionKv'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultUri.value), createObject('value', '')))]",
           "existingDiskAccessResourceId": {
             "value": "[parameters('existingDiskAccessResourceId')]"
           },
@@ -14885,7 +14882,7 @@
           "hibernationEnabled": {
             "value": "[parameters('hibernationEnabled')]"
           },
-          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
+          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
           "identitySolution": {
             "value": "[parameters('identitySolution')]"
           },
@@ -14910,7 +14907,6 @@
           "keyManagementDisks": {
             "value": "[parameters('keyManagementDisks')]"
           },
-          "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
@@ -14919,10 +14915,6 @@
           },
           "ouPath": {
             "value": "[parameters('vmOUPath')]"
-          },
-          "pooledHostPool": "[if(equals(split(parameters('hostPoolType'), ' ')[0], 'Pooled'), createObject('value', true()), createObject('value', false()))]",
-          "privateEndpoint": {
-            "value": "[parameters('deployPrivateEndpoints')]"
           },
           "privateEndpointNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.privateEndpointNameConv.value]"
@@ -14938,9 +14930,6 @@
           },
           "recoveryServices": "[if(contains(parameters('hostPoolType'), 'Personal'), createObject('value', parameters('recoveryServices')), createObject('value', false()))]",
           "resourceGroupHosts": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupHosts.value), createObject('value', parameters('existingHostsResourceGroupName')))]",
-          "resourceGroupDeployment": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupDeployment.value]"
-          },
           "securityType": {
             "value": "[parameters('securityType')]"
           },
@@ -14985,7 +14974,7 @@
           "virtualMachineSize": {
             "value": "[parameters('virtualMachineSize')]"
           },
-          "vmInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.vmInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingVMInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
+          "vmInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.vmInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingVMInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
           "vTpmEnabled": {
             "value": "[parameters('vTpmEnabled')]"
           }
@@ -14996,8 +14985,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "2221692638963424915"
+              "version": "0.43.8.12551",
+              "templateHash": "5291505406679053554"
             }
           },
           "parameters": {
@@ -15133,18 +15122,6 @@
                 "description": "Required. When true, creates a new DiskAccess resource to enforce managed disk network access restrictions."
               }
             },
-            "deploymentUserAssignedIdentityClientId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Client ID of the deployment user-assigned identity. Used by Run Command scripts that authenticate during deployment."
-              }
-            },
-            "deploymentVirtualMachineName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the temporary deployment VM used for domain join preparation and confidential VM key operations."
-              }
-            },
             "domainJoinUserPassword": {
               "type": "securestring",
               "metadata": {
@@ -15233,12 +15210,6 @@
               "type": "string",
               "metadata": {
                 "description": "Required. Resource ID of the Key Vault containing Customer Managed Keys for disk encryption set configuration."
-              }
-            },
-            "encryptionKeyVaultUri": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. URI of the Key Vault (e.g. \"https://kv-avd-enc-xxxx.vault.azure.net/\") for CMK disk encryption set references."
               }
             },
             "existingDiskAccessResourceId": {
@@ -15385,18 +15356,6 @@
                 "description": "Required. Azure region where session host VMs and compute resources are deployed."
               }
             },
-            "logAnalyticsWorkspaceResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the Log Analytics workspace for Azure Monitor diagnostics and AVD Insights."
-              }
-            },
-            "privateEndpoint": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, creates private endpoints for supported resources such as Key Vaults and storage accounts."
-              }
-            },
             "privateEndpointNameConv": {
               "type": "string",
               "metadata": {
@@ -15439,22 +15398,10 @@
                 "description": "Required. Distinguished name of the Active Directory OU for session host computer accounts (e.g. \"OU=AVD,DC=contoso,DC=com\"). Leave empty for Entra ID join."
               }
             },
-            "pooledHostPool": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, this is a pooled (shared, multi-session) host pool. When false, personal (dedicated) assignment."
-              }
-            },
             "recoveryServices": {
               "type": "bool",
               "metadata": {
                 "description": "Required. When true, deploys a Recovery Services Vault and configures daily VM backup for session hosts."
-              }
-            },
-            "resourceGroupDeployment": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the temporary deployment resource group used to host the deployment VM."
               }
             },
             "resourceGroupHosts": {
@@ -15628,8 +15575,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "3208226987569419861"
+                      "version": "0.43.8.12551",
+                      "templateHash": "11766629778045529073"
                     }
                   },
                   "parameters": {
@@ -15718,8 +15665,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "8626526654823654338"
+                      "version": "0.43.8.12551",
+                      "templateHash": "8698349424985136456"
                     }
                   },
                   "parameters": {
@@ -15797,8 +15744,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "5140851448350880510"
+                      "version": "0.43.8.12551",
+                      "templateHash": "15600314881808657893"
                     }
                   },
                   "parameters": {
@@ -15877,8 +15824,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "9589415449045104821"
+                      "version": "0.43.8.12551",
+                      "templateHash": "9215232199660468920"
                     }
                   },
                   "parameters": {
@@ -16019,8 +15966,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "359553888254851861"
+                      "version": "0.43.8.12551",
+                      "templateHash": "711228786282229453"
                     }
                   },
                   "parameters": {
@@ -16102,8 +16049,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "6975905468961208197"
+                              "version": "0.43.8.12551",
+                              "templateHash": "11303942372742828501"
                             }
                           },
                           "parameters": {
@@ -16201,8 +16148,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "16504344645162195401"
+                      "version": "0.43.8.12551",
+                      "templateHash": "15990894903977712372"
                     }
                   },
                   "definitions": {
@@ -16395,8 +16342,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "14514355323903729643"
+                              "version": "0.43.8.12551",
+                              "templateHash": "8442619122949581268"
                             }
                           },
                           "parameters": {
@@ -16518,8 +16465,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "8509303238056875595"
+                              "version": "0.43.8.12551",
+                              "templateHash": "3176829335966308983"
                             }
                           },
                           "parameters": {
@@ -16604,8 +16551,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "13075540108381172885"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -16775,8 +16722,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "14514355323903729643"
+                              "version": "0.43.8.12551",
+                              "templateHash": "8442619122949581268"
                             }
                           },
                           "parameters": {
@@ -16912,8 +16859,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "6718767308030891154"
+                              "version": "0.43.8.12551",
+                              "templateHash": "1494202011118404825"
                             }
                           },
                           "parameters": {
@@ -17058,8 +17005,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "13075540108381172885"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -17220,8 +17167,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "13075540108381172885"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -17415,8 +17362,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "1140073301599974734"
+                      "version": "0.43.8.12551",
+                      "templateHash": "15618571469569479372"
                     }
                   },
                   "parameters": {
@@ -17514,8 +17461,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "12977708654141805100"
+                      "version": "0.43.8.12551",
+                      "templateHash": "7790884664765577855"
                     }
                   },
                   "parameters": {
@@ -17773,8 +17720,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "14179236617910406938"
+                      "version": "0.43.8.12551",
+                      "templateHash": "6678432847358667255"
                     }
                   },
                   "parameters": {
@@ -18478,8 +18425,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "12221768984233053938"
+                              "version": "0.43.8.12551",
+                              "templateHash": "1500641470629823555"
                             }
                           },
                           "parameters": {
@@ -18610,8 +18557,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.42.1.51946",
-                              "templateHash": "16929907412779993527"
+                              "version": "0.43.8.12551",
+                              "templateHash": "628934711390630812"
                             }
                           },
                           "parameters": {
@@ -18661,8 +18608,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.42.1.51946",
-                                      "templateHash": "1775484931921149215"
+                                      "version": "0.43.8.12551",
+                                      "templateHash": "6693329195934858545"
                                     }
                                   },
                                   "parameters": {
@@ -18763,8 +18710,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "7268907933231436318"
+                      "version": "0.43.8.12551",
+                      "templateHash": "6531243142419261405"
                     }
                   },
                   "parameters": {
@@ -18840,8 +18787,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "6511691809511277955"
+                      "version": "0.43.8.12551",
+                      "templateHash": "10322310665700276745"
                     }
                   },
                   "parameters": {
@@ -18872,13 +18819,12 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Hosts-Tags-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('KeyVaults-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId(variables('monitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('RecoveryServices-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix')))]"
       ]
@@ -18920,8 +18866,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "18237246551342193018"
+              "version": "0.43.8.12551",
+              "templateHash": "1181036761231519719"
             }
           },
           "parameters": {
@@ -19013,8 +18959,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "11251645360607682588"
+                      "version": "0.43.8.12551",
+                      "templateHash": "13568062785559810859"
                     }
                   },
                   "parameters": {
@@ -19199,8 +19145,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "11251645360607682588"
+                      "version": "0.43.8.12551",
+                      "templateHash": "13568062785559810859"
                     }
                   },
                   "parameters": {
@@ -19388,8 +19334,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.42.1.51946",
-                      "templateHash": "11251645360607682588"
+                      "version": "0.43.8.12551",
+                      "templateHash": "13568062785559810859"
                     }
                   },
                   "parameters": {
@@ -19543,11 +19489,11 @@
   "outputs": {
     "hostPoolResourceId": {
       "type": "string",
-      "value": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), reference(subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value, parameters('existingHostPoolResourceId'))]"
+      "value": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), reference(subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value, parameters('existingHostPoolResourceId'))]"
     },
     "workspaceResourceId": {
       "type": "string",
-      "value": "[if(empty(parameters('existingFeedWorkspaceResourceId')), if(equals(parameters('deploymentType'), 'Complete'), reference(subscriptionResourceId(variables('controlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.workspaceResourceId.value, ''), parameters('existingFeedWorkspaceResourceId'))]"
+      "value": "[if(empty(parameters('existingFeedWorkspaceResourceId')), if(equals(parameters('deploymentType'), 'Complete'), reference(subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.workspaceResourceId.value, ''), parameters('existingFeedWorkspaceResourceId'))]"
     },
     "fslogixLocalStorageAccountResourceIds": {
       "type": "array",
