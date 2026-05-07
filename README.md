@@ -92,7 +92,7 @@ Central storage and management for software artifacts. **Required** for custom i
 **Learn More:**
 
 - [Artifacts & Image Management Guide](docs/artifactsGuide.md)
-- [Deploy-ImageManagement Script](docs/imageManagementScript.md)
+- [Update-ImageArtifacts Script](docs/updateImageArtifacts.md)
 
 #### Custom Image Building
 
@@ -186,6 +186,7 @@ Support for multiple identity configurations to meet organizational requirements
 ### Getting Started
 
 - 📖 [Quick Start Guide](docs/quickStart.md) - Step-by-step deployment instructions
+- 🤖 [End-to-End Automation Guide](docs/automationGuide.md) - Chaining steps together and passing outputs
 - 🏗️ [Design](docs/design.md) - Architecture and resource organization
 - ⚙️ [Parameters Reference](docs/parameters.md) - Complete parameter documentation
 
@@ -194,7 +195,7 @@ Support for multiple identity configurations to meet organizational requirements
 - 🏢 [Host Pool Deployment](docs/hostpoolDeployment.md) - Deploy AVD host pools
 - 🎨 [Image Build Guide](docs/imageBuild.md) - Build custom images
 - 📦 [Artifacts & Image Management](docs/artifactsGuide.md) - Software artifact system
-- 🔧 [Deploy-ImageManagement Script](docs/imageManagementScript.md) - Script usage guide
+- 🔧 [Update-ImageArtifacts Script](docs/updateImageArtifacts.md) - Script usage guide
 
 ### Advanced Topics
 

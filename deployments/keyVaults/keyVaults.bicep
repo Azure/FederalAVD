@@ -26,7 +26,7 @@ param secretsKeyVaultEnablePurgeProtection bool = true
 @description('Optional. The retention period in days for soft-deleted objects in the Key Vaults.')
 @minValue(7)
 @maxValue(90)
-param keyVaultRetentionInDays int = 90
+param keyVaultRetentionInDays int = 7
 
 // ── Credential Secrets (Optional — Security Team Owned) ───────────────────────
 // Providing these values stores them in the Secrets Key Vault at foundation deployment time.

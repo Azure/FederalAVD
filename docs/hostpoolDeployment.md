@@ -19,7 +19,7 @@ A complete host pool deployment includes:
 | **🔐 Security** | Secrets Key Vault (optional inline), Encryption Key Vault (optional inline), disk encryption sets, storage encryption UAI, RBAC assignments |
 | **📊 Monitoring** | Log Analytics workspace, diagnostic settings, Application Insights |
 | **🌐 Networking** | Private endpoints, network security (Zero Trust option) |
-| **💿 Backup** | Recovery Services Vault (optional) — file share backup for pooled host pools, VM backup for personal host pools |
+| **💿 Backup** | Recovery Services Vault (optional) — VM backup for **personal** host pools; FSLogix Azure Files file share backup for **pooled** host pools |
 
 ---
 
@@ -168,7 +168,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 
 New-AzSubscriptionDeployment `
     -Location "usgovvirginia" `
-    -TemplateFile ".\hostpools\hostpool.bicep" `
+    -TemplateFile ".\hostpools\hostpool.json" `
     -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
     -Name $deploymentName
 ```
@@ -187,7 +187,7 @@ DEPLOYMENT_NAME="${PARAM_FILE%.json}"
 
 az deployment sub create \
     --location usgovvirginia \
-    --template-file ./hostpools/hostpool.bicep \
+    --template-file ./hostpools/hostpool.json \
     --parameters @./hostpools/parameters/$PARAM_FILE \
     --name $DEPLOYMENT_NAME
 ```
@@ -411,7 +411,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 
 New-AzSubscriptionDeployment `
     -Location "East US 2" `
-    -TemplateFile ".\hostpools\hostpool.bicep" `
+    -TemplateFile ".\hostpools\hostpool.json" `
     -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
     -Name $deploymentName
 ```
@@ -488,11 +488,41 @@ Verify monitoring is working:
 
 ### Configure Backup (Optional)
 
-If backup was enabled, verify backup policies:
+Backup behavior depends on host pool type, deployment mode, and the `recoveryServices` parameter:
+
+| Host Pool Type | Deployment Mode | `recoveryServices` | Additional requirements | Vault | Backed Up |
+|---|---|---|---|---|---|
+| **Personal** | Complete | `true` | — | Created inline | VM OS disks |
+| **Personal** | Complete | `false` | — | Not created | Nothing |
+| **Personal** | HostpoolOnly | `true` | Existing vault provided | Existing | VM OS disks |
+| **Personal** | HostpoolOnly | `false` | — | — | Nothing |
+| **Personal** | SessionHostsOnly | `true` | Existing vault provided | Existing | VM OS disks |
+| **Personal** | SessionHostsOnly | `false` | — | — | Nothing |
+| **Pooled** | Complete | `true` | `deployFSLogixStorage=true` + Azure Files | Created inline | FSLogix file shares |
+| **Pooled** | Complete | `false` | — | Not created | Nothing |
+| **Pooled** | HostpoolOnly | `true` | `deployFSLogixStorage=true` + Azure Files + existing vault | Existing | FSLogix file shares |
+| **Pooled** | HostpoolOnly | `false` | — | — | Nothing |
+| **Pooled** | SessionHostsOnly | any | — | N/A | Nothing — not supported |
+
+> **Pooled VMs are never backed up.** Users are stateless in pooled pools; profile data lives in FSLogix storage which is what gets backed up instead.
+>
+> **FSLogix backup only applies to Azure Files.** NetApp Files has its own snapshot/replication capabilities and is not enrolled in Recovery Services.
+>
+> **Personal pools have no FSLogix storage.** The `deployFSLogixStorage` parameter is ignored for personal host pools.
+>
+> **Soft delete fallback for Azure Files.** When no Recovery Services Vault is configured, soft delete is automatically enabled on the FSLogix storage account file service, providing a baseline safety net against accidental deletion. When a vault is configured, soft delete is disabled because Azure Backup manages its own snapshot-based retention — the two mechanisms conflict.
+
+If backup was enabled, verify backup policies and protected items:
 
 ```powershell
+# Verify backup policies
 Get-AzRecoveryServicesBackupProtectionPolicy -VaultId $vaultId
+
+# Verify protected VMs (personal pools)
 Get-AzRecoveryServicesBackupItem -WorkloadType AzureVM -VaultId $vaultId
+
+# Verify protected file shares (pooled pools)
+Get-AzRecoveryServicesBackupItem -WorkloadType AzureStorage -VaultId $vaultId
 ```
 
 ---
@@ -514,7 +544,7 @@ To add more session hosts to an existing pool:
    
    New-AzSubscriptionDeployment `
        -Location "East US 2" `
-       -TemplateFile ".\hostpools\hostpool.bicep" `
+       -TemplateFile ".\hostpools\hostpool.json" `
        -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
        -Name $deploymentName
    ```
@@ -824,7 +854,7 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
    $identifier = "prod"  # or extract from parameter file name
    New-AzDeployment `
        -Location "eastus2" `
-       -TemplateFile ".\deployments\hostpools\hostpool.bicep" `
+       -TemplateFile ".\deployments\hostpools\hostpool.json" `
        -TemplateParameterFile ".\my-saved-parameters.json" `
        -Name "avd-$identifier-hostpool"
    
@@ -833,14 +863,14 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
    $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
    New-AzDeployment `
        -Location "eastus2" `
-       -TemplateFile ".\deployments\hostpools\hostpool.bicep" `
+       -TemplateFile ".\deployments\hostpools\hostpool.json" `
        -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
        -Name $deploymentName
    
    # Option 3: Combine identifier with date (if uniqueness needed)
    New-AzDeployment `
        -Location "eastus2" `
-       -TemplateFile ".\deployments\hostpools\hostpool.bicep" `
+       -TemplateFile ".\deployments\hostpools\hostpool.json" `
        -TemplateParameterFile ".\my-saved-parameters.json" `
        -Name "avd-prod-hostpool-$(Get-Date -Format 'yyyyMMdd')"
    ```

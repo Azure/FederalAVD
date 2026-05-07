@@ -1,4 +1,4 @@
-{
+﻿{
 	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
 	"view": {
 		"kind": "Form",
@@ -2428,23 +2428,23 @@
 					"label": "User Profiles",
 					"elements": [
 						{
+							"name": "personalHostPoolInfoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"visible": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), equals(steps('controlPlane').hostPool.type, 'Personal'))]",
+							"options": {
+								"style": "Info",
+								"text": "Deploying FSLogix profile containers for Personal host pools is not supported by this solution. Personal host pools use local profiles stored directly on each session host VM. No FSLogix storage resources will be deployed."
+							}
+						},
+						{
 							"name": "profileSolution",
 							"type": "Microsoft.Common.DropDown",
-							"defaultValue": "FSLogix",
+							"defaultValue": "[if(if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), equals(steps('controlPlane').hostPool.type, 'Personal')), 'Local Profiles Only', 'FSLogix')]",
 							"visible": true,
 							"label": "Profile Solution",
 							"toolTip": "Select the user profile solution for your end users.",
 							"constraints": {
-								"allowedValues": [
-									{
-										"label": "FSLogix",
-										"value": "FSLogix"
-									},
-									{
-										"label": "Other",
-										"value": "Other"
-									}
-								]
+								"allowedValues": "[if(if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), equals(steps('controlPlane').hostPool.type, 'Personal')), parse('[{\"label\":\"Local Profiles Only\",\"value\":\"LocalProfilesOnly\"}]'), parse('[{\"label\":\"FSLogix\",\"value\":\"FSLogix\"},{\"label\":\"Other\",\"value\":\"Other\"}]'))]"
 							}
 						},
 						{
@@ -3584,15 +3584,15 @@
 							"name": "backup",
 							"type": "Microsoft.Common.Section",
 							"label": "Backup and Recovery",
-							"visible": "[or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'))]",
+							"visible": "[or(if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), equals(steps('controlPlane').hostPool.type, 'Personal')), and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('controlPlane').hostPool.type, 'Pooled'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles')))]",
 							"elements": [
 								{
 									"name": "recoveryServicesVaultApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('hosts').scope.resourceGroup.id)))]",
+									"condition": "[and(or(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').deploymentType, 'HostpoolOnly')), not(empty(steps('hosts').scope.subscription.subscriptionId)), steps('management').backup.recoveryServices)]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.RecoveryServices/vaults?api-version=2024-10-01')]",
+										"path": "[concat('/subscriptions/', steps('hosts').scope.subscription.subscriptionId, '/providers/Microsoft.RecoveryServices/vaults?api-version=2024-10-01')]",
 										"transforms": {
 											"list": "value|[*].{label:name, value:id}"
 										}
@@ -3602,24 +3602,20 @@
 									"name": "recoveryServices",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Recovery Services",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), true, if(empty(steps('basics').recoveryServicesVaultApi), false, true))]",
-									"toolTip": "Choose to deploy backups for your solution. For a personal host pool, this will enable backups on the virtual machines. For a pooled host pool, this will enable backups on the FSLogix file share when using Azure Files."
+									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), true, if(empty(steps('management').backup.recoveryServicesVaultApi), false, true))]",
+									"toolTip": "Enable Azure Backup for this host pool. Personal host pools: backs up virtual machine OS disks. Pooled host pools: backs up FSLogix Azure Files file shares. Complete deployment creates a new vault; HostpoolOnly and SessionHostsOnly (Personal) require an existing vault."
 								},
 								{
 									"name": "recoveryServicesVaultStorageRedundancy",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Vault Storage Redundancy",
 									"defaultValue": "Locally Redundant",
-									"toolTip": "Controls how backup recovery points are stored in the vault. This is independent of the storage account redundancy. LocallyRedundant is lowest cost. ZoneRedundant survives a zone failure. GeoRedundant enables cross-region restore.",
+									"toolTip": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), 'Controls where VM backup recovery points are physically stored inside the vault. Locally Redundant (LRS): lowest cost, recovery points stored in one datacenter — vault is unavailable if that datacenter fails. Zone Redundant (ZRS): recovery points replicated across availability zones — vault survives a zone-level failure. Geo Redundant (GRS): recovery points replicated to a paired Azure region — enables Cross-Region Restore, allowing you to recover personal VMs to the secondary region even if the primary region is completely unavailable. Recommended for mission-critical personal desktops.', 'Controls where FSLogix backup policy metadata is stored in the vault. Note: for Azure Files backup, the actual share snapshots are stored inside the storage account itself — not in the vault — so vault redundancy has minimal impact on backup data durability. Locally Redundant (LRS) or Zone Redundant (ZRS) is sufficient for most pooled deployments.')]",
 									"constraints": {
 										"required": true,
-										"allowedValues": [
-											{ "label": "Locally Redundant", "value": "LocallyRedundant" },
-											{ "label": "Zone Redundant", "value": "ZoneRedundant" },
-											{ "label": "Geo Redundant", "value": "GeoRedundant" }
-										]
+										"allowedValues": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"},{\"label\":\"Zone Redundant\",\"value\":\"ZoneRedundant\"},{\"label\":\"Geo Redundant\",\"value\":\"GeoRedundant\"}]'), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"},{\"label\":\"Zone Redundant\",\"value\":\"ZoneRedundant\"}]'))]"
 									},
-									"visible": "[and(steps('management').backup.recoveryServices, not(equals(steps('basics').deploymentType, 'SessionHostsOnly')))]"
+									"visible": "[and(steps('management').backup.recoveryServices, equals(steps('basics').deploymentType, 'Complete'))]"
 								},
 								{
 									"name": "recoveryServicesVault",
@@ -3630,12 +3626,12 @@
 										"allowedValues": "[steps('management').backup.recoveryServicesVaultApi.transformed.list]",
 										"required": true
 									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('management').backup.recoveryServices)]"
+									"visible": "[and(steps('management').backup.recoveryServices, if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), equals(steps('basics').deploymentType, 'HostpoolOnly')))]"
 								},
 								{
 									"name": "diskAccessesApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('hosts').scope.resourceGroup.id)))]",
+									"condition": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), and(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), not(empty(steps('hosts').scope.resourceGroup.id))), false)]",
 									"request": {
 										"method": "GET",
 										"path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Compute/diskAccesses?api-version=2024-03-02')]",
@@ -3650,7 +3646,7 @@
 									"label": "Associate VM(s) with Disk Access Resource",
 									"defaultValue": "[not(empty(steps('management').backup.diskAccessesApi))]",
 									"toolTip": "Disk Access Resources are used to allow Azure Backup to access the managed disk over the private network in order to perform the backup.",
-									"visible": "[and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('management').backup.diskAccessesApi)))]"
+									"visible": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), and(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), not(empty(steps('management').backup.diskAccessesApi))), false)]"
 								},
 								{
 									"name": "diskAccess",
@@ -3662,7 +3658,7 @@
 										"allowedValues": "[steps('management').backup.diskAccessesApi.transformed.list]",
 										"required": true
 									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('management').backup.associateDiskAccessResource)]"
+									"visible": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), and(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.associateDiskAccessResource), false)]"
 								}
 							]
 						},
@@ -4648,7 +4644,7 @@
 				"deploymentVmSize": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))), steps('management').deploymentVm.size, 'Standard_B2s')]",
 				"recoveryServices": "[steps('management').backup.recoveryServices]",
 				"recoveryServicesVaultStorageRedundancy": "[if(and(steps('management').backup.recoveryServices, not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))), steps('management').backup.recoveryServicesVaultStorageRedundancy, 'LocallyRedundant')]",
-				"existingRecoveryServicesVaultResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices), steps('management').backup.recoveryServicesVault, '')]",
+				"existingRecoveryServicesVaultResourceId": "[if(and(steps('management').backup.recoveryServices, or(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('basics').deploymentType, 'HostpoolOnly'))), steps('management').backup.recoveryServicesVault, '')]",
 				"existingDiskAccessResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices, steps('management').backup.associateDiskAccessResource), steps('management').backup.diskAccess, '')]",
 				"deploySecretsKeyVault": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual')), steps('management').keyVaults.deploySecretsKeyVault, false)]",
 				"secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault), steps('management').keyVaults.enableSoftDelete, false)]",

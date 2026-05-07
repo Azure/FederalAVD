@@ -1,5 +1,6 @@
 param appUpdateUserAssignedIdentityResourceId string
 param availability string
+param recoveryServicesVaultResourceId string = ''
 param azureFilePrivateDnsZoneResourceId string
 param deploymentUserAssignedIdentityClientId string
 param deploymentVirtualMachineName string
@@ -117,7 +118,7 @@ module fileServices '../../../../../.common/bicepModules/storage/storageAccounts
     params: {
       storageAccountName: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
       smbSettings: smbSettingsValues
-      shareDeleteRetentionPolicyEnabled: false
+      shareDeleteRetentionPolicyEnabled: empty(recoveryServicesVaultResourceId)
       diagnosticSettings: !empty(logAnalyticsWorkspaceId)
         ? {
             workspaceId: logAnalyticsWorkspaceId

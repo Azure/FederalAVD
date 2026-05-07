@@ -354,7 +354,7 @@ For a complete list of all 150+ parameters with detailed descriptions, see:
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\hostpool.bicep" `
+  -TemplateFile ".\hostpool.json" `
   -TemplateParameterFile ".\parameters\finance.parameters.json" `
   -deploymentType "Complete" `
   -identifier "finance" `
@@ -371,7 +371,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\hostpool.bicep" `
+  -TemplateFile ".\hostpool.json" `
   -deploymentType "SessionHostsOnly" `
   -existingHostPoolResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.DesktopVirtualization/hostPools/hp-finance" `
   -virtualMachineCount 5 `
@@ -386,7 +386,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\hostpool.bicep" `
+  -TemplateFile ".\hostpool.json" `
   -TemplateParameterFile ".\parameters\secure.parameters.json" `
   -deployPrivateEndpointStorage $true `
   -deployPrivateEndpointKeyVault $true `
@@ -400,7 +400,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\hostpool.bicep" `
+  -TemplateFile ".\hostpool.json" `
   -TemplateParameterFile ".\parameters\graphics.parameters.json" `
   -customImageResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/win11-graphics/versions/latest" `
   -virtualMachineSize "Standard_NV12ads_A10_v5" `
@@ -413,7 +413,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\hostpool.bicep" `
+  -TemplateFile ".\hostpool.json" `
   -TemplateParameterFile ".\parameters\enterprise.parameters.json" `
   -storageService "AzureNetAppFiles" `
   -netAppFilesAccountName "anf-avd-storage" `

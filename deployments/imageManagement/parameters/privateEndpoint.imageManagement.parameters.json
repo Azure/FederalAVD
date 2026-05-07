@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "nameConvResTypeAtEnd": {
+      "value": false
+    },
+    "deployArtifactsStorageAccount": {
+      "value": true
+    },
+    "deployBuildLogsStorageAccount": {
+      "value": true
+    },
+    "storageNetworkAccess": {
+      "value": "PrivateEndpoint"
+    },
+    "storageAllowSharedKeyAccess": {
+      "value": false
+    },
+    "privateEndpointSubnetResourceId": {
+      "value": "/subscriptions/<subscriptionId>/resourceGroups/<networkResourceGroup>/providers/Microsoft.Network/virtualNetworks/<vnetName>/subnets/<subnetName>"
+    },
+    "azureBlobPrivateDnsZoneResourceId": {
+      "value": "/subscriptions/<subscriptionId>/resourceGroups/<dnsResourceGroup>/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.usgovcloudapi.net"
+    },
+    "tags": {
+      "value": {}
+    }
+  }
+}

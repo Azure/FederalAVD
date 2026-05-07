@@ -109,12 +109,12 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
 
 ### Optional Resources
 
-5. **Private DNS Zones** (Private Endpoints)
+1. **Private DNS Zones** (Private Endpoints)
 
    - `privatelink.blob.core.windows.net` (Azure Commercial)
    - `privatelink.blob.core.usgovcloudapi.net` (Azure Government)
 
-6. **Remote Compute Gallery** (Disaster Recovery)
+2. **Remote Compute Gallery** (Disaster Recovery)
 
    - Second gallery in different region
    - For multi-region image distribution
@@ -131,7 +131,7 @@ Use the included PowerShell script to automate prerequisite deployment:
   -PrivateEndpointSubnetResourceId '/subscriptions/.../subnets/endpoints'
 ```
 
-See [imageManagementScript.md](../../docs/imageManagementScript.md) for details.
+See [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) for details.
 
 ## Parameters
 
@@ -187,7 +187,8 @@ See [imageManagementScript.md](../../docs/imageManagementScript.md) for details.
 #### `userAssignedIdentityResourceId`
 
 - **Type:** String
-- **Description:** Resource ID of managed identity with storage access
+- **Default:** `''` (empty — deployment creates its own identity)
+- **Description:** Optional. Resource ID of a managed identity to attach to the build VM. Required when zero-trust artifacts storage (`artifactsContainerUri`) or log collection (`collectCustomizationLogs`) is enabled. The identity must have **Storage Blob Data Reader** on the artifacts container and/or **Storage Blob Data Contributor** on the log storage account. When empty, the deployment creates its own UAI and assigns it Contributor and Storage Blob Data Contributor on the build resource group.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity}`
 
 #### `subnetResourceId`
@@ -373,25 +374,63 @@ See [imageManagementScript.md](../../docs/imageManagementScript.md) for details.
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Collect customization logs to storage account (retained 7 days)
+- **Description:** Upload all Run Command output and error logs to an existing blob storage container. Requires `existingLogStorageAccountResourceId` and a UAI with **Storage Blob Data Contributor** on that account.
 
-#### `logStorageAccountNetworkAccess`
-
-- **Type:** String
-- **Default:** `PublicEndpoint`
-- **Allowed Values:** `PrivateEndpoint`, `ServiceEndpoint`, `PublicEndpoint`
-
-#### `blobPrivateDnsZoneResourceId`
+#### `existingLogStorageAccountResourceId`
 
 - **Type:** String
-- **Description:** Private DNS zone for blob storage (if using private endpoints)
-- **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net`
+- **Default:** `''`
+- **Description:** Resource ID of an existing storage account to receive build logs. Deploy imageManagement with `deployBuildLogsStorageAccount = true` to provision one. The UAI specified by `userAssignedIdentityResourceId` must have **Storage Blob Data Contributor** on this account.
+- **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{name}`
 
-#### `privateEndpointSubnetResourceId`
+#### `logContainerName`
 
 - **Type:** String
-- **Description:** Subnet for storage private endpoint
-- **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/{subnet}`
+- **Default:** `image-customization-logs`
+- **Description:** Blob container within the log storage account to write logs to.
+
+### Customer-Managed Key Encryption
+
+#### `keyManagementGalleryImageVersions`
+
+- **Type:** String
+- **Default:** `PlatformManaged`
+- **Allowed Values:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
+- **Description:** Controls how gallery image version replicas are encrypted at rest. When `CustomerManaged` or `CustomerManagedHSM`, a Disk Encryption Set is automatically created in the gallery resource group unless `existingGalleryDiskEncryptionSetResourceId` is provided.
+
+#### `encryptionKeyVaultResourceId`
+
+- **Type:** String
+- **Default:** `''`
+- **Description:** Resource ID of the Key Vault used for CMK operations. Required when `keyManagementGalleryImageVersions` is not `PlatformManaged`. The vault must have soft delete and purge protection enabled.
+- **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.KeyVault/vaults/{vault}`
+
+#### `keyExpirationInDays`
+
+- **Type:** Integer (7–365)
+- **Default:** `180`
+- **Description:** Number of days before a new key version is automatically generated.
+
+#### `existingGalleryDiskEncryptionSetResourceId`
+
+- **Type:** String
+- **Default:** `''`
+- **Description:** Optional. Resource ID of an existing Disk Encryption Set for gallery image version encryption. If not provided and CMK is enabled, a new DES is created automatically.
+- **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}`
+
+#### `galleryImageVersionConfidentialVMEncryptionType`
+
+- **Type:** String
+- **Default:** `''`
+- **Allowed Values:** `''`, `EncryptedWithPmk`, `EncryptedVMGuestStateOnlyWithPmk`, `EncryptedWithCmk`
+- **Description:** Specifies VM guest state encryption for Confidential VM image definitions. Only relevant when `keyManagementGalleryImageVersions` is not `PlatformManaged` and the image definition security type is Confidential.
+
+#### `existingGallerySecureVMDiskEncryptionSetResourceId`
+
+- **Type:** String
+- **Default:** `''`
+- **Description:** Required when `galleryImageVersionConfidentialVMEncryptionType` is `EncryptedWithCmk`. Must be a Confidential VM DES of type `ConfidentialVmEncryptedWithCustomerKey`.
+- **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{cvm-des}`
 
 ### Image Definition
 
@@ -665,11 +704,10 @@ module imageBuild './imageBuild.bicep' = {
     updateService: 'WSUS'
     wsusServer: 'https://wsus.corp.contoso.com:8531'
     
-    // Logging with private endpoint
+    // Logging to existing imageManagement storage account
     collectCustomizationLogs: true
-    logStorageAccountNetworkAccess: 'PrivateEndpoint'
-    privateEndpointSubnetResourceId: '/subscriptions/{sub}/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-endpoints'
-    blobPrivateDnsZoneResourceId: '/subscriptions/{sub}/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.usgovcloudapi.net'
+    existingLogStorageAccountResourceId: '/subscriptions/{sub}/resourceGroups/rg-image-management/providers/Microsoft.Storage/storageAccounts/stbuildlogs'
+    logContainerName: 'image-customization-logs'
     
     // Use existing image definition
     imageDefinitionResourceId: '/subscriptions/{sub}/resourceGroups/rg-gallery/providers/Microsoft.Compute/galleries/gal-avd-prod/images/vmid-win10-22h2-avd'
@@ -1076,8 +1114,8 @@ stages:
                 $timestamp = Get-Date -Format 'yyyyMMddHHmmss'
                 az deployment sub create `
                   --location $(location) `
-                  --template-file deployments/imageBuild/imageBuild.bicep `
-                  --parameters deployments/imageBuild/parameters/prod.bicepparam `
+                  --template-file deployments/imageBuild/imageBuild.json `
+                  --parameters deployments/imageBuild/parameters/prod.imageBuild.parameters.json `
                   --name "imageBuild-$timestamp" `
                   --verbose
 ```
@@ -1134,8 +1172,8 @@ jobs:
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
           az deployment sub create \
             --location ${{ env.LOCATION }} \
-            --template-file deployments/imageBuild/imageBuild.bicep \
-            --parameters deployments/imageBuild/parameters/prod.bicepparam \
+            --template-file deployments/imageBuild/imageBuild.json \
+            --parameters deployments/imageBuild/parameters/prod.imageBuild.parameters.json \
             --name "imageBuild-$TIMESTAMP"
 ```
 
@@ -1242,7 +1280,7 @@ This sets the `endOfLifeDate` property, visible in Azure Portal and queryable vi
 
 ### Related Templates
 
-- [Deploy-ImageManagement.ps1](../../docs/imageManagementScript.md) - Deploy prerequisites
+- [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) - Upload artifacts to storage
 - [Invoke-ImageBuilds.ps1](../Invoke-ImageBuilds.ps1) - Batch build multiple images
 - [New-TemplateSpecs.ps1](../New-TemplateSpecs.ps1) - Create template specs
 

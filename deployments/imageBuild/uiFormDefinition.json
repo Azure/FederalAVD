@@ -247,7 +247,7 @@
                         {
                             "name": "storage",
                             "type": "Microsoft.Common.Section",
-                            "label": "Artifacts Storage",
+                            "label": "Storage Accounts",
                             "elements": [
                                 {
                                     "name": "textBlockZeroTrust1",
@@ -328,15 +328,77 @@
                                     "visible": "[steps('prereqs').storage.enableZeroTrustStorage]"
                                 },
                                 {
+                                    "name": "logsInfoBox",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": true,
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "To collect customization logs, select a storage account deployed by the imageManagement solution (with 'deployBuildLogsStorageAccount = true') and choose the container to write logs to. All standard and error output is written to individual blobs."
+                                    }
+                                },
+                                {
+                                    "name": "collectLogs",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Collect customization logs in a storage container"
+                                },
+                                {
+                                    "name": "logsStorageAccountsApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[steps('prereqs').storage.collectLogs]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "existingLogsStorageAccount",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Logs Storage Account",
+                                    "multiLine": true,
+                                    "toolTip": "Select the storage account from the imageManagement resource group that will receive build logs. Deploy imageManagement with 'deployBuildLogsStorageAccount = true' to create one.",
+                                    "constraints": {
+                                        "allowedValues": "[map(steps('prereqs').storage.logsStorageAccountsApi.value, (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\",\"value\":{\"id\":\"', sa.id, '\"}}')))]",
+                                        "required": true
+                                    },
+                                    "visible": "[steps('prereqs').storage.collectLogs]"
+                                },
+                                {
+                                    "name": "logsContainersApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[not(empty(steps('prereqs').storage.existingLogsStorageAccount))]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('prereqs').storage.existingLogsStorageAccount.id, '/blobServices/default/containers?api-version=2023-05-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "logsContainer",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Logs Container",
+                                    "toolTip": "Select the blob container to write customization logs to.",
+                                    "visible": "[and(steps('prereqs').storage.collectLogs, not(empty(steps('prereqs').storage.existingLogsStorageAccount)))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(steps('prereqs').storage.logsContainersApi.value, (c) => parse(concat('{\"label\":\"', c.name, '\",\"value\":\"', c.name, '\"}')))]"
+                                    }
+                                },
+                                {
+                                    "name": "userAssignedIdentityInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Select a User Assigned Identity to attach to the build VMs. It must have 'Storage Blob Data Reader' on the artifacts storage account (if zero-trust storage is enabled) and 'Storage Blob Data Contributor' on the logs storage account (if log collection is enabled). The managed identity output from the imageManagement deployment already has both roles when configured correctly."
+                                    }
+                                },
+                                {
                                     "name": "userAssignedIdentity",
                                     "type": "Microsoft.Solutions.ResourceSelector",
                                     "label": "User Assigned Identity",
-                                    "toolTip": "Select an existing User Assigned Identity which has been assigned data plane rights of at least 'Storage Blob Data Reader' to the storage account and container selected above.",
+                                    "toolTip": "Select an existing User Assigned Identity to attach to the build VMs. It must have 'Storage Blob Data Reader' on the artifacts storage account and/or 'Storage Blob Data Contributor' on the logs storage account, depending on which features are enabled.",
                                     "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
-                                    "constraints": {
-                                        "required": true
-                                    },
-                                    "visible": "[steps('prereqs').storage.enableZeroTrustStorage]"
+                                    "constraints": { "required": true },
+                                    "visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]"
                                 }
                             ]
                         },
@@ -1350,187 +1412,6 @@
                                     "visible": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), true, false)]"
                                 }
                             ]
-                        },
-                        {
-                            "name": "logging",
-                            "type": "Microsoft.Common.Section",
-                            "label": "Log Collection",
-                            "elements": [
-                                {
-                                    "name": "infoBox",
-                                    "type": "Microsoft.Common.InfoBox",
-                                    "visible": true,
-                                    "options": {
-                                        "style": "Info",
-                                        "text": "If you choose to collect logs, a new randomly-named storage account will be created in the build resource group with a blob container called 'image-customization-logs'. All standard and error output will be written to individual blobs and saved for 7 days."
-                                    }
-                                },
-                                {
-                                    "name": "collectLogs",
-                                    "type": "Microsoft.Common.CheckBox",
-                                    "label": "Collect customization logs in a storage container"
-                                },
-                                {
-                                    "name": "networkAccess",
-                                    "type": "Microsoft.Common.OptionsGroup",
-                                    "defaultValue": "Private Endpoint",
-                                    "label": "Storage Account Networking Endpoint",
-                                    "constraints": {
-                                        "allowedValues": "[if(empty(filter(filter(steps('prereqs').network.subnetsApi.value, (snet) => equals(snet.name, last(split(steps('prereqs').network.subnet, '/')))), (snet) => equals(first(map(snet.properties.serviceEndpoints, (se) => se.service)), 'Microsoft.Storage'))), parse('[{\"label\":\"Private Endpoint\",\"value\":\"PrivateEndpoint\"},{\"label\":\"Public Endpoint\",\"value\":\"PublicEndpoint\"}]'), parse('[{\"label\":\"Private Endpoint\",\"value\":\"PrivateEndpoint\"},{\"label\":\"Service Endpoint\",\"value\":\"ServiceEndpoint\"},{\"label\":\"Public Endpoint\",\"value\":\"PublicEndpoint\"}]'))]",
-                                        "required": true
-                                    },
-                                    "toolTip": "Select the storage account network access configuration below. If you select 'Private Endpoint', then you must specify the subnet where it will be attached and select the blob storage private DNS zone where it's record will be created. If you select 'Service Endpoint', then the subnet to which the image virtual machine is attached will be configured with a service endpoint for 'Microsoft.Storage' and the storage account will be configured to only allow access from this network. If you select 'Public Access', then the storage account will allow access through the public endpoint.",
-                                    "visible": "[steps('imageCustomizations').logging.collectLogs]"
-                                },
-                                {
-                                    "name": "virtualNetwork",
-                                    "type": "Microsoft.Common.DropDown",
-                                    "visible": "[and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint'))]",
-                                    "label": "Virtual Network",
-                                    "defaultValue": "[steps('prereqs').network.virtualNetwork.name]",
-                                    "toolTip": "Select an existing virtual network for the storage account blob private endpoint. If the desired network isn't available be sure to change the region in the Deployment Details section above.",
-                                    "constraints": {
-                                        "required": false,
-                                        "allowedValues": "[map(filter(steps('basics').virtualNetworksApi.value, (item) => equals(item.location, steps('basics').scope.location.name)), (item) => parse(concat('{\"label\":\"', item.name, '\",\"description\":\"Resource group: ', first(skip(split(item.id, '/'), 4)), '\",\"value\":\"', item.id, '\"}')))]"
-                                    }
-                                },
-                                {
-                                    "name": "subnetsApi",
-                                    "type": "Microsoft.Solutions.ArmApiControl",
-                                    "condition": "[not(empty(steps('imageCustomizations').logging.virtualNetwork))]",
-                                    "request": {
-                                        "method": "GET",
-                                        "path": "[concat(steps('imageCustomizations').logging.virtualNetwork, '/subnets?api-version=2022-05-01')]"
-                                    }
-                                },
-                                {
-                                    "name": "subnet",
-                                    "type": "Microsoft.Common.DropDown",
-                                    "visible": "[and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint'))]",
-                                    "label": "Subnet",
-                                    "defaultValue": "",
-                                    "toolTip": "Select an existing subnet for the storage account private endpoint.",
-                                    "constraints": {
-                                        "required": true,
-                                        "allowedValues": "[map(steps('imageCustomizations').logging.subnetsApi.value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]"
-                                    }
-                                },
-                                {
-                                    "name": "privateDNSZoneIntegrationTextBlock",
-                                    "type": "Microsoft.Common.TextBlock",
-                                    "visible": "[and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint'))]",
-                                    "options": {
-                                        "text": "To connect privately with your private endpoint, you need a DNS record. We recommend that you integrate your private endpoint with a private DNS zone. If you select the checkbox below, you'll be asked to select the appropriate Private DNS Zone for each resource type deployed by this solution and the deployment will automatically create the Private DNS integration when creating the private endpoints. Alternatively, you can assign policies to private endpoints to automatically register the endpoints with the appropriate private DNS zones. Uncheck the box below if that is the method you are using.",
-                                        "link": {
-                                            "label": "Learn more",
-                                            "uri": "https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview#dns-configuration"
-                                        }
-                                    }
-                                },
-                                {
-                                    "name": "enablePrivateDNSIntegration",
-                                    "type": "Microsoft.Common.CheckBox",
-                                    "label": "Enable Private DNS Zone Integration",
-                                    "toolTip": "To connect privately with your private endpoint, you need a DNS record. Check this box to select the appropriate private DNS zones so that the deployment automatically integrates each private endpoint with Azure private DNS.",
-                                    "defaultValue": true,
-                                    "visible": "[and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint'))]"
-                                },
-                                {
-                                    "name": "privateDNSZonesSubscription",
-                                    "type": "Microsoft.Common.DropDown",
-                                    "label": "Private DNS Zone Subscription",
-                                    "placeholder": "",
-                                    "defaultValue": "[steps('basics').scope.subscription.displayName]",
-                                    "toolTip": "Select the subscription that contains your Private DNS Zones.",
-                                    "constraints": {
-                                        "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"id\":\"', sub.id, '\",\"displayName\":\"', sub.displayName, '\"}}')))]",
-                                        "required": true
-                                    },
-                                    "visible": "[and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint'), steps('imageCustomizations').logging.enablePrivateDNSIntegration)]"
-                                },
-                                {
-                                    "name": "privateDNSZonesApi",
-                                    "type": "Microsoft.Solutions.ArmApiControl",
-                                    "condition": "[not(empty(steps('basics').scope.subscription))]",
-                                    "request": {
-                                        "method": "GET",
-                                        "path": "[concat(steps('imageCustomizations').logging.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
-                                    }
-                                },
-                                {
-                                    "name": "blobPrivateDnsZone",
-                                    "type": "Microsoft.Common.DropDown",
-                                    "visible": "[and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint'), steps('imageCustomizations').logging.enablePrivateDNSIntegration)]",
-                                    "label": "Blob Storage Private DNS Zone",
-                                    "defaultValue": "",
-                                    "multiLine": true,
-                                    "toolTip": "Select the Azure Blob Storage Private Link Private DNS Zone.",
-                                    "constraints": {
-                                        "required": true,
-                                        "allowedValues": "[map(filter(steps('imageCustomizations').logging.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
-                                    }
-                                },
-                                {
-                                    "name": "cmkHeader",
-                                    "type": "Microsoft.Common.TextBlock",
-                                    "visible": "[steps('imageCustomizations').logging.collectLogs]",
-                                    "options": {
-                                        "text": "Encryption Key Management",
-                                        "style": "Heading"
-                                    }
-                                },
-                                {
-                                    "name": "keyManagement",
-                                    "type": "Microsoft.Common.DropDown",
-                                    "label": "Key Management",
-                                    "defaultValue": "Microsoft-Managed Keys",
-                                    "toolTip": "Select how the logs storage account encryption key is managed. Customer-Managed Keys require an existing Key Vault.",
-                                    "visible": "[steps('imageCustomizations').logging.collectLogs]",
-                                    "constraints": {
-                                        "required": true,
-                                        "allowedValues": [
-                                            {
-                                                "label": "Microsoft-Managed Keys",
-                                                "value": "MicrosoftManaged"
-                                            },
-                                            {
-                                                "label": "Customer-Managed Keys",
-                                                "value": "CustomerManaged"
-                                            },
-                                            {
-                                                "label": "Customer-Managed Keys protected by HSM",
-                                                "value": "CustomerManagedHSM"
-                                            }
-                                        ]
-                                    }
-                                },
-                                {
-                                    "name": "encryptionKeyVault",
-                                    "type": "Microsoft.Solutions.ResourceSelector",
-                                    "label": "Encryption Key Vault",
-                                    "resourceType": "Microsoft.KeyVault/vaults",
-                                    "toolTip": "Select the Key Vault that contains or will contain the customer-managed key for the logs storage account.",
-                                    "constraints": {
-                                        "required": true
-                                    },
-                                    "scope": {
-                                        "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
-                                        "location": "[steps('basics').scope.location.name]"
-                                    },
-                                    "visible": "[and(steps('imageCustomizations').logging.collectLogs, not(equals(steps('imageCustomizations').logging.keyManagement, 'MicrosoftManaged')))]"
-                                },
-                                {
-                                    "name": "keyExpirationInDays",
-                                    "type": "Microsoft.Common.Slider",
-                                    "label": "Encryption Key Rotation (in Days)",
-                                    "defaultValue": 180,
-                                    "showStepMarkers": false,
-                                    "toolTip": "The number of days before a new key version is automatically generated in the Key Vault.",
-                                    "min": 7,
-                                    "max": 365,
-                                    "visible": "[and(steps('imageCustomizations').logging.collectLogs, not(equals(steps('imageCustomizations').logging.keyManagement, 'MicrosoftManaged')))]"
-                                }
-                            ]
                         }
                     ]
                 },
@@ -2083,6 +1964,98 @@
                                     "visible": "[steps('imageDest').disasterRecovery.specifyRemoteGallery]"
                                 }
                             ]
+                        },
+                        {
+                            "name": "encryption",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Customer-Managed Keys",
+                            "elements": [
+                                {
+                                    "name": "info",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "visible": true,
+                                    "options": {
+                                        "text": "Configure Customer-Managed Key (CMK) encryption for gallery image versions. The Key Vault must have soft delete and purge protection enabled."
+                                    }
+                                },
+                                {
+                                    "name": "keyManagementGalleryImageVersions",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Image Version Key Management",
+                                    "defaultValue": "Platform-Managed Keys",
+                                    "toolTip": "Controls how gallery image version replicas are encrypted at rest. When CustomerManaged or CustomerManagedHSM, a Disk Encryption Set is automatically created in the gallery resource group.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            { "label": "Platform-Managed Keys", "value": "PlatformManaged" },
+                                            { "label": "Customer-Managed Keys", "value": "CustomerManaged" },
+                                            { "label": "Customer-Managed Keys protected by HSM", "value": "CustomerManagedHSM" }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "existingGalleryDiskEncryptionSetResourceId",
+                                    "type": "Microsoft.Solutions.ResourceSelector",
+                                    "label": "Existing Disk Encryption Set (optional)",
+                                    "resourceType": "Microsoft.Compute/diskEncryptionSets",
+                                    "toolTip": "Optional. Select an existing DES to use for gallery image version encryption. If not provided, a new DES is created automatically in the gallery resource group.",
+                                    "constraints": { "required": false },
+                                    "visible": "[not(equals(steps('imageDest').encryption.keyManagementGalleryImageVersions, 'PlatformManaged'))]"
+                                },
+                                {
+                                    "name": "confidentialVMEncryptionType",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Confidential VM Encryption Type",
+                                    "defaultValue": "Encrypted with PMK",
+                                    "toolTip": "Specifies how the VM guest state is encrypted in gallery image version replicas. Only relevant for Confidential VM image definitions. 'Encrypted with CMK' requires providing an existing Confidential VM DES below — auto-creation is not supported.",
+                                    "visible": "[and(not(equals(steps('imageDest').encryption.keyManagementGalleryImageVersions, 'PlatformManaged')), contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            { "label": "Encrypted with PMK", "value": "EncryptedWithPmk" },
+                                            { "label": "Encrypted VM Guest State Only with PMK", "value": "EncryptedVMGuestStateOnlyWithPmk" },
+                                            { "label": "Encrypted with CMK (requires existing CVM DES)", "value": "EncryptedWithCmk" }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "existingGallerySecureVMDiskEncryptionSetResourceId",
+                                    "type": "Microsoft.Solutions.ResourceSelector",
+                                    "label": "Confidential VM Disk Encryption Set",
+                                    "resourceType": "Microsoft.Compute/diskEncryptionSets",
+                                    "toolTip": "Required when Confidential VM Encryption Type is 'Encrypted with CMK'. Must be of type ConfidentialVmEncryptedWithCustomerKey with CVM Orchestrator key release permissions pre-configured.",
+                                    "constraints": { "required": true },
+                                    "visible": "[equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk')]"
+                                },
+                                {
+                                    "name": "keyVaultHeader",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "visible": "[not(equals(steps('imageDest').encryption.keyManagementGalleryImageVersions, 'PlatformManaged'))]",
+                                    "options": {
+                                        "text": "Key Vault & Rotation Policy"
+                                    }
+                                },
+                                {
+                                    "name": "encryptionKeyVault",
+                                    "type": "Microsoft.Solutions.ResourceSelector",
+                                    "label": "Encryption Key Vault",
+                                    "resourceType": "Microsoft.KeyVault/vaults",
+                                    "toolTip": "The Key Vault used for all Customer-Managed Key operations in this deployment. Required when any CMK option above is enabled.",
+                                    "constraints": { "required": true },
+                                    "visible": "[not(equals(steps('imageDest').encryption.keyManagementGalleryImageVersions, 'PlatformManaged'))]"
+                                },
+                                {
+                                    "name": "keyExpirationInDays",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Key Rotation (in Days)",
+                                    "defaultValue": 180,
+                                    "showStepMarkers": false,
+                                    "toolTip": "The number of days before a new key version is automatically generated.",
+                                    "min": 7,
+                                    "max": 365,
+                                    "visible": "[not(equals(steps('imageDest').encryption.keyManagementGalleryImageVersions, 'PlatformManaged'))]"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -2174,7 +2147,6 @@
             ]
         },
         "outputs": {
-
             "kind": "Subscription",
             "location": "[steps('basics').scope.location.name]",
             "subscriptionId": "[steps('basics').scope.subscription.id]",
@@ -2186,7 +2158,7 @@
                 "customBuildResourceGroupName": "[if(equals(steps('basics').resGroup.useExResGroup, false), steps('basics').resGroup.customBuildResourceGroupName, '')]",
                 "computeGalleryResourceId": "[steps('prereqs').gallery.gallery.id]",
                 "artifactsContainerUri": "[if(steps('prereqs').storage.enableZeroTrustStorage, concat(steps('prereqs').storage.storageAccount.blobEndpoint, steps('prereqs').storage.container), '')]",
-                "userAssignedIdentityResourceId": "[if(steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.userAssignedIdentity.id, '')]",
+                "userAssignedIdentityResourceId": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs), coalesce(steps('prereqs').storage.userAssignedIdentity.id, ''), '')]",
                 "subnetResourceId": "[steps('prereqs').network.subnet]",
                 "vmSize": "[steps('vmProps').vmSize]",
                 "encryptionAtHost": "[steps('vmProps').encryptionAtHost]",
@@ -2210,13 +2182,15 @@
                 "updateUwpApps": "[steps('imageCustomizations').updates.updateUwpApps]",
                 "updateService": "[steps('imageCustomizations').updates.updateService]",
                 "wsusServer": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), steps('imageCustomizations').updates.wsusServer, '')]",
-                "collectCustomizationLogs": "[steps('imageCustomizations').logging.collectLogs]",
-                "logStorageAccountNetworkAccess": "[if(steps('imageCustomizations').logging.collectLogs, steps('imageCustomizations').logging.networkAccess, 'PublicEndpoint')]",
-                "keyManagementLogsStorageAccount": "[if(steps('imageCustomizations').logging.collectLogs, steps('imageCustomizations').logging.keyManagement, 'MicrosoftManaged')]",
-                "encryptionKeyVaultResourceId": "[if(and(steps('imageCustomizations').logging.collectLogs, not(equals(steps('imageCustomizations').logging.keyManagement, 'MicrosoftManaged'))), steps('imageCustomizations').logging.encryptionKeyVault.id, '')]",
-                "keyExpirationInDays": "[if(and(steps('imageCustomizations').logging.collectLogs, not(equals(steps('imageCustomizations').logging.keyManagement, 'MicrosoftManaged'))), steps('imageCustomizations').logging.keyExpirationInDays, 180)]",
-                "privateEndpointSubnetResourceId": "[if(and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint')), steps('imageCustomizations').logging.subnet, '')]",
-                "blobPrivateDnsZoneResourceId": "[if(and(steps('imageCustomizations').logging.collectLogs, equals(steps('imageCustomizations').logging.networkAccess, 'PrivateEndpoint'), steps('imageCustomizations').logging.enablePrivateDNSIntegration), steps('imageCustomizations').logging.blobPrivateDnsZone, '')]",
+                "collectCustomizationLogs": "[steps('prereqs').storage.collectLogs]",
+                "existingLogStorageAccountResourceId": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.existingLogsStorageAccount.id, ''), '')]",
+                "logContainerName": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.logsContainer, 'image-customization-logs'), 'image-customization-logs')]",
+                "encryptionKeyVaultResourceId": "[if(not(equals(steps('imageDest').encryption.keyManagementGalleryImageVersions, 'PlatformManaged')), coalesce(steps('imageDest').encryption.encryptionKeyVault.id, ''), '')]",
+                "keyExpirationInDays": "[if(not(equals(steps('imageDest').encryption.keyManagementGalleryImageVersions, 'PlatformManaged')), steps('imageDest').encryption.keyExpirationInDays, 180)]",
+                "keyManagementGalleryImageVersions": "[steps('imageDest').encryption.keyManagementGalleryImageVersions]",
+                "existingGalleryDiskEncryptionSetResourceId": "[if(not(equals(steps('imageDest').encryption.keyManagementGalleryImageVersions, 'PlatformManaged')), coalesce(steps('imageDest').encryption.existingGalleryDiskEncryptionSetResourceId.id, ''), '')]",
+                "galleryImageVersionConfidentialVMEncryptionType": "[if(not(equals(steps('imageDest').encryption.keyManagementGalleryImageVersions, 'PlatformManaged')), coalesce(steps('imageDest').encryption.confidentialVMEncryptionType, ''), '')]",
+                "existingGallerySecureVMDiskEncryptionSetResourceId": "[if(equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk'), coalesce(steps('imageDest').encryption.existingGallerySecureVMDiskEncryptionSetResourceId.id, ''), '')]",
                 "imageDefinitionResourceId": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, true), steps('imageDest').imageDefinition.existingImageDefinition.id, '')]",
                 "customImageDefinitionName": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, false), steps('imageDest').imageDefinition.customImageDefinitionName, '')]",
                 "imageDefinitionPublisher": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, false), steps('imageDest').imageDefinition.imageDefinitionPublisher, '')]",
@@ -2238,14 +2212,7 @@
                 "remoteImageVersionStorageAccountType": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.storageAccountType , 'Standard_LRS')]",
                 "remoteImageVersionDefaultReplicaCount": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.replicaCount, 1)]",
                 "remoteImageVersionExcludeFromLatest": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.excludeFromLatest, false)]",
-                "tags": "[steps('tags').tags]",
-                "testConfidentialVMSizes": "[steps('basics').resourceSkusApi.transformed.confidentialVMSizes]",
-                "testHibernationVMSizes": "[steps('basics').resourceSkusApi.transformed.hibernationVMSizes]",
-                "testNvmeVMSizes": "[steps('basics').resourceSkusApi.transformed.nvmeVMSizes]",
-                "testAcceleratedNetworkingVMSizes": "[steps('basics').resourceSkusApi.transformed.acceleratedNetworkingVMSizes]",
-                "testHibernationAccelNetVMSizes": "[steps('basics').resourceSkusApi.transformed.hibernationAccelNetVMSizes]",
-                "testNvmeAccelNetVMSizes": "[steps('basics').resourceSkusApi.transformed.nvmeAccelNetVMSizes]",
-                "testDefaultVMSizes": "[steps('basics').resourceSkusApi.transformed.defaultVMSizes]"
+                "tags": "[steps('tags').tags]"
             }
         }
     }

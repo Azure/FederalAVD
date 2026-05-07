@@ -87,7 +87,7 @@ var effectiveVaultRG = createVault ? resourceGroupOperations : split(existingRec
 var effectiveVaultName = createVault ? vaultName : last(split(existingRecoveryServicesVaultResourceId, '/'))!
 
 // ─── Recovery Services Vault ──────────────────────────────────────────────────
-module recoveryServicesVault '../../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (createVault) {
+module recoveryServicesVault '../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (createVault) {
   name: 'RecoveryServicesVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupOperations)
   params: {
@@ -96,12 +96,12 @@ module recoveryServicesVault '../../../../../.common/bicepModules/recoveryServic
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
     publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     storageType: storageRedundancy
-    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.RecoveryServices/vaults'] ?? {})
+    tags: tags[?'Microsoft.RecoveryServices/vaults'] ?? {}
   }
 }
 
 // ─── VM Backup Policy (personal host pools only) ───────────────────────────
-module vmBackupPolicy '../../../../../.common/bicepModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = if (!pooledHostPool) {
+module vmBackupPolicy '../../../../.common/bicepModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = if (!pooledHostPool) {
   name: 'RSV-BackupPolicy-VirtualMachines-${deploymentSuffix}'
   scope: resourceGroup(effectiveVaultSub, effectiveVaultRG)
   params: {
@@ -136,7 +136,7 @@ module vmBackupPolicy '../../../../../.common/bicepModules/recoveryServices/vaul
 }
 
 // ─── File Share Backup Policy (pooled host pools only) ────────────────────────
-module fileShareBackupPolicy '../../../../../.common/bicepModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = if (pooledHostPool) {
+module fileShareBackupPolicy '../../../../.common/bicepModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = if (pooledHostPool) {
   name: 'RSV-BackupPolicy-FileShares-${deploymentSuffix}'
   scope: resourceGroup(effectiveVaultSub, effectiveVaultRG)
   params: {
@@ -169,7 +169,7 @@ module fileShareBackupPolicy '../../../../../.common/bicepModules/recoveryServic
 
 // ─── Vault Private Endpoint ───────────────────────────────────────────────────
 // Only created alongside a new vault (Complete). Existing vaults already have their PE.
-module vaultPrivateEndpoint '../../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId)) {
+module vaultPrivateEndpoint '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId)) {
   name: 'PE-RecoveryServicesVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupOperations)
   params: {
@@ -188,7 +188,7 @@ module vaultPrivateEndpoint '../../../../../.common/bicepModules/network/private
     privateLinkServiceId: recoveryServicesVault!.outputs.resourceId
     groupId: 'AzureBackup'
     privateDNSZoneIds: backupPrivateDnsZoneResourceIds
-    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
+    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
   }
 }
 

@@ -578,7 +578,7 @@ New-AzResourceGroupDeployment -ResourceGroupName $params.resourceGroupName `
 
 # OR deploy directly from bicep file
 New-AzResourceGroupDeployment -ResourceGroupName $params.resourceGroupName `
-    -TemplateFile ".\deployments\add-ons\SessionHostReplacer\main.bicep" `
+    -TemplateFile ".\deployments\add-ons\SessionHostReplacer\main.json" `
     -TemplateParameterObject $params
 ```
 
@@ -638,7 +638,7 @@ $params = @{
 }
 
 New-AzResourceGroupDeployment -ResourceGroupName "rg-avd-management" `
-    -TemplateFile ".\deployments\add-ons\SessionHostReplacer\main.bicep" `
+    -TemplateFile ".\deployments\add-ons\SessionHostReplacer\main.json" `
     -TemplateParameterObject $params
 ```
 

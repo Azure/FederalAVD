@@ -257,14 +257,23 @@ var privateEndpointNICNameConv = replace(
   'RESOURCETYPE',
   resourceAbbreviations.networkInterfaces
 )
-var recoveryServicesVaultName = replace(
+var recoveryServicesVaultNameVMs = replace(
   replace(
     replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.recoveryServicesVaults),
     'LOCATION',
     virtualMachinesRegionAbbreviation
   ),
-  'TOKEN-',
-  ''
+  'TOKEN',
+  'vms'
+)
+var recoveryServicesVaultNameFSLogix = replace(
+  replace(
+    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.recoveryServicesVaults),
+    'LOCATION',
+    virtualMachinesRegionAbbreviation
+  ),
+  'TOKEN',
+  'fslogix'
 )
 var userAssignedIdentityNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
@@ -390,7 +399,10 @@ output netAppAccountName string = netAppAccountName
 output netAppCapacityPoolName string = netAppCapacityPoolName
 output privateEndpointNameConv string = privateEndpointNameConv
 output privateEndpointNICNameConv string = privateEndpointNICNameConv
-output recoveryServicesVaultName string = recoveryServicesVaultName
+output recoveryServicesVaultNames object = {
+  vms: recoveryServicesVaultNameVMs
+  fslogix: recoveryServicesVaultNameFSLogix
+}
 output resourceGroupControlPlane string = resourceGroupControlPlane
 output resourceGroupGlobalFeed string = globalFeedResourceGroupName
 output resourceGroupHosts string = resourceGroupHosts

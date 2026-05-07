@@ -17,7 +17,7 @@ graph TD
     SEC{Need Key Vaults?<br/>Customer Managed Keys} -->|Yes| KV[🔒 Step 1: Deploy<br/>Key Vaults]
     SEC -->|No| D
     KV --> D{Need Custom<br/>Software?}
-    D -->|Yes| E[📦 Step 2: Deploy<br/>Image Management]
+    D -->|Yes| E[📦 Step 2: Deploy Image Management<br/>+ Upload Artifacts]
     D -->|No| I
     E --> G{Build<br/>Custom Image?}
     G -->|Yes<br/>Pre-install software| H[🎨 Step 3: Build<br/>Custom Image]
@@ -48,7 +48,7 @@ Most components support multiple deployment methods:
 |-----------|-------------|---------------|----------------|
 | **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Key Vaults** (Secrets & Encryption) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
+| **Image Management** (infrastructure) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
@@ -187,7 +187,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 
 New-AzDeployment `
     -Location "usgovvirginia" `
-    -TemplateFile ".\deployments\hostpools\hostpool.bicep" `
+    -TemplateFile ".\deployments\hostpools\hostpool.json" `
     -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
     -Name $deploymentName
 ```
@@ -252,7 +252,7 @@ Set-AzContext -Subscription "<subscription-id>"
 New-AzDeployment `
     -Location "usgovvirginia" `
     -Name "avd-networking-deployment" `
-    -TemplateFile ".\deployments\networking\networking.bicep" `
+    -TemplateFile ".\deployments\networking\networking.json" `
     -TemplateParameterFile ".\deployments\networking\parameters\<your-params>.json" `
     -Verbose
 ```
@@ -324,7 +324,6 @@ The Key Vaults deployment creates a **dedicated operations resource group** (`rg
 > - Pre-populate credential secrets so the portal form can reference them
 > - Give your security team time to review KV access policies before host pool deployment begins
 > - Use the same KVs across multiple host pool deployments (e.g., multiple personas sharing one encryption KV)
-> - Avoid the host pool needing Owner-level access just to create Key Vaults
 
 ### Deploy Key Vaults
 
@@ -336,11 +335,23 @@ The Key Vaults deployment creates a **dedicated operations resource group** (`rg
 **Option 2: PowerShell** — All clouds
 
 ```powershell
-Connect-AzAccount -Environment AzureUSGovernment
+Connect-AzAccount -Environment '<environment>'
 Set-AzContext -Subscription "<subscription-id>"
+$location = '<location>'
 
-cd deployments
-.\Deploy-KeyVaults.ps1 -Location "usgovvirginia"
+$virtualMachineAdminPassword = Read-Host -Prompt "Enter the VM admin password" -AsSecureString
+$virtualMachineAdminUserName = Read-Host -Prompt "Enter the VM admin username" -AsSecureString
+$domainJoinUserPassword = Read-Host -Prompt "Enter the domain join user password" -AsSecureString
+$domainJoinUserPrincipalName = Read-Host -Prompt "Enter the domain join user principal name" -AsSecureString
+$templateFile = Get-ChildItem -Path . -Recurse -Filter 'keyVaults.json' | Where-Object { $_.FullName -like '*keyVaults*' } | Select-Object -First 1 -ExpandProperty FullName
+Write-Output "Template file found: $templateFile"
+New-AzDeployment `
+    -TemplateFile $templateFile `
+    -Location $location `
+    -virtualMachineAdminPassword $virtualMachineAdminPassword `
+    -virtualMachineAdminUserName $virtualMachineUserPrincipalName `
+    -domainJoinUserPassword $domainJoinUserPassword `
+    -domainJoinUserPrincipalName $domainJoinUserPrincipalName
 ```
 
 **Option 3: Template Spec + Portal UI** — All clouds including air-gapped
@@ -373,32 +384,53 @@ After deployment, note the Key Vault resource IDs from the deployment outputs an
 
 **Required for:** Custom image builds or session host runtime customizations with software packages.
 
-Image Management deploys:
+This step has two parts: deploying the Azure infrastructure once, then uploading artifacts whenever your software changes.
 
-- Storage Account for artifacts (scripts & installers)
-- Compute Gallery for custom images
-- Managed Identity for secure access
+### Part A: Deploy Infrastructure (One-Time)
 
-### Quick Deploy
+Deploys the compute gallery, artifacts storage account, and managed identity.
+
+**Option 1: Azure Portal (Blue Button)** — Commercial & Government clouds only
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageManagement.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FuiFormDefinition.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageManagement.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FuiFormDefinition.json)
+
+**Option 2: Deploy-ImageManagement.ps1 Script** — All clouds (recommended for PowerShell)
 
 ```powershell
-# Connect to Azure
 Connect-AzAccount -Environment AzureUSGovernment
-
-# Set subscription
 Set-AzContext -Subscription "<subscription-id>"
 
-# Deploy image management
 cd deployments
-.\Deploy-ImageManagement.ps1 -DeployImageManagementResources -Location "usgovvirginia"
+# Deploy infrastructure only
+.\Deploy-ImageManagement.ps1 -Location "usgovvirginia" -ParameterFilePrefix basic
+
+# OR deploy infrastructure AND upload artifacts in one step
+.\Deploy-ImageManagement.ps1 -Location "usgovvirginia" -ParameterFilePrefix basic -UpdateArtifacts
 ```
 
-**📖 Detailed Guides:**
+Example parameter files are in `deployments\imageManagement\parameters\` (`basic`, `privateEndpoint`, `serviceEndpoint`, `production`). Copy and rename one for your environment.
 
-- **[Artifacts & Image Management Guide](artifactsGuide.md)** - Understanding the artifact system
-- **[Deploy-ImageManagement Script Reference](imageManagementScript.md)** - All parameters and options
-- **[Creating Custom Artifacts](artifactsGuide.md#creating-custom-artifact-packages)** - Build your own software packages
-- **[Air-Gapped Cloud Instructions](airGappedClouds.md)** - Secret/Top Secret cloud considerations
+If you did **not** use `-UpdateArtifacts`, note the `artifactsStorageAccountResourceId` output — you'll need it in Part B.
+
+### Part B: Upload Artifacts (Run Whenever Software Changes)
+
+> **⏭️ Skip if** you already used `-UpdateArtifacts` in Part A.
+
+```powershell
+cd deployments
+.\Update-ImageArtifacts.ps1 `
+    -StorageAccountResourceId "<artifactsStorageAccountResourceId from Part A output>"
+```
+
+**✈️ Air-gapped environments:** Use `-SkipDownloadingNewSources` and manually place installers in `.common/artifacts/` subdirectories before running.
+
+**📚 Detailed Guides:**
+
+- **[imageManagement README](../deployments/imageManagement/README.md)** — Infrastructure parameters and deployment options
+- **[Update-ImageArtifacts Script Reference](updateImageArtifacts.md)** — All script parameters and examples
+- **[Artifacts Guide](artifactsGuide.md)** — Creating custom artifact packages
+- **[Air-Gapped Cloud Instructions](airGappedClouds.md)** — Secret/Top Secret cloud considerations
 
 ---
 
@@ -458,7 +490,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 New-AzDeployment `
     -Location 'eastus2' `
     -Name $deploymentName `
-    -TemplateFile '.\deployments\hostpools\hostpool.bicep' `
+    -TemplateFile '.\deployments\hostpools\hostpool.json' `
     -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
     -Verbose
 ```
@@ -543,6 +575,7 @@ New-AzDeployment -Location "usgovvirginia" -Name $deploymentName -TemplateFile "
 ```
 
 **Alternative patterns:**
+
 - **Environment-based**: `"avd-prod-hostpool"`, `"avd-dev-finance"`
 - **Incremental versions**: `"avd-prod-v2"`, `"avd-prod-v3"`
 - **Keep it simple**: Azure tracks deployment history automatically

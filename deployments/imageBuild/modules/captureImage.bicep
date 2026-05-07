@@ -16,6 +16,9 @@ param location string
 param tags object
 param deploymentSuffix string
 param virtualMachineResourceId string
+param diskEncryptionSetId string = ''
+param confidentialVMEncryptionType string = ''
+param secureVMDiskEncryptionSetId string = ''
 
 // Image Definitions with Security Type = 'TrustedLaunchSupported', 'ConfidentialVMSupported', or TrustedLaunchConfidentialVMSupported' do not
 // support capture directly from a VM. Must create a legacy managed image first.
@@ -49,6 +52,9 @@ module imageVersion '../../../.common/bicepModules/compute/galleries/images/vers
     sourceId: contains(imageDefinitionSecurityType, 'Supported') ? managedImage!.outputs.resourceId : ''
     virtualMachineId: !contains(imageDefinitionSecurityType, 'Supported') ? virtualMachineResourceId : ''
     targetRegions: imageVersionReplicationRegions
+    diskEncryptionSetId: diskEncryptionSetId
+    confidentialVMEncryptionType: confidentialVMEncryptionType
+    secureVMDiskEncryptionSetId: secureVMDiskEncryptionSetId
     tags: tags[?'Microsoft.Compute/galleries/images/versions'] ?? {}
   }
 }

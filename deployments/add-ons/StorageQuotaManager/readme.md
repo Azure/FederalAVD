@@ -65,7 +65,7 @@ Click the button for your target cloud to open the deployment UI in Azure Portal
 ```bash
 az deployment sub create \
   --location eastus \
-  --template-file main.bicep \
+  --template-file main.json \
   --parameters \
     functionAppResourceGroupName='rg-avd-sqm' \
     storageResourceGroupId='/subscriptions/{sub-id}/resourceGroups/{storage-rg-name}' \
@@ -78,7 +78,7 @@ az deployment sub create \
 ```powershell
 New-AzSubscriptionDeployment `
   -Location 'eastus' `
-  -TemplateFile '.\main.bicep' `
+  -TemplateFile '.\main.json' `
   -functionAppResourceGroupName 'rg-avd-sqm' `
   -storageResourceGroupId '/subscriptions/{sub-id}/resourceGroups/{storage-rg-name}' `
   -location 'eastus' `

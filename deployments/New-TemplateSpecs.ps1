@@ -4,6 +4,7 @@ param (
     [Parameter(Mandatory=$true)]
     [string]$Location,
     [bool]$createResourceGroup = $true,
+    [bool]$createKeyVault = $true,
     [bool]$createNetwork = $true,
     [bool]$createCustomImage = $true,
     [bool]$createHostPool = $true,
@@ -41,9 +42,9 @@ if ($null -eq $locationAbbr) {
 if ($null -eq $ResourceGroupName -or $ResourceGroupName -eq '') {
     Write-Output 'Resource Group Name not provided. Using default naming convention'
     if ($nameConvResTypeAtEnd) {
-        $ResourceGroupName = "avd-management-$locationAbbr-$($resourceAbbreviations.resourceGroups)"
+        $ResourceGroupName = "avd-operations-$locationAbbr-$($resourceAbbreviations.resourceGroups)"
     } else {
-        $ResourceGroupName = "$($resourceAbbreviations.resourceGroups)-avd-management-$locationAbbr"
+        $ResourceGroupName = "$($resourceAbbreviations.resourceGroups)-avd-operations-$locationAbbr"
     }
     Write-Output "Resource Group Name: $ResourceGroupName"
 }
@@ -61,6 +62,16 @@ if ($createResourceGroup) {
 
 # Build collection of template specs to create
 $templateSpecs = @()
+
+if ($createKeyVault) {
+    $templateSpecs += @{
+        Name = 'avd-keyvaults'
+        DisplayName = 'AVD Key Vaults'
+        Description = 'Deploys key vaults to support Azure Virtual Desktop'
+        TemplateFile = Join-Path $PSScriptRoot -ChildPath 'keyVaults\keyVaults.json'
+        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath 'keyVaults\uiFormDefinition.json'
+    }
+}
 
 if ($createNetwork) {
     $templateSpecs += @{

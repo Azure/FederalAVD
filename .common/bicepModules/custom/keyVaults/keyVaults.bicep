@@ -1,11 +1,8 @@
 targetScope = 'subscription'
-
 // Shared module: deploys AVD Secrets Key Vault and/or Encryption Key Vault into an existing resource group.
 // Called by both the standalone Security deployment and the hostpool inline fallback.
 // The caller is responsible for creating the resource group before calling this module.
-
 param resourceGroupName string
-
 param azureKeyVaultPrivateDnsZoneResourceId string = ''
 param deploySecretsKeyVault bool = true
 #disable-next-line secure-secrets-in-params

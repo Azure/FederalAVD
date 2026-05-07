@@ -170,8 +170,9 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 | **replicationRegions** | Regions to replicate image to | `["usgovvirginia", "usgovarizona"]` |
 | **runWindowsUpdate** | Install Windows Updates during build | `true` |
 | **windowsUpdateCategories** | Categories of updates to install | `Critical, Security, UpdateRollup` |
-| **collectCustomizationLogs** | Save customization logs to blob storage | `true` (optional, default: `false`) |
-| **logStorageAccountNetworkAccess** | Network access for log storage account | `PrivateEndpoint`, `ServiceEndpoint`, or `PublicEndpoint` |
+| **collectCustomizationLogs** | Save customization logs to an existing blob storage container | `true` (optional, default: `false`) |
+| **existingLogStorageAccountResourceId** | Resource ID of the storage account to receive build logs (deploy imageManagement with `deployBuildLogsStorageAccount = true`) | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{name}` |
+| **logContainerName** | Blob container name to write logs into | `image-customization-logs` (default) |
 
 ### Image Management Resource References
 
@@ -181,7 +182,7 @@ These parameters reference the Image Management resources and are included in th
 |-----------|-------------|------|
 | **computeGalleryResourceId** | Resource ID of the Azure Compute Gallery | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.Compute/galleries/{gallery-name}` |
 | **artifactsContainerUri** | URI of the blob container with artifacts | `https://{storage-account}.blob.core.usgovcloudapi.net/artifacts` |
-| **userAssignedIdentityResourceId** | Managed identity for blob access | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity-name}` |
+| **userAssignedIdentityResourceId** | Optional. Managed identity to attach to the build VM. Required when zero-trust artifacts storage or log collection is enabled. Must have 'Storage Blob Data Reader' on the artifacts container and/or 'Storage Blob Data Contributor' on the log storage account. Leave empty to allow the deployment to create its own identity. | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity-name}` |
 
 ### Automatic Image Versioning
 
@@ -219,7 +220,7 @@ The image build process includes automatic timestamp-based versioning:
 
 Click the button for your target cloud to open the deployment UI in Azure Portal:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FimageBuild.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageBuild%2FuiFormDefinition.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FimageBuild.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageBuild%2FuiFormDefinition.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FimageBuild.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FuiFormDefinition.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FimageBuild.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FuiFormDefinition.json)
 
 **⚠️ Note:** For Air-Gapped clouds (Secret/Top Secret), create Template Specs using [`New-TemplateSpecs.ps1`](../deployments/New-TemplateSpecs.ps1) or use PowerShell deployment methods below.
 
@@ -310,14 +311,18 @@ Check the build VM and its Run Command executions:
 
 ### Customization Logs in Blob Storage
 
-The image build solution includes an optional feature to automatically save all customization logs to Azure Blob Storage. This is controlled by the `collectCustomizationLogs` parameter (or the "Collect customization logs in a storage container" checkbox in the Azure Portal UI).
+The image build solution includes an optional feature to automatically save all customization logs to an existing Azure Blob Storage account. This is controlled by the `collectCustomizationLogs` parameter (or the "Collect customization logs in a storage container" checkbox in the Azure Portal UI).
+
+**Prerequisites:**
+
+Before enabling log collection, deploy the imageManagement solution with `deployBuildLogsStorageAccount = true`. This creates a dedicated storage account and container in the imageManagement resource group for build logs. The imageManagement UAI is automatically granted **Storage Blob Data Contributor** access to it.
 
 **When enabled:**
 
-- A dedicated storage account is created in the build resource group
-- All Run Command output and error logs are uploaded to a blob container named `image-customization-logs`
-- Logs are automatically retained for **7 days** via lifecycle management policy
-- You can configure network access: **Private Endpoint**, **Service Endpoint**, or **Public Endpoint**
+- All Run Command output and error logs are uploaded to the specified blob container
+- The `existingLogStorageAccountResourceId` and `logContainerName` parameters (or Portal selectors) identify where logs are written
+- The `userAssignedIdentityResourceId` must reference an identity with **Storage Blob Data Contributor** on the log storage account
+- Logs from the imageManagement-deployed storage account are automatically retained per the lifecycle policy configured there
 
 **Log File Naming Convention:**
 
@@ -331,9 +336,9 @@ The image build solution includes an optional feature to automatically save all 
 
 **To access logs:**
 
-1. Navigate to the build resource group
-2. Find the storage account (name starts with `stlogs`)
-3. Open **Storage Browser** > **Blob containers** > **image-customization-logs**
+1. Navigate to the imageManagement resource group
+2. Find the logs storage account
+3. Open **Storage Browser** > **Blob containers** > your container (default: `image-customization-logs`)
 4. Download or view log files directly in the portal
 
 ### Build Timeline
@@ -397,15 +402,16 @@ Typical build duration: **45-90 minutes** depending on:
 
 **Option 1: Blob Storage Logs (Recommended)**
 
-If you enabled the `collectCustomizationLogs` parameter during deployment:
+If you enabled the `collectCustomizationLogs` parameter during deployment, logs are written to the existing storage account you specified:
 
 ```powershell
-# List all customization logs
-$buildRg = "rg-avd-imagebuild-use2"
-$storageAccount = Get-AzStorageAccount -ResourceGroupName $buildRg | Where-Object {$_.StorageAccountName -like "stlogs*"}
+# Get the log storage account (the one you specified as existingLogStorageAccountResourceId)
+$logStorageAccountId = "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{name}"
+$parts = $logStorageAccountId.Split('/')
+$storageAccount = Get-AzStorageAccount -ResourceGroupName $parts[4] -Name $parts[8]
 $ctx = $storageAccount.Context
 
-# List all logs in the container
+# List all logs in the container (default container name: image-customization-logs)
 Get-AzStorageBlob -Container "image-customization-logs" -Context $ctx | Select-Object Name, LastModified, Length
 
 # Download a specific log
@@ -516,7 +522,7 @@ The Session Host Replacer add-on automatically detects new image versions and re
 ## Related Documentation
 
 - 📦 [Artifacts & Image Management Guide](artifactsGuide.md)
-- 🔧 [Deploy-ImageManagement Script](imageManagementScript.md)
+- 🔧 [Update-ImageArtifacts Script](updateImageArtifacts.md)
 - 🏢 [Host Pool Deployment Guide](hostpoolDeployment.md)
 - 📖 [Quick Start Guide](quickStart.md)
 - ⚙️ [Parameters Reference](parameters.md)

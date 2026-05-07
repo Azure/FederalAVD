@@ -148,30 +148,43 @@ param cleanupDesktop bool = false
 @description('Optional. Collect image customization logs.')
 param collectCustomizationLogs bool = false
 
-@description('Optional. Log Storage Account Network Access Configuration.')
-@allowed([
-  'PrivateEndpoint'
-  'PublicEndpoint'
-  'ServiceEndpoint'
-])
-param logStorageAccountNetworkAccess string = 'PublicEndpoint'
+@description('Optional. Resource ID of an existing storage account (deployed by imageManagement with deployBuildLogsStorageAccount = true) to use for build customization logs. Required when collectCustomizationLogs is true.')
+param existingLogStorageAccountResourceId string = ''
 
-// ── Customer-Managed Key parameters for the logs storage account ──────────────
+@description('Optional. Name of the blob container in the logs storage account to write customization logs to.')
+param logContainerName string = 'image-customization-logs'
 
-@description('Optional. Key management solution for the log storage account.')
-@allowed([
-  'MicrosoftManaged'
-  'CustomerManaged'
-  'CustomerManagedHSM'
-])
-param keyManagementLogsStorageAccount string = 'MicrosoftManaged'
-
-@description('Optional. Resource ID of the Key Vault containing the CMK for the logs storage account. Required when keyManagementLogsStorageAccount is CustomerManaged or CustomerManagedHSM.')
+@description('Optional. Resource ID of the Key Vault used for gallery image version Customer-Managed Key operations. Required when `keyManagementGalleryImageVersions` is CustomerManaged or CustomerManagedHSM.')
 param encryptionKeyVaultResourceId string = ''
 
 @description('Optional. Number of days before the CMK expires and auto-rotates.')
 @minValue(7)
 param keyExpirationInDays int = 180
+
+// ── Customer-Managed Key parameters for gallery image versions ────────────────
+
+@description('Optional. Key management for gallery image version replicas stored in the Compute Gallery. When CustomerManaged or CustomerManagedHSM, a Disk Encryption Set is created in the gallery resource group and applied to all replication target regions. Requires `encryptionKeyVaultResourceId` to be set.')
+@allowed([
+  'PlatformManaged'
+  'CustomerManaged'
+  'CustomerManagedHSM'
+])
+param keyManagementGalleryImageVersions string = 'PlatformManaged'
+
+@description('Optional. Resource ID of an existing Disk Encryption Set to use for gallery image version encryption. When provided, no new DES is created. Only used when keyManagementGalleryImageVersions is not PlatformManaged.')
+param existingGalleryDiskEncryptionSetResourceId string = ''
+
+@description('Optional. Confidential VM encryption type applied to each image version replication target region. Only relevant when the image definition SecurityType is ConfidentialVM or ConfidentialVMSupported and keyManagementGalleryImageVersions is not PlatformManaged.')
+@allowed([
+  ''
+  'EncryptedWithPmk'
+  'EncryptedWithCmk'
+  'EncryptedVMGuestStateOnlyWithPmk'
+])
+param galleryImageVersionConfidentialVMEncryptionType string = ''
+
+@description('Optional. Resource ID of an existing Disk Encryption Set to use for Confidential VM guest state encryption in gallery image version replicas. When provided, no new DES is created. Only used when galleryImageVersionConfidentialVMEncryptionType is EncryptedWithCmk.')
+param existingGallerySecureVMDiskEncryptionSetResourceId string = ''
 
 @description('Optional. Determines if the latest updates from the specified update service will be installed.')
 param installUpdates bool = true
@@ -192,14 +205,6 @@ param updateService string = 'MU'
 
 @description('Conditional. The WSUS Server Url if WSUS is specified. (i.e., https://wsus.corp.contoso.com:8531)')
 param wsusServer string = ''
-
-@description('''Optional. The resource id of the existing Azure storage account blob service private dns zone.
-Used for the Customization Logs Storage Account.
-This zone must be linked to or resolvable from the vnet referenced in the [privateEndpointSubnetResourceId] parameter.''')
-param blobPrivateDnsZoneResourceId string = ''
-
-@description('Optional. The resource id of the private endpoint subnet. Used for the Customization Logs Storage Account.')
-param privateEndpointSubnetResourceId string = ''
 
 @description('Optional. The resource id of an existing Image Definition in the Compute gallery.')
 param imageDefinitionResourceId string = ''
@@ -338,26 +343,6 @@ var downloads = startsWith(cloud, 'usn')
 
 var computeLocation = vnet.location
 var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''
-var logStorageAccountName = take(
-  replace(toLower('sa${depPrefix}log${uniqueString(subscription().id,imageBuildResourceGroupName)}'), '-', ''),
-  24
-)
-
-var vnetName = !empty(privateEndpointSubnetResourceId) ? split(privateEndpointSubnetResourceId, '/')[8] : ''
-var privateEndpointNameConv = replace(
-  '${nameConvResTypeAtEnd ? 'RESOURCE-SUBRESOURCE-${vnetName}-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-${vnetName}'}',
-  'RESOURCETYPE',
-  resourceAbbreviations.privateEndpoints
-)
-var privateEndpointName = replace(
-  replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'),
-  'RESOURCE',
-  logStorageAccountName
-)
-var customNetworkInterfaceName = nameConvResTypeAtEnd
-  ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}'
-  : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
-
 var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
   ? (empty(customBuildResourceGroupName)
       ? nameConvResTypeAtEnd
@@ -369,15 +354,10 @@ var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
 var adminPw = '1qaz@WSX${uniqueString(subscription().id, imageBuildResourceGroupName)}'
 var adminUserName = 'vmadmin'
 
-var logContainerName = 'image-customization-logs'
-var logContainerUri = collectCustomizationLogs
-  ? 'https://${logStorageAccountName}.blob.${environment().suffixes.storage}/${logContainerName}/'
+var existingLogStorageAccountName = empty(existingLogStorageAccountResourceId) ? '' : last(split(existingLogStorageAccountResourceId, '/'))
+var logContainerUri = collectCustomizationLogs && !empty(existingLogStorageAccountResourceId)
+  ? 'https://${existingLogStorageAccountName}.blob.${environment().suffixes.storage}/${logContainerName}/'
   : ''
-
-var logsStorageEncryptionKeyName = 'key-imagebuild-logstorage-${deploymentSuffix}'
-var logsStorageEncryptionIdentityName = nameConvResTypeAtEnd
-  ? 'imagebuild-logstorage-encryption-${resourceAbbreviations.userAssignedIdentities}'
-  : '${resourceAbbreviations.userAssignedIdentities}-imagebuild-logstorage-encryption'
 
 var imageDefinitionFeatures = empty(imageDefinitionResourceId)
   ? filter([
@@ -393,28 +373,28 @@ var galleryImageDefinitionName = empty(imageDefinitionResourceId)
   ? empty(customImageDefinitionName)
       ? nameConvResTypeAtEnd
           ? replace(
-              '${replace(galleryImageDefinitionPublisher, '-', '')}-${replace(galleryImageDefinitionOffer, '-', '')}-${replace(galleryImageDefinitionSku, '-', '')}-${resourceAbbreviations.imageDefinitions}',
+              '${replace(effectiveGalleryImageDefinitionPublisher, '-', '')}-${replace(effectiveGalleryImageDefinitionOffer, '-', '')}-${replace(effectiveGalleryImageDefinitionSku, '-', '')}-${resourceAbbreviations.imageDefinitions}',
               ' ',
               ''
             )
           : replace(
-              '${resourceAbbreviations.imageDefinitions}-${replace(galleryImageDefinitionPublisher, '-', '')}-${replace(galleryImageDefinitionOffer, '-', '')}-${replace(galleryImageDefinitionSku, '-', '')}',
+              '${resourceAbbreviations.imageDefinitions}-${replace(effectiveGalleryImageDefinitionPublisher, '-', '')}-${replace(effectiveGalleryImageDefinitionOffer, '-', '')}-${replace(effectiveGalleryImageDefinitionSku, '-', '')}' ,
               ' ',
               ''
             )
       : customImageDefinitionName
   : last(split(imageDefinitionResourceId, '/'))
-var galleryImageDefinitionOffer = !empty(imageDefinitionOffer) ? replace(imageDefinitionOffer, ' ', '') : mpOffer
-var galleryImageDefinitionPublisher = !empty(imageDefinitionPublisher)
+var effectiveGalleryImageDefinitionOffer = !empty(imageDefinitionOffer) ? replace(imageDefinitionOffer, ' ', '') : mpOffer
+var effectiveGalleryImageDefinitionPublisher = !empty(imageDefinitionPublisher)
   ? replace(imageDefinitionPublisher, ' ', '')
   : mpPublisher
 
-var galleryImageDefinitionSecurityType = empty(imageDefinitionResourceId)
+var effectiveGalleryImageDefinitionSecurityType = empty(imageDefinitionResourceId)
   ? imageDefinitionSecurityType
   : !empty(filter(existingImageDefinition!.properties.features, feature => feature.name == 'SecurityType'))
       ? filter(existingImageDefinition!.properties.features, feature => feature.name == 'SecurityType')[0].value
       : 'Standard'
-var galleryImageDefinitionSku = !empty(imageDefinitionSku) ? replace(imageDefinitionSku, ' ', '') : mpSku
+var effectiveGalleryImageDefinitionSku = !empty(imageDefinitionSku) ? replace(imageDefinitionSku, ' ', '') : mpSku
 // build an image version from the ISO 8601 timestamp
 var autoImageVersionName = '${substring(deploymentSuffix, 0, 4)}.${substring(deploymentSuffix, 4, 4)}.${substring(deploymentSuffix, 8, 4)}'
 var imageVersionName = imageMajorVersion != -1 && imageMajorVersion != -1 && imagePatch != -1
@@ -451,14 +431,51 @@ var imageVersionReplicationRegions = empty(remoteComputeGalleryResourceId)
       ? union(localImageVersionTargetRegions, defaultRemoteImageVersionTargetRegions)
       : localImageVersionTargetRegions
 
+var deployGalleryDes = keyManagementGalleryImageVersions != 'PlatformManaged' && empty(existingGalleryDiskEncryptionSetResourceId)
+
+var galleryDiskEncryptionSetName = nameConvResTypeAtEnd
+  ? 'avd-gallery-${keyManagementGalleryImageVersions == 'CustomerManagedHSM' ? 'hsm-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
+  : '${resourceAbbreviations.diskEncryptionSets}-avd-gallery-${keyManagementGalleryImageVersions == 'CustomerManagedHSM' ? 'hsm-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}'
+
+var galleryDiskEncryptionKeyName = 'avd-encryption-key-gallery-imageversions'
+
+var effectiveGalleryDiskEncryptionSetResourceId = keyManagementGalleryImageVersions == 'PlatformManaged'
+  ? ''
+  : !empty(existingGalleryDiskEncryptionSetResourceId)
+      ? existingGalleryDiskEncryptionSetResourceId
+      : galleryDes!.outputs.diskEncryptionSetResourceId
+
+// Note: auto-creation of a ConfidentialVM DES (ConfidentialVmEncryptedWithCustomerKey type) is a feature gap.
+// CVM DES provisioning requires a Confidential VM Orchestrator service principal key-release role assignment
+// that cannot be reliably automated here. Supply an existing DES via existingGallerySecureVMDiskEncryptionSetResourceId.
+var effectiveGallerySecureVMDiskEncryptionSetResourceId = galleryImageVersionConfidentialVMEncryptionType == 'EncryptedWithCmk'
+  ? existingGallerySecureVMDiskEncryptionSetResourceId
+  : ''
+
+var imageVersionReplicationRegionsWithEncryption = empty(effectiveGalleryDiskEncryptionSetResourceId)
+  ? imageVersionReplicationRegions
+  : map(imageVersionReplicationRegions, region => union(region, {
+      encryption: {
+        osDiskImage: union(
+          { diskEncryptionSetId: effectiveGalleryDiskEncryptionSetResourceId },
+          !empty(galleryImageVersionConfidentialVMEncryptionType) ? {
+            securityProfile: union(
+              { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
+              !empty(effectiveGallerySecureVMDiskEncryptionSetResourceId) ? { secureVMDiskEncryptionSetId: effectiveGallerySecureVMDiskEncryptionSetResourceId } : {}
+            )
+          } : {}
+        )
+      }
+    }))
+
 var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0 ? dateTimeAdd(deploymentSuffix, 'P${imageVersionEOLinDays}D') : ''
 
 var imageVmName = take('${depPrefix}vmimg-${uniqueString(deploymentSuffix)}', 15)
 var orchestrationVmName = take('${depPrefix}vmorc-${uniqueString(deploymentSuffix)}', 15)
 
-var vmSecurityType = galleryImageDefinitionSecurityType == 'TrustedLaunch'
+var vmSecurityType = effectiveGalleryImageDefinitionSecurityType == 'TrustedLaunch'
   ? 'TrustedLaunch'
-  : galleryImageDefinitionSecurityType == 'ConfidentialVM' ? 'ConfidentialVM' : 'Standard'
+  : effectiveGalleryImageDefinitionSecurityType == 'ConfidentialVM' ? 'ConfidentialVM' : 'Standard'
 
 var remoteLocation = !empty(remoteComputeGalleryResourceId) ? remoteComputeGallery!.location : ''
 
@@ -498,7 +515,7 @@ module userAssignedIdentity '../../.common/bicepModules/managedIdentity/userAssi
     location: location
     name: nameConvResTypeAtEnd
       ? 'avd-image-builder-${locations[varLocation].abbreviation}-${resourceAbbreviations.userAssignedIdentities}'
-      : '${resourceAbbreviations.userAssignedIdentities}-image-builder-${locations[varLocation].abbreviation}'
+      : '${resourceAbbreviations.userAssignedIdentities}-avd-image-builder-${locations[varLocation].abbreviation}'
     tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
   }
   dependsOn: [
@@ -529,9 +546,9 @@ module imageDefinition '../../.common/bicepModules/compute/galleries/images/depl
     hyperVGeneration: galleryImageDefinitionHyperVGeneration
     osType: 'Windows'
     osState: 'Generalized'
-    publisher: galleryImageDefinitionPublisher
-    offer: galleryImageDefinitionOffer
-    sku: galleryImageDefinitionSku
+    publisher: effectiveGalleryImageDefinitionPublisher
+    offer: effectiveGalleryImageDefinitionOffer
+    sku: effectiveGalleryImageDefinitionSku
     tags: tags[?'Microsoft.Compute/galleries/images'] ?? {}
   }
 }
@@ -555,13 +572,13 @@ module remoteImageDefinition '../../.common/bicepModules/compute/galleries/image
     osType: 'Windows'
     osState: 'Generalized'
     publisher: empty(imageDefinitionResourceId)
-      ? galleryImageDefinitionPublisher
+      ? effectiveGalleryImageDefinitionPublisher
       : existingImageDefinition!.properties.identifier.publisher
     offer: empty(imageDefinitionResourceId)
-      ? galleryImageDefinitionOffer
+      ? effectiveGalleryImageDefinitionOffer
       : existingImageDefinition!.properties.identifier.offer
     sku: empty(imageDefinitionResourceId)
-      ? galleryImageDefinitionSku
+      ? effectiveGalleryImageDefinitionSku
       : existingImageDefinition!.properties.identifier.sku
     tags: tags[?'Microsoft.Compute/galleries/images'] ?? {}
   }
@@ -584,140 +601,35 @@ module roleAssignmentContributorBuildRg '../../.common/bicepModules/authorizatio
   ]
 }
 
-module roleAssignmentBlobDataContributorBuilderRg '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (collectCustomizationLogs) {
-  name: '${depPrefix}RA-MI-StorBlobDataContr-BuildRG-${deploymentSuffix}'
-  scope: resourceGroup(imageBuildResourceGroupName)
+module roleAssignmentBlobDataContributorExistingStorage '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (collectCustomizationLogs && !empty(existingLogStorageAccountResourceId) && empty(userAssignedIdentityResourceId)) {
+  // Only needed when imageBuild creates its own UAI — when the imageManagement UAI is supplied via
+  // userAssignedIdentityResourceId it already has Blob Data Contributor granted by imageManagement.
+  name: '${depPrefix}RA-MI-StorBlobDataContr-ExistingLogsRG-${deploymentSuffix}'
+  scope: resourceGroup(split(existingLogStorageAccountResourceId, '/')[2], split(existingLogStorageAccountResourceId, '/')[4])
   params: {
-    principalId: empty(userAssignedIdentityResourceId)
-      ? userAssignedIdentity!.outputs.principalId
-      : existingUserAssignedIdentity!.properties.principalId
+    principalId: userAssignedIdentity!.outputs.principalId
     roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
     principalType: 'ServicePrincipal'
   }
 }
 
-// ── Customer-Managed Keys for the logs storage account ───────────────────────
-// Must complete before storage account deployment so the role assignment has
-// time to propagate before the storage account PUT includes the CMK reference.
+// ── Customer-Managed Keys for gallery image versions ──────────────────────────
+// Creates one DES per key management type in the gallery resource group.
+// Scoped to the gallery subscription so cross-subscription galleries are supported.
 
-module logsStorageCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (collectCustomizationLogs && keyManagementLogsStorageAccount != 'MicrosoftManaged') {
-  name: '${depPrefix}Logs-Storage-CMK-${deploymentSuffix}'
-  scope: resourceGroup(imageBuildResourceGroupName)
+module galleryDes '../hostpools/modules/diskCmk/diskCmk.bicep' = if (deployGalleryDes) {
+  name: '${depPrefix}Gallery-ImageVersion-DES-${deploymentSuffix}'
+  scope: subscription(split(computeGalleryResourceId, '/')[2])
   params: {
+    resourceGroupName: split(computeGalleryResourceId, '/')[4]
     keyVaultResourceId: encryptionKeyVaultResourceId
-    keyManagementType: keyManagementLogsStorageAccount == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyManagementType: keyManagementGalleryImageVersions == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
     keyExpirationInDays: keyExpirationInDays
     location: computeLocation
     tags: tags
     deploymentSuffix: deploymentSuffix
-    storageKeyNames: [logsStorageEncryptionKeyName]
-    storageIdentityName: logsStorageEncryptionIdentityName
-  }
-  dependsOn: [imageBuildRg]
-}
-
-// * Logging * //
-
-module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = if (collectCustomizationLogs) {
-  name: '${depPrefix}Logs-StorageAccount-${deploymentSuffix}'
-  scope: resourceGroup(imageBuildResourceGroupName)
-  params: {
-    #disable-next-line BCP335
-    name: logStorageAccountName
-    location: computeLocation
-    allowCrossTenantReplication: false
-    allowSharedKeyAccess: false
-    requireInfrastructureEncryption: true
-    kind: 'StorageV2'
-    publicNetworkAccess: logStorageAccountNetworkAccess == 'PrivateEndpoint' ? 'Disabled' : 'Enabled'
-    networkAcls: logStorageAccountNetworkAccess == 'PrivateEndpoint'
-      ? {
-          bypass: 'None'
-          defaultAction: 'Deny'
-        }
-      : logStorageAccountNetworkAccess == 'ServiceEndpoint'
-          ? {
-              bypass: 'None'
-              defaultAction: 'Deny'
-              virtualNetworkRules: [
-                {
-                  id: subnetResourceId
-                  action: 'Allow'
-                }
-              ]
-            }
-          : {
-              bypass: 'None'
-              defaultAction: 'Allow'
-            }
-    sasExpirationPeriod: '180.00:00:00'
-    skuName: 'Standard_LRS'
-    encryptionKeyVaultUri: keyManagementLogsStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)
-      ? 'https://${last(split(encryptionKeyVaultResourceId, '/'))}.vault.${environment().suffixes.keyvaultDns}/'
-      : null
-    encryptionKeyName: keyManagementLogsStorageAccount != 'MicrosoftManaged' ? logsStorageEncryptionKeyName : null
-    encryptionUserAssignedIdentityResourceId: keyManagementLogsStorageAccount != 'MicrosoftManaged'
-      ? resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', logsStorageEncryptionIdentityName)
-      : null
-    tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
-  }
-  dependsOn: [
-    imageBuildRg
-    logsStorageCmk
-  ]
-}
-
-module logsStorageContainer '../../.common/bicepModules/storage/storageAccounts/blobServices/containers/deploy.bicep' = if (collectCustomizationLogs) {
-  name: '${depPrefix}Logs-BlobContainer-${deploymentSuffix}'
-  scope: resourceGroup(imageBuildResourceGroupName)
-  params: {
-    storageAccountName: logStorageAccountName
-    name: logContainerName
-    publicAccess: 'None'
-  }
-  dependsOn: [logsStorageAccount]
-}
-
-module logsStorageLifecyclePolicy '../../.common/bicepModules/storage/storageAccounts/managementPolicies/deploy.bicep' = if (collectCustomizationLogs) {
-  name: '${depPrefix}Logs-Storage-LifecyclePolicy-${deploymentSuffix}'
-  scope: resourceGroup(imageBuildResourceGroupName)
-  params: {
-    storageAccountName: logStorageAccountName
-    rules: [
-      {
-        enabled: true
-        name: 'Delete Blobs after 7 days'
-        type: 'Lifecycle'
-        definition: {
-          actions: {
-            baseBlob: {
-              delete: {
-                daysAfterModificationGreaterThan: 7
-              }
-            }
-          }
-          filters: {
-            blobTypes: ['blockBlob', 'appendBlob']
-          }
-        }
-      }
-    ]
-  }
-  dependsOn: [logsStorageAccount]
-}
-
-module logsStoragePrivateEndpoint '../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (collectCustomizationLogs && logStorageAccountNetworkAccess == 'PrivateEndpoint' && !empty(privateEndpointSubnetResourceId)) {
-  name: '${depPrefix}Logs-Storage-PE-${deploymentSuffix}'
-  scope: resourceGroup(imageBuildResourceGroupName)
-  params: {
-    name: privateEndpointName
-    customNetworkInterfaceName: customNetworkInterfaceName
-    location: computeLocation
-    subnetResourceId: privateEndpointSubnetResourceId
-    privateLinkServiceId: logsStorageAccount!.outputs.resourceId
-    groupId: 'blob'
-    privateDNSZoneIds: !empty(blobPrivateDnsZoneResourceId) ? [blobPrivateDnsZoneResourceId] : []
-    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+    keyName: galleryDiskEncryptionKeyName
+    diskEncryptionSetName: galleryDiskEncryptionSetName
   }
 }
 
@@ -752,7 +664,6 @@ module orchestrationVm '../../.common/bicepModules/compute/virtualMachines/deplo
   }
   dependsOn: [
     imageBuildRg
-    roleAssignmentContributorBuildRg
   ]
 }
 
@@ -860,8 +771,8 @@ module generalizeImageVM 'modules/generalizeVm.bicep' = {
     logBlobContainerUri: logContainerUri
     orchestrationVmName: orchestrationVm.outputs.name
     userAssignedIdentityClientId: empty(userAssignedIdentityResourceId)
-          ? userAssignedIdentity!.outputs.clientId
-          : existingUserAssignedIdentity!.properties.clientId
+      ? userAssignedIdentity!.outputs.clientId
+      : existingUserAssignedIdentity!.properties.clientId
   }
   dependsOn: [
     customizeImage
@@ -877,7 +788,7 @@ module captureImage 'modules/captureImage.bicep' = {
     depPrefix: depPrefix
     hyperVGeneration: galleryImageDefinitionHyperVGeneration
     imageBuildResourceGroupName: imageBuildResourceGroupName
-    imageDefinitionSecurityType: galleryImageDefinitionSecurityType
+    imageDefinitionSecurityType: effectiveGalleryImageDefinitionSecurityType
     imageName: !empty(imageDefinitionResourceId)
       ? last(split(imageDefinitionResourceId, '/'))
       : imageDefinition!.outputs.name
@@ -885,11 +796,14 @@ module captureImage 'modules/captureImage.bicep' = {
     imageVersionDefaultStorageAccountType: imageVersionDefaultStorageAccountType
     imageVersionExcludeFromLatest: imageVersionExcludeFromLatest
     imageVersionName: imageVersionName
-    imageVersionReplicationRegions: imageVersionReplicationRegions
+    imageVersionReplicationRegions: imageVersionReplicationRegionsWithEncryption
     imageVersionEndOfLifeDate: imageVersionEndOfLifeDate
     location: computeLocation
     tags: tags
     deploymentSuffix: deploymentSuffix
+    diskEncryptionSetId: effectiveGalleryDiskEncryptionSetResourceId
+    confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType
+    secureVMDiskEncryptionSetId: effectiveGallerySecureVMDiskEncryptionSetResourceId
     virtualMachineResourceId: imageVm.outputs.resourceId
   }
   dependsOn: [
@@ -917,7 +831,7 @@ module removeImageBuildResources '../../.common/bicepModules/compute/virtualMach
           ? userAssignedIdentity!.outputs.clientId
           : existingUserAssignedIdentity!.properties.clientId
       }
-      { name: 'ImageResourceId', value: contains(galleryImageDefinitionSecurityType, 'Supported') ? captureImage.outputs.managedImageId : '' }
+      { name: 'ImageResourceId', value: contains(effectiveGalleryImageDefinitionSecurityType, 'Supported') ? captureImage.outputs.managedImageId : '' }
       { name: 'ImageVmResourceId', value: imageVm.outputs.resourceId }
       { name: 'ManagementVmResourceId', value: orchestrationVm.outputs.resourceId }
     ]

@@ -44,10 +44,6 @@ param dedicatedHostResourceId string
 param deployDiskAccessPolicy bool
 @description('Required. When true, creates a new DiskAccess resource to enforce managed disk network access restrictions.')
 param deployDiskAccessResource bool
-@description('Required. Client ID of the deployment user-assigned identity. Used by Run Command scripts that authenticate during deployment.')
-param deploymentUserAssignedIdentityClientId string
-@description('Required. Name of the temporary deployment VM used for domain join preparation and confidential VM key operations.')
-param deploymentVirtualMachineName string
 @description('Required. Password for the domain join service account.')
 @secure()
 param domainJoinUserPassword string
@@ -80,8 +76,6 @@ param hasNvidiaGpu bool
 param nvidiaDriverVersion string
 @description('Required. Resource ID of the Key Vault containing Customer Managed Keys for disk encryption set configuration.')
 param encryptionKeyVaultResourceId string
-@description('Required. URI of the Key Vault (e.g. "https://kv-avd-enc-xxxx.vault.azure.net/") for CMK disk encryption set references.')
-param encryptionKeyVaultUri string
 @description('Optional. Resource ID of a pre-existing DiskAccess resource. Used instead of creating a new resource when deployDiskAccessResource is false.')
 param existingDiskAccessResourceId string
 @description('Optional. Resource ID of a pre-existing Disk Encryption Set. When provided, bypasses inline DES creation.')
@@ -130,10 +124,6 @@ param keyExpirationInDays int
 param keyManagementDisks string
 @description('Required. Azure region where session host VMs and compute resources are deployed.')
 param location string
-@description('Required. Resource ID of the Log Analytics workspace for Azure Monitor diagnostics and AVD Insights.')
-param logAnalyticsWorkspaceResourceId string
-@description('Required. When true, creates private endpoints for supported resources such as Key Vaults and storage accounts.')
-param privateEndpoint bool
 @description('Required. Name convention string for private endpoint resources, containing RESOURCETYPE, SUBRESOURCE, and RESOURCE placeholders.')
 param privateEndpointNameConv string
 @description('Required. Name convention string for private endpoint network interface cards.')
@@ -148,12 +138,8 @@ param networkInterfaceNameConv string
 param osDiskNameConv string
 @description('Required. Distinguished name of the Active Directory OU for session host computer accounts (e.g. "OU=AVD,DC=contoso,DC=com"). Leave empty for Entra ID join.')
 param ouPath string
-@description('Required. When true, this is a pooled (shared, multi-session) host pool. When false, personal (dedicated) assignment.')
-param pooledHostPool bool
 @description('Required. When true, deploys a Recovery Services Vault and configures daily VM backup for session hosts.')
 param recoveryServices bool
-@description('Required. Name of the temporary deployment resource group used to host the deployment VM.')
-param resourceGroupDeployment string
 @description('Required. Name of the resource group where session host VMs and compute resources are deployed.')
 param resourceGroupHosts string
 @description('Required. When true, enables Secure Boot on session host VMs as part of Trusted Launch or Confidential VM security configuration.')
@@ -337,7 +323,7 @@ resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-
   name: last(split(artifactsUserAssignedIdentityResourceId, '/'))
 }
 
-module availabilitySets '../../../../.common/bicepModules/compute/availabilitySets/deploy.bicep' = [for i in range(0, availabilitySetsCount): if (pooledHostPool && availability == 'AvailabilitySets') {
+module availabilitySets '../../../../.common/bicepModules/compute/availabilitySets/deploy.bicep' = [for i in range(0, availabilitySetsCount): if (availability == 'AvailabilitySets') {
   name: 'AvailabilitySet-${padLeft((i + availabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
@@ -441,22 +427,17 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
   ]
 }]
 
-/* Disabled temporarily until we can figure out why protected Items fail via ARM/Bicep.
-module protectedItems_Vm 'modules/protectedItems.bicep' = [for i in range(1, sessionHostBatchCount): if (recoveryServices && (deploymentType != 'SessionHostsOnly' || !empty(existingRecoveryServicesVaultResourceId))) {
+module protectedItems_Vm '../operations/vmBackupItems.bicep' = [for i in range(1, sessionHostBatchCount): if (recoveryServices && !empty(existingRecoveryServicesVaultResourceId)) {
   name: 'BackupProtectedItems-VirtualMachines-${i-1}-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupHosts)
+  scope: resourceGroup(split(existingRecoveryServicesVaultResourceId, '/')[4])
   params: {
+    hostPoolResourceId: hostPoolResourceId
     policyName: 'AvdPolicyVm'
     recoveryServicesVaultName: last(split(existingRecoveryServicesVaultResourceId, '/'))
-    sessionHostCount: i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment
-    sessionHostIndex: i == 1 ? sessionHostIndex : ((i - 1) * maxVMsPerDeployment) + sessionHostIndex
-    virtualMachineNamePrefix: virtualMachineNamePrefix
+    resourceGroupHosts: resourceGroupHosts
+    virtualMachineNames: virtualMachines[i-1].outputs.virtualMachineNames
   }
-  dependsOn: [
-    virtualMachines[i-1]
-  ]
 }]
-*/
 
 module getFlattenedVmNamesArray 'modules/flattenVirtualMachineNames.bicep' = {
   name: 'Flatten-VirtualMachine-Names-${deploymentSuffix}'

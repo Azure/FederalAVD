@@ -300,7 +300,7 @@ If zones already exist, provide their resource IDs:
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\networking.bicep" `
+  -TemplateFile ".\networking.json" `
   -deployVnet $true `
   -deployVnetResourceGroup $true `
   -vnetResourceGroupName "rg-avd-networking-usgv" `
@@ -316,7 +316,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\networking.bicep" `
+  -TemplateFile ".\networking.json" `
   -deployVnet $true `
   -deployVnetResourceGroup $true `
   -vnetResourceGroupName "rg-avd-networking-usgv" `
@@ -338,7 +338,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\networking.bicep" `
+  -TemplateFile ".\networking.json" `
   -deployVnet $true `
   -deployVnetResourceGroup $true `
   -vnetResourceGroupName "rg-avd-networking-usgv" `
@@ -356,7 +356,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\networking.bicep" `
+  -TemplateFile ".\networking.json" `
   -deployVnet $true `
   -deployVnetResourceGroup $true `
   -vnetResourceGroupName "rg-avd-networking-usgv" `
@@ -376,7 +376,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\networking.bicep" `
+  -TemplateFile ".\networking.json" `
   -TemplateParameterFile ".\parameters\prod.networking.parameters.json" `
   -Name "avd-networking-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
@@ -386,7 +386,7 @@ New-AzSubscriptionDeployment `
 ```bash
 az deployment sub create \
   --location usgovvirginia \
-  --template-file ./networking.bicep \
+  --template-file ./networking.json \
   --parameters \
     deployVnet=true \
     deployVnetResourceGroup=true \

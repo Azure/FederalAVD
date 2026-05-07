@@ -655,22 +655,18 @@ var deploymentSuffix = startsWith(deployment().name, 'Microsoft.Template-')
   ? substring(deployment().name, 19, 14)
   : timeStamp
 
-var controlPlaneSubscription = empty(controlPlaneSubscriptionId)
+var effectiveControlPlaneSubscription = empty(controlPlaneSubscriptionId)
   ? subscription().subscriptionId
   : controlPlaneSubscriptionId
-var monitoringSubscription = empty(monitoringSubscriptionId) ? subscription().subscriptionId : monitoringSubscriptionId
-var hostsSubscription = subscription().subscriptionId
-var deploymentSubscription = subscription().subscriptionId
-var managementSubscription = subscription().subscriptionId
-var storageSubscription = subscription().subscriptionId
+var effectiveMonitoringSubscription = empty(monitoringSubscriptionId) ? subscription().subscriptionId : monitoringSubscriptionId
 
-var rbacSubs = union([controlPlaneSubscription], [hostsSubscription])
+var rbacSubs = union([effectiveControlPlaneSubscription], [subscription().subscriptionId])
 
 var globalFeedRegion = !empty(globalFeedPrivateEndpointSubnetResourceId)
   ? avdPrivateLinkGlobalFeedNetwork.?location
   : ''
 var virtualMachinesRegion = vmVirtualNetwork.location
-var controlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
+var effectiveControlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
 
 var createDeploymentVm = deploymentType != 'SessionHostsOnly' && (deployFSLogixStorage || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName))
 
@@ -888,11 +884,11 @@ var deployDiskAccessResource = contains(hostPoolType, 'Personal') && recoverySer
 
 // Custom Tags for Host Pool
 var hostsResourceGroupIdTag = {
-  hostsResourceGroupId: '/subscriptions/${hostsSubscription}/resourceGroups/${resourceNames.outputs.resourceGroupHosts}'
+  hostsResourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceNames.outputs.resourceGroupHosts}'
 }
 var storageResourceGroupIdTag = deployFSLogixStorage
   ? {
-      storageResourceGroupId: '/subscriptions/${storageSubscription}/resourceGroups/${resourceNames.outputs.resourceGroupStorage}'
+      storageResourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceNames.outputs.resourceGroupStorage}'
     }
   : {}
 
@@ -953,7 +949,7 @@ module resourceNames 'modules/resourceNames.bicep' = {
     fslogixStorageCustomPrefix: fslogixStorageCustomPrefix
     identifier: identifier
     index: index
-    controlPlaneRegion: controlPlaneRegion
+    controlPlaneRegion: effectiveControlPlaneRegion
     globalFeedRegion: globalFeedRegion!
     virtualMachinesRegion: virtualMachinesRegion
     nameConvResTypeAtEnd: nameConvResTypeAtEnd
@@ -963,7 +959,6 @@ module resourceNames 'modules/resourceNames.bicep' = {
 
 // Resource Groups
 module deploymentResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (createDeploymentVm) {
-  scope: subscription(deploymentSubscription)
   name: 'Resource-Group-Deployment-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
@@ -976,7 +971,7 @@ module deploymentResourceGroup '../../.common/bicepModules/resources/resourceGro
 
 module monitoringResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType == 'Complete' && enableMonitoring) {
   name: 'Resource-Group-Monitoring-${deploymentSuffix}'
-  scope: subscription(monitoringSubscription)
+  scope: subscription(effectiveMonitoringSubscription)
   params: {
     location: virtualMachinesRegion
     name: resourceNames.outputs.resourceGroupMonitoring
@@ -986,9 +981,9 @@ module monitoringResourceGroup '../../.common/bicepModules/resources/resourceGro
 
 module controlPlaneResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType == 'Complete' && empty(existingFeedWorkspaceResourceId)) {
   name: 'Resource-Group-Control-Plane-${deploymentSuffix}'
-  scope: subscription(controlPlaneSubscription)
+  scope: subscription(effectiveControlPlaneSubscription)
   params: {
-    location: controlPlaneRegion
+    location: effectiveControlPlaneRegion
     name: resourceNames.outputs.resourceGroupControlPlane
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
@@ -996,7 +991,7 @@ module controlPlaneResourceGroup '../../.common/bicepModules/resources/resourceG
 
 module globalFeedResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) && empty(existingGlobalFeedResourceId)) {
   name: 'Resource-Group-Global-Feed-${deploymentSuffix}'
-  scope: subscription(controlPlaneSubscription)
+  scope: subscription(effectiveControlPlaneSubscription)
   params: {
     location: globalFeedRegion!
     name: resourceNames.outputs.resourceGroupGlobalFeed
@@ -1008,7 +1003,6 @@ module globalFeedResourceGroup '../../.common/bicepModules/resources/resourceGro
 
 module hostsResourceGroupNoTags '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType != 'SessionHostsOnly') {
   name: 'Resource-Group-Hosts-${deploymentSuffix}'
-  scope: subscription(hostsSubscription)
   params: {
     location: virtualMachinesRegion
     name: resourceNames.outputs.resourceGroupHosts
@@ -1018,7 +1012,6 @@ module hostsResourceGroupNoTags '../../.common/bicepModules/resources/resourceGr
 
 module hostsResourceGroupWithTags '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType != 'SessionHostsOnly') {
   name: 'Resource-Group-Hosts-Tags-${deploymentSuffix}'
-  scope: subscription(hostsSubscription)
   params: {
     location: virtualMachinesRegion
     name: resourceNames.outputs.resourceGroupHosts
@@ -1035,7 +1028,6 @@ module hostsResourceGroupWithTags '../../.common/bicepModules/resources/resource
 
 module operationsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults || (deploymentType == 'Complete' && recoveryServices)) {
   name: 'Resource-Group-Operations-${deploymentSuffix}'
-  scope: subscription(managementSubscription)
   params: {
     location: virtualMachinesRegion
     name: resourceNames.outputs.resourceGroupOperations
@@ -1045,7 +1037,6 @@ module operationsResourceGroup '../../.common/bicepModules/resources/resourceGro
 
 module storageResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
   name: 'Resource-Group-FSLogix-Storage-${deploymentSuffix}'
-  scope: subscription(storageSubscription)
   params: {
     location: virtualMachinesRegion
     name: resourceNames.outputs.resourceGroupStorage
@@ -1071,7 +1062,6 @@ module rbac 'modules/rbac/rbac.bicep' = [
 // Deployment VM for Prerequisites
 module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeploymentVm) {
   name: 'Deployment-Prereqs-${deploymentSuffix}'
-  scope: subscription(deploymentSubscription)
   params: {
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
     deploymentSuffix: deploymentSuffix
@@ -1132,9 +1122,8 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
 // KeyVaults: Inline Key Vault creation — only runs when Security KVs were not provided.
 // For all-in-one portal deployments: deploys encryption KV when CMK is requested, secrets KV when deploySecretsKeyVault=true.
 // For Security-first deployments: skipped entirely because encryptionKeyVaultResourceId will be non-empty.
-module keyVaults 'modules/operations/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
+module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
   name: 'KeyVaults-${deploymentSuffix}'
-  scope: subscription(managementSubscription)
   params: {
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
     deploymentSuffix: deploymentSuffix
@@ -1156,7 +1145,7 @@ module keyVaults 'modules/operations/keyVaults/keyVaults.bicep' = if (deployKeyV
     privateEndpoint: deployPrivateEndpoints
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
-    resourceGroupSecurity: resourceNames.outputs.resourceGroupOperations
+    resourceGroupName: resourceNames.outputs.resourceGroupOperations
     tags: tags
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
@@ -1171,7 +1160,6 @@ module keyVaults 'modules/operations/keyVaults/keyVaults.bicep' = if (deployKeyV
 // Confidential VM disk encryption is excluded here; it still uses a run command inside sessionHosts.
 module diskCmk 'modules/diskCmk/diskCmk.bicep' = if (deployTopLevelDiskCmk) {
   name: 'Disk-CMK-${deploymentSuffix}'
-  scope: subscription(hostsSubscription)
   params: {
     resourceGroupName: resourceNames.outputs.resourceGroupHosts
     keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
@@ -1194,7 +1182,6 @@ module diskCmk 'modules/diskCmk/diskCmk.bicep' = if (deployTopLevelDiskCmk) {
 // Runs in parallel with monitoring/controlPlane so role assignments propagate before azureFiles deploys.
 module storageCmk 'modules/storageCmk/storageCmk.bicep' = if (deployTopLevelStorageCmk) {
   name: 'Storage-CMK-${deploymentSuffix}'
-  scope: subscription(storageSubscription)
   params: {
     resourceGroupName: resourceNames.outputs.resourceGroupStorage
     keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
@@ -1216,7 +1203,7 @@ module storageCmk 'modules/storageCmk/storageCmk.bicep' = if (deployTopLevelStor
 // Monitoring: Log Analytics Workspace, Data Collection Endpoint, Data Collection Rules, Automation Account
 module monitoring 'modules/monitoring/monitoring.bicep' = if (deploymentType == 'Complete' && enableMonitoring) {
   name: 'Monitoring-${deploymentSuffix}'
-  scope: subscription(monitoringSubscription)
+  scope: subscription(effectiveMonitoringSubscription)
   params: {
     azureMonitorPrivateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
     dataCollectionEndpointName: resourceNames.outputs.dataCollectionEndpointName
@@ -1234,12 +1221,12 @@ module monitoring 'modules/monitoring/monitoring.bicep' = if (deploymentType == 
 // AVD Control Plane Resources: workspace, host pool, and desktop application group
 module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentType != 'SessionHostsOnly') {
   name: 'ControlPlane-${deploymentSuffix}'
-  scope: subscription(controlPlaneSubscription)
+  scope: subscription(effectiveControlPlaneSubscription)
   params: {
     appGroupSecurityGroups: map(appGroupSecurityGroups, group => group.id)
     avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
     avdPrivateLinkPrivateRoutes: avdPrivateLinkPrivateRoutes
-    controlPlaneRegion: controlPlaneRegion
+    controlPlaneRegion: effectiveControlPlaneRegion
     deployScalingPlan: deployScalingPlan
     deploymentSuffix: deploymentSuffix
     deploymentUserAssignedIdentityClientId: createDeploymentVm
@@ -1295,13 +1282,14 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
 // Deployed BEFORE fslogix and sessionHosts so the vault is ready for both phases to register items.
 var deployRecoveryServices = recoveryServices && deploymentType != 'SessionHostsOnly' && (deploymentType == 'Complete' || !empty(existingRecoveryServicesVaultResourceId))
 
-module recoveryServicesModule 'modules/operations/recoveryServices/recoveryServices.bicep' = if (deployRecoveryServices) {
+module recoveryServicesModule 'modules/operations/recoveryServices.bicep' = if (deployRecoveryServices) {
   name: 'RecoveryServices-${deploymentSuffix}'
-  scope: subscription(managementSubscription)
   params: {
     createVault: deploymentType == 'Complete'
     existingRecoveryServicesVaultResourceId: existingRecoveryServicesVaultResourceId
-    vaultName: resourceNames.outputs.recoveryServicesVaultName
+    vaultName: contains(hostPoolType, 'Personal')
+      ? resourceNames.outputs.recoveryServicesVaultNames.vms
+      : resourceNames.outputs.recoveryServicesVaultNames.fslogix
     resourceGroupOperations: resourceNames.outputs.resourceGroupOperations
     location: virtualMachinesRegion
     storageRedundancy: recoveryServicesVaultStorageRedundancy
@@ -1337,9 +1325,8 @@ var effectiveRecoveryServicesVaultResourceId = recoveryServices
   : ''
 
 // FSLogix Storage
-module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionHostsOnly' && deployFSLogixStorage) {
+module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionHostsOnly' && deployFSLogixStorage && split(hostPoolType, ' ')[0] == 'Pooled') {
   name: 'FSLogix-${deploymentSuffix}'
-  scope: subscription(storageSubscription)
   params: {
     activeDirectoryConnection: existingSharedActiveDirectoryConnection
     appUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
@@ -1412,7 +1399,6 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
 // Session Hosts
 module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
   name: 'Session-Hosts-${deploymentSuffix}'
-  scope: subscription(hostsSubscription)
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
     agentDownloadUrl: agentDownloadUrl
@@ -1444,10 +1430,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     deployDiskAccessPolicy: deployDiskAccessPolicy
     deployDiskAccessResource: deployDiskAccessResource
     deploymentType: deploymentType
-    deploymentUserAssignedIdentityClientId: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
-      : ''
-    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
     diskAccessName: resourceNames.outputs.diskAccessName
     diskEncryptionSetNames: resourceNames.outputs.diskEncryptionSetNames
     diskSizeGB: diskSizeGB
@@ -1476,7 +1458,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
       ? resourceNames.outputs.encryptionKeyNames.confidentialVMs
       : resourceNames.outputs.encryptionKeyNames.virtualMachines
     encryptionKeyVaultResourceId: effectiveEncryptionKeyVaultResourceId
-    encryptionKeyVaultUri: encryptionKeyVaultUri
     existingDiskAccessResourceId: existingDiskAccessResourceId
     existingDiskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     existingRecoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
@@ -1506,27 +1487,17 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     intuneEnrollment: intuneEnrollment
     keyExpirationInDays: keyExpirationInDays
     keyManagementDisks: keyManagementDisks
-    logAnalyticsWorkspaceResourceId: enableMonitoring
-      ? (deploymentType == 'Complete'
-          ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
-          : existingLogAnalyticsWorkspaceResourceId)
-      : ''
     location: virtualMachinesRegion
     osDiskNameConv: resourceNames.outputs.virtualMachineDiskNameConv
     ouPath: vmOUPath
-    pooledHostPool: split(hostPoolType, ' ')[0] == 'Pooled' ? true : false
-    privateEndpoint: deployPrivateEndpoints
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     networkInterfaceNameConv: resourceNames.outputs.virtualMachineNicNameConv
-    recoveryServices: deploymentType != 'SessionHostsOnly'
-      ? (contains(hostPoolType, 'Personal') ? recoveryServices : false)
-      : recoveryServices
+    recoveryServices: contains(hostPoolType, 'Personal') ? recoveryServices : false
     resourceGroupHosts: deploymentType != 'SessionHostsOnly'
       ? resourceNames.outputs.resourceGroupHosts
       : existingHostsResourceGroupName
-    resourceGroupDeployment: resourceNames.outputs.resourceGroupDeployment
     securityType: securityType
     secureBootEnabled: secureBootEnabled
     sessionHostCount: sessionHostCount
@@ -1564,7 +1535,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
 // Clean Up Deployment VM and Role Assignments
 module cleanUp 'modules/cleanUp/cleanUp.bicep' = if (createDeploymentVm) {
   name: 'CleanUp-${deploymentSuffix}'
-  scope: subscription(deploymentSubscription)
   params: {
     location: virtualMachinesRegion
     deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''

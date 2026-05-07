@@ -3,44 +3,13 @@ targetScope = 'subscription'
 // Deploys the Azure Virtual Desktop image management infrastructure: storage account for build artifacts,
 // Azure Compute Gallery, and image definitions. Required before running any custom image build.
 
-@minLength(3)
-@maxLength(63)
-@description('Optional. Blob Container Name. Must start with a letter. Can only contain lower case letters, numbers, and -.')
-param artifactsContainerName string = 'artifacts'
-
 param location string = deployment().location
-
-@description('Optional. Custom workload identifier to use when naming the resource group and resources. If not specified then "image-management" will be used. All resources will be created using the Cloud Adoption Framework naming convention.')
-param customIdentifier string = ''
 
 @description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
 param nameConvResTypeAtEnd bool = false
 
-@description('Optional. Resource Id of an existing Log Analytics Workspace to which diagnostic logs will be sent.')
-param logAnalyticsWorkspaceResourceId string = ''
-
 @description('Optional. Remote Location to which an Image Gallery will be deployed to support regional disaster recovery.')
 param remoteLocation string = ''
-
-@allowed([
-  'Standard_LRS'
-  'Standard_GRS'
-  'Standard_RAGRS'
-  'Standard_ZRS'
-  'Premium_LRS'
-  'Premium_ZRS'
-  'Standard_GZRS'
-  'Standard_RAGZRS'
-])
-@description('Optional. Storage Account Sku Name.')
-param storageSkuName string = 'Standard_LRS'
-
-@allowed([
-  'Hot'
-  'Cool'
-])
-@description('Conditional. Required if the Storage Account kind is set to BlobStorage. The access tier is used for billing. The "Premium" access tier is the default value for premium block blobs storage account type and it cannot be changed for the premium block blobs storage account type.')
-param storageAccessTier string = 'Hot'
 
 @description('Optional. Indicates whether the storage account permits requests to be authorized with the account access key via Shared Key. If false, then all requests, including shared access signatures, must be authorized with Azure Active Directory (Azure AD). The default value is null, which is equivalent to true.')
 param storageAllowSharedKeyAccess bool = false
@@ -48,18 +17,16 @@ param storageAllowSharedKeyAccess bool = false
 @description('Optional. The Resource Id of the Private DNS Zone where the Private Endpoint (if configured) A record will be registered.')
 param azureBlobPrivateDnsZoneResourceId string = ''
 
-@description('Optional. Whether or not public network access is allowed for this resource. To limit public network access, use the "PermittedIPs" and/or the "ServiceEndpointSubnetResourceIds" parameters.')
+@description('Optional. Network access configuration for the artifacts storage account.')
 @allowed([
-  'Enabled'
-  'Disabled'
+  'PublicEndpoint'
+  'PrivateEndpoint'
+  'ServiceEndpoint'
 ])
-param storagePublicNetworkAccess string = 'Enabled'
+param storageNetworkAccess string = 'PublicEndpoint'
 
 @description('Optional. The ResourceId of the private endpoint subnet.')
 param privateEndpointSubnetResourceId string = ''
-
-@description('Optional. The SAS expiration period. DD.HH:MM:SS.')
-param storageSASExpirationPeriod string = '180.00:00:00'
 
 @description('Optional. Array of permitted IPs or IP CIDR blocks that can access the storage account using the Public Endpoint.')
 param storagePermittedIPs array = []
@@ -68,21 +35,16 @@ param storagePermittedIPs array = []
 param storageServiceEndpointSubnetResourceIds array = []
 
 @description('Optional. The tags by resource type to apply to the resources created by this template.')
-/*
-tags = {
-  'Microsoft.Compute/computeGalleries': {
-    'Purpose': 'Image Management'
-  },
-  'Microsoft.Storage/storageAccounts': {
-    'Purpose': 'Image Management'
-  }
-}
-*/
 param tags object = {}
+
+// ── Artifacts Storage Account ─────────────────────────────────────────────────
+
+@description('Optional. Deploy the artifacts storage account and managed identity. Set to false when you only need the gallery and all image customizations use fully-qualified public URIs or an externally-managed storage account.')
+param deployArtifactsStorageAccount bool = true
 
 // ── Customer-Managed Key parameters for the artifacts storage account ─────────
 
-@description('Optional. Key management solution for the artifacts storage account.')
+@description('Optional. Key management solution for both the artifacts and build logs storage accounts.')
 @allowed([
   'MicrosoftManaged'
   'CustomerManaged'
@@ -90,12 +52,17 @@ param tags object = {}
 ])
 param keyManagementStorageAccount string = 'MicrosoftManaged'
 
-@description('Optional. Resource ID of the Key Vault for CMK encryption of the artifacts storage account. Required when keyManagementStorageAccount is CustomerManaged or CustomerManagedHSM.')
+@description('Optional. Resource ID of the Key Vault for CMK encryption. Required when keyManagementStorageAccount is CustomerManaged or CustomerManagedHSM.')
 param encryptionKeyVaultResourceId string = ''
 
 @description('Optional. Number of days before the CMK expires and auto-rotates.')
 @minValue(7)
 param keyExpirationInDays int = 180
+
+// ── Build Logs Storage Account ────────────────────────────────────────────────
+
+@description('Optional. Deploy a dedicated storage account in the imageManagement resource group to persist image build customization logs. When enabled, pass the `buildLogsStorageAccountResourceId` output to imageBuild as `existingLogStorageAccountResourceId`.')
+param deployBuildLogsStorageAccount bool = false
 
 @description('DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddhhmm')
@@ -106,9 +73,7 @@ var cloud = toLower(environment().name)
 #disable-next-line BCP329
 var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
 #disable-next-line BCP329
-var varRemoteLocation = !empty(remoteLocation)
-  ? (startsWith(cloud, 'us') ? substring(remoteLocation, 5, length(remoteLocation) - 5) : remoteLocation)
-  : ''
+var varRemoteLocation = !empty(remoteLocation) ? (startsWith(cloud, 'us') ? substring(remoteLocation, 5, length(remoteLocation) - 5) : remoteLocation) : ''
 var locations = startsWith(cloud, 'us')
   ? (loadJsonContent('../../.common/data/locations.json')).other
   : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
@@ -117,7 +82,7 @@ var nameConv_Suffix_withoutResType = 'LOCATION'
 var nameConvSuffix = nameConvResTypeAtEnd
   ? '${nameConv_Suffix_withoutResType}-RESOURCETYPE'
   : nameConv_Suffix_withoutResType
-var identifier = empty(customIdentifier) ? 'image-management' : customIdentifier
+var identifier = 'image-management'
 var nameConv_ImageManagement_ResGroup = nameConvResTypeAtEnd
   ? 'avd-${identifier}-${nameConvSuffix}'
   : 'RESOURCETYPE-avd-${identifier}-${nameConvSuffix}'
@@ -138,7 +103,7 @@ var remoteResourceGroupName = !empty(remoteLocation)
       resourceAbbreviations.resourceGroups
     )
   : ''
-var blobContainerName = replace(replace(toLower(artifactsContainerName), '_', '-'), ' ', '-')
+var artifactsBlobContainerName = 'artifacts'
 var galleryName = replace(
   replace(
     replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.computeGalleries),
@@ -170,31 +135,64 @@ var privateEndpointNameConv = replace(
   'RESOURCETYPE',
   resourceAbbreviations.privateEndpoints
 )
-var privateEndpointName = replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'), 'RESOURCE', storageName)
+var privateEndpointName = replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'), 'RESOURCE', artifactsStorageAccountName)
 var customNetworkInterfaceName = nameConvResTypeAtEnd
   ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}'
   : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
-var storageName = take(
+var artifactsStorageAccountName = take(
   '${resourceAbbreviations.storageAccounts}imageassets${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
   24
 )
+var sasExpirationPeriod = '180.00:00:00' // 180 days
 var storageKind = 'StorageV2'
+var storageSkuName = 'Standard_LRS'
+var storageAccessTier = 'Hot'
 var ipRules = [for ip in storagePermittedIPs: { value: ip, action: 'Allow' }]
 var virtualNetworkRules = [for subnetId in storageServiceEndpointSubnetResourceIds: { id: subnetId, action: 'Allow' }]
 
-var storageEncryptionKeyName = 'key-imagemgmt-storage-${timeStamp}'
+// PrivateEndpoint with no IP rules disables public access entirely.
+// PrivateEndpoint with IP rules keeps public enabled so those IPs can still reach the account alongside PE traffic.
+var storagePublicNetworkAccess = storageNetworkAccess == 'PrivateEndpoint' && empty(ipRules) ? 'Disabled' : 'Enabled'
+// Deny-by-default whenever any restrictions are in place; open only when no rules are configured.
+var storageNetworkAcls = storageNetworkAccess == 'PrivateEndpoint'
+  ? empty(ipRules)
+      ? { bypass: 'None', defaultAction: 'Deny' }
+      : { bypass: 'None', defaultAction: 'Deny', ipRules: ipRules }
+  : storageNetworkAccess == 'ServiceEndpoint'
+      ? { bypass: 'None', defaultAction: 'Deny', ipRules: ipRules, virtualNetworkRules: virtualNetworkRules }
+      : !empty(ipRules)
+          ? { bypass: 'None', defaultAction: 'Deny', ipRules: ipRules }
+          : { bypass: 'None', defaultAction: 'Allow' }
+
+var storageEncryptionKeyName = '${identifier}-encryption-key-imagemgmt-storage'
+var logsStorageEncryptionKeyName = '${identifier}-encryption-key-imagemgmt-logstorage'
+// Single encryption UAI shared by both storage accounts.
+// Result: uai-avd-image-management-encryption-{loc} (nameConvResTypeAtEnd=false)
+//         avd-image-management-encryption-{loc}-uai  (nameConvResTypeAtEnd=true)
 var storageEncryptionIdentityName = replace(
-  replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
+  replace(
+    replace(nameConv_ImageManagement_Resources, identifier, '${identifier}-encryption'),
+    'RESOURCETYPE',
+    resourceAbbreviations.userAssignedIdentities
+  ),
   'LOCATION',
   locations[varLocation].abbreviation
-) == identityName
-  // Avoid name collision with the artifacts-access UAI by appending '-encryption'
-  ? '${identityName}-encryption'
-  : replace(
-      replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
-      'LOCATION',
-      '${locations[varLocation].abbreviation}-encryption'
-    )
+)
+// Combined key list — only includes keys for storage accounts that are actually being deployed.
+var cmkKeyNames = union(
+  deployArtifactsStorageAccount ? [storageEncryptionKeyName] : [],
+  deployBuildLogsStorageAccount ? [logsStorageEncryptionKeyName] : []
+)
+
+var logsStorageName = take(
+  '${resourceAbbreviations.storageAccounts}imagelogs${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
+  24
+)
+var logsContainerName = 'image-customization-logs'
+var logsPrivateEndpointName = replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'), 'RESOURCE', logsStorageName)
+var logsCustomNetworkInterfaceName = nameConvResTypeAtEnd
+  ? '${logsPrivateEndpointName}-${resourceAbbreviations.networkInterfaces}'
+  : '${resourceAbbreviations.networkInterfaces}-${logsPrivateEndpointName}'
 
 resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: resourceGroupName
@@ -213,7 +211,7 @@ module imageGallery '../../.common/bicepModules/compute/galleries/deploy.bicep' 
   dependsOn: [resourceGroup]
 }
 
-module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
+module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (deployArtifactsStorageAccount || deployBuildLogsStorageAccount) {
   name: 'Managed-Identity-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -224,9 +222,10 @@ module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedI
   dependsOn: [resourceGroup]
 }
 
-// CMK must complete before storage account deployment so the role assignment
+// Single CMK module covering both storage accounts with a shared encryption UAI.
+// CMK must complete before any storage account deployment so the role assignment
 // propagates before the storage PUT includes the CMK reference.
-module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccount != 'MicrosoftManaged') {
+module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccount != 'MicrosoftManaged' && (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)) {
   name: 'Storage-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -236,35 +235,26 @@ module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/custome
     location: location
     tags: tags
     deploymentSuffix: timeStamp
-    storageKeyNames: [storageEncryptionKeyName]
+    storageKeyNames: cmkKeyNames
     storageIdentityName: storageEncryptionIdentityName
   }
   dependsOn: [resourceGroup]
 }
 
-module storageAccount '../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = {
-  name: 'Storage-Account-${timeStamp}'
+module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = if (deployArtifactsStorageAccount) {
+  name: 'Assets-Storage-Account-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
-    name: storageName
+    name: artifactsStorageAccountName
     location: location
     kind: storageKind
     skuName: storageSkuName
     accessTier: storageAccessTier
     allowSharedKeyAccess: storageAllowSharedKeyAccess
+    requireInfrastructureEncryption: true
     publicNetworkAccess: storagePublicNetworkAccess
-    networkAcls: !empty(ipRules) || !empty(storageServiceEndpointSubnetResourceIds)
-      ? {
-          bypass: 'AzureServices'
-          defaultAction: 'Deny'
-          virtualNetworkRules: virtualNetworkRules
-          ipRules: ipRules
-        }
-      : {
-          bypass: 'AzureServices'
-          defaultAction: 'Deny'
-        }
-    sasExpirationPeriod: storageSASExpirationPeriod
+    networkAcls: storageNetworkAcls
+    sasExpirationPeriod: sasExpirationPeriod
     encryptionKeyVaultUri: keyManagementStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)
       ? 'https://${last(split(encryptionKeyVaultResourceId, '/'))}.vault.${environment().suffixes.keyvaultDns}/'
       : ''
@@ -273,20 +263,15 @@ module storageAccount '../../.common/bicepModules/storage/storageAccounts/deploy
       ? resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', storageEncryptionIdentityName)
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
-    diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
-      ? {
-          workspaceId: logAnalyticsWorkspaceResourceId
-        }
-      : null
   }
   dependsOn: [resourceGroup, storageCmk]
 }
 
-module blobService '../../.common/bicepModules/storage/storageAccounts/blobServices/deploy.bicep' = {
-  name: 'Blob-Service-${timeStamp}'
+module assetsBlobService '../../.common/bicepModules/storage/storageAccounts/blobServices/deploy.bicep' = if (deployArtifactsStorageAccount) {
+  name: 'Assets-Blob-Service-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
-    storageAccountName: storageName
+    storageAccountName: artifactsStorageAccountName
     deleteRetentionPolicyEnabled: true
     deleteRetentionPolicyDays: 7
     containerDeleteRetentionPolicyEnabled: true
@@ -294,49 +279,158 @@ module blobService '../../.common/bicepModules/storage/storageAccounts/blobServi
     versioningEnabled: true
     changeFeedEnabled: true
   }
-  dependsOn: [storageAccount]
+  dependsOn: [assetsStorageAccount]
 }
 
-module blobContainer '../../.common/bicepModules/storage/storageAccounts/blobServices/containers/deploy.bicep' = {
-  name: 'Blob-Container-${timeStamp}'
+module assetsBlobContainer '../../.common/bicepModules/storage/storageAccounts/blobServices/containers/deploy.bicep' = if (deployArtifactsStorageAccount) {
+  name: 'Assets-Blob-Container-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
-    storageAccountName: storageName
-    name: blobContainerName
+    storageAccountName: artifactsStorageAccountName
+    name: artifactsBlobContainerName
     publicAccess: 'None'
   }
-  dependsOn: [blobService]
+  dependsOn: [assetsBlobService]
 }
 
-module storagePrivateEndpoint '../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (!empty(privateEndpointSubnetResourceId)) {
-  name: 'Storage-PE-${timeStamp}'
+module assetsStoragePrivateEndpoint '../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deployArtifactsStorageAccount && storageNetworkAccess == 'PrivateEndpoint') {
+  name: 'Assets-Storage-PE-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     name: privateEndpointName
     customNetworkInterfaceName: customNetworkInterfaceName
     location: location
     subnetResourceId: privateEndpointSubnetResourceId
-    privateLinkServiceId: storageAccount.outputs.resourceId
+    privateLinkServiceId: assetsStorageAccount!.outputs.resourceId
     groupId: 'blob'
     privateDNSZoneIds: !empty(azureBlobPrivateDnsZoneResourceId) ? [azureBlobPrivateDnsZoneResourceId] : []
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
   }
 }
 
-module storageBlobReaderAssignment '../../.common/bicepModules/storage/storageAccounts/roleAssignment.bicep' = {
+module assetsStorageBlobReaderAssignment '../../.common/bicepModules/storage/storageAccounts/roleAssignment.bicep' = if (deployArtifactsStorageAccount) {
   name: 'RA-MI-BlobReader-SA-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
-    storageAccountName: storageName
+    storageAccountName: artifactsStorageAccountName
     assignments: [
       {
-        principalId: managedIdentity.outputs.principalId
+        principalId: managedIdentity!.outputs.principalId
         roleDefinitionId: '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1' // Storage Blob Data Reader
         principalType: 'ServicePrincipal'
       }
     ]
   }
-  dependsOn: [storageAccount]
+  dependsOn: [assetsStorageAccount]
+}
+
+// ── Build Logs Storage Account ────────────────────────────────────────────────
+
+module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = if (deployBuildLogsStorageAccount) {
+  name: 'Logs-Storage-Account-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    name: logsStorageName
+    location: location
+    kind: storageKind
+    skuName: storageSkuName
+    accessTier: storageAccessTier
+    allowSharedKeyAccess: storageAllowSharedKeyAccess
+    requireInfrastructureEncryption: true
+    publicNetworkAccess: storagePublicNetworkAccess
+    networkAcls: storageNetworkAcls
+    sasExpirationPeriod: sasExpirationPeriod
+    encryptionKeyVaultUri: keyManagementStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)
+      ? 'https://${last(split(encryptionKeyVaultResourceId, '/'))}.vault.${environment().suffixes.keyvaultDns}/'
+      : ''
+    encryptionKeyName: keyManagementStorageAccount != 'MicrosoftManaged' ? logsStorageEncryptionKeyName : ''
+    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccount != 'MicrosoftManaged'
+      ? resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', storageEncryptionIdentityName)
+      : ''
+    tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
+  }
+  dependsOn: [resourceGroup, storageCmk]
+}
+
+module logsBlobService '../../.common/bicepModules/storage/storageAccounts/blobServices/deploy.bicep' = if (deployBuildLogsStorageAccount) {
+  name: 'Logs-Blob-Service-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    storageAccountName: logsStorageName
+    deleteRetentionPolicyEnabled: false
+    containerDeleteRetentionPolicyEnabled: false
+  }
+  dependsOn: [logsStorageAccount]
+}
+
+module logsStorageBlobContainer '../../.common/bicepModules/storage/storageAccounts/blobServices/containers/deploy.bicep' = if (deployBuildLogsStorageAccount) {
+  name: 'Logs-Blob-Container-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    storageAccountName: logsStorageName
+    name: logsContainerName
+    publicAccess: 'None'
+  }
+  dependsOn: [logsBlobService]
+}
+
+module logsStorageLifecyclePolicy '../../.common/bicepModules/storage/storageAccounts/managementPolicies/deploy.bicep' = if (deployBuildLogsStorageAccount) {
+  name: 'Logs-Storage-LifecyclePolicy-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    storageAccountName: logsStorageName
+    rules: [
+      {
+        enabled: true
+        name: 'Delete Blobs after 7 days'
+        type: 'Lifecycle'
+        definition: {
+          actions: {
+            baseBlob: {
+              delete: {
+                daysAfterModificationGreaterThan: 7
+              }
+            }
+          }
+          filters: {
+            blobTypes: ['blockBlob', 'appendBlob']
+          }
+        }
+      }
+    ]
+  }
+  dependsOn: [logsStorageAccount]
+}
+
+module logsStoragePrivateEndpoint '../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deployBuildLogsStorageAccount && storageNetworkAccess == 'PrivateEndpoint') {
+  name: 'Logs-Storage-PE-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    name: logsPrivateEndpointName
+    customNetworkInterfaceName: logsCustomNetworkInterfaceName
+    location: location
+    subnetResourceId: privateEndpointSubnetResourceId
+    privateLinkServiceId: logsStorageAccount!.outputs.resourceId
+    groupId: 'blob'
+    privateDNSZoneIds: !empty(azureBlobPrivateDnsZoneResourceId) ? [azureBlobPrivateDnsZoneResourceId] : []
+    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+  }
+}
+
+module logsStorageBlobContributorAssignment '../../.common/bicepModules/storage/storageAccounts/roleAssignment.bicep' = if (deployBuildLogsStorageAccount) {
+  name: 'RA-MI-BlobContrib-LogsSA-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    storageAccountName: logsStorageName
+    assignments: [
+      {
+        principalId: managedIdentity!.outputs.principalId
+        roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
+        principalType: 'ServicePrincipal'
+      }
+    ]
+  }
+  dependsOn: [logsStorageAccount]
 }
 
 resource remoteResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = if (!empty(remoteLocation)) {
@@ -356,9 +450,11 @@ module remoteImageGallery '../../.common/bicepModules/compute/galleries/deploy.b
   dependsOn: [remoteResourceGroup]
 }
 
-output storageAccountResourceId string = storageAccount.outputs.resourceId
-output blobContainerName string = blobContainer.outputs.name
-output blobContainerUrl string = 'https://${storageName}.blob.${environment().suffixes.storage}/${blobContainerName}'
-output managedIdentityResourceId string = managedIdentity.outputs.resourceId
-#disable-next-line BCP318
+output artifactsStorageAccountResourceId string = deployArtifactsStorageAccount ? assetsStorageAccount!.outputs.resourceId : ''
+output artifactsBlobContainerName string = deployArtifactsStorageAccount ? assetsBlobContainer!.outputs.name : ''
+output artifactsBlobContainerUrl string = deployArtifactsStorageAccount ? 'https://${artifactsStorageAccountName}.blob.${environment().suffixes.storage}/${artifactsBlobContainerName}' : ''
+output managedIdentityResourceId string = (deployArtifactsStorageAccount || deployBuildLogsStorageAccount) ? managedIdentity!.outputs.resourceId : ''
+output computeGalleryResourceId string = imageGallery!.outputs.resourceId
 output remoteComputeGalleryResourceId string = !empty(remoteLocation) ? remoteImageGallery!.outputs.resourceId : ''
+output buildLogsStorageAccountResourceId string = deployBuildLogsStorageAccount ? logsStorageAccount!.outputs.resourceId : ''
+output buildLogsContainerUri string = deployBuildLogsStorageAccount ? 'https://${logsStorageName}.blob.${environment().suffixes.storage}/${logsContainerName}' : ''
