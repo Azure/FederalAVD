@@ -16,7 +16,7 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 | Component | Description | Documentation |
 | --------- | ----------- | ------------- |
 | 🌐 **Networking** | Virtual network, subnets, NSGs, NAT gateway, hub peering, route tables, private DNS zones | [Quick Start - Networking](docs/quickStart.md#step-0-deploy-networking-infrastructure-greenfield) |
-| 🔒 **Security Prereqs** | Secrets Key Vault (credentials) and Encryption Key Vault (CMK keys) deployed to a shared security resource group. Deploy before host pools when using CMK or pre-provisioned credentials storage. | [Security Prereqs Guide](docs/hostpoolDeployment.md#security-prerequisites-optional) |
+| 🔒 **Security Prereqs** | Secrets Key Vault (credentials) and Encryption Key Vault (CMK keys). Required before image management when using CMK with custom images. Otherwise, Key Vaults are deployed inline during host pool deployment and are idempotent — subsequent host pool deployments referencing the same resource group will reuse them. | [Quick Start - Key Vaults](docs/quickStart.md#step-1-deploy-key-vaults-cmk-with-custom-images) |
 | 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpoolDeployment.md) |
 | 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifactsGuide.md) |
 | 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/imageBuild.md) |
@@ -37,18 +37,19 @@ Ready to deploy? The **[Quick Start Guide](docs/quickStart.md)** walks you throu
 ```mermaid
 graph TD
     A[Start] --> B{Have Existing<br/>VNet?}
-    B -->|No<br/>Greenfield| C[🌐 Deploy<br/>Networking]
-    B -->|Yes| D{Need Custom<br/>Software?}
-    C --> D
-    D -->|Yes| E[📦 Deploy Image<br/>Management]
-    D -->|No| F[Use Marketplace<br/>Image]
-    E --> G{Build<br/>Custom Image?}
-    G -->|Yes<br/>Pre-install| H[🎨 Build Custom<br/>Image]
-    G -->|No<br/>Runtime install| SEC
-    H --> SEC
-    F --> SEC
-    SEC[🔒 Deploy Security<br/>Prereqs - Optional] --> I[🏢 Deploy<br/>Host Pool]
-    I --> J[✅ Complete]
+    B -->|No - Greenfield| C[🌐 Deploy<br/>Networking]
+    B -->|Yes| CUST
+    C --> CUST
+    CUST{Need Custom<br/>Software?} -->|No - Marketplace / PoC<br/>CMK inline available| HP
+    CUST -->|Yes| CMK{Using Customer<br/>Managed Keys?}
+    CMK -->|Yes| KV[🔒 Deploy<br/>Key Vaults]
+    CMK -->|No| IMG
+    KV --> IMG[📦 Deploy Image<br/>Management]
+    IMG --> BUILD{Build Custom<br/>Image?}
+    BUILD -->|Yes<br/>Pre-install| IB[🎨 Build Custom<br/>Image]
+    BUILD -->|No<br/>Runtime install| HP
+    IB --> HP[🏢 Deploy<br/>Host Pool]
+    HP --> J[✅ Complete]
 ```
 
 ### Deployment Methods
@@ -56,8 +57,8 @@ graph TD
 | Component | Blue Button | Template Spec | PowerShell/CLI |
 | --------- | ----------- | ------------- | -------------- |
 | **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Security Prereqs** (Key Vaults) | ❌ | ✅ All clouds | ✅ All clouds |
-| **Image Management** (infrastructure) | ❌ | ✅ All clouds | ✅ All clouds |
+| **Security Prereqs** (Key Vaults) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Image Management** (infrastructure) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
@@ -68,7 +69,7 @@ graph TD
 - Generate parameter files for automation workflows
 - Useful for teams unfamiliar with ARM/Bicep syntax
 - **Only UI option for air-gapped clouds** (Secret/Top Secret)
-- Not available for image management infrastructure Blue Button deployment
+- Not available for image management infrastructure deployment
 
 **👉 [Get Started Now](docs/quickStart.md)** - Complete prerequisites, deployment options, and step-by-step instructions
 

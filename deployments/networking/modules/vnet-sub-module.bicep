@@ -3,7 +3,7 @@ targetScope = 'subscription'
 param deployVnetResourceGroup bool
 param vnetName string
 param vnetAddressPrefixes array
-param hostsSubnet object
+param hostsSubnets array
 param privateEndpointsSubnet object
 param functionAppSubnet object
 param defaultRouting string
@@ -37,7 +37,7 @@ module vnetResources 'vnetResources.bicep' = {
   params: {
     vnetName: vnetName
     vnetAddressPrefixes: vnetAddressPrefixes
-    hostsSubnet: hostsSubnet
+    hostsSubnets: hostsSubnets
     privateEndpointsSubnet: privateEndpointsSubnet
     functionAppSubnet: functionAppSubnet
     defaultRouting: defaultRouting

@@ -21,8 +21,8 @@ param vnetName string = ''
 @description('Conditional. The address prefixes for the virtual network. Required when "deployVnet" is "true".')
 param vnetAddressPrefixes array = []
 
-@description('Conditional. The hosts subnet to create within the virtual network. Required when "deployVnet" is "true".')
-param hostsSubnet object = {}
+@description('Conditional. The hosts subnets to create within the virtual network. Required when "deployVnet" is "true".')
+param hostsSubnets array = []
 
 @description('Optional. The private endpoint subnet to create within the virtual network.')
 param privateEndpointsSubnet object = {}
@@ -225,7 +225,7 @@ module vnetResources 'modules/vnet-sub-module.bicep' = if (deployVnet) {
     includeAvdBypassRoutes: includeAvdBypassRoutes
     deployDDoSNetworkProtection: deployDDoSNetworkProtection
     functionAppSubnet: functionAppSubnet
-    hostsSubnet: hostsSubnet
+    hostsSubnets: hostsSubnets
     hubVnetName: !empty(hubVnetResourceId) ? last(split(hubVnetResourceId, '/')) : ''
     hubVnetResourceGroup: !empty(hubVnetResourceId) ? split(hubVnetResourceId, '/')[4] : ''
     hubVnetSubscriptionId: !empty(hubVnetResourceId) ? split(hubVnetResourceId, '/')[2] : ''

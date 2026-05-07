@@ -323,6 +323,60 @@
 									"visible": "[and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation)]"
 								},
 								{
+									"name": "additionalHostsSubnetsTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('virtualNetwork').deployVnet]",
+									"options": {
+										"text": "Optionally, add additional Session Host subnets below. Each subnet will share the same NSG and routing configuration as the primary subnet."
+									}
+								},
+								{
+									"name": "additionalHostsSubnets",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Additional Session Host Subnets",
+									"label": "Additional Session Host Subnets",
+									"visible": "[steps('virtualNetwork').deployVnet]",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 0,
+												"max": 10
+											}
+										},
+										"columns": [
+											{
+												"id": "name",
+												"header": "Subnet Name",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "Example: sn-hosts-2",
+													"constraints": {
+														"required": true,
+														"regex": "^[a-zA-Z0-9][a-zA-Z0-9\\-_]{0,78}[a-zA-Z0-9]$",
+														"validationMessage": "Subnet name must be 2-80 characters, alphanumeric, hyphens, or underscores."
+													}
+												}
+											},
+											{
+												"id": "addressPrefix",
+												"header": "Address Prefix (CIDR)",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "Example: 10.0.1.0/24",
+													"constraints": {
+														"required": true,
+														"regex": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\/(3[0-2]|[1-2]?[0-9])$",
+														"validationMessage": "Must be a valid CIDR notation, e.g. 10.0.1.0/24."
+													}
+												}
+											}
+										]
+									}
+								},
+								{
 									"name": "defaultRouteType",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Default Route Type",
@@ -785,7 +839,7 @@
 				"vnetResourceGroupName": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.resourceGroup.value.name, '')]",
 				"vnetName": "[if(steps('virtualNetwork').deployVnet, if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.name, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.name, steps('virtualNetwork').deploy.vnetMinimum.name)), '')]",
 				"vnetAddressPrefixes": "[if(steps('virtualNetwork').deployVnet, if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.addressPrefixes, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.addressPrefixes, steps('virtualNetwork').deploy.vnetMinimum.addressPrefixes)), '')]",
-				"hostsSubnet": "[if(steps('virtualNetwork').deployVnet, if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.subnets.subnet1, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.subnets.subnet1, steps('virtualNetwork').deploy.vnetMinimum.subnets.subnet1)), parse('{}'))]",
+				"hostsSubnets": "[if(steps('virtualNetwork').deployVnet, concat(createArray(if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.subnets.subnet1, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.subnets.subnet1, steps('virtualNetwork').deploy.vnetMinimum.subnets.subnet1))), steps('virtualNetwork').deploy.additionalHostsSubnets), parse('[]'))]",
 				"privateEndpointsSubnet": "[if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.subnets.subnet2, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.subnets.subnet2, parse('{}')))]",
 				"functionAppSubnet": "[if(steps('virtualNetwork').deployVnet, if(steps('basics').features.storageQuotaAutomation, steps('virtualNetwork').deploy.vnetFunctionApp.subnets.subnet3, parse('{}')), parse('{}'))]",
 				"defaultRouting": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.defaultRouteType, 'nat')]",

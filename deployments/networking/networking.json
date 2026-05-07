@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "12202553156310130504"
+      "templateHash": "9604343173989412809"
     }
   },
   "parameters": {
@@ -51,11 +51,11 @@
         "description": "Conditional. The address prefixes for the virtual network. Required when \"deployVnet\" is \"true\"."
       }
     },
-    "hostsSubnet": {
-      "type": "object",
-      "defaultValue": {},
+    "hostsSubnets": {
+      "type": "array",
+      "defaultValue": [],
       "metadata": {
-        "description": "Conditional. The hosts subnet to create within the virtual network. Required when \"deployVnet\" is \"true\"."
+        "description": "Conditional. The hosts subnets to create within the virtual network. Required when \"deployVnet\" is \"true\"."
       }
     },
     "privateEndpointsSubnet": {
@@ -955,8 +955,8 @@
           "functionAppSubnet": {
             "value": "[parameters('functionAppSubnet')]"
           },
-          "hostsSubnet": {
-            "value": "[parameters('hostsSubnet')]"
+          "hostsSubnets": {
+            "value": "[parameters('hostsSubnets')]"
           },
           "hubVnetName": "[if(not(empty(parameters('hubVnetResourceId'))), createObject('value', last(split(parameters('hubVnetResourceId'), '/'))), createObject('value', ''))]",
           "hubVnetResourceGroup": "[if(not(empty(parameters('hubVnetResourceId'))), createObject('value', split(parameters('hubVnetResourceId'), '/')[4]), createObject('value', ''))]",
@@ -1007,7 +1007,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "3307760736060248777"
+              "templateHash": "9097439381493076644"
             }
           },
           "parameters": {
@@ -1020,8 +1020,8 @@
             "vnetAddressPrefixes": {
               "type": "array"
             },
-            "hostsSubnet": {
-              "type": "object"
+            "hostsSubnets": {
+              "type": "array"
             },
             "privateEndpointsSubnet": {
               "type": "object"
@@ -1110,8 +1110,8 @@
                   "vnetAddressPrefixes": {
                     "value": "[parameters('vnetAddressPrefixes')]"
                   },
-                  "hostsSubnet": {
-                    "value": "[parameters('hostsSubnet')]"
+                  "hostsSubnets": {
+                    "value": "[parameters('hostsSubnets')]"
                   },
                   "privateEndpointsSubnet": {
                     "value": "[parameters('privateEndpointsSubnet')]"
@@ -1178,7 +1178,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.42.1.51946",
-                      "templateHash": "6823220818579635374"
+                      "templateHash": "17003606359457088971"
                     }
                   },
                   "parameters": {
@@ -1188,8 +1188,8 @@
                     "vnetAddressPrefixes": {
                       "type": "array"
                     },
-                    "hostsSubnet": {
-                      "type": "object"
+                    "hostsSubnets": {
+                      "type": "array"
                     },
                     "privateEndpointsSubnet": {
                       "type": "object"
@@ -1250,6 +1250,23 @@
                     }
                   },
                   "variables": {
+                    "copy": [
+                      {
+                        "name": "snetHosts",
+                        "count": "[length(parameters('hostsSubnets'))]",
+                        "input": {
+                          "name": "[parameters('hostsSubnets')[copyIndex('snetHosts')].name]",
+                          "properties": {
+                            "addressPrefix": "[parameters('hostsSubnets')[copyIndex('snetHosts')].addressPrefix]",
+                            "natGateway": "[if(equals(parameters('defaultRouting'), 'nat'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null())]",
+                            "routeTable": "[if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
+                            "networkSecurityGroup": {
+                              "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]"
+                            }
+                          }
+                        }
+                      }
+                    ],
                     "azureCloud": "[environment().name]",
                     "baseUDRs": [
                       {
@@ -1264,19 +1281,6 @@
                     "commercialCloudUDRs": "[if(equals(variables('azureCloud'), 'AzureCloud'), createArray(createObject('name', 'DirectRouteToKMS01', 'properties', createObject('addressPrefix', '20.118.99.224/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet')), createObject('name', 'DirectRouteToKMS02', 'properties', createObject('addressPrefix', '40.83.235.53/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet')), createObject('name', 'DirectRouteToKMS03', 'properties', createObject('addressPrefix', '23.102.135.246/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet'))), createArray())]",
                     "governmentCloudUDRs": "[if(equals(variables('azureCloud'), 'AzureUSGovernment'), createArray(createObject('name', 'AVDStunTraffic', 'properties', createObject('addressPrefix', '20.202.0.0/16', 'hasBgpOverride', true(), 'nextHopType', 'Internet')), createObject('name', 'DirectRouteToKMS01', 'properties', createObject('addressPrefix', '23.97.0.13/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet')), createObject('name', 'DirectRouteToKMS02', 'properties', createObject('addressPrefix', '52.126.105.2/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet'))), createArray())]",
                     "defaultUDRs": "[union(variables('baseUDRs'), variables('commercialCloudUDRs'), variables('governmentCloudUDRs'))]",
-                    "snetHosts": [
-                      {
-                        "name": "[parameters('hostsSubnet').name]",
-                        "properties": {
-                          "addressPrefix": "[parameters('hostsSubnet').addressPrefix]",
-                          "natGateway": "[if(equals(parameters('defaultRouting'), 'nat'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null())]",
-                          "routeTable": "[if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
-                          "networkSecurityGroup": {
-                            "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]"
-                          }
-                        }
-                      }
-                    ],
                     "snetPrivateEndpoints": "[if(not(empty(parameters('privateEndpointsSubnet'))), createArray(createObject('name', parameters('privateEndpointsSubnet').name, 'properties', createObject('addressPrefix', parameters('privateEndpointsSubnet').addressPrefix))), createArray())]",
                     "snetFunctionApp": "[if(not(empty(parameters('functionAppSubnet'))), createArray(createObject('name', parameters('functionAppSubnet').name, 'properties', createObject('addressPrefix', parameters('functionAppSubnet').addressPrefix, 'delegations', createArray(createObject('name', 'Microsoft.Web/serverFarms', 'properties', createObject('ServiceName', 'Microsoft.Web/serverFarms')))))), createArray())]",
                     "subnets": "[union(variables('snetHosts'), variables('snetPrivateEndpoints'), variables('snetFunctionApp'))]"

@@ -62,7 +62,7 @@ Before deploying a host pool, ensure you have completed these prerequisites from
 
 For production deployments or any deployment using Customer Managed Keys (CMK), deploy the Key Vaults first:
 
-**🔒 [Key Vaults Deployment Guide](quickStart.md#step-2a-deploy-key-vaults-recommended-for-production)**
+**🔒 [Key Vaults Deployment Guide](quickStart.md#step-1-deploy-key-vaults-cmk-with-custom-images)**
 
 The key vault deployment creates `rg-avd-operations-{loc}` with:
 

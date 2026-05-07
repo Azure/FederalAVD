@@ -11,19 +11,19 @@ Get your Azure Virtual Desktop environment deployed quickly with this step-by-st
 ```mermaid
 graph TD
     A[Start] --> B{Have Existing<br/>VNet?}
-    B -->|No<br/>Greenfield| C[🌐 Step 0: Deploy<br/>Networking]
-    B -->|Yes| SEC
-    C --> SEC
-    SEC{Need Key Vaults?<br/>Customer Managed Keys} -->|Yes| KV[🔒 Step 1: Deploy<br/>Key Vaults]
-    SEC -->|No| D
-    KV --> D{Need Custom<br/>Software?}
-    D -->|Yes| E[📦 Step 2: Deploy Image Management<br/>+ Upload Artifacts]
-    D -->|No| I
-    E --> G{Build<br/>Custom Image?}
-    G -->|Yes<br/>Pre-install software| H[🎨 Step 3: Build<br/>Custom Image]
-    G -->|No<br/>Install at runtime| I
-    H --> I[🏢 Step 4: Deploy<br/>Host Pool]
-    I --> J[✅ Complete]
+    B -->|No - Greenfield| C[🌐 Step 0: Deploy<br/>Networking]
+    B -->|Yes| CUST
+    C --> CUST
+    CUST{Need Custom Software<br/>or Images?} -->|No - Marketplace / PoC<br/>CMK available inline| HP
+    CUST -->|Yes| CMK{Using Customer<br/>Managed Keys?}
+    CMK -->|Yes| KV[🔒 Step 1: Deploy<br/>Key Vaults]
+    CMK -->|No| IMG
+    KV --> IMG[📦 Step 2: Deploy Image<br/>Management + Artifacts]
+    IMG --> BUILD{Build Custom<br/>Image?}
+    BUILD -->|Yes<br/>Pre-install software| IB[🎨 Step 3: Build<br/>Custom Image]
+    BUILD -->|No<br/>Install at runtime| HP
+    IB --> HP[🏢 Step 4: Deploy<br/>Host Pool]
+    HP --> J[✅ Complete]
 ```
 
 **Decision Guide:**
@@ -33,10 +33,11 @@ graph TD
 
 **Then choose your deployment approach:**
 
-- **Simple PoC with marketplace images, no CMK?** → Jump directly to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool)
-- **Using CMK (disk, storage, or image management) or pre-provisioned credentials KV?** → [Step 1: Deploy Key Vaults](#step-1-deploy-key-vaults-recommended-for-production) first, then continue
-- **Need custom software, install at session host runtime?** → [Step 2](#step-2-deploy-image-management-resources) → [Step 4](#step-4-deploy-host-pool)
-- **Want pre-configured images with software pre-installed?** → [Step 2](#step-2-deploy-image-management-resources) → [Step 3](#step-3-build-custom-image-optional) → [Step 4](#step-4-deploy-host-pool)
+- **PoC or marketplace images only?** → Jump directly to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool) *(CMK optional — deployed inline, no Key Vault pre-deploy needed)*
+- **Need custom software on session hosts, no CMK?** → [Step 2: Image Management](#step-2-deploy-image-management-resources) first, then:
+  - **Install at runtime only?** → [Step 4: Host Pool](#step-4-deploy-host-pool)
+  - **Want pre-built images?** → [Step 3: Build Custom Image](#step-3-build-custom-image-optional) → [Step 4: Host Pool](#step-4-deploy-host-pool)
+- **Need custom software with CMK?** → [Step 1: Key Vaults](#step-1-deploy-key-vaults-cmk-with-custom-images) first (required before image management can encrypt), then [Step 2: Image Management](#step-2-deploy-image-management-resources) → [Step 3: Build Image](#step-3-build-custom-image-optional) → [Step 4: Host Pool](#step-4-deploy-host-pool)
 
 ---
 
@@ -92,7 +93,7 @@ Before deploying, ensure you have these essentials ready:
 - 🔒 **Domain Services** for hybrid identity (AD DS or Entra Domain Services)
 - 🔒 **Domain Join Account** with permissions ([setup guide](hostpoolDeployment.md#domain-permissions))
 - 🔒 **Entra Kerberos** for Azure Files - [Hybrid Guide](entraKerberosHybrid.md) | [Cloud-Only Guide](entraKerberosCloudOnly.md)
-- 🔒 **Key Vaults** (Secrets & Encryption) for CMK or pre-provisioned credentials — see [Step 1](#step-1-deploy-key-vaults-recommended-for-production)
+- 🔒 **Key Vaults** (Secrets & Encryption) — only needed upfront when using CMK with custom images; marketplace-only deployments can use inline KV deployment — see [Step 1](#step-1-deploy-key-vaults-cmk-with-custom-images)
 
 <details>
 <summary><b>📖 Detailed Prerequisites & Setup Guides</b></summary>
@@ -308,23 +309,23 @@ New-AzDeployment `
 
 ---
 
-## Step 1: Deploy Key Vaults (Recommended for Production)
+## Step 1: Deploy Key Vaults (CMK with Custom Images)
 
-**⏭️ Skip this step if:** You are not using Customer Managed Keys (CMK) and do not need a pre-provisioned credentials Key Vault for your host pool.
+**⏭️ Skip this step if:** You don't need custom images with CMK. Key Vaults deployed inline during host pool deployment are idempotent — subsequent deployments to the same resource group reuse them, so you don't need to pre-deploy for sharing across host pools.
 
-**Recommended for:** Any production deployment using CMK for disk or storage encryption, or any deployment that references a pre-existing credentials Key Vault.
+**Required when:** Using Customer Managed Keys with custom image management — the key vault must exist before deploying image management so the storage account and compute gallery can be encrypted.
 
 The Key Vaults deployment creates a **dedicated operations resource group** (`rg-avd-operations-{loc}`) containing:
 
 | Resource | Name Pattern | Purpose |
-|----------|-------------|---------|
+|----------|-------------|-------|
 | **Secrets Key Vault** | `kv-avd-sec-{unique}-{loc}` | Stores VM admin credentials and domain join credentials referenced by the host pool deployment |
 | **Encryption Key Vault** | `kv-avd-enc-{unique}-{loc}` | Stores CMK encryption keys for disk encryption sets and FSLogix storage accounts (Premium SKU, purge-protected) |
 
-> **Why deploy this separately?** Deploying Key Vaults before the host pool lets you:
+> **Why deploy this separately?** Deploying Key Vaults before image management lets you:
+> - Encrypt the compute gallery and artifacts storage account with CMK from the start
 > - Pre-populate credential secrets so the portal form can reference them
-> - Give your security team time to review KV access policies before host pool deployment begins
-> - Use the same KVs across multiple host pool deployments (e.g., multiple personas sharing one encryption KV)
+> - Give your security team time to review KV access policies before deployment begins
 
 ### Deploy Key Vaults
 
@@ -365,16 +366,15 @@ cd C:\repos\FederalAVD\tools
 
 Then navigate to **Template Specs** → **AVD Security** → **Deploy**.
 
-### Pass Outputs to Host Pool
+### Pass Outputs to Image Management & Host Pool
 
-After deployment, note the Key Vault resource IDs from the deployment outputs and pass them to the host pool:
+After deployment, note the Key Vault resource IDs from the deployment outputs:
 
-| Security Output | Host Pool Parameter |
-|----------------|---------------------|
-| `secretsKeyVaultResourceId` | `credentialsKeyVaultResourceId` |
-| `encryptionKeyVaultResourceId` | `encryptionKeyVaultResourceId` |
-
-> **If using the portal form:** The host pool UI includes a resource selector to pick your existing encryption Key Vault. When `encryptionKeyVaultResourceId` is provided, the host pool skips inline KV creation entirely.
+| Security Output | Used In |
+|----------------|--------|
+| `encryptionKeyVaultResourceId` | Image Management deployment (CMK for storage/gallery) |
+| `secretsKeyVaultResourceId` | Host pool deployment (`credentialsKeyVaultResourceId`) |
+| `encryptionKeyVaultResourceId` | Host pool deployment (`encryptionKeyVaultResourceId`) |
 
 > **Required RBAC on the Encryption KV** for the deploying identity: `Key Vault Crypto Officer` — needed to create encryption keys during host pool deployment. This applies whether the KV was pre-deployed here or created inline by the host pool `Complete` deployment type, because creating a vault does not grant the deploying identity any key operation rights (ARM control plane ≠ Key Vault data plane). This role can be removed after initial deployment once key rotation is handled separately. See the [full explanation and Confidential VM exception](hostpoolDeployment.md#security-prerequisites-optional).
 
@@ -398,9 +398,6 @@ Deploys the compute gallery, artifacts storage account, and managed identity.
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageManagement.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FuiFormDefinition.json)
 
 **Option 2: Deploy-ImageManagement.ps1 Script** — All clouds (recommended for PowerShell)
-
-```powershell
-Connect-AzAccount -Environment AzureUSGovernment
 Set-AzContext -Subscription "<subscription-id>"
 
 cd deployments
@@ -592,4 +589,4 @@ New-AzDeployment -Location "usgovvirginia" -Name $deploymentName -TemplateFile "
 
 ---
 
-**Ready to deploy? Start with [Step 1](#step-1-deploy-image-management-resources) or [jump to Step 3](#step-3-deploy-host-pool) for marketplace images!**
+**Ready to deploy? Start with [Step 2](#step-2-deploy-image-management-resources) or [jump to Step 4](#step-4-deploy-host-pool) for marketplace images!**

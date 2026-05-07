@@ -1,6 +1,6 @@
 param vnetName string
 param vnetAddressPrefixes array
-param hostsSubnet object
+param hostsSubnets array
 param privateEndpointsSubnet object
 param functionAppSubnet object
 param defaultRouting string
@@ -96,27 +96,25 @@ var governmentCloudUDRs = (azureCloud == 'AzureUSGovernment')
 
 var defaultUDRs = union(baseUDRs, commercialCloudUDRs, governmentCloudUDRs)
 
-var snetHosts = [
-  {
-    name: hostsSubnet.name
-    properties: {
-      addressPrefix: hostsSubnet.addressPrefix
-      natGateway: defaultRouting == 'nat'
-        ? {
-            id: natGateway.id
-          }
-        : null
-      routeTable: defaultRouting != 'nat'
-        ? {
-            id: routeTable.id
-          }
-        : null
-      networkSecurityGroup: {
-        id: nsg.id
-      }
+var snetHosts = [for subnet in hostsSubnets: {
+  name: subnet.name
+  properties: {
+    addressPrefix: subnet.addressPrefix
+    natGateway: defaultRouting == 'nat'
+      ? {
+          id: natGateway.id
+        }
+      : null
+    routeTable: defaultRouting != 'nat'
+      ? {
+          id: routeTable.id
+        }
+      : null
+    networkSecurityGroup: {
+      id: nsg.id
     }
   }
-]
+}]
 
 var snetPrivateEndpoints = !empty(privateEndpointsSubnet)
   ? [
