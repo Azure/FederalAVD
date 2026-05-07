@@ -148,7 +148,7 @@ Connect-AzAccount -Environment <YourEnvironment>  # AzureUSGovernment, etc.
 Set-AzContext -Subscription "<subscription-id>"
 
 # Create all template specs
-cd C:\repos\FederalAVD\deployments
+cd C:\repos\FederalAVD\tools
 .\New-TemplateSpecs.ps1 -Location "<region>"
 ```
 
@@ -262,6 +262,7 @@ New-AzDeployment `
 1. Create networking template spec:
 
    ```powershell
+   cd C:\repos\FederalAVD\tools
    .\New-TemplateSpecs.ps1 -Location "usgovvirginia" -createNetwork $true -createCustomImage $false -createHostPool $false -CreateAddOns $false
    ```
 
@@ -358,6 +359,7 @@ New-AzDeployment `
 
 ```powershell
 # Create the Template Spec (one-time)
+cd C:\repos\FederalAVD\tools
 .\New-TemplateSpecs.ps1 -Location "usgovvirginia"
 ```
 

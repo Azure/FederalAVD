@@ -133,7 +133,7 @@ Choose the deployment method that best fits your workflow:
 1. **Create Template Spec** (one-time setup):
 
    ```powershell
-   cd C:\repos\FederalAVD\deployments
+   cd C:\repos\FederalAVD\tools
    .\New-TemplateSpecs.ps1 -Location "East US 2"
    ```
 
@@ -805,7 +805,7 @@ Connect-AzAccount -Environment AzureCloud  # or AzureUSGovernment
 Set-AzContext -Subscription "<subscription-id>"
 
 # Create template specs
-cd C:\repos\FederalAVD\deployments
+cd C:\repos\FederalAVD\tools
 .\New-TemplateSpecs.ps1 -Location "eastus2"
 ```
 

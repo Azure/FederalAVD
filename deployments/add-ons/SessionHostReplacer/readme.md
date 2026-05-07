@@ -475,10 +475,10 @@ For more information, see [Template Specs | Microsoft Learn](https://learn.micro
    Set-AzContext -Subscription <subscriptionID>
    ```
 
-3. Navigate to the deployments folder and execute the script with the add-ons flag:
+3. Navigate to the tools folder and execute the script with the add-ons flag:
 
    ```powershell
-   cd deployments
+   cd tools
    .\New-TemplateSpecs.ps1 -ResourceGroupName <resource-group-name> -Location <location> -CreateAddOns $true
    ```
 

@@ -4,9 +4,10 @@ param (
     [Parameter(Mandatory=$true)]
     [string]$Location,
     [bool]$createResourceGroup = $true,
-    [bool]$createKeyVault = $true,
-    [bool]$createNetwork = $true,
+    [bool]$createKeyVault = $false,
+    [bool]$createNetwork = $false,
     [bool]$createCustomImage = $true,
+    [bool]$createImageManagement = $false,
     [bool]$createHostPool = $true,
     [bool]$CreateAddOns = $true,
     [bool]$nameConvResTypeAtEnd = $false,
@@ -68,8 +69,8 @@ if ($createKeyVault) {
         Name = 'avd-keyvaults'
         DisplayName = 'AVD Key Vaults'
         Description = 'Deploys key vaults to support Azure Virtual Desktop'
-        TemplateFile = Join-Path $PSScriptRoot -ChildPath 'keyVaults\keyVaults.json'
-        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath 'keyVaults\uiFormDefinition.json'
+        TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\keyVaults\keyVaults.json'
+        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath '..\deployments\keyVaults\uiFormDefinition.json'
     }
 }
 
@@ -78,8 +79,8 @@ if ($createNetwork) {
         Name = 'avd-networking'
         DisplayName = 'AVD Network Spoke'
         Description = 'Deploys the networking components to support Azure Virtual Desktop'
-        TemplateFile = Join-Path $PSScriptRoot -ChildPath 'networking\networking.json'
-        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath 'networking\uiFormDefinition.json'
+        TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\networking\networking.json'
+        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath '..\deployments\networking\uiFormDefinition.json'
     }
 }
 
@@ -88,8 +89,18 @@ if ($createCustomImage) {
         Name = 'avd-custom-image'
         DisplayName = 'AVD Custom Image'
         Description = 'Generates a custom image for Azure Virtual Desktop'
-        TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath 'imageBuild\imageBuild.json'
-        UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath 'imageBuild\uiFormDefinition.json'
+        TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\imageBuild\imageBuild.json'
+        UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\imageBuild\uiFormDefinition.json'
+    }
+}
+
+if ($createImageManagement) {
+    $templateSpecs += @{
+        Name = 'avd-image-management'
+        DisplayName = 'AVD Image Management'
+        Description = 'Deploys the image management resources for Azure Virtual Desktop'
+        TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\imageManagement\imageManagement.json'
+        UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\imageManagement\uiFormDefinition.json'
     }
 }
 
@@ -98,8 +109,8 @@ if ($createHostPool) {
         Name = 'avd-hostpool'
         DisplayName = 'AVD Host Pool'
         Description = 'Deploys an Azure Virtual Desktop Host Pool'
-        TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath 'hostpools\hostpool.json'
-        UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath 'hostpools\uiFormDefinition.json'
+        TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\hostpools\hostpool.json'
+        UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\hostpools\uiFormDefinition.json'
     }
 }
 
@@ -116,8 +127,8 @@ if ($CreateAddOns) {
             Name = $addOn.Name
             DisplayName = $addOn.DisplayName
             Description = $addOn.Description
-            TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath "add-ons\$($addOn.FolderName)\main.json"
-            UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath "add-ons\$($addOn.FolderName)\uiFormDefinition.json"
+            TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath "..\deployments\add-ons\$($addOn.FolderName)\main.json"
+            UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath "..\deployments\add-ons\$($addOn.FolderName)\uiFormDefinition.json"
         }
     }
 }

@@ -1282,7 +1282,7 @@ This sets the `endOfLifeDate` property, visible in Azure Portal and queryable vi
 
 - [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) - Upload artifacts to storage
 - [Invoke-ImageBuilds.ps1](../Invoke-ImageBuilds.ps1) - Batch build multiple images
-- [New-TemplateSpecs.ps1](../New-TemplateSpecs.ps1) - Create template specs
+- [New-TemplateSpecs.ps1](../../tools/New-TemplateSpecs.ps1) - Create template specs
 
 ### Community
 

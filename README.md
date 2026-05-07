@@ -57,7 +57,7 @@ graph TD
 | --------- | ----------- | ------------- | -------------- |
 | **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Security Prereqs** (Key Vaults) | ❌ | ✅ All clouds | ✅ All clouds |
-| **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
+| **Image Management** (infrastructure) | ❌ | ✅ All clouds | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
@@ -68,7 +68,7 @@ graph TD
 - Generate parameter files for automation workflows
 - Useful for teams unfamiliar with ARM/Bicep syntax
 - **Only UI option for air-gapped clouds** (Secret/Top Secret)
-- Not available for image management infrastructure deployment
+- Not available for image management infrastructure Blue Button deployment
 
 **👉 [Get Started Now](docs/quickStart.md)** - Complete prerequisites, deployment options, and step-by-step instructions
 
@@ -139,10 +139,10 @@ Optional add-ons extend the base AVD deployment with advanced lifecycle manageme
 
 | Add-On | Purpose | Documentation |
 |--------|---------|---------------|
-| 🔄 **Session Host Replacer** | Automates rolling replacement of session hosts when new images are available with zero-downtime updates | [Session Host Replacer](deployments/add-ons/SessionHostReplacer/readme.md) |
-| 📊 **Storage Quota Manager** | Monitors and automatically increases Azure Files Premium share quotas for FSLogix storage | [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/readme.md) |
-| 🔑 **Update Storage Keys** | Updates FSLogix storage account keys on session hosts for Entra ID-only deployments | [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md) |
-| 📝 **Run Commands on VMs** | Execute scripts on selected virtual machines from a resource group | [Run Commands](deployments/add-ons/RunCommandsOnVms/readme.md) |
+| 🔄 **Session Host Replacer** | Automates rolling replacement of session hosts when new images are available with zero-downtime updates | [Session Host Replacer](deployments/add-ons/SessionHostReplacer/README.md) |
+| 📊 **Storage Quota Manager** | Monitors and automatically increases Azure Files Premium share quotas for FSLogix storage | [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/README.md) |
+| 🔑 **Update Storage Keys** | Updates FSLogix storage account keys on session hosts for Entra ID-only deployments | [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/README.md) |
+| 📝 **Run Commands on VMs** | Execute scripts on selected virtual machines from a resource group | [Run Commands](deployments/add-ons/RunCommandsOnVms/README.md) |
 
 ---
 
@@ -207,10 +207,10 @@ Support for multiple identity configurations to meet organizational requirements
 
 ### Add-Ons
 
-- 🔄 [Session Host Replacer](deployments/add-ons/SessionHostReplacer/readme.md)
-- 📊 [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/readme.md)
-- 🔑 [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md)
-- 📝 [Run Commands on VMs](deployments/add-ons/RunCommandsOnVms/readme.md)
+- 🔄 [Session Host Replacer](deployments/add-ons/SessionHostReplacer/README.md)
+- 📊 [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/README.md)
+- 🔑 [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/README.md)
+- 📝 [Run Commands on VMs](deployments/add-ons/RunCommandsOnVms/README.md)
 
 ---
 
