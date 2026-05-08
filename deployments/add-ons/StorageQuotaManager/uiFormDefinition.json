@@ -479,33 +479,30 @@
                 "allowedValues": "[map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
                 "required": true
               }
-            }
-          ]
-        },
-        {
-          "name": "permittedIPsSection",
-          "type": "Microsoft.Common.Section",
-          "label": "Permitted IP Addresses",
-          "elements": [
+            },
             {
               "name": "permittedIPsInfo",
               "type": "Microsoft.Common.TextBlock",
               "options": {
                 "text": "Permitted IP Addresses / CIDR Ranges (optional)",
                 "style": "Heading"
-              }
+              },
+              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
             },
             {
               "name": "permittedIPsDescription",
               "type": "Microsoft.Common.TextBlock",
               "options": {
                 "text": "Restrict public access to PaaS resources (storage accounts, function app) to specific IP addresses or CIDR ranges. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. Leave empty to allow all public traffic (or rely solely on private endpoints if deployed)."
-              }
+              },
+              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
             },
             {
               "name": "permittedIPs",
               "type": "Microsoft.Common.EditableGrid",
+              "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
               "label": "Permitted IP Addresses / CIDR Ranges",
+              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
               "constraints": {
                 "width": "Full",
                 "rows": {
@@ -533,7 +530,7 @@
               }
             }
           ]
-        },
+        },        
         {
           "name": "monitoring",
           "label": "Monitoring",
@@ -797,7 +794,7 @@
         "privateEndpointSubnetResourceId": "[if(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').functionAppPrivateEndpointSubnet, '')]",
         "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureBlobPrivateDnsZone, '')]",
         "azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureFunctionAppPrivateDnsZone, '')]",
-        "permittedIPs": "[map(steps('infrastructure').permittedIPsSection.permittedIPs, (item) => item.ipAddress)]",
+        "permittedIPs": "[if(steps('infrastructure').configureZeroTrustNetworking, map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), parse('[]'))]",
         "logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
         "privateLinkScopeResourceId": "[if(steps('monitoring').enableAMPLS, steps('monitoring').privateLinkScope.id, '')]",
         "functionAppNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",

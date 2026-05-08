@@ -196,8 +196,8 @@
 					]
 				},
 				{
-					"name": "zeroTrust",
-					"label": "Zero Trust Networking",
+					"name": "networking",
+					"label": "Networking",
 					"elements": [
 						{
 							"name": "infoBox",
@@ -217,12 +217,12 @@
 							"name": "networkSection",
 							"type": "Microsoft.Common.Section",
 							"label": "Network Configuration",
-							"visible": "[steps('zeroTrust').privateEndpoint]",
+							"visible": "[steps('networking').privateEndpoint]",
 							"elements": [
 								{
 									"name": "virtualNetworksApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(steps('zeroTrust').privateEndpoint, not(empty(steps('basics').scope.subscription)))]",
+									"condition": "[and(steps('networking').privateEndpoint, not(empty(steps('basics').scope.subscription)))]",
 									"request": {
 										"method": "GET",
 										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
@@ -236,16 +236,16 @@
 									"toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the selected region are shown.",
 									"constraints": {
 										"required": true,
-										"allowedValues": "[map(filter(steps('zeroTrust').networkSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+										"allowedValues": "[map(filter(steps('networking').networkSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
 									}
 								},
 								{
 									"name": "subnetsApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('zeroTrust').networkSection.virtualNetwork))]",
+									"condition": "[not(empty(steps('networking').networkSection.virtualNetwork))]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('zeroTrust').networkSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+										"path": "[concat(steps('networking').networkSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
 									}
 								},
 								{
@@ -255,7 +255,7 @@
 									"toolTip": "Select the subnet for Key Vault private endpoints. Must not have any service delegations.",
 									"constraints": {
 										"required": true,
-										"allowedValues": "[map(filter(steps('zeroTrust').networkSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+										"allowedValues": "[map(filter(steps('networking').networkSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
 									}
 								}
 							]
@@ -264,7 +264,7 @@
 							"name": "privateDnsSection",
 							"type": "Microsoft.Common.Section",
 							"label": "Private DNS Zone",
-							"visible": "[steps('zeroTrust').privateEndpoint]",
+							"visible": "[steps('networking').privateEndpoint]",
 							"elements": [
 								{
 									"name": "enablePrivateDNSIntegration",
@@ -276,82 +276,84 @@
 								{
 									"name": "privateDNSZonesSubscription",
 									"type": "Microsoft.Common.DropDown",
-									"visible": "[steps('zeroTrust').privateDnsSection.enablePrivateDNSIntegration]",
+									"visible": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
 									"label": "Private DNS Zone Subscription",
 									"defaultValue": "[steps('basics').scope.subscription.displayName]",
 									"toolTip": "Select the subscription that contains your Private DNS Zones. In hub-and-spoke topologies this is typically the hub/connectivity subscription.",
 									"constraints": {
-										"required": "[steps('zeroTrust').privateDnsSection.enablePrivateDNSIntegration]",
+										"required": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
 									}
 								},
 								{
 									"name": "privateDNSZonesApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(steps('zeroTrust').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('zeroTrust').privateDnsSection.privateDNSZonesSubscription)))]",
+									"condition": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('networking').privateDnsSection.privateDNSZonesSubscription)))]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('zeroTrust').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+										"path": "[concat(steps('networking').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
 									}
 								},
 								{
 									"name": "keyVaultPrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
-									"visible": "[steps('zeroTrust').privateDnsSection.enablePrivateDNSIntegration]",
+									"visible": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
 									"label": "Key Vault Private DNS Zone",
 									"multiLine": true,
-									"defaultValue": "[first(map(filter(steps('zeroTrust').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => zone.name))]",
+									"defaultValue": "[first(map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => zone.name))]",
 									"toolTip": "Select the Private DNS Zone for Key Vault (privatelink.vaultcore.azure.net or privatelink.vaultcore.usgovcloudapi.net for Azure Government).",
 									"constraints": {
-										"required": "[steps('zeroTrust').privateDnsSection.enablePrivateDNSIntegration]",
-										"allowedValues": "[map(filter(steps('zeroTrust').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+										"required": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
+										"allowedValues": "[map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
 									}
 								}
 							]
-						}
-					]
-				},
-				{
-					"name": "permittedIPs",
-					"label": "Permitted IP Addresses",
-					"elements": [
-						{
-							"name": "infoBox",
-							"type": "Microsoft.Common.InfoBox",
-							"options": {
-								"style": "Info",
-								"text": "Restrict public access to the Key Vaults to specific IP addresses or CIDR ranges. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. Leave empty to allow all public traffic (or rely solely on private endpoints if deployed)."
-							}
 						},
 						{
-							"name": "permittedIPs",
-							"type": "Microsoft.Common.EditableGrid",
-							"label": "Permitted IP Addresses / CIDR Ranges",
-							"constraints": {
-								"width": "Full",
-								"rows": {
-									"count": {
-										"min": 0,
-										"max": 50
+							"name": "permittedIPsSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Permitted IP Addresses",
+							"elements": [
+								{
+									"name": "infoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "Restrict public access to the Key Vaults to specific IP addresses or CIDR ranges. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. Leave empty to allow all public traffic (or rely solely on private endpoints if deployed)."
 									}
 								},
-								"columns": [
-									{
-										"id": "ipAddress",
-										"header": "IP Address or CIDR Range",
-										"width": "1fr",
-										"element": {
-											"type": "Microsoft.Common.TextBox",
-											"placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
-											"constraints": {
-												"required": false,
-												"regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
-												"validationMessage": "Enter a valid IPv4 address or CIDR range."
+								{
+									"name": "permittedIPs",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Permitted IP Addresses or CIDR Ranges",
+									"label": "Permitted IP Addresses / CIDR Ranges",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 0,
+												"max": 50
 											}
-										}
+										},
+										"columns": [
+											{
+												"id": "ipAddress",
+												"header": "IP Address or CIDR Range",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
+													"constraints": {
+														"required": false,
+														"regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
+														"validationMessage": "Enter a valid IPv4 address or CIDR range."
+													}
+												}
+											}
+										]
 									}
-								]
-							}
+								}
+							]
 						}
 					]
 				},
@@ -446,10 +448,10 @@
 				"domainJoinUserPrincipalName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPrincipalName, '')]",
 				"domainJoinUserPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPassword, '')]",
 				"deployEncryptionKeyVault": "[steps('encryptionKeyVault').deployEncryptionKeyVault]",
-				"privateEndpoint": "[steps('zeroTrust').privateEndpoint]",
-				"privateEndpointSubnetResourceId": "[if(steps('zeroTrust').privateEndpoint, steps('zeroTrust').networkSection.privateEndpointSubnet, '')]",
-				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoint, steps('zeroTrust').privateDnsSection.enablePrivateDNSIntegration), steps('zeroTrust').privateDnsSection.keyVaultPrivateDnsZone, '')]",
-				"permittedIPs": "[map(steps('permittedIPs').permittedIPs, (item) => item.ipAddress)]",
+				"privateEndpoint": "[steps('networking').privateEndpoint]",
+				"privateEndpointSubnetResourceId": "[if(steps('networking').privateEndpoint, steps('networking').networkSection.privateEndpointSubnet, '')]",
+				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.keyVaultPrivateDnsZone, '')]",
+				"permittedIPs": "[map(steps('networking').permittedIPsSection.permittedIPs, (item) => item.ipAddress)]",
 				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
 				"tags": "[steps('tags').resourceTags]"
 			}

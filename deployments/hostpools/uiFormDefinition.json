@@ -2195,10 +2195,10 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Intune Enrollment",
 									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment)), false, bool(steps('basics').hostsRGProps.tags.vmIntuneEnrollment))]",
-									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting this checkbox."									
-								}								
+									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting this checkbox."
+								}
 							],
-							"visible": "[not(contains(steps('identity').solution, 'DomainServices'))]"							
+							"visible": "[not(contains(steps('identity').solution, 'DomainServices'))]"
 						},
 						{
 							"name": "customizations",
@@ -2329,7 +2329,7 @@
 										"validationMessage": "Must be either a full URL (https://...) or a blob name ending in .msi"
 									},
 									"visible": "[steps('hosts').customizations.customizeAgentDownload]"
-								},								
+								},
 								{
 									"name": "agentUrl",
 									"type": "Microsoft.Common.TextBox",
@@ -2415,7 +2415,8 @@
 														"required": false
 													}
 												}
-											}										]
+											}
+										]
 									}
 								}
 							],
@@ -3131,7 +3132,6 @@
 									"showStepMarkers": false,
 									"visible": "[or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true))]"
 								},
-
 								{
 									"name": "domainName",
 									"type": "Microsoft.Common.TextBox",
@@ -3579,7 +3579,7 @@
 									"visible": true
 								}
 							]
-						},						
+						},
 						{
 							"name": "backup",
 							"type": "Microsoft.Common.Section",
@@ -3954,7 +3954,7 @@
 										"required": true
 									},
 									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
-								},								
+								},
 								{
 									"name": "hostpoolHeader",
 									"type": "Microsoft.Common.TextBlock",
@@ -4110,7 +4110,61 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": false
 									}
-								}								
+								}
+							]
+						},
+						{
+							"name": "permittedIPsSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Permitted IP Addresses",
+							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
+							"elements": [
+								{
+									"name": "permittedIPsInfo",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Permitted IP Addresses / CIDR Ranges (optional)",
+										"style": "Heading"
+									}
+								},
+								{
+									"name": "permittedIPsDescription",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Restrict public access to PaaS resources (storage accounts, Key Vaults) to specific IP addresses or CIDR ranges. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. Leave empty to allow all public traffic (or rely solely on private endpoints if deployed)."
+									}
+								},
+								{
+									"name": "permittedIPs",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Permitted IP Addresses or CIDR Ranges",
+									"label": "Permitted IP Addresses / CIDR Ranges",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 0,
+												"max": 50
+											}
+										},
+										"columns": [
+											{
+												"id": "ipAddress",
+												"header": "IP Address or CIDR Range",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
+													"constraints": {
+														"required": false,
+														"regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
+														"validationMessage": "Enter a valid IPv4 address or CIDR range."
+													}
+												}
+											}
+										]
+									}
+								}
 							]
 						},
 						{
@@ -4511,59 +4565,6 @@
 									}
 								}
 							]
-						}
-					]
-				},
-				{
-					"name": "permittedIPsSection",
-					"type": "Microsoft.Common.Section",
-					"label": "Permitted IP Addresses",
-					"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
-					"elements": [
-						{
-							"name": "permittedIPsInfo",
-							"type": "Microsoft.Common.TextBlock",
-							"options": {
-								"text": "Permitted IP Addresses / CIDR Ranges (optional)",
-								"style": "Heading"
-							}
-						},
-						{
-							"name": "permittedIPsDescription",
-							"type": "Microsoft.Common.TextBlock",
-							"options": {
-								"text": "Restrict public access to PaaS resources (storage accounts, Key Vaults) to specific IP addresses or CIDR ranges. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. Leave empty to allow all public traffic (or rely solely on private endpoints if deployed)."
-							}
-						},
-						{
-							"name": "permittedIPs",
-							"type": "Microsoft.Common.EditableGrid",
-							"label": "Permitted IP Addresses / CIDR Ranges",
-							"constraints": {
-								"width": "Full",
-								"rows": {
-									"count": {
-										"min": 0,
-										"max": 50
-									}
-								},
-								"columns": [
-									{
-										"id": "ipAddress",
-										"header": "IP Address or CIDR Range",
-										"width": "1fr",
-										"element": {
-											"type": "Microsoft.Common.TextBox",
-											"placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
-											"constraints": {
-												"required": false,
-												"regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
-												"validationMessage": "Enter a valid IPv4 address or CIDR range."
-											}
-										}
-									}
-								]
-							}
 						}
 					]
 				},
