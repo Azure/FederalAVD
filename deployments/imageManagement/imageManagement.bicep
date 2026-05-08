@@ -184,6 +184,11 @@ resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   tags: tags.?resourceGroups ?? {}
 }
 
+resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (keyManagementStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)) {
+  name: last(split(encryptionKeyVaultResourceId, '/'))
+  scope: az.resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
+}
+
 module imageGallery '../../.common/bicepModules/compute/galleries/deploy.bicep' = {
   name: 'Image-Gallery-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
@@ -242,15 +247,15 @@ module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/
     networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
     encryptionKeyVaultUri: keyManagementStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)
-      ? 'https://${last(split(encryptionKeyVaultResourceId, '/'))}.vault.${environment().suffixes.keyvaultDns}/'
+      ? encryptionKeyVault!.properties.vaultUri
       : ''
     encryptionKeyName: keyManagementStorageAccount != 'MicrosoftManaged' ? storageEncryptionKeyName : ''
     encryptionUserAssignedIdentityResourceId: keyManagementStorageAccount != 'MicrosoftManaged'
-      ? resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', storageEncryptionIdentityName)
+      ? storageCmk!.outputs.storageIdentityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
   }
-  dependsOn: [resourceGroup, storageCmk]
+  dependsOn: [resourceGroup]
 }
 
 module assetsBlobService '../../.common/bicepModules/storage/storageAccounts/blobServices/deploy.bicep' = if (deployArtifactsStorageAccount) {
@@ -329,15 +334,15 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
     networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
     encryptionKeyVaultUri: keyManagementStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)
-      ? 'https://${last(split(encryptionKeyVaultResourceId, '/'))}.vault.${environment().suffixes.keyvaultDns}/'
+      ? encryptionKeyVault!.properties.vaultUri
       : ''
     encryptionKeyName: keyManagementStorageAccount != 'MicrosoftManaged' ? logsStorageEncryptionKeyName : ''
     encryptionUserAssignedIdentityResourceId: keyManagementStorageAccount != 'MicrosoftManaged'
-      ? resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', storageEncryptionIdentityName)
+      ? storageCmk!.outputs.storageIdentityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
   }
-  dependsOn: [resourceGroup, storageCmk]
+  dependsOn: [resourceGroup]
 }
 
 module logsBlobService '../../.common/bicepModules/storage/storageAccounts/blobServices/deploy.bicep' = if (deployBuildLogsStorageAccount) {
