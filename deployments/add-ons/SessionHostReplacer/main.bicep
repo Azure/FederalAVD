@@ -86,6 +86,9 @@ param zoneRedundant bool = false
 @description('Optional. Enable private endpoints for function app and storage. Default is false.')
 param privateEndpoint bool = false
 
+@description('Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. Use when managing from a trusted workstation outside the Azure network boundary.')
+param permittedIPs array = []
+
 @description('Optional. The subnet resource ID for private endpoints. Required if privateEndpoint is true.')
 param privateEndpointSubnetResourceId string = ''
 
@@ -1147,6 +1150,7 @@ module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp
       '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor (for deployment state management)
     ]
     storageEncryptionIdentityName: storageEncryptionIdentityName
+    permittedIPs: permittedIPs
     tags: tags
   }
 }

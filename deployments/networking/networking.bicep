@@ -21,14 +21,8 @@ param vnetName string = ''
 @description('Conditional. The address prefixes for the virtual network. Required when "deployVnet" is "true".')
 param vnetAddressPrefixes array = []
 
-@description('Conditional. The hosts subnets to create within the virtual network. Required when "deployVnet" is "true".')
-param hostsSubnets array = []
-
-@description('Optional. The private endpoint subnet to create within the virtual network.')
-param privateEndpointsSubnet object = {}
-
-@description('Optional. The function app subnet to create within the virtual network.')
-param functionAppSubnet object = {}
+@description('Optional. The subnets to create within the virtual network. Each item must include "name", "addressPrefix", and "purpose" (hosts | privateEndpoints | functionApp).')
+param subnets array = []
 
 @description('Optional. The routing method to use for the virtual network subnets.')
 @allowed([
@@ -39,6 +33,12 @@ param defaultRouting string = 'nat'
 
 @description('Optional. When using NVA routing, determines if AVD service bypass routes should be added to the route table. These routes allow AVD service traffic to bypass the NVA.')
 param includeAvdBypassRoutes bool = false
+
+@description('Optional. Enables RDP Shortpath for managed networks (ExpressRoute or VPN). Adds an NSG rule allowing inbound UDP 3390 from VirtualNetwork.')
+param rdpShortpathManagedNetworks bool = false
+
+@description('Optional. Enables RDP Shortpath for public networks using STUN/ICE. Deploys a NAT Gateway for cone-shaped NAT, adds AVD service bypass routes on NVA deployments, and adds an NSG rule allowing inbound UDP 3390 from Internet.')
+param rdpShortpathPublicNetworks bool = false
 
 @description('Optional. Determines if the resources should be named with the resource type at the end.')
 param nameConvResTypeAtEnd bool = false
@@ -223,9 +223,10 @@ module vnetResources 'modules/vnet-sub-module.bicep' = if (deployVnet) {
     deployVnetResourceGroup: deployVnetResourceGroup
     defaultRouting: defaultRouting
     includeAvdBypassRoutes: includeAvdBypassRoutes
+    rdpShortpathManagedNetworks: rdpShortpathManagedNetworks
+    rdpShortpathPublicNetworks: rdpShortpathPublicNetworks
     deployDDoSNetworkProtection: deployDDoSNetworkProtection
-    functionAppSubnet: functionAppSubnet
-    hostsSubnets: hostsSubnets
+    subnets: subnets
     hubVnetName: !empty(hubVnetResourceId) ? last(split(hubVnetResourceId, '/')) : ''
     hubVnetResourceGroup: !empty(hubVnetResourceId) ? split(hubVnetResourceId, '/')[4] : ''
     hubVnetSubscriptionId: !empty(hubVnetResourceId) ? split(hubVnetResourceId, '/')[2] : ''
@@ -234,7 +235,6 @@ module vnetResources 'modules/vnet-sub-module.bicep' = if (deployVnet) {
     natGatewayName: natGatewayName
     nsgName: nsgName
     nvaIPAddress: !empty(nvaIPAddress) ? nvaIPAddress : ''
-    privateEndpointsSubnet: !empty(privateEndpointsSubnet) ? privateEndpointsSubnet : {}
     publicIPName: publicIPName
     routeTableName: routeTableName
     tags: tags

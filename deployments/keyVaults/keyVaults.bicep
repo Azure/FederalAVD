@@ -77,6 +77,11 @@ param privateEndpointSubnetResourceId string = ''
 @description('Conditional. The resource ID of the Azure Key Vault Private DNS Zone. Required when privateEndpoint is true.')
 param azureKeyVaultPrivateDnsZoneResourceId string = ''
 
+// ── Permitted IPs ─────────────────────────────────────────────────────────────
+
+@description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module. Use when managing from a trusted workstation outside the Azure network boundary.')
+param permittedIPs array = []
+
 // ── Monitoring ─────────────────────────────────────────────────────────────────
 
 @description('Optional. The resource ID of an existing Log Analytics Workspace for Key Vault diagnostic logs.')
@@ -198,6 +203,7 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
+    permittedIPs: permittedIPs
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     tags: tags
     deploymentSuffix: deploymentSuffix

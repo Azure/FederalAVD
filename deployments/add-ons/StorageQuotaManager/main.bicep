@@ -83,6 +83,9 @@ param encryptionKeyVaultResourceId string = ''
 ])
 param keyManagementStorageAccounts string = 'MicrosoftManaged'
 
+@description('Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. Use when managing from a trusted workstation outside the Azure network boundary.')
+param permittedIPs array = []
+
 @description('Optional. Log Analytics Workspace resource ID for Application Insights.')
 param logAnalyticsWorkspaceResourceId string = ''
 
@@ -306,6 +309,7 @@ module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp
     serverFarmId: empty(appServicePlanResourceId) ? hostingPlan!.outputs.hostingPlanId : appServicePlanResourceId
     storageAccountName: storageAccountName
     storageEncryptionIdentityName: storageEncryptionIdentityName
+    permittedIPs: permittedIPs
     tags: tags
   }
 }

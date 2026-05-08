@@ -29,6 +29,9 @@ param virtualMachineAdminUserName string = ''
 param deployEncryptionKeyVault bool = true
 param encryptionKeyVaultName string
 
+@description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module.')
+param permittedIPs array = []
+
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
@@ -69,11 +72,8 @@ module secretsKeyVault '../../keyVault/vaults/deploy.bicep' = if (deploySecretsK
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
       ? { workspaceId: logAnalyticsWorkspaceResourceId }
       : null
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
-    networkAcls: {
-      bypass: 'AzureServices'
-      defaultAction: privateEndpoint ? 'Deny' : 'Allow'
-    }
+    permittedIPs: permittedIPs
+    privateEndpoint: privateEndpoint
   }
 }
 
@@ -128,11 +128,8 @@ module encryptionKeyVault '../../keyVault/vaults/deploy.bicep' = if (deployEncry
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
       ? { workspaceId: logAnalyticsWorkspaceResourceId }
       : null
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
-    networkAcls: {
-      bypass: 'AzureServices'
-      defaultAction: privateEndpoint ? 'Deny' : 'Allow'
-    }
+    permittedIPs: permittedIPs
+    privateEndpoint: privateEndpoint
   }
 }
 

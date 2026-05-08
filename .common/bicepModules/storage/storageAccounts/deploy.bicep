@@ -1,5 +1,4 @@
 import { diagnosticSettingsType } from '../../types/diagnosticSettings.bicep'
-import { networkAclsType } from '../../types/storageTypes.bicep'
 
 param name string
 param location string = resourceGroup().location
@@ -29,14 +28,18 @@ param dnsEndpointType string = 'Standard'
 
 param largeFileSharesState string = ''
 
-param networkAcls networkAclsType = {
-  bypass: 'AzureServices'
-  defaultAction: 'Deny'
-  ipRules: []
-  virtualNetworkRules: []
-}
+@description('Optional. Whether this storage account is accessed via a private endpoint. When true and no permittedIPs or serviceEndpointSubnetIds are provided, public network access is disabled entirely.')
+param privateEndpoint bool = false
 
-param publicNetworkAccess string = ''
+@description('Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall allowing only these addresses.')
+param permittedIPs array = []
+
+@description('Optional. Subnet resource IDs for virtual network service endpoint rules.')
+param serviceEndpointSubnetIds array = []
+
+@description('Optional. Services allowed to bypass network rules. Set to "None" for stricter configurations that do not require trusted Azure service access (e.g., backup, monitoring).')
+@allowed(['AzureServices', 'Logging', 'Metrics', 'None'])
+param networkAclsBypass string = 'AzureServices'
 
 @description('Optional. Scope restriction for copy operations.')
 param allowedCopyScope string = ''
@@ -57,6 +60,12 @@ param encryptionKeyName string = ''
 param encryptionUserAssignedIdentityResourceId string = ''
 
 param diagnosticSettings diagnosticSettingsType?
+
+var ipRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
+var virtualNetworkRules = [for subnetId in serviceEndpointSubnetIds: { id: subnetId, action: 'Allow' }]
+var hasFirewallRestrictions = privateEndpoint || !empty(permittedIPs) || !empty(serviceEndpointSubnetIds)
+// Disable public access only when private endpoint is the sole access path (no trusted IPs or service endpoints need public access).
+var resolvedPublicNetworkAccess = (privateEndpoint && empty(permittedIPs) && empty(serviceEndpointSubnetIds)) ? 'Disabled' : 'Enabled'
 
 var supportsBlobService = kind == 'BlockBlobStorage' || kind == 'BlobStorage' || kind == 'StorageV2' || kind == 'Storage'
 var supportsFileService = kind == 'FileStorage' || kind == 'StorageV2' || kind == 'Storage'
@@ -89,16 +98,13 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     minimumTlsVersion: minimumTlsVersion
     dnsEndpointType: !empty(dnsEndpointType) ? dnsEndpointType : null
     largeFileSharesState: !empty(largeFileSharesState) ? largeFileSharesState : null
-    networkAcls: !empty(networkAcls) ? {
-      bypass: networkAcls.?bypass ?? null
-      defaultAction: networkAcls.?defaultAction ?? null
-      virtualNetworkRules: networkAcls.?virtualNetworkRules ?? []
-      ipRules: networkAcls.?ipRules ?? []
-    } : {
-      defaultAction: 'Deny'
-      bypass: 'None'
+    networkAcls: {
+      bypass: hasFirewallRestrictions ? networkAclsBypass : 'AzureServices'
+      defaultAction: hasFirewallRestrictions ? 'Deny' : 'Allow'
+      virtualNetworkRules: virtualNetworkRules
+      ipRules: ipRules
     }
-    publicNetworkAccess: !empty(publicNetworkAccess) ? publicNetworkAccess : null
+    publicNetworkAccess: resolvedPublicNetworkAccess
     allowedCopyScope: !empty(allowedCopyScope) ? allowedCopyScope : null
     sasPolicy: !empty(sasExpirationPeriod)
       ? {

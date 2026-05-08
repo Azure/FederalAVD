@@ -19,23 +19,31 @@ param enabledForTemplateDeployment bool = false
 @description('Allow disk encryption operations (Azure Disk Encryption / Disk Encryption Sets) to access the vault.')
 param enabledForDiskEncryption bool = false
 
-@allowed(['Enabled', 'Disabled', ''])
-param publicNetworkAccess string = ''
+@description('Optional. Whether this vault is accessed via a private endpoint. When true and no permittedIPs are provided, public network access is disabled.')
+param privateEndpoint bool = false
 
-@description('Optional. Network ACLs. When omitted the vault defaults to Deny with AzureServices bypass.')
-param networkAcls object = {}
+@description('Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall.')
+param permittedIPs array = []
 
 param diagnosticSettings diagnosticSettingsType?
 
 // AzureServices bypass is required when vault is used for deployment, template deployment, or disk encryption
 var requiresAzureServicesBypass = enabledForDeployment || enabledForTemplateDeployment || enabledForDiskEncryption
 
-var resolvedNetworkAcls = !empty(networkAcls)
-  ? networkAcls
+var kvIpRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
+var hasFirewallRestrictions = privateEndpoint || !empty(kvIpRules)
+// Disable public access only when private endpoint is the sole access path with no trusted IP exceptions.
+var resolvedPublicNetworkAccess = (privateEndpoint && empty(kvIpRules)) ? 'Disabled' : 'Enabled'
+var resolvedNetworkAcls = hasFirewallRestrictions
+  ? {
+      bypass: requiresAzureServicesBypass ? 'AzureServices' : 'None'
+      defaultAction: 'Deny'
+      ipRules: kvIpRules
+    }
   : requiresAzureServicesBypass
       ? {
           bypass: 'AzureServices'
-          defaultAction: 'Deny'
+          defaultAction: 'Allow'
         }
       : null
 
@@ -56,7 +64,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enabledForDeployment: enabledForDeployment
     enabledForTemplateDeployment: enabledForTemplateDeployment
     enabledForDiskEncryption: enabledForDiskEncryption
-    publicNetworkAccess: !empty(publicNetworkAccess) ? publicNetworkAccess : null
+    publicNetworkAccess: resolvedPublicNetworkAccess
     networkAcls: resolvedNetworkAcls
   }
 }

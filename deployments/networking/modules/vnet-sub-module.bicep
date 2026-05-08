@@ -3,11 +3,11 @@ targetScope = 'subscription'
 param deployVnetResourceGroup bool
 param vnetName string
 param vnetAddressPrefixes array
-param hostsSubnets array
-param privateEndpointsSubnet object
-param functionAppSubnet object
+param subnets array
 param defaultRouting string
 param includeAvdBypassRoutes bool
+param rdpShortpathManagedNetworks bool
+param rdpShortpathPublicNetworks bool
 param natGatewayName string
 param publicIPName string
 param routeTableName string
@@ -37,11 +37,11 @@ module vnetResources 'vnetResources.bicep' = {
   params: {
     vnetName: vnetName
     vnetAddressPrefixes: vnetAddressPrefixes
-    hostsSubnets: hostsSubnets
-    privateEndpointsSubnet: privateEndpointsSubnet
-    functionAppSubnet: functionAppSubnet
+    subnets: subnets
     defaultRouting: defaultRouting
     includeAvdBypassRoutes: includeAvdBypassRoutes
+    rdpShortpathManagedNetworks: rdpShortpathManagedNetworks
+    rdpShortpathPublicNetworks: rdpShortpathPublicNetworks
     natGatewayName: natGatewayName
     publicIPName: publicIPName
     routeTableName: routeTableName

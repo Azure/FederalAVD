@@ -49,6 +49,9 @@ param encryptionUserAssignedIdentityResourceId string = ''
 @description('Optional. Resource ID of the Recovery Services Vault to register Azure Files backup items against. When provided and storageSolution is AzureFiles, protection containers and items are registered after storage deployment.')
 param recoveryServicesVaultResourceId string = ''
 
+@description('Optional. Array of permitted IP addresses or CIDR blocks for the FSLogix storage account firewall.')
+param permittedIPs array = []
+
 // Azure NetApp files for fslogix
 module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution == 'AzureNetAppFiles' && contains(
   identitySolution,
@@ -125,6 +128,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     storageSku: storageSku
     tags: tags
     deploymentSuffix: deploymentSuffix
+    permittedIPs: permittedIPs
   }
 }
 

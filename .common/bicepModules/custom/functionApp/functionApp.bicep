@@ -32,6 +32,8 @@ param serverFarmId string
 @description('Optional. Name for the storage encryption user-assigned identity to create when CMK is selected and functionAppUserAssignedIdentityResourceId is not provided. Computed by caller using naming convention. Required when keyManagementStorageAccounts != MicrosoftManaged and functionAppUserAssignedIdentityResourceId is empty.')
 param storageEncryptionIdentityName string = ''
 param storageAccountName string
+@description('Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. When provided alongside a private endpoint, the firewall remains open to these IPs while still requiring PE for all other traffic.')
+param permittedIPs array = []
 param tags object
 
 var cloudSuffix = replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')
@@ -41,6 +43,36 @@ var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && private
   : ''
 
 var peVnetId = length(privateEndpointVnetName) < 37 ? privateEndpointVnetName : uniqueString(privateEndpointVnetName)
+
+var storageIpRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
+
+var permittedIPRestrictions = [for (ip, i) in permittedIPs: {
+  ipAddress: ip
+  action: 'Allow'
+  priority: 100 + i
+  name: 'PermittedIP-${i}'
+}]
+
+var azureCloudRestriction = [
+  {
+    ipAddress: 'AzureCloud'
+    action: 'Allow'
+    tag: 'ServiceTag'
+    priority: 200
+    name: 'AzureCloud'
+  }
+  {
+    ipAddress: 'Any'
+    action: 'Deny'
+    priority: 2147483647
+    name: 'Deny all'
+    description: 'Deny all access'
+  }
+]
+
+var resolvedIpSecurityRestrictions = (privateEndpoint || !empty(permittedIPs))
+  ? union(permittedIPRestrictions, azureCloudRestriction)
+  : null
 
 // Build arrays dynamically based on which storage types are enabled
 var storageSubResources = union(
@@ -173,10 +205,10 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     networkAcls: {
       bypass: 'AzureServices'
       virtualNetworkRules: []
-      ipRules: []
-      defaultAction: privateEndpoint ? 'Deny' : 'Allow'
+      ipRules: storageIpRules
+      defaultAction: (privateEndpoint || !empty(storageIpRules)) ? 'Deny' : 'Allow'
     }
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: (privateEndpoint && empty(storageIpRules)) ? 'Disabled' : 'Enabled'
     sasPolicy: {
       expirationAction: 'Log'
       sasExpirationPeriod: '180.00:00:00'
@@ -387,14 +419,9 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       minimumElasticInstanceCount: 0
       netFrameworkVersion: 'v6.0'
       powerShellVersion: '7.4'
-      ipSecurityRestrictions: privateEndpoint ? [
-        {
-          ipAddress: 'AzureCloud'
-          action: 'Allow'
-          tag: 'ServiceTag'
-          priority: 100
-          name: 'AzureCloud'
-        }
+      ipSecurityRestrictions: resolvedIpSecurityRestrictions
+      ipSecurityRestrictionsDefaultAction: (privateEndpoint || !empty(permittedIPs)) ? 'Deny' : null
+      scmIpSecurityRestrictions: (privateEndpoint || !empty(permittedIPs)) ? [
         {
           ipAddress: 'Any'
           action: 'Deny'
@@ -403,19 +430,9 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
           description: 'Deny all access'
         }
       ] : null
-      ipSecurityRestrictionsDefaultAction: privateEndpoint ? 'Deny' : null
-      scmIpSecurityRestrictions: privateEndpoint ? [
-        {
-          ipAddress: 'Any'
-          action: 'Deny'
-          priority: 2147483647
-          name: 'Deny all'
-          description: 'Deny all access'
-        }
-      ] : null
-      scmIpSecurityRestrictionsDefaultAction: privateEndpoint ? 'Deny' : null
-      scmIpSecurityRestrictionsUseMain: privateEndpoint ? true : null
-      publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+      scmIpSecurityRestrictionsDefaultAction: (privateEndpoint || !empty(permittedIPs)) ? 'Deny' : null
+      scmIpSecurityRestrictionsUseMain: (privateEndpoint || !empty(permittedIPs)) ? true : null
+      publicNetworkAccess: (privateEndpoint && empty(permittedIPs)) ? 'Disabled' : 'Enabled'
       use32BitWorkerProcess: false
     }
     outboundVnetRouting: empty(functionAppDelegatedSubnetResourceId)

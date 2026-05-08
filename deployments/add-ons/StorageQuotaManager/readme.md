@@ -120,6 +120,7 @@ New-AzSubscriptionDeployment `
 | `functionAppDelegatedSubnetResourceId` | string | '' | Subnet delegated to `Microsoft.Web/serverFarms` for VNet integration. **Required if** `privateEndpoint=true`. |
 | `azureBlobPrivateDnsZoneResourceId` | string | '' | Private DNS Zone for blob storage. Required for private endpoint DNS resolution. |
 | `azureFunctionAppPrivateDnsZoneResourceId` | string | '' | Private DNS Zone for function app. Required for private endpoint DNS resolution. |
+| `permittedIPs` | array | [] | Array of permitted IP addresses or CIDR blocks allowed through the firewall of the storage account and function app. Use when managing from a trusted workstation outside the Azure network boundary. |
 
 #### Encryption Configuration
 

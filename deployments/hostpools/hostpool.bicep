@@ -503,7 +503,8 @@ param fslogixStorageIndex int = 1
 @description('Optional. The type of key management used for the Azure Files storage account encryption.')
 param keyManagementStorageAccounts string = 'MicrosoftManaged'
 
-// Management
+@description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all PaaS components (storage accounts, Key Vaults). Use when managing the deployment from a trusted workstation outside the Azure network boundary.')
+param permittedIPs array = []
 
 @description('Optional. Enable backups to an Azure Recovery Services vault.  For a pooled host pool this will enable backups on the Azure file share.  For a personal host pool this will enable backups on the AVD sessions hosts.')
 param recoveryServices bool = false
@@ -1143,6 +1144,7 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
       : ''
     privateEndpointSubnetResourceId: keyVaultPrivateEndpointSubnetResourceId
     privateEndpoint: deployPrivateEndpoints
+    permittedIPs: permittedIPs
     privateEndpointNameConv: resourceNames.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
     resourceGroupName: resourceNames.outputs.resourceGroupOperations
@@ -1384,6 +1386,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     storageIndex: fslogixStorageIndex
     storageSku: fslogixStorageService == 'None' ? 'None' : split(fslogixStorageService, ' ')[1]
     storageSolution: split(fslogixStorageService, ' ')[0]
+    permittedIPs: permittedIPs
     tags: tags
     deploymentSuffix: deploymentSuffix
     encryptionUserAssignedIdentityResourceId: deployTopLevelStorageCmk

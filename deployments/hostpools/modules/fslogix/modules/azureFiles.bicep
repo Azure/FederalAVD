@@ -37,6 +37,9 @@ param storageSku string
 param tags object
 param deploymentSuffix string
 
+@description('Optional. Array of permitted IP addresses or CIDR blocks for the FSLogix storage account firewall.')
+param permittedIPs array = []
+
 var adminRoleDefinitionId = '69566ab7-960f-475b-8e7c-b3118f30c6bd' // Storage File Data Privileged Contributor
 
 var defaultSharePermission = 'StorageFileDataSmbShareContributor'
@@ -86,11 +89,8 @@ module storageAccounts '../../../../../.common/bicepModules/storage/storageAccou
       allowSharedKeyAccess: identitySolution == 'EntraId' ? true : false
       largeFileSharesState: storageSku == 'Standard' ? 'Enabled' : ''
       sasExpirationPeriod: '180.00:00:00'
-      publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
-      networkAcls: {
-        bypass: 'AzureServices'
-        defaultAction: privateEndpoint ? 'Deny' : 'Allow'
-      }
+      permittedIPs: permittedIPs
+      privateEndpoint: privateEndpoint
       azureFilesIdentityBasedAuthentication: identitySolution != 'EntraId'
         ? {
             defaultSharePermission: defaultSharePermission

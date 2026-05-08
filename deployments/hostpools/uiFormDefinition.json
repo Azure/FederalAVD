@@ -4515,6 +4515,59 @@
 					]
 				},
 				{
+					"name": "permittedIPsSection",
+					"type": "Microsoft.Common.Section",
+					"label": "Permitted IP Addresses",
+					"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
+					"elements": [
+						{
+							"name": "permittedIPsInfo",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Permitted IP Addresses / CIDR Ranges (optional)",
+								"style": "Heading"
+							}
+						},
+						{
+							"name": "permittedIPsDescription",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Restrict public access to PaaS resources (storage accounts, Key Vaults) to specific IP addresses or CIDR ranges. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. Leave empty to allow all public traffic (or rely solely on private endpoints if deployed)."
+							}
+						},
+						{
+							"name": "permittedIPs",
+							"type": "Microsoft.Common.EditableGrid",
+							"label": "Permitted IP Addresses / CIDR Ranges",
+							"constraints": {
+								"width": "Full",
+								"rows": {
+									"count": {
+										"min": 0,
+										"max": 50
+									}
+								},
+								"columns": [
+									{
+										"id": "ipAddress",
+										"header": "IP Address or CIDR Range",
+										"width": "1fr",
+										"element": {
+											"type": "Microsoft.Common.TextBox",
+											"placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
+											"constraints": {
+												"required": false,
+												"regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
+												"validationMessage": "Enter a valid IPv4 address or CIDR range."
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				},
+				{
 					"name": "tags",
 					"label": "Tags",
 					"elements": [
@@ -4677,6 +4730,7 @@
 				"existingGlobalFeedResourceId": "[first(map(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed')), (ws) => ws.id))]",
 				"globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
 				"globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
+				"permittedIPs": "[map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress)]",
 				"tags": "[steps('tags').tags]"
 			},
 			"kind": "Subscription",

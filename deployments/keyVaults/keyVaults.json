@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "10545617109141181738"
+      "templateHash": "1799895661601147168"
     }
   },
   "parameters": {
@@ -46,7 +46,7 @@
     },
     "keyVaultRetentionInDays": {
       "type": "int",
-      "defaultValue": 90,
+      "defaultValue": 7,
       "minValue": 7,
       "maxValue": 90,
       "metadata": {
@@ -107,6 +107,13 @@
       "defaultValue": "",
       "metadata": {
         "description": "Conditional. The resource ID of the Azure Key Vault Private DNS Zone. Required when privateEndpoint is true."
+      }
+    },
+    "permittedIPs": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module. Use when managing from a trusted workstation outside the Azure network boundary."
       }
     },
     "logAnalyticsWorkspaceResourceId": {
@@ -814,6 +821,9 @@
           "privateEndpointNICNameConv": {
             "value": "[variables('privateEndpointNICNameConv')]"
           },
+          "permittedIPs": {
+            "value": "[parameters('permittedIPs')]"
+          },
           "logAnalyticsWorkspaceResourceId": {
             "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
           },
@@ -831,7 +841,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "4595131076035545713"
+              "templateHash": "17445214334626262799"
             }
           },
           "parameters": {
@@ -910,6 +920,13 @@
             },
             "encryptionKeyVaultName": {
               "type": "string"
+            },
+            "permittedIPs": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module."
+              }
             }
           },
           "variables": {
@@ -955,12 +972,11 @@
                     "value": true
                   },
                   "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
-                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
-                  "networkAcls": {
-                    "value": {
-                      "bypass": "AzureServices",
-                      "defaultAction": "[if(parameters('privateEndpoint'), 'Deny', 'Allow')]"
-                    }
+                  "permittedIPs": {
+                    "value": "[parameters('permittedIPs')]"
+                  },
+                  "privateEndpoint": {
+                    "value": "[parameters('privateEndpoint')]"
                   }
                 },
                 "template": {
@@ -971,7 +987,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.42.1.51946",
-                      "templateHash": "9340235821535799809"
+                      "templateHash": "697911705270146620"
                     }
                   },
                   "definitions": {
@@ -1127,20 +1143,18 @@
                         "description": "Allow disk encryption operations (Azure Disk Encryption / Disk Encryption Sets) to access the vault."
                       }
                     },
-                    "publicNetworkAccess": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "allowedValues": [
-                        "Enabled",
-                        "Disabled",
-                        ""
-                      ]
-                    },
-                    "networkAcls": {
-                      "type": "object",
-                      "defaultValue": {},
+                    "privateEndpoint": {
+                      "type": "bool",
+                      "defaultValue": false,
                       "metadata": {
-                        "description": "Optional. Network ACLs. When omitted the vault defaults to Deny with AzureServices bypass."
+                        "description": "Optional. Whether this vault is accessed via a private endpoint. When true and no permittedIPs are provided, public network access is disabled."
+                      }
+                    },
+                    "permittedIPs": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall."
                       }
                     },
                     "diagnosticSettings": {
@@ -1149,8 +1163,20 @@
                     }
                   },
                   "variables": {
+                    "copy": [
+                      {
+                        "name": "kvIpRules",
+                        "count": "[length(parameters('permittedIPs'))]",
+                        "input": {
+                          "value": "[parameters('permittedIPs')[copyIndex('kvIpRules')]]",
+                          "action": "Allow"
+                        }
+                      }
+                    ],
                     "requiresAzureServicesBypass": "[or(or(parameters('enabledForDeployment'), parameters('enabledForTemplateDeployment')), parameters('enabledForDiskEncryption'))]",
-                    "resolvedNetworkAcls": "[if(not(empty(parameters('networkAcls'))), parameters('networkAcls'), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Deny'), null()))]",
+                    "hasFirewallRestrictions": "[or(parameters('privateEndpoint'), not(empty(variables('kvIpRules'))))]",
+                    "resolvedPublicNetworkAccess": "[if(and(parameters('privateEndpoint'), empty(variables('kvIpRules'))), 'Disabled', 'Enabled')]",
+                    "resolvedNetworkAcls": "[if(variables('hasFirewallRestrictions'), createObject('bypass', if(variables('requiresAzureServicesBypass'), 'AzureServices', 'None'), 'defaultAction', 'Deny', 'ipRules', variables('kvIpRules')), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow'), null()))]",
                     "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
                     "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
                   },
@@ -1174,7 +1200,7 @@
                         "enabledForDeployment": "[parameters('enabledForDeployment')]",
                         "enabledForTemplateDeployment": "[parameters('enabledForTemplateDeployment')]",
                         "enabledForDiskEncryption": "[parameters('enabledForDiskEncryption')]",
-                        "publicNetworkAccess": "[if(not(empty(parameters('publicNetworkAccess'))), parameters('publicNetworkAccess'), null())]",
+                        "publicNetworkAccess": "[variables('resolvedPublicNetworkAccess')]",
                         "networkAcls": "[variables('resolvedNetworkAcls')]"
                       }
                     },
@@ -1493,12 +1519,11 @@
                     "value": true
                   },
                   "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
-                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
-                  "networkAcls": {
-                    "value": {
-                      "bypass": "AzureServices",
-                      "defaultAction": "[if(parameters('privateEndpoint'), 'Deny', 'Allow')]"
-                    }
+                  "permittedIPs": {
+                    "value": "[parameters('permittedIPs')]"
+                  },
+                  "privateEndpoint": {
+                    "value": "[parameters('privateEndpoint')]"
                   }
                 },
                 "template": {
@@ -1509,7 +1534,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.42.1.51946",
-                      "templateHash": "9340235821535799809"
+                      "templateHash": "697911705270146620"
                     }
                   },
                   "definitions": {
@@ -1665,20 +1690,18 @@
                         "description": "Allow disk encryption operations (Azure Disk Encryption / Disk Encryption Sets) to access the vault."
                       }
                     },
-                    "publicNetworkAccess": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "allowedValues": [
-                        "Enabled",
-                        "Disabled",
-                        ""
-                      ]
-                    },
-                    "networkAcls": {
-                      "type": "object",
-                      "defaultValue": {},
+                    "privateEndpoint": {
+                      "type": "bool",
+                      "defaultValue": false,
                       "metadata": {
-                        "description": "Optional. Network ACLs. When omitted the vault defaults to Deny with AzureServices bypass."
+                        "description": "Optional. Whether this vault is accessed via a private endpoint. When true and no permittedIPs are provided, public network access is disabled."
+                      }
+                    },
+                    "permittedIPs": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall."
                       }
                     },
                     "diagnosticSettings": {
@@ -1687,8 +1710,20 @@
                     }
                   },
                   "variables": {
+                    "copy": [
+                      {
+                        "name": "kvIpRules",
+                        "count": "[length(parameters('permittedIPs'))]",
+                        "input": {
+                          "value": "[parameters('permittedIPs')[copyIndex('kvIpRules')]]",
+                          "action": "Allow"
+                        }
+                      }
+                    ],
                     "requiresAzureServicesBypass": "[or(or(parameters('enabledForDeployment'), parameters('enabledForTemplateDeployment')), parameters('enabledForDiskEncryption'))]",
-                    "resolvedNetworkAcls": "[if(not(empty(parameters('networkAcls'))), parameters('networkAcls'), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Deny'), null()))]",
+                    "hasFirewallRestrictions": "[or(parameters('privateEndpoint'), not(empty(variables('kvIpRules'))))]",
+                    "resolvedPublicNetworkAccess": "[if(and(parameters('privateEndpoint'), empty(variables('kvIpRules'))), 'Disabled', 'Enabled')]",
+                    "resolvedNetworkAcls": "[if(variables('hasFirewallRestrictions'), createObject('bypass', if(variables('requiresAzureServicesBypass'), 'AzureServices', 'None'), 'defaultAction', 'Deny', 'ipRules', variables('kvIpRules')), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow'), null()))]",
                     "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
                     "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
                   },
@@ -1712,7 +1747,7 @@
                         "enabledForDeployment": "[parameters('enabledForDeployment')]",
                         "enabledForTemplateDeployment": "[parameters('enabledForTemplateDeployment')]",
                         "enabledForDiskEncryption": "[parameters('enabledForDiskEncryption')]",
-                        "publicNetworkAccess": "[if(not(empty(parameters('publicNetworkAccess'))), parameters('publicNetworkAccess'), null())]",
+                        "publicNetworkAccess": "[variables('resolvedPublicNetworkAccess')]",
                         "networkAcls": "[variables('resolvedNetworkAcls')]"
                       }
                     },

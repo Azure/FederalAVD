@@ -147,22 +147,6 @@ var sasExpirationPeriod = '180.00:00:00' // 180 days
 var storageKind = 'StorageV2'
 var storageSkuName = 'Standard_LRS'
 var storageAccessTier = 'Hot'
-var ipRules = [for ip in storagePermittedIPs: { value: ip, action: 'Allow' }]
-var virtualNetworkRules = [for subnetId in storageServiceEndpointSubnetResourceIds: { id: subnetId, action: 'Allow' }]
-
-// PrivateEndpoint with no IP rules disables public access entirely.
-// PrivateEndpoint with IP rules keeps public enabled so those IPs can still reach the account alongside PE traffic.
-var storagePublicNetworkAccess = storageNetworkAccess == 'PrivateEndpoint' && empty(ipRules) ? 'Disabled' : 'Enabled'
-// Deny-by-default whenever any restrictions are in place; open only when no rules are configured.
-var storageNetworkAcls = storageNetworkAccess == 'PrivateEndpoint'
-  ? empty(ipRules)
-      ? { bypass: 'None', defaultAction: 'Deny' }
-      : { bypass: 'None', defaultAction: 'Deny', ipRules: ipRules }
-  : storageNetworkAccess == 'ServiceEndpoint'
-      ? { bypass: 'None', defaultAction: 'Deny', ipRules: ipRules, virtualNetworkRules: virtualNetworkRules }
-      : !empty(ipRules)
-          ? { bypass: 'None', defaultAction: 'Deny', ipRules: ipRules }
-          : { bypass: 'None', defaultAction: 'Allow' }
 
 var storageEncryptionKeyName = '${identifier}-encryption-key-imagemgmt-storage'
 var logsStorageEncryptionKeyName = '${identifier}-encryption-key-imagemgmt-logstorage'
@@ -252,8 +236,10 @@ module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/
     accessTier: storageAccessTier
     allowSharedKeyAccess: storageAllowSharedKeyAccess
     requireInfrastructureEncryption: true
-    publicNetworkAccess: storagePublicNetworkAccess
-    networkAcls: storageNetworkAcls
+    permittedIPs: storagePermittedIPs
+    serviceEndpointSubnetIds: storageServiceEndpointSubnetResourceIds
+    privateEndpoint: storageNetworkAccess == 'PrivateEndpoint'
+    networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
     encryptionKeyVaultUri: keyManagementStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)
       ? 'https://${last(split(encryptionKeyVaultResourceId, '/'))}.vault.${environment().suffixes.keyvaultDns}/'
@@ -337,8 +323,10 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
     accessTier: storageAccessTier
     allowSharedKeyAccess: storageAllowSharedKeyAccess
     requireInfrastructureEncryption: true
-    publicNetworkAccess: storagePublicNetworkAccess
-    networkAcls: storageNetworkAcls
+    permittedIPs: storagePermittedIPs
+    serviceEndpointSubnetIds: storageServiceEndpointSubnetResourceIds
+    privateEndpoint: storageNetworkAccess == 'PrivateEndpoint'
+    networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
     encryptionKeyVaultUri: keyManagementStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)
       ? 'https://${last(split(encryptionKeyVaultResourceId, '/'))}.vault.${environment().suffixes.keyvaultDns}/'
