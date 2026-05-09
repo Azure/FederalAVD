@@ -14,7 +14,7 @@
 							"type": "Microsoft.Common.InfoBox",
 							"options": {
 								"style": "Info",
-								"text": "Deploy Azure Virtual Desktop image management infrastructure: an Azure Compute Gallery for storing custom image versions, an optional artifacts storage account for image build scripts and installers, and an optional build logs storage account. After deployment, run Update-ImageArtifacts.ps1 to populate the storage account with software packages."
+								"text": "This template deploys AVD image management infrastructure in the selected region. An Azure Compute Gallery is always deployed to store and version custom OS images. Optionally deploy an artifacts storage account (for image build scripts and software installers) and a build logs storage account (for customization logs, auto-purged after 7 days). Zero Trust storage hardening is applied by default: shared key access is disabled, Entra ID authentication is enforced, and network access can be restricted to private endpoints, service endpoints, or permitted IP ranges. Encryption at rest can use platform-managed keys or customer-managed keys (including HSM-backed keys) stored in a Premium Key Vault — the same key vault and rotation policy apply to both storage accounts and gallery image versions."
 							}
 						},
 						{
@@ -46,53 +46,6 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Resource Type Abbreviation at End of Name",
 									"toolTip": "When checked, names follow the pattern 'avd-image-management-eus-gal'. When unchecked (default), names follow 'gal-avd-image-management-eus'."
-								}
-							]
-						}
-					]
-				},
-				{
-					"name": "computeGallery",
-					"label": "Compute Gallery",
-					"elements": [
-						{
-							"name": "infoBox",
-							"type": "Microsoft.Common.InfoBox",
-							"options": {
-								"style": "Info",
-								"text": "An Azure Compute Gallery is always deployed in the primary region to store custom image versions. Optionally deploy a second gallery in a remote region to support regional disaster recovery and multi-region image replication."
-							}
-						},
-						{
-							"name": "deployRemoteGallery",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Deploy Remote Region Gallery",
-							"toolTip": "Deploy a second Azure Compute Gallery in a remote region for disaster recovery and multi-region image replication."
-						},
-						{
-							"name": "remoteGallerySection",
-							"type": "Microsoft.Common.Section",
-							"label": "Remote Gallery Region",
-							"visible": "[steps('computeGallery').deployRemoteGallery]",
-							"elements": [
-								{
-									"name": "locationsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(steps('computeGallery').deployRemoteGallery, not(empty(steps('basics').scope.subscription)))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/locations?api-version=2020-01-01')]"
-									}
-								},
-								{
-									"name": "remoteLocation",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Remote Region",
-									"toolTip": "Select the Azure region for the secondary Compute Gallery. Choose a paired or geographically distant region for best disaster recovery coverage.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('computeGallery').remoteGallerySection.locationsApi.value, (loc) => not(equals(loc.name, steps('basics').scope.location.name))), (loc) => parse(concat('{\"label\":\"', loc.displayName, '\",\"value\":\"', loc.name, '\"}')))]"
-									}
 								}
 							]
 						}
@@ -131,21 +84,6 @@
 							"visible": "[or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount)]",
 							"elements": [
 								{
-									"name": "keyManagementStorageAccount",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Encryption Key Management",
-									"defaultValue": "MicrosoftManaged",
-									"toolTip": "Key management for both storage accounts. Customer-managed keys require an existing Premium SKU Key Vault deployed by the keyVaults template.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{ "label": "Microsoft Managed Keys", "value": "MicrosoftManaged" },
-											{ "label": "Customer Managed Keys (Key Vault)", "value": "CustomerManaged" },
-											{ "label": "Customer Managed Keys (HSM)", "value": "CustomerManagedHSM" }
-										]
-									}
-								},
-								{
 									"name": "storageNetworkAccess",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Network Access",
@@ -154,9 +92,18 @@
 									"constraints": {
 										"required": true,
 										"allowedValues": [
-											{ "label": "Public Endpoint", "value": "PublicEndpoint" },
-											{ "label": "Private Endpoint", "value": "PrivateEndpoint" },
-											{ "label": "Service Endpoint", "value": "ServiceEndpoint" }
+											{
+												"label": "Public Endpoint",
+												"value": "PublicEndpoint"
+											},
+											{
+												"label": "Private Endpoint",
+												"value": "PrivateEndpoint"
+											},
+											{
+												"label": "Service Endpoint",
+												"value": "ServiceEndpoint"
+											}
 										]
 									}
 								},
@@ -366,19 +313,49 @@
 									}
 								}
 							]
+						}
+					]
+				},
+				{
+					"name": "encryption",
+					"label": "Encryption Key Management",
+					"elements": [
+						{
+							"name": "keyManagement",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Key Management",
+							"defaultValue": "PlatformManaged",
+							"toolTip": "Encryption key management applied to all resources in this deployment — storage accounts and gallery image versions. Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
+							"constraints": {
+								"required": true,
+								"allowedValues": [
+									{
+										"label": "Platform-Managed Keys",
+										"value": "PlatformManaged"
+									},
+									{
+										"label": "Customer-Managed Keys",
+										"value": "CustomerManaged"
+									},
+									{
+										"label": "Customer-Managed Keys (HSM-backed)",
+										"value": "CustomerManagedHSM"
+									}
+								]
+							}
 						},
 						{
-							"name": "cmkSettings",
+							"name": "cmkSection",
 							"type": "Microsoft.Common.Section",
-							"label": "Customer-Managed Key Configuration",
-							"visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), or(equals(steps('storageAccounts').storageSettings.keyManagementStorageAccount, 'CustomerManaged'), equals(steps('storageAccounts').storageSettings.keyManagementStorageAccount, 'CustomerManagedHSM')))]",
+							"label": "Key Vault & Rotation",
+							"visible": "[not(equals(steps('encryption').keyManagement, 'PlatformManaged'))]",
 							"elements": [
 								{
 									"name": "cmkInfo",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
 										"style": "Info",
-										"text": "Customer-managed keys require an existing Premium SKU Key Vault with soft delete and purge protection enabled. Deploy the Key Vault using the keyVaults template. The deploying identity requires the Key Vault Crypto Officer role at deployment time."
+										"text": "Customer-managed keys require an existing Premium SKU Key Vault with soft delete and purge protection enabled. Deploy the Key Vault using the keyVaults template before running this deployment. The deploying identity requires the Key Vault Crypto Officer role on the vault. The same vault and key rotation policy apply to both storage accounts and gallery image versions."
 									}
 								},
 								{
@@ -395,17 +372,17 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Encryption Key Vault",
 									"multiLine": true,
-									"toolTip": "Select the Premium SKU Key Vault for customer-managed encryption keys. The same vault is used for both storage accounts.",
+									"toolTip": "Select the Premium SKU Key Vault that holds the customer-managed encryption keys. Only Premium SKU vaults are listed. The same vault is used for storage account and gallery image version encryption.",
 									"constraints": {
 										"required": true,
-										"allowedValues": "[map(filter(steps('storageAccounts').cmkSettings.keyVaultsApi.value, (kv) => equals(kv.properties.sku.name, 'premium')), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
+										"allowedValues": "[map(filter(steps('encryption').cmkSection.keyVaultsApi.value, (kv) => equals(kv.properties.sku.name, 'premium')), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
 									}
 								},
 								{
 									"name": "keyExpirationInDays",
 									"type": "Microsoft.Common.Slider",
-									"label": "Key Expiration (Days)",
-									"toolTip": "Number of days before the customer-managed encryption key expires and auto-rotates. Applies to both storage accounts.",
+									"label": "Key Rotation (Days)",
+									"toolTip": "Number of days before the customer-managed encryption key expires and auto-rotates. Applies to all encrypted resources in this deployment.",
 									"min": 7,
 									"max": 365,
 									"defaultValue": 180,
@@ -448,17 +425,16 @@
 			"parameters": {
 				"location": "[steps('basics').scope.location.name]",
 				"nameConvResTypeAtEnd": "[steps('basics').naming.nameConvResTypeAtEnd]",
-				"remoteLocation": "[if(steps('computeGallery').deployRemoteGallery, steps('computeGallery').remoteGallerySection.remoteLocation, '')]",
 				"deployArtifactsStorageAccount": "[steps('storageAccounts').deployArtifactsStorageAccount]",
 				"deployBuildLogsStorageAccount": "[steps('storageAccounts').deployBuildLogsStorageAccount]",
-				"keyManagementStorageAccount": "[if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), steps('storageAccounts').storageSettings.keyManagementStorageAccount, 'MicrosoftManaged')]",
 				"storageNetworkAccess": "[if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), steps('storageAccounts').storageSettings.storageNetworkAccess, 'PublicEndpoint')]",
 				"privateEndpointSubnetResourceId": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateEndpointSection.privateEndpointSubnet, '')]",
 				"azureBlobPrivateDnsZoneResourceId": "[if(and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration), steps('storageAccounts').privateDnsSection.blobPrivateDnsZone, '')]",
 				"storageServiceEndpointSubnetResourceIds": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), steps('storageAccounts').serviceEndpointSection.serviceEndpointSubnets, parse('[]'))]",
 				"storagePermittedIPs": "[map(steps('storageAccounts').storageSettings.storagePermittedIPs, (item) => item.ipAddress)]",
-				"encryptionKeyVaultResourceId": "[if(or(equals(steps('storageAccounts').storageSettings.keyManagementStorageAccount, 'CustomerManaged'), equals(steps('storageAccounts').storageSettings.keyManagementStorageAccount, 'CustomerManagedHSM')), steps('storageAccounts').cmkSettings.encryptionKeyVault, '')]",
-				"keyExpirationInDays": "[if(or(equals(steps('storageAccounts').storageSettings.keyManagementStorageAccount, 'CustomerManaged'), equals(steps('storageAccounts').storageSettings.keyManagementStorageAccount, 'CustomerManagedHSM')), steps('storageAccounts').cmkSettings.keyExpirationInDays, 180)]",
+				"keyManagement": "[steps('encryption').keyManagement]",
+				"encryptionKeyVaultResourceId": "[if(not(equals(steps('encryption').keyManagement, 'PlatformManaged')), steps('encryption').cmkSection.encryptionKeyVault, '')]",
+				"keyExpirationInDays": "[if(not(equals(steps('encryption').keyManagement, 'PlatformManaged')), steps('encryption').cmkSection.keyExpirationInDays, 180)]",
 				"tags": "[steps('tags').resourceTags]"
 			}
 		}

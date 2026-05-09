@@ -8,9 +8,6 @@ param location string = deployment().location
 @description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
 param nameConvResTypeAtEnd bool = false
 
-@description('Optional. Remote Location to which an Image Gallery will be deployed to support regional disaster recovery.')
-param remoteLocation string = ''
-
 @description('Optional. Indicates whether the storage account permits requests to be authorized with the account access key via Shared Key. If false, then all requests, including shared access signatures, must be authorized with Azure Active Directory (Azure AD). The default value is null, which is equivalent to true.')
 param storageAllowSharedKeyAccess bool = false
 
@@ -42,17 +39,17 @@ param tags object = {}
 @description('Optional. Deploy the artifacts storage account and managed identity. Set to false when you only need the gallery and all image customizations use fully-qualified public URIs or an externally-managed storage account.')
 param deployArtifactsStorageAccount bool = true
 
-// ── Customer-Managed Key parameters for the artifacts storage account ─────────
+// ── Customer-Managed Key parameters ──────────────────────────────────────────
 
-@description('Optional. Key management solution for both the artifacts and build logs storage accounts.')
+@description('Optional. Key management for all encrypted resources: storage accounts and gallery image versions. When CustomerManaged or CustomerManagedHSM, storage accounts get CMK via a UAI and the gallery gets a Disk Encryption Set. The `galleryDiskEncryptionSetResourceId` output can then be passed to imageBuild as `existingGalleryDiskEncryptionSetResourceId`.')
 @allowed([
-  'MicrosoftManaged'
+  'PlatformManaged'
   'CustomerManaged'
   'CustomerManagedHSM'
 ])
-param keyManagementStorageAccount string = 'MicrosoftManaged'
+param keyManagement string = 'PlatformManaged'
 
-@description('Optional. Resource ID of the Key Vault for CMK encryption. Required when keyManagementStorageAccount is CustomerManaged or CustomerManagedHSM.')
+@description('Optional. Resource ID of the Key Vault for CMK encryption. Required when keyManagement is CustomerManaged or CustomerManagedHSM.')
 param encryptionKeyVaultResourceId string = ''
 
 @description('Optional. Number of days before the CMK expires and auto-rotates.')
@@ -73,7 +70,6 @@ var cloud = toLower(environment().name)
 #disable-next-line BCP329
 var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
 #disable-next-line BCP329
-var varRemoteLocation = !empty(remoteLocation) ? (startsWith(cloud, 'us') ? substring(remoteLocation, 5, length(remoteLocation) - 5) : remoteLocation) : ''
 var locations = startsWith(cloud, 'us')
   ? (loadJsonContent('../../.common/data/locations.json')).other
   : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
@@ -96,13 +92,7 @@ var resourceGroupName = replace(
   resourceAbbreviations.resourceGroups
 )
 #disable-next-line BCP329
-var remoteResourceGroupName = !empty(remoteLocation)
-  ? replace(
-      replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varRemoteLocation].abbreviation),
-      'RESOURCETYPE',
-      resourceAbbreviations.resourceGroups
-    )
-  : ''
+
 var artifactsBlobContainerName = 'artifacts'
 var galleryName = replace(
   replace(
@@ -113,17 +103,6 @@ var galleryName = replace(
   '-',
   '_'
 )
-var remoteGalleryName = !empty(remoteLocation)
-  ? replace(
-      replace(
-        replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.computeGalleries),
-        'LOCATION',
-        locations[varRemoteLocation].abbreviation
-      ),
-      '-',
-      '_'
-    )
-  : ''
 var identityName = replace(
   replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
   'LOCATION',
@@ -168,6 +147,11 @@ var cmkKeyNames = union(
   deployBuildLogsStorageAccount ? [logsStorageEncryptionKeyName] : []
 )
 
+var galleryDiskEncryptionSetName = nameConvResTypeAtEnd
+  ? 'image-management-gallery-${keyManagement == 'CustomerManagedHSM' ? 'hsm-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
+  : '${resourceAbbreviations.diskEncryptionSets}-image-management-gallery-${keyManagement == 'CustomerManagedHSM' ? 'hsm-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}'
+var galleryDiskEncryptionKeyName = 'image-management-encryption-key-gallery-imageversions'
+
 var logsStorageName = take(
   '${resourceAbbreviations.storageAccounts}imagelogs${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
   24
@@ -184,7 +168,7 @@ resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   tags: tags.?resourceGroups ?? {}
 }
 
-resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (keyManagementStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)) {
+resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (keyManagement != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)) {
   name: last(split(encryptionKeyVaultResourceId, '/'))
   scope: az.resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
 }
@@ -214,18 +198,38 @@ module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedI
 // Single CMK module covering both storage accounts with a shared encryption UAI.
 // CMK must complete before any storage account deployment so the role assignment
 // propagates before the storage PUT includes the CMK reference.
-module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccount != 'MicrosoftManaged' && (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)) {
+module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagement != 'PlatformManaged' && (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)) {
   name: 'Storage-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     keyVaultResourceId: encryptionKeyVaultResourceId
-    keyManagementType: keyManagementStorageAccount == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyManagementType: keyManagement == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
     keyExpirationInDays: keyExpirationInDays
     location: location
     tags: tags
     deploymentSuffix: timeStamp
     storageKeyNames: cmkKeyNames
     storageIdentityName: storageEncryptionIdentityName
+  }
+  dependsOn: [resourceGroup]
+}
+
+// DES for gallery image version encryption — created once here so imageBuild deployments
+// can pass `galleryDiskEncryptionSetResourceId` as `existingGalleryDiskEncryptionSetResourceId`,
+// suppressing per-build DES creation and KV dependency during image builds.
+module galleryCmk '../hostpools/modules/diskCmk/diskCmk.bicep' = if (keyManagement != 'PlatformManaged') {
+  name: 'Gallery-CMK-${timeStamp}'
+  scope: subscription()
+  params: {
+    resourceGroupName: resourceGroupName
+    keyVaultResourceId: encryptionKeyVaultResourceId
+    keyManagementType: keyManagement == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyExpirationInDays: keyExpirationInDays
+    location: location
+    tags: tags
+    deploymentSuffix: timeStamp
+    keyName: galleryDiskEncryptionKeyName
+    diskEncryptionSetName: galleryDiskEncryptionSetName
   }
   dependsOn: [resourceGroup]
 }
@@ -246,11 +250,11 @@ module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/
     privateEndpoint: storageNetworkAccess == 'PrivateEndpoint'
     networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
-    encryptionKeyVaultUri: keyManagementStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)
+    encryptionKeyVaultUri: keyManagement != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
       ? encryptionKeyVault!.properties.vaultUri
       : ''
-    encryptionKeyName: keyManagementStorageAccount != 'MicrosoftManaged' ? storageEncryptionKeyName : ''
-    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccount != 'MicrosoftManaged'
+    encryptionKeyName: keyManagement != 'PlatformManaged' ? storageEncryptionKeyName : ''
+    encryptionUserAssignedIdentityResourceId: keyManagement != 'PlatformManaged'
       ? storageCmk!.outputs.storageIdentityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
@@ -333,11 +337,11 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
     privateEndpoint: storageNetworkAccess == 'PrivateEndpoint'
     networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
-    encryptionKeyVaultUri: keyManagementStorageAccount != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId)
+    encryptionKeyVaultUri: keyManagement != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
       ? encryptionKeyVault!.properties.vaultUri
       : ''
-    encryptionKeyName: keyManagementStorageAccount != 'MicrosoftManaged' ? logsStorageEncryptionKeyName : ''
-    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccount != 'MicrosoftManaged'
+    encryptionKeyName: keyManagement != 'PlatformManaged' ? logsStorageEncryptionKeyName : ''
+    encryptionUserAssignedIdentityResourceId: keyManagement != 'PlatformManaged'
       ? storageCmk!.outputs.storageIdentityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
@@ -426,28 +430,11 @@ module logsStorageBlobContributorAssignment '../../.common/bicepModules/storage/
   dependsOn: [logsStorageAccount]
 }
 
-resource remoteResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = if (!empty(remoteLocation)) {
-  name: remoteResourceGroupName
-  location: remoteLocation
-  tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
-}
-
-module remoteImageGallery '../../.common/bicepModules/compute/galleries/deploy.bicep' = if (!empty(remoteLocation)) {
-  name: 'Remote-Image-Gallery-${timeStamp}'
-  scope: az.resourceGroup(remoteResourceGroupName)
-  params: {
-    location: remoteLocation
-    name: remoteGalleryName
-    tags: tags[?'Microsoft.Compute/galleries'] ?? {}
-  }
-  dependsOn: [remoteResourceGroup]
-}
-
 output artifactsStorageAccountResourceId string = deployArtifactsStorageAccount ? assetsStorageAccount!.outputs.resourceId : ''
 output artifactsBlobContainerName string = deployArtifactsStorageAccount ? assetsBlobContainer!.outputs.name : ''
 output artifactsBlobContainerUrl string = deployArtifactsStorageAccount ? 'https://${artifactsStorageAccountName}.blob.${environment().suffixes.storage}/${artifactsBlobContainerName}' : ''
 output managedIdentityResourceId string = (deployArtifactsStorageAccount || deployBuildLogsStorageAccount) ? managedIdentity!.outputs.resourceId : ''
 output computeGalleryResourceId string = imageGallery!.outputs.resourceId
-output remoteComputeGalleryResourceId string = !empty(remoteLocation) ? remoteImageGallery!.outputs.resourceId : ''
 output buildLogsStorageAccountResourceId string = deployBuildLogsStorageAccount ? logsStorageAccount!.outputs.resourceId : ''
 output buildLogsContainerUri string = deployBuildLogsStorageAccount ? 'https://${logsStorageName}.blob.${environment().suffixes.storage}/${logsContainerName}' : ''
+output galleryDiskEncryptionSetResourceId string = keyManagement != 'PlatformManaged' ? galleryCmk!.outputs.diskEncryptionSetResourceId : ''

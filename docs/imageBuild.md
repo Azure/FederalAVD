@@ -174,12 +174,20 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 | **existingLogStorageAccountResourceId** | Resource ID of the storage account to receive build logs (deploy imageManagement with `deployBuildLogsStorageAccount = true`) | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{name}` |
 | **logContainerName** | Blob container name to write logs into | `image-customization-logs` (default) |
 
-### Image Management Resource References
+### CMK Encryption Reference
 
-These parameters reference the Image Management resources and are included in the same `<prefix>.imageBuild.parameters.json` file:
+Gallery image version encryption is managed by the **imageManagement** template. Deploy imageManagement with `keyManagement = CustomerManaged` or `CustomerManagedHSM` to create one Disk Encryption Set for the gallery, then pass its `galleryDiskEncryptionSetResourceId` output here. This avoids creating a new DES on every build.
 
 | Parameter | Description | Example |
-|-----------|-------------|------|
+|-----------|-------------|---------|
+| **existingGalleryDiskEncryptionSetResourceId** | Resource ID of the DES created by imageManagement. Leave empty for platform-managed key encryption. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}` |
+
+### Image Management Resource References
+
+These parameters reference Image Management outputs and belong in the same `<prefix>.imageBuild.parameters.json` file:
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
 | **computeGalleryResourceId** | Resource ID of the Azure Compute Gallery | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.Compute/galleries/{gallery-name}` |
 | **artifactsContainerUri** | URI of the blob container with artifacts | `https://{storage-account}.blob.core.usgovcloudapi.net/artifacts` |
 | **userAssignedIdentityResourceId** | Optional. Managed identity to attach to the build VM. Required when zero-trust artifacts storage or log collection is enabled. Must have 'Storage Blob Data Reader' on the artifacts container and/or 'Storage Blob Data Contributor' on the log storage account. Leave empty to allow the deployment to create its own identity. | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity-name}` |

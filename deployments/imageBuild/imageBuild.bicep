@@ -154,27 +154,10 @@ param existingLogStorageAccountResourceId string = ''
 @description('Optional. Name of the blob container in the logs storage account to write customization logs to.')
 param logContainerName string = 'image-customization-logs'
 
-@description('Optional. Resource ID of the Key Vault used for gallery image version Customer-Managed Key operations. Required when `keyManagementGalleryImageVersions` is CustomerManaged or CustomerManagedHSM.')
-param encryptionKeyVaultResourceId string = ''
-
-@description('Optional. Number of days before the CMK expires and auto-rotates.')
-@minValue(7)
-param keyExpirationInDays int = 180
-
-// ── Customer-Managed Key parameters for gallery image versions ────────────────
-
-@description('Optional. Key management for gallery image version replicas stored in the Compute Gallery. When CustomerManaged or CustomerManagedHSM, a Disk Encryption Set is created in the gallery resource group and applied to all replication target regions. Requires `encryptionKeyVaultResourceId` to be set.')
-@allowed([
-  'PlatformManaged'
-  'CustomerManaged'
-  'CustomerManagedHSM'
-])
-param keyManagementGalleryImageVersions string = 'PlatformManaged'
-
-@description('Optional. Resource ID of an existing Disk Encryption Set to use for gallery image version encryption. When provided, no new DES is created. Only used when keyManagementGalleryImageVersions is not PlatformManaged.')
+@description('Optional. Resource ID of an existing Disk Encryption Set to use for gallery image version encryption. Created by the imageManagement template; pass its galleryDiskEncryptionSetResourceId output here to share the same DES across all image builds.')
 param existingGalleryDiskEncryptionSetResourceId string = ''
 
-@description('Optional. Confidential VM encryption type applied to each image version replication target region. Only relevant when the image definition SecurityType is ConfidentialVM or ConfidentialVMSupported and keyManagementGalleryImageVersions is not PlatformManaged.')
+@description('Optional. Confidential VM encryption type applied to each image version replication target region. Only relevant when the image definition SecurityType is ConfidentialVM or ConfidentialVMSupported.')
 @allowed([
   ''
   'EncryptedWithPmk'
@@ -431,19 +414,7 @@ var imageVersionReplicationRegions = empty(remoteComputeGalleryResourceId)
       ? union(localImageVersionTargetRegions, defaultRemoteImageVersionTargetRegions)
       : localImageVersionTargetRegions
 
-var deployGalleryDes = keyManagementGalleryImageVersions != 'PlatformManaged' && empty(existingGalleryDiskEncryptionSetResourceId)
-
-var galleryDiskEncryptionSetName = nameConvResTypeAtEnd
-  ? 'avd-gallery-${keyManagementGalleryImageVersions == 'CustomerManagedHSM' ? 'hsm-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
-  : '${resourceAbbreviations.diskEncryptionSets}-avd-gallery-${keyManagementGalleryImageVersions == 'CustomerManagedHSM' ? 'hsm-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}'
-
-var galleryDiskEncryptionKeyName = 'avd-encryption-key-gallery-imageversions'
-
-var effectiveGalleryDiskEncryptionSetResourceId = keyManagementGalleryImageVersions == 'PlatformManaged'
-  ? ''
-  : !empty(existingGalleryDiskEncryptionSetResourceId)
-      ? existingGalleryDiskEncryptionSetResourceId
-      : galleryDes!.outputs.diskEncryptionSetResourceId
+var effectiveGalleryDiskEncryptionSetResourceId = existingGalleryDiskEncryptionSetResourceId
 
 // Note: auto-creation of a ConfidentialVM DES (ConfidentialVmEncryptedWithCustomerKey type) is a feature gap.
 // CVM DES provisioning requires a Confidential VM Orchestrator service principal key-release role assignment
@@ -610,26 +581,6 @@ module roleAssignmentBlobDataContributorExistingStorage '../../.common/bicepModu
     principalId: userAssignedIdentity!.outputs.principalId
     roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
     principalType: 'ServicePrincipal'
-  }
-}
-
-// ── Customer-Managed Keys for gallery image versions ──────────────────────────
-// Creates one DES per key management type in the gallery resource group.
-// Scoped to the gallery subscription so cross-subscription galleries are supported.
-
-module galleryDes '../hostpools/modules/diskCmk/diskCmk.bicep' = if (deployGalleryDes) {
-  name: '${depPrefix}Gallery-ImageVersion-DES-${deploymentSuffix}'
-  scope: subscription(split(computeGalleryResourceId, '/')[2])
-  params: {
-    resourceGroupName: split(computeGalleryResourceId, '/')[4]
-    keyVaultResourceId: encryptionKeyVaultResourceId
-    keyManagementType: keyManagementGalleryImageVersions == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
-    keyExpirationInDays: keyExpirationInDays
-    location: computeLocation
-    tags: tags
-    deploymentSuffix: deploymentSuffix
-    keyName: galleryDiskEncryptionKeyName
-    diskEncryptionSetName: galleryDiskEncryptionSetName
   }
 }
 

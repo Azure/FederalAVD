@@ -28,7 +28,8 @@ flowchart TD
         IM_O3(["artifactsBlobContainerUrl"])
         IM_O4(["managedIdentityResourceId"])
         IM_O5(["buildLogsStorageAccountResourceId"])
-        IM_RUN --> IM_O1 & IM_O2 & IM_O3 & IM_O4 & IM_O5
+        IM_O6(["galleryDiskEncryptionSetResourceId"])
+        IM_RUN --> IM_O1 & IM_O2 & IM_O3 & IM_O4 & IM_O5 & IM_O6
     end
 
     subgraph UA["⬆️ Step 3 · Upload Artifacts"]
@@ -53,9 +54,6 @@ flowchart TD
     %% Key Vaults → Image Management (CMK)
     KV_O2 -->|"→ encryptionKeyVaultResourceId"| IM_RUN
 
-    %% Key Vaults → Image Build (CMK on gallery images)
-    KV_O2 -->|"→ encryptionKeyVaultResourceId"| IB_RUN
-
     %% Key Vaults → Host Pool
     KV_O1 -->|"→ credentialsKeyVaultResourceId"| HP_RUN
     KV_O2 -->|"→ encryptionKeyVaultResourceId"| HP_RUN
@@ -68,6 +66,7 @@ flowchart TD
     IM_O3 -->|"→ artifactsContainerUri"| IB_RUN
     IM_O4 -->|"→ userAssignedIdentityResourceId"| IB_RUN
     IM_O5 -->|"→ existingLogStorageAccountResourceId"| IB_RUN
+    IM_O6 -->|"→ existingGalleryDiskEncryptionSetResourceId"| IB_RUN
 
     %% Upload Artifacts → Image Build (data dependency, no parameter)
     UA_DONE -.->|"artifacts ready"| IB_RUN
@@ -88,7 +87,7 @@ flowchart TD
 | Output | Used by |
 |--------|---------|
 | `secretsKeyVaultResourceId` | Host pool — `credentialsKeyVaultResourceId` parameter |
-| `encryptionKeyVaultResourceId` | Image Management — `encryptionKeyVaultResourceId`; Image Build — `encryptionKeyVaultResourceId`; Host Pool — `encryptionKeyVaultResourceId` |
+| `encryptionKeyVaultResourceId` | Image Management — `encryptionKeyVaultResourceId`; Host Pool — `encryptionKeyVaultResourceId` |
 | `encryptionKeyVaultUri` | Available if needed for manual key references |
 
 ### Notes
@@ -121,6 +120,7 @@ Script invocation:
 | `artifactsBlobContainerUrl` | Image Build — `artifactsContainerUri` parameter |
 | `managedIdentityResourceId` | Image Build — `userAssignedIdentityResourceId` parameter |
 | `buildLogsStorageAccountResourceId` | Image Build — `existingLogStorageAccountResourceId` parameter |
+| `galleryDiskEncryptionSetResourceId` | Image Build — `existingGalleryDiskEncryptionSetResourceId` parameter (only when CMK enabled) |
 
 ### Notes
 
@@ -161,9 +161,7 @@ Inputs from Step 2:
   artifactsBlobContainerUrl     →  imageBuild parameter: artifactsContainerUri
   managedIdentityResourceId     →  imageBuild parameter: userAssignedIdentityResourceId
   buildLogsStorageAccountResourceId  →  imageBuild parameter: existingLogStorageAccountResourceId (optional)
-
-Inputs from Step 1 (if CMK on gallery images):
-  encryptionKeyVaultResourceId  →  imageBuild parameter: encryptionKeyVaultResourceId
+  galleryDiskEncryptionSetResourceId →  imageBuild parameter: existingGalleryDiskEncryptionSetResourceId (only when CMK enabled)
 
 Script invocation:
   .\Invoke-ImageBuilds.ps1 -Location <region> -ParameterFilePrefixes @('prefix1','prefix2')

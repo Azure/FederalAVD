@@ -38,10 +38,11 @@ Subscription
 │   ├── User-Assigned Managed Identity (deployArtifactsStorageAccount = true OR deployBuildLogsStorageAccount = true)
 │   │   ├── RBAC: Storage Blob Data Reader on artifacts storage account
 │   │   └── RBAC: Storage Blob Data Contributor on build logs storage account
+│   ├── CMK Encryption Identity (keyManagement != PlatformManaged)
+│   │   └── RBAC: Key Vault Crypto Officer on encryption key vault
+│   ├── Gallery Disk Encryption Set (keyManagement != PlatformManaged)
 │   └── Private Endpoint(s) (optional, one per storage account)
 │       └── Network Interface
-└── Remote Resource Group (Secondary Region, optional)
-    └── Azure Compute Gallery (for regional replication)
 ```
 
 ### Identity & Access
@@ -92,12 +93,12 @@ The managed identity is automatically assigned:
 - **Default:** `true`
 - **Description:** Deploy the artifacts storage account, blob container, and managed identity. Set to `false` when only the gallery is needed.
 
-#### `keyManagementStorageAccount`
+#### `keyManagement`
 
 - **Type:** String
-- **Default:** `MicrosoftManaged`
-- **Allowed Values:** `MicrosoftManaged`, `CustomerManaged`, `CustomerManagedHSM`
-- **Description:** Encryption key management for **both** the artifacts and build logs storage accounts. When set to `CustomerManaged` or `CustomerManagedHSM`, a single shared encryption UAI (`uai-avd-image-management-encryption-{loc}`) is created and both storage accounts use the same Key Vault.
+- **Default:** `PlatformManaged`
+- **Allowed Values:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
+- **Description:** Encryption key management for **all** encrypted resources in this deployment — both storage accounts and gallery image versions. When `CustomerManaged` or `CustomerManagedHSM`, a shared encryption UAI and a gallery Disk Encryption Set (DES) are created. Pass the `galleryDiskEncryptionSetResourceId` output to each imageBuild deployment as `existingGalleryDiskEncryptionSetResourceId` to reuse the same DES across all builds.
 
 ### Networking & Security
 
@@ -143,13 +144,7 @@ The managed identity is automatically assigned:
 
 ### Disaster Recovery
 
-#### `remoteLocation`
-
-- **Type:** String
-- **Optional**
-- **Description:** Secondary Azure region for remote gallery
-- **Example:** `usgovarizona` (if primary is `usgovvirginia`)
-- **Use when:** Multi-region image replication needed
+Image version replication to a remote region is configured per imageBuild deployment via the `remoteComputeGalleryResourceId` parameter. No remote gallery is deployed by imageManagement.
 
 ### Monitoring & Tagging
 
@@ -165,14 +160,14 @@ The managed identity is automatically assigned:
 
 - **Type:** String
 - **Optional**
-- **Description:** Resource ID of the Key Vault used for CMK encryption. Required when `keyManagementStorageAccount` is not `MicrosoftManaged`. Vault must have soft delete and purge protection enabled. The same Key Vault is used for both the artifacts and build logs storage accounts.
+- **Description:** Resource ID of the Key Vault used for CMK encryption. Required when `keyManagement` is not `PlatformManaged`. Vault must have soft delete and purge protection enabled. The same vault is used for both storage accounts and gallery image version encryption.
 - **Example:** `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.KeyVault/vaults/{vault}`
 
 #### `keyExpirationInDays`
 
 - **Type:** Integer
 - **Default:** `180`
-- **Description:** Days before the CMK key version is automatically rotated.
+- **Description:** Days before the CMK key version is automatically rotated. Applies to all encrypted resources.
 
 ### Build Logs Storage Account
 
@@ -296,7 +291,12 @@ az deployment sub create \
 - **Description:** Full URI of the build logs blob container (empty string if `deployBuildLogsStorageAccount = false`)
 - **Example:** `https://stbuildlogsuse2abc123.blob.core.usgovcloudapi.net/image-customization-logs`
 
-## Post-Deployment Steps
+### `galleryDiskEncryptionSetResourceId`
+
+- **Type:** String
+- **Description:** Resource ID of the gallery Disk Encryption Set. Empty string when `keyManagement = PlatformManaged`.
+- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/diskEncryptionSets/des-avd-image-management-use2`
+- **Used by:** Pass as `existingGalleryDiskEncryptionSetResourceId` in every imageBuild deployment when CMK is enabled.
 
 ### 1. Upload Artifacts to Storage
 

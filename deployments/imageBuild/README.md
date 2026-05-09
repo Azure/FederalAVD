@@ -391,31 +391,13 @@ See [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) for
 
 ### Customer-Managed Key Encryption
 
-#### `keyManagementGalleryImageVersions`
-
-- **Type:** String
-- **Default:** `PlatformManaged`
-- **Allowed Values:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
-- **Description:** Controls how gallery image version replicas are encrypted at rest. When `CustomerManaged` or `CustomerManagedHSM`, a Disk Encryption Set is automatically created in the gallery resource group unless `existingGalleryDiskEncryptionSetResourceId` is provided.
-
-#### `encryptionKeyVaultResourceId`
-
-- **Type:** String
-- **Default:** `''`
-- **Description:** Resource ID of the Key Vault used for CMK operations. Required when `keyManagementGalleryImageVersions` is not `PlatformManaged`. The vault must have soft delete and purge protection enabled.
-- **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.KeyVault/vaults/{vault}`
-
-#### `keyExpirationInDays`
-
-- **Type:** Integer (7–365)
-- **Default:** `180`
-- **Description:** Number of days before a new key version is automatically generated.
+Gallery image version CMK is managed by the **imageManagement** template, which creates one Disk Encryption Set (DES) for the gallery and outputs `galleryDiskEncryptionSetResourceId`. Pass that output here to share the same DES across all builds rather than creating a new one per build.
 
 #### `existingGalleryDiskEncryptionSetResourceId`
 
 - **Type:** String
 - **Default:** `''`
-- **Description:** Optional. Resource ID of an existing Disk Encryption Set for gallery image version encryption. If not provided and CMK is enabled, a new DES is created automatically.
+- **Description:** Resource ID of an existing Disk Encryption Set for gallery image version encryption. Created by the imageManagement template; pass its `galleryDiskEncryptionSetResourceId` output here. When empty, gallery image versions use platform-managed keys.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}`
 
 #### `galleryImageVersionConfidentialVMEncryptionType`
@@ -423,7 +405,7 @@ See [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) for
 - **Type:** String
 - **Default:** `''`
 - **Allowed Values:** `''`, `EncryptedWithPmk`, `EncryptedVMGuestStateOnlyWithPmk`, `EncryptedWithCmk`
-- **Description:** Specifies VM guest state encryption for Confidential VM image definitions. Only relevant when `keyManagementGalleryImageVersions` is not `PlatformManaged` and the image definition security type is Confidential.
+- **Description:** Specifies VM guest state encryption for Confidential VM image definitions. Only relevant when the image definition security type is Confidential.
 
 #### `existingGallerySecureVMDiskEncryptionSetResourceId`
 
