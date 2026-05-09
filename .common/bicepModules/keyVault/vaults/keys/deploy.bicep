@@ -12,11 +12,17 @@ param keySize int = 4096
 @description('Whether the key is enabled for use.')
 param attributesEnabled bool = true
 
-@description('Whether the private key can be exported.')
+@description('Whether the private key can be exported. Required for Confidential VM key release.')
 param attributesExportable bool = false
+
+@description('Optional. Permitted key operations. Defaults to all standard operations when empty.')
+param keyOps array = []
 
 @description('Optional. Key rotation policy.')
 param rotationPolicy object = {}
+
+@description('Optional. Key release policy. Required for Confidential VM encryption keys (exportable must also be true).')
+param keyReleasePolicy object = {}
 
 @description('Optional. Tags to apply to the key.')
 param tags object = {}
@@ -32,11 +38,13 @@ resource key 'Microsoft.KeyVault/vaults/keys@2023-07-01' = {
   properties: {
     kty: kty
     keySize: keySize > 0 ? keySize : null
+    keyOps: !empty(keyOps) ? keyOps : null
     attributes: {
       enabled: attributesEnabled
       exportable: attributesExportable
     }
     rotationPolicy: !empty(rotationPolicy) ? rotationPolicy : null
+    release_policy: !empty(keyReleasePolicy) ? keyReleasePolicy : null
   }
 }
 

@@ -37,6 +37,8 @@ param keyVaultResourceId string
 @allowed([
   'CustomerManaged'
   'CustomerManagedHSM'
+  'PlatformManagedAndCustomerManaged'
+  'PlatformManagedAndCustomerManagedHSM'
 ])
 param keyManagementType string
 
@@ -73,16 +75,22 @@ param storageIdentityName string = ''
 
 @description('''
 Optional. Array of disk encryption set CMK configurations.
-Each entry produces: one KV key (unless confidentialVM), one DiskEncryptionSet,
+Each entry produces: one KV key (unless skipKeyCreation), one DiskEncryptionSet,
 one key-scoped role assignment (Crypto Service Encryption User).
-  keyName                       — name of the key to create
-  diskEncryptionSetName         — name of the DiskEncryptionSet to create
-  confidentialVMOSDiskEncryption — when true, skips key creation (key is created
-                                   via run command by the Confidential VM
-                                   infrastructure) and uses ConfidentialVmEncryptedWithCustomerKey
+  keyName                           — name of the key to create
+  diskEncryptionSetName             — name of the DiskEncryptionSet to create
+  confidentialVMOSDiskEncryption    — when true, uses ConfidentialVmEncryptedWithCustomerKey DES type
+                                      and grants CVM Orchestrator the Crypto Release User role
   confidentialVMOrchestratorObjectId — required when confidentialVMOSDiskEncryption is true;
                                        object ID of the Confidential VM Orchestrator
                                        enterprise application (bf7b6499-ff71-4aa2-97a4-f372087be7f0)
+  skipKeyCreation                   — when true, skips key creation (key was pre-created via
+                                      Run Command or external process due to key release policy
+                                      immutability). Used by hostpool Run Command path.
+                                      When false/omitted, key is created via ARM with release policy.
+                                      WARNING: ARM key creation with keyReleasePolicy is a one-time
+                                      operation — the policy is immutable. Re-deploying will fail if
+                                      the key already exists. Use skipKeyCreation on subsequent deploys.
 ''')
 param diskEncryptionConfigs diskEncryptionConfigType[] = []
 
@@ -93,6 +101,8 @@ type diskEncryptionConfigType = {
   diskEncryptionSetName: string
   confidentialVMOSDiskEncryption: bool?
   confidentialVMOrchestratorObjectId: string?
+  @description('When true, skips ARM key creation — key was pre-created via Run Command or external process.')
+  skipKeyCreation: bool?
 }
 
 // ─── Variables ───────────────────────────────────────────────────────────────
@@ -123,6 +133,14 @@ var parentTag = !empty(parentResourceId) ? { 'cm-resource-parent': parentResourc
 
 var roleKeyVaultCryptoEncryptionUser = 'e147488a-f6f5-4113-8e2d-b22465e65bf6'
 var roleKeyVaultCryptoReleaseUser = '08bbd89e-9f13-488c-ac41-acfcb10c90ab'
+
+// Key release policy covering all Azure regions (commercial + sovereign).
+// The anyOf structure allows any listed attestation authority to satisfy the policy,
+// so a single policy JSON works across all clouds without modification.
+// This policy is used for Confidential VM encryption keys (exportable RSA-HSM).
+// IMPORTANT: Azure Key Vault key release policies are immutable once set.
+// Re-deploying with this policy on an existing key will fail. See documentation.
+var cvmKeyReleasePolicy = base64('{"version":"1.0.0","anyOf":[{"authority":"https://sharedeus.eus.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedwus.wus.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedneu.neu.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedweu.weu.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedsasia.sasia.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedeasia.easia.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedjpe.jpe.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedswn.swn.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://shareditn.itn.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedeus2.eus2.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedeus2e.eus2e.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedscus.scus.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedcuse.cuse.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedcus.cus.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedeau.eau.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedsau.sau.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedcin.cin.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://shareduaen.uaen.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://shareddewc.dewc.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedwus3.wus3.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]}]}')
 
 // ─── Storage: Keys ───────────────────────────────────────────────────────────
 
@@ -178,10 +196,16 @@ module storageKeyRoleAssignments '../../keyVault/vaults/keys/roleAssignment.bice
   }
 ]
 
-// ─── Disk: Keys (skipped for Confidential VM — CVMOrchestrator creates them) ─
+// ─── Disk: Keys ──────────────────────────────────────────────────────────────
+// Skipped when skipKeyCreation=true (key pre-created via Run Command).
+// For CVM configs without skipKeyCreation, key is created via ARM with
+// exportable=true and a key release policy covering all Azure regions.
+// WARNING: Key release policies are immutable — re-deploying will fail if the
+// key already exists. This is a one-time operation; use skipKeyCreation on
+// subsequent deploys or document this as a first-deploy-only step.
 
 module diskKeys '../../keyVault/vaults/keys/deploy.bicep' = [
-  for (config, i) in diskEncryptionConfigs: if (!(config.?confidentialVMOSDiskEncryption ?? false)) {
+  for (config, i) in diskEncryptionConfigs: if (!(config.?skipKeyCreation ?? false)) {
     name: 'CMK-DiskKey-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
     params: {
@@ -190,8 +214,14 @@ module diskKeys '../../keyVault/vaults/keys/deploy.bicep' = [
       kty: kty
       keySize: 4096
       attributesEnabled: true
-      attributesExportable: false
-      rotationPolicy: rotationPolicy
+      attributesExportable: config.?confidentialVMOSDiskEncryption ?? false
+      keyOps: (config.?confidentialVMOSDiskEncryption ?? false)
+        ? ['encrypt', 'decrypt', 'sign', 'verify', 'wrapKey', 'unwrapKey']
+        : []
+      rotationPolicy: (config.?confidentialVMOSDiskEncryption ?? false) ? {} : rotationPolicy
+      keyReleasePolicy: (config.?confidentialVMOSDiskEncryption ?? false)
+        ? { data: cvmKeyReleasePolicy, contentType: 'application/json; charset=utf-8' }
+        : {}
       tags: parentTag
     }
   }

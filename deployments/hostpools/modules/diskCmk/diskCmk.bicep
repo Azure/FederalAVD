@@ -7,7 +7,7 @@ param resourceGroupName string
 param keyVaultResourceId string
 
 @description('Required. CMK type for disk encryption.')
-@allowed(['CustomerManaged', 'CustomerManagedHSM'])
+@allowed(['CustomerManaged', 'CustomerManagedHSM', 'PlatformManagedAndCustomerManaged', 'PlatformManagedAndCustomerManagedHSM'])
 param keyManagementType string
 
 @description('Required. Key expiration in days.')

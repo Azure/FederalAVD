@@ -1165,7 +1165,9 @@ module diskCmk 'modules/diskCmk/diskCmk.bicep' = if (deployTopLevelDiskCmk) {
   params: {
     resourceGroupName: resourceNames.outputs.resourceGroupHosts
     keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
-    keyManagementType: contains(keyManagementDisks, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyManagementType: contains(keyManagementDisks, 'HSM')
+      ? (contains(keyManagementDisks, 'Platform') ? 'PlatformManagedAndCustomerManagedHSM' : 'CustomerManagedHSM')
+      : (contains(keyManagementDisks, 'Platform') ? 'PlatformManagedAndCustomerManaged' : 'CustomerManaged')
     keyExpirationInDays: keyExpirationInDays
     location: virtualMachinesRegion
     tags: tags

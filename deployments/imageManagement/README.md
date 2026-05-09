@@ -38,9 +38,10 @@ Subscription
 │   ├── User-Assigned Managed Identity (deployArtifactsStorageAccount = true OR deployBuildLogsStorageAccount = true)
 │   │   ├── RBAC: Storage Blob Data Reader on artifacts storage account
 │   │   └── RBAC: Storage Blob Data Contributor on build logs storage account
-│   ├── CMK Encryption Identity (keyManagement != PlatformManaged)
-│   │   └── RBAC: Key Vault Crypto Officer on encryption key vault
-│   ├── Gallery Disk Encryption Set (keyManagement != PlatformManaged)
+│   ├── CMK Encryption Identity (keyManagementStorageAccounts != PlatformManaged)
+│   │   └── RBAC: Key Vault Crypto Service Encryption User on storage encryption keys
+│   ├── Gallery Disk Encryption Set (keyManagementGalleryImageVersions != PlatformManaged)
+│   ├── Gallery Confidential VM Disk Encryption Set (createConfidentialVmGalleryDes = true)
 │   └── Private Endpoint(s) (optional, one per storage account)
 │       └── Network Interface
 ```
@@ -93,12 +94,31 @@ The managed identity is automatically assigned:
 - **Default:** `true`
 - **Description:** Deploy the artifacts storage account, blob container, and managed identity. Set to `false` when only the gallery is needed.
 
-#### `keyManagement`
+#### `keyManagementStorageAccounts`
 
 - **Type:** String
 - **Default:** `PlatformManaged`
 - **Allowed Values:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
-- **Description:** Encryption key management for **all** encrypted resources in this deployment — both storage accounts and gallery image versions. When `CustomerManaged` or `CustomerManagedHSM`, a shared encryption UAI and a gallery Disk Encryption Set (DES) are created. Pass the `galleryDiskEncryptionSetResourceId` output to each imageBuild deployment as `existingGalleryDiskEncryptionSetResourceId` to reuse the same DES across all builds.
+- **Description:** Encryption key management for the storage accounts in this deployment. When `CustomerManaged` or `CustomerManagedHSM`, a shared encryption UAI and per-account keys are created in the specified Key Vault.
+
+#### `keyManagementGalleryImageVersions`
+
+- **Type:** String
+- **Default:** `PlatformManaged`
+- **Allowed Values:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`, `PlatformManagedAndCustomerManaged`, `PlatformManagedAndCustomerManagedHSM`
+- **Description:** Encryption key management for gallery image versions. When any customer-managed option is selected, a standard Disk Encryption Set (DES) is always created. `PlatformManagedAndCustomerManaged*` variants add a second platform-key layer for double encryption at rest. Pass the `galleryDiskEncryptionSetResourceId` output to each imageBuild deployment as `existingGalleryDiskEncryptionSetResourceId`.
+
+#### `createConfidentialVmGalleryDes`
+
+- **Type:** Boolean
+- **Default:** `false`
+- **Description:** Deploy a second DES of type `ConfidentialVmEncryptedWithCustomerKey` for gallery image versions intended for ConfidentialVM session host deployments. Requires a Premium Key Vault and the CVM Orchestrator enterprise application to be registered in the tenant. The CVM DES always uses an RSA-HSM key regardless of the `keyManagementGalleryImageVersions` selection. A standard gallery DES is always created alongside it. **WARNING:** The Confidential VM key release policy is immutable once set — re-deploying with this option enabled will fail if the key already exists. Enable only on the first deployment per region.
+
+#### `confidentialVMOrchestratorObjectId`
+
+- **Type:** String
+- **Optional**
+- **Description:** Object ID of the Confidential VM Orchestrator enterprise application in the tenant (app ID: `bf7b6499-ff71-4aa2-97a4-f372087be7f0`). Required when `createConfidentialVmGalleryDes = true`. Retrieve with: `Get-AzADServicePrincipal -ApplicationId 'bf7b6499-ff71-4aa2-97a4-f372087be7f0' | Select-Object -ExpandProperty Id`
 
 ### Networking & Security
 
@@ -182,7 +202,7 @@ Image version replication to a remote region is configured per imageBuild deploy
 Example parameter files are provided in the `parameters\` directory. Copy and rename one to match your environment, then fill in the placeholder values (`<...>`).
 
 | File | Description |
-|------|-------------|
+| :--- | :---------- |
 | `basic.imageManagement.parameters.json` | Artifacts storage only, public endpoint |
 | `privateEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, private endpoints, fully private |
 | `serviceEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, service endpoint subnet access |
@@ -272,12 +292,6 @@ az deployment sub create \
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-use2`
 - **Used by:** Image build VMs to authenticate to storage
 
-### `remoteComputeGalleryResourceId`
-
-- **Type:** String
-- **Description:** Resource ID of the remote gallery (if deployed)
-- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-usa2/providers/Microsoft.Compute/galleries/gal_avd_image_management_usa2`
-
 ### `buildLogsStorageAccountResourceId`
 
 - **Type:** String
@@ -294,9 +308,16 @@ az deployment sub create \
 ### `galleryDiskEncryptionSetResourceId`
 
 - **Type:** String
-- **Description:** Resource ID of the gallery Disk Encryption Set. Empty string when `keyManagement = PlatformManaged`.
-- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/diskEncryptionSets/des-avd-image-management-use2`
+- **Description:** Resource ID of the standard gallery Disk Encryption Set. Empty string when `keyManagementGalleryImageVersions = PlatformManaged`.
+- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/diskEncryptionSets/des-image-management-gallery-customer-keys-use2`
 - **Used by:** Pass as `existingGalleryDiskEncryptionSetResourceId` in every imageBuild deployment when CMK is enabled.
+
+### `galleryConfidentialVmDiskEncryptionSetResourceId`
+
+- **Type:** String
+- **Description:** Resource ID of the Confidential VM gallery Disk Encryption Set (`ConfidentialVmEncryptedWithCustomerKey`). Empty string when `createConfidentialVmGalleryDes = false`.
+- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/diskEncryptionSets/des-image-management-gallery-confidential-vm-keys-use2`
+- **Used by:** Pass as `existingGallerySecureVMDiskEncryptionSetResourceId` in imageBuild deployments targeting ConfidentialVM image definitions.
 
 ### 1. Upload Artifacts to Storage
 

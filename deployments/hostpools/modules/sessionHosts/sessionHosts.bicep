@@ -313,6 +313,7 @@ module customerManagedKeys '../../../../.common/bicepModules/custom/customerMana
               : diskEncryptionSetNames.platformAndCustomerManaged)
         confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
         confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
+        skipKeyCreation: confidentialVMOSDiskEncryption // key pre-created by Run Command for CVM
       }
     ]
   }

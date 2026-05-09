@@ -41,20 +41,36 @@ param deployArtifactsStorageAccount bool = true
 
 // ── Customer-Managed Key parameters ──────────────────────────────────────────
 
-@description('Optional. Key management for all encrypted resources: storage accounts and gallery image versions. When CustomerManaged or CustomerManagedHSM, storage accounts get CMK via a UAI and the gallery gets a Disk Encryption Set. The `galleryDiskEncryptionSetResourceId` output can then be passed to imageBuild as `existingGalleryDiskEncryptionSetResourceId`.')
+@description('Optional. Key management for storage account encryption.')
 @allowed([
   'PlatformManaged'
   'CustomerManaged'
   'CustomerManagedHSM'
 ])
-param keyManagement string = 'PlatformManaged'
+param keyManagementStorageAccounts string = 'PlatformManaged'
 
-@description('Optional. Resource ID of the Key Vault for CMK encryption. Required when keyManagement is CustomerManaged or CustomerManagedHSM.')
+@description('Optional. Key management for gallery image version encryption. CustomerManaged and CustomerManagedHSM use a single CMK layer. PlatformManagedAndCustomerManaged / PlatformManagedAndCustomerManagedHSM add a second platform-key layer underneath (double encryption). A standard DES is always created when any customer-managed option is selected. The `galleryDiskEncryptionSetResourceId` output can then be passed to imageBuild as `existingGalleryDiskEncryptionSetResourceId`.')
+@allowed([
+  'PlatformManaged'
+  'CustomerManaged'
+  'CustomerManagedHSM'
+  'PlatformManagedAndCustomerManaged'
+  'PlatformManagedAndCustomerManagedHSM'
+])
+param keyManagementGalleryImageVersions string = 'PlatformManaged'
+
+@description('Optional. Resource ID of the Key Vault for CMK encryption. Required when keyManagementStorageAccounts or keyManagementGalleryImageVersions is not PlatformManaged.')
 param encryptionKeyVaultResourceId string = ''
 
 @description('Optional. Number of days before the CMK expires and auto-rotates.')
 @minValue(7)
 param keyExpirationInDays int = 180
+
+@description('Optional. Deploy a Disk Encryption Set for Confidential VM gallery image versions (ConfidentialVmEncryptedWithCustomerKey). Requires a Premium Key Vault and the CVM Orchestrator service principal object ID. The CVM DES is always RSA-HSM backed (CustomerManagedHSM) regardless of the gallery key management selection. A standard gallery DES is always created alongside this. WARNING: The Confidential VM encryption key release policy is immutable once created — redeploying with this option enabled will fail if the key already exists. This is a one-time operation per region.')
+param createConfidentialVmGalleryDes bool = false
+
+@description('Optional. Object ID of the Confidential VM Orchestrator enterprise application (app ID: bf7b6499-ff71-4aa2-97a4-f372087be7f0). Required when createConfidentialVmGalleryDes is true.')
+param confidentialVMOrchestratorObjectId string = ''
 
 // ── Build Logs Storage Account ────────────────────────────────────────────────
 
@@ -69,7 +85,6 @@ var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes
 #disable-next-line BCP329
 var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
-#disable-next-line BCP329
 var locations = startsWith(cloud, 'us')
   ? (loadJsonContent('../../.common/data/locations.json')).other
   : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
@@ -85,14 +100,11 @@ var nameConv_ImageManagement_ResGroup = nameConvResTypeAtEnd
 var nameConv_ImageManagement_Resources = nameConvResTypeAtEnd
   ? 'avd-${identifier}-${nameConvSuffix}'
   : 'RESOURCETYPE-avd-${identifier}-${nameConvSuffix}'
-#disable-next-line BCP329
 var resourceGroupName = replace(
   replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varLocation].abbreviation),
   'RESOURCETYPE',
   resourceAbbreviations.resourceGroups
 )
-#disable-next-line BCP329
-
 var artifactsBlobContainerName = 'artifacts'
 var galleryName = replace(
   replace(
@@ -148,9 +160,14 @@ var cmkKeyNames = union(
 )
 
 var galleryDiskEncryptionSetName = nameConvResTypeAtEnd
-  ? 'image-management-gallery-${keyManagement == 'CustomerManagedHSM' ? 'hsm-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
-  : '${resourceAbbreviations.diskEncryptionSets}-image-management-gallery-${keyManagement == 'CustomerManagedHSM' ? 'hsm-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}'
-var galleryDiskEncryptionKeyName = 'image-management-encryption-key-gallery-imageversions'
+  ? 'image-management-gallery-${contains(keyManagementGalleryImageVersions, 'Platform') ? 'platform-and-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
+  : '${resourceAbbreviations.diskEncryptionSets}-image-management-gallery-${contains(keyManagementGalleryImageVersions, 'Platform') ? 'platform-and-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}'
+var galleryDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-vmImages'
+
+var galleryConfidentialVmDiskEncryptionSetName = nameConvResTypeAtEnd
+  ? 'image-management-gallery-confidential-vm-keys-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
+  : '${resourceAbbreviations.diskEncryptionSets}-image-management-gallery-confidential-vm-keys-${locations[varLocation].abbreviation}'
+var galleryConfidentialVmDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-confidentialVmImages'
 
 var logsStorageName = take(
   '${resourceAbbreviations.storageAccounts}imagelogs${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
@@ -168,7 +185,7 @@ resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   tags: tags.?resourceGroups ?? {}
 }
 
-resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (keyManagement != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)) {
+resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if ((keyManagementStorageAccounts != 'PlatformManaged' || keyManagementGalleryImageVersions != 'PlatformManaged' || createConfidentialVmGalleryDes) && !empty(encryptionKeyVaultResourceId)) {
   name: last(split(encryptionKeyVaultResourceId, '/'))
   scope: az.resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
 }
@@ -198,12 +215,12 @@ module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedI
 // Single CMK module covering both storage accounts with a shared encryption UAI.
 // CMK must complete before any storage account deployment so the role assignment
 // propagates before the storage PUT includes the CMK reference.
-module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagement != 'PlatformManaged' && (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)) {
+module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccounts != 'PlatformManaged' && (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)) {
   name: 'Storage-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     keyVaultResourceId: encryptionKeyVaultResourceId
-    keyManagementType: keyManagement == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyManagementType: keyManagementStorageAccounts == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
     keyExpirationInDays: keyExpirationInDays
     location: location
     tags: tags
@@ -217,19 +234,46 @@ module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/custome
 // DES for gallery image version encryption — created once here so imageBuild deployments
 // can pass `galleryDiskEncryptionSetResourceId` as `existingGalleryDiskEncryptionSetResourceId`,
 // suppressing per-build DES creation and KV dependency during image builds.
-module galleryCmk '../hostpools/modules/diskCmk/diskCmk.bicep' = if (keyManagement != 'PlatformManaged') {
+module galleryCmk '../hostpools/modules/diskCmk/diskCmk.bicep' = if (keyManagementGalleryImageVersions != 'PlatformManaged') {
   name: 'Gallery-CMK-${timeStamp}'
   scope: subscription()
   params: {
     resourceGroupName: resourceGroupName
     keyVaultResourceId: encryptionKeyVaultResourceId
-    keyManagementType: keyManagement == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyManagementType: contains(keyManagementGalleryImageVersions, 'HSM')
+      ? (contains(keyManagementGalleryImageVersions, 'Platform') ? 'PlatformManagedAndCustomerManagedHSM' : 'CustomerManagedHSM')
+      : (contains(keyManagementGalleryImageVersions, 'Platform') ? 'PlatformManagedAndCustomerManaged' : 'CustomerManaged')
     keyExpirationInDays: keyExpirationInDays
     location: location
     tags: tags
     deploymentSuffix: timeStamp
     keyName: galleryDiskEncryptionKeyName
     diskEncryptionSetName: galleryDiskEncryptionSetName
+  }
+  dependsOn: [resourceGroup]
+}
+
+// DES for Confidential VM gallery image versions (ConfidentialVmEncryptedWithCustomerKey).
+// Requires RSA-HSM key with key release policy — created via ARM on first deploy only.
+// WARNING: The key release policy is immutable. Re-deploying with createConfidentialVmGalleryDes=true
+// will fail if the key already exists. Disable this option on subsequent deployments.
+module galleryConfidentialVmCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (createConfidentialVmGalleryDes) {
+  name: 'Gallery-ConfidentialVM-CMK-${timeStamp}'
+  scope: az.resourceGroup(resourceGroupName)
+  params: {
+    keyVaultResourceId: encryptionKeyVaultResourceId
+    keyManagementType: 'CustomerManagedHSM'
+    location: location
+    tags: tags
+    deploymentSuffix: timeStamp
+    diskEncryptionConfigs: [
+      {
+        keyName: galleryConfidentialVmDiskEncryptionKeyName
+        diskEncryptionSetName: galleryConfidentialVmDiskEncryptionSetName
+        confidentialVMOSDiskEncryption: true
+        confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
+      }
+    ]
   }
   dependsOn: [resourceGroup]
 }
@@ -250,11 +294,11 @@ module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/
     privateEndpoint: storageNetworkAccess == 'PrivateEndpoint'
     networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
-    encryptionKeyVaultUri: keyManagement != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
+    encryptionKeyVaultUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
       ? encryptionKeyVault!.properties.vaultUri
       : ''
-    encryptionKeyName: keyManagement != 'PlatformManaged' ? storageEncryptionKeyName : ''
-    encryptionUserAssignedIdentityResourceId: keyManagement != 'PlatformManaged'
+    encryptionKeyName: keyManagementStorageAccounts != 'PlatformManaged' ? storageEncryptionKeyName : ''
+    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
       ? storageCmk!.outputs.storageIdentityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
@@ -337,11 +381,11 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
     privateEndpoint: storageNetworkAccess == 'PrivateEndpoint'
     networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
-    encryptionKeyVaultUri: keyManagement != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
+    encryptionKeyVaultUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
       ? encryptionKeyVault!.properties.vaultUri
       : ''
-    encryptionKeyName: keyManagement != 'PlatformManaged' ? logsStorageEncryptionKeyName : ''
-    encryptionUserAssignedIdentityResourceId: keyManagement != 'PlatformManaged'
+    encryptionKeyName: keyManagementStorageAccounts != 'PlatformManaged' ? logsStorageEncryptionKeyName : ''
+    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
       ? storageCmk!.outputs.storageIdentityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
@@ -437,4 +481,5 @@ output managedIdentityResourceId string = (deployArtifactsStorageAccount || depl
 output computeGalleryResourceId string = imageGallery!.outputs.resourceId
 output buildLogsStorageAccountResourceId string = deployBuildLogsStorageAccount ? logsStorageAccount!.outputs.resourceId : ''
 output buildLogsContainerUri string = deployBuildLogsStorageAccount ? 'https://${logsStorageName}.blob.${environment().suffixes.storage}/${logsContainerName}' : ''
-output galleryDiskEncryptionSetResourceId string = keyManagement != 'PlatformManaged' ? galleryCmk!.outputs.diskEncryptionSetResourceId : ''
+output galleryDiskEncryptionSetResourceId string = keyManagementGalleryImageVersions != 'PlatformManaged' ? galleryCmk!.outputs.diskEncryptionSetResourceId : ''
+output galleryConfidentialVmDiskEncryptionSetResourceId string = createConfidentialVmGalleryDes ? galleryConfidentialVmCmk!.outputs.diskResults[0].diskEncryptionSetResourceId : ''

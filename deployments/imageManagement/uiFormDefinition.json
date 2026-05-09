@@ -321,34 +321,97 @@
 					"label": "Encryption Key Management",
 					"elements": [
 						{
-							"name": "keyManagement",
-							"type": "Microsoft.Common.DropDown",
-							"label": "Key Management",
-							"defaultValue": "PlatformManaged",
-							"toolTip": "Encryption key management applied to all resources in this deployment — storage accounts and gallery image versions. Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
-							"constraints": {
-								"required": true,
-								"allowedValues": [
-									{
-										"label": "Platform-Managed Keys",
-										"value": "PlatformManaged"
-									},
-									{
-										"label": "Customer-Managed Keys",
-										"value": "CustomerManaged"
-									},
-									{
-										"label": "Customer-Managed Keys (HSM-backed)",
-										"value": "CustomerManagedHSM"
+							"name": "storage",
+							"type": "Microsoft.Common.Section",
+							"label": "Storage Account Encryption",
+							"elements": [
+								{
+									"name": "storageEncryptionInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "Storage accounts are encrypted at rest by default. Platform-managed keys require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys."
 									}
-								]
-							}
+								},
+								{
+									"name": "keyManagement",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Key Management",
+									"defaultValue": "PlatformManaged",
+									"toolTip": "Encryption key management applied to all resources in this deployment — storage accounts and gallery image versions. Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "Platform-Managed Keys",
+												"value": "PlatformManaged"
+											},
+											{
+												"label": "Customer-Managed Keys",
+												"value": "CustomerManaged"
+											},
+											{
+												"label": "Customer-Managed Keys (HSM-backed)",
+												"value": "CustomerManagedHSM"
+											}
+										]
+									}
+								}
+							]
 						},
 						{
-							"name": "cmkSection",
+							"name": "gallery",
+							"type": "Microsoft.Common.Section",
+							"label": "Gallery Image Version Encryption",
+							"elements": [
+								{
+									"name": "galleryEncryptionInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "Gallery image versions are encrypted at rest by default. Platform-managed keys require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys."
+									}
+								},
+								{
+									"name": "keyManagement",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Key Management",
+									"defaultValue": "PlatformManaged",
+
+									"toolTip": "Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "Platform-Managed Keys",
+												"value": "PlatformManaged"
+											},
+											{
+												"label": "Customer-Managed Keys",
+												"value": "CustomerManaged"
+											},
+											{
+												"label": "Customer-Managed Keys (HSM-backed)",
+												"value": "CustomerManagedHSM"
+											},
+											{
+												"label": "Platform-Managed and Customer-Managed Keys (Double Encryption)",
+												"value": "PlatformManagedAndCustomerManaged"
+											},
+											{
+												"label": "Platform-Managed and Customer-Managed Keys, HSM-backed (Double Encryption)",
+												"value": "PlatformManagedAndCustomerManagedHSM"
+											}
+										]
+									}
+								}
+							]
+						},						
+						{
+							"name": "keyVaultSection",
 							"type": "Microsoft.Common.Section",
 							"label": "Key Vault & Rotation",
-							"visible": "[not(equals(steps('encryption').keyManagement, 'PlatformManaged'))]",
+							"visible": "[or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged')))]",
 							"elements": [
 								{
 									"name": "cmkInfo",
@@ -375,7 +438,7 @@
 									"toolTip": "Select the Premium SKU Key Vault that holds the customer-managed encryption keys. Only Premium SKU vaults are listed. The same vault is used for storage account and gallery image version encryption.",
 									"constraints": {
 										"required": true,
-										"allowedValues": "[map(filter(steps('encryption').cmkSection.keyVaultsApi.value, (kv) => equals(kv.properties.sku.name, 'premium')), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
+										"allowedValues": "[map(filter(steps('encryption').keyVaultSection.keyVaultsApi.value, (kv) => equals(kv.properties.sku.name, 'premium')), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
 									}
 								},
 								{
@@ -387,6 +450,49 @@
 									"max": 365,
 									"defaultValue": 180,
 									"showStepMarkers": false
+								}
+							]
+						},
+						{
+							"name": "cvmDesSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Confidential VM Gallery Disk Encryption Set",
+							"visible": "[not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))]",
+							"elements": [
+								{
+									"name": "cvmDesInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "A Confidential VM Disk Encryption Set (ConfidentialVmEncryptedWithCustomerKey) is required to encrypt gallery image versions that will be used to deploy ConfidentialVM session hosts with customer-managed key encryption of the VM Guest State. This option requires an HSM-backed key management selection. The CVM Orchestrator enterprise application (app ID: bf7b6499-ff71-4aa2-97a4-f372087be7f0) must be created in your tenant before proceeding."
+									}
+								},
+								{
+									"name": "cvmDesWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Warning",
+										"text": "IMPORTANT: The Confidential VM encryption key release policy is immutable once set. This deployment will fail on subsequent runs if the key already exists. Enable this option only on the first deployment per region. Disable it on all future redeployments."
+									}
+								},
+								{
+									"name": "createConfidentialVmGalleryDes",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Create Confidential VM Gallery Disk Encryption Set",
+									"toolTip": "Creates a second DES of type ConfidentialVmEncryptedWithCustomerKey for encrypting gallery image versions intended for ConfidentialVM session host deployments. First deployment only — see warning above.",
+									"defaultValue": false
+								},
+								{
+									"name": "confidentialVMOrchestratorObjectId",
+									"type": "Microsoft.Common.TextBox",
+									"label": "CVM Orchestrator Object ID",
+									"toolTip": "Object ID of the Confidential VM Orchestrator enterprise application in your tenant. Run: Get-AzADServicePrincipal -ApplicationId 'bf7b6499-ff71-4aa2-97a4-f372087be7f0' | Select-Object -ExpandProperty Id",
+									"visible": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
+									"constraints": {
+										"required": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
+										"regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+										"validationMessage": "Must be a valid GUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
+									}
 								}
 							]
 						}
@@ -432,9 +538,12 @@
 				"azureBlobPrivateDnsZoneResourceId": "[if(and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration), steps('storageAccounts').privateDnsSection.blobPrivateDnsZone, '')]",
 				"storageServiceEndpointSubnetResourceIds": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), steps('storageAccounts').serviceEndpointSection.serviceEndpointSubnets, parse('[]'))]",
 				"storagePermittedIPs": "[map(steps('storageAccounts').storageSettings.storagePermittedIPs, (item) => item.ipAddress)]",
-				"keyManagement": "[steps('encryption').keyManagement]",
-				"encryptionKeyVaultResourceId": "[if(not(equals(steps('encryption').keyManagement, 'PlatformManaged')), steps('encryption').cmkSection.encryptionKeyVault, '')]",
-				"keyExpirationInDays": "[if(not(equals(steps('encryption').keyManagement, 'PlatformManaged')), steps('encryption').cmkSection.keyExpirationInDays, 180)]",
+				"keyManagementStorageAccounts": "[steps('encryption').storage.keyManagement]",
+				"keyManagementGalleryImageVersions": "[steps('encryption').gallery.keyManagement]",
+				"encryptionKeyVaultResourceId": "[if(or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.encryptionKeyVault, '')]",
+				"keyExpirationInDays": "[if(or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.keyExpirationInDays, 180)]",
+				"createConfidentialVmGalleryDes": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
+				"confidentialVMOrchestratorObjectId": "[if(steps('encryption').cvmDesSection.createConfidentialVmGalleryDes, steps('encryption').cvmDesSection.confidentialVMOrchestratorObjectId, '')]",
 				"tags": "[steps('tags').resourceTags]"
 			}
 		}
