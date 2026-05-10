@@ -126,7 +126,11 @@ var privateEndpointNameConv = replace(
   'RESOURCETYPE',
   resourceAbbreviations.privateEndpoints
 )
-var privateEndpointName = replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'), 'RESOURCE', artifactsStorageAccountName)
+var privateEndpointName = replace(
+  replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'),
+  'RESOURCE',
+  artifactsStorageAccountName
+)
 var customNetworkInterfaceName = nameConvResTypeAtEnd
   ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}'
   : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
@@ -174,7 +178,11 @@ var logsStorageName = take(
   24
 )
 var logsContainerName = 'image-customization-logs'
-var logsPrivateEndpointName = replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'), 'RESOURCE', logsStorageName)
+var logsPrivateEndpointName = replace(
+  replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'),
+  'RESOURCE',
+  logsStorageName
+)
 var logsCustomNetworkInterfaceName = nameConvResTypeAtEnd
   ? '${logsPrivateEndpointName}-${resourceAbbreviations.networkInterfaces}'
   : '${resourceAbbreviations.networkInterfaces}-${logsPrivateEndpointName}'
@@ -241,8 +249,12 @@ module galleryCmk '../hostpools/modules/diskCmk/diskCmk.bicep' = if (keyManageme
     resourceGroupName: resourceGroupName
     keyVaultResourceId: encryptionKeyVaultResourceId
     keyManagementType: contains(keyManagementGalleryImageVersions, 'HSM')
-      ? (contains(keyManagementGalleryImageVersions, 'Platform') ? 'PlatformManagedAndCustomerManagedHSM' : 'CustomerManagedHSM')
-      : (contains(keyManagementGalleryImageVersions, 'Platform') ? 'PlatformManagedAndCustomerManaged' : 'CustomerManaged')
+      ? (contains(keyManagementGalleryImageVersions, 'Platform')
+          ? 'PlatformManagedAndCustomerManagedHSM'
+          : 'CustomerManagedHSM')
+      : (contains(keyManagementGalleryImageVersions, 'Platform')
+          ? 'PlatformManagedAndCustomerManaged'
+          : 'CustomerManaged')
     keyExpirationInDays: keyExpirationInDays
     location: location
     tags: tags
@@ -474,12 +486,26 @@ module logsStorageBlobContributorAssignment '../../.common/bicepModules/storage/
   dependsOn: [logsStorageAccount]
 }
 
-output artifactsStorageAccountResourceId string = deployArtifactsStorageAccount ? assetsStorageAccount!.outputs.resourceId : ''
+output artifactsStorageAccountResourceId string = deployArtifactsStorageAccount
+  ? assetsStorageAccount!.outputs.resourceId
+  : ''
 output artifactsBlobContainerName string = deployArtifactsStorageAccount ? assetsBlobContainer!.outputs.name : ''
-output artifactsBlobContainerUrl string = deployArtifactsStorageAccount ? 'https://${artifactsStorageAccountName}.blob.${environment().suffixes.storage}/${artifactsBlobContainerName}' : ''
-output managedIdentityResourceId string = (deployArtifactsStorageAccount || deployBuildLogsStorageAccount) ? managedIdentity!.outputs.resourceId : ''
+output artifactsBlobContainerUrl string = deployArtifactsStorageAccount
+  ? 'https://${artifactsStorageAccountName}.blob.${environment().suffixes.storage}/${artifactsBlobContainerName}'
+  : ''
+output managedIdentityResourceId string = (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)
+  ? managedIdentity!.outputs.resourceId
+  : ''
 output computeGalleryResourceId string = imageGallery!.outputs.resourceId
-output buildLogsStorageAccountResourceId string = deployBuildLogsStorageAccount ? logsStorageAccount!.outputs.resourceId : ''
-output buildLogsContainerUri string = deployBuildLogsStorageAccount ? 'https://${logsStorageName}.blob.${environment().suffixes.storage}/${logsContainerName}' : ''
-output galleryDiskEncryptionSetResourceId string = keyManagementGalleryImageVersions != 'PlatformManaged' ? galleryCmk!.outputs.diskEncryptionSetResourceId : ''
-output galleryConfidentialVmDiskEncryptionSetResourceId string = createConfidentialVmGalleryDes ? galleryConfidentialVmCmk!.outputs.diskResults[0].diskEncryptionSetResourceId : ''
+output buildLogsStorageAccountResourceId string = deployBuildLogsStorageAccount
+  ? logsStorageAccount!.outputs.resourceId
+  : ''
+output buildLogsContainerUri string = deployBuildLogsStorageAccount
+  ? 'https://${logsStorageName}.blob.${environment().suffixes.storage}/${logsContainerName}'
+  : ''
+output galleryDiskEncryptionSetResourceId string = keyManagementGalleryImageVersions != 'PlatformManaged'
+  ? galleryCmk!.outputs.diskEncryptionSetResourceId
+  : ''
+output galleryConfidentialVmDiskEncryptionSetResourceId string = createConfidentialVmGalleryDes
+  ? galleryConfidentialVmCmk!.outputs.diskResults[0].diskEncryptionSetResourceId
+  : ''

@@ -22,7 +22,10 @@
         "<ipAddressOrCidr>"
       ]
     },
-    "keyManagementStorageAccount": {
+    "keyManagementStorageAccounts": {
+      "value": "CustomerManaged"
+    },
+    "keyManagementGalleryImageVersions": {
       "value": "CustomerManaged"
     },
     "encryptionKeyVaultResourceId": {
@@ -30,9 +33,6 @@
     },
     "keyExpirationInDays": {
       "value": 180
-    },
-    "remoteLocation": {
-      "value": "<secondaryRegion>"
     },
     "tags": {
       "value": {

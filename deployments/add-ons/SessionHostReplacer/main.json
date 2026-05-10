@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "6533854123922835181"
+      "templateHash": "18093659002199127704"
     }
   },
   "parameters": {
@@ -134,6 +134,13 @@
       "defaultValue": false,
       "metadata": {
         "description": "Optional. Enable private endpoints for function app and storage. Default is false."
+      }
+    },
+    "permittedIPs": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. Use when managing from a trusted workstation outside the Azure network boundary."
       }
     },
     "privateEndpointSubnetResourceId": {
@@ -4138,6 +4145,9 @@
           "storageEncryptionIdentityName": {
             "value": "[variables('storageEncryptionIdentityName')]"
           },
+          "permittedIPs": {
+            "value": "[parameters('permittedIPs')]"
+          },
           "tags": {
             "value": "[parameters('tags')]"
           }
@@ -4149,7 +4159,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "2379132062061826780"
+              "templateHash": "10348732608898091481"
             }
           },
           "parameters": {
@@ -4252,14 +4262,58 @@
             "storageAccountName": {
               "type": "string"
             },
+            "permittedIPs": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. When provided alongside a private endpoint, the firewall remains open to these IPs while still requiring PE for all other traffic."
+              }
+            },
             "tags": {
               "type": "object"
             }
           },
           "variables": {
+            "copy": [
+              {
+                "name": "storageIpRules",
+                "count": "[length(parameters('permittedIPs'))]",
+                "input": {
+                  "value": "[parameters('permittedIPs')[copyIndex('storageIpRules')]]",
+                  "action": "Allow"
+                }
+              },
+              {
+                "name": "permittedIPRestrictions",
+                "count": "[length(parameters('permittedIPs'))]",
+                "input": {
+                  "ipAddress": "[parameters('permittedIPs')[copyIndex('permittedIPRestrictions')]]",
+                  "action": "Allow",
+                  "priority": "[add(100, copyIndex('permittedIPRestrictions'))]",
+                  "name": "[format('PermittedIP-{0}', copyIndex('permittedIPRestrictions'))]"
+                }
+              }
+            ],
             "cloudSuffix": "[replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')]",
             "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
             "peVnetId": "[if(less(length(variables('privateEndpointVnetName')), 37), variables('privateEndpointVnetName'), uniqueString(variables('privateEndpointVnetName')))]",
+            "azureCloudRestriction": [
+              {
+                "ipAddress": "AzureCloud",
+                "action": "Allow",
+                "tag": "ServiceTag",
+                "priority": 200,
+                "name": "AzureCloud"
+              },
+              {
+                "ipAddress": "Any",
+                "action": "Deny",
+                "priority": 2147483647,
+                "name": "Deny all",
+                "description": "Deny all access"
+              }
+            ],
+            "resolvedIpSecurityRestrictions": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), union(variables('permittedIPRestrictions'), variables('azureCloudRestriction')), null())]",
             "storageSubResources": "[union(createArray('blob'), if(parameters('enableQueueStorage'), createArray('queue'), createArray()), if(parameters('enableTableStorage'), createArray('table'), createArray()))]",
             "azureStoragePrivateDnsZoneResourceIds": "[union(createArray(parameters('azureBlobPrivateDnsZoneResourceId')), if(and(parameters('enableQueueStorage'), not(empty(parameters('azureQueuePrivateDnsZoneResourceId')))), createArray(parameters('azureQueuePrivateDnsZoneResourceId')), createArray()), if(and(parameters('enableTableStorage'), not(empty(parameters('azureTablePrivateDnsZoneResourceId')))), createArray(parameters('azureTablePrivateDnsZoneResourceId')), createArray()))]",
             "useCmk": "[not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))]",
@@ -4307,10 +4361,10 @@
                 "networkAcls": {
                   "bypass": "AzureServices",
                   "virtualNetworkRules": [],
-                  "ipRules": [],
-                  "defaultAction": "[if(parameters('privateEndpoint'), 'Deny', 'Allow')]"
+                  "ipRules": "[variables('storageIpRules')]",
+                  "defaultAction": "[if(or(parameters('privateEndpoint'), not(empty(variables('storageIpRules')))), 'Deny', 'Allow')]"
                 },
-                "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', 'Enabled')]",
+                "publicNetworkAccess": "[if(and(parameters('privateEndpoint'), empty(variables('storageIpRules'))), 'Disabled', 'Enabled')]",
                 "sasPolicy": {
                   "expirationAction": "Log",
                   "sasExpirationPeriod": "180.00:00:00"
@@ -4421,12 +4475,12 @@
                   "minimumElasticInstanceCount": 0,
                   "netFrameworkVersion": "v6.0",
                   "powerShellVersion": "7.4",
-                  "ipSecurityRestrictions": "[if(parameters('privateEndpoint'), createArray(createObject('ipAddress', 'AzureCloud', 'action', 'Allow', 'tag', 'ServiceTag', 'priority', 100, 'name', 'AzureCloud'), createObject('ipAddress', 'Any', 'action', 'Deny', 'priority', 2147483647, 'name', 'Deny all', 'description', 'Deny all access')), null())]",
-                  "ipSecurityRestrictionsDefaultAction": "[if(parameters('privateEndpoint'), 'Deny', null())]",
-                  "scmIpSecurityRestrictions": "[if(parameters('privateEndpoint'), createArray(createObject('ipAddress', 'Any', 'action', 'Deny', 'priority', 2147483647, 'name', 'Deny all', 'description', 'Deny all access')), null())]",
-                  "scmIpSecurityRestrictionsDefaultAction": "[if(parameters('privateEndpoint'), 'Deny', null())]",
-                  "scmIpSecurityRestrictionsUseMain": "[if(parameters('privateEndpoint'), true(), null())]",
-                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), 'Disabled', 'Enabled')]",
+                  "ipSecurityRestrictions": "[variables('resolvedIpSecurityRestrictions')]",
+                  "ipSecurityRestrictionsDefaultAction": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), 'Deny', null())]",
+                  "scmIpSecurityRestrictions": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), createArray(createObject('ipAddress', 'Any', 'action', 'Deny', 'priority', 2147483647, 'name', 'Deny all', 'description', 'Deny all access')), null())]",
+                  "scmIpSecurityRestrictionsDefaultAction": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), 'Deny', null())]",
+                  "scmIpSecurityRestrictionsUseMain": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), true(), null())]",
+                  "publicNetworkAccess": "[if(and(parameters('privateEndpoint'), empty(parameters('permittedIPs'))), 'Disabled', 'Enabled')]",
                   "use32BitWorkerProcess": false
                 },
                 "outboundVnetRouting": "[if(empty(parameters('functionAppDelegatedSubnetResourceId')), null(), createObject('allTraffic', true(), 'applicationTraffic', true()))]",
@@ -4528,7 +4582,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "15990894903977712372"
+                      "templateHash": "18067987585444669153"
                     }
                   },
                   "definitions": {
@@ -4548,6 +4602,13 @@
                         "confidentialVMOrchestratorObjectId": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "skipKeyCreation": {
+                          "type": "bool",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "When true, skips ARM key creation — key was pre-created via Run Command or external process."
+                          }
                         }
                       }
                     },
@@ -4571,7 +4632,9 @@
                       "type": "string",
                       "allowedValues": [
                         "CustomerManaged",
-                        "CustomerManagedHSM"
+                        "CustomerManagedHSM",
+                        "PlatformManagedAndCustomerManaged",
+                        "PlatformManagedAndCustomerManagedHSM"
                       ],
                       "metadata": {
                         "description": "Required. CMK type — drives key type (RSA vs RSA-HSM) and disk encryption type."
@@ -4637,7 +4700,7 @@
                       },
                       "defaultValue": [],
                       "metadata": {
-                        "description": "Optional. Array of disk encryption set CMK configurations.\nEach entry produces: one KV key (unless confidentialVM), one DiskEncryptionSet,\none key-scoped role assignment (Crypto Service Encryption User).\n  keyName                       — name of the key to create\n  diskEncryptionSetName         — name of the DiskEncryptionSet to create\n  confidentialVMOSDiskEncryption — when true, skips key creation (key is created\n                                   via run command by the Confidential VM\n                                   infrastructure) and uses ConfidentialVmEncryptedWithCustomerKey\n  confidentialVMOrchestratorObjectId — required when confidentialVMOSDiskEncryption is true;\n                                       object ID of the Confidential VM Orchestrator\n                                       enterprise application (bf7b6499-ff71-4aa2-97a4-f372087be7f0)\n"
+                        "description": "Optional. Array of disk encryption set CMK configurations.\nEach entry produces: one KV key (unless skipKeyCreation), one DiskEncryptionSet,\none key-scoped role assignment (Crypto Service Encryption User).\n  keyName                           — name of the key to create\n  diskEncryptionSetName             — name of the DiskEncryptionSet to create\n  confidentialVMOSDiskEncryption    — when true, uses ConfidentialVmEncryptedWithCustomerKey DES type\n                                      and grants CVM Orchestrator the Crypto Release User role\n  confidentialVMOrchestratorObjectId — required when confidentialVMOSDiskEncryption is true;\n                                       object ID of the Confidential VM Orchestrator\n                                       enterprise application (bf7b6499-ff71-4aa2-97a4-f372087be7f0)\n  skipKeyCreation                   — when true, skips key creation (key was pre-created via\n                                      Run Command or external process due to key release policy\n                                      immutability). Used by hostpool Run Command path.\n                                      When false/omitted, key is created via ARM with release policy.\n                                      WARNING: ARM key creation with keyReleasePolicy is a one-time\n                                      operation — the policy is immutable. Re-deploying will fail if\n                                      the key already exists. Use skipKeyCreation on subsequent deploys.\n"
                       }
                     }
                   },
@@ -4671,7 +4734,8 @@
                     },
                     "parentTag": "[if(not(empty(parameters('parentResourceId'))), createObject('cm-resource-parent', parameters('parentResourceId')), createObject())]",
                     "roleKeyVaultCryptoEncryptionUser": "e147488a-f6f5-4113-8e2d-b22465e65bf6",
-                    "roleKeyVaultCryptoReleaseUser": "08bbd89e-9f13-488c-ac41-acfcb10c90ab"
+                    "roleKeyVaultCryptoReleaseUser": "08bbd89e-9f13-488c-ac41-acfcb10c90ab",
+                    "cvmKeyReleasePolicy": "[base64('{\"version\":\"1.0.0\",\"anyOf\":[{\"authority\":\"https://sharedeus.eus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus.wus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedneu.neu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedweu.weu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsasia.sasia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeasia.easia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedjpe.jpe.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedswn.swn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareditn.itn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2.eus2.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2e.eus2e.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedscus.scus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcuse.cuse.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcus.cus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeau.eau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsau.sau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcin.cin.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareduaen.uaen.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareddewc.dewc.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus3.wus3.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]}]}')]"
                   },
                   "resources": {
                     "storageKeys": {
@@ -4722,7 +4786,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.43.8.12551",
-                              "templateHash": "8442619122949581268"
+                              "templateHash": "3058719336033375780"
                             }
                           },
                           "parameters": {
@@ -4769,7 +4833,14 @@
                               "type": "bool",
                               "defaultValue": false,
                               "metadata": {
-                                "description": "Whether the private key can be exported."
+                                "description": "Whether the private key can be exported. Required for Confidential VM key release."
+                              }
+                            },
+                            "keyOps": {
+                              "type": "array",
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Optional. Permitted key operations. Defaults to all standard operations when empty."
                               }
                             },
                             "rotationPolicy": {
@@ -4777,6 +4848,13 @@
                               "defaultValue": {},
                               "metadata": {
                                 "description": "Optional. Key rotation policy."
+                              }
+                            },
+                            "keyReleasePolicy": {
+                              "type": "object",
+                              "defaultValue": {},
+                              "metadata": {
+                                "description": "Optional. Key release policy. Required for Confidential VM encryption keys (exportable must also be true)."
                               }
                             },
                             "tags": {
@@ -4796,11 +4874,13 @@
                               "properties": {
                                 "kty": "[parameters('kty')]",
                                 "keySize": "[if(greater(parameters('keySize'), 0), parameters('keySize'), null())]",
+                                "keyOps": "[if(not(empty(parameters('keyOps'))), parameters('keyOps'), null())]",
                                 "attributes": {
                                   "enabled": "[parameters('attributesEnabled')]",
                                   "exportable": "[parameters('attributesExportable')]"
                                 },
-                                "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]"
+                                "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]",
+                                "release_policy": "[if(not(empty(parameters('keyReleasePolicy'))), parameters('keyReleasePolicy'), null())]"
                               }
                             }
                           ],
@@ -5058,7 +5138,7 @@
                         "name": "diskKeys",
                         "count": "[length(parameters('diskEncryptionConfigs'))]"
                       },
-                      "condition": "[not(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()))]",
+                      "condition": "[not(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'skipKeyCreation'), false()))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
                       "name": "[format('CMK-DiskKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
@@ -5086,11 +5166,11 @@
                             "value": true
                           },
                           "attributesExportable": {
-                            "value": false
+                            "value": "[coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false())]"
                           },
-                          "rotationPolicy": {
-                            "value": "[variables('rotationPolicy')]"
-                          },
+                          "keyOps": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', createArray('encrypt', 'decrypt', 'sign', 'verify', 'wrapKey', 'unwrapKey')), createObject('value', createArray()))]",
+                          "rotationPolicy": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', createObject()), createObject('value', variables('rotationPolicy')))]",
+                          "keyReleasePolicy": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', createObject('data', variables('cvmKeyReleasePolicy'), 'contentType', 'application/json; charset=utf-8')), createObject('value', createObject()))]",
                           "tags": {
                             "value": "[variables('parentTag')]"
                           }
@@ -5102,7 +5182,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.43.8.12551",
-                              "templateHash": "8442619122949581268"
+                              "templateHash": "3058719336033375780"
                             }
                           },
                           "parameters": {
@@ -5149,7 +5229,14 @@
                               "type": "bool",
                               "defaultValue": false,
                               "metadata": {
-                                "description": "Whether the private key can be exported."
+                                "description": "Whether the private key can be exported. Required for Confidential VM key release."
+                              }
+                            },
+                            "keyOps": {
+                              "type": "array",
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Optional. Permitted key operations. Defaults to all standard operations when empty."
                               }
                             },
                             "rotationPolicy": {
@@ -5157,6 +5244,13 @@
                               "defaultValue": {},
                               "metadata": {
                                 "description": "Optional. Key rotation policy."
+                              }
+                            },
+                            "keyReleasePolicy": {
+                              "type": "object",
+                              "defaultValue": {},
+                              "metadata": {
+                                "description": "Optional. Key release policy. Required for Confidential VM encryption keys (exportable must also be true)."
                               }
                             },
                             "tags": {
@@ -5176,11 +5270,13 @@
                               "properties": {
                                 "kty": "[parameters('kty')]",
                                 "keySize": "[if(greater(parameters('keySize'), 0), parameters('keySize'), null())]",
+                                "keyOps": "[if(not(empty(parameters('keyOps'))), parameters('keyOps'), null())]",
                                 "attributes": {
                                   "enabled": "[parameters('attributesEnabled')]",
                                   "exportable": "[parameters('attributesExportable')]"
                                 },
-                                "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]"
+                                "rotationPolicy": "[if(not(empty(parameters('rotationPolicy'))), parameters('rotationPolicy'), null())]",
+                                "release_policy": "[if(not(empty(parameters('keyReleasePolicy'))), parameters('keyReleasePolicy'), null())]"
                               }
                             }
                           ],
