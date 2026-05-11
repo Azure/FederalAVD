@@ -154,8 +154,8 @@ param existingLogStorageAccountResourceId string = ''
 @description('Optional. Name of the blob container in the logs storage account to write customization logs to.')
 param logContainerName string = 'image-customization-logs'
 
-@description('Optional. Resource ID of an existing Disk Encryption Set to use for gallery image version encryption. Created by the imageManagement template; pass its galleryDiskEncryptionSetResourceId output here to share the same DES across all image builds.')
-param existingGalleryDiskEncryptionSetResourceId string = ''
+@description('Optional. Resource ID of an existing Disk Encryption Set to use for gallery image version encryption. Created by the imageManagement template; pass its diskEncryptionSetResourceId output here to share the same DES across all image builds.')
+param existingDiskEncryptionSetResourceId string = ''
 
 @description('Optional. Confidential VM encryption type applied to each image version replication target region. Only relevant when the image definition SecurityType is ConfidentialVM or ConfidentialVMSupported.')
 @allowed([
@@ -167,7 +167,7 @@ param existingGalleryDiskEncryptionSetResourceId string = ''
 param galleryImageVersionConfidentialVMEncryptionType string = ''
 
 @description('Optional. Resource ID of an existing Disk Encryption Set to use for Confidential VM guest state encryption in gallery image version replicas. When provided, no new DES is created. Only used when galleryImageVersionConfidentialVMEncryptionType is EncryptedWithCmk.')
-param existingGallerySecureVMDiskEncryptionSetResourceId string = ''
+param existingConfidentialVMDiskEncryptionSetResourceId string = ''
 
 @description('Optional. Determines if the latest updates from the specified update service will be installed.')
 param installUpdates bool = true
@@ -414,25 +414,25 @@ var imageVersionReplicationRegions = empty(remoteComputeGalleryResourceId)
       ? union(localImageVersionTargetRegions, defaultRemoteImageVersionTargetRegions)
       : localImageVersionTargetRegions
 
-var effectiveGalleryDiskEncryptionSetResourceId = existingGalleryDiskEncryptionSetResourceId
+var effectiveDiskEncryptionSetResourceId = existingDiskEncryptionSetResourceId
 
 // Note: auto-creation of a ConfidentialVM DES (ConfidentialVmEncryptedWithCustomerKey type) is a feature gap.
 // CVM DES provisioning requires a Confidential VM Orchestrator service principal key-release role assignment
-// that cannot be reliably automated here. Supply an existing DES via existingGallerySecureVMDiskEncryptionSetResourceId.
-var effectiveGallerySecureVMDiskEncryptionSetResourceId = galleryImageVersionConfidentialVMEncryptionType == 'EncryptedWithCmk'
-  ? existingGallerySecureVMDiskEncryptionSetResourceId
+// that cannot be reliably automated here. Supply an existing DES via existingConfidentialVMDiskEncryptionSetResourceId.
+var effectiveConfidentialVmDiskEncryptionSetResourceId = galleryImageVersionConfidentialVMEncryptionType == 'EncryptedWithCmk'
+  ? existingConfidentialVMDiskEncryptionSetResourceId
   : ''
 
-var imageVersionReplicationRegionsWithEncryption = empty(effectiveGalleryDiskEncryptionSetResourceId)
+var imageVersionReplicationRegionsWithEncryption = empty(effectiveDiskEncryptionSetResourceId)
   ? imageVersionReplicationRegions
   : map(imageVersionReplicationRegions, region => union(region, {
       encryption: {
         osDiskImage: union(
-          { diskEncryptionSetId: effectiveGalleryDiskEncryptionSetResourceId },
+          { diskEncryptionSetId: effectiveDiskEncryptionSetResourceId },
           !empty(galleryImageVersionConfidentialVMEncryptionType) ? {
             securityProfile: union(
               { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
-              !empty(effectiveGallerySecureVMDiskEncryptionSetResourceId) ? { secureVMDiskEncryptionSetId: effectiveGallerySecureVMDiskEncryptionSetResourceId } : {}
+              !empty(effectiveConfidentialVmDiskEncryptionSetResourceId) ? { secureVMDiskEncryptionSetId: effectiveConfidentialVmDiskEncryptionSetResourceId } : {}
             )
           } : {}
         )
@@ -606,7 +606,7 @@ module orchestrationVm '../../.common/bicepModules/compute/virtualMachines/deplo
     securityType: 'TrustedLaunch'
     secureBootEnabled: true
     vTpmEnabled: true
-    diskEncryptionSetResourceId: effectiveGalleryDiskEncryptionSetResourceId
+    diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
     userAssignedIdentityResourceIds: [empty(userAssignedIdentityResourceId)
@@ -650,8 +650,8 @@ module imageVm '../../.common/bicepModules/compute/virtualMachines/deploy.bicep'
     // (e.g. when EncryptedWithPmk guest state is selected but a policy requires a DES on all VM disks).
     // For all other builds, apply the standard gallery DES.
     diskEncryptionSetResourceId: vmSecurityType == 'ConfidentialVM'
-      ? (!empty(effectiveGallerySecureVMDiskEncryptionSetResourceId) ? effectiveGallerySecureVMDiskEncryptionSetResourceId : effectiveGalleryDiskEncryptionSetResourceId)
-      : effectiveGalleryDiskEncryptionSetResourceId
+      ? (!empty(effectiveConfidentialVmDiskEncryptionSetResourceId) ? effectiveConfidentialVmDiskEncryptionSetResourceId : effectiveDiskEncryptionSetResourceId)
+      : effectiveDiskEncryptionSetResourceId
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
     userAssignedIdentityResourceIds: [empty(userAssignedIdentityResourceId)
@@ -759,9 +759,9 @@ module captureImage 'modules/captureImage.bicep' = {
     location: computeLocation
     tags: tags
     deploymentSuffix: deploymentSuffix
-    diskEncryptionSetId: effectiveGalleryDiskEncryptionSetResourceId
+    diskEncryptionSetId: effectiveDiskEncryptionSetResourceId
     confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType
-    secureVMDiskEncryptionSetId: effectiveGallerySecureVMDiskEncryptionSetResourceId
+    secureVMDiskEncryptionSetId: effectiveConfidentialVmDiskEncryptionSetResourceId
     virtualMachineResourceId: imageVm.outputs.resourceId
   }
   dependsOn: [

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "1741512388340855847"
+      "templateHash": "9896849786597290718"
     }
   },
   "parameters": {
@@ -498,13 +498,6 @@
       "defaultValue": false,
       "metadata": {
         "description": "Optional. Determines whether or not to enable hibernation for the session host VMs."
-      }
-    },
-    "nvidiaDriverVersion": {
-      "type": "string",
-      "defaultValue": "538.46",
-      "metadata": {
-        "description": "Optional. The NVIDIA driver version to install on NVv3 series VMs. GRID Driver version 17.x is incompatible on NVv3 (NVIDIA Tesla M60). Use driver version 538.46 or other supported versions. Reference: https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/hpccompute-gpu-windows#known-issues"
       }
     },
     "availability": {
@@ -14966,9 +14959,6 @@
           "hasNvidiaGpu": {
             "value": "[variables('hasNvidiaGpu')]"
           },
-          "nvidiaDriverVersion": {
-            "value": "[parameters('nvidiaDriverVersion')]"
-          },
           "encryptionKeyName": "[if(parameters('confidentialVMOSDiskEncryption'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyNames.value.confidentialVMs), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyNames.value.virtualMachines))]",
           "encryptionKeyVaultResourceId": "[if(not(empty(parameters('encryptionKeyVaultResourceId'))), createObject('value', parameters('encryptionKeyVaultResourceId')), if(variables('deployInlineEncryptionKv'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultResourceId.value), createObject('value', '')))]",
           "existingDiskAccessResourceId": {
@@ -15107,7 +15097,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "15365948065555110415"
+              "templateHash": "18365435257536258159"
             }
           },
           "parameters": {
@@ -15319,12 +15309,6 @@
               "type": "bool",
               "metadata": {
                 "description": "Required. When true, installs the NVIDIA GPU driver extension on session host VMs."
-              }
-            },
-            "nvidiaDriverVersion": {
-              "type": "string",
-              "metadata": {
-                "description": "Optional. NVIDIA GPU driver version string. Leave empty to install the latest supported version."
               }
             },
             "encryptionKeyVaultResourceId": {
@@ -17794,9 +17778,6 @@
                   "hasNvidiaGpu": {
                     "value": "[parameters('hasNvidiaGpu')]"
                   },
-                  "nvidiaDriverVersion": {
-                    "value": "[parameters('nvidiaDriverVersion')]"
-                  },
                   "identitySolution": {
                     "value": "[parameters('identitySolution')]"
                   },
@@ -17885,7 +17866,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "6678432847358667255"
+                      "templateHash": "17921790926436057731"
                     }
                   },
                   "parameters": {
@@ -18095,9 +18076,6 @@
                     },
                     "hasNvidiaGpu": {
                       "type": "bool"
-                    },
-                    "nvidiaDriverVersion": {
-                      "type": "string"
                     }
                   },
                   "variables": {
@@ -18423,7 +18401,7 @@
                         "type": "NvidiaGpuDriverWindows",
                         "typeHandlerVersion": "1.10",
                         "autoUpgradeMinorVersion": true,
-                        "settings": "[if(empty(parameters('nvidiaDriverVersion')), createObject(), createObject('driverVersion', parameters('nvidiaDriverVersion')))]"
+                        "settings": {}
                       },
                       "dependsOn": [
                         "[resourceId('Microsoft.Compute/virtualMachines/extensions', replace(parameters('virtualMachineNameConv'), '###', padLeft(add(range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0')), 'AADLoginForWindows')]",

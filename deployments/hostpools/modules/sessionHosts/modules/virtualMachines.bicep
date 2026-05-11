@@ -71,7 +71,6 @@ param vmInsightsDataCollectionRulesResourceId string
 param vTpmEnabled bool
 param hasAmdGpu bool
 param hasNvidiaGpu bool
-param nvidiaDriverVersion string
 
 // Storage Accounts
 var fslogixLocalStorageAccountNames = [for id in fslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
@@ -472,11 +471,7 @@ resource extension_NvidiaGpuDriverWindows 'Microsoft.Compute/virtualMachines/ext
       type: 'NvidiaGpuDriverWindows'
       typeHandlerVersion: '1.10'
       autoUpgradeMinorVersion: true
-      settings: empty(nvidiaDriverVersion)
-        ? {}
-        : {
-            driverVersion: nvidiaDriverVersion
-          }
+      settings: {}
     }
     dependsOn: [
       extension_GuestAttestation[i]

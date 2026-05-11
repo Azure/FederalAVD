@@ -72,8 +72,6 @@ param encryptionKeyName string
 param hasAmdGpu bool
 @description('Required. When true, installs the NVIDIA GPU driver extension on session host VMs.')
 param hasNvidiaGpu bool
-@description('Optional. NVIDIA GPU driver version string. Leave empty to install the latest supported version.')
-param nvidiaDriverVersion string
 @description('Required. Resource ID of the Key Vault containing Customer Managed Keys for disk encryption set configuration.')
 param encryptionKeyVaultResourceId string
 @description('Optional. Resource ID of a pre-existing DiskAccess resource. Used instead of creating a new resource when deployDiskAccessResource is false.')
@@ -393,7 +391,6 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     hostPoolResourceId: deploymentType != 'SessionHostsOnly' ? hostPoolResourceId : hostPoolUpdate!.outputs.resourceId
     hasAmdGpu: hasAmdGpu
     hasNvidiaGpu: hasNvidiaGpu
-    nvidiaDriverVersion: nvidiaDriverVersion
     identitySolution: identitySolution
     imageOffer: imageOffer
     imagePublisher: imagePublisher

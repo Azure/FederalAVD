@@ -176,11 +176,11 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 
 ### CMK Encryption Reference
 
-Gallery image version encryption is managed by the **imageManagement** template. Deploy imageManagement with `keyManagement = CustomerManaged` or `CustomerManagedHSM` to create one Disk Encryption Set for the gallery, then pass its `galleryDiskEncryptionSetResourceId` output here. This avoids creating a new DES on every build.
+Gallery image version encryption is managed by the **imageManagement** template. Deploy imageManagement with `keyManagement = CustomerManaged` or `CustomerManagedHSM` to create one Disk Encryption Set for the gallery, then pass its `diskEncryptionSetResourceId` output here. This avoids creating a new DES on every build.
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
-| **existingGalleryDiskEncryptionSetResourceId** | Resource ID of the DES created by imageManagement. Leave empty for platform-managed key encryption. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}` |
+| **existingDiskEncryptionSetResourceId** | Resource ID of the DES created by imageManagement. Leave empty for platform-managed key encryption. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}` |
 
 ### Image Management Resource References
 

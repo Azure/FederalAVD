@@ -28,7 +28,7 @@ flowchart TD
         IM_O3(["artifactsBlobContainerUrl"])
         IM_O4(["managedIdentityResourceId"])
         IM_O5(["buildLogsStorageAccountResourceId"])
-        IM_O6(["galleryDiskEncryptionSetResourceId"])
+        IM_O6(["diskEncryptionSetResourceId"])
         IM_RUN --> IM_O1 & IM_O2 & IM_O3 & IM_O4 & IM_O5 & IM_O6
     end
 
@@ -66,7 +66,7 @@ flowchart TD
     IM_O3 -->|"→ artifactsContainerUri"| IB_RUN
     IM_O4 -->|"→ userAssignedIdentityResourceId"| IB_RUN
     IM_O5 -->|"→ existingLogStorageAccountResourceId"| IB_RUN
-    IM_O6 -->|"→ existingGalleryDiskEncryptionSetResourceId"| IB_RUN
+    IM_O6 -->|"→ existingDiskEncryptionSetResourceId"| IB_RUN
 
     %% Upload Artifacts → Image Build (data dependency, no parameter)
     UA_DONE -.->|"artifacts ready"| IB_RUN
@@ -120,7 +120,7 @@ Script invocation:
 | `artifactsBlobContainerUrl` | Image Build — `artifactsContainerUri` parameter |
 | `managedIdentityResourceId` | Image Build — `userAssignedIdentityResourceId` parameter |
 | `buildLogsStorageAccountResourceId` | Image Build — `existingLogStorageAccountResourceId` parameter |
-| `galleryDiskEncryptionSetResourceId` | Image Build — `existingGalleryDiskEncryptionSetResourceId` parameter (only when CMK enabled) |
+| `diskEncryptionSetResourceId` | Image Build — `existingDiskEncryptionSetResourceId` parameter (only when CMK enabled) |
 
 ### Notes
 
@@ -161,7 +161,7 @@ Inputs from Step 2:
   artifactsBlobContainerUrl     →  imageBuild parameter: artifactsContainerUri
   managedIdentityResourceId     →  imageBuild parameter: userAssignedIdentityResourceId
   buildLogsStorageAccountResourceId  →  imageBuild parameter: existingLogStorageAccountResourceId (optional)
-  galleryDiskEncryptionSetResourceId →  imageBuild parameter: existingGalleryDiskEncryptionSetResourceId (only when CMK enabled)
+  diskEncryptionSetResourceId →  imageBuild parameter: existingDiskEncryptionSetResourceId (only when CMK enabled)
 
 Script invocation:
   .\Invoke-ImageBuilds.ps1 -Location <region> -ParameterFilePrefixes @('prefix1','prefix2')

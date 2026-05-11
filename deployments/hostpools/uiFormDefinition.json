@@ -2114,30 +2114,7 @@
 									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking)), true, bool(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking))]",
 									"toolTip": "Enables low latency and high throughput on the network interface.",
 									"visible": "[and(not(equals(steps('hosts').security.securityType, 'ConfidentialVM')), bool(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value)), false)), or(equals(steps('hosts').image.source, 'marketplace'), bool(coalesce(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported, false))))]"
-								},
-								{
-									"name": "nvidiaDriverVersionInfoBox",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"icon": "Info",
-										"text": "GRID Driver version 17.x is incompatible on NVv3 (NVIDIA Tesla M60). GRID drivers up to version 16.5 are supported. The default driver version 538.46 is recommended for NVv3 series VMs.",
-										"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/hpccompute-gpu-windows#known-issues"
-									},
-									"visible": "[and(contains(if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric), 'Standard_NV'), endsWith(if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric), '_v3'))]"
-								},
-								{
-									"name": "nvidiaDriverVersion",
-									"type": "Microsoft.Common.TextBox",
-									"label": "NVIDIA Driver Version",
-									"defaultValue": "538.46",
-									"toolTip": "Specify the NVIDIA driver version for NVv3 series VMs. Leave as default (538.46) unless you have a specific requirement.",
-									"constraints": {
-										"required": false,
-										"regex": "^[0-9]+\\.[0-9]+$",
-										"validationMessage": "Driver version must be in the format XX.XX (e.g., 538.46)"
-									},
-									"visible": "[and(contains(if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric), 'Standard_NV'), endsWith(if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric), '_v3'))]"
-								}
+								}								
 							]
 						},
 						{
@@ -4667,7 +4644,6 @@
 				"memoryGB": "[first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (cap) => equals(cap.name, 'MemoryGB')), (cap) => cap.value))]",
 				"availabilityZones": "[if(and(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), equals(steps('hosts').availability.availability, 'AvailabilityZones')), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"enableAcceleratedNetworking": "[if(and(not(equals(steps('hosts').security.securityType, 'ConfidentialVM')), bool(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value)), false)), or(equals(steps('hosts').image.source, 'marketplace'), bool(coalesce(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported, false)))), steps('hosts').specs.enableAcceleratedNetworking, false)]",
-				"nvidiaDriverVersion": "[if(and(contains(if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric), 'Standard_NV'), endsWith(if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric), '_v3')), steps('hosts').specs.nvidiaDriverVersion, '538.46')]",
 				"hibernationEnabled": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)))), steps('hosts').specs.hibernationEnabled, false)]",
 				"intuneEnrollment": "[if(or(equals(steps('identity').solution, 'EntraId'), contains(steps('identity').solution, 'EntraKerberos')), steps('hosts').management.intune, false)]",
 				"artifactsContainerUri": "[if(steps('hosts').customizations.addCustomScripts, if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container), ''), '')]",

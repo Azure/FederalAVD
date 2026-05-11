@@ -391,13 +391,13 @@ See [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) for
 
 ### Customer-Managed Key Encryption
 
-Gallery image version CMK is managed by the **imageManagement** template, which creates one Disk Encryption Set (DES) for the gallery and outputs `galleryDiskEncryptionSetResourceId`. Pass that output here to share the same DES across all builds rather than creating a new one per build.
+Gallery image version CMK is managed by the **imageManagement** template, which creates one Disk Encryption Set (DES) for the gallery and outputs `diskEncryptionSetResourceId`. Pass that output here to share the same DES across all builds rather than creating a new one per build.
 
-#### `existingGalleryDiskEncryptionSetResourceId`
+#### `existingDiskEncryptionSetResourceId`
 
 - **Type:** String
 - **Default:** `''`
-- **Description:** Resource ID of an existing Disk Encryption Set for gallery image version encryption. Created by the imageManagement template; pass its `galleryDiskEncryptionSetResourceId` output here. When empty, gallery image versions use platform-managed keys.
+- **Description:** Resource ID of an existing Disk Encryption Set for gallery image version encryption. Created by the imageManagement template; pass its `diskEncryptionSetResourceId` output here. When empty, gallery image versions use platform-managed keys.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}`
 
 #### `galleryImageVersionConfidentialVMEncryptionType`
@@ -407,11 +407,11 @@ Gallery image version CMK is managed by the **imageManagement** template, which 
 - **Allowed Values:** `''`, `EncryptedWithPmk`, `EncryptedVMGuestStateOnlyWithPmk`, `EncryptedWithCmk`
 - **Description:** Specifies VM guest state encryption for Confidential VM image definitions. Only relevant when the image definition security type is Confidential.
 
-#### `existingGallerySecureVMDiskEncryptionSetResourceId`
+#### `existingConfidentialVMDiskEncryptionSetResourceId`
 
 - **Type:** String
 - **Default:** `''`
-- **Description:** Required when `galleryImageVersionConfidentialVMEncryptionType` is `EncryptedWithCmk`. Must be a Confidential VM DES of type `ConfidentialVmEncryptedWithCustomerKey`.
+- **Description:** Required when `galleryImageVersionConfidentialVMEncryptionType` is `EncryptedWithCmk`. Must be a Confidential VM DES of type `ConfidentialVmEncryptedWithCustomerKey`. Created by the imageManagement template; pass its `confidentialVmDiskEncryptionSetResourceId` output here.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{cvm-des}`
 
 ### Image Definition

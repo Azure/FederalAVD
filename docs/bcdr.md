@@ -194,7 +194,7 @@ Azure resolves `latest` from within the secondary gallery, which already has the
 
 ### Customer-Managed Key Considerations
 
-If `keyManagementGalleryImageVersions` is not `PlatformManaged`, the `galleryDiskEncryptionSetResourceId` output from each imageManagement deployment is region-specific. Pass the **secondary region** imageManagement DES output to the imageBuild `existingGalleryDiskEncryptionSetResourceId` parameter when building images that will be replicated to that region. Encrypted image versions can only be replicated to regions where the DES exists.
+If `keyManagementGalleryImageVersions` is not `PlatformManaged`, the `diskEncryptionSetResourceId` output from each imageManagement deployment is region-specific. Pass the **secondary region** imageManagement DES output to the imageBuild `existingDiskEncryptionSetResourceId` parameter when building images that will be replicated to that region. Encrypted image versions can only be replicated to regions where the DES exists.
 
 ---
 

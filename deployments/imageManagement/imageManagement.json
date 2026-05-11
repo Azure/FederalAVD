@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "15023985240945699782"
+      "templateHash": "9522119425938823155"
     }
   },
   "parameters": {
@@ -104,7 +104,7 @@
         "PlatformManagedAndCustomerManagedHSM"
       ],
       "metadata": {
-        "description": "Optional. Key management for image encryption. Controls the Disk Encryption Set used for both gallery image version encryption and build VM OS disk encryption during image builds. CustomerManaged and CustomerManagedHSM use a single CMK layer. PlatformManagedAndCustomerManaged / PlatformManagedAndCustomerManagedHSM add a second platform-key layer underneath (double encryption). A DES is always created when any customer-managed option is selected. Pass the `galleryDiskEncryptionSetResourceId` output to imageBuild as `existingGalleryDiskEncryptionSetResourceId`."
+        "description": "Optional. Key management for image encryption. Controls the Disk Encryption Set used for both gallery image version encryption and build VM OS disk encryption during image builds. CustomerManaged and CustomerManagedHSM use a single CMK layer. PlatformManagedAndCustomerManaged / PlatformManagedAndCustomerManagedHSM add a second platform-key layer underneath (double encryption). A DES is always created when any customer-managed option is selected. Pass the `diskEncryptionSetResourceId` output to imageBuild as `existingDiskEncryptionSetResourceId`."
       }
     },
     "encryptionKeyVaultResourceId": {
@@ -2163,7 +2163,7 @@
       "condition": "[not(equals(parameters('keyManagementGalleryImageVersions'), 'PlatformManaged'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Gallery-CMK-{0}', parameters('timeStamp'))]",
+      "name": "[format('Disk-CMK-{0}', parameters('timeStamp'))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2188,7 +2188,7 @@
             "value": "[parameters('tags')]"
           },
           "deploymentSuffix": {
-            "value": "[parameters('timeStamp')]"
+            "value": "[format('{0}-gal', parameters('timeStamp'))]"
           },
           "keyName": {
             "value": "[variables('galleryDiskEncryptionKeyName')]"
@@ -3552,7 +3552,7 @@
       "condition": "[parameters('createConfidentialVmGalleryDes')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Gallery-ConfidentialVM-CMK-{0}', parameters('timeStamp'))]",
+      "name": "[format('ConfidentialVM-CMK-{0}', parameters('timeStamp'))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -3573,7 +3573,7 @@
             "value": "[parameters('tags')]"
           },
           "deploymentSuffix": {
-            "value": "[parameters('timeStamp')]"
+            "value": "[format('{0}-cvm', parameters('timeStamp'))]"
           },
           "diskEncryptionConfigs": {
             "value": [
@@ -7047,13 +7047,13 @@
       "type": "string",
       "value": "[if(parameters('deployBuildLogsStorageAccount'), format('https://{0}.blob.{1}/{2}', variables('logsStorageName'), environment().suffixes.storage, variables('logsContainerName')), '')]"
     },
-    "galleryDiskEncryptionSetResourceId": {
+    "diskEncryptionSetResourceId": {
       "type": "string",
-      "value": "[if(not(equals(parameters('keyManagementGalleryImageVersions'), 'PlatformManaged')), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Gallery-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value, '')]"
+      "value": "[if(not(equals(parameters('keyManagementGalleryImageVersions'), 'PlatformManaged')), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value, '')]"
     },
-    "galleryConfidentialVmDiskEncryptionSetResourceId": {
+    "confidentialVmDiskEncryptionSetResourceId": {
       "type": "string",
-      "value": "[if(parameters('createConfidentialVmGalleryDes'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Gallery-ConfidentialVM-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.diskResults.value[0].diskEncryptionSetResourceId, '')]"
+      "value": "[if(parameters('createConfidentialVmGalleryDes'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('ConfidentialVM-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.diskResults.value[0].diskEncryptionSetResourceId, '')]"
     }
   }
 }
