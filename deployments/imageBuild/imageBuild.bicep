@@ -606,6 +606,7 @@ module orchestrationVm '../../.common/bicepModules/compute/virtualMachines/deplo
     securityType: 'TrustedLaunch'
     secureBootEnabled: true
     vTpmEnabled: true
+    diskEncryptionSetResourceId: effectiveGalleryDiskEncryptionSetResourceId
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
     userAssignedIdentityResourceIds: [empty(userAssignedIdentityResourceId)
@@ -645,6 +646,12 @@ module imageVm '../../.common/bicepModules/compute/virtualMachines/deploy.bicep'
     securityType: vmSecurityType
     secureBootEnabled: vmSecurityType == 'TrustedLaunch' ? true : false
     vTpmEnabled: vmSecurityType == 'TrustedLaunch' ? true : false
+    // For CVM builds, prefer the CVM DES on the image VM OS disk; fall back to the standard gallery DES when no CVM DES is provided
+    // (e.g. when EncryptedWithPmk guest state is selected but a policy requires a DES on all VM disks).
+    // For all other builds, apply the standard gallery DES.
+    diskEncryptionSetResourceId: vmSecurityType == 'ConfidentialVM'
+      ? (!empty(effectiveGallerySecureVMDiskEncryptionSetResourceId) ? effectiveGallerySecureVMDiskEncryptionSetResourceId : effectiveGalleryDiskEncryptionSetResourceId)
+      : effectiveGalleryDiskEncryptionSetResourceId
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
     userAssignedIdentityResourceIds: [empty(userAssignedIdentityResourceId)

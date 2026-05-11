@@ -49,7 +49,7 @@ param deployArtifactsStorageAccount bool = true
 ])
 param keyManagementStorageAccounts string = 'PlatformManaged'
 
-@description('Optional. Key management for gallery image version encryption. CustomerManaged and CustomerManagedHSM use a single CMK layer. PlatformManagedAndCustomerManaged / PlatformManagedAndCustomerManagedHSM add a second platform-key layer underneath (double encryption). A standard DES is always created when any customer-managed option is selected. The `galleryDiskEncryptionSetResourceId` output can then be passed to imageBuild as `existingGalleryDiskEncryptionSetResourceId`.')
+@description('Optional. Key management for image encryption. Controls the Disk Encryption Set used for both gallery image version encryption and build VM OS disk encryption during image builds. CustomerManaged and CustomerManagedHSM use a single CMK layer. PlatformManagedAndCustomerManaged / PlatformManagedAndCustomerManagedHSM add a second platform-key layer underneath (double encryption). A DES is always created when any customer-managed option is selected. Pass the `galleryDiskEncryptionSetResourceId` output to imageBuild as `existingGalleryDiskEncryptionSetResourceId`.')
 @allowed([
   'PlatformManaged'
   'CustomerManaged'
@@ -164,14 +164,14 @@ var cmkKeyNames = union(
 )
 
 var galleryDiskEncryptionSetName = nameConvResTypeAtEnd
-  ? 'image-management-gallery-${contains(keyManagementGalleryImageVersions, 'Platform') ? 'platform-and-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
-  : '${resourceAbbreviations.diskEncryptionSets}-image-management-gallery-${contains(keyManagementGalleryImageVersions, 'Platform') ? 'platform-and-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}'
-var galleryDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-vmImages'
+  ? 'image-management-${contains(keyManagementGalleryImageVersions, 'Platform') ? 'platform-and-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
+  : '${resourceAbbreviations.diskEncryptionSets}-image-management-${contains(keyManagementGalleryImageVersions, 'Platform') ? 'platform-and-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}'
+var galleryDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-imagemgmt'
 
 var galleryConfidentialVmDiskEncryptionSetName = nameConvResTypeAtEnd
-  ? 'image-management-gallery-confidential-vm-keys-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
-  : '${resourceAbbreviations.diskEncryptionSets}-image-management-gallery-confidential-vm-keys-${locations[varLocation].abbreviation}'
-var galleryConfidentialVmDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-confidentialVmImages'
+  ? 'image-management-confidential-vm-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
+  : '${resourceAbbreviations.diskEncryptionSets}-image-management-confidential-vm-${locations[varLocation].abbreviation}'
+var galleryConfidentialVmDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-imagemgmt-cvm'
 
 var logsStorageName = take(
   '${resourceAbbreviations.storageAccounts}imagelogs${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',

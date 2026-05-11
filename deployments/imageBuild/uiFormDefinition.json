@@ -1970,24 +1970,51 @@
 						{
 							"name": "encryption",
 							"type": "Microsoft.Common.Section",
-							"label": "Gallery Encryption",
+							"label": "Disk Encryption",
 							"elements": [
 								{
+									"name": "buildVmDesInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": true,
+									"options": {
+										"style": "Info",
+										"text": "Disk Encryption Sets are applied to both build VM OS disks and gallery image version replicas, keeping builds compliant with policies that require a DES on all VMs. The standard DES is applied to the orchestration VM and the image VM for non-Confidential VM builds. For Confidential VM builds, the Confidential VM DES is applied to the image VM OS disk instead; the standard DES is used as a fallback when no Confidential VM DES is provided."
+									}
+								},
+								{
+									"name": "enableCmk",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Customer Managed Key encryption",
+									"defaultValue": false,
+									"toolTip": "When enabled, a standard Customer Managed Key Disk Encryption Set must be selected. Applied to the orchestration VM OS disk, the image VM OS disk for non-Confidential VM builds (or as a fallback for Confidential VM builds), and gallery image version replicas.",
+									"visible": true
+								},
+								{
+									"name": "diskEncryptionSetsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2023-10-02')]"
+									}
+								},
+								{
 									"name": "existingGalleryDiskEncryptionSetResourceId",
-									"type": "Microsoft.Solutions.ResourceSelector",
-									"label": "Gallery Disk Encryption Set",
-									"resourceType": "Microsoft.Compute/diskEncryptionSets",
-									"toolTip": "Optional. Select the Disk Encryption Set to use for gallery image version encryption. Create this once using the imageManagement template and pass its galleryDiskEncryptionSetResourceId output here.",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Standard Disk Encryption Set",
+									"placeholder": "Select a standard Disk Encryption Set...",
+									"toolTip": "Required. Select the standard DES created by the imageManagement template. Only DES of type Customer Managed Key or Platform + Customer Managed Keys are shown; Confidential VM DES are excluded. Applied to the orchestration VM OS disk, the image VM OS disk for non-Confidential VM builds (or as a fallback for Confidential VM builds), and gallery image version replicas.",
+									"visible": "[steps('imageDest').encryption.enableCmk]",
 									"constraints": {
-										"required": false
+										"required": true,
+										"allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(des.location, steps('basics').scope.location.name), not(equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey')))), (des) => parse(concat('{\"label\":\"', des.name, ' (', if(equals(des.properties.encryptionType, 'EncryptionAtRestWithCustomerKey'), 'Customer Managed Key', 'Platform + Customer Managed Keys'), ')\"', ',\"description\":\"Resource group: ', split(des.id, '/')[4], '\"', ',\"value\":\"', des.id, '\"}')))]"
 									}
 								},
 								{
 									"name": "confidentialVMEncryptionType",
 									"type": "Microsoft.Common.DropDown",
-									"label": "Confidential VM Encryption Type",
+									"label": "Confidential VM Guest State Encryption",
 									"defaultValue": "Encrypted with PMK",
-									"toolTip": "Specifies how the VM guest state is encrypted in gallery image version replicas. Only relevant for Confidential VM image definitions. 'Encrypted with CMK' requires providing an existing Confidential VM DES below — auto-creation is not supported.",
+									"toolTip": "Specifies how the Confidential VM guest state is encrypted in gallery image version replicas. 'Encrypted with CMK' requires a Confidential VM DES created by the imageManagement template. Pass the imageManagement output 'galleryConfidentialVmDiskEncryptionSetResourceId' to the picker below.",
 									"visible": "[contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential')]",
 									"constraints": {
 										"required": true,
@@ -2001,7 +2028,7 @@
 												"value": "EncryptedVMGuestStateOnlyWithPmk"
 											},
 											{
-												"label": "Encrypted with CMK (requires existing CVM DES)",
+												"label": "Encrypted with CMK (requires Confidential VM DES)",
 												"value": "EncryptedWithCmk"
 											}
 										]
@@ -2009,14 +2036,15 @@
 								},
 								{
 									"name": "existingGallerySecureVMDiskEncryptionSetResourceId",
-									"type": "Microsoft.Solutions.ResourceSelector",
+									"type": "Microsoft.Common.DropDown",
 									"label": "Confidential VM Disk Encryption Set",
-									"resourceType": "Microsoft.Compute/diskEncryptionSets",
-									"toolTip": "Required when Confidential VM Encryption Type is 'Encrypted with CMK'. Must be of type ConfidentialVmEncryptedWithCustomerKey with CVM Orchestrator key release permissions pre-configured.",
+									"placeholder": "Select a Confidential VM Disk Encryption Set...",
+									"toolTip": "Required. Only DES of type ConfidentialVmEncryptedWithCustomerKey are shown. This DES must have CVM Orchestrator key release permissions pre-configured. Applied to the image VM OS disk during Confidential VM builds and gallery image version guest state encryption in each replication region. Use the imageManagement template to create this.",
+									"visible": "[and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk'))]",
 									"constraints": {
-										"required": true
-									},
-									"visible": "[equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk')]"
+										"required": true,
+										"allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(des.location, steps('basics').scope.location.name), equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey'))), (des) => parse(concat('{\"label\":\"', des.name, ' (Confidential VM - Customer Managed)\"', ',\"description\":\"Resource group: ', split(des.id, '/')[4], '\"', ',\"value\":\"', des.id, '\"}')))]"
+									}
 								}
 							]
 						}
@@ -2148,9 +2176,9 @@
 				"collectCustomizationLogs": "[steps('prereqs').storage.collectLogs]",
 				"existingLogStorageAccountResourceId": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.existingLogsStorageAccount.id, ''), '')]",
 				"logContainerName": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.logsContainer, 'image-customization-logs'), 'image-customization-logs')]",
-				"existingGalleryDiskEncryptionSetResourceId": "[coalesce(steps('imageDest').encryption.existingGalleryDiskEncryptionSetResourceId.id, '')]",
-				"galleryImageVersionConfidentialVMEncryptionType": "[coalesce(steps('imageDest').encryption.confidentialVMEncryptionType, '')]",
-				"existingGallerySecureVMDiskEncryptionSetResourceId": "[if(equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk'), coalesce(steps('imageDest').encryption.existingGallerySecureVMDiskEncryptionSetResourceId.id, ''), '')]",
+				"existingGalleryDiskEncryptionSetResourceId": "[if(steps('imageDest').encryption.enableCmk, coalesce(steps('imageDest').encryption.existingGalleryDiskEncryptionSetResourceId, ''), '')]",
+				"galleryImageVersionConfidentialVMEncryptionType": "[if(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), coalesce(steps('imageDest').encryption.confidentialVMEncryptionType, ''), '')]",
+				"existingGallerySecureVMDiskEncryptionSetResourceId": "[if(and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk')), coalesce(steps('imageDest').encryption.existingGallerySecureVMDiskEncryptionSetResourceId, ''), '')]",
 				"imageDefinitionResourceId": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, true), steps('imageDest').imageDefinition.existingImageDefinition.id, '')]",
 				"customImageDefinitionName": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, false), steps('imageDest').imageDefinition.customImageDefinitionName, '')]",
 				"imageDefinitionPublisher": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, false), steps('imageDest').imageDefinition.imageDefinitionPublisher, '')]",

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "3494365586454364085"
+      "templateHash": "2523868705324766338"
     }
   },
   "parameters": {
@@ -104,7 +104,7 @@
         "PlatformManagedAndCustomerManagedHSM"
       ],
       "metadata": {
-        "description": "Optional. Key management for gallery image version encryption. CustomerManaged and CustomerManagedHSM use a single CMK layer. PlatformManagedAndCustomerManaged / PlatformManagedAndCustomerManagedHSM add a second platform-key layer underneath (double encryption). A standard DES is always created when any customer-managed option is selected. The `galleryDiskEncryptionSetResourceId` output can then be passed to imageBuild as `existingGalleryDiskEncryptionSetResourceId`."
+        "description": "Optional. Key management for image encryption. Controls the Disk Encryption Set used for both gallery image version encryption and build VM OS disk encryption during image builds. CustomerManaged and CustomerManagedHSM use a single CMK layer. PlatformManagedAndCustomerManaged / PlatformManagedAndCustomerManagedHSM add a second platform-key layer underneath (double encryption). A DES is always created when any customer-managed option is selected. Pass the `galleryDiskEncryptionSetResourceId` output to imageBuild as `existingGalleryDiskEncryptionSetResourceId`."
       }
     },
     "encryptionKeyVaultResourceId": {
@@ -716,10 +716,10 @@
     "logsStorageEncryptionKeyName": "[format('{0}-encryption-key-imagemgmt-logstorage', variables('identifier'))]",
     "storageEncryptionIdentityName": "[replace(replace(replace(variables('nameConv_ImageManagement_Resources'), variables('identifier'), format('{0}-encryption', variables('identifier'))), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'LOCATION', variables('locations')[variables('varLocation')].abbreviation)]",
     "cmkKeyNames": "[union(if(parameters('deployArtifactsStorageAccount'), createArray(variables('storageEncryptionKeyName')), createArray()), if(parameters('deployBuildLogsStorageAccount'), createArray(variables('logsStorageEncryptionKeyName')), createArray()))]",
-    "galleryDiskEncryptionSetName": "[if(parameters('nameConvResTypeAtEnd'), format('image-management-gallery-{0}-{1}-{2}', if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), 'platform-and-customer-keys', 'customer-keys'), variables('locations')[variables('varLocation')].abbreviation, variables('resourceAbbreviations').diskEncryptionSets), format('{0}-image-management-gallery-{1}-{2}', variables('resourceAbbreviations').diskEncryptionSets, if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), 'platform-and-customer-keys', 'customer-keys'), variables('locations')[variables('varLocation')].abbreviation))]",
-    "galleryDiskEncryptionKeyName": "[format('{0}-{1}-encryption-key-vmImages', variables('identifier'), variables('locations')[variables('varLocation')].abbreviation)]",
-    "galleryConfidentialVmDiskEncryptionSetName": "[if(parameters('nameConvResTypeAtEnd'), format('image-management-gallery-confidential-vm-keys-{0}-{1}', variables('locations')[variables('varLocation')].abbreviation, variables('resourceAbbreviations').diskEncryptionSets), format('{0}-image-management-gallery-confidential-vm-keys-{1}', variables('resourceAbbreviations').diskEncryptionSets, variables('locations')[variables('varLocation')].abbreviation))]",
-    "galleryConfidentialVmDiskEncryptionKeyName": "[format('{0}-{1}-encryption-key-confidentialVmImages', variables('identifier'), variables('locations')[variables('varLocation')].abbreviation)]",
+    "galleryDiskEncryptionSetName": "[if(parameters('nameConvResTypeAtEnd'), format('image-management-{0}-{1}-{2}', if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), 'platform-and-customer-keys', 'customer-keys'), variables('locations')[variables('varLocation')].abbreviation, variables('resourceAbbreviations').diskEncryptionSets), format('{0}-image-management-{1}-{2}', variables('resourceAbbreviations').diskEncryptionSets, if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), 'platform-and-customer-keys', 'customer-keys'), variables('locations')[variables('varLocation')].abbreviation))]",
+    "galleryDiskEncryptionKeyName": "[format('{0}-{1}-encryption-key-imagemgmt', variables('identifier'), variables('locations')[variables('varLocation')].abbreviation)]",
+    "galleryConfidentialVmDiskEncryptionSetName": "[if(parameters('nameConvResTypeAtEnd'), format('image-management-confidential-vm-{0}-{1}', variables('locations')[variables('varLocation')].abbreviation, variables('resourceAbbreviations').diskEncryptionSets), format('{0}-image-management-confidential-vm-{1}', variables('resourceAbbreviations').diskEncryptionSets, variables('locations')[variables('varLocation')].abbreviation))]",
+    "galleryConfidentialVmDiskEncryptionKeyName": "[format('{0}-{1}-encryption-key-imagemgmt-cvm', variables('identifier'), variables('locations')[variables('varLocation')].abbreviation)]",
     "logsStorageName": "[take(format('{0}imagelogs{1}{2}', variables('resourceAbbreviations').storageAccounts, variables('locations')[variables('varLocation')].abbreviation, uniqueString(subscription().subscriptionId, variables('resourceGroupName'))), 24)]",
     "logsContainerName": "image-customization-logs",
     "logsPrivateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logsStorageName'))]",
