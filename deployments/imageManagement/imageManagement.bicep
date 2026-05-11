@@ -144,7 +144,6 @@ var storageSkuName = 'Standard_LRS'
 var storageAccessTier = 'Hot'
 
 var storageEncryptionKeyName = '${identifier}-encryption-key-imagemgmt-storage'
-var logsStorageEncryptionKeyName = '${identifier}-encryption-key-imagemgmt-logstorage'
 // Single encryption UAI shared by both storage accounts.
 // Result: uai-avd-image-management-encryption-{loc} (nameConvResTypeAtEnd=false)
 //         avd-image-management-encryption-{loc}-uai  (nameConvResTypeAtEnd=true)
@@ -157,11 +156,9 @@ var storageEncryptionIdentityName = replace(
   'LOCATION',
   locations[varLocation].abbreviation
 )
-// Combined key list — only includes keys for storage accounts that are actually being deployed.
-var cmkKeyNames = union(
-  deployArtifactsStorageAccount ? [storageEncryptionKeyName] : [],
-  deployBuildLogsStorageAccount ? [logsStorageEncryptionKeyName] : []
-)
+// Both storage accounts share the same key — no operational benefit to separate keys
+// for same-solution, same-sensitivity storage in the same resource group.
+var cmkKeyNames = (deployArtifactsStorageAccount || deployBuildLogsStorageAccount) ? [storageEncryptionKeyName] : []
 
 var galleryDiskEncryptionSetName = nameConvResTypeAtEnd
   ? 'image-management-${contains(keyManagementGalleryImageVersions, 'Platform') ? 'platform-and-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
@@ -396,7 +393,7 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
     encryptionKeyVaultUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
       ? encryptionKeyVault!.properties.vaultUri
       : ''
-    encryptionKeyName: keyManagementStorageAccounts != 'PlatformManaged' ? logsStorageEncryptionKeyName : ''
+    encryptionKeyName: keyManagementStorageAccounts != 'PlatformManaged' ? storageEncryptionKeyName : ''
     encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
       ? storageCmk!.outputs.storageIdentityResourceId
       : ''

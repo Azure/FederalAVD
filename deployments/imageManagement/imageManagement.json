@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "2523868705324766338"
+      "templateHash": "15023985240945699782"
     }
   },
   "parameters": {
@@ -713,9 +713,8 @@
     "storageSkuName": "Standard_LRS",
     "storageAccessTier": "Hot",
     "storageEncryptionKeyName": "[format('{0}-encryption-key-imagemgmt-storage', variables('identifier'))]",
-    "logsStorageEncryptionKeyName": "[format('{0}-encryption-key-imagemgmt-logstorage', variables('identifier'))]",
     "storageEncryptionIdentityName": "[replace(replace(replace(variables('nameConv_ImageManagement_Resources'), variables('identifier'), format('{0}-encryption', variables('identifier'))), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'LOCATION', variables('locations')[variables('varLocation')].abbreviation)]",
-    "cmkKeyNames": "[union(if(parameters('deployArtifactsStorageAccount'), createArray(variables('storageEncryptionKeyName')), createArray()), if(parameters('deployBuildLogsStorageAccount'), createArray(variables('logsStorageEncryptionKeyName')), createArray()))]",
+    "cmkKeyNames": "[if(or(parameters('deployArtifactsStorageAccount'), parameters('deployBuildLogsStorageAccount')), createArray(variables('storageEncryptionKeyName')), createArray())]",
     "galleryDiskEncryptionSetName": "[if(parameters('nameConvResTypeAtEnd'), format('image-management-{0}-{1}-{2}', if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), 'platform-and-customer-keys', 'customer-keys'), variables('locations')[variables('varLocation')].abbreviation, variables('resourceAbbreviations').diskEncryptionSets), format('{0}-image-management-{1}-{2}', variables('resourceAbbreviations').diskEncryptionSets, if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), 'platform-and-customer-keys', 'customer-keys'), variables('locations')[variables('varLocation')].abbreviation))]",
     "galleryDiskEncryptionKeyName": "[format('{0}-{1}-encryption-key-imagemgmt', variables('identifier'), variables('locations')[variables('varLocation')].abbreviation)]",
     "galleryConfidentialVmDiskEncryptionSetName": "[if(parameters('nameConvResTypeAtEnd'), format('image-management-confidential-vm-{0}-{1}', variables('locations')[variables('varLocation')].abbreviation, variables('resourceAbbreviations').diskEncryptionSets), format('{0}-image-management-confidential-vm-{1}', variables('resourceAbbreviations').diskEncryptionSets, variables('locations')[variables('varLocation')].abbreviation))]",
@@ -5927,7 +5926,7 @@
             "value": "[variables('sasExpirationPeriod')]"
           },
           "encryptionKeyVaultUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('encryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri), createObject('value', ''))]",
-          "encryptionKeyName": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', variables('logsStorageEncryptionKeyName')), createObject('value', ''))]",
+          "encryptionKeyName": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', variables('storageEncryptionKeyName')), createObject('value', ''))]",
           "encryptionUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.storageIdentityResourceId.value), createObject('value', ''))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
