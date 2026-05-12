@@ -164,13 +164,13 @@ param cleanupDesktop bool = false
 param collectCustomizationLogs bool = false
 
 @description('Optional. Resource ID of an existing storage account (deployed by imageManagement with deployBuildLogsStorageAccount = true) to use for build customization logs. Required when collectCustomizationLogs is true.')
-param existingLogStorageAccountResourceId string = ''
+param logStorageAccountResourceId string = ''
 
 @description('Optional. Name of the blob container in the logs storage account to write customization logs to.')
 param logContainerName string = 'image-customization-logs'
 
 @description('Optional. Resource ID of an existing Disk Encryption Set to use for gallery image version encryption. Created by the imageManagement template; pass its diskEncryptionSetResourceId output here to share the same DES across all image builds.')
-param existingDiskEncryptionSetResourceId string = ''
+param diskEncryptionSetResourceId string = ''
 
 @description('Optional. Confidential VM encryption type applied to each image version replication target region. Only relevant when the image definition SecurityType is ConfidentialVM or ConfidentialVMSupported.')
 @allowed([
@@ -182,7 +182,7 @@ param existingDiskEncryptionSetResourceId string = ''
 param galleryImageVersionConfidentialVMEncryptionType string = ''
 
 @description('Optional. Resource ID of an existing Disk Encryption Set to use for Confidential VM guest state encryption in gallery image version replicas. When provided, no new DES is created. Only used when galleryImageVersionConfidentialVMEncryptionType is EncryptedWithCmk.')
-param existingConfidentialVMDiskEncryptionSetResourceId string = ''
+param confidentialVMDiskEncryptionSetResourceId string = ''
 
 @description('Optional. Determines if the latest updates from the specified update service will be installed.')
 param installUpdates bool = true
@@ -350,10 +350,10 @@ var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
 var adminPw = '1qaz@WSX${uniqueString(subscription().id, imageBuildResourceGroupName)}'
 var adminUserName = 'vmadmin'
 
-var existingLogStorageAccountName = empty(existingLogStorageAccountResourceId)
+var existingLogStorageAccountName = empty(logStorageAccountResourceId)
   ? ''
-  : last(split(existingLogStorageAccountResourceId, '/'))
-var logContainerUri = collectCustomizationLogs && !empty(existingLogStorageAccountResourceId)
+  : last(split(logStorageAccountResourceId, '/'))
+var logContainerUri = collectCustomizationLogs && !empty(logStorageAccountResourceId)
   ? 'https://${existingLogStorageAccountName}.blob.${environment().suffixes.storage}/${logContainerName}/'
   : ''
 
@@ -434,16 +434,14 @@ var imageVersionReplicationRegions = empty(remoteComputeGalleryResourceId)
       ? union(localImageVersionTargetRegions, defaultRemoteImageVersionTargetRegions)
       : localImageVersionTargetRegions
 
-var effectiveDiskEncryptionSetResourceId = existingDiskEncryptionSetResourceId
-
 // Note: auto-creation of a ConfidentialVM DES (ConfidentialVmEncryptedWithCustomerKey type) is a feature gap.
 // CVM DES provisioning requires a Confidential VM Orchestrator service principal key-release role assignment
-// that cannot be reliably automated here. Supply an existing DES via existingConfidentialVMDiskEncryptionSetResourceId.
+// that cannot be reliably automated here. Supply an existing DES via confidentialVMDiskEncryptionSetResourceId.
 var effectiveConfidentialVmDiskEncryptionSetResourceId = galleryImageVersionConfidentialVMEncryptionType == 'EncryptedWithCmk'
-  ? existingConfidentialVMDiskEncryptionSetResourceId
+  ? confidentialVMDiskEncryptionSetResourceId
   : ''
 
-var imageVersionReplicationRegionsWithEncryption = empty(effectiveDiskEncryptionSetResourceId)
+var imageVersionReplicationRegionsWithEncryption = empty(diskEncryptionSetResourceId)
   ? imageVersionReplicationRegions
   : map(
       imageVersionReplicationRegions,
@@ -451,7 +449,7 @@ var imageVersionReplicationRegionsWithEncryption = empty(effectiveDiskEncryption
         union(region, {
           encryption: {
             osDiskImage: union(
-              { diskEncryptionSetId: effectiveDiskEncryptionSetResourceId },
+              { diskEncryptionSetId: diskEncryptionSetResourceId },
               !empty(galleryImageVersionConfidentialVMEncryptionType)
                 ? {
                     securityProfile: union(
@@ -607,13 +605,13 @@ module roleAssignmentContributorBuildRg '../../.common/bicepModules/authorizatio
   ]
 }
 
-module roleAssignmentBlobDataContributorExistingStorage '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (collectCustomizationLogs && !empty(existingLogStorageAccountResourceId) && empty(userAssignedIdentityResourceId)) {
+module roleAssignmentBlobDataContributorExistingStorage '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (collectCustomizationLogs && !empty(logStorageAccountResourceId) && empty(userAssignedIdentityResourceId)) {
   // Only needed when imageBuild creates its own UAI — when the imageManagement UAI is supplied via
   // userAssignedIdentityResourceId it already has Blob Data Contributor granted by imageManagement.
   name: '${depPrefix}RA-MI-StorBlobDataContr-ExistingLogsRG-${deploymentSuffix}'
   scope: resourceGroup(
-    split(existingLogStorageAccountResourceId, '/')[2],
-    split(existingLogStorageAccountResourceId, '/')[4]
+    split(logStorageAccountResourceId, '/')[2],
+    split(logStorageAccountResourceId, '/')[4]
   )
   params: {
     principalId: userAssignedIdentity!.outputs.principalId
@@ -644,7 +642,7 @@ module orchestrationVm '../../.common/bicepModules/compute/virtualMachines/deplo
     securityType: 'TrustedLaunch'
     secureBootEnabled: true
     vTpmEnabled: true
-    diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
+    diskEncryptionSetResourceId: diskEncryptionSetResourceId
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
     userAssignedIdentityResourceIds: [
@@ -690,8 +688,8 @@ module imageVm '../../.common/bicepModules/compute/virtualMachines/deploy.bicep'
     diskEncryptionSetResourceId: vmSecurityType == 'ConfidentialVM'
       ? (!empty(effectiveConfidentialVmDiskEncryptionSetResourceId)
           ? effectiveConfidentialVmDiskEncryptionSetResourceId
-          : effectiveDiskEncryptionSetResourceId)
-      : effectiveDiskEncryptionSetResourceId
+          : diskEncryptionSetResourceId)
+      : diskEncryptionSetResourceId
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
     userAssignedIdentityResourceIds: [
@@ -800,7 +798,7 @@ module captureImage 'modules/captureImage.bicep' = {
     location: computeLocation
     tags: tags
     deploymentSuffix: deploymentSuffix
-    diskEncryptionSetId: effectiveDiskEncryptionSetResourceId
+    diskEncryptionSetId: diskEncryptionSetResourceId
     confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType
     secureVMDiskEncryptionSetId: effectiveConfidentialVmDiskEncryptionSetResourceId
     virtualMachineResourceId: imageVm.outputs.resourceId

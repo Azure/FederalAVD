@@ -111,13 +111,16 @@ $DisableStoreAutoUpdate = [System.Convert]::ToBoolean($DisableStoreAutoUpdate)
 
 $ErrorActionPreference = 'Stop'
 
-function Write-OutputWithTimeStamp {
+$LogFile = "$env:SystemRoot\Logs\Disable-SoftwareUpdates.log"
+
+function Write-Log {
     param(
         [Parameter(Mandatory = $true, Position = 0)]
+        [AllowEmptyString()]
         [string]$Message
     )
-    $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'
-    $Entry = '[' + $Timestamp + '] ' + $Message
+    $Entry = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message"
+    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue
     Write-Output $Entry
 }
 
@@ -129,22 +132,22 @@ function Set-RegistryValue {
         $Value
     )
     If (!(Test-Path -Path $Path)) {
-        Write-OutputWithTimeStamp "Creating registry key: $Path"
+        Write-Log "Creating registry key: $Path"
         New-Item -Path $Path -Force | Out-Null
     }
     $existing = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
     If ($existing) {
         $current = Get-ItemPropertyValue -Path $Path -Name $Name
         If ($current -ne $Value) {
-            Write-OutputWithTimeStamp "Setting $Path\$Name : $current -> $Value"
+            Write-Log "Setting $Path\$Name : $current -> $Value"
             Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
         }
         Else {
-            Write-OutputWithTimeStamp "$Path\$Name is already $Value"
+            Write-Log "$Path\$Name is already $Value"
         }
     }
     Else {
-        Write-OutputWithTimeStamp "Creating $Path\$Name = $Value"
+        Write-Log "Creating $Path\$Name = $Value"
         New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
     }
 }
@@ -154,25 +157,25 @@ function Disable-Service {
     $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
     If ($svc) {
         If ($svc.StartType -ne 'Disabled') {
-            Write-OutputWithTimeStamp "Disabling service: $Name"
+            Write-Log "Disabling service: $Name"
             Set-Service -Name $Name -StartupType Disabled -ErrorAction SilentlyContinue
             Stop-Service -Name $Name -Force -ErrorAction SilentlyContinue
         }
         Else {
-            Write-OutputWithTimeStamp "Service already disabled: $Name"
+            Write-Log "Service already disabled: $Name"
         }
     }
     Else {
-        Write-OutputWithTimeStamp "Service not found (skipping): $Name"
+        Write-Log "Service not found (skipping): $Name"
     }
 }
 
-Start-Transcript -Path "$env:SystemRoot\Logs\Disable-SoftwareUpdates.log" -Force
-Write-OutputWithTimeStamp 'Starting Disable-SoftwareUpdates'
+try {
+Write-Log 'Starting Disable-SoftwareUpdates'
 
 #region Windows Update
 If ($DisableWindowsUpdate) {
-    Write-OutputWithTimeStamp '--- Windows Update ---'
+    Write-Log '--- Windows Update ---'
     # Disable Windows Update via policy (NoAutoUpdate + AUOptions=1 = never check)
     Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' -Name 'NoAutoUpdate'    -PropertyType 'DWORD' -Value 1
     Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' -Name 'AUOptions'       -PropertyType 'DWORD' -Value 1
@@ -188,7 +191,7 @@ If ($DisableWindowsUpdate) {
     $updateTaskPath = '\Microsoft\Windows\WindowsUpdate\'
     $updateTask = Get-ScheduledTask -TaskName $updateTaskName -TaskPath $updateTaskPath -ErrorAction SilentlyContinue
     if ($updateTask) {
-            Write-OutputWithTimeStamp "Disabling scheduled task: $updateTaskPath$updateTaskName"
+            Write-Log "Disabling scheduled task: $updateTaskPath$updateTaskName"
             Disable-ScheduledTask -TaskName $updateTaskName -TaskPath $updateTaskPath -ErrorAction SilentlyContinue | Out-Null
         }
     }
@@ -196,7 +199,7 @@ If ($DisableWindowsUpdate) {
 
     #region Microsoft 365 / Office Updates
     If ($DisableM365Update) {
-        Write-OutputWithTimeStamp '--- Microsoft 365 / Office Updates ---'
+        Write-Log '--- Microsoft 365 / Office Updates ---'
         Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' -Name 'enableautomaticupdates' -PropertyType 'DWORD' -Value 0
         Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' -Name 'hideupdatenotifications' -PropertyType 'DWORD' -Value 1
         Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' -Name 'hideenabledisableupdates'  -PropertyType 'DWORD' -Value 1
@@ -204,7 +207,7 @@ If ($DisableWindowsUpdate) {
         $c2rTaskName = 'Office Automatic Updates 2.0'
         $c2rTask = Get-ScheduledTask -TaskName $c2rTaskName -ErrorAction SilentlyContinue
         If ($c2rTask) {
-            Write-OutputWithTimeStamp "Disabling scheduled task: $c2rTaskName"
+            Write-Log "Disabling scheduled task: $c2rTaskName"
             Disable-ScheduledTask -TaskName $c2rTaskName -TaskPath $c2rTask.TaskPath -ErrorAction SilentlyContinue | Out-Null
         }
     }
@@ -212,7 +215,7 @@ If ($DisableWindowsUpdate) {
 
     #region Teams for VDI
     If ($DisableTeamsUpdate) {
-        Write-OutputWithTimeStamp '--- Teams for VDI Updates ---'
+        Write-Log '--- Teams for VDI Updates ---'
         # New Teams (MSTeams) — disable auto-update via policy
         Set-RegistryValue -Path 'HKLM:\SOFTWARE\Microsoft\Teams' -Name 'DisableAutoUpdate' -PropertyType 'DWORD' -Value 1
     }
@@ -220,7 +223,7 @@ If ($DisableWindowsUpdate) {
 
     #region OneDrive
     If ($DisableOneDriveUpdate) {
-        Write-OutputWithTimeStamp '--- OneDrive Updates ---'
+        Write-Log '--- OneDrive Updates ---'
         # Set the OneDrive update ring to Deferred (value 0) via the documented GPOSetUpdateRing policy.
         # Deferred ring defers new builds for up to 60 days and allows controlled update deployment.
         # Ref: https://learn.microsoft.com/en-us/sharepoint/use-group-policy#set-the-sync-app-update-ring
@@ -229,7 +232,7 @@ If ($DisableWindowsUpdate) {
         # Ref: https://learn.microsoft.com/en-us/sharepoint/sync-client-update-process#how-the-sync-app-checks-for-and-applies-updates
         foreach ($taskName in @('OneDrive Reporting Task-S-*', 'OneDrive Standalone Update Task-S-*')) {
             Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue | ForEach-Object {
-                Write-OutputWithTimeStamp "Disabling scheduled task: $($_.TaskName)"
+                Write-Log "Disabling scheduled task: $($_.TaskName)"
                 $_ | Disable-ScheduledTask -ErrorAction SilentlyContinue | Out-Null
             }
         }
@@ -238,7 +241,7 @@ If ($DisableWindowsUpdate) {
 
     #region Microsoft Edge
     If ($DisableEdgeUpdate) {
-        Write-OutputWithTimeStamp '--- Microsoft Edge Updates ---'
+        Write-Log '--- Microsoft Edge Updates ---'
         Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' -Name 'UpdateDefault'                        -PropertyType 'DWORD'  -Value 0
         Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' -Name 'Update{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}' -PropertyType 'DWORD' -Value 0
         # Disable Edge Update services
@@ -248,7 +251,7 @@ If ($DisableWindowsUpdate) {
         foreach ($taskName in @('MicrosoftEdgeUpdateTaskMachineCore', 'MicrosoftEdgeUpdateTaskMachineUA')) {
             $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
             If ($task) {
-                Write-OutputWithTimeStamp "Disabling scheduled task: $taskName"
+                Write-Log "Disabling scheduled task: $taskName"
                 Disable-ScheduledTask -TaskName $taskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue | Out-Null
             }
         }
@@ -257,7 +260,7 @@ If ($DisableWindowsUpdate) {
 
     #region WebView2
     If ($DisableWebView2Update) {
-        Write-OutputWithTimeStamp '--- WebView2 Runtime Updates ---'
+        Write-Log '--- WebView2 Runtime Updates ---'
         Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' -Name 'Update{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}' -PropertyType 'DWORD' -Value 0
         # Disable WebView2 updater scheduled tasks
         foreach ($taskName in @('MicrosoftEdgeUpdateTaskMachineCore', 'MicrosoftEdgeUpdateTaskMachineUA')) {
@@ -272,7 +275,7 @@ If ($DisableWindowsUpdate) {
 
     #region Microsoft Store / UWP App Auto-Update
     If ($DisableStoreAutoUpdate) {
-        Write-OutputWithTimeStamp '--- Microsoft Store / UWP App Auto-Update ---'
+        Write-Log '--- Microsoft Store / UWP App Auto-Update ---'
         # Disable automatic app updates from the Store
         Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore' -Name 'AutoDownload' -PropertyType 'DWORD' -Value 2
         # Disable Store update scheduled tasks
@@ -284,7 +287,7 @@ If ($DisableWindowsUpdate) {
         foreach ($entry in $storeTasks) {
             $task = Get-ScheduledTask -TaskName $entry.Name -TaskPath $entry.Path -ErrorAction SilentlyContinue
             If ($task) {
-                Write-OutputWithTimeStamp "Disabling scheduled task: $($entry.Path)$($entry.Name)"
+                Write-Log "Disabling scheduled task: $($entry.Path)$($entry.Name)"
                 Disable-ScheduledTask -TaskName $entry.Name -TaskPath $entry.Path -ErrorAction SilentlyContinue | Out-Null
             }
         }
@@ -294,5 +297,11 @@ If ($DisableWindowsUpdate) {
     }
     #endregion
 
-    Write-OutputWithTimeStamp 'Disable-SoftwareUpdates complete.'
-    Stop-Transcript
+    Write-Log 'Disable-SoftwareUpdates complete.'
+}
+catch {
+    Write-Log "FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
+    If ($_.Exception.InnerException) { Write-Log "Inner exception: $($_.Exception.InnerException.Message)" }
+    Write-Log $_.ScriptStackTrace
+    Exit 1
+}

@@ -171,7 +171,7 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 | **runWindowsUpdate** | Install Windows Updates during build | `true` |
 | **windowsUpdateCategories** | Categories of updates to install | `Critical, Security, UpdateRollup` |
 | **collectCustomizationLogs** | Save customization logs to an existing blob storage container | `true` (optional, default: `false`) |
-| **existingLogStorageAccountResourceId** | Resource ID of the storage account to receive build logs (deploy imageManagement with `deployBuildLogsStorageAccount = true`) | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{name}` |
+| **logStorageAccountResourceId** | Resource ID of the storage account to receive build logs (deploy imageManagement with `deployBuildLogsStorageAccount = true`) | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{name}` |
 | **logContainerName** | Blob container name to write logs into | `image-customization-logs` (default) |
 
 ### CMK Encryption Reference
@@ -180,7 +180,7 @@ Gallery image version encryption is managed by the **imageManagement** template.
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
-| **existingDiskEncryptionSetResourceId** | Resource ID of the DES created by imageManagement. Leave empty for platform-managed key encryption. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}` |
+| **diskEncryptionSetResourceId** | Resource ID of the DES created by imageManagement. Leave empty for platform-managed key encryption. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}` |
 
 ### Image Management Resource References
 
@@ -328,7 +328,7 @@ Before enabling log collection, deploy the imageManagement solution with `deploy
 **When enabled:**
 
 - All Run Command output and error logs are uploaded to the specified blob container
-- The `existingLogStorageAccountResourceId` and `logContainerName` parameters (or Portal selectors) identify where logs are written
+- The `logStorageAccountResourceId` and `logContainerName` parameters (or Portal selectors) identify where logs are written
 - The `userAssignedIdentityResourceId` must reference an identity with **Storage Blob Data Contributor** on the log storage account
 - Logs from the imageManagement-deployed storage account are automatically retained per the lifecycle policy configured there
 
@@ -413,7 +413,7 @@ Typical build duration: **45-90 minutes** depending on:
 If you enabled the `collectCustomizationLogs` parameter during deployment, logs are written to the existing storage account you specified:
 
 ```powershell
-# Get the log storage account (the one you specified as existingLogStorageAccountResourceId)
+# Get the log storage account (the one you specified as logStorageAccountResourceId)
 $logStorageAccountId = "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{name}"
 $parts = $logStorageAccountId.Split('/')
 $storageAccount = Get-AzStorageAccount -ResourceGroupName $parts[4] -Name $parts[8]

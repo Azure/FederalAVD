@@ -410,9 +410,9 @@ See [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) for
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Upload all Run Command output and error logs to an existing blob storage container. Requires `existingLogStorageAccountResourceId` and a UAI with **Storage Blob Data Contributor** on that account.
+- **Description:** Upload all Run Command output and error logs to an existing blob storage container. Requires `logStorageAccountResourceId` and a UAI with **Storage Blob Data Contributor** on that account.
 
-#### `existingLogStorageAccountResourceId`
+#### `logStorageAccountResourceId`
 
 - **Type:** String
 - **Default:** `''`
@@ -429,7 +429,7 @@ See [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) for
 
 Gallery image version CMK is managed by the **imageManagement** template, which creates one Disk Encryption Set (DES) for the gallery and outputs `diskEncryptionSetResourceId`. Pass that output here to share the same DES across all builds rather than creating a new one per build.
 
-#### `existingDiskEncryptionSetResourceId`
+#### `diskEncryptionSetResourceId`
 
 - **Type:** String
 - **Default:** `''`
@@ -443,7 +443,7 @@ Gallery image version CMK is managed by the **imageManagement** template, which 
 - **Allowed Values:** `''`, `EncryptedWithPmk`, `EncryptedVMGuestStateOnlyWithPmk`, `EncryptedWithCmk`
 - **Description:** Specifies VM guest state encryption for Confidential VM image definitions. Only relevant when the image definition security type is Confidential.
 
-#### `existingConfidentialVMDiskEncryptionSetResourceId`
+#### `confidentialVMDiskEncryptionSetResourceId`
 
 - **Type:** String
 - **Default:** `''`
@@ -724,7 +724,7 @@ module imageBuild './imageBuild.bicep' = {
     
     // Logging to existing imageManagement storage account
     collectCustomizationLogs: true
-    existingLogStorageAccountResourceId: '/subscriptions/{sub}/resourceGroups/rg-image-management/providers/Microsoft.Storage/storageAccounts/stbuildlogs'
+    logStorageAccountResourceId: '/subscriptions/{sub}/resourceGroups/rg-image-management/providers/Microsoft.Storage/storageAccounts/stbuildlogs'
     logContainerName: 'image-customization-logs'
     
     // Use existing image definition

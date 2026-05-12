@@ -9,21 +9,21 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
-function Write-OutputWithTimeStamp {
-    param(
-        [string]$Message
-    )    
-    $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'
-    $Entry = '[' + $Timestamp + '] ' + $Message
-    Write-Output $Entry
-}
-
 $EnvSuffix = $BlobStorageSuffix.Substring(10, ($BlobStorageSuffix.length - 10))
 
 $SoftwareName = 'Microsoft-365-Applications'
-Start-Transcript -Path "$env:SystemRoot\Logs\Install-$SoftwareName.log" -Force
-Write-OutputWithTimeStamp "Starting Script to install '$SoftwareName' with the following parameters:"
-Write-Output ( $PSBoundParameters | Format-Table -AutoSize )
+$LogFile = "$env:SystemRoot\Logs\Install-$SoftwareName.log"
+
+function Write-Log {
+    param([string]$Message)
+    $Entry = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message"
+    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue
+    Write-Output $Entry
+}
+
+try {
+Write-Log "Starting Script to install '$SoftwareName' with the following parameters:"
+Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)
 
 If ($AppsToInstall -ne '' -and $null -ne $AppsToInstall) {
     [array]$AppsToInstall = $AppsToInstall.Replace('\"', '"') | ConvertFrom-Json
@@ -49,14 +49,14 @@ If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {
 }
 $SourceFileName = ($Uri -Split "/")[-1]
 $DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName
-Write-OutputWithTimeStamp "Downloading '$Uri' to '$DestFile'."
+Write-Log "Downloading '$Uri' to '$DestFile'."
 $webClient.DownloadFile("$Uri", "$DestFile")
 Start-Sleep -Seconds 5
-If (!(Test-Path -Path $DestFile)) { Write-Error "Failed to download $SourceFileName"; Exit 1 }
-Write-OutputWithTimeStamp "Finished downloading"
+If (!(Test-Path -Path $DestFile)) { Write-Log "Failed to download $SourceFileName"; Exit 1 }
+Write-Log "Finished downloading"
 $Setup = $DestFile
 
-Write-OutputWithTimeStamp "Dynamically creating $SoftwareName configuration file for setup."
+Write-Log "Dynamically creating $SoftwareName configuration file for setup."
 $ConfigFile = Join-Path -Path $TempDir -ChildPath 'office365x64.xml'
 [array]$Content = @()
 [array]$ExcludedApps = @()
@@ -121,19 +121,26 @@ $Content += '  <Updates Enabled="FALSE" />'
 $Content += '  <Display Level="None" AcceptEULA="TRUE" />'
 $Content += '</Configuration>'
 Add-Content -Path $ConfigFile -Value $Content
-Write-OutputWithTimeStamp "Config File Content:"
-Write-Output "---------------------------------------------------------------------------------------------------------"
+Write-Log "Config File Content:"
+Write-Log "---------------------------------------------------------------------------------------------------------"
 $ConfigFileContent = Get-Content -Path $ConfigFile
-Write-Output $ConfigFileContent
-Write-Output "---------------------------------------------------------------------------------------------------------"
-Write-OutputWithTimeStamp "Starting setup process."
-Write-Output "Command Line: $Setup /configure `"$ConfigFile`""
+Write-Log $ConfigFileContent
+Write-Log "---------------------------------------------------------------------------------------------------------"
+Write-Log "Starting setup process."
+Write-Log "Command Line: $Setup /configure `"$ConfigFile`""
 $Install = Start-Process -FilePath $Setup -ArgumentList "/configure `"$ConfigFile`"" -Wait -PassThru -ErrorAction "Stop"
 If ($($Install.ExitCode) -eq 0) {
-    Write-OutputWithTimeStamp "'$SoftwareName' installed successfully."
+    Write-Log "'$SoftwareName' installed successfully."
 }
 Else {
-    Write-Error "'$SoftwareName' install exit code is $($Install.ExitCode)"
+    Write-Log "'$SoftwareName' install exit code is $($Install.ExitCode)"
+    Exit 1
 }
 If ((Split-Path $TempDir -Parent) -eq $Env:Temp) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }
-Stop-Transcript
+}
+catch {
+    Write-Log "FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
+    If ($_.Exception.InnerException) { Write-Log "Inner exception: $($_.Exception.InnerException.Message)" }
+    Write-Log $_.ScriptStackTrace
+    Exit 1
+}

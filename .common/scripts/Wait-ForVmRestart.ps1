@@ -12,12 +12,6 @@ param(
 $ErrorActionPreference = 'Stop'
 $WarningPreference = 'SilentlyContinue'
 
-function Write-OutputWithTimeStamp {
-    param([string]$Message)
-    $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'
-    Write-Output "[$Timestamp] $Message"
-}
-
 Try {
     $ResourceManagerUriFixed = if ($ResourceManagerUri[-1] -eq '/') { $ResourceManagerUri.Substring(0, $ResourceManagerUri.Length - 1) } else { $ResourceManagerUri }
 
@@ -38,14 +32,14 @@ Try {
     # Give the image VM a window to start restarting. The CBS check script issues 'shutdown /r /t 30',
     # so the restart fires ~30 seconds after that Run Command exits. Poll for 90 seconds to detect a
     # power state change. If the VM never goes down, no restart was triggered.
-    Write-OutputWithTimeStamp "Waiting to detect if image VM is restarting due to pending CBS operations..."
+    Write-Output "Waiting to detect if image VM is restarting due to pending CBS operations..."
     $WentDown = $false
     $DownCheckEnd = (Get-Date).AddSeconds(90)
 
     while ((Get-Date) -lt $DownCheckEnd) {
         $PowerState = Get-VmPowerState
         if ($PowerState -ne 'PowerState/running') {
-            Write-OutputWithTimeStamp "Image VM power state changed to '$PowerState'. Waiting for restart to complete..."
+            Write-Output "Image VM power state changed to '$PowerState'. Waiting for restart to complete..."
             $WentDown = $true
             break
         }
@@ -63,11 +57,11 @@ Try {
             $PowerState = Get-VmPowerState
         }
         # Allow the guest agent time to fully initialize before the next Run Command is issued
-        Write-OutputWithTimeStamp "Image VM is running. Waiting 30 seconds for guest agent to initialize..."
+        Write-Output "Image VM is running. Waiting 30 seconds for guest agent to initialize..."
         Start-Sleep -Seconds 30
-        Write-OutputWithTimeStamp "Image VM is ready. Proceeding."
+        Write-Output "Image VM is ready. Proceeding."
     } else {
-        Write-OutputWithTimeStamp "Image VM did not restart within the detection window. No CBS reboot was required. Proceeding."
+        Write-Output "Image VM did not restart within the detection window. No CBS reboot was required. Proceeding."
     }
 }
 catch {

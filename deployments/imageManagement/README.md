@@ -106,7 +106,7 @@ The managed identity is automatically assigned:
 - **Type:** String
 - **Default:** `PlatformManaged`
 - **Allowed Values:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`, `PlatformManagedAndCustomerManaged`, `PlatformManagedAndCustomerManagedHSM`
-- **Description:** Encryption key management for gallery image versions. When any customer-managed option is selected, a standard Disk Encryption Set (DES) is always created. `PlatformManagedAndCustomerManaged*` variants add a second platform-key layer for double encryption at rest. Pass the `diskEncryptionSetResourceId` output to each imageBuild deployment as `existingDiskEncryptionSetResourceId`.
+- **Description:** Encryption key management for gallery image versions. When any customer-managed option is selected, a standard Disk Encryption Set (DES) is always created. `PlatformManagedAndCustomerManaged*` variants add a second platform-key layer for double encryption at rest. Pass the `diskEncryptionSetResourceId` output to each imageBuild deployment as `diskEncryptionSetResourceId`.
 
 #### `createConfidentialVmGalleryDes`
 
@@ -195,7 +195,7 @@ Image version replication to a remote region is configured per imageBuild deploy
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Deploy a dedicated storage account for persisting image build customization logs. When enabled, pass the `buildLogsStorageAccountResourceId` output to imageBuild deployments as `existingLogStorageAccountResourceId`. The managed identity is automatically granted **Storage Blob Data Contributor** on this account.
+- **Description:** Deploy a dedicated storage account for persisting image build customization logs. When enabled, pass the `buildLogsStorageAccountResourceId` output to imageBuild deployments as `logStorageAccountResourceId`. The managed identity is automatically granted **Storage Blob Data Contributor** on this account.
 
 ## Parameter Files
 
@@ -296,7 +296,7 @@ az deployment sub create \
 
 - **Type:** String
 - **Description:** Resource ID of the build logs storage account (empty string if `deployBuildLogsStorageAccount = false`)
-- **Used by:** Pass as `existingLogStorageAccountResourceId` in imageBuild deployments
+- **Used by:** Pass as `logStorageAccountResourceId` in imageBuild deployments
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Storage/storageAccounts/stbuildlogsuse2abc123`
 
 ### `buildLogsContainerUri`
@@ -310,14 +310,14 @@ az deployment sub create \
 - **Type:** String
 - **Description:** Resource ID of the standard Disk Encryption Set used for gallery image version encryption and build VM OS disks. Empty string when `keyManagementGalleryImageVersions = PlatformManaged`.
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/diskEncryptionSets/des-image-management-gallery-customer-keys-use2`
-- **Used by:** Pass as `existingDiskEncryptionSetResourceId` in every imageBuild deployment when CMK is enabled.
+- **Used by:** Pass as `diskEncryptionSetResourceId` in every imageBuild deployment when CMK is enabled.
 
 ### `confidentialVmDiskEncryptionSetResourceId`
 
 - **Type:** String
 - **Description:** Resource ID of the Confidential VM Disk Encryption Set (`ConfidentialVmEncryptedWithCustomerKey`). Empty string when `createConfidentialVmGalleryDes = false`.
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/diskEncryptionSets/des-image-management-gallery-confidential-vm-keys-use2`
-- **Used by:** Pass as `existingConfidentialVMDiskEncryptionSetResourceId` in imageBuild deployments targeting ConfidentialVM image definitions.
+- **Used by:** Pass as `confidentialVMDiskEncryptionSetResourceId` in imageBuild deployments targeting ConfidentialVM image definitions.
 
 ### 1. Upload Artifacts to Storage
 

@@ -8,20 +8,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Write-OutputWithTimeStamp {
-    param(
-        [string]$Message
-    )    
-    $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'
-    $Entry = '[' + $Timestamp + '] ' + $Message
+$SoftwareName = 'OneDrive'
+$LogFile = "$env:SystemRoot\Logs\Install-$SoftwareName.log"
+
+function Write-Log {
+    param([string]$Message)
+    $Entry = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message"
+    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue
     Write-Output $Entry
 }
 
-$SoftwareName = 'OneDrive'
-
-Start-Transcript -Path "$env:SystemRoot\Logs\Install-$SoftwareName.log" -Force
-Write-OutputWithTimeStamp "Starting Script to install '$SoftwareName' with the following parameters:"
-Write-Output ( $PSBoundParameters | Format-Table -AutoSize )
+try {
+    Write-Log "Starting Script to install '$SoftwareName' with the following parameters:"
+    Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)
 
 If ($BuildDir -ne '') {
     $TempDir = Join-Path $BuildDir -ChildPath $SoftwareName
@@ -38,11 +37,11 @@ If (Test-Path -Path $RegPath) {
     }
 }
 If ($AllUsersInstall -eq '1') {
-    Write-OutputWithTimeStamp "$SoftwareName is already setup per-machine. Quiting."
+    Write-Log "$SoftwareName is already setup per-machine. Quiting."
 }
 Else {
-    Write-OutputWithTimeStamp "Starting '$SoftwareName' install script with following Parameters:"
-    Write-Output ( $PSBoundParameters | Format-Table -AutoSize )
+    Write-Log "Starting '$SoftwareName' install script with following Parameters:"
+    Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)
     $WebClient = New-Object System.Net.WebClient
     If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {
         $StorageEndpoint = ($Uri -split "://")[0] + "://" + ($Uri -split "/")[2] + "/"
@@ -52,15 +51,15 @@ Else {
         $webClient.Headers.Add("Authorization", "Bearer $AccessToken")
     }
     $DestFile = Join-Path -Path $TempDir -ChildPath 'OneDriveSetup.exe'
-    Write-OutputWithTimeStamp "Downloading 'OneDriveSetup.exe' from '$Uri' to '$DestFile'."
+    Write-Log "Downloading 'OneDriveSetup.exe' from '$Uri' to '$DestFile'."
     $webClient.DownloadFile("$Uri", "$DestFile")
     Start-Sleep -Seconds 5
-    If (!(Test-Path -Path $DestFile)) { Write-Error "Failed to download $SourceFileName"; Exit 1 }
+    If (!(Test-Path -Path $DestFile)) { Write-Log "Failed to download $SourceFileName"; Exit 1 }
     $OneDriveSetup = $DestFile
     #Find existing OneDriveSetup
     $RegPath = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\OneDriveSetup.exe'
     If (Test-Path -Path $RegPath) {
-        Write-OutputWithTimeStamp "Found Per-Machine Installation, determining uninstallation command."
+        Write-Log "Found Per-Machine Installation, determining uninstallation command."
         If (Get-ItemProperty -Path $RegPath -name UninstallString -ErrorAction SilentlyContinue) {
             $UninstallString = (Get-ItemPropertyValue -Path $RegPath -Name UninstallString).toLower()
             $OneDriveSetupindex = $UninstallString.IndexOf('onedrivesetup.exe') + 17
@@ -73,23 +72,30 @@ Else {
         $Arguments = '/uninstall'
     }    
     # Uninstall existing version
-    Write-OutputWithTimeStamp "Running [$Uninstaller $Arguments] to remove any existing versions."
+    Write-Log "Running [$Uninstaller $Arguments] to remove any existing versions."
     Start-Process -FilePath $Uninstaller -ArgumentList $Arguments
     If (get-process onedrivesetup) { Wait-Process -Name OneDriveSetup }
     # Set OneDrive for All Users Install
-    Write-OutputWithTimeStamp "Setting registry values to indicate a per-machine (AllUsersInstall)"
+    Write-Log "Setting registry values to indicate a per-machine (AllUsersInstall)"
     New-Item -Path "HKLM:\SOFTWARE\Microsoft\OneDrive" -Force | Out-Null
     New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\OneDrive" -Name AllUsersInstall -PropertyType DWORD -Value 1 -Force | Out-Null
     $Install = Start-Process -FilePath $OneDriveSetup -ArgumentList '/allusers' -Wait -Passthru
     If ($($Install.ExitCode) -eq 0) {
-        Write-OutputWithTimeStamp "'$SoftwareName' installed successfully."
+        Write-Log "'$SoftwareName' installed successfully."
     }
     Else {
-        Write-Error "'$SoftwareName' install exit code is $($Install.ExitCode)"
+        Write-Log "'$SoftwareName' install exit code is $($Install.ExitCode)"
+        Exit 1
     }
-    Write-OutputWithTimeStamp "Configuring OneDrive to startup for each user upon logon."
+    Write-Log "Configuring OneDrive to startup for each user upon logon."
     New-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' -Name OneDrive -PropertyType String -Value 'C:\Program Files\Microsoft OneDrive\OneDrive.exe /background' -Force | Out-Null
-    Write-OutputWithTimeStamp "Installed OneDrive Per-Machine"
+    Write-Log "Installed OneDrive Per-Machine"
     If ((Split-Path $TempDir -Parent) -eq $Env:Temp) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }
 }
-Stop-Transcript
+}
+catch {
+    Write-Log "FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
+    If ($_.Exception.InnerException) { Write-Log "Inner exception: $($_.Exception.InnerException.Message)" }
+    Write-Log $_.ScriptStackTrace
+    Exit 1
+}

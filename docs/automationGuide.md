@@ -65,8 +65,8 @@ flowchart TD
     IM_O1 -->|"→ computeGalleryResourceId"| IB_RUN
     IM_O3 -->|"→ artifactsContainerUri"| IB_RUN
     IM_O4 -->|"→ userAssignedIdentityResourceId"| IB_RUN
-    IM_O5 -->|"→ existingLogStorageAccountResourceId"| IB_RUN
-    IM_O6 -->|"→ existingDiskEncryptionSetResourceId"| IB_RUN
+    IM_O5 -->|"→ logStorageAccountResourceId"| IB_RUN
+    IM_O6 -->|"→ diskEncryptionSetResourceId"| IB_RUN
 
     %% Upload Artifacts → Image Build (data dependency, no parameter)
     UA_DONE -.->|"artifacts ready"| IB_RUN
@@ -119,8 +119,8 @@ Script invocation:
 | `artifactsStorageAccountResourceId` | Update-ImageArtifacts.ps1 — `StorageAccountResourceId` |
 | `artifactsBlobContainerUrl` | Image Build — `artifactsContainerUri` parameter |
 | `managedIdentityResourceId` | Image Build — `userAssignedIdentityResourceId` parameter |
-| `buildLogsStorageAccountResourceId` | Image Build — `existingLogStorageAccountResourceId` parameter |
-| `diskEncryptionSetResourceId` | Image Build — `existingDiskEncryptionSetResourceId` parameter (only when CMK enabled) |
+| `buildLogsStorageAccountResourceId` | Image Build — `logStorageAccountResourceId` parameter |
+| `diskEncryptionSetResourceId` | Image Build — `diskEncryptionSetResourceId` parameter (only when CMK enabled) |
 
 ### Notes
 
@@ -160,8 +160,8 @@ Inputs from Step 2:
   computeGalleryResourceId      →  imageBuild parameter: computeGalleryResourceId
   artifactsBlobContainerUrl     →  imageBuild parameter: artifactsContainerUri
   managedIdentityResourceId     →  imageBuild parameter: userAssignedIdentityResourceId
-  buildLogsStorageAccountResourceId  →  imageBuild parameter: existingLogStorageAccountResourceId (optional)
-  diskEncryptionSetResourceId →  imageBuild parameter: existingDiskEncryptionSetResourceId (only when CMK enabled)
+  buildLogsStorageAccountResourceId  →  imageBuild parameter: logStorageAccountResourceId (optional)
+  diskEncryptionSetResourceId →  imageBuild parameter: diskEncryptionSetResourceId (only when CMK enabled)
 
 Script invocation:
   .\Invoke-ImageBuilds.ps1 -Location <region> -ParameterFilePrefixes @('prefix1','prefix2')
