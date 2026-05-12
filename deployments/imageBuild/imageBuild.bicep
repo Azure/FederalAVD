@@ -302,7 +302,9 @@ param tags object = {}
 
 // * VARIABLE DECLARATIONS * //
 
-var deploymentSuffix = startsWith(deployment().name, 'Microsoft.Template-') ? substring(deployment().name, 19, 14) : timeStamp
+var deploymentSuffix = startsWith(deployment().name, 'Microsoft.Template-')
+  ? substring(deployment().name, 19, 14)
+  : timeStamp
 
 // Function to ensure unique names in customization arrays by appending index to duplicates
 var uniqueCustomizers = map(range(0, length(customizations)), i => {
@@ -325,7 +327,7 @@ var uniqueVdiCustomizers = map(range(0, length(vdiCustomizations)), i => {
 var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes
 #disable-next-line BCP329
-var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location)-5) : location
+var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
 var locationsData = loadJsonContent('../../.common/data/locations.json')
 var locations = startsWith(cloud, 'us') ? locationsData.other : locationsData[environment().name]
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
@@ -348,18 +350,23 @@ var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
 var adminPw = '1qaz@WSX${uniqueString(subscription().id, imageBuildResourceGroupName)}'
 var adminUserName = 'vmadmin'
 
-var existingLogStorageAccountName = empty(existingLogStorageAccountResourceId) ? '' : last(split(existingLogStorageAccountResourceId, '/'))
+var existingLogStorageAccountName = empty(existingLogStorageAccountResourceId)
+  ? ''
+  : last(split(existingLogStorageAccountResourceId, '/'))
 var logContainerUri = collectCustomizationLogs && !empty(existingLogStorageAccountResourceId)
   ? 'https://${existingLogStorageAccountName}.blob.${environment().suffixes.storage}/${logContainerName}/'
   : ''
 
 var imageDefinitionFeatures = empty(imageDefinitionResourceId)
-  ? filter([
-      imageDefinitionIsHibernateSupported ? { name: 'IsHibernateSupported', value: 'True' } : null
-      imageDefinitionIsAcceleratedNetworkSupported ? { name: 'IsAcceleratedNetworkSupported', value: 'True' } : null
-      imageDefinitionIsHigherStoragePerformanceSupported ? { name: 'DiskControllerTypes', value: 'SCSI, NVMe' } : null
-      imageDefinitionSecurityType != 'Standard' ? { name: 'SecurityType', value: imageDefinitionSecurityType } : null
-    ], item => item != null)
+  ? filter(
+      [
+        imageDefinitionIsHibernateSupported ? { name: 'IsHibernateSupported', value: 'True' } : null
+        imageDefinitionIsAcceleratedNetworkSupported ? { name: 'IsAcceleratedNetworkSupported', value: 'True' } : null
+        imageDefinitionIsHigherStoragePerformanceSupported ? { name: 'DiskControllerTypes', value: 'SCSI, NVMe' } : null
+        imageDefinitionSecurityType != 'Standard' ? { name: 'SecurityType', value: imageDefinitionSecurityType } : null
+      ],
+      item => item != null
+    )
   : existingImageDefinition!.properties.features
 
 var galleryImageDefinitionHyperVGeneration = endsWith(mpSku, 'g2') || startsWith(mpSku, 'win11') ? 'V2' : 'V1'
@@ -372,13 +379,15 @@ var galleryImageDefinitionName = empty(imageDefinitionResourceId)
               ''
             )
           : replace(
-              '${resourceAbbreviations.imageDefinitions}-${replace(effectiveGalleryImageDefinitionPublisher, '-', '')}-${replace(effectiveGalleryImageDefinitionOffer, '-', '')}-${replace(effectiveGalleryImageDefinitionSku, '-', '')}' ,
+              '${resourceAbbreviations.imageDefinitions}-${replace(effectiveGalleryImageDefinitionPublisher, '-', '')}-${replace(effectiveGalleryImageDefinitionOffer, '-', '')}-${replace(effectiveGalleryImageDefinitionSku, '-', '')}',
               ' ',
               ''
             )
       : customImageDefinitionName
   : last(split(imageDefinitionResourceId, '/'))
-var effectiveGalleryImageDefinitionOffer = !empty(imageDefinitionOffer) ? replace(imageDefinitionOffer, ' ', '') : mpOffer
+var effectiveGalleryImageDefinitionOffer = !empty(imageDefinitionOffer)
+  ? replace(imageDefinitionOffer, ' ', '')
+  : mpOffer
 var effectiveGalleryImageDefinitionPublisher = !empty(imageDefinitionPublisher)
   ? replace(imageDefinitionPublisher, ' ', '')
   : mpPublisher
@@ -436,21 +445,31 @@ var effectiveConfidentialVmDiskEncryptionSetResourceId = galleryImageVersionConf
 
 var imageVersionReplicationRegionsWithEncryption = empty(effectiveDiskEncryptionSetResourceId)
   ? imageVersionReplicationRegions
-  : map(imageVersionReplicationRegions, region => union(region, {
-      encryption: {
-        osDiskImage: union(
-          { diskEncryptionSetId: effectiveDiskEncryptionSetResourceId },
-          !empty(galleryImageVersionConfidentialVMEncryptionType) ? {
-            securityProfile: union(
-              { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
-              !empty(effectiveConfidentialVmDiskEncryptionSetResourceId) ? { secureVMDiskEncryptionSetId: effectiveConfidentialVmDiskEncryptionSetResourceId } : {}
+  : map(
+      imageVersionReplicationRegions,
+      region =>
+        union(region, {
+          encryption: {
+            osDiskImage: union(
+              { diskEncryptionSetId: effectiveDiskEncryptionSetResourceId },
+              !empty(galleryImageVersionConfidentialVMEncryptionType)
+                ? {
+                    securityProfile: union(
+                      { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
+                      !empty(effectiveConfidentialVmDiskEncryptionSetResourceId)
+                        ? { secureVMDiskEncryptionSetId: effectiveConfidentialVmDiskEncryptionSetResourceId }
+                        : {}
+                    )
+                  }
+                : {}
             )
-          } : {}
-        )
-      }
-    }))
+          }
+        })
+    )
 
-var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0 ? dateTimeAdd(deploymentSuffix, 'P${imageVersionEOLinDays}D') : ''
+var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0
+  ? dateTimeAdd(deploymentSuffix, 'P${imageVersionEOLinDays}D')
+  : ''
 
 var imageVmName = take('${depPrefix}vmimg-${uniqueString(deploymentSuffix)}', 15)
 var orchestrationVmName = take('${depPrefix}vmorc-${uniqueString(deploymentSuffix)}', 15)
@@ -462,16 +481,16 @@ var vmSecurityType = effectiveGalleryImageDefinitionSecurityType == 'TrustedLaun
 var remoteLocation = !empty(remoteComputeGalleryResourceId) ? remoteComputeGallery!.location : ''
 
 var vmAcceleratedNetworking = !empty(filter(
-            imageDefinitionFeatures,
-            feature => feature.name == 'IsAcceleratedNetworkSupported'
-          ))
-          ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsAcceleratedNetworkSupported')[0]!.value)
-          : false
+    imageDefinitionFeatures,
+    feature => feature.name == 'IsAcceleratedNetworkSupported'
+  ))
+  ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsAcceleratedNetworkSupported')[0]!.value)
+  : false
 var vmDiskControllerType = !empty(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes'))
-      ? contains(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0]!.value, 'NVMe')
-          ? 'NVMe'
-          : 'SCSI'
+  ? contains(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0]!.value, 'NVMe')
+      ? 'NVMe'
       : 'SCSI'
+  : 'SCSI'
 
 // * Prerequisite Resources * //
 
@@ -513,13 +532,18 @@ resource existingUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIde
 // * Image Definition * //
 
 resource existingImageDefinition 'Microsoft.Compute/galleries/images@2024-03-03' existing = if (!empty(imageDefinitionResourceId)) {
-  name: '${split(imageDefinitionResourceId, '/')[8]}/${last(split(imageDefinitionResourceId, '/'))}'
-  scope: resourceGroup(split(imageDefinitionResourceId, '/')[2], split(imageDefinitionResourceId, '/')[4])
+  name: !empty(imageDefinitionResourceId)
+    ? '${split(imageDefinitionResourceId, '/')[8]}/${last(split(imageDefinitionResourceId, '/'))}'
+    : 'placeholder/placeholder'
+  scope: resourceGroup(
+    !empty(imageDefinitionResourceId) ? split(imageDefinitionResourceId, '/')[2] : subscription().subscriptionId,
+    !empty(imageDefinitionResourceId) ? split(imageDefinitionResourceId, '/')[4] : 'placeholder'
+  )
 }
 
 module imageDefinition '../../.common/bicepModules/compute/galleries/images/deploy.bicep' = if (empty(imageDefinitionResourceId)) {
   name: '${depPrefix}Gallery-Image-Definition-${deploymentSuffix}'
-  scope: resourceGroup(split(computeGalleryResourceId, '/')[4])
+  scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
     location: location
     features: imageDefinitionFeatures
@@ -587,7 +611,10 @@ module roleAssignmentBlobDataContributorExistingStorage '../../.common/bicepModu
   // Only needed when imageBuild creates its own UAI — when the imageManagement UAI is supplied via
   // userAssignedIdentityResourceId it already has Blob Data Contributor granted by imageManagement.
   name: '${depPrefix}RA-MI-StorBlobDataContr-ExistingLogsRG-${deploymentSuffix}'
-  scope: resourceGroup(split(existingLogStorageAccountResourceId, '/')[2], split(existingLogStorageAccountResourceId, '/')[4])
+  scope: resourceGroup(
+    split(existingLogStorageAccountResourceId, '/')[2],
+    split(existingLogStorageAccountResourceId, '/')[4]
+  )
   params: {
     principalId: userAssignedIdentity!.outputs.principalId
     roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
@@ -620,9 +647,9 @@ module orchestrationVm '../../.common/bicepModules/compute/virtualMachines/deplo
     diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
-    userAssignedIdentityResourceIds: [empty(userAssignedIdentityResourceId)
-      ? userAssignedIdentity!.outputs.resourceId
-      : userAssignedIdentityResourceId]
+    userAssignedIdentityResourceIds: [
+      empty(userAssignedIdentityResourceId) ? userAssignedIdentity!.outputs.resourceId : userAssignedIdentityResourceId
+    ]
     vmSize: vmSize
   }
   dependsOn: [
@@ -661,13 +688,15 @@ module imageVm '../../.common/bicepModules/compute/virtualMachines/deploy.bicep'
     // (e.g. when EncryptedWithPmk guest state is selected but a policy requires a DES on all VM disks).
     // For all other builds, apply the standard gallery DES.
     diskEncryptionSetResourceId: vmSecurityType == 'ConfidentialVM'
-      ? (!empty(effectiveConfidentialVmDiskEncryptionSetResourceId) ? effectiveConfidentialVmDiskEncryptionSetResourceId : effectiveDiskEncryptionSetResourceId)
+      ? (!empty(effectiveConfidentialVmDiskEncryptionSetResourceId)
+          ? effectiveConfidentialVmDiskEncryptionSetResourceId
+          : effectiveDiskEncryptionSetResourceId)
       : effectiveDiskEncryptionSetResourceId
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
-    userAssignedIdentityResourceIds: [empty(userAssignedIdentityResourceId)
-      ? userAssignedIdentity!.outputs.resourceId
-      : userAssignedIdentityResourceId]
+    userAssignedIdentityResourceIds: [
+      empty(userAssignedIdentityResourceId) ? userAssignedIdentity!.outputs.resourceId : userAssignedIdentityResourceId
+    ]
     vmSize: vmSize
   }
   dependsOn: [
@@ -801,7 +830,12 @@ module removeImageBuildResources '../../.common/bicepModules/compute/virtualMach
           ? userAssignedIdentity!.outputs.clientId
           : existingUserAssignedIdentity!.properties.clientId
       }
-      { name: 'ImageResourceId', value: contains(effectiveGalleryImageDefinitionSecurityType, 'Supported') ? captureImage.outputs.managedImageId : '' }
+      {
+        name: 'ImageResourceId'
+        value: contains(effectiveGalleryImageDefinitionSecurityType, 'Supported')
+          ? captureImage.outputs.managedImageId
+          : ''
+      }
       { name: 'ImageVmResourceId', value: imageVm.outputs.resourceId }
       { name: 'ManagementVmResourceId', value: orchestrationVm.outputs.resourceId }
     ]

@@ -102,6 +102,7 @@ param(
 
 #region Variables
 $ErrorActionPreference = 'Stop'
+$ScriptStartTime = Get-Date
 
 $Context = Get-AzContext
 If ($null -eq $Context) {
@@ -131,7 +132,6 @@ Else {
 $ArtifactsContainerName = 'artifacts'
 $TempArtifactsDir = Join-Path -Path $TempDir -ChildPath 'Artifacts'
 $ArtifactsDir = (Get-Item -Path (Join-Path -Path $PSScriptRoot -ChildPath '..\.common\artifacts')).FullName
-$FunctionsPath = (Get-Item -Path (Join-Path -Path $PSScriptRoot -ChildPath '..\.common\powerShellFunctions')).FullName
 
 If (Test-Path -Path $TempArtifactsDir) {
     Remove-Item -Path $TempArtifactsDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -161,20 +161,319 @@ Write-Output "Container URL   : $ArtifactsContainerUrl"
 
 Write-Output ("[{0} entered]" -f $MyInvocation.MyCommand)
 
-. "$FunctionsPath\GeneralDeployment\Get-MSIInfo.ps1"
-. "$FunctionsPath\Storage\Compress-SubFolderContents.ps1"
-. "$FunctionsPath\Storage\Get-InternetFile.ps1"
-. "$FunctionsPath\Storage\Get-InternetUrl.ps1"
-. "$FunctionsPath\Storage\Add-ContentToBlobContainer.ps1"
+#region Functions
+function Get-MsiInfo {
+    [CmdletBinding()]
+    param(
+        [parameter(Mandatory=$True, ValueFromPipeline=$true)]
+        [IO.FileInfo[]]$Path,
+        [AllowEmptyString()]
+        [AllowNull()]
+        [string[]]$Property
+    )
+    Begin {
+        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
+        Write-Verbose "${CmdletName}: Starting with [$PSBoundParameters]"
+        $winInstaller = New-Object -ComObject WindowsInstaller.Installer
+    }
+    Process {
+        try {
+            Write-Verbose "${CmdletName}: Opening MSIFile: $Path"
+            $msiDb = $winInstaller.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $winInstaller, @($Path.FullName, 0))
+            if ($Property) {
+                Write-Verbose "${CmdletName}: Property: $Property specified"
+                $propQuery = 'WHERE ' + (($Property | ForEach-Object { "Property = '$($_)'" }) -join ' OR ')
+            }
+            $query = ("SELECT Property,Value FROM Property {0}" -f ($propQuery))
+            $view = $msiDb.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $msiDb, ($query))
+            $null = $view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null)
+            $msiInfo = [PSCustomObject]@{ 'File' = $Path }
+            do {
+                $null = $view.GetType().InvokeMember('ColumnInfo', 'GetProperty', $null, $view, 0)
+                $record = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
+                if (-not $record) { break }
+                $propName = $record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, 1) | Select-Object -First 1
+                $value    = $record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, 2) | Select-Object -First 1
+                $msiInfo  = $msiInfo | Add-Member -MemberType NoteProperty -Name $propName -Value $value -PassThru
+            } while ($true)
+            $null = $msiDb.GetType().InvokeMember('Commit', 'InvokeMethod', $null, $msiDb, $null)
+            $null = $view.GetType().InvokeMember('Close', 'InvokeMethod', $null, $view, $null)
+            $msiInfo
+        }
+        catch {
+            Write-Error $_
+            Write-Error $_.ScriptStackTrace
+        }
+    }
+    End {
+        try {
+            $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($winInstaller)
+            [GC]::Collect()
+        }
+        catch {
+            Write-Error 'Failed to release Windows Installer COM reference'
+            Write-Error $_
+        }
+    }
+}
+
+function Get-InternetUrl {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory, HelpMessage = "Specifies the website that contains a link to the desired download.")]
+        [uri]$WebSiteUrl,
+        [Parameter(Mandatory, HelpMessage = "Specifies the search string. Wildcard '*' can be used.")]
+        [string]$SearchString
+    )
+    $HTML = Invoke-WebRequest -Uri $WebSiteUrl -UseBasicParsing
+    $Links = $HTML.Links
+    $LinkHref = $HTML.Links.Href | Get-Unique | Where-Object { $_ -like $SearchString }
+    If ($LinkHref) {
+        if ($LinkHref.Contains('http://') -or $LinkHref.Contains('https://')) {
+            Return $LinkHref
+        }
+        Else {
+            Return $WebSiteUrl.AbsoluteUri + $LinkHref
+        }
+    }
+    $LinkHref = $Links | Where-Object { $_.OuterHTML -like $SearchString }
+    If ($LinkHref) {
+        Return $LinkHref.href
+    }
+    $escapedPattern = [Regex]::Escape($SearchString) -replace '\\\*', '[^"''\s>]*'
+    $regex = "https?://[^""'\s>]*$escapedPattern"
+    Return ([regex]::Matches($html.Content, $regex)).Value
+}
+
+Function Get-InternetFile {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true, Position = 0)]
+        [uri]$Url,
+        [Parameter(Mandatory = $true, Position = 1)]
+        [string]$OutputDirectory,
+        [Parameter(Mandatory = $false, Position = 2)]
+        [string]$OutputFileName
+    )
+    Begin {
+        $ProgressPreference = 'SilentlyContinue'
+        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
+    }
+    Process {
+        $start_time = Get-Date
+        If (!$OutputFileName) {
+            Write-Verbose "${CmdletName}: No OutputFileName specified. Trying to get file name from URL."
+            If ((Split-Path -Path $Url -Leaf).Contains('.')) {
+                $OutputFileName = Split-Path -Path $Url -Leaf
+                Write-Verbose "${CmdletName}: Url contains file name - '$OutputFileName'."
+            }
+            Else {
+                Write-Verbose "${CmdletName}: Url does not contain file name. Trying 'Location' Response Header."
+                $request = [System.Net.WebRequest]::Create($Url)
+                $request.AllowAutoRedirect = $false
+                $response = $request.GetResponse()
+                $Location = $response.GetResponseHeader("Location")
+                If ($Location) {
+                    $OutputFileName = [System.IO.Path]::GetFileName($Location)
+                    Write-Verbose "${CmdletName}: File Name from 'Location' Response Header is '$OutputFileName'."
+                }
+                Else {
+                    Write-Verbose "${CmdletName}: No 'Location' Response Header returned. Trying 'Content-Disposition' Response Header."
+                    $result = Invoke-WebRequest -Method GET -Uri $Url -UseBasicParsing
+                    $contentDisposition = $result.Headers.'Content-Disposition'
+                    If ($contentDisposition) {
+                        $OutputFileName = $contentDisposition.Split("=")[1].Replace('"', '')
+                        Write-Verbose "${CmdletName}: File Name from 'Content-Disposition' Response Header is '$OutputFileName'."
+                    }
+                }
+            }
+        }
+        If ($OutputFileName) {
+            $wc = New-Object System.Net.WebClient
+            $OutputFile = Join-Path $OutputDirectory $OutputFileName
+            If (Test-Path -Path $OutputFile) { Remove-Item -Path $OutputFile -Force }
+            Write-Verbose "${CmdletName}: Downloading file at '$Url' to '$OutputFile'."
+            Try {
+                $wc.DownloadFile($Url, $OutputFile)
+                $time = (Get-Date).Subtract($start_time).Seconds
+                if (Test-Path -Path $OutputFile) {
+                    $totalSize = [math]::Round((Get-Item $OutputFile).Length / 1MB, 1)
+                    Write-Output "${CmdletName}: Downloaded '$OutputFileName' ($totalSize MB) in $time seconds."
+                    $OutputFile
+                }
+            }
+            Catch {
+                Write-Error "${CmdletName}: Error downloading file. Please check url."
+                Exit 2
+            }
+        }
+        Else {
+            Write-Error "${CmdletName}: No OutputFileName specified. Unable to download file."
+            Exit 2
+        }
+    }
+    End {}
+}
+
+function ConvertTo-LongSafePath {
+    param([string] $Path)
+    $trimmed = $Path.TrimEnd('\')
+    if ($trimmed.StartsWith('\\?\')) { return $trimmed }
+    if (-not [System.IO.Path]::IsPathRooted($trimmed)) {
+        throw "ConvertTo-LongSafePath requires an absolute path. Received: '$trimmed'"
+    }
+    if ($trimmed.StartsWith('\\')) {
+        return "\\?\UNC\" + $trimmed.Substring(2)
+    }
+    return "\\?\" + $trimmed
+}
+
+function Remove-LongSafePrefix {
+    param([string] $Path)
+    if ($Path.StartsWith('\\?\UNC\')) { return '\\' + $Path.Substring(8) }
+    if ($Path.StartsWith('\\?\'))     { return $Path.Substring(4) }
+    return $Path
+}
+
+function Compress-SubFolderContents {
+    [CmdletBinding(SupportsShouldProcess = $True)]
+    param(
+        [Parameter(Mandatory, HelpMessage = "Specifies the location containing subfolders to be compressed.")]
+        [string] $SourceFolderPath,
+        [Parameter(Mandatory, HelpMessage = "Specifies the location for the .zip files.")]
+        [string] $DestinationFolderPath,
+        [Parameter(Mandatory = $false)]
+        [ValidateSet("Optimal", "Fastest", "NoCompression")]
+        [string] $CompressionLevel = "Fastest"
+    )
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $compressionLevelEnum = switch ($CompressionLevel) {
+            "Optimal"       { [System.IO.Compression.CompressionLevel]::Optimal }
+            "Fastest"       { [System.IO.Compression.CompressionLevel]::Fastest }
+            "NoCompression" { [System.IO.Compression.CompressionLevel]::NoCompression }
+        }
+        if (!(Test-Path -Path $SourceFolderPath)) {
+            throw "Source folder not found: '$SourceFolderPath'"
+        }
+        if (!(Test-Path -Path $DestinationFolderPath)) {
+            New-Item -ItemType Directory -Path $DestinationFolderPath | Out-Null
+        }
+        $subfolders = Get-ChildItem -Path $SourceFolderPath -Directory
+        foreach ($sf in $subfolders) {
+            try {
+                $destinationFilePath = Join-Path -Path $DestinationFolderPath -ChildPath ($sf.Name + ".zip")
+                $tempFilePath        = $destinationFilePath + ".tmp"
+                $safeTempFilePath    = ConvertTo-LongSafePath $tempFilePath
+                Write-Output "Compressing '$($sf.Name)'..."
+                Write-Verbose "Archive will be created from: $($sf.FullName)"
+                Write-Verbose "Archive will be stored as: $destinationFilePath"
+                $baseFullName = (Remove-LongSafePrefix $sf.FullName).TrimEnd('\')
+                $baseLen      = $baseFullName.Length + 1
+                $zipArchive   = $null
+                $failedFiles  = [System.Collections.Generic.List[string]]::new()
+                if ($PSCmdlet.ShouldProcess($destinationFilePath, "Create archive from $($sf.FullName)")) {
+                    if (Test-Path -Path $tempFilePath) { Remove-Item -Path $tempFilePath -Force }
+                    $zipArchive = [System.IO.Compression.ZipFile]::Open(
+                        $safeTempFilePath,
+                        [System.IO.Compression.ZipArchiveMode]::Create
+                    )
+                    try {
+                        Get-ChildItem -Path $sf.FullName -Directory -Recurse -Force |
+                        Where-Object {
+                            -not [System.IO.Directory]::EnumerateFiles(
+                                (ConvertTo-LongSafePath $_.FullName), '*', 'AllDirectories'
+                            ).GetEnumerator().MoveNext()
+                        } |
+                        ForEach-Object {
+                            $normalFull  = (Remove-LongSafePrefix $_.FullName).TrimEnd('\')
+                            $relativeDir = ($normalFull.Substring($baseLen) -replace '\\', '/') + '/'
+                            $zipArchive.CreateEntry($relativeDir) | Out-Null
+                        }
+                        Get-ChildItem -Path $sf.FullName -File -Recurse -Force | ForEach-Object {
+                            $filePath = $_.FullName
+                            try {
+                                $longSafePath = ConvertTo-LongSafePath $filePath
+                                $normalFull   = (Remove-LongSafePrefix $filePath).TrimEnd('\')
+                                $relativePath = $normalFull.Substring($baseLen) -replace '\\', '/'
+                                [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                                    $zipArchive, $longSafePath, $relativePath, $compressionLevelEnum
+                                ) | Out-Null
+                            }
+                            catch {
+                                $failedFiles.Add($filePath)
+                                Write-Error "Failed to add file '$filePath': $_"
+                            }
+                        }
+                    }
+                    finally {
+                        if ($null -ne $zipArchive) { $zipArchive.Dispose(); $zipArchive = $null }
+                    }
+                    if ($failedFiles.Count -gt 0) {
+                        Remove-Item -Path $tempFilePath -Force -ErrorAction SilentlyContinue
+                        throw "Archive for '$($sf.Name)' is incomplete — $($failedFiles.Count) file(s) could not be added."
+                    }
+                    if (Test-Path -Path $destinationFilePath) { Remove-Item -Path $destinationFilePath -Force }
+                    Move-Item -Path $tempFilePath -Destination $destinationFilePath
+                    Write-Output "Compression completed: '$($sf.Name)'"
+                }
+            }
+            catch {
+                if (Test-Path -LiteralPath $tempFilePath) {
+                    Remove-Item -Path $tempFilePath -Force -ErrorAction SilentlyContinue
+                }
+                Write-Error "Compression FAILED for '$($sf.Name)': $_"
+            }
+        }
+    }
+    catch {
+        Write-Error "Fatal error in Compress-SubFolderContents: $_"
+    }
+}
+
+function Add-ContentToBlobContainer {
+    [CmdletBinding(SupportsShouldProcess = $True)]
+    param(
+        [Parameter(Mandatory, HelpMessage = "Specifies the name of the resource group that contains the Storage account to update.")]
+        [string] $ResourceGroupName,
+        [Parameter(Mandatory, HelpMessage = "Specifies the name of the Storage account to update.")]
+        [string] $StorageAccountName,
+        [Parameter(Mandatory, HelpMessage = "The paths to the content to upload.")]
+        [string[]] $contentDirectories,
+        [Parameter(Mandatory, HelpMessage = "The name of the container to upload to.")]
+        [string] $targetContainer
+    )
+    $ProgressPreference = 'SilentlyContinue'
+    $ctx = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount
+    foreach ($contentDirectory in $contentDirectories) {
+        try {
+            If (-Not (Test-Path -Path $contentDirectory)) {
+                throw "Cannot find content path to upload [$contentDirectory]"
+            }
+            $scriptsToUpload = Get-ChildItem -Path $contentDirectory -File -ErrorAction 'Stop'
+            if ($PSCmdlet.ShouldProcess("Files to the '$targetContainer' container", "Upload")) {
+                foreach ($file in $scriptsToUpload) {
+                    Write-Output "Uploading '$($file.Name)' ($([math]::Round($file.Length / 1MB, 1)) MB)..."
+                    $file | Set-AzStorageBlobContent -Container $targetContainer -Context $ctx -Force -ErrorAction 'Stop' | Out-Null
+                }
+            }
+            Write-Verbose "$($scriptsToUpload.Count) file(s) uploaded from [$contentDirectory] to container [$targetContainer]"
+        }
+        catch {
+            Write-Error "Upload FAILED: $_"
+        }
+    }
+}
+
+#endregion Functions
 
 #region Download New Sources
 
 $downloadFilePath = (Join-Path -Path "$PSScriptRoot\imageManagement\parameters" -ChildPath "$downloadsParametersPrefix.downloads.parameters.json")
 if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
 
-    Write-Verbose "###########################################################################"
-    Write-Verbose "## 1 - Download New Source Files into the artifacts Directory            ##"
-    Write-Verbose "###########################################################################"
+    Write-Output ""
+    Write-Output "=== Phase 1: Download ==="
     $DownloadDir = Join-Path -Path $TempArtifactsDir -ChildPath 'downloads'
     New-Item -Path $DownloadDir -ItemType Directory -Force | Out-Null
     $FileVersionInfoFile = Join-Path -Path $ArtifactsDir -ChildPath 'uploadedFileVersionInfo.txt'
@@ -214,33 +513,37 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         Write-Warning "One or more downloads require winget, but winget was not found on this system. Winget-based downloads will be skipped."
     }
 
+    $packageCount = ($Downloads.PSObject.Properties.Name).Count
+    Write-Output "Processing $packageCount package(s) from '$downloadFilePath'."
+
     foreach ($key in $Downloads.PSObject.Properties.Name) {
         $Download = $Downloads.$key
         $SoftwareName = $key
-        Write-Output "--------------------------------------------------"
-        Write-Output "## Start - $SoftwareName ##"
+        Write-Output ""
+        Write-Output "=== $SoftwareName ==="
         $DownloadUrl = $null
         $UseWinget = $false
         If ($null -ne $Download.WingetId -and $Download.WingetId -ne '') {
             $UseWinget = $true
-            Write-Output "Winget Id '$($Download.WingetId)' configured for '$SoftwareName'."
         }
         ElseIf (($null -ne $Download.WebSiteUrl -and $Download.WebSiteUrl -ne '') -and ($null -ne $Download.SearchString -and $Download.SearchString -ne '')) {
             $WebSiteUrl = $Download.WebSiteUrl
             $SearchString = $Download.SearchString
-            Write-Output "Determining download Url for latest version of '$SoftwareName' from '$WebSiteUrl'."
+            Write-Output "[$SoftwareName] Determining download URL from '$WebSiteUrl'..."
             $DownloadUrl = Get-InternetUrl -WebSiteUrl $WebSiteUrl -searchstring $SearchString -ErrorAction SilentlyContinue
-            If ($null -eq $DownloadUrl -and ($null -ne $Download.DownloadUrl -and $Download.DownloadUrl -ne '')) {
-                Write-Output "Download Url directly available."
+            If ($null -ne $DownloadUrl) {
+                Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
+            } ElseIf ($null -ne $Download.DownloadUrl -and $Download.DownloadUrl -ne '') {
+                Write-Output "[$SoftwareName] Download URL available (website fallback)."
                 $DownloadUrl = $Download.DownloadUrl
             }
         }
         ElseIf ($null -ne $Download.DownloadUrl -and $Download.DownloadUrl -ne '') {
-            Write-Output "Download Url directly available."
+            Write-Output "[$SoftwareName] Download URL available."
             $DownloadUrl = $Download.DownloadUrl
         }
         ElseIf ($null -ne $Download.APIUrl -and $Download.APIUrl -ne '') {
-            Write-Output "Retrieving the url of the latest version of the Edge Templates from API Url."
+            Write-Output "[$SoftwareName] Retrieving Edge Templates URL from API..."
             $APIUrl = $Download.APIUrl
             $EdgeUpdatesJSON = Invoke-WebRequest -Uri $APIUrl -UseBasicParsing
             $content = $EdgeUpdatesJSON.content | ConvertFrom-Json
@@ -253,26 +556,29 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                 $latestPolicyFile = $policyfiles | Sort-Object ProductVersion | Select-Object -Last 1
             }
             $DownloadUrl = $latestPolicyFile.artifacts.Location
+            Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
         }
         ElseIf ($null -ne $Download.GitHubRepo -and $Download.GitHubRepo -ne '') {
             $Repo = $Download.GitHubRepo
             $FileNamePattern = $Download.GitHubFileNamePattern
             $ReleasesUri = "https://api.github.com/repos/$Repo/releases/latest"
-            Write-Output "Retrieving the url of the latest version from '$Repo' Github repo."
+            Write-Output "[$SoftwareName] Retrieving URL from GitHub ($Repo)..."
             $DownloadUrl = ((Invoke-RestMethod -Method GET -Uri $ReleasesUri).assets | Where-Object name -like $FileNamePattern).browser_download_url
+            Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
         }
         ElseIf ($null -ne $Download.Evergreen) {
-            Write-Output "Retrieving the url of the latest version from Evergreen."
-            Write-Output "Evergreen Configuration: $($Download.Evergreen)"
+            Write-Output "[$SoftwareName] Retrieving URL via Evergreen..."
+            Write-Output "[$SoftwareName] Evergreen config: $($Download.Evergreen)"
             $DownloadUrl = Get-EvergreenAppUri -Evergreen $Download.Evergreen
+            Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
         }
 
         If ($UseWinget) {
             If (-not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
-                Write-Warning "Skipping '$SoftwareName': winget is not available on this system."
+                Write-Warning "[$SoftwareName] Skipping: winget is not available on this system."
             }
             Else {
-                Write-Output "Downloading '$SoftwareName' via winget (Id: $($Download.WingetId))."
+                Write-Output "[$SoftwareName] Downloading via winget (Id: $($Download.WingetId))..."
                 Try {
                     $TempSoftwareDownloadDir = Join-Path -Path $DownloadDir -ChildPath ($SoftwareName.Replace(' ', '_'))
                     New-Item -Path $TempSoftwareDownloadDir -ItemType Directory -Force | Out-Null
@@ -281,7 +587,9 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     $VersionText = @()
                     $VersionText += "SoftwareName = $SoftwareName"
                     $VersionText += "WingetId = $($Download.WingetId)"
-                    & winget download --id $Download.WingetId --download-directory $TempSoftwareDownloadDir --accept-source-agreements --accept-package-agreements | Out-String | Write-Output
+                    & winget download --id $Download.WingetId --download-directory $TempSoftwareDownloadDir --accept-source-agreements --accept-package-agreements |
+                        Where-Object { $_ -match 'Found |Successfully |Installer downloaded:|[Ee]rror|[Ww]arning|[Ff]ailed' } |
+                        ForEach-Object { Write-Output "[$SoftwareName]  $_" }
                     $DestFileExtension = [System.IO.Path]::GetExtension($DestFileName)
                     $DownloadedFileItem = Get-ChildItem -Path $TempSoftwareDownloadDir -File | Where-Object { $_.Extension -eq $DestFileExtension } | Select-Object -First 1
                     If ($null -eq $DownloadedFileItem) {
@@ -294,7 +602,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     If ($DownloadedFileItem.FullName -ne $DestFileFullName) {
                         Rename-Item -Path $DownloadedFileItem.FullName -NewName $DestFileName -Force
                     }
-                    Write-Output "Finished downloading '$SoftwareName' via winget."
+                    Write-Output "[$SoftwareName] Download complete."
                     If ([System.IO.Path]::GetExtension($DestFileFullName) -eq '.msi') {
                         $VersionText += Get-MSIInfo -Path $DestFileFullName
                     }
@@ -310,17 +618,19 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     Write-Error "Error downloading '$SoftwareName' via winget: $_."
                 }
                 $DestFolders = $Download.DestinationFolders
-                ForEach ($DestFolder in $DestFolders) {
+                foreach ($DestFolder in $DestFolders) {
                     $DestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolder
                     If (-not (Test-Path -Path $DestinationDir)) {
                         New-Item -Path $DestinationDir -ItemType Directory -Force | Out-Null
                     }
-                    Get-ChildItem -Path $TempSoftwareDownloadDir | Copy-Item -Destination $DestinationDir -Force
+                    $copySize = [math]::Round((Get-Item $DestFileFullName).Length / 1MB, 1)
+                    Write-Output "[$SoftwareName] Copying to artifacts directory ($copySize MB)..."
+                    Copy-Item -Path $DestFileFullName -Destination $DestinationDir -Force
                 }
             }
         }
         ElseIf (($DownloadUrl -ne '') -and ($null -ne $DownloadUrl)) {
-            Write-Output "Downloading '$SoftwareName'."
+            Write-Output "[$SoftwareName] Downloading from '$DownloadUrl'..."
             Try {
                 $TempSoftwareDownloadDir = Join-Path -Path $DownloadDir -ChildPath ($SoftwareName.Replace(' ', '_'))
                 New-Item -Path $TempSoftwareDownloadDir -ItemType Directory -Force | Out-Null
@@ -330,7 +640,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                 $VersionText += "SoftwareName = $SoftwareName"
                 $VersionText += "DownloadUrl = $DownloadUrl"
                 Try {
-                    $DownloadedFileFullName = Get-InternetFile -Url $DownloadUrl -OutputDirectory $TempSoftwareDownloadDir -Verbose
+                    $DownloadedFileFullName = Get-InternetFile -Url $DownloadUrl -OutputDirectory $TempSoftwareDownloadDir
                     $DownloadedFile = Split-Path -Path $DownloadedFileFullName -Leaf
                     If ($DownloadedFileFullName -ne $DestFileFullName) {
                         $VersionText += "Download File = $DownloadedFile"
@@ -341,7 +651,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     $DownloadedFileFullName = Get-InternetFile -Url $DownloadUrl -OutputDirectory $TempSoftwareDownloadDir -OutputFileName $DestFileName
                     $VersionText += "Download File = $(Split-Path $DownloadedFileFullName -Leaf)"
                 }
-                Write-Output "Finished downloading '$SoftwareName' from Internet."
+                Write-Output "[$SoftwareName] Download complete."
                 If ([System.IO.Path]::GetExtension($DestFileFullName) -eq '.msi') {
                     $VersionText += Get-MSIInfo -Path $DestFileFullName
                 }
@@ -357,47 +667,53 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                 Write-Error "Error downloading software from '$DownloadUrl': $_."
             }
             $DestFolders = $Download.DestinationFolders
-            ForEach ($DestFolder in $DestFolders) {
+            foreach ($DestFolder in $DestFolders) {
                 $DestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolder
                 If (-not (Test-Path -Path $DestinationDir)) {
                     New-Item -Path $DestinationDir -ItemType Directory -Force | Out-Null
                 }
-                Get-ChildItem -Path $TempSoftwareDownloadDir | Copy-Item -Destination $DestinationDir -Force
+                $copySize = [math]::Round((Get-Item $DestFileFullName).Length / 1MB, 1)
+                Write-Output "[$SoftwareName] Copying to artifacts directory ($copySize MB)..."
+                Copy-Item -Path $DestFileFullName -Destination $DestinationDir -Force
             }
         }
         Else {
             Write-Error "No Internet URL found for '$SoftwareName'."
         }
-        Write-Output "## End - $SoftwareName ##"
-        Write-Output "--------------------------------------------------"
     }
-    Get-Item -Path $DownloadDir | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Output ""
+    Write-Output "Cleaning up download temp directory in background..."
+    Start-Job -ScriptBlock {
+        param($Path)
+        Remove-Item -Path $Path -Recurse -Force -ErrorAction SilentlyContinue
+    } -ArgumentList $DownloadDir | Out-Null
 }
 Else {
-    Write-Verbose "No software configured to be downloaded, or -SkipDownloadingNewSources was specified."
+    Write-Output "Skipping download phase (-SkipDownloadingNewSources specified or no downloads parameter file found)."
 }
 #endregion Download New Sources
 
 #region Compress Artifacts
 
-Write-Verbose "###########################################################################"
-Write-Verbose "## 2 - Create Zip files for all subfolders inside ArtifactsDir.          ##"
-Write-Verbose "###########################################################################"
+Write-Output ""
+Write-Output "=== Phase 2: Compress ==="
 
 if ($PSCmdlet.ShouldProcess("[$ArtifactsDir] subfolders as .zip and store them into [$TempArtifactsDir]", "Compress")) {
-    Compress-SubFolderContents -SourceFolderPath $ArtifactsDir -DestinationFolderPath $TempArtifactsDir -Verbose
-    Write-Verbose "Artifact compression finished."
+    Compress-SubFolderContents -SourceFolderPath $ArtifactsDir -DestinationFolderPath $TempArtifactsDir
+    Write-Output "Compression complete."
 }
-Write-Verbose "Copying files in root of '$ArtifactsDir' to '$TempArtifactsDir'."
-Get-ChildItem -Path $ArtifactsDir -File | Where-Object { $_.FullName -ne $downloadFilePath } | Copy-Item -Destination $TempArtifactsDir -Force
+$rootFiles = Get-ChildItem -Path $ArtifactsDir -File | Where-Object { $_.FullName -ne $downloadFilePath }
+if ($rootFiles) {
+    Write-Output "Copying $($rootFiles.Count) root artifact file(s) to staging directory..."
+    $rootFiles | Copy-Item -Destination $TempArtifactsDir -Force
+}
 
 #endregion Compress Artifacts
 
 #region Upload Blobs
 
-Write-Verbose "###########################################################################"
-Write-Verbose "## 3 - Upload all files in TempArtifactsDir to Storage Account.          ##"
-Write-Verbose "###########################################################################"
+Write-Output ""
+Write-Output "=== Phase 3: Upload ==="
 
 if ($DeleteExistingBlobs) {
     Write-Output "Deleting existing blobs in '$StorageAccountName/$ArtifactsContainerName'."
@@ -406,13 +722,21 @@ if ($DeleteExistingBlobs) {
 }
 
 if ($PSCmdlet.ShouldProcess("storage account '$StorageAccountName'", "Uploading blobs to")) {
-    Add-ContentToBlobContainer -ResourceGroupName $StorageAccountResourceGroup -StorageAccountName $StorageAccountName -contentDirectories $TempArtifactsDir -TargetContainer $ArtifactsContainerName -Verbose
-    Write-Verbose "Upload finished."
+    Add-ContentToBlobContainer -ResourceGroupName $StorageAccountResourceGroup -StorageAccountName $StorageAccountName -contentDirectories $TempArtifactsDir -TargetContainer $ArtifactsContainerName
+    Write-Output "Upload complete."
 }
 
-Get-ChildItem -Path $TempArtifactsDir -Recurse -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+Write-Output "Cleaning up temp artifacts directory in background..."
+Start-Job -ScriptBlock {
+    param($Path)
+    Remove-Item -Path $Path -Recurse -Force -ErrorAction SilentlyContinue
+} -ArgumentList $TempArtifactsDir | Out-Null
 
 #endregion Upload Blobs
 
-Write-Output "Artifacts container URL: '$ArtifactsContainerUrl'"
+$elapsed = (Get-Date) - $ScriptStartTime
+Write-Output ""
+Write-Output "=== Complete ==="
+Write-Output "Elapsed time    : $([math]::Floor($elapsed.TotalMinutes))m $($elapsed.Seconds)s"
+Write-Output "Artifacts URL   : $ArtifactsContainerUrl"
 Write-Verbose ("[{0} exited]" -f $MyInvocation.MyCommand)

@@ -2222,7 +2222,7 @@
 				"updateUwpApps": "[steps('imageCustomizations').updates.updateUwpApps]",
 				"updateService": "[steps('imageCustomizations').updates.updateService]",
 				"wsusServer": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), steps('imageCustomizations').updates.wsusServer, '')]",
-				"disableSoftwareUpdates": "[coalesce(steps('imageCustomizations').updates.disableSoftwareUpdates, [])]",
+				"disableSoftwareUpdates": "[steps('imageCustomizations').updates.disableSoftwareUpdates]",
 				"collectCustomizationLogs": "[steps('prereqs').storage.collectLogs]",
 				"existingLogStorageAccountResourceId": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.existingLogsStorageAccount.id, ''), '')]",
 				"logContainerName": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.logsContainer, 'image-customization-logs'), 'image-customization-logs')]",
