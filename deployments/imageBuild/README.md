@@ -368,6 +368,42 @@ See [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) for
 - **Description:** WSUS server URL (required if updateService=WSUS)
 - **Example:** `https://wsus.corp.contoso.com:8531`
 
+### Disable Software Update Channels
+
+#### `disableSoftwareUpdates`
+
+- **Type:** Array
+- **Default:** `[]` (all channels left enabled)
+- **Description:** Locks down automatic update channels baked into the image. Use this for pooled host pools where you want to control updates centrally (e.g. via WSUS or Intune) rather than letting the OS self-update at runtime. Each value in the array disables one channel; omit a value to leave that channel enabled.
+
+> **Note:** This is distinct from `installUpdates`, which installs updates *during* the build. `disableSoftwareUpdates` prevents the baked image from self-updating *after* deployment.
+
+| Value | What it disables |
+|---|---|
+| `disableWindowsUpdate` | Windows Update / Windows Update for Business (sets `NoAutoUpdate`, `AUOptions`, `DODownloadMode`; stops `wuauserv` and `UsoSvc`) |
+| `disableM365Update` | Microsoft 365 Apps auto-update notifications and enable/disable controls |
+| `disableTeamsUpdate` | New Teams (MSTeams) auto-update via `DisableAutoUpdate` registry key |
+| `disableOneDriveUpdate` | OneDrive update ring (sets `GPOSetUpdateRing` to Deferred/0) |
+| `disableEdgeUpdate` | Microsoft Edge auto-update via EdgeUpdate policy (`UpdateDefault=0`) |
+| `disableWebView2Update` | WebView2 Runtime auto-update via EdgeUpdate policy |
+| `disableStoreAutoUpdate` | Microsoft Store auto-download (`AutoDownload=2`), InstallService scheduled tasks, and cloud content delivery (`DisableWindowsConsumerFeatures`, `DisableCloudOptimizedContent`) |
+
+**Example — disable all channels:**
+
+```json
+"disableSoftwareUpdates": {
+  "value": [
+    "disableWindowsUpdate",
+    "disableM365Update",
+    "disableTeamsUpdate",
+    "disableOneDriveUpdate",
+    "disableEdgeUpdate",
+    "disableWebView2Update",
+    "disableStoreAutoUpdate"
+  ]
+}
+```
+
 ### Logging
 
 #### `collectCustomizationLogs`

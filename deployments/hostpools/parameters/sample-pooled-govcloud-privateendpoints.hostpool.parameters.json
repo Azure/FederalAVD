@@ -1,0 +1,192 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+
+        // ── Deployment ─────────────────────────────────────────────────────────
+        "deploymentType": {
+            "value": "Complete"
+        },
+        "identifier": {
+            "value": "prod"
+        },
+        "controlPlaneLocation": {
+            "value": "usgovvirginia"
+        },
+
+        // ── Identity ───────────────────────────────────────────────────────────
+        "identitySolution": {
+            "value": "ActiveDirectoryDomainServices"
+        },
+        "domainName": {
+            "value": "corp.agency.gov"
+        },
+        "vmOUPath": {
+            "value": "OU=AVD,OU=Computers,DC=corp,DC=agency,DC=gov"
+        },
+
+        // ── Credentials ────────────────────────────────────────────────────────
+        "credentialsKeyVaultResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-management-usgva/providers/Microsoft.KeyVault/vaults/kv-avd-usgva"
+        },
+
+        // ── Control Plane ──────────────────────────────────────────────────────
+        "hostPoolType": {
+            "value": "Pooled DepthFirst"
+        },
+        "hostPoolMaxSessionLimit": {
+            "value": 8
+        },
+        "startVMOnConnect": {
+            "value": true
+        },
+        "appGroupSecurityGroups": {
+            "value": [
+                {
+                    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                    "name": "sg-avd-prod-users"
+                }
+            ]
+        },
+        "deployScalingPlan": {
+            "value": true
+        },
+        "avdObjectId": {
+            "value": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        },
+
+        // ── Session Hosts ──────────────────────────────────────────────────────
+        "virtualMachineNamePrefix": {
+            "value": "avdprod"
+        },
+        "sessionHostCount": {
+            "value": 5
+        },
+        "sessionHostIndex": {
+            "value": 1
+        },
+        "virtualMachineSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-hosts"
+        },
+        "virtualMachineSize": {
+            "value": "Standard_D4ads_v5"
+        },
+        "diskSku": {
+            "value": "Premium_LRS"
+        },
+        "availability": {
+            "value": "AvailabilityZones"
+        },
+        "securityType": {
+            "value": "TrustedLaunch"
+        },
+        "encryptionAtHost": {
+            "value": true
+        },
+
+        // ── Source Image (Custom Gallery — built by imageBuild template) ────────
+        "customImageResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-usgva/providers/Microsoft.Compute/galleries/gal_avd_image_management_usgva/images/win11-24h2-avd-gcch/versions/latest"
+        },
+
+        // ── FSLogix Profile Storage ────────────────────────────────────────────
+        "deployFSLogixStorage": {
+            "value": true
+        },
+        "fslogixStorageService": {
+            "value": "AzureFiles Standard"
+        },
+        "fslogixContainerType": {
+            "value": "ProfileContainer"
+        },
+        "fslogixShareSizeInGB": {
+            "value": 100
+        },
+        "fslogixSizeInMBs": {
+            "value": 30720
+        },
+        "fslogixConfigureSessionHosts": {
+            "value": true
+        },
+        "fslogixOUPath": {
+            "value": "OU=AVD,OU=Computers,DC=corp,DC=agency,DC=gov"
+        },
+        "fslogixAdminGroups": {
+            "value": [
+                {
+                    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                    "name": "sg-avd-storage-admins"
+                }
+            ]
+        },
+        "fslogixUserGroups": {
+            "value": [
+                {
+                    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                    "name": "sg-avd-prod-users"
+                }
+            ]
+        },
+
+        // ── Monitoring ─────────────────────────────────────────────────────────
+        "enableMonitoring": {
+            "value": true
+        },
+
+        // ── Recovery Services ──────────────────────────────────────────────────
+        "recoveryServices": {
+            "value": true
+        },
+        "recoveryServicesVaultStorageRedundancy": {
+            "value": "ZoneRedundant"
+        },
+
+        // ── Zero Trust / Private Endpoints ─────────────────────────────────────
+        //    All management and storage resources communicate over private endpoints.
+        //    DNS zones must be linked to your hub VNet and pre-created.
+        "deployPrivateEndpoints": {
+            "value": true
+        },
+        "keyVaultPrivateEndpointSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-privateendpoints"
+        },
+        "hostPoolResourcesPrivateEndpointSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-privateendpoints"
+        },
+        "azureFilesPrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.usgovcloudapi.net"
+        },
+        "azureKeyVaultPrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.usgovcloudapi.net"
+        },
+        "azureBlobPrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.usgovcloudapi.net"
+        },
+        "azureQueuePrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.usgovcloudapi.net"
+        },
+        "deployDiskAccessPolicy": {
+            "value": true
+        },
+
+        // ── AVD Private Link ───────────────────────────────────────────────────
+        "avdPrivateLinkPrivateRoutes": {
+            "value": "FeedAndHostPool"
+        },
+        "hostpoolPrivateEndpointSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-privateendpoints"
+        },
+        "avdPrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.wvd.microsoft.us"
+        },
+        "workspaceFeedPrivateEndpointSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-privateendpoints"
+        },
+        "hostPoolPublicNetworkAccess": {
+            "value": "EnabledForClientsOnly"
+        },
+        "workspaceFeedPublicNetworkAccess": {
+            "value": "Disabled"
+        }
+    }
+}

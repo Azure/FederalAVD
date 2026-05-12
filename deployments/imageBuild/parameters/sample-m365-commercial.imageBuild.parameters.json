@@ -1,0 +1,174 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+
+        // ── Deployment ─────────────────────────────────────────────────────────
+        "location": {
+            "value": "eastus2"
+        },
+        "deploymentPrefix": {
+            "value": "avd"
+        },
+
+        // ── Required Existing Resources ────────────────────────────────────────
+        //    These values come from the imageManagement deployment outputs.
+        "computeGalleryResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-eus2/providers/Microsoft.Compute/galleries/gal_avd_image_management_eus2"
+        },
+        "artifactsContainerUri": {
+            "value": "https://saimageassetseus2xxxxxxxx.blob.core.windows.net/artifacts"
+        },
+        "userAssignedIdentityResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-eus2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-eus2"
+        },
+        "subnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eus2/providers/Microsoft.Network/virtualNetworks/vnet-avd-eus2/subnets/snet-avd-imagebuilds"
+        },
+
+        // ── VM Properties ──────────────────────────────────────────────────────
+        "vmSize": {
+            "value": "Standard_D4ads_v6"
+        },
+        "encryptionAtHost": {
+            "value": true
+        },
+
+        // ── Source Marketplace Image ───────────────────────────────────────────
+        "mpPublisher": {
+            "value": "MicrosoftWindowsDesktop"
+        },
+        "mpOffer": {
+            "value": "windows-11"
+        },
+        "mpSku": {
+            "value": "win11-24h2-avd"
+        },
+
+        // ── Software Installations ─────────────────────────────────────────────
+        "installFsLogix": {
+            "value": true
+        },
+        "office365AppsToInstall": {
+            "value": [ "Excel", "OneNote", "Outlook", "PowerPoint", "Word" ]
+        },
+        "installOneDrive": {
+            "value": true
+        },
+        "installTeams": {
+            "value": true
+        },
+        "teamsCloudType": {
+            "value": "Commercial"
+        },
+
+        // ── Image Customizations ───────────────────────────────────────────────
+        //    Artifacts are downloaded from artifactsContainerUri by blob name.
+        "applyWindowsDesktopOptimizations": {
+            "value": true
+        },
+        "customizations": {
+            "value": []
+        },
+
+        // ── Bloatware Removal ──────────────────────────────────────────────────
+        "appsToRemove": {
+            "value": [
+                "Microsoft.BingNews",
+                "Microsoft.BingSearch",
+                "Microsoft.BingWeather",
+                "Microsoft.GamingApp",
+                "Microsoft.GetHelp",
+                "Microsoft.Getstarted",
+                "Microsoft.MicrosoftSolitaireCollection",
+                "Microsoft.OutlookForWindows",
+                "Microsoft.People",
+                "Microsoft.PowerAutomateDesktop",
+                "Microsoft.SkypeApp",
+                "Microsoft.Todos",
+                "Microsoft.WindowsAlarms",
+                "Microsoft.WindowsCamera",
+                "microsoft.windowscommunicationsapps",
+                "Microsoft.WindowsFeedbackHub",
+                "Microsoft.WindowsMaps",
+                "Microsoft.WindowsSoundRecorder",
+                "Microsoft.Xbox.TCUI",
+                "Microsoft.XboxApp",
+                "Microsoft.XboxGameOverlay",
+                "Microsoft.XboxGamingOverlay",
+                "Microsoft.XboxIdentityProvider",
+                "Microsoft.YourPhone",
+                "Microsoft.ZuneMusic",
+                "Microsoft.ZuneVideo"
+            ]
+        },
+        "cleanupDesktop": {
+            "value": true
+        },
+
+        // ── Disable Software Update Channels ───────────────────────────────────
+        //    Locks update channels in the baked image. For pooled host pools
+        //    where updates are managed centrally (WSUS, Intune, etc.).
+        "disableSoftwareUpdates": {
+            "value": [
+                "disableWindowsUpdate",
+                "disableM365Update",
+                "disableTeamsUpdate",
+                "disableOneDriveUpdate",
+                "disableEdgeUpdate",
+                "disableWebView2Update",
+                "disableStoreAutoUpdate"
+            ]
+        },
+
+        // ── Windows Updates (applied during build) ─────────────────────────────
+        "installUpdates": {
+            "value": true
+        },
+        "updateService": {
+            "value": "MU"
+        },
+
+        // ── Build Logs ─────────────────────────────────────────────────────────
+        "collectCustomizationLogs": {
+            "value": true
+        },
+        "existingLogStorageAccountResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-eus2/providers/Microsoft.Storage/storageAccounts/saimagelogseus2xxxxxxxx"
+        },
+
+        // ── Image Definition (create new) ──────────────────────────────────────
+        "imageDefinitionPublisher": {
+            "value": "Contoso"
+        },
+        "imageDefinitionOffer": {
+            "value": "windows-11"
+        },
+        "imageDefinitionSku": {
+            "value": "win11-24h2-avd-m365"
+        },
+        "imageDefinitionSecurityType": {
+            "value": "TrustedLaunch"
+        },
+        "imageDefinitionIsAcceleratedNetworkSupported": {
+            "value": true
+        },
+        "imageDefinitionIsHibernateSupported": {
+            "value": false
+        },
+        "imageDefinitionIsHigherStoragePerformanceSupported": {
+            "value": true
+        },
+
+        // ── Image Version ──────────────────────────────────────────────────────
+        "imageVersionDefaultReplicaCount": {
+            "value": 2
+        },
+        "imageVersionDefaultStorageAccountType": {
+            "value": "Standard_LRS"
+        },
+        "imageVersionEOLinDays": {
+            "value": 180
+        }
+    }
+}

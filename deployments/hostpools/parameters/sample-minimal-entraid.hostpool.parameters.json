@@ -1,0 +1,87 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+
+        // ── Deployment ─────────────────────────────────────────────────────────
+        "deploymentType": {
+            "value": "Complete"
+        },
+        "identifier": {
+            "value": "dev"
+        },
+        "controlPlaneLocation": {
+            "value": "eastus2"
+        },
+
+        // ── Identity ───────────────────────────────────────────────────────────
+        //    EntraId = Entra-joined (cloud-only). No domain join credentials needed.
+        "identitySolution": {
+            "value": "EntraId"
+        },
+        "intuneEnrollment": {
+            "value": false
+        },
+
+        // ── Credentials ────────────────────────────────────────────────────────
+        //    Store secrets in Key Vault and reference them here.
+        "credentialsKeyVaultResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-management-eus2/providers/Microsoft.KeyVault/vaults/kv-avd-eus2"
+        },
+
+        // ── Control Plane ──────────────────────────────────────────────────────
+        "hostPoolType": {
+            "value": "Pooled DepthFirst"
+        },
+        "hostPoolMaxSessionLimit": {
+            "value": 4
+        },
+        "startVMOnConnect": {
+            "value": true
+        },
+        "appGroupSecurityGroups": {
+            "value": [
+                {
+                    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                    "name": "sg-avd-dev-users"
+                }
+            ]
+        },
+
+        // ── Session Hosts ──────────────────────────────────────────────────────
+        "virtualMachineNamePrefix": {
+            "value": "avddev"
+        },
+        "sessionHostCount": {
+            "value": 2
+        },
+        "sessionHostIndex": {
+            "value": 1
+        },
+        "virtualMachineSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eus2/providers/Microsoft.Network/virtualNetworks/vnet-avd-eus2/subnets/snet-avd-hosts"
+        },
+        "virtualMachineSize": {
+            "value": "Standard_D4ads_v5"
+        },
+        "availability": {
+            "value": "AvailabilityZones"
+        },
+
+        // ── Source Image (Marketplace) ─────────────────────────────────────────
+        "imagePublisher": {
+            "value": "MicrosoftWindowsDesktop"
+        },
+        "imageOffer": {
+            "value": "office-365"
+        },
+        "imageSku": {
+            "value": "win11-24h2-avd-m365"
+        },
+
+        // ── Monitoring ─────────────────────────────────────────────────────────
+        "enableMonitoring": {
+            "value": true
+        }
+    }
+}

@@ -1,0 +1,146 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+
+        // ── Deployment ─────────────────────────────────────────────────────────
+        "deploymentType": {
+            "value": "Complete"
+        },
+        "identifier": {
+            "value": "prod"
+        },
+        "controlPlaneLocation": {
+            "value": "eastus2"
+        },
+
+        // ── Identity ───────────────────────────────────────────────────────────
+        "identitySolution": {
+            "value": "ActiveDirectoryDomainServices"
+        },
+        "domainName": {
+            "value": "corp.contoso.com"
+        },
+        "vmOUPath": {
+            "value": "OU=AVD,OU=Computers,DC=corp,DC=contoso,DC=com"
+        },
+
+        // ── Credentials ────────────────────────────────────────────────────────
+        //    All secrets are stored in Key Vault (no plaintext passwords here).
+        "credentialsKeyVaultResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-management-eus2/providers/Microsoft.KeyVault/vaults/kv-avd-eus2"
+        },
+
+        // ── Control Plane ──────────────────────────────────────────────────────
+        "hostPoolType": {
+            "value": "Pooled DepthFirst"
+        },
+        "hostPoolMaxSessionLimit": {
+            "value": 8
+        },
+        "startVMOnConnect": {
+            "value": true
+        },
+        "appGroupSecurityGroups": {
+            "value": [
+                {
+                    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                    "name": "sg-avd-prod-users"
+                }
+            ]
+        },
+        "deployScalingPlan": {
+            "value": true
+        },
+        "avdObjectId": {
+            "value": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        },
+
+        // ── Session Hosts ──────────────────────────────────────────────────────
+        "virtualMachineNamePrefix": {
+            "value": "avdprod"
+        },
+        "sessionHostCount": {
+            "value": 5
+        },
+        "sessionHostIndex": {
+            "value": 1
+        },
+        "virtualMachineSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eus2/providers/Microsoft.Network/virtualNetworks/vnet-avd-eus2/subnets/snet-avd-hosts"
+        },
+        "virtualMachineSize": {
+            "value": "Standard_D4ads_v5"
+        },
+        "diskSku": {
+            "value": "Premium_LRS"
+        },
+        "availability": {
+            "value": "AvailabilityZones"
+        },
+        "securityType": {
+            "value": "TrustedLaunch"
+        },
+        "encryptionAtHost": {
+            "value": true
+        },
+
+        // ── Source Image (Custom Gallery) ──────────────────────────────────────
+        //    Built by the imageBuild template. Use latest version from the gallery.
+        "customImageResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-eus2/providers/Microsoft.Compute/galleries/gal_avd_image_management_eus2/images/win11-24h2-avd-m365/versions/latest"
+        },
+
+        // ── FSLogix Profile Storage ────────────────────────────────────────────
+        "deployFSLogixStorage": {
+            "value": true
+        },
+        "fslogixStorageService": {
+            "value": "AzureFiles Standard"
+        },
+        "fslogixContainerType": {
+            "value": "ProfileContainer"
+        },
+        "fslogixShareSizeInGB": {
+            "value": 100
+        },
+        "fslogixSizeInMBs": {
+            "value": 30720
+        },
+        "fslogixConfigureSessionHosts": {
+            "value": true
+        },
+        "fslogixOUPath": {
+            "value": "OU=AVD,OU=Computers,DC=corp,DC=contoso,DC=com"
+        },
+        "fslogixAdminGroups": {
+            "value": [
+                {
+                    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                    "name": "sg-avd-storage-admins"
+                }
+            ]
+        },
+        "fslogixUserGroups": {
+            "value": [
+                {
+                    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                    "name": "sg-avd-prod-users"
+                }
+            ]
+        },
+
+        // ── Monitoring ─────────────────────────────────────────────────────────
+        "enableMonitoring": {
+            "value": true
+        },
+
+        // ── Recovery Services ──────────────────────────────────────────────────
+        "recoveryServices": {
+            "value": true
+        },
+        "recoveryServicesVaultStorageRedundancy": {
+            "value": "ZoneRedundant"
+        }
+    }
+}
