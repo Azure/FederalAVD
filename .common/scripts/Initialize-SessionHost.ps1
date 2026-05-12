@@ -42,9 +42,6 @@ param (
     [string]$NvidiaVmSize = 'false',
 
     [Parameter(Mandatory = $false)]
-    [string]$DisableUpdates = 'false',
-
-    [Parameter(Mandatory = $false)]
     [string]$ConfigureFSLogix = 'false',
 
     [Parameter(Mandatory = $false)]
@@ -551,7 +548,7 @@ try {
     Write-Log -Message 'AVD Session Host Initialization Starting'
     Write-Log -Message '========================================='
     
-    Write-Log -Message "TimeZone=$TimeZone | ConfigureFSLogix=$ConfigureFSLogix | DisableUpdates=$DisableUpdates | AmdVmSize=$AmdVmSize | NvidiaVmSize=$NvidiaVmSize"
+    Write-Log -Message "TimeZone=$TimeZone | ConfigureFSLogix=$ConfigureFSLogix | AmdVmSize=$AmdVmSize | NvidiaVmSize=$NvidiaVmSize"
     Write-Log -Message "AADJoin=$AADJoin | AgentBootLoaderUrl=$AgentBootLoaderUrl$(if ($AgentUrl) { " | AgentUrl=$AgentUrl" })$(if ($MdmId) { " | MdmId=$MdmId" })"
     
     #region Phase 1: Session Host Configuration
@@ -570,29 +567,6 @@ try {
     
     # Convert boolean parameters
     [bool]$ConfigureFSLogixBool = [System.Convert]::ToBoolean($ConfigureFSLogix)
-    
-    # Disable Updates if specified
-    If ($DisableUpdates -eq 'true') {
-        Write-Log -Message "Adding registry settings to disable automatic updates"
-        # Disable Automatic Updates
-        $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'; Name = 'NoAutoUpdate'; PropertyType = 'DWORD'; Value = 1 })
-        # Disable Edge Updates
-        $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate'; Name = 'UpdateDefault'; PropertyType = 'DWORD'; Value = 0 })
-        # Set the OneDrive Update Ring to Deferred
-        $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive'; Name = 'GPOSetUpdateRing'; PropertyType = 'DWORD'; Value = 0 })
-        
-        If (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match 'Microsoft 365 Apps' } | Select-Object -First 1) {
-            Write-Log -Message "Microsoft 365 Apps detected, disabling Office updates"
-            $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate'; Name = 'hideupdatenotifications'; PropertyType = 'DWORD'; Value = 1 })
-            $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate'; Name = 'hideenabledisableupdates'; PropertyType = 'DWORD'; Value = 1 })
-        }
-        
-        $TeamsInstalled = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq 'MSTeams' }
-        If ($TeamsInstalled) {
-            Write-Log -Message "Teams detected, disabling Teams auto-update"
-            $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Microsoft\Teams'; Name = 'disableAutoUpdate'; PropertyType = 'DWORD'; Value = 1 })
-        }
-    }
     
     # Enable Time Zone Redirection
     $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'; Name = 'fEnableTimeZoneRedirection'; PropertyType = 'DWORD'; Value = 1 })

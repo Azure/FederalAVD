@@ -1378,24 +1378,8 @@
 												"value": "MU"
 											},
 											{
-												"label": "Windows Update",
-												"value": "WU"
-											},
-											{
 												"label": "Windows Server Update Services (WSUS)",
 												"value": "WSUS"
-											},
-											{
-												"label": "DCAT (Flighting updates like previews, rarely used)",
-												"value": "DCAT"
-											},
-											{
-												"label": "Microsoft Store",
-												"value": "STORE"
-											},
-											{
-												"label": "Other",
-												"value": "OTHER"
 											}
 										],
 										"required": false
@@ -1412,6 +1396,68 @@
 										"required": true
 									},
 									"visible": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), true, false)]"
+								},
+								{
+									"name": "disableSoftwareUpdatesInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": true,
+									"options": {
+										"style": "Info",
+										"text": "Disable Update Channels: Select which software update channels to permanently disable in the image. Each selected channel will have its update service, scheduled tasks, and policy keys configured to prevent automatic updates after deployment. Recommended for pooled host pools where VMs are replaced on a regular cadence rather than patched in place."
+									}
+								},
+								{
+									"name": "disableSoftwareUpdates",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Disable Update Channels",
+									"placeholder": "Select channels to disable...",
+									"toolTip": "Select one or more update channels to disable in the image. Leave empty to keep all channels enabled.",
+									"multiselect": true,
+									"selectAll": true,
+									"filter": true,
+									"filterPlaceholder": "Filter channels...",
+									"multiLine": true,
+									"defaultValue": [],
+									"visible": true,
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Windows Update",
+												"description": "Disables the Windows Update and Update Orchestrator services and sets AU policy to never check.",
+												"value": "disableWindowsUpdate"
+											},
+											{
+												"label": "Microsoft 365 / Office",
+												"description": "Disables Click-to-Run auto-updates and hides the update controls in Office apps.",
+												"value": "disableM365Update"
+											},
+											{
+												"label": "Microsoft Teams",
+												"description": "Disables auto-update for both new Teams and the classic machine-wide installer.",
+												"value": "disableTeamsUpdate"
+											},
+											{
+												"label": "OneDrive",
+												"description": "Prevents the OneDrive per-machine updater from running.",
+												"value": "disableOneDriveUpdate"
+											},
+											{
+												"label": "Microsoft Edge",
+												"description": "Disables the Edge update service, edgeupdatem service, and scheduled update tasks.",
+												"value": "disableEdgeUpdate"
+											},
+											{
+												"label": "WebView2 Runtime",
+												"description": "Prevents the WebView2 runtime from self-updating via the Edge update channel.",
+												"value": "disableWebView2Update"
+											},
+											{
+												"label": "Microsoft Store / UWP Auto-Update",
+												"description": "Disables the Store update scan pipeline (AutoDownload policy and InstallService scheduled tasks) and prevents pre-installed UWP apps from silently updating via cloud content delivery.",
+												"value": "disableStoreAutoUpdate"
+											}
+										]
+									}
 								}
 							]
 						}
@@ -2176,6 +2222,7 @@
 				"updateUwpApps": "[steps('imageCustomizations').updates.updateUwpApps]",
 				"updateService": "[steps('imageCustomizations').updates.updateService]",
 				"wsusServer": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), steps('imageCustomizations').updates.wsusServer, '')]",
+				"disableSoftwareUpdates": "[coalesce(steps('imageCustomizations').updates.disableSoftwareUpdates, [])]",
 				"collectCustomizationLogs": "[steps('prereqs').storage.collectLogs]",
 				"existingLogStorageAccountResourceId": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.existingLogsStorageAccount.id, ''), '')]",
 				"logContainerName": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.logsContainer, 'image-customization-logs'), 'image-customization-logs')]",

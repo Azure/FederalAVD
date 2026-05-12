@@ -525,11 +525,7 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
         {
           name: 'NvidiaVmSize'
           value: hasNvidiaGpu ? 'true' : 'false'
-        }
-        {
-          name: 'DisableUpdates'
-          value: 'false'
-        }
+        }        
         {
           name: 'ConfigureFSLogix'
           value: fslogixConfigureSessionHosts ? 'true' : 'false'

@@ -1,6 +1,7 @@
 targetScope = 'resourceGroup'
 
 param applyWindowsDesktopOptimizations bool
+param disableSoftwareUpdates array
 param appsToRemove array
 param cloud string
 param downloads object
@@ -748,7 +749,7 @@ resource cleanupPublicDesktop 'Microsoft.Compute/virtualMachines/runCommands@202
   location: location
   parent: imageVm
   properties: {
-    asyncExecution: true
+    asyncExecution: false
     source: {
       script: '''
         Remove-Item "$Env:Public\Desktop\*" -Force -ErrorAction SilentlyContinue
@@ -766,25 +767,30 @@ resource cleanupPublicDesktop 'Microsoft.Compute/virtualMachines/runCommands@202
   ]
 }
 
-resource removeBuildDir 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (useBuildDir) {
-  name: 'remove-BuildDir'
+var disableSoftwareUpdatesKeys = [
+  'disableWindowsUpdate'
+  'disableM365Update'
+  'disableTeamsUpdate'
+  'disableOneDriveUpdate'
+  'disableEdgeUpdate'
+  'disableWebView2Update'
+  'disableStoreAutoUpdate'
+]
+
+var disableSoftwareUpdatesParams = [for key in disableSoftwareUpdatesKeys: {
+  name: '${toUpper(substring(key, 0, 1))}${substring(key, 1)}'
+  value: contains(disableSoftwareUpdates, key) ? 'true' : 'false'
+}]
+
+resource disableSoftwareUpdatesRunCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(disableSoftwareUpdates)) {
+  name: 'disable-SoftwareUpdates'
   location: location
   parent: imageVm
   properties: {
-    asyncExecution: true
-    parameters: [
-      {
-        name: 'BuildDir'
-        value: buildDir
-      }
-    ]
+    asyncExecution: false
+    parameters: disableSoftwareUpdatesParams
     source: {
-      script: '''
-        param(
-          [string]$BuildDir
-        )
-        Remove-Item -Path $BuildDir -Recurse -Force -ErrorAction SilentlyContinue
-      '''
+      script: loadTextContent('../../../.common/scripts/Disable-SoftwareUpdates.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -795,5 +801,33 @@ resource removeBuildDir 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
     restartUpdates
     restartWDOT
     vdiApplications
+  ]
+}
+
+resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =  {
+  name: 'cleanup-image'
+  location: location
+  parent: imageVm
+  properties: {
+    asyncExecution: false
+    parameters: [
+      {
+        name: 'BuildDir'
+        value: buildDir
+      }
+    ]
+    source: {
+      script: loadTextContent('../../../.common/scripts/Invoke-DiskCleanup.ps1')
+    }
+    treatFailureAsDeploymentFailure: true
+  }
+  dependsOn: [
+    createBuildDir
+    restartMicrosoftSoftware
+    restartCustomizations
+    restartUpdates
+    restartWDOT
+    vdiApplications
+    disableSoftwareUpdatesRunCommand
   ]
 }

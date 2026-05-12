@@ -101,6 +101,21 @@ param teamsCloudType string = 'Commercial'
 @description('Optional. Apply the Windows Desktop Optimization Tool customizations.')
 param applyWindowsDesktopOptimizations bool = false
 
+@description('''Optional. Disable automatic software updates baked into the image.
+Provide an array containing one or more of the following values to disable those update channels.
+Omit a value to leave that channel enabled.
+Valid values:
+  disableWindowsUpdate
+  disableM365Update
+  disableTeamsUpdate
+  disableOneDriveUpdate
+  disableEdgeUpdate
+  disableWebView2Update
+  disableStoreAutoUpdate
+Example: ["disableWindowsUpdate", "disableEdgeUpdate"]
+''')
+param disableSoftwareUpdates array = []
+
 @description('''An array of image customization objects that are executed first before any restarts or updates.
 Each object contains the following properties:
 -name: Required. The name of the script or application that is running minus extension
@@ -176,12 +191,8 @@ param installUpdates bool = true
 param updateUwpApps bool = false
 
 @allowed([
-  'WU'
   'MU'
   'WSUS'
-  'DCAT'
-  'STORE'
-  'OTHER'
 ])
 @description('Optional. The update service.')
 param updateService string = 'MU'
@@ -693,6 +704,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     installOneDrive: installOneDrive
     installTeams: installTeams
     applyWindowsDesktopOptimizations: applyWindowsDesktopOptimizations
+    disableSoftwareUpdates: disableSoftwareUpdates
     userAssignedIdentityClientId: empty(userAssignedIdentityResourceId)
       ? userAssignedIdentity!.outputs.clientId
       : existingUserAssignedIdentity!.properties.clientId

@@ -7,9 +7,8 @@ param (
     [String]$Criteria = "IsInstalled=0 and Type='Software' and IsHidden=0",
     [Parameter()]
     [bool]$ExcludePreviewUpdates = $true,
-    # Default service (WSUS if machine is configured to use it, or MU if opted in, or WU otherwise.)
     [Parameter()]
-    [ValidateSet("WU", "MU", "WSUS", "DCAT", "STORE", "OTHER")]
+    [ValidateSet("MU", "WSUS")]
     [string]$Service = 'MU',
     # The http/https fqdn for the Windows Server Update Server
     [Parameter()]
@@ -46,12 +45,8 @@ Write-OutputWithTimeStamp -Message "Starting Windows Update Script with the foll
 Write-Output ( $PSBoundParameters | Format-Table -AutoSize )
 
 Switch ($Service.ToUpper()) {
-    'WU' { $ServerSelection = 2 }
     'MU' { $ServerSelection = 3; $ServiceId = "7971f918-a847-4430-9279-4a52d1efe18d" }
     'WSUS' { $ServerSelection = 1 }
-    'DCAT' { $ServerSelection = 3; $ServiceId = "855E8A7C-ECB4-4CA3-B045-1DFA50104289" }
-    'STORE' { $serverSelection = 3; $ServiceId = "117cab2d-82b1-4b5a-a08c-4d62dbee7782" }
-    'OTHER' { $ServerSelection = 3; $ServiceId = $Service }
 }        
 If ($Service -eq 'MU') {
     $UpdateServiceManager = New-Object -ComObject Microsoft.Update.ServiceManager
@@ -148,7 +143,7 @@ If ($($SearchResult.Updates).Count -gt 0) {
     }
 }
 Else {
-    Write-OutputWithTimeStamp "No missiong updates found."
+    Write-OutputWithTimeStamp "No missing updates found."
 }
 
 If ($service -eq 'MU') {
