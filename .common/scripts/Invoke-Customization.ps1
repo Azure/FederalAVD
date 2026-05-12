@@ -153,7 +153,16 @@ If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {
 $SourceFileName = ($Uri -Split "/")[-1]
 Write-OutputWithTimeStamp "Downloading '$Uri' to '$TempDir'."
 $DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName
-$webClient.DownloadFile("$Uri", "$DestFile")
+try {
+  $webClient.DownloadFile("$Uri", "$DestFile")
+} catch {
+  Write-OutputWithTimeStamp "Download failed with exception: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
+  if ($_.Exception.InnerException) {
+    Write-OutputWithTimeStamp "Inner exception: $($_.Exception.InnerException.Message)"
+  }
+  Stop-Transcript
+  Exit 1
+}
 Start-Sleep -Seconds 10
 If (!(Test-Path -Path $DestFile)) { Write-Error "Failed to download $SourceFileName"; Exit 1 }
 Write-OutputWithTimeStamp 'Finished downloading'
