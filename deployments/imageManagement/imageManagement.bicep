@@ -141,7 +141,11 @@ var artifactsStorageAccountName = take(
 var sasExpirationPeriod = '180.00:00:00' // 180 days
 var storageKind = 'StorageV2'
 var storageSkuName = 'Standard_LRS'
-var storageAccessTier = 'Hot'
+// Both storage accounts use Hot tier: Cool's 30-day minimum applies to overwritten blob versions too (via versioning),
+// so any Update-ImageArtifacts.ps1 run within 30 days of the last would incur early-deletion penalties on artifacts,
+// and the 7-day log deletion would similarly penalize logs. Hot avoids both.
+var artifactsStorageAccessTier = 'Hot'
+var logsStorageAccessTier = 'Hot'
 
 var storageEncryptionKeyName = '${identifier}-encryption-key-imagemgmt-storage'
 // Single encryption UAI shared by both storage accounts.
@@ -295,7 +299,7 @@ module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/
     location: location
     kind: storageKind
     skuName: storageSkuName
-    accessTier: storageAccessTier
+    accessTier: artifactsStorageAccessTier
     allowSharedKeyAccess: storageAllowSharedKeyAccess
     requireInfrastructureEncryption: true
     permittedIPs: storagePermittedIPs
@@ -324,8 +328,8 @@ module assetsBlobService '../../.common/bicepModules/storage/storageAccounts/blo
     deleteRetentionPolicyDays: 7
     containerDeleteRetentionPolicyEnabled: true
     containerDeleteRetentionPolicyDays: 7
-    versioningEnabled: true
-    changeFeedEnabled: true
+    versioningEnabled: false
+    changeFeedEnabled: false
   }
   dependsOn: [assetsStorageAccount]
 }
@@ -382,7 +386,7 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
     location: location
     kind: storageKind
     skuName: storageSkuName
-    accessTier: storageAccessTier
+    accessTier: logsStorageAccessTier
     allowSharedKeyAccess: storageAllowSharedKeyAccess
     requireInfrastructureEncryption: true
     permittedIPs: storagePermittedIPs

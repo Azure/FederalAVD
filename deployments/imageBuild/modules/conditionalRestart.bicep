@@ -1,11 +1,10 @@
-@secure()
-param adminPw string
 param location string = resourceGroup().location
 param logBlobContainerUri string
 param orchestrationVmName string
 param imageVmName string
-param deploymentSuffix string = utcNow('yyMMddhhmm')
+param deploymentSuffix string = utcNow('yyyyMMddhhmm')
 param userAssignedIdentityClientId string
+param context string  // e.g. 'PostUpdates' or 'PostCleanup' — disambiguates resource names and blob URIs when called multiple times
 
 resource imageVm 'Microsoft.Compute/virtualMachines@2022-11-01' existing = {
   name: imageVmName
@@ -15,8 +14,23 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
   name: orchestrationVmName
 }
 
-resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
-  name: 'sysprep'
+var waitForRestartParameters = [
+  {
+    name: 'ResourceManagerUri'
+    value: environment().resourceManager
+  }
+  {
+    name: 'UserAssignedIdentityClientId'
+    value: userAssignedIdentityClientId
+  }
+  {
+    name: 'VmResourceId'
+    value: imageVm.id
+  }
+]
+
+resource cbsCheck 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
+  name: 'cbs-check-and-restart-${context}'
   location: location
   parent: imageVm
   properties: {
@@ -28,22 +42,16 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Sysprep-${deploymentSuffix}.log'
-    protectedParameters: [
-      {
-        name: 'AdminUserPw'
-        value: adminPw
-      }
-    ]
+      : '${logBlobContainerUri}${imageVmName}-CbsCheck-${context}-${deploymentSuffix}.log'
     source: {
-      script: loadTextContent('../../../.common/scripts/Invoke-Sysprep.ps1')
+      script: loadTextContent('../../../.common/scripts/Check-CbsAndRestart.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
 }
 
-resource generalizeVm 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
-  name: 'generalizeImageVm'
+resource waitForCbsRestart 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
+  name: 'wait-for-cbs-restart-${context}'
   location: location
   parent: orchestrationVm
   properties: {
@@ -55,27 +63,14 @@ resource generalizeVm 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-GeneralizeVM-${deploymentSuffix}.log'
-    parameters: [
-          {
-            name: 'ResourceManagerUri'
-            value: environment().resourceManager
-          }
-          {
-            name: 'UserAssignedIdentityClientId'
-            value: userAssignedIdentityClientId
-          }
-          {
-            name: 'VmResourceId'
-            value: imageVm.id
-          }
-        ]
+      : '${logBlobContainerUri}${imageVmName}-WaitForConditionalRestart-${context}-${deploymentSuffix}.log'
+    parameters: waitForRestartParameters
     source: {
-      script: loadTextContent('../../../.common/scripts/Generalize-Vm.ps1')
+      script: loadTextContent('../../../.common/scripts/Wait-ForVmRestart.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
-    sysprep
+    cbsCheck
   ]
 }

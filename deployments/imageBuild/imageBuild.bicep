@@ -609,10 +609,7 @@ module roleAssignmentBlobDataContributorExistingStorage '../../.common/bicepModu
   // Only needed when imageBuild creates its own UAI — when the imageManagement UAI is supplied via
   // userAssignedIdentityResourceId it already has Blob Data Contributor granted by imageManagement.
   name: '${depPrefix}RA-MI-StorBlobDataContr-ExistingLogsRG-${deploymentSuffix}'
-  scope: resourceGroup(
-    split(logStorageAccountResourceId, '/')[2],
-    split(logStorageAccountResourceId, '/')[4]
-  )
+  scope: resourceGroup(split(logStorageAccountResourceId, '/')[2], split(logStorageAccountResourceId, '/')[4])
   params: {
     principalId: userAssignedIdentity!.outputs.principalId
     roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
@@ -761,7 +758,6 @@ module generalizeImageVM 'modules/generalizeVm.bicep' = {
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     adminPw: adminPw
-    checkCbsAndRestart: empty(vdiCustomizations) ? true : false
     deploymentSuffix: deploymentSuffix
     imageVmName: imageVm.outputs.name
     location: location

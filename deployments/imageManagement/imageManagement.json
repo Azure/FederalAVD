@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "9522119425938823155"
+      "templateHash": "12810945073840345972"
     }
   },
   "parameters": {
@@ -711,7 +711,8 @@
     "sasExpirationPeriod": "180.00:00:00",
     "storageKind": "StorageV2",
     "storageSkuName": "Standard_LRS",
-    "storageAccessTier": "Hot",
+    "artifactsStorageAccessTier": "Hot",
+    "logsStorageAccessTier": "Hot",
     "storageEncryptionKeyName": "[format('{0}-encryption-key-imagemgmt-storage', variables('identifier'))]",
     "storageEncryptionIdentityName": "[replace(replace(replace(variables('nameConv_ImageManagement_Resources'), variables('identifier'), format('{0}-encryption', variables('identifier'))), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'LOCATION', variables('locations')[variables('varLocation')].abbreviation)]",
     "cmkKeyNames": "[if(or(parameters('deployArtifactsStorageAccount'), parameters('deployBuildLogsStorageAccount')), createArray(variables('storageEncryptionKeyName')), createArray())]",
@@ -4836,7 +4837,7 @@
             "value": "[variables('storageSkuName')]"
           },
           "accessTier": {
-            "value": "[variables('storageAccessTier')]"
+            "value": "[variables('artifactsStorageAccessTier')]"
           },
           "allowSharedKeyAccess": {
             "value": "[parameters('storageAllowSharedKeyAccess')]"
@@ -5283,10 +5284,10 @@
             "value": 7
           },
           "versioningEnabled": {
-            "value": true
+            "value": false
           },
           "changeFeedEnabled": {
-            "value": true
+            "value": false
           }
         },
         "template": {
@@ -5902,7 +5903,7 @@
             "value": "[variables('storageSkuName')]"
           },
           "accessTier": {
-            "value": "[variables('storageAccessTier')]"
+            "value": "[variables('logsStorageAccessTier')]"
           },
           "allowSharedKeyAccess": {
             "value": "[parameters('storageAllowSharedKeyAccess')]"

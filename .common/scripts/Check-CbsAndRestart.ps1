@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$LogFile = "$env:SystemRoot\Logs\Check-CbsAndRestart.log"
+$LogFile = "$env:SystemRoot\Logs\Check-CbsAndRestart-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 
 function Write-Log {
     param([string]$Message)
@@ -8,7 +8,7 @@ function Write-Log {
     Write-Output $Entry
 }
 
-Write-Log "Checking CBS (Component Based Servicing) state before sysprep."
+Write-Log "Checking CBS (Component Based Servicing) state."
 
 $RebootPendingPaths = @(
     'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'

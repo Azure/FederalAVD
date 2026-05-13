@@ -437,33 +437,38 @@ resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands
 }
 
 @batchSize(1)
-module customizationBatches 'applyCustomizationsBatch.bicep' = [for i in range(0, batchCount): {
-  name: 'customization-batch-${i}-${deploymentSuffix}'
-  params: {
-    batchIndex: i
-    commonScriptParams: commonScriptParams
-    customizations: map(filter(range(0, customizationBatchSize), j => (i * customizationBatchSize + j) < customizersCount), j => {
-      name: customizers[i * customizationBatchSize + j].name
-      uri: customizers[i * customizationBatchSize + j].uri
-      arguments: customizers[i * customizationBatchSize + j].arguments
-      restart: customizers[i * customizationBatchSize + j].restart
-    })
-    deploymentSuffix: deploymentSuffix
-    imageVmName: imageVmName
-    location: location
-    logBlobContainerUri: logBlobContainerUri
-    orchestrationVmName: orchestrationVmName
-    resourceGroupName: resourceGroup().name
-    resourceManagerUri: environment().resourceManager
-    subscriptionId: subscription().subscriptionId
-    userAssignedIdentityClientId: userAssignedIdentityClientId
-    restartVMParameters: restartVMParameters
+module customizationBatches 'applyCustomizationsBatch.bicep' = [
+  for i in range(0, batchCount): {
+    name: 'customization-batch-${i}-${deploymentSuffix}'
+    params: {
+      batchIndex: i
+      commonScriptParams: commonScriptParams
+      customizations: map(
+        filter(range(0, customizationBatchSize), j => (i * customizationBatchSize + j) < customizersCount),
+        j => {
+          name: customizers[i * customizationBatchSize + j].name
+          uri: customizers[i * customizationBatchSize + j].uri
+          arguments: customizers[i * customizationBatchSize + j].arguments
+          restart: customizers[i * customizationBatchSize + j].restart
+        }
+      )
+      deploymentSuffix: deploymentSuffix
+      imageVmName: imageVmName
+      location: location
+      logBlobContainerUri: logBlobContainerUri
+      orchestrationVmName: orchestrationVmName
+      resourceGroupName: resourceGroup().name
+      resourceManagerUri: environment().resourceManager
+      subscriptionId: subscription().subscriptionId
+      userAssignedIdentityClientId: userAssignedIdentityClientId
+      restartVMParameters: restartVMParameters
+    }
+    dependsOn: [
+      createBuildDir
+      restartMicrosoftSoftware
+    ]
   }
-  dependsOn: [
-    createBuildDir
-    restartMicrosoftSoftware
-  ]
-}]
+]
 
 resource restartCustomizations 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(customizations)) {
   name: 'restart-post-customizations'
@@ -541,6 +546,22 @@ resource restartUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
   ]
 }
 
+module conditionalRestartPostUpdates 'conditionalRestart.bicep' = if (installUpdates) {
+  name: 'conditional-restart-post-updates'
+  params: {
+    imageVmName: imageVmName
+    location: location
+    logBlobContainerUri: logBlobContainerUri
+    orchestrationVmName: orchestrationVmName
+    userAssignedIdentityClientId: userAssignedIdentityClientId
+    deploymentSuffix: deploymentSuffix
+    context: 'PostUpdates'
+  }
+  dependsOn: [
+    restartUpdates
+  ]
+}
+
 resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (updateUwpApps) {
   name: 'update-builtInUwpApps'
   location: location
@@ -559,13 +580,13 @@ resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-0
     source: {
       script: loadTextContent('../../../.common/scripts/Update-UwpApps.ps1')
     }
-    treatFailureAsDeploymentFailure: true
+    treatFailureAsDeploymentFailure: false
   }
   dependsOn: [
     removeAppxPackages
     restartMicrosoftSoftware
     restartCustomizations
-    restartUpdates
+    conditionalRestartPostUpdates
   ]
 }
 
@@ -605,7 +626,7 @@ resource wdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (a
     createBuildDir
     restartMicrosoftSoftware
     restartCustomizations
-    restartUpdates
+    conditionalRestartPostUpdates
     updateBuiltInApps
   ]
 }
@@ -666,7 +687,7 @@ resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-
       createBuildDir
       restartMicrosoftSoftware
       restartCustomizations
-      restartUpdates
+      conditionalRestartPostUpdates
       restartWDOT
       updateBuiltInApps
     ]
@@ -690,7 +711,7 @@ resource cleanupPublicDesktop 'Microsoft.Compute/virtualMachines/runCommands@202
     createBuildDir
     restartMicrosoftSoftware
     restartCustomizations
-    restartUpdates
+    conditionalRestartPostUpdates
     restartWDOT
     vdiApplications
     updateBuiltInApps
@@ -707,11 +728,6 @@ var disableSoftwareUpdatesKeys = [
   'disableStoreAutoUpdate'
 ]
 
-var disableSoftwareUpdatesParams = [for key in disableSoftwareUpdatesKeys: {
-  name: '${toUpper(substring(key, 0, 1))}${substring(key, 1)}'
-  value: contains(disableSoftwareUpdates, key) ? 'true' : 'false'
-}]
-
 resource disableSoftwareUpdatesRunCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(disableSoftwareUpdates)) {
   name: 'disable-SoftwareUpdates'
   location: location
@@ -726,8 +742,13 @@ resource disableSoftwareUpdatesRunCommand 'Microsoft.Compute/virtualMachines/run
     outputBlobUri: empty(logBlobContainerUri)
       ? null
       : '${logBlobContainerUri}${imageVmName}-Disable-SoftwareUpdates-${deploymentSuffix}.log'
-    
-    parameters: disableSoftwareUpdatesParams
+
+    parameters: [
+      for key in disableSoftwareUpdatesKeys: {
+        name: '${toUpper(substring(key, 0, 1))}${substring(key, 1)}'
+        value: contains(disableSoftwareUpdates, key) ? 'true' : 'false'
+      }
+    ]
     source: {
       script: loadTextContent('../../../.common/scripts/Disable-SoftwareUpdates.ps1')
     }
@@ -744,7 +765,7 @@ resource disableSoftwareUpdatesRunCommand 'Microsoft.Compute/virtualMachines/run
   ]
 }
 
-resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' =  {
+resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
   name: 'cleanup-image'
   location: location
   parent: imageVm
@@ -767,16 +788,34 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
     source: {
       script: loadTextContent('../../../.common/scripts/Invoke-DiskCleanup.ps1')
     }
-    treatFailureAsDeploymentFailure: true
+    treatFailureAsDeploymentFailure: false
   }
   dependsOn: [
     createBuildDir
     restartMicrosoftSoftware
     restartCustomizations
-    restartUpdates
+    conditionalRestartPostUpdates
     restartWDOT
     vdiApplications
     disableSoftwareUpdatesRunCommand
     updateBuiltInApps
+  ]
+}
+
+// Check for a restart required and perform it only if no VDI customizations were applied
+
+module conditionalRestartPostCleanup 'conditionalRestart.bicep' = if (empty(vdiCustomizers)) {
+  name: 'conditional-restart-post-cleanup'
+  params: {
+    imageVmName: imageVmName
+    location: location
+    logBlobContainerUri: logBlobContainerUri
+    orchestrationVmName: orchestrationVmName
+    userAssignedIdentityClientId: userAssignedIdentityClientId
+    deploymentSuffix: deploymentSuffix
+    context: 'PostCleanup'
+  }
+  dependsOn: [
+    cleanupImage
   ]
 }

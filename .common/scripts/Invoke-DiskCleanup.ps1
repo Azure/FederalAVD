@@ -32,7 +32,11 @@ try {
     )
     foreach ($scanPath in $scanPaths) {
         if (Test-Path -Path $scanPath) {
-            Get-ChildItem -Path $scanPath -Include *.tmp, *.dmp, *.etl, *.log -File -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -ErrorAction SilentlyContinue
+            Get-ChildItem -Path $scanPath -Include *.tmp, *.dmp, *.etl, *.log -File -Recurse -Force -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    try { Remove-Item $_.FullName -Force -ErrorAction Stop }
+                    catch { Write-Log "  Skipped (locked/in-use): $($_.FullName)" }
+                }
         }
     }
 
@@ -53,7 +57,15 @@ try {
     Write-Log "Clearing event logs"
     Get-WinEvent -ListLog * -ErrorAction SilentlyContinue |
         Where-Object { $_.RecordCount -gt 0 } |
-        ForEach-Object { wevtutil cl $_.LogName 2>$null }
+        ForEach-Object {
+            Write-Log "  Clearing event log '$($_.LogName)' with $($_.RecordCount) record(s)"
+            try {
+                wevtutil cl $_.LogName 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) { Write-Log "  Failed to clear event log '$($_.LogName)' - Exit Code [$LASTEXITCODE]" }
+                else { Write-Log "  Cleared event log '$($_.LogName)'" }
+            }
+            catch { Write-Log "  Failed to clear event log '$($_.LogName)' with Exception '$($_.Exception.Message)'" }
+        }
 
     Write-Log "Disk cleanup complete."
 }
