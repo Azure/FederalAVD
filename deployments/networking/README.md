@@ -107,23 +107,34 @@ Subscription
 
 ### Subnet Configuration
 
-#### `hostsSubnet`
-- **Type:** Object
+#### `hostsSubnets`
+- **Type:** Array
 - **Required when:** `deployVnet` is `true`
-- **Description:** Session hosts subnet configuration
+- **Description:** Session host subnets configuration. Supports one or more subnets — all share the same NSG and routing configuration.
 - **Schema:**
   ```json
-  {
-    "name": "string",
-    "addressPrefix": "string"
-  }
+  [
+    {
+      "name": "string",
+      "addressPrefix": "string"
+    }
+  ]
   ```
-- **Example:**
+- **Example (single subnet):**
   ```json
-  {
-    "name": "snet-avd-hosts",
-    "addressPrefix": "10.0.0.0/24"
-  }
+  [
+    {
+      "name": "snet-avd-hosts",
+      "addressPrefix": "10.0.0.0/24"
+    }
+  ]
+  ```
+- **Example (multiple subnets):**
+  ```json
+  [
+    { "name": "snet-avd-hosts-1", "addressPrefix": "10.0.0.0/24" },
+    { "name": "snet-avd-hosts-2", "addressPrefix": "10.0.1.0/24" }
+  ]
   ```
 
 #### `privateEndpointsSubnet`
@@ -300,13 +311,13 @@ If zones already exist, provide their resource IDs:
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\networking.bicep" `
+  -TemplateFile ".\networking.json" `
   -deployVnet $true `
   -deployVnetResourceGroup $true `
   -vnetResourceGroupName "rg-avd-networking-usgv" `
   -vnetName "vnet-avd-usgv" `
   -vnetAddressPrefixes @("10.100.0.0/16") `
-  -hostsSubnet @{name="snet-avd-hosts"; addressPrefix="10.100.0.0/24"} `
+  -hostsSubnets @(@{name="snet-avd-hosts"; addressPrefix="10.100.0.0/24"}) `
   -defaultRouting "nat" `
   -Name "avd-networking-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
@@ -316,13 +327,13 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\networking.bicep" `
+  -TemplateFile ".\networking.json" `
   -deployVnet $true `
   -deployVnetResourceGroup $true `
   -vnetResourceGroupName "rg-avd-networking-usgv" `
   -vnetName "vnet-avd-usgv" `
   -vnetAddressPrefixes @("10.100.0.0/16") `
-  -hostsSubnet @{name="snet-avd-hosts"; addressPrefix="10.100.0.0/24"} `
+  -hostsSubnets @(@{name="snet-avd-hosts"; addressPrefix="10.100.0.0/24"}) `
   -privateEndpointsSubnet @{name="snet-avd-endpoints"; addressPrefix="10.100.1.0/24"} `
   -defaultRouting "nat" `
   -createAzureBlobZone $true `
@@ -338,13 +349,13 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\networking.bicep" `
+  -TemplateFile ".\networking.json" `
   -deployVnet $true `
   -deployVnetResourceGroup $true `
   -vnetResourceGroupName "rg-avd-networking-usgv" `
   -vnetName "vnet-avd-usgv" `
   -vnetAddressPrefixes @("10.100.0.0/16") `
-  -hostsSubnet @{name="snet-avd-hosts"; addressPrefix="10.100.0.0/24"} `
+  -hostsSubnets @(@{name="snet-avd-hosts"; addressPrefix="10.100.0.0/24"}) `
   -defaultRouting "nva" `
   -nvaIPAddress "10.1.0.4" `
   -includeAvdBypassRoutes $true `
@@ -356,13 +367,13 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\networking.bicep" `
+  -TemplateFile ".\networking.json" `
   -deployVnet $true `
   -deployVnetResourceGroup $true `
   -vnetResourceGroupName "rg-avd-networking-usgv" `
   -vnetName "vnet-avd-spoke-usgv" `
   -vnetAddressPrefixes @("10.100.0.0/16") `
-  -hostsSubnet @{name="snet-avd-hosts"; addressPrefix="10.100.0.0/24"} `
+  -hostsSubnets @(@{name="snet-avd-hosts"; addressPrefix="10.100.0.0/24"}) `
   -defaultRouting "nva" `
   -nvaIPAddress "10.1.0.4" `
   -hubVnetResourceId "/subscriptions/{sub}/resourceGroups/rg-hub/providers/Microsoft.Network/virtualNetworks/vnet-hub" `
@@ -376,7 +387,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\networking.bicep" `
+  -TemplateFile ".\networking.json" `
   -TemplateParameterFile ".\parameters\prod.networking.parameters.json" `
   -Name "avd-networking-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
@@ -386,14 +397,14 @@ New-AzSubscriptionDeployment `
 ```bash
 az deployment sub create \
   --location usgovvirginia \
-  --template-file ./networking.bicep \
+  --template-file ./networking.json \
   --parameters \
     deployVnet=true \
     deployVnetResourceGroup=true \
     vnetResourceGroupName="rg-avd-networking-usgv" \
     vnetName="vnet-avd-usgv" \
     vnetAddressPrefixes='["10.100.0.0/16"]' \
-    hostsSubnet='{"name":"snet-avd-hosts","addressPrefix":"10.100.0.0/24"}' \
+    hostsSubnets='[{"name":"snet-avd-hosts","addressPrefix":"10.100.0.0/24"}]' \
     defaultRouting="nat" \
   --name avd-networking-$(date +%Y%m%d%H%M)
 ```

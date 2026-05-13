@@ -46,9 +46,11 @@ Subscription
 │   ├── OS Disks
 │   ├── Availability Set (optional)
 │   └── Disk Encryption Set (optional)
-├── Management Resource Group
+├── Operations Resource Group
 │   ├── Key Vaults
-│   └── Private Endpoints (Key Vaults)
+│   ├── Recovery Services Vault (optional, when backup enabled)
+│   ├── Backup Policies (file share policy for pooled, VM policy for personal)
+│   └── Private Endpoints (Key Vaults, Recovery Services Vault)
 ├── Storage Resource Group
 │   ├── Azure NetApp Files Account (optional)
 │   ├── Capacity Pool (optional)
@@ -238,6 +240,11 @@ Subscription
 - **Default:** `false`
 - **Description:** Enable validation environment (early features)
 
+#### `startVMOnConnect`
+- **Type:** Boolean
+- **Default:** `true`
+- **Description:** Enables the Start VM on Connect feature so deallocated session hosts are powered on when a user connects
+
 ### Session Hosts
 
 #### `virtualMachineSize`
@@ -321,6 +328,32 @@ Subscription
 - **Default:** `false`
 - **Description:** Collect AVD-specific performance counters and logs
 
+### Backup
+
+#### `recoveryServices`
+- **Type:** Boolean
+- **Default:** `false`
+- **Description:** Enable Azure Backup. For pooled host pools this backs up the Azure Files share; for personal host pools this backs up the session host VM disks.
+
+#### `recoveryServicesVaultStorageRedundancy`
+- **Type:** String
+- **Allowed:** `LocallyRedundant`, `ZoneRedundant`, `GeoRedundant`
+- **Default:** `LocallyRedundant`
+- **Description:** Storage redundancy for backup recovery points in the Recovery Services vault. Independent of storage account SKU.
+
+#### `existingRecoveryServicesVaultResourceId`
+- **Type:** String
+- **Optional**
+- **Description:** Resource ID of an existing Recovery Services vault. Required when `deploymentType` is `HostPoolOnly` or `SessionHostsOnly` and `recoveryServices` is `true`.
+
+### Networking
+
+#### `permittedIPs`
+- **Type:** Array
+- **Optional**
+- **Description:** IP addresses or CIDR blocks permitted through the firewall of all PaaS resources (storage accounts, Key Vaults). Use when managing deployments from a trusted workstation outside the Azure network boundary.
+- **Example:** `["203.0.113.10", "198.51.100.0/24"]`
+
 ### Security & Encryption
 
 #### `diskEncryption`
@@ -339,6 +372,12 @@ Subscription
 - **Default:** `Standard`
 - **Description:** VM security configuration
 
+#### `encryptionKeyVaultResourceId`
+- **Type:** String
+- **Optional**
+- **Description:** Resource ID of an existing Encryption Key Vault containing customer-managed keys. Typically provided from the Key Vaults (Foundation) deployment. Leave empty to have a Key Vault created automatically when CMK is enabled and `deploymentType` is `Complete`.
+- **Example:** `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.KeyVault/vaults/{vault}`
+
 ### 📖 Complete Parameter Reference
 
 For a complete list of all 150+ parameters with detailed descriptions, see:
@@ -352,7 +391,7 @@ For a complete list of all 150+ parameters with detailed descriptions, see:
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\hostpool.bicep" `
+  -TemplateFile ".\hostpool.json" `
   -TemplateParameterFile ".\parameters\finance.parameters.json" `
   -deploymentType "Complete" `
   -identifier "finance" `
@@ -369,7 +408,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\hostpool.bicep" `
+  -TemplateFile ".\hostpool.json" `
   -deploymentType "SessionHostsOnly" `
   -existingHostPoolResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.DesktopVirtualization/hostPools/hp-finance" `
   -virtualMachineCount 5 `
@@ -384,7 +423,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\hostpool.bicep" `
+  -TemplateFile ".\hostpool.json" `
   -TemplateParameterFile ".\parameters\secure.parameters.json" `
   -deployPrivateEndpointStorage $true `
   -deployPrivateEndpointKeyVault $true `
@@ -398,7 +437,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\hostpool.bicep" `
+  -TemplateFile ".\hostpool.json" `
   -TemplateParameterFile ".\parameters\graphics.parameters.json" `
   -customImageResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/win11-graphics/versions/latest" `
   -virtualMachineSize "Standard_NV12ads_A10_v5" `
@@ -411,7 +450,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\hostpool.bicep" `
+  -TemplateFile ".\hostpool.json" `
   -TemplateParameterFile ".\parameters\enterprise.parameters.json" `
   -storageService "AzureNetAppFiles" `
   -netAppFilesAccountName "anf-avd-storage" `

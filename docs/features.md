@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # Features
 
@@ -604,7 +604,7 @@ This solution provides multiple layers of resiliency to ensure high availability
 
 ### Availability Zones and Availability Sets
 
-Deploy session hosts across Availability Zones or Availability Sets to provide infrastructure-level redundancy and higher SLAs. This feature is available for "pooled" host pools where load balancing distributes users across multiple session hosts.
+Deploy session hosts across Availability Zones or Availability Sets to provide infrastructure-level redundancy and higher SLAs. This feature is available for both **pooled** and **personal** host pools. For pooled pools, the benefit is that a failure event does not affect all users simultaneously. For personal pools, the benefit is the same at the organizational level — not all users' VMs are taken offline at once — though individual users are still tied to their assigned VM.
 
 **Availability Options:**
 

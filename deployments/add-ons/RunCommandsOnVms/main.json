@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.40.2.10011",
-      "templateHash": "10035919117737131946"
+      "version": "0.42.1.51946",
+      "templateHash": "11220951250521312790"
     }
   },
   "parameters": {
@@ -194,8 +194,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "17175578679719777736"
+              "version": "0.42.1.51946",
+              "templateHash": "5930699868699095408"
             }
           },
           "parameters": {
@@ -292,8 +292,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "13472448701982493506"
+              "version": "0.42.1.51946",
+              "templateHash": "6597931680229389534"
             }
           },
           "parameters": {
@@ -331,46 +331,205 @@
                 "mode": "serial",
                 "batchSize": 1
               },
-              "type": "Microsoft.Compute/virtualMachines/runCommands",
-              "apiVersion": "2023-03-01",
-              "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('scripts')[copyIndex()].name)]",
-              "location": "[parameters('location')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[parameters('scripts')[copyIndex()].name]",
               "properties": {
-                "asyncExecution": false,
-                "errorBlobManagedIdentity": "[if(empty(parameters('logsContainerUri')), null(), createObject('clientId', parameters('logsUserAssignedIdentityClientId')))]",
-                "errorBlobUri": "[if(empty(parameters('logsContainerUri')), null(), format('{0}/{1}-{2}-error-{3}.log', parameters('logsContainerUri'), parameters('virtualMachineName'), parameters('scripts')[copyIndex()].name, parameters('timeStamp')))]",
-                "outputBlobManagedIdentity": "[if(empty(parameters('logsContainerUri')), null(), createObject('clientId', parameters('logsUserAssignedIdentityClientId')))]",
-                "outputBlobUri": "[if(empty(parameters('logsContainerUri')), null(), format('{0}/{1}-{2}-output-{3}.log', parameters('logsContainerUri'), parameters('virtualMachineName'), parameters('scripts')[copyIndex()].name, parameters('timeStamp')))]",
-                "parameters": [
-                  {
-                    "name": "APIVersion",
-                    "value": "[variables('apiVersion')]"
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "virtualMachineName": {
+                    "value": "[parameters('virtualMachineName')]"
                   },
-                  {
-                    "name": "BlobStorageSuffix",
-                    "value": "[format('blob.{0}', environment().suffixes.storage)]"
+                  "location": {
+                    "value": "[parameters('location')]"
                   },
-                  {
-                    "name": "UserAssignedIdentityClientId",
-                    "value": "[parameters('scriptsUserAssignedIdentityClientId')]"
-                  },
-                  {
-                    "name": "Name",
+                  "name": {
                     "value": "[parameters('scripts')[copyIndex()].name]"
                   },
-                  {
-                    "name": "Uri",
-                    "value": "[parameters('scripts')[copyIndex()].uri]"
+                  "script": {
+                    "value": "[variables('$fxv#0')]"
                   },
-                  {
-                    "name": "Arguments",
-                    "value": "[parameters('scripts')[copyIndex()].arguments]"
+                  "outputBlobUri": "[if(empty(parameters('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-output-{3}.log', parameters('logsContainerUri'), parameters('virtualMachineName'), parameters('scripts')[copyIndex()].name, parameters('timeStamp'))))]",
+                  "errorBlobUri": "[if(empty(parameters('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-error-{3}.log', parameters('logsContainerUri'), parameters('virtualMachineName'), parameters('scripts')[copyIndex()].name, parameters('timeStamp'))))]",
+                  "outputBlobManagedIdentityClientId": {
+                    "value": "[parameters('logsUserAssignedIdentityClientId')]"
+                  },
+                  "errorBlobManagedIdentityClientId": {
+                    "value": "[parameters('logsUserAssignedIdentityClientId')]"
+                  },
+                  "parameters": {
+                    "value": [
+                      {
+                        "name": "APIVersion",
+                        "value": "[variables('apiVersion')]"
+                      },
+                      {
+                        "name": "BlobStorageSuffix",
+                        "value": "[format('blob.{0}', environment().suffixes.storage)]"
+                      },
+                      {
+                        "name": "UserAssignedIdentityClientId",
+                        "value": "[parameters('scriptsUserAssignedIdentityClientId')]"
+                      },
+                      {
+                        "name": "Name",
+                        "value": "[parameters('scripts')[copyIndex()].name]"
+                      },
+                      {
+                        "name": "Uri",
+                        "value": "[parameters('scripts')[copyIndex()].uri]"
+                      },
+                      {
+                        "name": "Arguments",
+                        "value": "[parameters('scripts')[copyIndex()].arguments]"
+                      }
+                    ]
                   }
-                ],
-                "source": {
-                  "script": "[variables('$fxv#0')]"
                 },
-                "treatFailureAsDeploymentFailure": true
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "11251645360607682588"
+                    }
+                  },
+                  "parameters": {
+                    "virtualMachineName": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "script": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "PowerShell script content to execute. Provide either script or scriptUri, not both."
+                      }
+                    },
+                    "scriptUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "URI of a script to execute. Provide either script or scriptUri, not both."
+                      }
+                    },
+                    "scriptUriManagedIdentityClientId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Client ID of the user-assigned managed identity used to access the script URI."
+                      }
+                    },
+                    "parameters": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Named parameters to pass to the script."
+                      }
+                    },
+                    "protectedParameters": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Named protected (secure) parameters to pass to the script."
+                      }
+                    },
+                    "timeoutInSeconds": {
+                      "type": "int",
+                      "defaultValue": 0,
+                      "metadata": {
+                        "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
+                      }
+                    },
+                    "asyncExecution": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Run the command asynchronously (fire and forget)."
+                      }
+                    },
+                    "treatFailureAsDeploymentFailure": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Treat a non-zero exit code as a deployment failure."
+                      }
+                    },
+                    "outputBlobUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+                      }
+                    },
+                    "errorBlobUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+                      }
+                    },
+                    "outputBlobManagedIdentityClientId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Client ID of the user-assigned managed identity used to access the output blob."
+                      }
+                    },
+                    "errorBlobManagedIdentityClientId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                      }
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Compute/virtualMachines/runCommands",
+                      "apiVersion": "2023-09-01",
+                      "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "source": {
+                          "script": "[if(not(empty(parameters('script'))), parameters('script'), null())]",
+                          "scriptUri": "[if(not(empty(parameters('scriptUri'))), parameters('scriptUri'), null())]",
+                          "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
+                        },
+                        "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
+                        "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                        "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
+                        "asyncExecution": "[parameters('asyncExecution')]",
+                        "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
+                        "outputBlobUri": "[if(not(empty(parameters('outputBlobUri'))), parameters('outputBlobUri'), null())]",
+                        "errorBlobUri": "[if(not(empty(parameters('errorBlobUri'))), parameters('errorBlobUri'), null())]",
+                        "outputBlobManagedIdentity": "[if(not(empty(parameters('outputBlobManagedIdentityClientId'))), createObject('clientId', parameters('outputBlobManagedIdentityClientId')), null())]",
+                        "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('virtualMachineName'), parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
               }
             }
           ]
@@ -399,34 +558,29 @@
           "location": {
             "value": "[parameters('location')]"
           },
-          "vmName": {
-            "value": "[parameters('vmNames')[0]]"
+          "virtualMachineName": {
+            "value": "[parameters('vmNames')[copyIndex()]]"
           },
-          "runCommandName": {
+          "name": {
             "value": "[parameters('runCommandName')]"
           },
-          "logsContainerUri": {
-            "value": "[variables('logsContainerUri')]"
-          },
-          "logsUserAssignedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('logsUserAssignedIdentityResourceId'), '/')[2], split(parameters('logsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('logsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
-          "scriptsUserAssignedIdentityClientId": "[if(empty(parameters('scriptsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('scriptsUserAssignedIdentityResourceId'), '/')[2], split(parameters('scriptsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('scriptsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
-          "parameters": {
-            "value": "[parameters('parameters')]"
-          },
-          "protectedParameter": {
-            "value": "[parameters('protectedParameter')]"
-          },
-          "scriptContent": {
+          "script": {
             "value": "[variables('normalizedScriptContent')]"
           },
           "scriptUri": {
             "value": "[parameters('scriptUri')]"
           },
+          "scriptUriManagedIdentityClientId": "[if(empty(parameters('scriptsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('scriptsUserAssignedIdentityResourceId'), '/')[2], split(parameters('scriptsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('scriptsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
+          "parameters": {
+            "value": "[parameters('parameters')]"
+          },
+          "protectedParameters": "[if(empty(parameters('protectedParameter')), createObject('value', createArray()), createObject('value', createArray(parameters('protectedParameter'))))]",
+          "outputBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-output-{3}.log', variables('logsContainerUri'), parameters('vmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
+          "errorBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-error-{3}.log', variables('logsContainerUri'), parameters('vmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
+          "outputBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('logsUserAssignedIdentityResourceId'), '/')[2], split(parameters('logsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('logsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
+          "errorBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('logsUserAssignedIdentityResourceId'), '/')[2], split(parameters('logsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('logsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
           "timeoutInSeconds": {
             "value": "[parameters('timeoutInSeconds')]"
-          },
-          "timeStamp": {
-            "value": "[parameters('timeStamp')]"
           }
         },
         "template": {
@@ -435,74 +589,140 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "14138041112015825831"
+              "version": "0.42.1.51946",
+              "templateHash": "11251645360607682588"
             }
           },
           "parameters": {
+            "virtualMachineName": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
             "location": {
-              "type": "string"
-            },
-            "vmName": {
-              "type": "string"
-            },
-            "runCommandName": {
-              "type": "string"
-            },
-            "logsUserAssignedIdentityClientId": {
-              "type": "string"
-            },
-            "logsContainerUri": {
-              "type": "string"
-            },
-            "parameters": {
-              "type": "array"
-            },
-            "protectedParameter": {
-              "type": "secureObject",
-              "defaultValue": {}
-            },
-            "scriptContent": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "script": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "PowerShell script content to execute. Provide either script or scriptUri, not both."
+              }
             },
             "scriptUri": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "URI of a script to execute. Provide either script or scriptUri, not both."
+              }
             },
-            "scriptsUserAssignedIdentityClientId": {
-              "type": "string"
+            "scriptUriManagedIdentityClientId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Client ID of the user-assigned managed identity used to access the script URI."
+              }
+            },
+            "parameters": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Named parameters to pass to the script."
+              }
+            },
+            "protectedParameters": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Named protected (secure) parameters to pass to the script."
+              }
             },
             "timeoutInSeconds": {
-              "type": "int"
+              "type": "int",
+              "defaultValue": 0,
+              "metadata": {
+                "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
+              }
             },
-            "timeStamp": {
-              "type": "string"
+            "asyncExecution": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Run the command asynchronously (fire and forget)."
+              }
+            },
+            "treatFailureAsDeploymentFailure": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Treat a non-zero exit code as a deployment failure."
+              }
+            },
+            "outputBlobUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+              }
+            },
+            "errorBlobUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+              }
+            },
+            "outputBlobManagedIdentityClientId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Client ID of the user-assigned managed identity used to access the output blob."
+              }
+            },
+            "errorBlobManagedIdentityClientId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+              }
             }
           },
           "resources": [
             {
               "type": "Microsoft.Compute/virtualMachines/runCommands",
-              "apiVersion": "2023-03-01",
-              "name": "[format('{0}/{1}', parameters('vmName'), parameters('runCommandName'))]",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
               "location": "[parameters('location')]",
               "properties": {
-                "errorBlobManagedIdentity": "[if(empty(parameters('logsUserAssignedIdentityClientId')), null(), createObject('clientId', parameters('logsUserAssignedIdentityClientId')))]",
-                "errorBlobUri": "[if(or(empty(parameters('logsContainerUri')), empty(parameters('logsUserAssignedIdentityClientId'))), null(), format('{0}/{1}-{2}-error-{3}.log', parameters('logsContainerUri'), reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmName')), '2023-03-01', 'full'), parameters('runCommandName'), parameters('timeStamp')))]",
-                "outputBlobManagedIdentity": "[if(empty(parameters('logsUserAssignedIdentityClientId')), null(), createObject('clientId', parameters('logsUserAssignedIdentityClientId')))]",
-                "outputBlobUri": "[if(or(empty(parameters('logsContainerUri')), empty(parameters('logsUserAssignedIdentityClientId'))), null(), format('{0}/{1}-{2}-output-{3}.log', parameters('logsContainerUri'), reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmName')), '2023-03-01', 'full'), parameters('runCommandName'), parameters('timeStamp')))]",
-                "parameters": "[if(empty(parameters('parameters')), null(), parameters('parameters'))]",
-                "protectedParameters": "[if(empty(parameters('protectedParameter')), null(), createArray(parameters('protectedParameter')))]",
                 "source": {
-                  "scriptUri": "[if(empty(parameters('scriptUri')), null(), parameters('scriptUri'))]",
-                  "script": "[if(empty(parameters('scriptContent')), null(), parameters('scriptContent'))]",
-                  "scriptUriManagedIdentity": "[if(empty(parameters('scriptsUserAssignedIdentityClientId')), null(), createObject('clientId', parameters('scriptsUserAssignedIdentityClientId')))]"
+                  "script": "[if(not(empty(parameters('script'))), parameters('script'), null())]",
+                  "scriptUri": "[if(not(empty(parameters('scriptUri'))), parameters('scriptUri'), null())]",
+                  "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
                 },
-                "timeoutInSeconds": "[if(equals(parameters('timeoutInSeconds'), 5400), null(), parameters('timeoutInSeconds'))]",
-                "treatFailureAsDeploymentFailure": true
+                "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
+                "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
+                "asyncExecution": "[parameters('asyncExecution')]",
+                "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
+                "outputBlobUri": "[if(not(empty(parameters('outputBlobUri'))), parameters('outputBlobUri'), null())]",
+                "errorBlobUri": "[if(not(empty(parameters('errorBlobUri'))), parameters('errorBlobUri'), null())]",
+                "outputBlobManagedIdentity": "[if(not(empty(parameters('outputBlobManagedIdentityClientId'))), createObject('clientId', parameters('outputBlobManagedIdentityClientId')), null())]",
+                "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
               }
             }
-          ]
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('virtualMachineName'), parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            }
+          }
         }
       },
       "dependsOn": [

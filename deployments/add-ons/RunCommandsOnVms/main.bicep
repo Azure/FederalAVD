@@ -136,27 +136,30 @@ module runCommands 'modules/runCommands.bicep' = [
   }
 ]
 
-module runCommand 'modules/runCommand.bicep' = [
+module runCommand '../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for (vmName, i) in vmNames: if (empty(scripts)) {
     name: 'RunCommand-${vmName}-${timeStamp}'
     scope: resourceGroup(resourceGroupName)
     params: {
       location: location
-      vmName: vmNames[0]
-      runCommandName: runCommandName
-      logsContainerUri: logsContainerUri
-      logsUserAssignedIdentityClientId: empty(logsUserAssignedIdentityResourceId)
-        ? ''
-        : logsUserAssignedIdentity!.properties.clientId
-      scriptsUserAssignedIdentityClientId: empty(scriptsUserAssignedIdentityResourceId)
+      virtualMachineName: vmName
+      name: runCommandName
+      script: normalizedScriptContent
+      scriptUri: scriptUri
+      scriptUriManagedIdentityClientId: empty(scriptsUserAssignedIdentityResourceId)
         ? ''
         : scriptsUserAssignedIdentity!.properties.clientId
       parameters: parameters
-      protectedParameter: protectedParameter
-      scriptContent: normalizedScriptContent
-      scriptUri: scriptUri
+      protectedParameters: empty(protectedParameter) ? [] : [protectedParameter]
+      outputBlobUri: empty(logsContainerUri) ? '' : '${logsContainerUri}/${vmName}-${runCommandName}-output-${timeStamp}.log'
+      errorBlobUri: empty(logsContainerUri) ? '' : '${logsContainerUri}/${vmName}-${runCommandName}-error-${timeStamp}.log'
+      outputBlobManagedIdentityClientId: empty(logsUserAssignedIdentityResourceId)
+        ? ''
+        : logsUserAssignedIdentity!.properties.clientId
+      errorBlobManagedIdentityClientId: empty(logsUserAssignedIdentityResourceId)
+        ? ''
+        : logsUserAssignedIdentity!.properties.clientId
       timeoutInSeconds: timeoutInSeconds
-      timeStamp: timeStamp
     }
     dependsOn: [
       updateVms[i]

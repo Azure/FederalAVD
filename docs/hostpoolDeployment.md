@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical Reference:** [Host Pool Template Documentation](../deployments/hostpools/README.md) - Complete parameter catalog and advanced scenarios
 
@@ -16,10 +16,10 @@ A complete host pool deployment includes:
 |-----------|------------------|
 | **🖥️ AVD Control Plane** | Host pool, workspace, application groups, session hosts |
 | **💾 Storage** | FSLogix profile storage (Azure Files or NetApp Files) |
-| **🔐 Security** | Key Vault for secrets, managed identities, RBAC assignments |
+| **🔐 Security** | Secrets Key Vault (optional inline), Encryption Key Vault (optional inline), disk encryption sets, storage encryption UAI, RBAC assignments |
 | **📊 Monitoring** | Log Analytics workspace, diagnostic settings, Application Insights |
 | **🌐 Networking** | Private endpoints, network security (Zero Trust option) |
-| **💿 Backup** | Recovery Services Vault for VM backups (optional) |
+| **💿 Backup** | Recovery Services Vault (optional) — VM backup for **personal** host pools; FSLogix Azure Files file share backup for **pooled** host pools |
 
 ---
 
@@ -57,6 +57,41 @@ Before deploying a host pool, ensure you have completed these prerequisites from
 ✅ **Identity Solution** - Microsoft Entra ID or Active Directory Domain Services  
 ✅ **Security Group** - Group containing AVD users  
 ✅ **Desktop Virtualization Provider** - Enabled in subscription
+
+### Key Vault Prerequisites (Optional) {#security-prerequisites-optional}
+
+For production deployments or any deployment using Customer Managed Keys (CMK), deploy the Key Vaults first:
+
+**🔒 [Key Vaults Deployment Guide](quickStart.md#step-1-deploy-key-vaults-cmk-with-custom-images)**
+
+The key vault deployment creates `rg-avd-operations-{loc}` with:
+
+- **Secrets Key Vault** (`kv-avd-sec-{unique}-{loc}`) — stores VM admin password, domain join credentials
+- **Encryption Key Vault** (`kv-avd-enc-{unique}-{loc}`) — Premium SKU, purge-protected, holds CMK keys
+
+**When to deploy Key Vaults first:**
+
+| Scenario | Recommendation |
+|----------|---------------|
+| Using CMK for disks or FSLogix storage | 🔒 **Deploy Security first** — pass `encryptionKeyVaultResourceId` to host pool |
+| Pre-provisioning credentials in a KV | 🔒 **Deploy Security first** — pass `credentialsKeyVaultResourceId` to host pool |
+| Multiple host pools sharing one encryption KV | 🔒 **Deploy Security first** — all host pools reference the same KV |
+| Simple PoC / dev with platform-managed keys | ✅ **Skip** — deploy host pool directly with `deploymentType = Complete` |
+
+**Inline fallback:** If `encryptionKeyVaultResourceId` is empty and CMK is requested, the `Complete` deployment type creates both KVs inline in `rg-avd-operations-{loc}`. The inline KV names are derived using the same seed as the standalone security deployment, so the names will match if you later run the security deployment separately.
+
+> **Why data plane roles are required separately from ARM roles**
+>
+> Azure enforces a strict separation between the ARM control plane (resource management) and service data planes (key operations, blob operations). `Owner` or `Contributor` on a subscription or resource group grants full control over ARM resources but **zero access** to data plane operations. This applies consistently across services:
+>
+> - **Key Vault keys** — creating or reading keys requires a data plane role (`Key Vault Crypto Officer`, `Key Vault Crypto User`, etc.), regardless of who owns or created the vault.
+> - **Storage blobs** — uploading or reading blobs requires a data plane role (`Storage Blob Data Contributor`, `Storage Blob Data Reader`, etc.) when shared key access is disabled. This is why the `Deploy-ImageManagement.ps1` script requires `Storage Blob Data Contributor` on the deploying identity — the storage account disables shared key access by default so SAS tokens and account keys are unavailable.
+>
+> **Required RBAC depends on CMK type:**
+>
+> - **Standard CMK** (disk or storage encryption, non-confidential VM): The **deploying identity** needs `Key Vault Crypto Officer` on the encryption Key Vault. ARM creates the encryption keys directly during deployment. This applies whether the KV was pre-deployed or created inline — creating the vault does not grant the deploying identity any key operation rights. This role may be removed after initial deployment if key rotation is managed separately.
+>
+> - **Confidential VM + HSM** (`confidentialVMOSDiskEncryption = true` and `keyManagementDisks = CustomerManagedHSM`): Encryption keys cannot be created via ARM for this scenario. Instead, a Run Command on the deployment VM creates the key, and the **deployment VM's user-assigned identity** is automatically assigned `Key Vault Crypto Officer` by the deployment. The deploying identity does **not** need Crypto Officer — it only needs `Role Based Access Control Administrator` on the operations resource group so the deployment can grant that role to the deployment VM's identity.
 
 ### Optional Prerequisites
 
@@ -98,7 +133,7 @@ Choose the deployment method that best fits your workflow:
 1. **Create Template Spec** (one-time setup):
 
    ```powershell
-   cd C:\repos\FederalAVD\deployments
+   cd C:\repos\FederalAVD\tools
    .\New-TemplateSpecs.ps1 -Location "East US 2"
    ```
 
@@ -133,7 +168,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 
 New-AzSubscriptionDeployment `
     -Location "usgovvirginia" `
-    -TemplateFile ".\hostpools\hostpool.bicep" `
+    -TemplateFile ".\hostpools\hostpool.json" `
     -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
     -Name $deploymentName
 ```
@@ -152,7 +187,7 @@ DEPLOYMENT_NAME="${PARAM_FILE%.json}"
 
 az deployment sub create \
     --location usgovvirginia \
-    --template-file ./hostpools/hostpool.bicep \
+    --template-file ./hostpools/hostpool.json \
     --parameters @./hostpools/parameters/$PARAM_FILE \
     --name $DEPLOYMENT_NAME
 ```
@@ -300,6 +335,29 @@ Run post-deployment scripts on session hosts using the `sessionHostCustomization
 
 ## Deployment Process
 
+### Deployment Sequence
+
+When deploying a `Complete` host pool, resources are created in this order to maximize parallelism and ensure RBAC assignments propagate before dependent resources need them:
+
+```mermaid
+graph TD
+    RG[Resource Groups<br/>all in parallel]
+    RG --> KV[Key Vaults<br/>inline - if no security prereq]
+    RG --> PREREQ[Deployment VM<br/>prereqs]
+    KV --> CMK[Disk CMK + Storage CMK<br/>keys · DES · UAI · role assignments]
+    PREREQ --> CMK
+    CMK --> MON[Monitoring]
+    CMK --> CP[Control Plane]
+    MON --> FSL[FSLogix Storage<br/>uses pre-created UAI]
+    CP --> FSL
+    MON --> SH[Session Hosts<br/>uses pre-created DES]
+    CP --> SH
+    FSL --> CU[Clean Up]
+    SH --> CU
+```
+
+> **CMK timing:** Disk Encryption Sets and the storage encryption User-Assigned Identity are created in the same phase as Monitoring and Control Plane (~5–15 minutes before VMs and storage accounts deploy). This gives Azure RBAC propagation time to complete before the resources that depend on those role assignments are created, without requiring any polling or deployment VM dependency.
+
 ### Step-by-Step Deployment
 
 #### 1. Prepare Parameter File
@@ -353,7 +411,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 
 New-AzSubscriptionDeployment `
     -Location "East US 2" `
-    -TemplateFile ".\hostpools\hostpool.bicep" `
+    -TemplateFile ".\hostpools\hostpool.json" `
     -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
     -Name $deploymentName
 ```
@@ -430,11 +488,41 @@ Verify monitoring is working:
 
 ### Configure Backup (Optional)
 
-If backup was enabled, verify backup policies:
+Backup behavior depends on host pool type, deployment mode, and the `recoveryServices` parameter:
+
+| Host Pool Type | Deployment Mode | `recoveryServices` | Additional requirements | Vault | Backed Up |
+|---|---|---|---|---|---|
+| **Personal** | Complete | `true` | — | Created inline | VM OS disks |
+| **Personal** | Complete | `false` | — | Not created | Nothing |
+| **Personal** | HostpoolOnly | `true` | Existing vault provided | Existing | VM OS disks |
+| **Personal** | HostpoolOnly | `false` | — | — | Nothing |
+| **Personal** | SessionHostsOnly | `true` | Existing vault provided | Existing | VM OS disks |
+| **Personal** | SessionHostsOnly | `false` | — | — | Nothing |
+| **Pooled** | Complete | `true` | `deployFSLogixStorage=true` + Azure Files | Created inline | FSLogix file shares |
+| **Pooled** | Complete | `false` | — | Not created | Nothing |
+| **Pooled** | HostpoolOnly | `true` | `deployFSLogixStorage=true` + Azure Files + existing vault | Existing | FSLogix file shares |
+| **Pooled** | HostpoolOnly | `false` | — | — | Nothing |
+| **Pooled** | SessionHostsOnly | any | — | N/A | Nothing — not supported |
+
+> **Pooled VMs are never backed up.** Users are stateless in pooled pools; profile data lives in FSLogix storage which is what gets backed up instead.
+>
+> **FSLogix backup only applies to Azure Files.** NetApp Files has its own snapshot/replication capabilities and is not enrolled in Recovery Services.
+>
+> **Personal pools have no FSLogix storage.** The `deployFSLogixStorage` parameter is ignored for personal host pools.
+>
+> **Soft delete fallback for Azure Files.** When no Recovery Services Vault is configured, soft delete is automatically enabled on the FSLogix storage account file service, providing a baseline safety net against accidental deletion. When a vault is configured, soft delete is disabled because Azure Backup manages its own snapshot-based retention — the two mechanisms conflict.
+
+If backup was enabled, verify backup policies and protected items:
 
 ```powershell
+# Verify backup policies
 Get-AzRecoveryServicesBackupProtectionPolicy -VaultId $vaultId
+
+# Verify protected VMs (personal pools)
 Get-AzRecoveryServicesBackupItem -WorkloadType AzureVM -VaultId $vaultId
+
+# Verify protected file shares (pooled pools)
+Get-AzRecoveryServicesBackupItem -WorkloadType AzureStorage -VaultId $vaultId
 ```
 
 ---
@@ -456,7 +544,7 @@ To add more session hosts to an existing pool:
    
    New-AzSubscriptionDeployment `
        -Location "East US 2" `
-       -TemplateFile ".\hostpools\hostpool.bicep" `
+       -TemplateFile ".\hostpools\hostpool.json" `
        -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
        -Name $deploymentName
    ```
@@ -717,7 +805,7 @@ Connect-AzAccount -Environment AzureCloud  # or AzureUSGovernment
 Set-AzContext -Subscription "<subscription-id>"
 
 # Create template specs
-cd C:\repos\FederalAVD\deployments
+cd C:\repos\FederalAVD\tools
 .\New-TemplateSpecs.ps1 -Location "eastus2"
 ```
 
@@ -766,7 +854,7 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
    $identifier = "prod"  # or extract from parameter file name
    New-AzDeployment `
        -Location "eastus2" `
-       -TemplateFile ".\deployments\hostpools\hostpool.bicep" `
+       -TemplateFile ".\deployments\hostpools\hostpool.json" `
        -TemplateParameterFile ".\my-saved-parameters.json" `
        -Name "avd-$identifier-hostpool"
    
@@ -775,14 +863,14 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
    $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
    New-AzDeployment `
        -Location "eastus2" `
-       -TemplateFile ".\deployments\hostpools\hostpool.bicep" `
+       -TemplateFile ".\deployments\hostpools\hostpool.json" `
        -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
        -Name $deploymentName
    
    # Option 3: Combine identifier with date (if uniqueness needed)
    New-AzDeployment `
        -Location "eastus2" `
-       -TemplateFile ".\deployments\hostpools\hostpool.bicep" `
+       -TemplateFile ".\deployments\hostpools\hostpool.json" `
        -TemplateParameterFile ".\my-saved-parameters.json" `
        -Name "avd-prod-hostpool-$(Get-Date -Format 'yyyyMMdd')"
    ```

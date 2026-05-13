@@ -1,0 +1,56 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+
+        // ── Deployment ─────────────────────────────────────────────────────────
+        "location": {
+            "value": "eastus2"
+        },
+        "deploymentPrefix": {
+            "value": "avd"
+        },
+
+        // ── Required Existing Resources ────────────────────────────────────────
+        //    These values come from the imageManagement deployment outputs.
+        "computeGalleryResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-eus2/providers/Microsoft.Compute/galleries/gal_avd_image_management_eus2"
+        },
+        "subnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eus2/providers/Microsoft.Network/virtualNetworks/vnet-avd-eus2/subnets/snet-avd-imagebuilds"
+        },
+
+        // ── Source Marketplace Image ───────────────────────────────────────────
+        "mpPublisher": {
+            "value": "MicrosoftWindowsDesktop"
+        },
+        "mpOffer": {
+            "value": "windows-11"
+        },
+        "mpSku": {
+            "value": "win11-24h2-avd"
+        },
+
+        // ── Windows Updates ────────────────────────────────────────────────────
+        "installUpdates": {
+            "value": true
+        },
+        "updateService": {
+            "value": "MU"
+        },
+
+        // ── Image Definition ───────────────────────────────────────────────────
+        //    Point at an existing image definition created by a prior build.
+        "imageDefinitionResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-eus2/providers/Microsoft.Compute/galleries/gal_avd_image_management_eus2/images/win11-24h2-avd"
+        },
+
+        // ── Image Version ──────────────────────────────────────────────────────
+        "imageVersionDefaultReplicaCount": {
+            "value": 1
+        },
+        "imageVersionDefaultStorageAccountType": {
+            "value": "Standard_LRS"
+        }
+    }
+}

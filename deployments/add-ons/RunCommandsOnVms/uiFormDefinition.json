@@ -182,7 +182,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[not(equals(steps('scripts').single.source, 'paste'))]",
 									"options": {
-										"text": "<b>Script Parameters</b>"
+										"text": "Script Parameters"
 									}
 								},
 								{
@@ -247,7 +247,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[not(equals(steps('scripts').single.source, 'paste'))]",
 									"options": {
-										"text": "<b>Script Protected Parameter</b>"
+										"text": "Script Protected Parameter"
 									}
 								},
 								{
@@ -310,7 +310,7 @@
 								{
 									"name": "timeout",
 									"type": "Microsoft.Common.TextBox",
-									"label": "Script timeout in <u>seconds</u>",
+									"label": "Script timeout in seconds",
 									"toolTip": "Optionally, enter the amount of seconds that the script will be allowed to run on the virtual machine before timing out.",
 									"defaultValue": 5400,
 									"constraints": {
@@ -384,7 +384,7 @@
 									"name": "artifactText",
 									"type": "Microsoft.Common.TextBlock",
 									"options": {
-										"text": "Enter the information about each script/artifact below.</br><ul><li>Enter the run command name in the first column.</li><li>Enter either the case-sensitive blob name (when downloading from a storage account) or the full URL in the second column.</li><li>Enter any arguments in the third column.</li><ul>"
+										"text": "Enter the information about each script/artifact below. Column 1: Enter the run command name, Column 2: Enter either the case-sensitive blob name (when downloading from a storage account) or the full URL, Column 3: Enter any arguments"
 									}
 								},
 								{

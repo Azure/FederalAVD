@@ -29,136 +29,84 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' existing = {
   name: split(netAppVolumesSubnetResourceId, '/')[8]
 }
 
-resource netAppAccount 'Microsoft.NetApp/netAppAccounts@2021-06-01' = {
-  name: netAppAccountName
-  location: location
-  tags: tagsNetAppAccount
-  properties: {
-    activeDirectories: activeDirectoryConnection ? [
-      {
-        aesEncryption: true
-        domain: domainName
-        dns: string(vnet.properties.dhcpOptions.dnsServers)
-        organizationalUnit: ouRelativePath
-        password: domainJoinUserPassword
-        smbServerName: 'anf-${smbServerLocation}'
-        username: split(domainJoinUserPrincipalName, '@')[0]
-      }
-    ] : null
-    encryption: {
-      keySource: 'Microsoft.NetApp'
+// ─── NetApp Account ────────────────────────────────────────────────────────────
+module netAppAccount '../../../../../.common/bicepModules/netApp/netAppAccounts/deploy.bicep' = {
+  name: 'NetAppAccount-${deploymentSuffix}'
+  params: {
+    name: netAppAccountName
+    location: location
+    tags: tagsNetAppAccount
+    activeDirectory: activeDirectoryConnection
+      ? {
+          aesEncryption: true
+          domain: domainName
+          dns: string(vnet.properties.dhcpOptions.dnsServers)
+          organizationalUnit: ouRelativePath
+          password: domainJoinUserPassword
+          smbServerName: 'anf-${smbServerLocation}'
+          username: split(domainJoinUserPrincipalName, '@')[0]
+        }
+      : {}
+  }
+}
+
+// ─── Capacity Pool ─────────────────────────────────────────────────────────────
+module capacityPool '../../../../../.common/bicepModules/netApp/netAppAccounts/capacityPools/deploy.bicep' = {
+  name: 'CapacityPool-${deploymentSuffix}'
+  params: {
+    netAppAccountName: netAppAccountName
+    name: netAppCapacityPoolName
+    location: location
+    serviceLevel: storageSku
+    tags: tagsNetAppAccount
+  }
+  dependsOn: [netAppAccount]
+}
+
+// ─── Volumes ───────────────────────────────────────────────────────────────────
+module netAppVolumes '../../../../../.common/bicepModules/netApp/netAppAccounts/capacityPools/volumes/deploy.bicep' = [
+  for i in range(0, length(shares)): {
+    name: 'Volume-${shares[i]}-${deploymentSuffix}'
+    params: {
+      netAppAccountName: netAppAccountName
+      capacityPoolName: netAppCapacityPoolName
+      name: shares[i]
+      location: location
+      subnetResourceId: netAppVolumesSubnetResourceId
+      usageThreshold: shareSizeInBytes
+      serviceLevel: storageSku
+      tags: tagsNetAppAccount
     }
+    dependsOn: [capacityPool]
   }
-}
-
-resource capacityPool 'Microsoft.NetApp/netAppAccounts/capacityPools@2021-06-01' = {
-  parent: netAppAccount
-  name: netAppCapacityPoolName
-  location: location
-  tags: tagsNetAppAccount
-  properties: {
-    coolAccess: false
-    encryptionType: 'Single'
-    qosType: 'Auto'
-    serviceLevel: storageSku
-    size: 4398046511104
-  }
-}
-
-resource volumes 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes@2021-06-01' = [for i in range(0, length(shares)): {
-  parent: capacityPool
-  name: shares[i]
-  location: location
-  tags: tagsNetAppAccount
-  properties: {
-    avsDataStore: 'Disabled'
-    // backupId: 'string'
-    coolAccess: false
-    // coolnessPeriod: int
-    creationToken: shares[i]
-    // dataProtection: {
-    //   backup: {
-    //     backupEnabled: bool
-    //     backupPolicyId: 'string'
-    //     policyEnforced: bool
-    //     vaultId: 'string'
-    //   }
-    //   replication: {
-    //     endpointType: 'string'
-    //     remoteVolumeRegion: 'string'
-    //     remoteVolumeResourceId: 'string'
-    //     replicationId: 'string'
-    //     replicationSchedule: 'string'
-    //   }
-    //   snapshot: {
-    //     snapshotPolicyId: 'string'
-    //   }
-    // }
-    defaultGroupQuotaInKiBs: 0
-    defaultUserQuotaInKiBs: 0
-    encryptionKeySource: 'Microsoft.NetApp'
-    // exportPolicy: {
-    //   rules: [
-    //     {
-    //       allowedClients: 'string'
-    //       chownMode: 'string'
-    //       cifs: bool
-    //       hasRootAccess: bool
-    //       kerberos5iReadWrite: bool
-    //       kerberos5pReadWrite: bool
-    //       kerberos5ReadWrite: bool
-    //       nfsv3: bool
-    //       nfsv41: bool
-    //       ruleIndex: int
-    //       unixReadWrite: bool
-    //     }
-    //   ]
-    // }
-    isDefaultQuotaEnabled: false
-    // isRestoring: bool
-    kerberosEnabled: false
-    ldapEnabled: false
-    networkFeatures: 'Standard'
-    protocolTypes: [
-      'CIFS'
-    ]
-    securityStyle: 'ntfs'
-    serviceLevel: storageSku
-    smbContinuouslyAvailable: true // recommended for FSLogix: https://docs.microsoft.com/en-us/azure/azure-netapp-files/enable-continuous-availability-existing-smb
-    smbEncryption: true
-    snapshotDirectoryVisible: true
-    // snapshotId: 'string'
-    subnetId: netAppVolumesSubnetResourceId
-    // throughputMibps: int
-    // unixPermissions: 'string'
-    usageThreshold: shareSizeInBytes
-    // volumeType: 'string'
-  }
-}]
-
-var netappServerFqdns = length(shares) > 1 ? [
-  volumes[0].properties.mountTargets[0].smbServerFqdn
-  volumes[1].properties.mountTargets[0].smbServerFqdn
-] : [
-  volumes[0].properties.mountTargets[0].smbServerFqdn
 ]
 
-module SetNTFSPermissions 'setNTFSPermissionsAzureNetAppFiles.bicep' = {
+var netappServerFqdns = length(shares) > 1
+  ? [netAppVolumes[0].outputs.smbServerFqdn, netAppVolumes[1].outputs.smbServerFqdn]
+  : [netAppVolumes[0].outputs.smbServerFqdn]
+
+// ─── Set NTFS Permissions ──────────────────────────────────────────────────────
+module setNTFSPermissions '../../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Set-NTFSPermissions-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
-    adminGroups:map(shareAdminGroups, group => group.name)  
-    domainJoinUserPrincipalName: domainJoinUserPrincipalName
-    domainJoinUserPassword: domainJoinUserPassword
-    location: location  
-    netAppServers: netappServerFqdns
-    shares: shares
-    userGroups: map(shareUserGroups, group => group.name)
     virtualMachineName: deploymentVirtualMachineName
+    name: 'Set-NTFS-Permissions'
+    location: location
+    script: loadTextContent('../../../../../.common/scripts/Set-NtfsPermissionsNetApp.ps1')
+    parameters: [
+      { name: 'AdminGroupNames', value: string(map(shareAdminGroups, group => group.name)) }
+      { name: 'NetAppServers', value: string(netappServerFqdns) }
+      { name: 'Shares', value: string(shares) }
+      { name: 'UserGroupNames', value: string(map(shareUserGroups, group => group.name)) }
+    ]
+    protectedParameters: [
+      { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
+      { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
+    ]
+    treatFailureAsDeploymentFailure: true
   }
-  dependsOn: [
-    volumes
-  ]
+  dependsOn: [netAppVolumes]
 }
 
-output volumeResourceIds array = [for i in range(0, length(shares)): volumes[i].id]
+output volumeResourceIds array = [for i in range(0, length(shares)): netAppVolumes[i].outputs.resourceId]

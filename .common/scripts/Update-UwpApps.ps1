@@ -1,10 +1,14 @@
-function Write-OutputWithTimeStamp {
+$ErrorActionPreference = 'Stop'
+$LogFile = "$env:SystemRoot\Logs\Update-UwpApps.log"
+
+function Write-Log {
     param(
-        [parameter(ValueFromPipeline=$True, Mandatory=$True, Position=0)]
+        [parameter(ValueFromPipeline = $True, Mandatory = $True, Position = 0)]
+        [AllowEmptyString()]
         [string]$Message
     )
-    $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'
-    $Entry = '[' + $Timestamp + '] ' + $Message
+    $Entry = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message"
+    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue
     Write-Output $Entry
 }
 
@@ -16,122 +20,151 @@ function Get-ProvisionedPackageVersionMap {
     return $map
 }
 
-Start-Transcript -Path "$env:SystemRoot\Logs\Update-UwpApps.log" -Force
-Write-Output "*********************************"
-Write-Output "Updating Built-In UWP Apps via InstallService"
-Write-Output "*********************************"
+try {
+    Write-Log "Updating Built-In UWP Apps via InstallService"
 
-$TaskPath = '\Microsoft\Windows\InstallService\'
-$TaskName = 'ScanForUpdates'
+    $TaskPath = '\Microsoft\Windows\InstallService\'
+    $TaskName = 'ScanForUpdates'
 
-$Task = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue
-If (-not $Task) {
-    Write-Warning "Scheduled task '$TaskPath$TaskName' not found. Skipping Store app updates."
-    Stop-Transcript
-    Exit 0
-}
-
-# Snapshot versions before triggering the scan so we can detect and report actual changes.
-Write-OutputWithTimeStamp "Snapshotting current provisioned package versions..."
-$VersionsBefore = Get-ProvisionedPackageVersionMap
-Write-OutputWithTimeStamp "Found $($VersionsBefore.Count) provisioned package(s)."
-
-# Trigger the scan. Brief sleep gives the task scheduler time to transition to Running.
-Write-OutputWithTimeStamp "Starting scheduled task '$TaskName'..."
-Start-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName
-Start-Sleep -Seconds 5
-
-# Wait for the task itself to finish. The task orchestrates the scan and kicks off
-# downloads/installs in the background - it does not block until they complete.
-$TaskTimeoutSeconds  = 300
-$TaskPollInterval    = 10
-$TaskElapsed         = 0
-
-Write-OutputWithTimeStamp "Waiting for task to complete (timeout: ${TaskTimeoutSeconds}s)..."
-do {
-    Start-Sleep -Seconds $TaskPollInterval
-    $TaskElapsed += $TaskPollInterval
-    $TaskState = (Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName).State
-    Write-OutputWithTimeStamp "Task state: $TaskState ($TaskElapsed/${TaskTimeoutSeconds}s elapsed)"
-} while ($TaskState -eq 'Running' -and $TaskElapsed -lt $TaskTimeoutSeconds)
-
-$TaskResult = (Get-ScheduledTaskInfo -TaskPath $TaskPath -TaskName $TaskName).LastTaskResult
-Write-OutputWithTimeStamp "Task completed. LastTaskResult: $TaskResult (0x0 = success)"
-
-# The task completing means the scan is done and downloads have been queued, but the
-# actual MSIX installs continue asynchronously. Wait a minimum time before polling
-# so downloads have a chance to start and provisioned package versions begin changing.
-$MinWaitSeconds = 60
-Write-OutputWithTimeStamp "Waiting $MinWaitSeconds seconds for installs to begin..."
-Start-Sleep -Seconds $MinWaitSeconds
-
-# Poll provisioned package versions until they stop changing across two consecutive
-# checks. This is the most reliable signal that all async installs have settled.
-$StabilityTimeoutSeconds = 600
-$StabilityPollInterval   = 30
-$StableChecksRequired    = 2
-$StableCount             = 0
-$StabilityElapsed        = 0
-$LastVersionMap          = Get-ProvisionedPackageVersionMap
-
-Write-OutputWithTimeStamp "Polling for version stability (interval: ${StabilityPollInterval}s, timeout: ${StabilityTimeoutSeconds}s)..."
-
-while ($StabilityElapsed -lt $StabilityTimeoutSeconds) {
-    Start-Sleep -Seconds $StabilityPollInterval
-    $StabilityElapsed += $StabilityPollInterval
-
-    $CurrentVersionMap = Get-ProvisionedPackageVersionMap
-    $Changed = $CurrentVersionMap.Keys | Where-Object {
-        $LastVersionMap.ContainsKey($_) -and $LastVersionMap[$_] -ne $CurrentVersionMap[$_]
+    $Task = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue
+    If (-not $Task) {
+        Write-Log "Scheduled task '$TaskPath$TaskName' not found. Skipping Store app updates."
+        Exit 0
     }
 
-    if ($Changed) {
-        $StableCount = 0
-        foreach ($pkg in $Changed) {
-            Write-OutputWithTimeStamp "  [updating] $pkg : $($LastVersionMap[$pkg]) -> $($CurrentVersionMap[$pkg])"
-        }
-        Write-OutputWithTimeStamp "$(@($Changed).Count) package(s) changed this interval. Resetting stability counter. ($StabilityElapsed/${StabilityTimeoutSeconds}s elapsed)"
+    # Snapshot versions before triggering the scan so we can detect and report actual changes.
+    Write-Log "Snapshotting current provisioned package versions..."
+    $VersionsBefore = Get-ProvisionedPackageVersionMap
+    Write-Log "Found $($VersionsBefore.Count) provisioned package(s)."
+
+    # Snapshot the task's LastRunTime before triggering so we can confirm this invocation
+    # actually executed (vs. reading a stale result from a previous run).
+    $TaskInfoBefore = Get-ScheduledTaskInfo -TaskPath $TaskPath -TaskName $TaskName
+    $LastRunTimeBefore = $TaskInfoBefore.LastRunTime
+    Write-Log "Task LastRunTime before trigger: $LastRunTimeBefore"
+
+    # Trigger the scan, then wait until the task enters Running state (or give up after
+    # a startup window). This is more reliable than a blind sleep on a loaded build VM.
+    Write-Log "Starting scheduled task '$TaskName'..."
+    Start-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName
+
+    $StartupTimeoutSeconds = 60
+    $StartupElapsed        = 0
+    $StartupPollInterval   = 2
+    do {
+        Start-Sleep -Seconds $StartupPollInterval
+        $StartupElapsed += $StartupPollInterval
+        $StartupState = (Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName).State
+    } while ($StartupState -ne 'Running' -and $StartupElapsed -lt $StartupTimeoutSeconds)
+
+    if ($StartupState -eq 'Running') {
+        Write-Log "Task entered Running state after $($StartupElapsed) seconds."
     } else {
-        $StableCount++
-        Write-OutputWithTimeStamp "No version changes detected (stable check $StableCount/$StableChecksRequired). ($StabilityElapsed/${StabilityTimeoutSeconds}s elapsed)"
+        Write-Log "Task did not enter Running state within $($StartupTimeoutSeconds) seconds. (current state: $($StartupState)). It may have started and completed very quickly."
     }
 
-    $LastVersionMap = $CurrentVersionMap
+    # Wait for the task itself to finish. The task orchestrates the scan and kicks off
+    # downloads/installs in the background - it does not block until they complete.
+    $TaskTimeoutSeconds = 300
+    $TaskPollInterval = 10
+    $TaskElapsed = 0
 
-    if ($StableCount -ge $StableChecksRequired) {
-        Write-OutputWithTimeStamp "Version map stable for $StableChecksRequired consecutive checks. Updates complete."
-        break
+    Write-Log "Waiting for task to complete (timeout: $($TaskTimeoutSeconds) seconds)..."
+    do {
+        Start-Sleep -Seconds $TaskPollInterval
+        $TaskElapsed += $TaskPollInterval
+        $TaskState = (Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName).State
+        Write-Log "Task state: ($($TaskState) $($TaskElapsed)/$($TaskTimeoutSeconds) seconds elapsed)"
+    } while ($TaskState -eq 'Running' -and $TaskElapsed -lt $TaskTimeoutSeconds)
+
+    $TaskInfoAfter = Get-ScheduledTaskInfo -TaskPath $TaskPath -TaskName $TaskName
+    $LastRunTimeAfter = $TaskInfoAfter.LastRunTime
+    $LastTaskResult = $TaskInfoAfter.LastTaskResult
+
+    $TaskActuallyRan = $LastRunTimeAfter -gt $LastRunTimeBefore
+    if ($TaskActuallyRan) {
+        Write-Log "Task completed. LastRunTime: $LastRunTimeAfter | LastTaskResult: $LastTaskResult (0x0 = success)"
+    }
+    else {
+        Write-Log "WARNING: Task LastRunTime ($LastRunTimeAfter) did not advance beyond pre-trigger value ($LastRunTimeBefore). The task did not execute this run. Skipping stability polling."
+    }
+
+    # Poll provisioned package versions until they stop changing across two consecutive
+    # checks. The task orchestrates the scan and kicks off downloads/installs in the
+    # background; polling is the most reliable signal that all async installs have settled.
+    if ($TaskActuallyRan) {
+        $StabilityTimeoutSeconds = 600
+        $StabilityPollInterval = 30
+        $StableChecksRequired = 2
+        $StableCount = 0
+        $StabilityElapsed = 0
+        $LastVersionMap = Get-ProvisionedPackageVersionMap
+
+        Write-Log "Polling for version stability (interval: $StabilityPollInterval, timeout: $StabilityTimeoutSeconds)..."
+
+        while ($StabilityElapsed -lt $StabilityTimeoutSeconds) {
+            Start-Sleep -Seconds $StabilityPollInterval
+            $StabilityElapsed += $StabilityPollInterval
+
+            $CurrentVersionMap = Get-ProvisionedPackageVersionMap
+            $Changed = $CurrentVersionMap.Keys | Where-Object {
+                $LastVersionMap.ContainsKey($_) -and $LastVersionMap[$_] -ne $CurrentVersionMap[$_]
+            }
+
+            if ($Changed) {
+                $StableCount = 0
+                foreach ($pkg in $Changed) {
+                    Write-Log "  [updating] $pkg : $($LastVersionMap[$pkg]) -> $($CurrentVersionMap[$pkg])"
+                }
+                Write-Log "$(@($Changed).Count) package(s) changed this interval. Resetting stability counter. $($StabilityElapsed)/$($StabilityTimeoutSeconds) elapsed"
+            }
+            else {
+                $StableCount++
+                Write-Log "No version changes detected (stable check $($StableCount)/$($StableChecksRequired)). $($StabilityElapsed)/$($StabilityTimeoutSeconds) elapsed"
+            }
+
+            $LastVersionMap = $CurrentVersionMap
+
+            if ($StableCount -ge $StableChecksRequired) {
+                Write-Log "Version map stable for $StableChecksRequired consecutive checks. Updates complete."
+                break
+            }
+        }
+
+        if ($StabilityElapsed -ge $StabilityTimeoutSeconds -and $StableCount -lt $StableChecksRequired) {
+            Write-Log "Timed out after $StabilityTimeoutSeconds seconds before versions fully stabilized. Some packages may still be updating."
+        }
+    } # end if ($TaskActuallyRan)
+
+    # Final summary — report everything that changed relative to the pre-scan snapshot.
+    Write-Log "*********************************"
+    Write-Log "Update Summary"
+    Write-Log "*********************************"
+    $FinalVersionMap = Get-ProvisionedPackageVersionMap
+    $Updated = $FinalVersionMap.Keys | Where-Object {
+        $VersionsBefore.ContainsKey($_) -and $VersionsBefore[$_] -ne $FinalVersionMap[$_]
+    }
+    $NewPackages = $FinalVersionMap.Keys | Where-Object { -not $VersionsBefore.ContainsKey($_) }
+
+    if ($Updated) {
+        Write-Log "Packages updated ($(@($Updated).Count)):"
+        foreach ($pkg in ($Updated | Sort-Object)) {
+            Write-Log "  $pkg : $($VersionsBefore[$pkg]) -> $($FinalVersionMap[$pkg])"
+        }
+    }
+    else {
+        Write-Log "No provisioned package versions changed. The image may already be up to date."
+    }
+    if ($NewPackages) {
+        Write-Log "New packages added ($(@($NewPackages).Count)):"
+        foreach ($pkg in ($NewPackages | Sort-Object)) {
+            Write-Log "  $pkg : $($FinalVersionMap[$pkg])"
+        }
     }
 }
-
-if ($StabilityElapsed -ge $StabilityTimeoutSeconds -and $StableCount -lt $StableChecksRequired) {
-    Write-Warning "Timed out after $StabilityTimeoutSeconds seconds before versions fully stabilized. Some packages may still be updating."
+catch {
+    Write-Log "FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
+    If ($_.Exception.InnerException) { Write-Log "Inner exception: $($_.Exception.InnerException.Message)" }
+    Write-Log $_.ScriptStackTrace
+    Exit 1
 }
-
-# Final summary — report everything that changed relative to the pre-scan snapshot.
-Write-Output ""
-Write-Output "*********************************"
-Write-Output "Update Summary"
-Write-Output "*********************************"
-$FinalVersionMap = Get-ProvisionedPackageVersionMap
-$Updated = $FinalVersionMap.Keys | Where-Object {
-    $VersionsBefore.ContainsKey($_) -and $VersionsBefore[$_] -ne $FinalVersionMap[$_]
-}
-$NewPackages = $FinalVersionMap.Keys | Where-Object { -not $VersionsBefore.ContainsKey($_) }
-
-if ($Updated) {
-    Write-OutputWithTimeStamp "Packages updated ($(@($Updated).Count)):"
-    foreach ($pkg in ($Updated | Sort-Object)) {
-        Write-Output "  $pkg : $($VersionsBefore[$pkg]) -> $($FinalVersionMap[$pkg])"
-    }
-} else {
-    Write-OutputWithTimeStamp "No provisioned package versions changed. The image may already be up to date."
-}
-if ($NewPackages) {
-    Write-OutputWithTimeStamp "New packages added ($(@($NewPackages).Count)):"
-    foreach ($pkg in ($NewPackages | Sort-Object)) {
-        Write-Output "  $pkg : $($FinalVersionMap[$pkg])"
-    }
-}
-
-Stop-Transcript

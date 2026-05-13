@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # Design
 
@@ -10,7 +10,7 @@ The deployment utilizes the Cloud Adoption Framework naming conventions and orga
 
 - Host Pool Index (***index***): This *optional* parameter is used when we must shard the unique persona across multiple host pools. For more information, see [Sharding Pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/sharding).
 
-- Name Convention Reversed (***nameConvResTypeAtEnd***): This bolean parameter, which is by default 'false', will move the resource type abbreviation to the end of the resource names effectively reversing the CAF naming standard.
+- Name Convention Reversed (***nameConvResTypeAtEnd***): This boolean parameter, which is by default 'false', will move the resource type abbreviation to the end of the resource names effectively reversing the CAF naming standard.
 
 The diagram below highlights how the resource groups are created based on the parameters.
 
@@ -21,19 +21,19 @@ graph TB
         subgraph Region1["USGovVirginia<br/>"]
             direction TB
             MON1[Monitoring<br/>rg-avd-monitoring-va<br/>Log Analytics, DCR, DCE]
-            MGT1[Management<br/>rg-avd-management-va<br/>Key Vault, App Service Plan]
+            OPS1[Operations<br/>rg-avd-operations-va<br/>Secrets KV, Encryption KV, Recovery Services Vault]
             CP1[Control Plane<br/>rg-avd-control-plane-va<br/>Workspace, App Groups, Host Pools]
             
             subgraph HP1["Host Pool 1 (Identifier: hr, Index: 01)"]
                 direction LR
-                HOSTS1[Hosts<br/>rg-hr-01-hosts-va<br/>VMs, Backup, Encryption]
-                STORAGE1[Storage<br/>rg-hr-01-storage-va<br/>Storage Accounts, NetApp, Functions]
+                HOSTS1[Hosts<br/>rg-hr-01-hosts-va<br/>VMs, Disk Encryption Set]
+                STORAGE1[Storage<br/>rg-hr-01-storage-va<br/>Storage Accounts, NetApp, Encryption UAI]
             end
             
             subgraph HP2["Host Pool 2 (Identifier: hr, Index: 02)"]
                 direction LR
-                HOSTS2[Hosts<br/>rg-hr-02-hosts-va<br/>VMs, Backup, Encryption]
-                STORAGE2[Storage<br/>rg-hr-02-storage-va<br/>Storage Accounts, NetApp, Functions]
+                HOSTS2[Hosts<br/>rg-hr-02-hosts-va<br/>VMs, Disk Encryption Set]
+                STORAGE2[Storage<br/>rg-hr-02-storage-va<br/>Storage Accounts, NetApp, Encryption UAI]
             end
             
             HP1 -.located in.-> CP1
@@ -41,10 +41,10 @@ graph TB
             CP1 -.diagnostics.-> MON1
             HOSTS1 -.logs and performance data.-> MON1
             HOSTS2 -.logs and performance data.-> MON1
-            MGT1 -.customer managed keys.-> HOSTS1
-            MGT1 -.customer managed keys.-> HOSTS2
-            MGT1 -.customer managed keys.-> STORAGE1
-            MGT1 -.customer managed keys.-> STORAGE2
+            OPS1 -.encryption keys.-> HOSTS1
+            OPS1 -.encryption keys.-> HOSTS2
+            OPS1 -.encryption keys.-> STORAGE1
+            OPS1 -.encryption keys.-> STORAGE2
             STORAGE1 -.diagnostics.-> MON1
             STORAGE2 -.diagnostics.-> MON1
         end
@@ -52,20 +52,20 @@ graph TB
         subgraph Region2["USGovTexas<br/>"]
             direction TB
             MON2[Monitoring<br/>rg-avd-monitoring-tx<br/>Log Analytics, DCR, DCE]
-            MGT2[Management<br/>rg-avd-management-tx<br/>Key Vault, App Service Plan]
+            OPS2[Operations<br/>rg-avd-operations-tx<br/>Secrets KV, Encryption KV, Recovery Services Vault]
             CP2[Control Plane<br/>rg-avd-control-plane-tx<br/>Workspace, App Groups, Host Pools]
             
             subgraph HP3["Host Pool 3 (Identifier: finance, Index: 01)"]
                 direction LR
-                HOSTS3[Hosts<br/>rg-finance-01-hosts-tx<br/>VMs, Backup, Encryption]
-                STORAGE3[Storage<br/>rg-finance-01-storage-tx<br/>Storage Accounts, NetApp, Functions]
+                HOSTS3[Hosts<br/>rg-finance-01-hosts-tx<br/>VMs, Disk Encryption Set]
+                STORAGE3[Storage<br/>rg-finance-01-storage-tx<br/>Storage Accounts, NetApp, Encryption UAI]
             end
             
             HP3 -.located in.-> CP2
             CP2 -.diagnostics.-> MON2
             HOSTS3 -.logs and performance data.-> MON2
-            MGT2 -.customer managed keys.-> HOSTS3
-            MGT2 -.customer managed keys.-> STORAGE3
+            OPS2 -.encryption keys.-> HOSTS3
+            OPS2 -.encryption keys.-> STORAGE3
             STORAGE3 -.diagnostics.-> MON2
         end
     end
@@ -73,7 +73,7 @@ graph TB
     %% Define styles for different resource group types
     classDef globalFeed fill:#4fc3f7,stroke:#0288d1,stroke-width:3px,color:#000
     classDef monitoring fill:#ffb74d,stroke:#f57c00,stroke-width:3px,color:#000
-    classDef management fill:#ba68c8,stroke:#7b1fa2,stroke-width:3px,color:#fff
+    classDef operations fill:#ba68c8,stroke:#7b1fa2,stroke-width:3px,color:#fff
     classDef controlPlane fill:#81c784,stroke:#388e3c,stroke-width:3px,color:#000
     classDef hosts fill:#e57373,stroke:#c62828,stroke-width:3px,color:#000
     classDef storage fill:#aed581,stroke:#689f38,stroke-width:3px,color:#000
@@ -84,7 +84,7 @@ graph TB
     %% Apply styles to nodes
     class GF globalFeed
     class MON1,MON2 monitoring
-    class MGT1,MGT2 management
+    class OPS1,OPS2 operations
     class CP1,CP2 controlPlane
     class HOSTS1,HOSTS2,HOSTS3 hosts
     class STORAGE1,STORAGE2,STORAGE3 storage
@@ -108,10 +108,10 @@ The diagram illustrates the following resource group distribution. In the table 
 | ------- | :-------: | ------------ | ----- |
 | Global Feed | global feed workspace | rg-avd-global-feed | One per Tenant |
 | Monitoring | Log Analytics Workspace<br>Data Collection Rules<br>Data Collection Endpoint | rg-avd-monitoring-va | One per region |
-| Management | key vault(s)<br>app service plan  | rg-avd-management-va | One per region |
+| Operations | Secrets Key Vault<br>Encryption Key Vault<br>Recovery Services Vault (optional) | rg-avd-operations-va | One per region. Created by the standalone KeyVault deployment or inline by the host pool `Complete` deployment type. Shared across all host pools in the same region. The Recovery Services Vault is deployed here when backup is enabled; backup policies are created conditionally — file share backup policy for pooled host pools, VM backup policy for personal host pools. |
 | Control Plane | feed workspace<br>application groups<br>hostpools<br>scaling plans | rg-avd-control-plane-va | One per region |
-| Hosts | virtual machines<br>recovery service vault<br>disk encryption set<br>key vault | rg-hr-01-hosts-va<br>rg-hr-02-hosts-va | One per identifier or per index (if specified) |
-| Storage | NetApp Storage Accounts<br>Storage Account(s)<br>function app<br>key vault(s) | rg-hr-01-storage-va<br>rg-hr-02-storage-va | One per identifier or per index (if specified) |
+| Hosts | virtual machines<br>disk encryption set | rg-hr-01-hosts-va<br>rg-hr-02-hosts-va | One per identifier or per index (if specified). Disk Encryption Set is created here when CMK is used. |
+| Storage | NetApp Storage Accounts<br>Storage Account(s)<br>function app<br>storage encryption UAI | rg-hr-01-storage-va<br>rg-hr-02-storage-va | One per identifier or per index (if specified). Storage encryption User-Assigned Identity is created here when CMK is used for FSLogix storage. |
 
 The code is idempotent, allowing you to scale storage and sessions hosts, but the core management resources will persist and update for any subsequent deployments. Some of those resources are the host pool, application group, and log analytics workspace.
 

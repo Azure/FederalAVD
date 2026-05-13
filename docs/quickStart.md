@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # Quick Start Guide
 
@@ -11,17 +11,19 @@ Get your Azure Virtual Desktop environment deployed quickly with this step-by-st
 ```mermaid
 graph TD
     A[Start] --> B{Have Existing<br/>VNet?}
-    B -->|No<br/>Greenfield| C[🌐 Step 0: Deploy<br/>Networking]
-    B -->|Yes| D{Need Custom<br/>Software?}
-    C --> D
-    D -->|Yes| E[📦 Step 1: Deploy<br/>Image Management]
-    D -->|No| F[Use Marketplace<br/>Image]
-    E --> G{Build<br/>Custom Image?}
-    G -->|Yes<br/>Pre-install software| H[🎨 Step 2: Build<br/>Custom Image]
-    G -->|No<br/>Install at runtime| I[🏢 Step 3: Deploy<br/>Host Pool]
-    H --> I
-    F --> I
-    I --> J[✅ Complete]
+    B -->|No - Greenfield| C[🌐 Step 0: Deploy<br/>Networking]
+    B -->|Yes| CUST
+    C --> CUST
+    CUST{Need Custom Software<br/>or Images?} -->|No - Marketplace / PoC<br/>CMK available inline| HP
+    CUST -->|Yes| CMK{Using Customer<br/>Managed Keys?}
+    CMK -->|Yes| KV[🔒 Step 1: Deploy<br/>Key Vaults]
+    CMK -->|No| IMG
+    KV --> IMG[📦 Step 2: Deploy Image<br/>Management + Artifacts]
+    IMG --> BUILD{Build Custom<br/>Image?}
+    BUILD -->|Yes<br/>Pre-install software| IB[🎨 Step 3: Build<br/>Custom Image]
+    BUILD -->|No<br/>Install at runtime| HP
+    IB --> HP[🏢 Step 4: Deploy<br/>Host Pool]
+    HP --> J[✅ Complete]
 ```
 
 **Decision Guide:**
@@ -31,9 +33,11 @@ graph TD
 
 **Then choose your deployment approach:**
 
-- **Simple PoC with marketplace images?** → Jump directly to [Step 3: Deploy Host Pool](#step-3-deploy-host-pool)
-- **Need custom software, install at session host runtime?** → [Step 1](#step-1-deploy-image-management-resources) → [Step 3](#step-3-deploy-host-pool)
-- **Want pre-configured images with software pre-installed?** → [Step 1](#step-1-deploy-image-management-resources) → [Step 2](#step-2-build-custom-image-optional) → [Step 3](#step-3-deploy-host-pool)
+- **PoC or marketplace images only?** → Jump directly to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool) *(CMK optional — deployed inline, no Key Vault pre-deploy needed)*
+- **Need custom software on session hosts, no CMK?** → [Step 2: Image Management](#step-2-deploy-image-management-resources) first, then:
+  - **Install at runtime only?** → [Step 4: Host Pool](#step-4-deploy-host-pool)
+  - **Want pre-built images?** → [Step 3: Build Custom Image](#step-3-build-custom-image-optional) → [Step 4: Host Pool](#step-4-deploy-host-pool)
+- **Need custom software with CMK?** → [Step 1: Key Vaults](#step-1-deploy-key-vaults-cmk-with-custom-images) first (required before image management can encrypt), then [Step 2: Image Management](#step-2-deploy-image-management-resources) → [Step 3: Build Image](#step-3-build-custom-image-optional) → [Step 4: Host Pool](#step-4-deploy-host-pool)
 
 ---
 
@@ -44,7 +48,8 @@ Most components support multiple deployment methods:
 | Component | Blue Button | Template Spec | PowerShell/CLI |
 |-----------|-------------|---------------|----------------|
 | **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
+| **Key Vaults** (Secrets & Encryption) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Image Management** (infrastructure) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
@@ -73,10 +78,14 @@ Before deploying, ensure you have these essentials ready:
 - ✅ **AVD Licenses** - [Verify licensing requirements](https://learn.microsoft.com/azure/virtual-desktop/overview#requirements)
 - ✅ **Resource Provider** - Enable `Microsoft.DesktopVirtualization` in your subscription
 
-### Required for Custom Software (Steps 1 & 2)
+### Required for Custom Software (Steps 2 & 3)
 
-- ✅ **Storage Blob Data Contributor** role for managing artifacts
+- ✅ **Storage Blob Data Contributor** role on the image management storage account — required because the storage account disables shared key access by default (Zero Trust). `Contributor` or `Owner` alone is not sufficient; see [why data plane roles are required separately](hostpoolDeployment.md#security-prerequisites-optional).
 - ✅ **PowerShell Az Module** for running deployment scripts
+
+### Required for Customer Managed Keys (Step 1 + Step 4 with CMK)
+
+- 🔑 **Key Vault Crypto Officer** on the encryption Key Vault — required for the deploying identity to create encryption keys during the host pool deployment. `Owner` or `Contributor` on the resource group does **not** grant key operation rights; Key Vault enforces a separate data plane RBAC. See [full explanation](hostpoolDeployment.md#security-prerequisites-optional).
 
 ### Optional for Zero Trust / Production
 
@@ -84,6 +93,7 @@ Before deploying, ensure you have these essentials ready:
 - 🔒 **Domain Services** for hybrid identity (AD DS or Entra Domain Services)
 - 🔒 **Domain Join Account** with permissions ([setup guide](hostpoolDeployment.md#domain-permissions))
 - 🔒 **Entra Kerberos** for Azure Files - [Hybrid Guide](entraKerberosHybrid.md) | [Cloud-Only Guide](entraKerberosCloudOnly.md)
+- 🔒 **Key Vaults** (Secrets & Encryption) — only needed upfront when using CMK with custom images; marketplace-only deployments can use inline KV deployment — see [Step 1](#step-1-deploy-key-vaults-cmk-with-custom-images)
 
 <details>
 <summary><b>📖 Detailed Prerequisites & Setup Guides</b></summary>
@@ -139,7 +149,7 @@ Connect-AzAccount -Environment <YourEnvironment>  # AzureUSGovernment, etc.
 Set-AzContext -Subscription "<subscription-id>"
 
 # Create all template specs
-cd C:\repos\FederalAVD\deployments
+cd C:\repos\FederalAVD\tools
 .\New-TemplateSpecs.ps1 -Location "<region>"
 ```
 
@@ -178,7 +188,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 
 New-AzDeployment `
     -Location "usgovvirginia" `
-    -TemplateFile ".\deployments\hostpools\hostpool.bicep" `
+    -TemplateFile ".\deployments\hostpools\hostpool.json" `
     -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
     -Name $deploymentName
 ```
@@ -243,7 +253,7 @@ Set-AzContext -Subscription "<subscription-id>"
 New-AzDeployment `
     -Location "usgovvirginia" `
     -Name "avd-networking-deployment" `
-    -TemplateFile ".\deployments\networking\networking.bicep" `
+    -TemplateFile ".\deployments\networking\networking.json" `
     -TemplateParameterFile ".\deployments\networking\parameters\<your-params>.json" `
     -Verbose
 ```
@@ -253,6 +263,7 @@ New-AzDeployment `
 1. Create networking template spec:
 
    ```powershell
+   cd C:\repos\FederalAVD\tools
    .\New-TemplateSpecs.ps1 -Location "usgovvirginia" -createNetwork $true -createCustomImage $false -createHostPool $false -CreateAddOns $false
    ```
 
@@ -298,42 +309,131 @@ New-AzDeployment `
 
 ---
 
-## Step 1: Deploy Image Management Resources
+## Step 1: Deploy Key Vaults (CMK with Custom Images)
+
+**⏭️ Skip this step if:** You don't need custom images with CMK. Key Vaults deployed inline during host pool deployment are idempotent — subsequent deployments to the same resource group reuse them, so you don't need to pre-deploy for sharing across host pools.
+
+**Required when:** Using Customer Managed Keys with custom image management — the key vault must exist before deploying image management so the storage account and compute gallery can be encrypted.
+
+The Key Vaults deployment creates a **dedicated operations resource group** (`rg-avd-operations-{loc}`) containing:
+
+| Resource | Name Pattern | Purpose |
+|----------|-------------|-------|
+| **Secrets Key Vault** | `kv-avd-sec-{unique}-{loc}` | Stores VM admin credentials and domain join credentials referenced by the host pool deployment |
+| **Encryption Key Vault** | `kv-avd-enc-{unique}-{loc}` | Stores CMK encryption keys for disk encryption sets and FSLogix storage accounts (Premium SKU, purge-protected) |
+
+> **Why deploy this separately?** Deploying Key Vaults before image management lets you:
+> - Encrypt the compute gallery and artifacts storage account with CMK from the start
+> - Pre-populate credential secrets so the portal form can reference them
+> - Give your security team time to review KV access policies before deployment begins
+
+### Deploy Key Vaults
+
+**Option 1: Azure Portal (Blue Button)** — Commercial & Government clouds only
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FkeyVaults%2FkeyVaults.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FkeyVaults%2FuiFormDefinition.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FkeyVaults%2FkeyVaults.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FkeyVaults%2FuiFormDefinition.json)
+
+**Option 2: PowerShell** — All clouds
+
+```powershell
+Connect-AzAccount -Environment '<environment>'
+Set-AzContext -Subscription "<subscription-id>"
+$location = '<location>'
+
+$virtualMachineAdminPassword = Read-Host -Prompt "Enter the VM admin password" -AsSecureString
+$virtualMachineAdminUserName = Read-Host -Prompt "Enter the VM admin username" -AsSecureString
+$domainJoinUserPassword = Read-Host -Prompt "Enter the domain join user password" -AsSecureString
+$domainJoinUserPrincipalName = Read-Host -Prompt "Enter the domain join user principal name" -AsSecureString
+$templateFile = Get-ChildItem -Path . -Recurse -Filter 'keyVaults.json' | Where-Object { $_.FullName -like '*keyVaults*' } | Select-Object -First 1 -ExpandProperty FullName
+Write-Output "Template file found: $templateFile"
+New-AzDeployment `
+    -TemplateFile $templateFile `
+    -Location $location `
+    -virtualMachineAdminPassword $virtualMachineAdminPassword `
+    -virtualMachineAdminUserName $virtualMachineUserPrincipalName `
+    -domainJoinUserPassword $domainJoinUserPassword `
+    -domainJoinUserPrincipalName $domainJoinUserPrincipalName
+```
+
+**Option 3: Template Spec + Portal UI** — All clouds including air-gapped
+
+```powershell
+# Create the Template Spec (one-time)
+cd C:\repos\FederalAVD\tools
+.\New-TemplateSpecs.ps1 -Location "usgovvirginia"
+```
+
+Then navigate to **Template Specs** → **AVD Security** → **Deploy**.
+
+### Pass Outputs to Image Management & Host Pool
+
+After deployment, note the Key Vault resource IDs from the deployment outputs:
+
+| Security Output | Used In |
+|----------------|--------|
+| `encryptionKeyVaultResourceId` | Image Management deployment (CMK for storage/gallery) |
+| `secretsKeyVaultResourceId` | Host pool deployment (`credentialsKeyVaultResourceId`) |
+| `encryptionKeyVaultResourceId` | Host pool deployment (`encryptionKeyVaultResourceId`) |
+
+> **Required RBAC on the Encryption KV** for the deploying identity: `Key Vault Crypto Officer` — needed to create encryption keys during host pool deployment. This applies whether the KV was pre-deployed here or created inline by the host pool `Complete` deployment type, because creating a vault does not grant the deploying identity any key operation rights (ARM control plane ≠ Key Vault data plane). This role can be removed after initial deployment once key rotation is handled separately. See the [full explanation and Confidential VM exception](hostpoolDeployment.md#security-prerequisites-optional).
+
+---
+
+## Step 2: Deploy Image Management Resources
 
 **⏭️ Skip this step if:** You're using marketplace images without customization.
 
 **Required for:** Custom image builds or session host runtime customizations with software packages.
 
-Image Management deploys:
+This step has two parts: deploying the Azure infrastructure once, then uploading artifacts whenever your software changes.
 
-- Storage Account for artifacts (scripts & installers)
-- Compute Gallery for custom images
-- Managed Identity for secure access
+### Part A: Deploy Infrastructure (One-Time)
 
-### Quick Deploy
+Deploys the compute gallery, artifacts storage account, and managed identity.
 
-```powershell
-# Connect to Azure
-Connect-AzAccount -Environment AzureUSGovernment
+**Option 1: Azure Portal (Blue Button)** — Commercial & Government clouds only
 
-# Set subscription
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageManagement.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FuiFormDefinition.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageManagement.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FuiFormDefinition.json)
+
+**Option 2: Deploy-ImageManagement.ps1 Script** — All clouds (recommended for PowerShell)
 Set-AzContext -Subscription "<subscription-id>"
 
-# Deploy image management
 cd deployments
-.\Deploy-ImageManagement.ps1 -DeployImageManagementResources -Location "usgovvirginia"
+# Deploy infrastructure only
+.\Deploy-ImageManagement.ps1 -Location "usgovvirginia" -ParameterFilePrefix basic
+
+# OR deploy infrastructure AND upload artifacts in one step
+.\Deploy-ImageManagement.ps1 -Location "usgovvirginia" -ParameterFilePrefix basic -UpdateArtifacts
 ```
 
-**📖 Detailed Guides:**
+Example parameter files are in `deployments\imageManagement\parameters\` (`basic`, `privateEndpoint`, `serviceEndpoint`, `production`). Copy and rename one for your environment.
 
-- **[Artifacts & Image Management Guide](artifactsGuide.md)** - Understanding the artifact system
-- **[Deploy-ImageManagement Script Reference](imageManagementScript.md)** - All parameters and options
-- **[Creating Custom Artifacts](artifactsGuide.md#creating-custom-artifact-packages)** - Build your own software packages
-- **[Air-Gapped Cloud Instructions](airGappedClouds.md)** - Secret/Top Secret cloud considerations
+If you did **not** use `-UpdateArtifacts`, note the `artifactsStorageAccountResourceId` output — you'll need it in Part B.
+
+### Part B: Upload Artifacts (Run Whenever Software Changes)
+
+> **⏭️ Skip if** you already used `-UpdateArtifacts` in Part A.
+
+```powershell
+cd deployments
+.\Update-ImageArtifacts.ps1 `
+    -StorageAccountResourceId "<artifactsStorageAccountResourceId from Part A output>"
+```
+
+**✈️ Air-gapped environments:** Use `-SkipDownloadingNewSources` and manually place installers in `.common/artifacts/` subdirectories before running.
+
+**📚 Detailed Guides:**
+
+- **[imageManagement README](../deployments/imageManagement/README.md)** — Infrastructure parameters and deployment options
+- **[Update-ImageArtifacts Script Reference](updateImageArtifacts.md)** — All script parameters and examples
+- **[Artifacts Guide](artifactsGuide.md)** — Creating custom artifact packages
+- **[Air-Gapped Cloud Instructions](airGappedClouds.md)** — Secret/Top Secret cloud considerations
 
 ---
 
-## Step 2: Build Custom Image (Optional)
+## Step 3: Build Custom Image (Optional)
 
 **⏭️ Skip this step if:** You're okay with marketplace images or installing software at session host runtime.
 
@@ -368,7 +468,7 @@ cd deployments
 
 ---
 
-## Step 3: Deploy Host Pool
+## Step 4: Deploy Host Pool
 
 Deploy your complete AVD environment including host pool, session hosts, storage, monitoring, and security resources.
 
@@ -389,7 +489,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 New-AzDeployment `
     -Location 'eastus2' `
     -Name $deploymentName `
-    -TemplateFile '.\deployments\hostpools\hostpool.bicep' `
+    -TemplateFile '.\deployments\hostpools\hostpool.json' `
     -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
     -Verbose
 ```
@@ -474,6 +574,7 @@ New-AzDeployment -Location "usgovvirginia" -Name $deploymentName -TemplateFile "
 ```
 
 **Alternative patterns:**
+
 - **Environment-based**: `"avd-prod-hostpool"`, `"avd-dev-finance"`
 - **Incremental versions**: `"avd-prod-v2"`, `"avd-prod-v3"`
 - **Keep it simple**: Azure tracks deployment history automatically
@@ -488,4 +589,4 @@ New-AzDeployment -Location "usgovvirginia" -Name $deploymentName -TemplateFile "
 
 ---
 
-**Ready to deploy? Start with [Step 1](#step-1-deploy-image-management-resources) or [jump to Step 3](#step-3-deploy-host-pool) for marketplace images!**
+**Ready to deploy? Start with [Step 2](#step-2-deploy-image-management-resources) or [jump to Step 4](#step-4-deploy-host-pool) for marketplace images!**

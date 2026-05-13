@@ -1,6 +1,5 @@
 @secure()
 param adminPw string
-param checkCbsAndRestart bool
 param location string = resourceGroup().location
 param logBlobContainerUri string
 param orchestrationVmName string
@@ -16,97 +15,12 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
   name: orchestrationVmName
 }
 
-var waitForRestartParameters = [
-  {
-    name: 'ResourceManagerUri'
-    value: environment().resourceManager
-  }
-  {
-    name: 'UserAssignedIdentityClientId'
-    value: userAssignedIdentityClientId
-  }
-  {
-    name: 'VmResourceId'
-    value: imageVm.id
-  }
-]
-
-resource cbsCheck 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (checkCbsAndRestart) {
-  name: 'cbs-check-and-restart'
-  location: location
-  parent: imageVm
-  properties: {
-    asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-CbsCheck-error-${deploymentSuffix}.log'
-    outputBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    outputBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-CbsCheck-output-${deploymentSuffix}.log'
-    source: {
-      script: loadTextContent('../../../.common/scripts/Check-CbsAndRestart.ps1')
-    }
-    treatFailureAsDeploymentFailure: true
-  }
-}
-
-resource waitForCbsRestart 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if(checkCbsAndRestart) {
-  name: 'wait-for-cbs-restart'
-  location: location
-  parent: orchestrationVm
-  properties: {
-    asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-WaitForCbsRestart-error-${deploymentSuffix}.log'
-    outputBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    outputBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-WaitForCbsRestart-output-${deploymentSuffix}.log'
-    parameters: waitForRestartParameters
-    source: {
-      script: loadTextContent('../../../.common/scripts/Wait-ForVmRestart.ps1')
-    }
-    treatFailureAsDeploymentFailure: true
-  }
-  dependsOn: [
-    cbsCheck
-  ]
-}
-
 resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
   name: 'sysprep'
   location: location
   parent: imageVm
   properties: {
     asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-Sysprep-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -114,8 +28,7 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Sysprep-output-${deploymentSuffix}.log'
-    parameters: null
+      : '${logBlobContainerUri}${imageVmName}-Sysprep-${deploymentSuffix}.log'
     protectedParameters: [
       {
         name: 'AdminUserPw'
@@ -127,9 +40,6 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
     }
     treatFailureAsDeploymentFailure: true
   }
-  dependsOn: [
-    waitForCbsRestart
-  ]
 }
 
 resource generalizeVm 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
@@ -138,14 +48,6 @@ resource generalizeVm 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
   parent: orchestrationVm
   properties: {
     asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-GeneralizeVM-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -153,7 +55,7 @@ resource generalizeVm 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-GeneralizeVM-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-GeneralizeVM-${deploymentSuffix}.log'
     parameters: [
           {
             name: 'ResourceManagerUri'

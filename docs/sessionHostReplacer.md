@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md)
+[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # Session Host Replacer Add-On
 
@@ -244,6 +244,16 @@ Consider creating alerts for:
 When `deployPrivateEndpoints: true`, the following private endpoints are created:
 - Function App (`sites`)
 - Storage Account (`blob`, `file`, `queue`, `table`)
+
+### Permitted IP Addresses
+When `permittedIPs` is specified (array of IPv4 addresses or CIDR ranges), the deployment restricts public access to the storage account and function app to only those IPs. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. When combined with `privateEndpoint: true`, the private endpoint remains the primary access path and the permitted IPs are applied as an additional firewall allowlist. Leave empty to allow all public traffic.
+
+```bicep
+permittedIPs: [
+  '203.0.113.10'       // trusted workstation
+  '198.51.100.0/24'   // trusted CIDR range
+]
+```
 
 ### Virtual Network Integration
 The function app can be integrated with a virtual network using `functionAppSubnetResourceId`. This subnet must be delegated to `Microsoft.Web/serverFarms`.

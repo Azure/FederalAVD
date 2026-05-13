@@ -1,6 +1,7 @@
-metadata name = 'FSLogix Storage Quota Manager Add-On'
-metadata description = 'Automated quota management for FSLogix Azure Files Premium file shares'
-metadata owner = 'FederalAVD'
+// FSLogix Storage Quota Manager Add-On
+// Automated quota management for FSLogix Azure Files Premium file shares
+
+targetScope = 'subscription'
 
 // ========== //
 // Parameters //
@@ -11,11 +12,37 @@ metadata owner = 'FederalAVD'
 // These parameters apply to the overall deployment and are shared across multiple resources.
 // ================================================================================================
 
-@description('Optional. The location for all resources. Defaults to deployment location.')
-param location string = resourceGroup().location
+@description('Required. The location for all resources.')
+param location string
+
+@description('Required. Name of the resource group where the function app and its supporting resources are deployed. Defaults to the storage account resource group.')
+param functionAppResourceGroupName string
 
 @description('Optional. Tags for all resources.')
 param tags object = {}
+
+// ================================================================================================
+// Brownfield Naming Override Parameters
+// These parameters allow explicit control over resource naming for brownfield deployments where
+// the existing host pool naming convention does not follow standard patterns. When specified,
+// these override the automatic naming convention detection.
+// ================================================================================================
+
+@description('Optional. Explicit name for the Function App. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique and follow Azure naming rules (2-60 chars, alphanumeric and hyphens).')
+@maxLength(60)
+param functionAppNameOverride string = ''
+
+@description('Optional. Explicit name for the Storage Account (used by Function App). If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique, 3-24 chars, lowercase alphanumeric only.')
+@maxLength(24)
+param storageAccountNameOverride string = ''
+
+@description('Optional. Explicit name for the storage encryption user-assigned identity. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments where a CMK identity was previously created with a specific name. Must follow Azure naming rules (3-128 chars, alphanumeric, hyphens, underscores).')
+@maxLength(128)
+param storageEncryptionIdentityNameOverride string = ''
+
+@description('Optional. Explicit name for the Application Insights instance. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard naming. Must follow Azure naming rules (1-260 chars, alphanumeric, hyphens, underscores, parentheses, periods).')
+@maxLength(260)
+param applicationInsightsNameOverride string = ''
 
 // ================================================================================================
 // Function App Infrastructure Parameters
@@ -25,6 +52,9 @@ param tags object = {}
 
 @description('Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed.')
 param appServicePlanResourceId string = ''
+
+@description('Optional. The name of the resource group to deploy the new App Service Plan into. Leave empty to deploy into the same resource group as the function app. Useful when sharing a single App Service Plan across multiple add-ons in a central operations resource group.')
+param appServicePlanResourceGroupName string = ''
 
 @description('Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if appServicePlanResourceId is not provided. Default is false.')
 param zoneRedundant bool = false
@@ -53,6 +83,9 @@ param encryptionKeyVaultResourceId string = ''
 ])
 param keyManagementStorageAccounts string = 'MicrosoftManaged'
 
+@description('Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. Use when managing from a trusted workstation outside the Azure network boundary.')
+param permittedIPs array = []
+
 @description('Optional. Log Analytics Workspace resource ID for Application Insights.')
 param logAnalyticsWorkspaceResourceId string = ''
 
@@ -63,8 +96,8 @@ param privateLinkScopeResourceId string = ''
 // Function App Execution Parameters
 // These parameters control the behavior and execution logic of the storage quota manager function.
 // ================================================================================================
-@description('Required. The resource id of the hostPool utilizing the FSLogix storage accounts. Used for tagging')
-param hostPoolResourceId string
+@description('Optional. The resource id of the hostPool utilizing the FSLogix storage accounts. Used for tagging and naming convention detection. Leave empty for non-host pool storage scenarios (e.g., App Attach). When empty, custom naming overrides must be provided.')
+param hostPoolResourceId string = ''
 
 @description('Required. The resource id of the resource group containing the FSLogix storage accounts.')
 param storageResourceGroupId string
@@ -76,10 +109,10 @@ param timerSchedule string = '0 */15 * * * *'
 // Variables  //
 // ========== //
 
-var deploymentSuffix = uniqueString(resourceGroup().id, deployment().name)
+var deploymentSuffix = uniqueString(subscription().subscriptionId, functionAppResourceGroupName, deployment().name)
+var aspResourceGroupName = empty(appServicePlanResourceGroupName) ? functionAppResourceGroupName : appServicePlanResourceGroupName
 var storageSubscriptionId = split(storageResourceGroupId, '/')[2]
 var storageResourceGroupName = split(storageResourceGroupId, '/')[4]
-var hostPoolName = last(split(hostPoolResourceId, '/'))
 
 var cloud = toLower(environment().name)
 var locationsObject = loadJsonContent('../../../.common/data/locations.json')
@@ -87,14 +120,21 @@ var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : cloud
 var locations = locationsObject[locationsEnvProperty]
 var functionAppRegionAbbreviation = locations[location].abbreviation
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
-// Dynamically determine naming convention from existing host pool name
-var nameConvReversed = startsWith(hostPoolName, resourceAbbreviations.hostPools)
-  ? false // Resource type is at the beginning (e.g., "hp-avd-01")
-  : endsWith(hostPoolName, resourceAbbreviations.hostPools)
-      ? true // Resource type is at the end (e.g., "avd-01-hp")
+
+// Dynamically determine naming convention.
+// When a host pool is provided, detect from its name. Otherwise detect from the storage RG name.
+var nameConvSourceName = empty(hostPoolResourceId)
+  ? storageResourceGroupName
+  : last(split(hostPoolResourceId, '/'))
+var nameConvReversed = startsWith(nameConvSourceName, resourceAbbreviations.hostPools) || startsWith(nameConvSourceName, resourceAbbreviations.resourceGroups)
+  ? false // Resource type is at the beginning (e.g., "hp-avd-01" or "rg-avd-storage-eus")
+  : endsWith(nameConvSourceName, resourceAbbreviations.hostPools) || endsWith(nameConvSourceName, resourceAbbreviations.resourceGroups)
+      ? true // Resource type is at the end (e.g., "avd-01-hp" or "avd-storage-eus-rg")
       : false // Default fallback
 
-var arrHostPoolName = split(hostPoolName, '-')
+// When a host pool is provided, extract base name from its name segments.
+// When no host pool, use 'sqm' as the fixed base token.
+var arrHostPoolName = split(last(split(hostPoolResourceId, '/')), '-')
 var lengthArrHostPoolName = length(arrHostPoolName)
 
 var hpIdentifier = nameConvReversed
@@ -107,7 +147,9 @@ var hpIndex = lengthArrHostPoolName == 3
       ? lengthArrHostPoolName < 5 ? arrHostPoolName[1] : arrHostPoolName[2]
       : lengthArrHostPoolName < 5 ? arrHostPoolName[2] : arrHostPoolName[3]
 
-var hpBaseName = empty(hpIndex) ? hpIdentifier : '${hpIdentifier}-${hpIndex}'
+var hpBaseName = empty(hostPoolResourceId)
+  ? 'sqm'
+  : empty(hpIndex) ? hpIdentifier : '${hpIdentifier}-${hpIndex}'
 var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
 
 var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
@@ -146,50 +188,81 @@ var privateEndpointNICNameConv = replace(
 )
 
 // quota management resource names
-var appInsightsName = replace(
-  replace(
-    replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
-    'LOCATION',
-    functionAppRegionAbbreviation
-  ),
-  'TOKEN-',
-  'sqm-${uniqueStringStorage}-'
-)
-var functionAppName = replace(
-  replace(
-    replace(
-      replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
+// Use explicit override if provided, otherwise derive from host pool naming convention
+var appInsightsName = !empty(applicationInsightsNameOverride)
+  ? applicationInsightsNameOverride
+  : replace(
+      replace(
+        replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
+        'LOCATION',
+        functionAppRegionAbbreviation
+      ),
+      'TOKEN-',
+      'sqm-${uniqueStringStorage}-'
+    )
+
+// Use explicit override if provided, otherwise derive from host pool naming convention
+var functionAppName = !empty(functionAppNameOverride)
+  ? functionAppNameOverride
+  : replace(
+      replace(
+        replace(
+          replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
+          'LOCATION',
+          functionAppRegionAbbreviation
+        ),
+        'TOKEN-',
+        'sqm-${uniqueStringStorage}-'
+      ),
       'LOCATION',
       functionAppRegionAbbreviation
-    ),
-    'TOKEN-',
-    'sqm-${uniqueStringStorage}-'
-  ),
-  'LOCATION',
-  functionAppRegionAbbreviation
-)
-var storageAccountName = toLower(replace(
-  replace(
-    replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', functionAppRegionAbbreviation),
-    'TOKEN-',
-    'sqm-${uniqueStringStorage}'
-  ),
-  '-',
-  ''
-))
-var encryptionKeyName = '${hpBaseName}-encryption-key-${storageAccountName}'
+    )
+
+// Storage Account naming - use explicit override if provided, otherwise derive from naming convention
+var storageAccountName = !empty(storageAccountNameOverride)
+  ? toLower(storageAccountNameOverride)
+  : toLower(replace(
+      replace(
+        replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', functionAppRegionAbbreviation),
+        'TOKEN-',
+        'sqm-${uniqueStringStorage}'
+      ),
+      '-',
+      ''
+    ))
+
+// Storage account name validation: Azure enforces 3-24 chars, lowercase alphanumeric only
+// If the derived name fails validation, deployment will error at storage account module
+// For brownfield deployments with non-standard host pool names, use storageAccountNameOverride parameter
+
+var encryptionKeyName = empty(hostPoolResourceId)
+  ? 'encryption-key-${storageAccountName}'
+  : '${hpBaseName}-encryption-key-${storageAccountName}'
+
+// Use explicit override if provided, otherwise derive from host pool naming convention
+var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)
+  ? storageEncryptionIdentityNameOverride
+  : replace(
+      replace(
+        replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
+        'TOKEN-',
+        'sqm-${uniqueStringStorage}-storage-encryption-'
+      ),
+      'LOCATION',
+      functionAppRegionAbbreviation
+    )
 
 // ========== //
 // Resources  //
 // ========== //
 
 // Conditional App Service Plan deployment
-module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
+module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
+  scope: resourceGroup(aspResourceGroupName)
   params: {
     functionAppKind: 'functionApp'
     hostingPlanType: 'FunctionsPremium'
-    logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     location: location
     name: appServicePlanName
     planPricing: 'PremiumV3_P1v3'
@@ -199,8 +272,9 @@ module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPla
 }
 
 // Storage Quota Manager Function App
-module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = {
+module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp.bicep' = {
   name: 'StorageQuotaFunctionApp-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
     applicationInsightsName: appInsightsName
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
@@ -234,24 +308,26 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     privateLinkScopeResourceId: privateLinkScopeResourceId
     serverFarmId: empty(appServicePlanResourceId) ? hostingPlan!.outputs.hostingPlanId : appServicePlanResourceId
     storageAccountName: storageAccountName
+    storageEncryptionIdentityName: storageEncryptionIdentityName
+    permittedIPs: permittedIPs
     tags: tags
   }
 }
 
-module roleAssignment_StorageAccounts '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = {
+module roleAssignment_StorageAccounts '../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   name: 'RA-StorageAccounts-${deploymentSuffix}'
   scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
   params: {
     principalId: functionApp.outputs.functionAppPrincipalId
+    roleDefinitionId: '17d1049b-9a84-46fb-8f53-869881c3d3ab'
     principalType: 'ServicePrincipal'
-    roleDefinitionId: '17d1049b-9a84-46fb-8f53-869881c3d3ab' // Storage Account Contributor
-    resourceGroupName: storageResourceGroupName
   }
 }
 
 // Storage Quota Manager Function
-module storageQuotaFunction '../../sharedModules/custom/functionApp/function.bicep' = {
+module storageQuotaFunction '../../../.common/bicepModules/custom/functionApp/function.bicep' = {
   name: 'StorageQuotaFunction-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
     files: {
       'run.ps1': loadTextContent('functions/run.ps1')

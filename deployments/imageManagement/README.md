@@ -1,9 +1,10 @@
 # AVD Image Management Infrastructure Template
 
 > **📖 User Guides:**
+>
 > - [Artifacts & Image Management Guide](../../docs/artifactsGuide.md) - Getting started with artifacts
 > - [Image Build Guide](../../docs/imageBuild.md) - Building custom images
-> - [Deploy-ImageManagement Script](../../docs/imageManagementScript.md) - Automated deployment script
+> - [Update-ImageArtifacts Script](../../docs/updateImageArtifacts.md) - Uploading artifacts to storage
 
 ## Overview
 
@@ -13,9 +14,10 @@ This Azure Bicep template deploys the prerequisite infrastructure required for A
 
 Provide foundational resources for AVD image management:
 
-- **Azure Compute Gallery** - Store and distribute custom AVD images
-- **Storage Account** - Host build artifacts (scripts, installers, packages)
-- **Managed Identity** - Authenticate to storage without credentials
+- **Azure Compute Gallery** - Store and distribute custom AVD images (always deployed)
+- **Storage Account** - Host build artifacts (scripts, installers, packages) (optional, default on)
+- **Build Logs Storage Account** - Persist image customization logs from image builds (optional, default off)
+- **Managed Identity** - Authenticate to storage without credentials (deployed when either storage account is enabled)
 - **Remote Gallery (Optional)** - Disaster recovery in secondary region
 - **Private Endpoint (Optional)** - Zero Trust network isolation
 
@@ -26,23 +28,31 @@ Provide foundational resources for AVD image management:
 ```
 Subscription
 ├── Image Management Resource Group (Primary Region)
-│   ├── Azure Compute Gallery
+│   ├── Azure Compute Gallery (always deployed)
 │   │   └── Image Definitions (created during image builds)
-│   ├── Storage Account
+│   ├── Storage Account (deployArtifactsStorageAccount = true, default)
 │   │   └── Artifacts Blob Container
-│   ├── User-Assigned Managed Identity
-│   │   └── RBAC: Storage Blob Data Reader (on storage account)
-│   └── Private Endpoint (optional)
+│   ├── Build Logs Storage Account (deployBuildLogsStorageAccount = true)
+│   │   ├── image-customization-logs Blob Container
+│   │   └── Lifecycle Policy (auto-delete blobs after 7 days)
+│   ├── User-Assigned Managed Identity (deployArtifactsStorageAccount = true OR deployBuildLogsStorageAccount = true)
+│   │   ├── RBAC: Storage Blob Data Reader on artifacts storage account
+│   │   └── RBAC: Storage Blob Data Contributor on build logs storage account
+│   ├── CMK Encryption Identity (keyManagementStorageAccounts != PlatformManaged)
+│   │   └── RBAC: Key Vault Crypto Service Encryption User on storage encryption keys
+│   ├── Gallery Disk Encryption Set (keyManagementGalleryImageVersions != PlatformManaged)
+│   ├── Gallery Confidential VM Disk Encryption Set (createConfidentialVmGalleryDes = true)
+│   └── Private Endpoint(s) (optional, one per storage account)
 │       └── Network Interface
-└── Remote Resource Group (Secondary Region, optional)
-    └── Azure Compute Gallery (for regional replication)
 ```
 
 ### Identity & Access
 
 The managed identity is automatically assigned:
-- **Storage Blob Data Reader** role on the artifacts storage account
-- Used by image build VMs to download artifacts without storage account keys
+
+- **Storage Blob Data Reader** on the artifacts storage account (when `deployArtifactsStorageAccount = true`)
+- **Storage Blob Data Contributor** on the build logs storage account (when `deployBuildLogsStorageAccount = true`)
+- Used by image build VMs to download artifacts and write customization logs without storage account keys
 
 ## Prerequisites
 
@@ -63,18 +73,13 @@ The managed identity is automatically assigned:
 ### Core Settings
 
 #### `location`
+
 - **Type:** String
 - **Default:** `deployment().location`
 - **Description:** Azure region for primary resources
 
-#### `customIdentifier`
-- **Type:** String (3-63 chars)
-- **Optional**
-- **Default:** `image-management`
-- **Description:** Custom workload identifier for naming
-- **Example:** `img-core`, `avd-images-prod`
-
 #### `nameConvResTypeAtEnd`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** Reverse CAF naming convention
@@ -83,52 +88,52 @@ The managed identity is automatically assigned:
 
 ### Storage Configuration
 
-#### `artifactsContainerName`
-- **Type:** String (3-63 chars)
-- **Default:** `artifacts`
-- **Description:** Blob container name for artifacts
-- **Constraints:** Must start with letter, lowercase letters/numbers/hyphens only
+#### `deployArtifactsStorageAccount`
 
-#### `storageSkuName`
-- **Type:** String
-- **Default:** `Standard_LRS`
-- **Allowed Values:**
-  - `Standard_LRS` - Locally redundant (lowest cost)
-  - `Standard_ZRS` - Zone redundant (HA in single region)
-  - `Standard_GRS` - Geo-redundant (cross-region replication)
-  - `Standard_RAGRS` - Read-access geo-redundant
-  - `Premium_LRS` - Premium locally redundant (SSD-backed)
-  - `Premium_ZRS` - Premium zone redundant
-  - `Standard_GZRS` - Geo-zone redundant
-  - `Standard_RAGZRS` - Read-access geo-zone redundant
-
-#### `storageAccessTier`
-- **Type:** String
-- **Default:** `Hot`
-- **Allowed Values:** `Premium`, `Hot`, `Cool`
-- **Description:** Blob access tier for cost optimization
-
-#### `storageAllowSharedKeyAccess`
 - **Type:** Boolean
 - **Default:** `true`
-- **Description:** Allow storage account key access (disable for Zero Trust)
+- **Description:** Deploy the artifacts storage account, blob container, and managed identity. Set to `false` when only the gallery is needed.
 
-#### `storageSASExpirationPeriod`
+#### `keyManagementStorageAccounts`
+
 - **Type:** String
-- **Default:** `180.00:00:00` (180 days)
-- **Format:** `DD.HH:MM:SS`
-- **Description:** SAS token expiration period
+- **Default:** `PlatformManaged`
+- **Allowed Values:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
+- **Description:** Encryption key management for the storage accounts in this deployment. When `CustomerManaged` or `CustomerManagedHSM`, a shared encryption UAI and per-account keys are created in the specified Key Vault.
+
+#### `keyManagementGalleryImageVersions`
+
+- **Type:** String
+- **Default:** `PlatformManaged`
+- **Allowed Values:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`, `PlatformManagedAndCustomerManaged`, `PlatformManagedAndCustomerManagedHSM`
+- **Description:** Encryption key management for gallery image versions. When any customer-managed option is selected, a standard Disk Encryption Set (DES) is always created. `PlatformManagedAndCustomerManaged*` variants add a second platform-key layer for double encryption at rest. Pass the `diskEncryptionSetResourceId` output to each imageBuild deployment as `diskEncryptionSetResourceId`.
+
+#### `createConfidentialVmGalleryDes`
+
+- **Type:** Boolean
+- **Default:** `false`
+- **Description:** Deploy a second DES of type `ConfidentialVmEncryptedWithCustomerKey` for gallery image versions intended for ConfidentialVM session host deployments. Requires a Premium Key Vault and the CVM Orchestrator enterprise application to be registered in the tenant. The CVM DES always uses an RSA-HSM key regardless of the `keyManagementGalleryImageVersions` selection. A standard gallery DES is always created alongside it. **WARNING:** The Confidential VM key release policy is immutable once set — re-deploying with this option enabled will fail if the key already exists. Enable only on the first deployment per region.
+
+#### `confidentialVMOrchestratorObjectId`
+
+- **Type:** String
+- **Optional**
+- **Description:** Object ID of the Confidential VM Orchestrator enterprise application in the tenant (app ID: `bf7b6499-ff71-4aa2-97a4-f372087be7f0`). Required when `createConfidentialVmGalleryDes = true`. Retrieve with: `Get-AzADServicePrincipal -ApplicationId 'bf7b6499-ff71-4aa2-97a4-f372087be7f0' | Select-Object -ExpandProperty Id`
 
 ### Networking & Security
 
-#### `storagePublicNetworkAccess`
+#### `storageNetworkAccess`
+
 - **Type:** String
-- **Default:** `Enabled`
-- **Allowed Values:** `Enabled`, `Disabled`
-- **Description:** Public network access to storage account
-- **Note:** Use `Disabled` with private endpoint for Zero Trust
+- **Default:** `PublicEndpoint`
+- **Allowed Values:** `PublicEndpoint`, `PrivateEndpoint`, `ServiceEndpoint`
+- **Description:** Network access mode for both storage accounts.
+  - `PublicEndpoint` — public access open to all (or restricted to `storagePermittedIPs` if provided)
+  - `PrivateEndpoint` — private endpoint deployed; public access disabled unless `storagePermittedIPs` is also provided
+  - `ServiceEndpoint` — storage ACL updated to allow specified subnets only; template does **not** deploy service endpoints to the subnets
 
 #### `privateEndpointSubnetResourceId`
+
 - **Type:** String
 - **Optional**
 - **Description:** Subnet resource ID for private endpoint
@@ -136,6 +141,7 @@ The managed identity is automatically assigned:
 - **Use when:** Zero Trust architecture with private endpoints
 
 #### `azureBlobPrivateDnsZoneResourceId`
+
 - **Type:** String
 - **Optional**
 - **Description:** Private DNS zone resource ID for blob storage
@@ -143,12 +149,14 @@ The managed identity is automatically assigned:
 - **Required when:** Using private endpoint
 
 #### `storagePermittedIPs`
+
 - **Type:** Array
 - **Optional**
 - **Description:** Allowed IP addresses or CIDR blocks for public endpoint access
 - **Example:** `["203.0.113.0/24", "198.51.100.10"]`
 
 #### `storageServiceEndpointSubnetResourceIds`
+
 - **Type:** Array
 - **Optional**
 - **Description:** Subnet resource IDs for service endpoint access
@@ -156,189 +164,178 @@ The managed identity is automatically assigned:
 
 ### Disaster Recovery
 
-#### `remoteLocation`
-- **Type:** String
-- **Optional**
-- **Description:** Secondary Azure region for remote gallery
-- **Example:** `usgovarizona` (if primary is `usgovvirginia`)
-- **Use when:** Multi-region image replication needed
+Image version replication to a remote region is configured per imageBuild deployment via the `remoteComputeGalleryResourceId` parameter. No remote gallery is deployed by imageManagement.
 
 ### Monitoring & Tagging
 
-#### `logAnalyticsWorkspaceResourceId`
-- **Type:** String
-- **Optional**
-- **Description:** Log Analytics workspace for storage diagnostic logs
-- **Example:** `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{workspace}`
-
 #### `tags`
+
 - **Type:** Object
 - **Optional**
 - **Description:** Tags to apply to resources
-- **Example:**
-  ```json
-  {
-    "Microsoft.Compute/galleries": {
-      "Environment": "Production",
-      "Purpose": "AVD Image Management"
-    },
-    "Microsoft.Storage/storageAccounts": {
-      "Environment": "Production",
-      "DataClassification": "Internal"
-    }
-  }
-  ```
 
-#### `timeStamp`
+### Encryption (Customer-Managed Keys)
+
+#### `encryptionKeyVaultResourceId`
+
 - **Type:** String
-- **Default:** `utcNow('yyyyMMddhhmm')`
-- **Description:** Timestamp for deployment uniqueness (DO NOT MODIFY)
+- **Optional**
+- **Description:** Resource ID of the Key Vault used for CMK encryption. Required when `keyManagement` is not `PlatformManaged`. Vault must have soft delete and purge protection enabled. The same vault is used for both storage accounts and gallery image version encryption.
+- **Example:** `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.KeyVault/vaults/{vault}`
 
-## Usage Examples
+#### `keyExpirationInDays`
 
-### Example 1: Basic Deployment
+- **Type:** Integer
+- **Default:** `180`
+- **Description:** Days before the CMK key version is automatically rotated. Applies to all encrypted resources.
 
-```powershell
-New-AzSubscriptionDeployment `
-  -Location "usgovvirginia" `
-  -TemplateFile ".\imageManagement.bicep" `
-  -artifactsContainerName "artifacts" `
-  -storageSkuName "Standard_ZRS" `
-  -Name "avd-image-mgmt-$(Get-Date -Format 'yyyyMMddHHmm')"
-```
+### Build Logs Storage Account
 
-### Example 2: Zero Trust with Private Endpoint
+#### `deployBuildLogsStorageAccount`
 
-```powershell
-New-AzSubscriptionDeployment `
-  -Location "usgovvirginia" `
-  -TemplateFile ".\imageManagement.bicep" `
-  -artifactsContainerName "artifacts" `
-  -storageSkuName "Standard_ZRS" `
-  -storagePublicNetworkAccess "Disabled" `
-  -privateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/rg-avd-networking-usgv/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-endpoints" `
-  -azureBlobPrivateDnsZoneResourceId "/subscriptions/{sub}/resourceGroups/rg-avd-privatedns/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.usgovcloudapi.net" `
--  storageAllowSharedKeyAccess $false `
-  -Name "avd-image-mgmt-$(Get-Date -Format 'yyyyMMddHHmm')"
-```
+- **Type:** Boolean
+- **Default:** `false`
+- **Description:** Deploy a dedicated storage account for persisting image build customization logs. When enabled, pass the `buildLogsStorageAccountResourceId` output to imageBuild deployments as `logStorageAccountResourceId`. The managed identity is automatically granted **Storage Blob Data Contributor** on this account.
 
-### Example 3: Multi-Region with Remote Gallery
+## Parameter Files
 
-```powershell
-New-AzSubscriptionDeployment `
-  -Location "usgovvirginia" `
-  -TemplateFile ".\imageManagement.bicep" `
-  -artifactsContainerName "artifacts" `
-  -storageSkuName "Standard_GRS" `
-  -remoteLocation "usgovarizona" `
-  -Name "avd-image-mgmt-$(Get-Date -Format 'yyyyMMddHHmm')"
-```
+Example parameter files are provided in the `parameters\` directory. Copy and rename one to match your environment, then fill in the placeholder values (`<...>`).
 
-### Example 4: Service Endpoint Access (Hybrid)
+| File | Description |
+| :--- | :---------- |
+| `basic.imageManagement.parameters.json` | Artifacts storage only, public endpoint |
+| `privateEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, private endpoints, fully private |
+| `serviceEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, service endpoint subnet access |
+| `production.imageManagement.parameters.json` | Full production: CMK, remote gallery, IP restrictions, tags |
 
-```powershell
-New-AzSubscriptionDeployment `
-  -Location "usgovvirginia" `
-  -TemplateFile ".\imageManagement.bicep" `
-  -artifactsContainerName "artifacts" `
-  -storageSkuName "Standard_ZRS" `
-  -storageServiceEndpointSubnetResourceIds @(
-    "/subscriptions/{sub}/resourceGroups/rg-avd-networking/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-imagebuilds",
-    "/subscriptions/{sub}/resourceGroups/rg-avd-networking/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-hosts"
-  ) `
-  -Name "avd-image-mgmt-$(Get-Date -Format 'yyyyMMddHHmm')"
-```
+Naming convention for custom files: `<prefix>.imageManagement.parameters.json`
 
-### Example 5: Using Parameter File
+## Deployment
+
+### Azure Portal (Blue Button)
+
+Commercial and Government clouds only:
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageManagement.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FuiFormDefinition.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageManagement.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FuiFormDefinition.json)
+
+> **Air-gapped clouds (Azure Secret/Top Secret):** Use the PowerShell script below.
+
+### Deploy-ImageManagement.ps1 (Recommended)
+
+Use the provided `Deploy-ImageManagement.ps1` script in the `deployments\` folder. It expects a parameter file prefix that maps to `imageManagement\parameters\<Prefix>.imageManagement.parameters.json`.
 
 ```powershell
-New-AzSubscriptionDeployment `
-  -Location "usgovvirginia" `
-  -TemplateFile ".\imageManagement.bicep" `
-  -TemplateParameterFile ".\parameters\production.imageManagement.parameters.json" `
-  -Name "avd-image-mgmt-$(Get-Date -Format 'yyyyMMddHHmm')"
+cd deployments
+
+# Basic deployment
+.\Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix basic
+
+# Private endpoint deployment
+.\Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix privateEndpoint
+
+# Production deployment
+.\Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix production
+
+# Deploy infrastructure AND immediately upload artifacts in one step
+.\Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix basic -UpdateArtifacts
 ```
 
-### Example 6: Using Deploy-ImageManagement Helper Script
+The script prints all deployment outputs. Use `-UpdateArtifacts` to automatically invoke `Update-ImageArtifacts.ps1` immediately after deployment using the storage account resource ID from the deployment outputs — useful for first-time setup when you want everything ready in one command.
+
+### PowerShell (Direct)
 
 ```powershell
-.\Deploy-ImageManagement.ps1 `
-  -Location "usgovvirginia" `
-  -Environment "prod" `
-  -BlobStorageAccountNetworkAccess "PrivateEndpoint" `
-  -PrivateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/rg-networking/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-endpoints"
+New-AzDeployment `
+  -Location 'usgovvirginia' `
+  -TemplateFile '.\imageManagement\imageManagement.json' `
+  -TemplateParameterFile '.\imageManagement\parameters\basic.imageManagement.parameters.json' `
+  -Name "ImageManagement-$(Get-Date -Format 'yyyyMMddHHmmss')"
 ```
-
-> See [Deploy-ImageManagement Script](../../docs/imageManagementScript.md) for details
 
 ### Azure CLI
 
 ```bash
 az deployment sub create \
   --location usgovvirginia \
-  --template-file ./imageManagement.bicep \
-  --parameters \
-    artifactsContainerName="artifacts" \
-    storageSkuName="Standard_ZRS" \
-  --name avd-image-mgmt-$(date +%Y%m%d%H%M)
+  --template-file ./imageManagement/imageManagement.json \
+  --parameters @./imageManagement/parameters/basic.imageManagement.parameters.json \
+  --name "ImageManagement-$(date +%Y%m%d%H%M%S)"
 ```
 
 ## Outputs
 
 ### `computeGalleryResourceId`
+
 - **Type:** String
 - **Description:** Resource ID of the Azure Compute Gallery
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/galleries/gal_avd_image_management_use2`
 - **Used by:** Image build deployments
 
-### `storageAccountResourceId`
+### `artifactsStorageAccountResourceId`
+
 - **Type:** String
-- **Description:** Resource ID of the artifacts storage account
+- **Description:** Resource ID of the artifacts storage account. Empty string when `deployArtifactsStorageAccount = false`.
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Storage/storageAccounts/saimgassetsuse2abc123`
 
-### `artifactsContainerUri`
+### `artifactsBlobContainerUrl`
+
 - **Type:** String
-- **Description:** URI of the artifacts blob container
+- **Description:** Full URL of the artifacts blob container. Empty string when `deployArtifactsStorageAccount = false`.
 - **Example:** `https://saimgassetsuse2abc123.blob.core.usgovcloudapi.net/artifacts/`
 - **Used by:** Image build deployments to download artifacts
 
-### `userAssignedIdentityResourceId`
+### `managedIdentityResourceId`
+
 - **Type:** String
-- **Description:** Resource ID of the managed identity
+- **Description:** Resource ID of the managed identity. Empty string when both `deployArtifactsStorageAccount` and `deployBuildLogsStorageAccount` are `false`.
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-use2`
 - **Used by:** Image build VMs to authenticate to storage
 
-### `remoteComputeGalleryResourceId`
-- **Type:** String
-- **Description:** Resource ID of the remote gallery (if deployed)
-- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-usa2/providers/Microsoft.Compute/galleries/gal_avd_image_management_usa2`
+### `buildLogsStorageAccountResourceId`
 
-## Post-Deployment Steps
+- **Type:** String
+- **Description:** Resource ID of the build logs storage account (empty string if `deployBuildLogsStorageAccount = false`)
+- **Used by:** Pass as `logStorageAccountResourceId` in imageBuild deployments
+- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Storage/storageAccounts/stbuildlogsuse2abc123`
+
+### `buildLogsContainerUri`
+
+- **Type:** String
+- **Description:** Full URI of the build logs blob container (empty string if `deployBuildLogsStorageAccount = false`)
+- **Example:** `https://stbuildlogsuse2abc123.blob.core.usgovcloudapi.net/image-customization-logs`
+
+### `diskEncryptionSetResourceId`
+
+- **Type:** String
+- **Description:** Resource ID of the standard Disk Encryption Set used for gallery image version encryption and build VM OS disks. Empty string when `keyManagementGalleryImageVersions = PlatformManaged`.
+- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/diskEncryptionSets/des-image-management-gallery-customer-keys-use2`
+- **Used by:** Pass as `diskEncryptionSetResourceId` in every imageBuild deployment when CMK is enabled.
+
+### `confidentialVmDiskEncryptionSetResourceId`
+
+- **Type:** String
+- **Description:** Resource ID of the Confidential VM Disk Encryption Set (`ConfidentialVmEncryptedWithCustomerKey`). Empty string when `createConfidentialVmGalleryDes = false`.
+- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/diskEncryptionSets/des-image-management-gallery-confidential-vm-keys-use2`
+- **Used by:** Pass as `confidentialVMDiskEncryptionSetResourceId` in imageBuild deployments targeting ConfidentialVM image definitions.
 
 ### 1. Upload Artifacts to Storage
 
-After deployment, upload your artifacts (scripts, installers) to the blob container:
+After deployment, use the `Update-ImageArtifacts.ps1` script to download, package, and upload artifacts:
 
 ```powershell
-# Get storage account name from outputs
-$storageAccountName = "saimgassetsuse2abc123"
-
-# Upload artifacts folder
-az storage blob upload-batch `
-  --account-name $storageAccountName `
-  --destination artifacts `
-  --source ./artifacts `
-  --auth-mode login
+cd deployments
+.\Update-ImageArtifacts.ps1 `
+    -StorageAccountResourceId "<artifactsStorageAccountResourceId from deployment output>"
 ```
 
-> See [Artifacts Guide](../../docs/artifactsGuide.md) for artifact package structure
+> See [Update-ImageArtifacts Script](../../docs/updateImageArtifacts.md) for all options and air-gapped usage
 
 ### 2. Note Output Values
 
 Save the following output values for image build deployments:
-- `computeGalleryResourceId`
-- `artifactsContainerUri`
-- `userAssignedIdentityResourceId`
+
+- **Note:** When `deployArtifactsStorageAccount = false`, outputs `artifactsStorageAccountResourceId`, `artifactsBlobContainerName`, `artifactsBlobContainerUrl`, and `managedIdentityResourceId` return empty strings.
 
 ### 3. Deploy Image Builds
 
@@ -347,10 +344,10 @@ Use these resources to build custom images:
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile "..\imageBuild\imageBuild.bicep" `
+  -TemplateFile "..\imageBuild\imageBuild.json" `
   -computeGalleryResourceId $computeGalleryResourceId `
   -artifactsContainerUri $artifactsContainerUri `
-  -userAssignedIdentityResourceId $userAssignedIdentityResourceId `
+  -userAssignedIdentityResourceId $managedIdentityResourceId `
   -Name "avd-image-build-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
 
@@ -361,15 +358,21 @@ New-AzSubscriptionDeployment `
 ### Storage Account Security
 
 **Public Access (Default)**
-- Use `storagePermittedIPs` to restrict access to known IPs
-- Use `storageServiceEndpointSubnetResourceIds` to allow specific subnets
-- Enable `storageAllowSharedKeyAccess` for compatibility
 
-**Zero Trust (Private Endpoint)**
-- Set `storagePublicNetworkAccess` to `Disabled`
+- Use `storagePermittedIPs` to restrict access to known IPs or CIDR ranges
+- Use `storageServiceEndpointSubnetResourceIds` with `storageNetworkAccess = ServiceEndpoint` to allow specific subnets
+- Shared key access is disabled by default (`storageAllowSharedKeyAccess = false`)
+
+**Private Endpoint**
+
+- Set `storageNetworkAccess = PrivateEndpoint` — public access is fully disabled unless `storagePermittedIPs` is also provided
 - Deploy private endpoint with `privateEndpointSubnetResourceId`
 - Link private DNS zone with `azureBlobPrivateDnsZoneResourceId`
-- Disable shared key access: `storageAllowSharedKeyAccess = false`
+
+**Private Endpoint + Public IP Allow-list**
+
+- Set `storageNetworkAccess = PrivateEndpoint` and populate `storagePermittedIPs`
+- Internal traffic uses the private endpoint; specified IPs are allowed over the public endpoint
 
 ### Identity-Based Access
 
@@ -446,7 +449,8 @@ New-AzSubscriptionDeployment `
 
 - 📖 [Artifacts & Image Management Guide](../../docs/artifactsGuide.md) - Comprehensive artifact guide
 - 📖 [Image Build Guide](../../docs/imageBuild.md) - Building custom images
-- 📖 [Deploy-ImageManagement Script](../../docs/imageManagementScript.md) - Helper script documentation
+- 📖 [Update-ImageArtifacts Script](../../docs/updateImageArtifacts.md) - Script documentation
+- 📖 [Deploy-ImageManagement Script](Deploy-ImageManagement.ps1) - Deployment script
 - 🔧 [Azure Compute Gallery Documentation](https://learn.microsoft.com/azure/virtual-machines/azure-compute-gallery)
 - 🔧 [Azure Storage Security](https://learn.microsoft.com/azure/storage/common/storage-security-guide)
 - 🔧 [Managed Identities Documentation](https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/)

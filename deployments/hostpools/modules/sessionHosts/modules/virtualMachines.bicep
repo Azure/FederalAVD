@@ -71,7 +71,6 @@ param vmInsightsDataCollectionRulesResourceId string
 param vTpmEnabled bool
 param hasAmdGpu bool
 param hasNvidiaGpu bool
-param nvidiaDriverVersion string
 
 // Storage Accounts
 var fslogixLocalStorageAccountNames = [for id in fslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
@@ -301,111 +300,6 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [
   }
 ]
 
-resource extension_JsonADDomainExtension 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
-  for i in range(0, sessionHostCount): if (contains(identitySolution, 'DomainServices')) {
-    parent: virtualMachine[i]
-    name: 'JsonADDomainExtension'
-    location: location
-    properties: {
-      forceUpdateTag: deploymentSuffix
-      publisher: 'Microsoft.Compute'
-      type: 'JsonADDomainExtension'
-      typeHandlerVersion: '1.3'
-      autoUpgradeMinorVersion: true
-      settings: {
-        Name: domainName
-        User: domainJoinUserPrincipalName
-        Restart: 'true'
-        Options: '3'
-        OUPath: ouPath
-      }
-      protectedSettings: {
-        Password: domainJoinUserPassword
-      }
-    }
-  }
-]
-
-resource extension_AADLoginForWindows 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
-  for i in range(0, sessionHostCount): if (startsWith(identitySolution, 'EntraKerberos') || identitySolution == 'EntraId') {
-    parent: virtualMachine[i]
-    name: 'AADLoginForWindows'
-    location: location
-    properties: {
-      publisher: 'Microsoft.Azure.ActiveDirectory'
-      type: 'AADLoginForWindows'
-      typeHandlerVersion: '1.0'
-      autoUpgradeMinorVersion: true
-      settings: intuneEnrollment
-        ? {
-            mdmId: '0000000a-0000-0000-c000-000000000000'
-          }
-        : null
-    }
-  }
-]
-
-resource extension_AzureMonitorWindowsAgent 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = [
-  for i in range(0, sessionHostCount): if (enableMonitoring) {
-    parent: virtualMachine[i]
-    name: 'AzureMonitorWindowsAgent'
-    location: location
-    properties: {
-      publisher: 'Microsoft.Azure.Monitor'
-      type: 'AzureMonitorWindowsAgent'
-      typeHandlerVersion: '1.1'
-      autoUpgradeMinorVersion: true
-      enableAutomaticUpgrade: true
-    }
-    dependsOn: [
-      extension_AADLoginForWindows
-      extension_JsonADDomainExtension
-    ]
-  }
-]
-
-resource dataCollectionEndpointAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
-  for i in range(0, sessionHostCount): if (enableMonitoring && !empty(dataCollectionEndpointResourceId)) {
-    scope: virtualMachine[i]
-    name: 'configurationAccessEndpoint'
-    properties: {
-      dataCollectionEndpointId: dataCollectionEndpointResourceId
-      description: 'Data Collection Endpoint Association'
-    }
-    dependsOn: [
-      extension_AzureMonitorWindowsAgent
-    ]
-  }
-]
-
-resource avdInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
-  for i in range(0, sessionHostCount): if (enableMonitoring && !empty(avdInsightsDataCollectionRulesResourceId)) {
-    scope: virtualMachine[i]
-    name: '${virtualMachine[i].name}-avdInsights-data-coll-rule-assoc'
-    properties: {
-      dataCollectionRuleId: avdInsightsDataCollectionRulesResourceId
-      description: 'AVD Insights data collection rule association'
-    }
-    dependsOn: [
-      extension_AzureMonitorWindowsAgent
-    ]
-  }
-]
-
-resource vmInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
-  for i in range(0, sessionHostCount): if (enableMonitoring && !empty(vmInsightsDataCollectionRulesResourceId)) {
-    scope: virtualMachine[i]
-    name: '${virtualMachine[i].name}-vmInsights-data-coll-rule-assoc'
-    properties: {
-      dataCollectionRuleId: vmInsightsDataCollectionRulesResourceId
-      description: 'VM Insights data collection rule association'
-    }
-    dependsOn: [
-      extension_AzureMonitorWindowsAgent
-    ]
-  }
-]
-
 resource extension_GuestAttestation 'Microsoft.Compute/virtualMachines/extensions@2023-09-01' = [
   for i in range(0, sessionHostCount): if (integrityMonitoring) {
     parent: virtualMachine[i]
@@ -431,15 +325,122 @@ resource extension_GuestAttestation 'Microsoft.Compute/virtualMachines/extension
         }
       }
     }
+  }
+]
+
+resource extension_JsonADDomainExtension 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = [
+  for i in range(0, sessionHostCount): if (contains(identitySolution, 'DomainServices')) {
+    parent: virtualMachine[i]
+    name: 'JsonADDomainExtension'
+    location: location
+    properties: {
+      forceUpdateTag: deploymentSuffix
+      publisher: 'Microsoft.Compute'
+      type: 'JsonADDomainExtension'
+      typeHandlerVersion: '1.3'
+      autoUpgradeMinorVersion: true
+      settings: {
+        Name: domainName
+        User: domainJoinUserPrincipalName
+        Restart: 'true'
+        Options: '3'
+        OUPath: ouPath
+      }
+      protectedSettings: {
+        Password: domainJoinUserPassword
+      }
+    }
     dependsOn: [
-      extension_AADLoginForWindows
-      extension_JsonADDomainExtension
-      extension_AzureMonitorWindowsAgent
+      extension_GuestAttestation[i]
     ]
   }
 ]
 
-resource extension_AmdGpuDriverWindows 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
+resource extension_AADLoginForWindows 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = [
+  for i in range(0, sessionHostCount): if (startsWith(identitySolution, 'EntraKerberos') || identitySolution == 'EntraId') {
+    parent: virtualMachine[i]
+    name: 'AADLoginForWindows'
+    location: location
+    properties: {
+      publisher: 'Microsoft.Azure.ActiveDirectory'
+      type: 'AADLoginForWindows'
+      typeHandlerVersion: '1.0'
+      autoUpgradeMinorVersion: true
+      settings: intuneEnrollment
+        ? {
+            mdmId: '0000000a-0000-0000-c000-000000000000'
+          }
+        : null
+    }
+    dependsOn: [
+      extension_GuestAttestation[i]
+    ]
+  }
+]
+
+resource extension_AzureMonitorWindowsAgent 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = [
+  for i in range(0, sessionHostCount): if (enableMonitoring) {
+    parent: virtualMachine[i]
+    name: 'AzureMonitorWindowsAgent'
+    location: location
+    properties: {
+      publisher: 'Microsoft.Azure.Monitor'
+      type: 'AzureMonitorWindowsAgent'
+      typeHandlerVersion: '1.1'
+      autoUpgradeMinorVersion: true
+      enableAutomaticUpgrade: true
+    }
+    dependsOn: [
+      extension_GuestAttestation[i]
+      extension_AADLoginForWindows[i]
+      extension_JsonADDomainExtension[i]
+    ]
+  }
+]
+
+resource dataCollectionEndpointAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
+  for i in range(0, sessionHostCount): if (enableMonitoring && !empty(dataCollectionEndpointResourceId)) {
+    scope: virtualMachine[i]
+    name: 'configurationAccessEndpoint'
+    properties: {
+      dataCollectionEndpointId: dataCollectionEndpointResourceId
+      description: 'Data Collection Endpoint Association'
+    }
+    dependsOn: [
+      extension_AzureMonitorWindowsAgent[i]
+    ]
+  }
+]
+
+resource avdInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
+  for i in range(0, sessionHostCount): if (enableMonitoring && !empty(avdInsightsDataCollectionRulesResourceId)) {
+    scope: virtualMachine[i]
+    name: '${virtualMachine[i].name}-avdInsights-data-coll-rule-assoc'
+    properties: {
+      dataCollectionRuleId: avdInsightsDataCollectionRulesResourceId
+      description: 'AVD Insights data collection rule association'
+    }
+    dependsOn: [
+      extension_AzureMonitorWindowsAgent[i]
+    ]
+  }
+]
+
+resource vmInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
+  for i in range(0, sessionHostCount): if (enableMonitoring && !empty(vmInsightsDataCollectionRulesResourceId)) {
+    scope: virtualMachine[i]
+    name: '${virtualMachine[i].name}-vmInsights-data-coll-rule-assoc'
+    properties: {
+      dataCollectionRuleId: vmInsightsDataCollectionRulesResourceId
+      description: 'VM Insights data collection rule association'
+    }
+    dependsOn: [
+      extension_AzureMonitorWindowsAgent[i]
+    ]
+  }
+]
+
+resource extension_AmdGpuDriverWindows 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = [
   for i in range(0, sessionHostCount): if (hasAmdGpu) {
     parent: virtualMachine[i]
     name: 'AmdGpuDriverWindows'
@@ -452,14 +453,15 @@ resource extension_AmdGpuDriverWindows 'Microsoft.Compute/virtualMachines/extens
       settings: {}
     }
     dependsOn: [
-      extension_AADLoginForWindows
-      extension_JsonADDomainExtension
-      extension_AzureMonitorWindowsAgent
+      extension_GuestAttestation[i]
+      extension_AADLoginForWindows[i]
+      extension_JsonADDomainExtension[i]
+      extension_AzureMonitorWindowsAgent[i]
     ]
   }
 ]
 
-resource extension_NvidiaGpuDriverWindows 'Microsoft.Compute/virtualMachines/extensions@2021-03-01' = [
+resource extension_NvidiaGpuDriverWindows 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = [
   for i in range(0, sessionHostCount): if (hasNvidiaGpu) {
     parent: virtualMachine[i]
     name: 'NvidiaGpuDriverWindows'
@@ -469,16 +471,13 @@ resource extension_NvidiaGpuDriverWindows 'Microsoft.Compute/virtualMachines/ext
       type: 'NvidiaGpuDriverWindows'
       typeHandlerVersion: '1.10'
       autoUpgradeMinorVersion: true
-      settings: empty(nvidiaDriverVersion)
-        ? {}
-        : {
-            driverVersion: nvidiaDriverVersion
-          }
+      settings: {}
     }
     dependsOn: [
-      extension_AADLoginForWindows
-      extension_JsonADDomainExtension
-      extension_AzureMonitorWindowsAgent
+      extension_GuestAttestation[i]
+      extension_AADLoginForWindows[i]
+      extension_JsonADDomainExtension[i]
+      extension_AzureMonitorWindowsAgent[i]
     ]
   }
 ]
@@ -493,12 +492,12 @@ module customizations 'invokeCustomizations.bicep' = [
       virtualMachineName: virtualMachine[i].name
     }
     dependsOn: [
-      extension_AADLoginForWindows
-      extension_JsonADDomainExtension
-      extension_AmdGpuDriverWindows
-      extension_NvidiaGpuDriverWindows
-      extension_AzureMonitorWindowsAgent
-      extension_GuestAttestation
+      extension_AADLoginForWindows[i]
+      extension_JsonADDomainExtension[i]
+      extension_AmdGpuDriverWindows[i]
+      extension_NvidiaGpuDriverWindows[i]
+      extension_AzureMonitorWindowsAgent[i]
+      extension_GuestAttestation[i]
     ]
   }
 ]
@@ -554,10 +553,6 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
         {
           name: 'NvidiaVmSize'
           value: hasNvidiaGpu ? 'true' : 'false'
-        }
-        {
-          name: 'DisableUpdates'
-          value: 'false'
         }
         {
           name: 'ConfigureFSLogix'
@@ -643,7 +638,7 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
   }
 ]
 
-module updateOSDiskNetworkAccess 'getOSDisk.bicep' = [
+module updateOSDiskNetworkAccess '../../../../../.common/bicepModules/custom/disableOSDiskPublicAccess/getOSDisk.bicep' = [
   for i in range(0, sessionHostCount): {
     name: '${virtualMachine[i].name}-disable-osDisk-PublicAccess-${deploymentSuffix}'
     params: {

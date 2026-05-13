@@ -475,10 +475,10 @@ For more information, see [Template Specs | Microsoft Learn](https://learn.micro
    Set-AzContext -Subscription <subscriptionID>
    ```
 
-3. Navigate to the deployments folder and execute the script with the add-ons flag:
+3. Navigate to the tools folder and execute the script with the add-ons flag:
 
    ```powershell
-   cd deployments
+   cd tools
    .\New-TemplateSpecs.ps1 -ResourceGroupName <resource-group-name> -Location <location> -CreateAddOns $true
    ```
 
@@ -502,14 +502,14 @@ The custom UI form provides a guided experience with tooltips and validation:
 2. Select the **sessionHostReplacer** template spec
 3. Click **Deploy**
 4. Fill out the form with your configuration:
-   - **Basics**: Resource group, location
-   - **Function App Configuration**: Host pool resource ID, execution settings
-   - **Session Hosts**: VM configuration, image, networking
+   - **Basics**: Host pool selection, location
+   - **Replacer Configuration**: Execution settings, replacement mode, schedule
    - **Identity**: Domain join configuration
+   - **Session Hosts**: VM configuration, image, networking
    - **User Profiles**: FSLogix settings (optional)
+   - **Infrastructure**: App Service Plan, encryption, zero trust networking
    - **Monitoring**: Application Insights, Log Analytics workspace
-   - **Custom Naming (Advanced)**: Brownfield naming overrides (optional)
-   - **Tags**: Resource tags
+   - **Advanced**: Brownfield naming overrides, resource tags (optional)
 5. Review and click **Create**
 
 Here is a screen shot of the form:
@@ -578,7 +578,7 @@ New-AzResourceGroupDeployment -ResourceGroupName $params.resourceGroupName `
 
 # OR deploy directly from bicep file
 New-AzResourceGroupDeployment -ResourceGroupName $params.resourceGroupName `
-    -TemplateFile ".\deployments\add-ons\SessionHostReplacer\main.bicep" `
+    -TemplateFile ".\deployments\add-ons\SessionHostReplacer\main.json" `
     -TemplateParameterObject $params
 ```
 
@@ -638,7 +638,7 @@ $params = @{
 }
 
 New-AzResourceGroupDeployment -ResourceGroupName "rg-avd-management" `
-    -TemplateFile ".\deployments\add-ons\SessionHostReplacer\main.bicep" `
+    -TemplateFile ".\deployments\add-ons\SessionHostReplacer\main.json" `
     -TemplateParameterObject $params
 ```
 

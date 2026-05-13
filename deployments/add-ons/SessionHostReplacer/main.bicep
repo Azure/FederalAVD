@@ -1,6 +1,7 @@
-metadata name = 'AVD Session Host Replacer Add-On'
-metadata description = 'Deploys automated session host lifecycle management for Azure Virtual Desktop'
-metadata owner = 'FederalAVD'
+// AVD Session Host Replacer Add-On
+// Deploys automated session host lifecycle management for Azure Virtual Desktop
+
+targetScope = 'subscription'
 
 // ========== //
 // Parameters //
@@ -11,8 +12,11 @@ metadata owner = 'FederalAVD'
 // These parameters apply to the overall deployment and are shared across multiple resources.
 // ================================================================================================
 
-@description('Optional. The location for all resources. Defaults to deployment location.')
-param location string = resourceGroup().location
+@description('Required. The location for all resources.')
+param location string
+
+@description('Required. Name of the resource group where the function app and its supporting resources are deployed. Defaults to the virtual machines resource group.')
+param functionAppResourceGroupName string
 
 @description('Optional. Tags for all resources.')
 param tags object = {}
@@ -31,6 +35,10 @@ param functionAppNameOverride string = ''
 @description('Optional. Explicit name for the Storage Account (used by Function App). If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique, 3-24 chars, lowercase alphanumeric only.')
 @maxLength(24)
 param storageAccountNameOverride string = ''
+
+@description('Optional. Explicit name for the storage encryption user-assigned identity. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments where a CMK identity was previously created with a specific name. Must follow Azure naming rules (3-128 chars, alphanumeric, hyphens, underscores).')
+@maxLength(128)
+param storageEncryptionIdentityNameOverride string = ''
 
 @description('Optional. Explicit name for the Application Insights instance. If not provided, name is derived from shared naming convention. Use this for brownfield deployments with non-standard naming. Must follow Azure naming rules (1-260 chars, alphanumeric, hyphens, underscores, parentheses, periods).')
 @maxLength(260)
@@ -60,6 +68,9 @@ param sessionHostReplacerUserAssignedIdentityResourceId string = ''
 @description('Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed.')
 param appServicePlanResourceId string = ''
 
+@description('Optional. The name of the resource group to deploy the new App Service Plan into. Leave empty to deploy into the same resource group as the function app. Useful when sharing a single App Service Plan across multiple add-ons in a central operations resource group.')
+param appServicePlanResourceGroupName string = ''
+
 @description('Optional. The SKU for the App Service Plan. Only applies if appServicePlanResourceId is not provided. Default is P0v3 for cost optimization.')
 @allowed([
   'PremiumV3_P0v3'
@@ -74,6 +85,9 @@ param zoneRedundant bool = false
 
 @description('Optional. Enable private endpoints for function app and storage. Default is false.')
 param privateEndpoint bool = false
+
+@description('Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. Use when managing from a trusted workstation outside the Azure network boundary.')
+param permittedIPs array = []
 
 @description('Optional. The subnet resource ID for private endpoints. Required if privateEndpoint is true.')
 param privateEndpointSubnetResourceId string = ''
@@ -432,13 +446,20 @@ param sessionHostCustomizations array = []
 // Variables  //
 // ========== //
 
-var deploymentSuffix = uniqueString(resourceGroup().id, deployment().name)
+var deploymentSuffix = uniqueString(subscription().subscriptionId, functionAppResourceGroupName, deployment().name)
+var aspResourceGroupName = empty(appServicePlanResourceGroupName) ? functionAppResourceGroupName : appServicePlanResourceGroupName
 var hostPoolName = last(split(hostPoolResourceId, '/'))
 var hostPoolResourceGroupName = split(hostPoolResourceId, '/')[4]
 var hostPoolSubscriptionId = split(hostPoolResourceId, '/')[2]
 var virtualMachineResourceGroupLocation = reference(virtualMachinesResourceGroupId, '2021-04-01', 'Full').location
 var virtualMachinesResourceGroupName = last(split(virtualMachinesResourceGroupId, '/'))
 var virtualMachinesSubscriptionId = split(virtualMachinesResourceGroupId, '/')[2]
+var templateSpecResourceGroupName = !empty(sessionHostTemplateSpecResourceId)
+  ? split(sessionHostTemplateSpecResourceId, '/')[4]
+  : functionAppResourceGroupName
+var templateSpecSubscriptionId = !empty(sessionHostTemplateSpecResourceId)
+  ? split(sessionHostTemplateSpecResourceId, '/')[2]
+  : subscription().subscriptionId
 
 // Naming Convention Logic (derived from resourceNames.bicep)
 var cloud = toLower(environment().name)
@@ -566,6 +587,17 @@ var storageAccountName = !empty(storageAccountNameOverride)
 // For brownfield deployments with non-standard host pool names, use storageAccountNameOverride parameter
 
 var encryptionKeyName = '${hpBaseName}-encryption-key-${storageAccountName}'
+var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)
+  ? storageEncryptionIdentityNameOverride
+  : replace(
+      replace(
+        replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
+        'TOKEN-',
+        'shr${uniqueStringHosts}-encryption-'
+      ),
+      'LOCATION',
+      functionAppRegionAbbreviation
+    )
 var templateSpecNameFinal = !empty(templateSpecName)
   ? templateSpecName
   : replace(
@@ -740,23 +772,27 @@ var sessionHostParameters = union(
 )
 
 // Conditional Template Spec for Session Host Deployment
-module templateSpec 'modules/sessionHosts/sessionHostTemplateSpec.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
+module templateSpec '../../../.common/bicepModules/resources/templateSpecs/deploy.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
   name: 'SessionHostTemplateSpec-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
+    name: templateSpecNameFinal
     location: location
-    templateSpecName: templateSpecNameFinal
-    templateSpecVersion: templateSpecVersion
     tags: tags[?'Microsoft.Resources/templateSpecs'] ?? {}
+    version: templateSpecVersion
+    description: 'Template Spec for AVD Session Host deployment used by Session Host Replacer'
+    displayName: 'AVD Session Host Template'
+    mainTemplate: loadJsonContent('modules/sessionHosts/sessionHosts.json')
   }
 }
 
 // Conditional App Service Plan deployment
-module hostingPlan '../../sharedModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
+module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
+  scope: resourceGroup(aspResourceGroupName)
   params: {
     functionAppKind: 'functionApp'
     hostingPlanType: 'FunctionsPremium'
-    logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     location: location
     name: appServicePlanName
     planPricing: appServicePlanSku
@@ -803,93 +839,108 @@ var roleAssignmentsResourceGroups = union(
     : []
 )
 
-module roleAssignmentsKeyVault '../../sharedModules/resources/key-vault/vault/rbac.bicep' = {
+module roleAssignmentsKeyVault '../../../.common/bicepModules/keyVault/vaults/roleAssignment.bicep' = {
   name: 'RoleAssign-KeyVault-KVCont-${deploymentSuffix}'
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
   params: {
-    principalId: functionApp.outputs.functionAppPrincipalId
-    roleDefinitionId: 'f25e0fa2-a7c8-4377-a976-54943a77a395' // Key Vault Contributor
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        roleDefinitionId: 'f25e0fa2-a7c8-4377-a976-54943a77a395' // Key Vault Contributor
+        principalType: 'ServicePrincipal'
+      }
+    ]
     keyVaultName: last(split(credentialsKeyVaultResourceId, '/'))
-    principalType: 'ServicePrincipal'
   }
 }
 
-module roleAssignmentVirtualMachinesSubscription '../../sharedModules/resources/authorization/role-assignment/subscription/main.bicep' = {
+module roleAssignmentVirtualMachinesSubscription '../../../.common/bicepModules/authorization/roleAssignments/subscription/deploy.bicep' = {
   name: 'RoleAssign-Sub-VirtMachCont-${deploymentSuffix}'
   scope: subscription(virtualMachinesSubscriptionId)
   params: {
     principalId: functionApp.outputs.functionAppPrincipalId
     roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
-    subscriptionId: virtualMachinesSubscriptionId
     principalType: 'ServicePrincipal'
   }
 }
 
-module roleAssignmentHostPoolSubscription '../../sharedModules/resources/authorization/role-assignment/subscription/main.bicep' = {
+module roleAssignmentHostPoolSubscription '../../../.common/bicepModules/authorization/roleAssignments/subscription/deploy.bicep' = {
   name: 'RoleAssign-Sub-Reader-${deploymentSuffix}'
   scope: subscription(hostPoolSubscriptionId)
   params: {
     principalId: functionApp.outputs.functionAppPrincipalId
     roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader - needed to read scaling plans that may be in different resource groups
-    subscriptionId: hostPoolSubscriptionId
     principalType: 'ServicePrincipal'
   }
 }
 
-module roleAssignmentsRGs '../../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = [
+module roleAssignmentsRGs '../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for rgRole in roleAssignmentsResourceGroups: {
     name: 'RoleAssign-${last(split(rgRole.resourceGroupId, '/'))}-${rgRole.roleDescription}-${deploymentSuffix}'
     scope: resourceGroup(split(rgRole.resourceGroupId, '/')[2], split(rgRole.resourceGroupId, '/')[4])
     params: {
       principalId: functionApp.outputs.functionAppPrincipalId
       roleDefinitionId: rgRole.roleDefinitionId
-      resourceGroupName: last(split(rgRole.resourceGroupId, '/'))
       principalType: 'ServicePrincipal'
     }
   }
 ]
 
-module roleAssignmentTemplateSpec '../../sharedModules/resources/resources/templateSpecs/rbac.bicep' = {
+module roleAssignmentTemplateSpec '../../../.common/bicepModules/resources/templateSpecs/roleAssignment.bicep' = {
   name: 'RoleAssign-TemplateSpec-Reader-${deploymentSuffix}'
+  scope: resourceGroup(templateSpecSubscriptionId, templateSpecResourceGroupName)
   params: {
-    principalId: functionApp.outputs.functionAppPrincipalId
-    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
-    principalType: 'ServicePrincipal'
-    templateSpecResourceId: !empty(sessionHostTemplateSpecResourceId)
-      ? sessionHostTemplateSpecResourceId
-      : templateSpec!.outputs.templateSpecResourceId
+    templateSpecName: !empty(sessionHostTemplateSpecResourceId)
+      ? last(split(sessionHostTemplateSpecResourceId, '/'))
+      : templateSpec!.outputs.name
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
+        principalType: 'ServicePrincipal'
+      }
+    ]
   }
 }
 
-module roleAssignmentComputeGallery '../../sharedModules/resources/compute/gallery/rbac.bicep' = if (!empty(customImageResourceId)) {
+module roleAssignmentComputeGallery '../../../.common/bicepModules/compute/galleries/roleAssignment.bicep' = if (!empty(customImageResourceId)) {
   name: 'RoleAssign-ComputeGallery-Reader-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
-    principalId: functionApp.outputs.functionAppPrincipalId
-    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
     galleryName: empty(computeGalleryResourceId) ? '' : last(split(computeGalleryResourceId, '/'))
-    principalType: 'ServicePrincipal'
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
+        principalType: 'ServicePrincipal'
+      }
+    ]
   }
 }
 
-module roleAssignmentUaiArtifacts '../../sharedModules/resources/managed-identity/user-assigned-identity/rbac.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
+module roleAssignmentUaiArtifacts '../../../.common/bicepModules/managedIdentity/userAssignedIdentities/roleAssignment.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
   name: 'RoleAssign-UAI-Artifacts-MngdIdOperator-${deploymentSuffix}'
   scope: resourceGroup(
     split(artifactsUserAssignedIdentityResourceId, '/')[2],
     split(artifactsUserAssignedIdentityResourceId, '/')[4]
   )
   params: {
-    principalId: functionApp.outputs.functionAppPrincipalId
-    roleDefinitionId: 'f1a07417-d97a-45cb-824c-7a7467783830' // Managed Identity Operator
-    principalType: 'ServicePrincipal'
     identityName: empty(artifactsUserAssignedIdentityResourceId)
       ? ''
       : last(split(artifactsUserAssignedIdentityResourceId, '/'))
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        roleDefinitionId: 'f1a07417-d97a-45cb-824c-7a7467783830' // Managed Identity Operator
+        principalType: 'ServicePrincipal'
+      }
+    ]
   }
 }
 
-module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = {
+module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp.bicep' = {
   name: 'SessionHostReplacerFunctionApp-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
     location: location
     applicationInsightsName: appInsightsName
@@ -1034,7 +1085,7 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
           name: 'SessionHostTemplate'
           value: !empty(sessionHostTemplateSpecResourceId)
             ? sessionHostTemplateSpecResourceId
-            : templateSpec!.outputs.templateSpecResourceId
+            : templateSpec!.outputs.resourceId
         }
         {
           name: 'SubscriptionId'
@@ -1098,12 +1149,15 @@ module functionApp '../../sharedModules/custom/functionApp/functionApp.bicep' = 
     storageAccountRoleDefinitionIds: [
       '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor (for deployment state management)
     ]
+    storageEncryptionIdentityName: storageEncryptionIdentityName
+    permittedIPs: permittedIPs
     tags: tags
   }
 }
 
-module functionCode '../../sharedModules/custom/functionApp/function.bicep' = {
+module functionCode '../../../.common/bicepModules/custom/functionApp/function.bicep' = {
   name: 'SessionHostReplacerFunction-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
     files: {
       'run.ps1': loadTextContent('functions/run.ps1')
@@ -1127,6 +1181,7 @@ module functionCode '../../sharedModules/custom/functionApp/function.bicep' = {
 
 module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId)) {
   name: 'SessionHostReplacerWorkbook-${deploymentSuffix}'
+  scope: resourceGroup(functionAppResourceGroupName)
   params: {
     workbookName: workbookName
     location: workbookLocation

@@ -3,10 +3,7 @@ targetScope = 'subscription'
 param activeDirectoryConnection bool
 param identitySolution string
 param availability string
-param azureBackupPrivateDnsZoneResourceId string
-param azureBlobPrivateDnsZoneResourceId string
 param azureFilePrivateDnsZoneResourceId string
-param azureQueuePrivateDnsZoneResourceId string
 param deploymentSuffix string
 param deploymentUserAssignedIdentityClientId string
 param deploymentVirtualMachineName string
@@ -15,7 +12,6 @@ param domainJoinUserPassword string
 @secure()
 param domainJoinUserPrincipalName string
 param domainName string
-param encryptionKeyVaultResourceId string
 param encryptionKeyVaultUri string
 param fslogixAdminGroups array
 param appUpdateUserAssignedIdentityResourceId string
@@ -25,7 +21,6 @@ param fslogixShardOptions string
 param fslogixUserGroups array
 param hostPoolResourceId string
 param kerberosEncryptionType string
-param keyExpirationInDays int
 param keyManagementStorageAccounts string
 param location string
 param logAnalyticsWorkspaceResourceId string
@@ -37,8 +32,6 @@ param privateEndpoint bool
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
-param recoveryServices bool
-param recoveryServicesVaultName string
 param resourceGroupDeployment string
 param resourceGroupStorage string
 param shareSizeInGB int
@@ -49,29 +42,15 @@ param storageIndex int
 param storageSku string
 param storageSolution string
 param tags object
-param timeZone string
-param userAssignedIdentityNameConv string
 
-module customerManagedKeys 'modules/customerManagedKeys.bicep' = if (storageSolution == 'AzureFiles' && keyManagementStorageAccounts != 'MicrosoftManaged') {
-  name: 'Customer-Managed-Keys-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupStorage)
-  params: {
-    deploymentResourceGroupName: resourceGroupDeployment
-    deploymentVirtualMachineName: deploymentVirtualMachineName
-    deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
-    hostPoolResourceId: hostPoolResourceId
-    keyExpirationInDays: keyExpirationInDays
-    keyManagementStorageAccounts: keyManagementStorageAccounts
-    keyVaultResourceId: encryptionKeyVaultResourceId
-    location: location
-    storageCount: storageCount
-    storageIndex: storageIndex
-    tags: tags
-    deploymentSuffix: deploymentSuffix
-    userAssignedIdentityNameConv: userAssignedIdentityNameConv
-    fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
-  }
-}
+@description('Optional. Resource ID of the pre-created storage encryption UAI (from top-level storageCmk module). When provided, the internal CMK step is skipped.')
+param encryptionUserAssignedIdentityResourceId string = ''
+
+@description('Optional. Resource ID of the Recovery Services Vault to register Azure Files backup items against. When provided and storageSolution is AzureFiles, protection containers and items are registered after storage deployment.')
+param recoveryServicesVaultResourceId string = ''
+
+@description('Optional. Array of permitted IP addresses or CIDR blocks for the FSLogix storage account firewall.')
+param permittedIPs array = []
 
 // Azure NetApp files for fslogix
 module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution == 'AzureNetAppFiles' && contains(
@@ -113,22 +92,19 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   params: {
     appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
     availability: availability
-    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     deploymentVirtualMachineName: deploymentVirtualMachineName
     deploymentResourceGroupName: resourceGroupDeployment
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
+    fileShares: fslogixFileShares
+    fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
     encryptionKeyVaultUri: encryptionKeyVaultUri
     encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'MicrosoftManaged'
       ? ''
-      : customerManagedKeys!.outputs.userAssignedIdentityResourceId
-    fileShares: fslogixFileShares
-    fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
+      : encryptionUserAssignedIdentityResourceId
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
     kerberosEncryptionType: kerberosEncryptionType
@@ -140,26 +116,43 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
-    recoveryServices: recoveryServices
-    recoveryServicesVaultName: recoveryServicesVaultName
     resourceGroupStorage: resourceGroupStorage
     shardingOptions: fslogixShardOptions
     shareAdminGroups: fslogixAdminGroups
     shareSizeInGB: shareSizeInGB
     shareUserGroups: fslogixUserGroups
+    recoveryServicesVaultResourceId: recoveryServicesVaultResourceId
     storageAccountNamePrefix: storageAccountNamePrefix
     storageCount: storageCount
     storageIndex: storageIndex
     storageSku: storageSku
     tags: tags
     deploymentSuffix: deploymentSuffix
-    timeZone: timeZone
+    permittedIPs: permittedIPs
   }
 }
 
-output encryptionUserAssignedIdentityResourceId string = keyManagementStorageAccounts != 'MicrosoftManaged'
-  ? customerManagedKeys!.outputs.userAssignedIdentityResourceId
-  : ''
+// ─── FSLogix Azure Files Backup Registration ──────────────────────────────────
+// Runs after azureFiles so storage account IDs are available. Scoped to the
+// vault's resource group so ARM child resources (containers, items) compile correctly.
+module fslogixBackupRegistration '../operations/fslogixBackupItems.bicep' = if (storageSolution == 'AzureFiles' && !empty(recoveryServicesVaultResourceId)) {
+  name: 'FSLogix-BackupRegistration-${deploymentSuffix}'
+  scope: resourceGroup(split(recoveryServicesVaultResourceId, '/')[2], split(recoveryServicesVaultResourceId, '/')[4])
+  params: {
+    vaultName: last(split(recoveryServicesVaultResourceId, '/'))!
+    location: location
+    resourceGroupStorage: resourceGroupStorage
+    storageAccountNamePrefix: storageAccountNamePrefix
+    storageCount: storageCount
+    storageIndex: storageIndex
+    fileShares: fslogixFileShares
+    storageAccountResourceIds: azureFiles!.outputs.storageAccountResourceIds
+    tags: tags
+    hostPoolResourceId: hostPoolResourceId
+  }
+}
+
+output encryptionUserAssignedIdentityResourceId string = encryptionUserAssignedIdentityResourceId
 output netAppVolumeResourceIds array = storageSolution == 'AzureNetAppFiles'
   ? azureNetAppFiles!.outputs.volumeResourceIds
   : []

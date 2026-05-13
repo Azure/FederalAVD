@@ -16,6 +16,7 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 | Component | Description | Documentation |
 | --------- | ----------- | ------------- |
 | 🌐 **Networking** | Virtual network, subnets, NSGs, NAT gateway, hub peering, route tables, private DNS zones | [Quick Start - Networking](docs/quickStart.md#step-0-deploy-networking-infrastructure-greenfield) |
+| 🔒 **Security Prereqs** | Secrets Key Vault (credentials) and Encryption Key Vault (CMK keys). Required before image management when using CMK with custom images. Otherwise, Key Vaults are deployed inline during host pool deployment and are idempotent — subsequent host pool deployments referencing the same resource group will reuse them. | [Quick Start - Key Vaults](docs/quickStart.md#step-1-deploy-key-vaults-cmk-with-custom-images) |
 | 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpoolDeployment.md) |
 | 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifactsGuide.md) |
 | 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/imageBuild.md) |
@@ -36,17 +37,19 @@ Ready to deploy? The **[Quick Start Guide](docs/quickStart.md)** walks you throu
 ```mermaid
 graph TD
     A[Start] --> B{Have Existing<br/>VNet?}
-    B -->|No<br/>Greenfield| C[🌐 Deploy<br/>Networking]
-    B -->|Yes| D{Need Custom<br/>Software?}
-    C --> D
-    D -->|Yes| E[📦 Deploy Image<br/>Management]
-    D -->|No| F[Use Marketplace<br/>Image]
-    E --> G{Build<br/>Custom Image?}
-    G -->|Yes<br/>Pre-install| H[🎨 Build Custom<br/>Image]
-    G -->|No<br/>Runtime install| I[🏢 Deploy<br/>Host Pool]
-    H --> I
-    F --> I
-    I --> J[✅ Complete]
+    B -->|No - Greenfield| C[🌐 Deploy<br/>Networking]
+    B -->|Yes| CUST
+    C --> CUST
+    CUST{Need Custom<br/>Software?} -->|No - Marketplace / PoC<br/>CMK inline available| HP
+    CUST -->|Yes| CMK{Using Customer<br/>Managed Keys?}
+    CMK -->|Yes| KV[🔒 Deploy<br/>Key Vaults]
+    CMK -->|No| IMG
+    KV --> IMG[📦 Deploy Image<br/>Management]
+    IMG --> BUILD{Build Custom<br/>Image?}
+    BUILD -->|Yes<br/>Pre-install| IB[🎨 Build Custom<br/>Image]
+    BUILD -->|No<br/>Runtime install| HP
+    IB --> HP[🏢 Deploy<br/>Host Pool]
+    HP --> J[✅ Complete]
 ```
 
 ### Deployment Methods
@@ -54,7 +57,8 @@ graph TD
 | Component | Blue Button | Template Spec | PowerShell/CLI |
 | --------- | ----------- | ------------- | -------------- |
 | **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Image Management** (infrastructure) | ❌ | ❌ | ✅ All clouds |
+| **Security Prereqs** (Key Vaults) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Image Management** (infrastructure) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
@@ -89,7 +93,7 @@ Central storage and management for software artifacts. **Required** for custom i
 **Learn More:**
 
 - [Artifacts & Image Management Guide](docs/artifactsGuide.md)
-- [Deploy-ImageManagement Script](docs/imageManagementScript.md)
+- [Update-ImageArtifacts Script](docs/updateImageArtifacts.md)
 
 #### Custom Image Building
 
@@ -117,9 +121,10 @@ Complete AVD environment deployment with enterprise features.
 - Session host virtual machines (pooled or personal)
 - FSLogix profile storage (Azure Files or NetApp Files)
 - Monitoring with Log Analytics and Application Insights
-- Key Vault for secrets management
+- Key Vault for secrets management (inline or pre-deployed via Security Prereqs)
 - Private endpoints and network security (Zero Trust)
 - Backup and recovery configuration
+- Customer Managed Keys: disk encryption sets and storage encryption UAIs deployed early in the deployment chain, giving RBAC propagation time before VMs are created
 
 **Learn More:**
 
@@ -135,10 +140,10 @@ Optional add-ons extend the base AVD deployment with advanced lifecycle manageme
 
 | Add-On | Purpose | Documentation |
 |--------|---------|---------------|
-| 🔄 **Session Host Replacer** | Automates rolling replacement of session hosts when new images are available with zero-downtime updates | [Session Host Replacer](deployments/add-ons/SessionHostReplacer/readme.md) |
-| 📊 **Storage Quota Manager** | Monitors and automatically increases Azure Files Premium share quotas for FSLogix storage | [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/readme.md) |
-| 🔑 **Update Storage Keys** | Updates FSLogix storage account keys on session hosts for Entra ID-only deployments | [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md) |
-| 📝 **Run Commands on VMs** | Execute scripts on selected virtual machines from a resource group | [Run Commands](deployments/add-ons/RunCommandsOnVms/readme.md) |
+| 🔄 **Session Host Replacer** | Automates rolling replacement of session hosts when new images are available with zero-downtime updates | [Session Host Replacer](deployments/add-ons/SessionHostReplacer/README.md) |
+| 📊 **Storage Quota Manager** | Monitors and automatically increases Azure Files Premium share quotas for FSLogix storage | [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/README.md) |
+| 🔑 **Update Storage Keys** | Updates FSLogix storage account keys on session hosts for Entra ID-only deployments | [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/README.md) |
+| 📝 **Run Commands on VMs** | Execute scripts on selected virtual machines from a resource group | [Run Commands](deployments/add-ons/RunCommandsOnVms/README.md) |
 
 ---
 
@@ -182,6 +187,7 @@ Support for multiple identity configurations to meet organizational requirements
 ### Getting Started
 
 - 📖 [Quick Start Guide](docs/quickStart.md) - Step-by-step deployment instructions
+- 🤖 [End-to-End Automation Guide](docs/automationGuide.md) - Chaining steps together and passing outputs
 - 🏗️ [Design](docs/design.md) - Architecture and resource organization
 - ⚙️ [Parameters Reference](docs/parameters.md) - Complete parameter documentation
 
@@ -190,7 +196,7 @@ Support for multiple identity configurations to meet organizational requirements
 - 🏢 [Host Pool Deployment](docs/hostpoolDeployment.md) - Deploy AVD host pools
 - 🎨 [Image Build Guide](docs/imageBuild.md) - Build custom images
 - 📦 [Artifacts & Image Management](docs/artifactsGuide.md) - Software artifact system
-- 🔧 [Deploy-ImageManagement Script](docs/imageManagementScript.md) - Script usage guide
+- 🔧 [Update-ImageArtifacts Script](docs/updateImageArtifacts.md) - Script usage guide
 
 ### Advanced Topics
 
@@ -202,10 +208,10 @@ Support for multiple identity configurations to meet organizational requirements
 
 ### Add-Ons
 
-- 🔄 [Session Host Replacer](deployments/add-ons/SessionHostReplacer/readme.md)
-- 📊 [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/readme.md)
-- 🔑 [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md)
-- 📝 [Run Commands on VMs](deployments/add-ons/RunCommandsOnVms/readme.md)
+- 🔄 [Session Host Replacer](deployments/add-ons/SessionHostReplacer/README.md)
+- 📊 [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/README.md)
+- 🔑 [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/README.md)
+- 📝 [Run Commands on VMs](deployments/add-ons/RunCommandsOnVms/README.md)
 
 ---
 

@@ -1,0 +1,104 @@
+{
+    "AzCli": {
+        "Description": "Optional: Azure CLI Installer",
+        "DownloadUrl": "https://aka.ms/installazurecliwindowsx64",
+        "DestinationFileName": "azclix64.msi",
+        "DestinationFolders": [
+            "AzCLI"
+        ]
+    },
+    "LGPO": {
+        "Description": "Optional: Local Group Policy Object (LGPO) Tool. Used for configuring local group policies.",
+        "DownloadUrl": "https://download.microsoft.com/download/8/5/c/85c25433-a1b0-4ffa-9429-7e023e7da8d8/LGPO.zip",
+        "DestinationFileName": "lgpo.zip",
+        "DestinationFolders": [
+            "Configure-DesktopBackground",
+            "Configure-EdgePolicy",
+            "Configure-Office365Policy",
+            "Configure-OneDriveKFMPolicy",
+            "Configure-RemoteDesktopPolicy",
+            "Configure-WindowsUpdatePolicy",
+            "LGPO",
+            "STIGs"
+        ]
+    },
+    "Office365AdministrativeTemplates": {
+        "Description": "Optional: Office 365 Administrative Templates. Used for Office 365 policy configuration via LGPO.",
+        "DownloadUrl": "https://download.microsoft.com/download/2/e/e/2eeec938-c014-419d-bb4b-d184871450f1/admintemplates_x64_5486-1000_en-us.exe",
+        "WebsiteUrl": "https://www.microsoft.com/en-us/download/details.aspx?id=49030",
+        "SearchString": "*admintemplates_x64*.exe",
+        "DestinationFileName": "AdminTemplates_x64.exe",
+        "DestinationFolders": [
+            "Configure-Office365Policy"
+        ]
+    },
+    "EdgeEnterpriseAdministrativeTemplates": {
+        "Description": "Optional: Microsoft Edge Enterprise Administrative Templates. Used for Edge policy configuration via LGPO.",
+        "APIUrl": "https://edgeupdates.microsoft.com/api/products?view=enterprise",
+        "DestinationFileName": "EdgeEnterprisePolicyTemplates.cab",
+        "DestinationFolders": [
+            "Configure-EdgePolicy"
+        ]
+    },
+    "PowerShellAzModule": {
+        "Description": "Optional: PowerShell Az Module",
+        "GitHubRepo": "Azure/azure-powershell",
+        "GitHubFileNamePattern": "Az-Cmdlets-*-x64.msi",
+        "DestinationFileName": "PowerShell-Az.msi",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "Powershell7": {
+        "Description": "Optional: PowerShell 7",
+        "GitHubRepo": "PowerShell/PowerShell",
+        "GitHubFileNamePattern": "*win-x64.msi",
+        "DestinationFileName": "PowerShell7.msi",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "VSCode": {
+        "Description": "Optional: Visual Studio Code",
+        "DownloadUrl": "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64",
+        "DestinationFileName": "VSCodesetup.exe",
+        "DestinationFolders": [
+            "VSCode"
+        ]
+    },
+    "DoDInstallRoot": {
+        "Description": "Optional: DoD InstallRoot Application",
+        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/InstallRoot_5.6x64.msi",
+        "WebSiteUrl": "https://public.cyber.mil/pki-pke/tools-configuration-files",
+        "SearchString": "InstallRoot*x64.msi",
+        "DestinationFileName": "InstallRoot.msi",
+        "DestinationFolders": [
+            "InstallRoot"
+        ]
+    },
+    "DoDSTIGGPOPackage": {
+        "Description": "Optional: DoD STIG GPO Package - Keep it updated! Used for applying STIGs via LGPO.",
+        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/zip/U_STIG_GPO_Package_April_2026.zip",
+        "DestinationFileName": "STIGs.zip",
+        "DestinationFolders": [
+            "STIGs"
+        ]
+    },
+    "GitForWindows": {
+        "Description": "Optional: Git for Windows Installer",
+        "GitHubRepo": "git-for-windows/git",
+        "GitHubFileNamePattern": "*64-bit.exe",
+        "DestinationFileName": "Git-64-bit.exe",
+        "DestinationFolders": [
+            "Git"
+        ]
+    },
+    "PowerBIDesktop": {
+        "Description": "Optional: Power BI Desktop Installer",
+        "WingetId": "Microsoft.PowerBI",
+        "DestinationFileName": "PowerBIDesktopSetup.exe",
+        "DestinationFolders": [
+            "Microsoft-PowerBIDesktop"
+        ]
+    }
+}

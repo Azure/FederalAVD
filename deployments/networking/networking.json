@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.40.2.10011",
-      "templateHash": "4236809172656667468"
+      "version": "0.43.8.12551",
+      "templateHash": "15847342191871020795"
     }
   },
   "parameters": {
@@ -51,25 +51,11 @@
         "description": "Conditional. The address prefixes for the virtual network. Required when \"deployVnet\" is \"true\"."
       }
     },
-    "hostsSubnet": {
-      "type": "object",
-      "defaultValue": {},
+    "subnets": {
+      "type": "array",
+      "defaultValue": [],
       "metadata": {
-        "description": "Conditional. The hosts subnet to create within the virtual network. Required when \"deployVnet\" is \"true\"."
-      }
-    },
-    "privateEndpointsSubnet": {
-      "type": "object",
-      "defaultValue": {},
-      "metadata": {
-        "description": "Optional. The private endpoint subnet to create within the virtual network."
-      }
-    },
-    "functionAppSubnet": {
-      "type": "object",
-      "defaultValue": {},
-      "metadata": {
-        "description": "Optional. The function app subnet to create within the virtual network."
+        "description": "Optional. The subnets to create within the virtual network. Each item must include \"name\", \"addressPrefix\", and \"purpose\" (hosts | privateEndpoints | functionApp)."
       }
     },
     "defaultRouting": {
@@ -88,6 +74,20 @@
       "defaultValue": false,
       "metadata": {
         "description": "Optional. When using NVA routing, determines if AVD service bypass routes should be added to the route table. These routes allow AVD service traffic to bypass the NVA."
+      }
+    },
+    "rdpShortpathManagedNetworks": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Enables RDP Shortpath for managed networks (ExpressRoute or VPN). Adds an NSG rule allowing inbound UDP 3390 from VirtualNetwork."
+      }
+    },
+    "rdpShortpathPublicNetworks": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Enables RDP Shortpath for public networks using STUN/ICE. Deploys a NAT Gateway for cone-shaped NAT, adds AVD service bypass routes on NVA deployments, and adds an NSG rule allowing inbound UDP 3390 from Internet."
       }
     },
     "nameConvResTypeAtEnd": {
@@ -949,14 +949,17 @@
           "includeAvdBypassRoutes": {
             "value": "[parameters('includeAvdBypassRoutes')]"
           },
+          "rdpShortpathManagedNetworks": {
+            "value": "[parameters('rdpShortpathManagedNetworks')]"
+          },
+          "rdpShortpathPublicNetworks": {
+            "value": "[parameters('rdpShortpathPublicNetworks')]"
+          },
           "deployDDoSNetworkProtection": {
             "value": "[parameters('deployDDoSNetworkProtection')]"
           },
-          "functionAppSubnet": {
-            "value": "[parameters('functionAppSubnet')]"
-          },
-          "hostsSubnet": {
-            "value": "[parameters('hostsSubnet')]"
+          "subnets": {
+            "value": "[parameters('subnets')]"
           },
           "hubVnetName": "[if(not(empty(parameters('hubVnetResourceId'))), createObject('value', last(split(parameters('hubVnetResourceId'), '/'))), createObject('value', ''))]",
           "hubVnetResourceGroup": "[if(not(empty(parameters('hubVnetResourceId'))), createObject('value', split(parameters('hubVnetResourceId'), '/')[4]), createObject('value', ''))]",
@@ -974,7 +977,6 @@
             "value": "[variables('nsgName')]"
           },
           "nvaIPAddress": "[if(not(empty(parameters('nvaIPAddress'))), createObject('value', parameters('nvaIPAddress')), createObject('value', ''))]",
-          "privateEndpointsSubnet": "[if(not(empty(parameters('privateEndpointsSubnet'))), createObject('value', parameters('privateEndpointsSubnet')), createObject('value', createObject()))]",
           "publicIPName": {
             "value": "[variables('publicIPName')]"
           },
@@ -1006,8 +1008,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "9412677567640400252"
+              "version": "0.43.8.12551",
+              "templateHash": "7050661415777903588"
             }
           },
           "parameters": {
@@ -1020,19 +1022,19 @@
             "vnetAddressPrefixes": {
               "type": "array"
             },
-            "hostsSubnet": {
-              "type": "object"
-            },
-            "privateEndpointsSubnet": {
-              "type": "object"
-            },
-            "functionAppSubnet": {
-              "type": "object"
+            "subnets": {
+              "type": "array"
             },
             "defaultRouting": {
               "type": "string"
             },
             "includeAvdBypassRoutes": {
+              "type": "bool"
+            },
+            "rdpShortpathManagedNetworks": {
+              "type": "bool"
+            },
+            "rdpShortpathPublicNetworks": {
               "type": "bool"
             },
             "natGatewayName": {
@@ -1110,20 +1112,20 @@
                   "vnetAddressPrefixes": {
                     "value": "[parameters('vnetAddressPrefixes')]"
                   },
-                  "hostsSubnet": {
-                    "value": "[parameters('hostsSubnet')]"
-                  },
-                  "privateEndpointsSubnet": {
-                    "value": "[parameters('privateEndpointsSubnet')]"
-                  },
-                  "functionAppSubnet": {
-                    "value": "[parameters('functionAppSubnet')]"
+                  "subnets": {
+                    "value": "[parameters('subnets')]"
                   },
                   "defaultRouting": {
                     "value": "[parameters('defaultRouting')]"
                   },
                   "includeAvdBypassRoutes": {
                     "value": "[parameters('includeAvdBypassRoutes')]"
+                  },
+                  "rdpShortpathManagedNetworks": {
+                    "value": "[parameters('rdpShortpathManagedNetworks')]"
+                  },
+                  "rdpShortpathPublicNetworks": {
+                    "value": "[parameters('rdpShortpathPublicNetworks')]"
                   },
                   "natGatewayName": {
                     "value": "[parameters('natGatewayName')]"
@@ -1177,8 +1179,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "16688373492870187177"
+                      "version": "0.43.8.12551",
+                      "templateHash": "16865748660063405838"
                     }
                   },
                   "parameters": {
@@ -1188,19 +1190,19 @@
                     "vnetAddressPrefixes": {
                       "type": "array"
                     },
-                    "hostsSubnet": {
-                      "type": "object"
-                    },
-                    "privateEndpointsSubnet": {
-                      "type": "object"
-                    },
-                    "functionAppSubnet": {
-                      "type": "object"
+                    "subnets": {
+                      "type": "array"
                     },
                     "defaultRouting": {
                       "type": "string"
                     },
                     "includeAvdBypassRoutes": {
+                      "type": "bool"
+                    },
+                    "rdpShortpathManagedNetworks": {
+                      "type": "bool"
+                    },
+                    "rdpShortpathPublicNetworks": {
                       "type": "bool"
                     },
                     "natGatewayName": {
@@ -1250,8 +1252,26 @@
                     }
                   },
                   "variables": {
+                    "copy": [
+                      {
+                        "name": "snetHosts",
+                        "count": "[length(variables('hostsSubnetsList'))]",
+                        "input": {
+                          "name": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].name]",
+                          "properties": {
+                            "addressPrefix": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].addressPrefix]",
+                            "natGateway": "[if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null())]",
+                            "routeTable": "[if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
+                            "networkSecurityGroup": {
+                              "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]"
+                            }
+                          }
+                        }
+                      }
+                    ],
                     "azureCloud": "[environment().name]",
-                    "baseUDRs": [
+                    "deployNatGateway": "[or(or(equals(parameters('defaultRouting'), 'nat'), parameters('includeAvdBypassRoutes')), parameters('rdpShortpathPublicNetworks'))]",
+                    "wvdServiceRoute": [
                       {
                         "name": "AVDServiceTraffic",
                         "properties": {
@@ -1261,25 +1281,19 @@
                         }
                       }
                     ],
-                    "commercialCloudUDRs": "[if(equals(variables('azureCloud'), 'AzureCloud'), createArray(createObject('name', 'DirectRouteToKMS01', 'properties', createObject('addressPrefix', '20.118.99.224/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet')), createObject('name', 'DirectRouteToKMS02', 'properties', createObject('addressPrefix', '40.83.235.53/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet')), createObject('name', 'DirectRouteToKMS03', 'properties', createObject('addressPrefix', '23.102.135.246/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet'))), createArray())]",
-                    "governmentCloudUDRs": "[if(equals(variables('azureCloud'), 'AzureUSGovernment'), createArray(createObject('name', 'AVDStunTraffic', 'properties', createObject('addressPrefix', '20.202.0.0/16', 'hasBgpOverride', true(), 'nextHopType', 'Internet')), createObject('name', 'DirectRouteToKMS01', 'properties', createObject('addressPrefix', '23.97.0.13/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet')), createObject('name', 'DirectRouteToKMS02', 'properties', createObject('addressPrefix', '52.126.105.2/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet'))), createArray())]",
-                    "defaultUDRs": "[union(variables('baseUDRs'), variables('commercialCloudUDRs'), variables('governmentCloudUDRs'))]",
-                    "snetHosts": [
-                      {
-                        "name": "[parameters('hostsSubnet').name]",
-                        "properties": {
-                          "addressPrefix": "[parameters('hostsSubnet').addressPrefix]",
-                          "natGateway": "[if(equals(parameters('defaultRouting'), 'nat'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null())]",
-                          "routeTable": "[if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
-                          "networkSecurityGroup": {
-                            "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]"
-                          }
-                        }
-                      }
-                    ],
-                    "snetPrivateEndpoints": "[if(not(empty(parameters('privateEndpointsSubnet'))), createArray(createObject('name', parameters('privateEndpointsSubnet').name, 'properties', createObject('addressPrefix', parameters('privateEndpointsSubnet').addressPrefix))), createArray())]",
-                    "snetFunctionApp": "[if(not(empty(parameters('functionAppSubnet'))), createArray(createObject('name', parameters('functionAppSubnet').name, 'properties', createObject('addressPrefix', parameters('functionAppSubnet').addressPrefix, 'delegations', createArray(createObject('name', 'Microsoft.Web/serverFarms', 'properties', createObject('ServiceName', 'Microsoft.Web/serverFarms')))))), createArray())]",
-                    "subnets": "[union(variables('snetHosts'), variables('snetPrivateEndpoints'), variables('snetFunctionApp'))]"
+                    "commercialKmsRoutes": "[if(equals(variables('azureCloud'), 'AzureCloud'), createArray(createObject('name', 'DirectRouteToKMS01', 'properties', createObject('addressPrefix', '20.118.99.224/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet')), createObject('name', 'DirectRouteToKMS02', 'properties', createObject('addressPrefix', '40.83.235.53/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet')), createObject('name', 'DirectRouteToKMS03', 'properties', createObject('addressPrefix', '23.102.135.246/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet'))), createArray())]",
+                    "govKmsRoutes": "[if(equals(variables('azureCloud'), 'AzureUSGovernment'), createArray(createObject('name', 'DirectRouteToKMS01', 'properties', createObject('addressPrefix', '23.97.0.13/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet')), createObject('name', 'DirectRouteToKMS02', 'properties', createObject('addressPrefix', '52.126.105.2/32', 'hasBgpOverride', true(), 'nextHopType', 'Internet'))), createArray())]",
+                    "avdBypassRoutes": "[union(variables('wvdServiceRoute'), variables('commercialKmsRoutes'), variables('govKmsRoutes'))]",
+                    "shortpathBypassRoutes": "[variables('wvdServiceRoute')]",
+                    "effectiveBypassRoutes": "[union(if(parameters('includeAvdBypassRoutes'), variables('avdBypassRoutes'), createArray()), if(and(parameters('rdpShortpathPublicNetworks'), equals(parameters('defaultRouting'), 'nva')), variables('shortpathBypassRoutes'), createArray()))]",
+                    "nsgRules_ManagedShortpath": "[if(parameters('rdpShortpathManagedNetworks'), createArray(createObject('name', 'RDPShortpathManagedNetworks', 'properties', createObject('priority', 150, 'access', 'Allow', 'description', 'Allow inbound UDP 3390 from VirtualNetwork for RDP Shortpath on managed networks (ExpressRoute/VPN).', 'destinationAddressPrefix', 'VirtualNetwork', 'direction', 'Inbound', 'sourcePortRange', '*', 'destinationPortRange', '3390', 'protocol', 'Udp', 'sourceAddressPrefix', 'VirtualNetwork'))), createArray())]",
+                    "nsgSecurityRules": "[variables('nsgRules_ManagedShortpath')]",
+                    "hostsSubnetsList": "[filter(parameters('subnets'), lambda('s', equals(lambdaVariables('s').purpose, 'hosts')))]",
+                    "peSubnetsList": "[filter(parameters('subnets'), lambda('s', equals(lambdaVariables('s').purpose, 'privateEndpoints')))]",
+                    "faSubnetsList": "[filter(parameters('subnets'), lambda('s', equals(lambdaVariables('s').purpose, 'functionApp')))]",
+                    "snetPrivateEndpoints": "[if(not(empty(variables('peSubnetsList'))), createArray(createObject('name', variables('peSubnetsList')[0].name, 'properties', createObject('addressPrefix', variables('peSubnetsList')[0].addressPrefix))), createArray())]",
+                    "snetFunctionApp": "[if(not(empty(variables('faSubnetsList'))), createArray(createObject('name', variables('faSubnetsList')[0].name, 'properties', createObject('addressPrefix', variables('faSubnetsList')[0].addressPrefix, 'natGateway', if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null()), 'routeTable', if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null()), 'delegations', createArray(createObject('name', 'Microsoft.Web/serverFarms', 'properties', createObject('ServiceName', 'Microsoft.Web/serverFarms')))))), createArray())]",
+                    "allSubnets": "[union(variables('snetHosts'), variables('snetPrivateEndpoints'), variables('snetFunctionApp'))]"
                   },
                   "resources": [
                     {
@@ -1297,7 +1311,7 @@
                       "name": "[parameters('routeTableName')]",
                       "location": "[parameters('location')]",
                       "properties": {
-                        "routes": "[if(parameters('includeAvdBypassRoutes'), concat(createArray(createObject('name', 'DefaultRoute', 'properties', createObject('addressPrefix', '0.0.0.0/0', 'nextHopType', 'VirtualAppliance', 'nextHopIpAddress', parameters('nvaIPAddress')))), variables('defaultUDRs')), createArray(createObject('name', 'DefaultRoute', 'properties', createObject('addressPrefix', '0.0.0.0/0', 'nextHopType', 'VirtualAppliance', 'nextHopIpAddress', parameters('nvaIPAddress')))))]"
+                        "routes": "[if(not(empty(variables('effectiveBypassRoutes'))), concat(createArray(createObject('name', 'DefaultRoute', 'properties', createObject('addressPrefix', '0.0.0.0/0', 'nextHopType', 'VirtualAppliance', 'nextHopIpAddress', parameters('nvaIPAddress')))), variables('effectiveBypassRoutes')), createArray(createObject('name', 'DefaultRoute', 'properties', createObject('addressPrefix', '0.0.0.0/0', 'nextHopType', 'VirtualAppliance', 'nextHopIpAddress', parameters('nvaIPAddress')))))]"
                       },
                       "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/routeTables'), createObject())]"
                     },
@@ -1307,22 +1321,7 @@
                       "name": "[parameters('nsgName')]",
                       "location": "[parameters('location')]",
                       "properties": {
-                        "securityRules": [
-                          {
-                            "name": "RDPShortpath",
-                            "properties": {
-                              "priority": 150,
-                              "access": "Allow",
-                              "description": "Session host traffic to RDP Shortpath Listener",
-                              "destinationAddressPrefix": "VirtualNetwork",
-                              "direction": "Inbound",
-                              "sourcePortRange": "*",
-                              "destinationPortRange": "3390",
-                              "protocol": "Udp",
-                              "sourceAddressPrefix": "VirtualNetwork"
-                            }
-                          }
-                        ]
+                        "securityRules": "[variables('nsgSecurityRules')]"
                       },
                       "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/networkSecurityGroups'), createObject())]"
                     },
@@ -1346,7 +1345,7 @@
                       ]
                     },
                     {
-                      "condition": "[equals(parameters('defaultRouting'), 'nat')]",
+                      "condition": "[variables('deployNatGateway')]",
                       "type": "Microsoft.Network/publicIPAddresses",
                       "apiVersion": "2021-05-01",
                       "name": "[parameters('publicIPName')]",
@@ -1362,7 +1361,7 @@
                       "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/publicIPAddresses'), createObject())]"
                     },
                     {
-                      "condition": "[equals(parameters('defaultRouting'), 'nat')]",
+                      "condition": "[variables('deployNatGateway')]",
                       "type": "Microsoft.Network/natGateways",
                       "apiVersion": "2024-01-01",
                       "name": "[parameters('natGatewayName')]",
@@ -1404,14 +1403,14 @@
                     {
                       "copy": {
                         "name": "snets",
-                        "count": "[length(variables('subnets'))]",
+                        "count": "[length(variables('allSubnets'))]",
                         "mode": "serial",
                         "batchSize": 1
                       },
                       "type": "Microsoft.Network/virtualNetworks/subnets",
                       "apiVersion": "2022-05-01",
-                      "name": "[format('{0}/{1}', parameters('vnetName'), variables('subnets')[copyIndex()].name)]",
-                      "properties": "[variables('subnets')[copyIndex()].properties]",
+                      "name": "[format('{0}/{1}', parameters('vnetName'), variables('allSubnets')[copyIndex()].name)]",
+                      "properties": "[variables('allSubnets')[copyIndex()].properties]",
                       "dependsOn": [
                         "[resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))]",
                         "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]",
@@ -1452,8 +1451,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "4398935535765594407"
+                              "version": "0.43.8.12551",
+                              "templateHash": "16492410427415835886"
                             }
                           },
                           "parameters": {
@@ -1546,8 +1545,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "4398935535765594407"
+                              "version": "0.43.8.12551",
+                              "templateHash": "16492410427415835886"
                             }
                           },
                           "parameters": {
@@ -1674,8 +1673,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.40.2.10011",
-              "templateHash": "7242410930989571129"
+              "version": "0.43.8.12551",
+              "templateHash": "10766098335062593410"
             }
           },
           "parameters": {
@@ -1741,8 +1740,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "8034762683926821685"
+                      "version": "0.43.8.12551",
+                      "templateHash": "4103905132982035324"
                     }
                   },
                   "parameters": {
@@ -1808,8 +1807,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.40.2.10011",
-                      "templateHash": "18145492010396267493"
+                      "version": "0.43.8.12551",
+                      "templateHash": "7212870871978282690"
                     }
                   },
                   "parameters": {
@@ -1853,8 +1852,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.40.2.10011",
-                              "templateHash": "659625964668236737"
+                              "version": "0.43.8.12551",
+                              "templateHash": "16800567780792670544"
                             }
                           },
                           "parameters": {

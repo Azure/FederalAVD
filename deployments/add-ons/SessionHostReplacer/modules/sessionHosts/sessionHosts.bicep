@@ -302,14 +302,13 @@ module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if (fsl
   }
 }
 
-module availabilitySets '../../../../sharedModules/resources/compute/availability-set/main.bicep' = [
+module availabilitySets '../../../../../.common/bicepModules/compute/availabilitySets/deploy.bicep' = [
   for i in range(0, calculatedAvailabilitySetsCount): if (availability == 'AvailabilitySets') {
     name: 'shr-availabilitySet-${padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
     params: {
       name: replace(avSetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))
       platformFaultDomainCount: 2
       platformUpdateDomainCount: 5
-      proximityPlacementGroupResourceId: ''
       location: location
       skuName: 'Aligned'
       tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Compute/availabilitySets'] ?? {})

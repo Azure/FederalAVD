@@ -42,6 +42,74 @@ Installs Microsoft Teams optimized for Azure Virtual Desktop.
 
 ### ⚙️ System Configuration
 
+#### [Initialize-SessionHost.ps1](Initialize-SessionHost.ps1)
+
+Unified session host initialization script that combines configuration and AVD agent installation into a single Run Command execution. This is the primary script executed on each session host after VM provisioning.
+
+- **Used by:** Host Pool Deployment
+- **Log:** `C:\Windows\Logs\Initialize-SessionHost.log`
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `RegistrationToken` | Yes | Host pool registration token for joining the session host |
+| `AgentBootLoaderUrl` | Yes | Direct URL to download the RDAgentBootLoader MSI |
+| `TimeZone` | Yes | Windows time zone ID to configure (e.g. `Eastern Standard Time`) |
+| `AgentUrl` | No | Direct URL to the RDAgent MSI — used if the Azure broker endpoint is unreachable |
+| `FallbackUrl` | No | URL to a `configuration.zip` containing `DeployAgent.zip` — last-resort fallback for agent download |
+| `AADJoin` | No | `'true'` if the VM is Entra ID (Azure AD) joined; default `'false'` |
+| `MdmId` | No | MDM enrollment ID for Intune auto-enrollment with Entra ID join |
+| `UserAssignedIdentityClientId` | No | Client ID of a managed identity for authenticating to Azure Storage |
+| `ApiVersion` | No | Azure IMDS API version for token requests |
+| `StorageSuffix` | No | Cloud-specific blob storage DNS suffix (e.g. `core.windows.net`) |
+| `AmdVmSize` | No | `'true'` to enable AMD GPU optimizations; default `'false'` |
+| `NvidiaVmSize` | No | `'true'` to enable NVIDIA GPU optimizations; default `'false'` |
+| `DisableUpdates` | No | `'true'` to disable Windows, Edge, OneDrive, M365, and Teams auto-updates; default `'false'` |
+| `ConfigureFSLogix` | No | `'true'` to configure FSLogix profile containers; default `'false'` |
+| `CloudCache` | No | `'true'` to enable FSLogix Cloud Cache; default `'false'` |
+| `IdentitySolution` | No | One of: `ActiveDirectoryDomainServices`, `EntraDomainServices`, `EntraKerberos-Hybrid`, `EntraKerberos-CloudOnly`, `EntraId` |
+| `StorageService` | No | `AzureFiles` or `AzureNetAppFiles` |
+| `Shares` | No | JSON array of file share names — index 0 = profile share, index 1 = ODFC share |
+| `SizeInMBs` | No | FSLogix container size in MB; default `30000` |
+| `LocalStorageAccountNames` | No | JSON array of local storage account names |
+| `LocalStorageAccountKeys` | No | JSON array of local storage account keys (stored in Credential Manager) |
+| `LocalNetAppServers` | No | JSON array of local NetApp server FQDNs |
+| `OSSGroups` | No | JSON array of AD groups for FSLogix Object Specific Settings |
+| `RemoteStorageAccountNames` | No | JSON array of remote (DR) storage account names |
+| `RemoteStorageAccountKeys` | No | JSON array of remote storage account keys |
+| `RemoteNetAppServers` | No | JSON array of remote NetApp server FQDNs |
+
+**Execution Phases:**
+
+*Phase 1 — Session Host Configuration*
+- Sets the system time zone
+- Optionally disables Windows Update, Edge, OneDrive, M365, and Teams auto-updates
+- Enables time zone redirection registry policy
+- Configures AMD/NVIDIA GPU registry settings when applicable
+- Configures FSLogix profile and ODFC containers (VHDLocations or CCDLocations), including:
+  - Azure Files and Azure NetApp Files storage paths
+  - Object Specific Settings (per-group VHD locations)
+  - Cloud Cache support
+  - FSLogix Redirections XML for Teams and Azure CLI profile exclusions
+  - Entra Kerberos `CloudKerberosTicketRetrievalEnabled` registry value
+  - Windows Defender path and process exclusions for FSLogix
+  - Local administrator added to FSLogix exclude lists
+- Applies all registry settings via `Set-RegistryValue`
+- Resizes the OS disk partition to its maximum supported size
+
+*Phase 2 — AVD Agent Installation*
+- Detects Server OS and installs `RDS-RD-Server` Windows Feature if needed
+- Skips installation if the VM is already registered (`RDInfraAgent` registry key)
+- Downloads the RDAgent MSI using a three-tier fallback strategy:
+  1. Queries the AVD broker endpoint via the registration token JWT
+  2. Falls back to the explicit `AgentUrl` parameter
+  3. Extracts from `configuration.zip` → `DeployAgent.zip` at `FallbackUrl`
+- Downloads the RDAgentBootLoader MSI from `AgentBootLoaderUrl` (with FallbackUrl fallback)
+- Installs RDAgentBootLoader and RDAgent via MSI with automatic retry on `ERROR_INSTALL_ALREADY_RUNNING` (exit code 1618)
+- Waits for the `RDAgentBootLoader` service to start
+- Cleans up the temporary download folder
+
 #### [Set-SessionHostConfiguration.ps1](Set-SessionHostConfiguration.ps1)
 
 Comprehensive session host configuration including FSLogix, GPU drivers, time zone, and optional Windows Update disabling.

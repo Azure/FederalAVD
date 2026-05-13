@@ -17,11 +17,11 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
 }
 
 @batchSize(1)
-module applications 'applyCustomization.bicep' = [
-  for customizer in customizations: {
-    name: '${customizer.name}-${deploymentSuffix}'
+module applyCustomizations 'applyCustomization.bicep' = [
+  for customization in customizations: {
+    name: '${customization.name}-${deploymentSuffix}'
     params: {
-      customizer: customizer
+      customization: customization
       location: location
       imageVmName: imageVmName
       orchestrationVmName: orchestrationVmName
@@ -68,6 +68,6 @@ resource removeRunCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-0
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
-    applications
+    applyCustomizations
   ]
 }

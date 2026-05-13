@@ -31,7 +31,7 @@
 							"visible": true,
 							"options": {
 								"style": "Info",
-								"text": "<b>IMPORTANT</b>\n\nSelect your AVD workload subscription in the <b>Project details</b> section below.\n\nSelect your desired region in the <b>Instance details</b> section below.\n\nThese selections will be used to scope where the virtual network components will be deployed.\n\nYou will have the option to select a seperate subscription for your private DNS zones which are global resources."
+								"text": "IMPORTANT\n\nSelect your AVD workload subscription in the Project details section below.\n\nSelect your desired region in the Instance details section below.\n\nThese selections will be used to scope where the virtual network components will be deployed.\n\nYou will have the option to select a separate subscription for your private DNS zones which are global resources."
 							}
 						},
 						{
@@ -104,8 +104,27 @@
 									"name": "storageQuotaAutomation",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Azure Premium Storage Quota Automation",
-									"toolTip": "Select this box to have the option for configuring the Azure Private DNS Zones for function apps.",
+									"toolTip": "The Storage Quota Automation solution uses an Azure Function App to automatically manage Azure Files Premium share quotas. Enable this if you plan to use VNet integration for the function app.",
 									"visible": "[steps('basics').features.privateEndpoints]"
+								},
+								{
+									"name": "sessionHostReplacer",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Session Host Replacer",
+									"toolTip": "The Session Host Replacer solution uses an Azure Function App to automatically replace AVD session hosts. Enable this if you plan to use VNet integration for the function app.",
+									"visible": "[steps('basics').features.privateEndpoints]"
+								},
+								{
+									"name": "rdpShortpathManagedNetworks",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "RDP Shortpath for Managed Networks",
+									"toolTip": "Enables RDP Shortpath for managed networks (ExpressRoute or VPN). Adds an NSG rule to allow inbound UDP 3390 from VirtualNetwork for direct UDP session host connectivity."
+								},
+								{
+									"name": "rdpShortpathPublicNetworks",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "RDP Shortpath for Public Networks (STUN/ICE)",
+									"toolTip": "Enables RDP Shortpath for public networks using STUN/ICE. Deploys a NAT Gateway on session host and function app subnets to provide the cone-shaped NAT required for STUN negotiation. On NVA deployments, also adds AVD service bypass routes so STUN/TURN traffic reaches the internet directly. No inbound NSG rule is required — ICE handles traversal entirely through the outbound-initiated cone NAT session."
 								}
 							]
 						}
@@ -148,7 +167,7 @@
 									"name": "vnetInfoBlock1",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
-										"text": "<b>IMPORTANT</b>\n\nFirst, select an existing or <u>Create a new</u> resource group to contain the virtual network resources.\n\nThen, review the virtual network and subnet names and IP prefixes in each selection below before continuing. Make any changes necessary with the <u>Edit Virtual Network</u> or <u>Edit Subnet</u> links."
+										"text": "IMPORTANT\n\nFirst, select an existing or create a new resource group to contain the virtual network resources.\n\nThen, enter the virtual network name and address prefix, and add the required subnets in the table below. Set each subnet's Purpose to control how it will be configured."
 									}
 								},
 								{
@@ -161,166 +180,94 @@
 									}
 								},
 								{
-									"name": "vnetMinimum",
-									"type": "Microsoft.Network.VirtualNetworkCombo",
-									"label": {
-										"virtualNetwork": "Virtual network",
-										"subnets": "Subnets"
-									},
-									"toolTip": {
-										"virtualNetwork": "",
-										"subnets": ""
-									},
-									"defaultValue": {
-										"name": "[if(contains(steps('basics').scope.location.name, 'virginia'), 'vnet-avd-va', if(contains(steps('basics').scope.location.name, 'arizona'), 'vnet-avd-az', if(contains(steps('basics').scope.location.name, 'texas'), 'vnet-avd-tx', concat('vnet-avd-', steps('basics').scope.location.name))))]",
-										"addressPrefixSize": "/24"
-									},
+									"name": "vnetName",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Virtual Network Name",
+									"defaultValue": "[if(contains(steps('basics').scope.location.name, 'virginia'), 'vnet-avd-va', if(contains(steps('basics').scope.location.name, 'arizona'), 'vnet-avd-az', if(contains(steps('basics').scope.location.name, 'texas'), 'vnet-avd-tx', concat('vnet-avd-', steps('basics').scope.location.name))))]",
+									"toolTip": "Enter the name for the virtual network.",
 									"constraints": {
-										"minAddressPrefixSize": "/24"
-									},
-									"options": {
-										"hideExisting": true
-									},
-									"scope": {
-										"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
-										"resourceGroupName": "[steps('virtualNetwork').deploy.resourceGroup.value.name]",
-										"location": "[steps('basics').scope.location.name]"
-									},
-									"subnets": {
-										"subnet1": {
-											"label": "Session Hosts Subnet",
-											"defaultValue": {
-												"name": "sn-hosts",
-												"addressPrefixSize": "/24"
-											},
-											"constraints": {
-												"minAddressPrefixSize": "/26",
-												"minAddressCount": 12,
-												"requireContiguousAddresses": false
-											}
-										}
-									},
-									"visible": "[equals(steps('basics').features.privateEndpoints, false)]"
+										"required": true,
+										"regex": "^[a-zA-Z0-9][a-zA-Z0-9_\\-\\.]{0,62}[a-zA-Z0-9_]$",
+										"validationMessage": "VNet name must be 2-64 characters, start and end with alphanumeric, and contain only letters, numbers, underscores, hyphens, or periods."
+									}
 								},
 								{
-									"name": "vnetPrivateEndpoints",
-									"type": "Microsoft.Network.VirtualNetworkCombo",
-									"label": {
-										"virtualNetwork": "Virtual network",
-										"subnets": "Subnets"
-									},
-									"toolTip": {
-										"virtualNetwork": "",
-										"subnets": ""
-									},
-									"defaultValue": {
-										"name": "[if(contains(steps('basics').scope.location.name, 'virginia'), 'vnet-avd-va', if(contains(steps('basics').scope.location.name, 'arizona'), 'vnet-avd-az', if(contains(steps('basics').scope.location.name, 'texas'), 'vnet-avd-tx', concat('vnet-avd-', steps('basics').scope.location.name))))]",
-										"addressPrefixSize": "/16"
-									},
+									"name": "vnetAddressPrefix",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Virtual Network Address Range (CIDR)",
+									"defaultValue": "10.0.0.0/16",
+									"toolTip": "Enter the address space for the virtual network in CIDR notation.",
 									"constraints": {
-										"minAddressPrefixSize": "/24"
-									},
-									"options": {
-										"hideExisting": true
-									},
-									"scope": {
-										"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
-										"resourceGroupName": "[steps('virtualNetwork').deploy.resourceGroup.value.name]",
-										"location": "[steps('basics').scope.location.name]"
-									},
-									"subnets": {
-										"subnet1": {
-											"label": "Session Hosts Subnet",
-											"defaultValue": {
-												"name": "sn-hosts",
-												"addressPrefixSize": "/24"
-											},
-											"constraints": {
-												"minAddressPrefixSize": "/26",
-												"minAddressCount": 12,
-												"requireContiguousAddresses": false
-											}
-										},
-										"subnet2": {
-											"label": "Private Endpoints Subnet",
-											"defaultValue": {
-												"name": "snet-private-endpoints",
-												"addressPrefixSize": "/24"
-											},
-											"constraints": {
-												"minAddressPrefixSize": "/26",
-												"minAddressCount": 8,
-												"requireContiguousAddresses": false
-											}
-										}
-									},
-									"visible": "[and(steps('basics').features.privateEndpoints, equals(steps('basics').features.storageQuotaAutomation, false))]"
+										"required": true,
+										"regex": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\/(3[0-2]|[1-2]?[0-9])$",
+										"validationMessage": "Must be a valid CIDR notation, e.g. 10.0.0.0/16."
+									}
 								},
 								{
-									"name": "vnetFunctionApp",
-									"type": "Microsoft.Network.VirtualNetworkCombo",
-									"label": {
-										"virtualNetwork": "Virtual network",
-										"subnets": "Subnets"
-									},
-									"toolTip": {
-										"virtualNetwork": "",
-										"subnets": ""
-									},
-									"defaultValue": {
-										"name": "[if(contains(steps('basics').scope.location.name, 'virginia'), 'vnet-avd-va', if(contains(steps('basics').scope.location.name, 'arizona'), 'vnet-avd-az', if(contains(steps('basics').scope.location.name, 'texas'), 'vnet-avd-tx', concat('vnet-avd-', steps('basics').scope.location.name))))]",
-										"addressPrefixSize": "/16"
-									},
-									"constraints": {
-										"minAddressPrefixSize": "/24"
-									},
+									"name": "subnetsInfoBox",
+									"type": "Microsoft.Common.InfoBox",
 									"options": {
-										"hideExisting": true
-									},
-									"scope": {
-										"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
-										"resourceGroupName": "[steps('virtualNetwork').deploy.resourceGroup.value.name]",
-										"location": "[steps('basics').scope.location.name]"
-									},
-									"subnets": {
-										"subnet1": {
-											"label": "Session Hosts Subnet",
-											"defaultValue": {
-												"name": "sn-hosts",
-												"addressPrefixSize": "/24"
-											},
-											"constraints": {
-												"minAddressPrefixSize": "/26",
-												"minAddressCount": 12,
-												"requireContiguousAddresses": false
+										"style": "Info",
+										"text": "Add one row per subnet. The Purpose column determines how each subnet is configured:\n\n- Session Hosts: attached to the NSG and route table; required for AVD session hosts.\n- Private Endpoints: no NSG, route table, or delegation; available when Private Endpoints is enabled.\n- Function App: receives a Microsoft.Web/serverFarms delegation; also attached to the NAT gateway and route table when those are deployed (same conditions as Session Hosts). Available when Storage Quota Automation or Session Host Replacer is enabled."
+									}
+								},
+								{
+									"name": "subnets",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Virtual Network Subnets",
+									"label": "Subnets",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 1,
+												"max": 20
 											}
 										},
-										"subnet2": {
-											"label": "Private Endpoints Subnet",
-											"defaultValue": {
-												"name": "snet-private-endpoints",
-												"addressPrefixSize": "/24"
+										"columns": [
+											{
+												"id": "name",
+												"header": "Subnet Name",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "Example: sn-hosts",
+													"constraints": {
+														"required": true,
+														"regex": "^[a-zA-Z0-9][a-zA-Z0-9\\-_]{0,78}[a-zA-Z0-9]$",
+														"validationMessage": "Subnet name must be 2-80 characters, alphanumeric, hyphens, or underscores."
+													}
+												}
 											},
-											"constraints": {
-												"minAddressPrefixSize": "/26",
-												"minAddressCount": 8,
-												"requireContiguousAddresses": false
-											}
-										},
-										"subnet3": {
-											"label": "Function App Subnet",
-											"defaultValue": {
-												"name": "snet-function-app",
-												"addressPrefixSize": "/26"
+											{
+												"id": "addressPrefix",
+												"header": "Address Prefix (CIDR)",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "Example: 10.0.0.0/24",
+													"constraints": {
+														"required": true,
+														"regex": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\/(3[0-2]|[1-2]?[0-9])$",
+														"validationMessage": "Must be a valid CIDR notation, e.g. 10.0.0.0/24."
+													}
+												}
 											},
-											"constraints": {
-												"minAddressPrefixSize": "/27",
-												"minAddressCount": 8,
-												"requireContiguousAddresses": false
+											{
+												"id": "purpose",
+												"header": "Purpose",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"placeholder": "Select purpose...",
+													"constraints": {
+														"required": true,
+														"allowedValues": "[filter(parse('[{\"label\":\"Session Hosts\",\"value\":\"hosts\"},{\"label\":\"Private Endpoints\",\"value\":\"privateEndpoints\"},{\"label\":\"Function App\",\"value\":\"functionApp\"}]'), (item) => or(equals(item.value, 'hosts'), if(equals(item.value, 'privateEndpoints'), steps('basics').features.privateEndpoints, false), if(equals(item.value, 'functionApp'), and(steps('basics').features.privateEndpoints, or(steps('basics').features.storageQuotaAutomation, steps('basics').features.sessionHostReplacer)), false)))]"
+													}
+												}
 											}
-										}
-									},
-									"visible": "[and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation)]"
+										]
+									}
 								},
 								{
 									"name": "defaultRouteType",
@@ -554,7 +501,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('basics').features.recoveryServices]",
 									"options": {
-										"text": "<u>Azure Backup Services</u>"
+										"text": "Azure Backup Services"
 									}
 								},
 								{
@@ -586,7 +533,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": true,
 									"options": {
-										"text": "<u>Azure Key Vaults</u>"
+										"text": "Azure Key Vaults"
 									}
 								},
 								{
@@ -606,7 +553,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[or(steps('basics').features.recoveryServices, steps('basics').features.azureFiles, steps('basics').features.storageQuotaAutomation)]",
 									"options": {
-										"text": "<u>Azure Storage</u>"
+										"text": "Azure Storage"
 									}
 								},
 								{
@@ -662,7 +609,7 @@
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('basics').features.avdPrivateLink]",
 									"options": {
-										"text": "<u>Azure Virtual Desktop Private Link</u>"
+										"text": "Azure Virtual Desktop Private Link"
 									}
 								},
 								{
@@ -693,15 +640,15 @@
 								{
 									"name": "functionAppsHeader",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('basics').features.storageQuotaAutomation]",
+									"visible": "[or(steps('basics').features.storageQuotaAutomation, steps('basics').features.sessionHostReplacer)]",
 									"options": {
-										"text": "<u>Websites (Function Apps)</u>"
+										"text": "Websites (Function Apps)"
 									}
 								},
 								{
 									"name": "azureWebApp",
 									"type": "Microsoft.Common.DropDown",
-									"visible": "[steps('basics').features.storageQuotaAutomation]",
+									"visible": "[or(steps('basics').features.storageQuotaAutomation, steps('basics').features.sessionHostReplacer)]",
 									"label": "Azure Web App",
 									"multiLine": true,
 									"toolTip": "Select the existing Private DNS Zone for Azure Function Apps",
@@ -716,7 +663,7 @@
 									"defaultValue": true,
 									"label": "Deploy any missing Private DNS Zones",
 									"toolTip": "Select this box to automatically deploy any missing Private DNS Zones to the subscription above.",
-									"visible": "[or(if(equals(steps('basics').features.recoveryServices, true), empty(steps('privateDNSZones').zones.azureBackup), false), if(or(equals(steps('basics').features.customImage, true), equals(steps('basics').features.recoveryServices, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureBlob), false), if(or(equals(steps('basics').features.azureFiles, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureFiles), false), if(or(equals(steps('basics').features.recoveryServices, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureQueue), false), if(equals(steps('basics').features.storageQuotaAutomation, true), empty(steps('privateDNSZones').zones.azureTable), false), empty(steps('privateDNSZones').zones.azureKeyVault), if(equals(steps('basics').features.avdPrivateLink, true), or(empty(steps('privateDNSZones').zones.avdFeedAndConnections), empty(steps('privateDNSZones').zones.globalFeed)), false), if(equals(steps('basics').features.storageQuotaAutomation, true), empty(steps('privateDNSZones').zones.azureWebApp), false))]"
+									"visible": "[or(if(equals(steps('basics').features.recoveryServices, true), empty(steps('privateDNSZones').zones.azureBackup), false), if(or(equals(steps('basics').features.customImage, true), equals(steps('basics').features.recoveryServices, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureBlob), false), if(or(equals(steps('basics').features.azureFiles, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureFiles), false), if(or(equals(steps('basics').features.recoveryServices, true), equals(steps('basics').features.storageQuotaAutomation, true)), empty(steps('privateDNSZones').zones.azureQueue), false), if(equals(steps('basics').features.storageQuotaAutomation, true), empty(steps('privateDNSZones').zones.azureTable), false), empty(steps('privateDNSZones').zones.azureKeyVault), if(equals(steps('basics').features.avdPrivateLink, true), or(empty(steps('privateDNSZones').zones.avdFeedAndConnections), empty(steps('privateDNSZones').zones.globalFeed)), false), if(or(equals(steps('basics').features.storageQuotaAutomation, true), equals(steps('basics').features.sessionHostReplacer, true)), empty(steps('privateDNSZones').zones.azureWebApp), false))]"
 								},
 								{
 									"type": "Microsoft.Common.ResourceGroupSelector",
@@ -783,11 +730,9 @@
 				"deployVnet": "[steps('virtualNetwork').deployVnet]",
 				"deployVnetResourceGroup": "[if(and(steps('virtualNetwork').deployVnet, equals(steps('virtualNetwork').deploy.resourceGroup.mode, 'New')), true, false)]",
 				"vnetResourceGroupName": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.resourceGroup.value.name, '')]",
-				"vnetName": "[if(steps('virtualNetwork').deployVnet, if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.name, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.name, steps('virtualNetwork').deploy.vnetMinimum.name)), '')]",
-				"vnetAddressPrefixes": "[if(steps('virtualNetwork').deployVnet, if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.addressPrefixes, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.addressPrefixes, steps('virtualNetwork').deploy.vnetMinimum.addressPrefixes)), '')]",
-				"hostsSubnet": "[if(steps('virtualNetwork').deployVnet, if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.subnets.subnet1, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.subnets.subnet1, steps('virtualNetwork').deploy.vnetMinimum.subnets.subnet1)), parse('{}'))]",
-				"privateEndpointsSubnet": "[if(and(steps('basics').features.privateEndpoints, steps('basics').features.storageQuotaAutomation), steps('virtualNetwork').deploy.vnetFunctionApp.subnets.subnet2, if(steps('basics').features.privateEndpoints, steps('virtualNetwork').deploy.vnetPrivateEndpoints.subnets.subnet2, parse('{}')))]",
-				"functionAppSubnet": "[if(steps('virtualNetwork').deployVnet, if(steps('basics').features.storageQuotaAutomation, steps('virtualNetwork').deploy.vnetFunctionApp.subnets.subnet3, parse('{}')), parse('{}'))]",
+				"vnetName": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.vnetName, '')]",
+				"vnetAddressPrefixes": "[if(steps('virtualNetwork').deployVnet, parse(concat('[\"', steps('virtualNetwork').deploy.vnetAddressPrefix, '\"]')), parse('[]'))]",
+				"subnets": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.subnets, parse('[]'))]",
 				"defaultRouting": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.defaultRouteType, 'nat')]",
 				"includeAvdBypassRoutes": "[if(steps('virtualNetwork').deployVnet, if(equals(steps('virtualNetwork').deploy.defaultRouteType, 'nva'), steps('virtualNetwork').deploy.includeAvdBypassRoutes, false), false)]",
 				"nvaIPAddress": "[if(steps('virtualNetwork').deployVnet, if(equals(steps('virtualNetwork').deploy.defaultRouteType, 'nva'), steps('virtualNetwork').deploy.nvaIPAddress, ''), '')]",
@@ -795,7 +740,7 @@
 				"deployDDoSNetworkProtection": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.deployDDoSNetworkProtection, false)]",
 				"hubVnetResourceId": "[if(steps('virtualNetwork').deployVnet, if(steps('virtualNetwork').deploy.peerVnetToHub, steps('virtualNetwork').deploy.hubVnet.id, ''), '')]",
 				"virtualNetworkGatewayOnHub": "[if(steps('virtualNetwork').deployVnet, if(steps('virtualNetwork').deploy.peerVnetToHub, steps('virtualNetwork').deploy.hubVirtualNetworkGateway, ''), '')]",
-				"logAnalyticsWorkspaceId": "[if(and(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.collectNSGDiagLogs), steps('virtualNetwork').deploy.logAnalyticsWorkspace.id, '')]",
+				"logAnalyticsWorkspaceResourceId": "[if(and(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.collectNSGDiagLogs), steps('virtualNetwork').deploy.logAnalyticsWorkspace.id, '')]",
 				"nameConvResTypeAtEnd": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.nameConvResTypeAtEnd, false)]",
 				"privateDNSZonesSubscriptionId": "[if(and(steps('basics').features.privateEndpoints, steps('privateDNSZones').zones.deployMissingZones), steps('privateDNSZones').zones.subscription.subscriptionId, '')]",
 				"deployPrivateDNSZonesResourceGroup": "[if(and(steps('basics').features.privateEndpoints, steps('privateDNSZones').zones.deployMissingZones, equals(steps('privateDNSZones').zones.resourceGroup.mode, 'New')), true, false)]",
@@ -817,8 +762,10 @@
 				"avdFeedZoneId": "[if(steps('basics').features.avdPrivateLink, steps('privateDNSZones').zones.avdFeedAndConnections, '')]",
 				"createAvdGlobalFeedZone": "[if(and(steps('basics').features.avdPrivateLink, steps('privateDNSZones').zones.deployMissingZones), empty(steps('privateDNSZones').zones.globalFeed), false)]",
 				"avdGlobalFeedZoneId": "[if(steps('basics').features.avdPrivateLink, steps('privateDNSZones').zones.globalFeed, '')]",
-				"createAzureWebAppZone": "[if(and(steps('basics').features.storageQuotaAutomation, steps('privateDNSZones').zones.deployMissingZones), empty(steps('privateDNSZones').zones.azureWebApp), false)]",
-				"azureWebAppZoneId": "[if(steps('basics').features.storageQuotaAutomation, steps('privateDNSZones').zones.azureWebApp, '')]",
+				"createAzureWebAppZone": "[if(and(or(steps('basics').features.storageQuotaAutomation, steps('basics').features.sessionHostReplacer), steps('privateDNSZones').zones.deployMissingZones), empty(steps('privateDNSZones').zones.azureWebApp), false)]",
+				"azureWebAppZoneId": "[if(or(steps('basics').features.storageQuotaAutomation, steps('basics').features.sessionHostReplacer), steps('privateDNSZones').zones.azureWebApp, '')]",
+				"rdpShortpathManagedNetworks": "[steps('basics').features.rdpShortpathManagedNetworks]",
+				"rdpShortpathPublicNetworks": "[steps('basics').features.rdpShortpathPublicNetworks]",
 				"linkPrivateDnsZonesToNewVnet": "[if(steps('virtualNetwork').deployVnet, equals(steps('privateDNSZones').zones.linkOptions, 'newVnet'), false)]",
 				"privateDnsZonesVnetId": "[if(equals(steps('privateDNSZones').zones.linkOptions, 'other'), steps('privateDNSZones').zones.privateDnsZoneLinkVnet.id, if(equals(steps('privateDNSZones').zones.linkOptions, 'hub'), steps('virtualNetwork').deploy.hubVnet.id, ''))]",
 				"tags": "[steps('tags').tags]"

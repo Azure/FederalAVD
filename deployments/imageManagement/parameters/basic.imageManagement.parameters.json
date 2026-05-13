@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "nameConvResTypeAtEnd": {
+      "value": false
+    },
+    "deployArtifactsStorageAccount": {
+      "value": true
+    },
+    "deployBuildLogsStorageAccount": {
+      "value": false
+    },
+    "storageNetworkAccess": {
+      "value": "PublicEndpoint"
+    },
+    "storageAllowSharedKeyAccess": {
+      "value": false
+    },
+    "tags": {
+      "value": {}
+    }
+  }
+}

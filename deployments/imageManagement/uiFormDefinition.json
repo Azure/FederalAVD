@@ -1,0 +1,551 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+	"view": {
+		"kind": "Form",
+		"properties": {
+			"title": "AVD Image Management",
+			"steps": [
+				{
+					"name": "basics",
+					"label": "Deployment Basics",
+					"elements": [
+						{
+							"name": "infoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"options": {
+								"style": "Info",
+								"text": "This template deploys AVD image management infrastructure in the selected region. An Azure Compute Gallery is always deployed to store and version custom OS images. Optionally deploy an artifacts storage account (for image build scripts and software installers) and a build logs storage account (for customization logs, auto-purged after 7 days). Zero Trust storage hardening is applied by default: shared key access is disabled, Entra ID authentication is enforced, and network access can be restricted to private endpoints, service endpoints, or permitted IP ranges. Encryption at rest can use platform-managed keys or customer-managed keys (including HSM-backed keys) stored in a Premium Key Vault — the same key vault and rotation policy apply to both storage accounts and gallery image versions."
+							}
+						},
+						{
+							"name": "subscriptionsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "GET",
+								"path": "/subscriptions?api-version=2022-12-01"
+							}
+						},
+						{
+							"name": "scope",
+							"type": "Microsoft.Common.ResourceScope",
+							"instanceDetailsLabel": "Image Management Location",
+							"location": {
+								"label": "Region",
+								"resourceTypes": [
+									"Microsoft.Compute/galleries"
+								]
+							}
+						},
+						{
+							"name": "naming",
+							"type": "Microsoft.Common.Section",
+							"label": "Naming Convention",
+							"elements": [
+								{
+									"name": "nameConvResTypeAtEnd",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Resource Type Abbreviation at End of Name",
+									"toolTip": "When checked, names follow the pattern 'avd-image-management-eus-gal'. When unchecked (default), names follow 'gal-avd-image-management-eus'."
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "storageAccounts",
+					"label": "Storage Accounts",
+					"elements": [
+						{
+							"name": "infoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"options": {
+								"style": "Info",
+								"text": "Optionally deploy an artifacts storage account (for image build scripts and installers) and/or a build logs storage account (for image customization logs, auto-purged after 7 days). A shared managed identity is deployed when either account is enabled. Shared key access is disabled on all accounts — Entra ID authentication is enforced."
+							}
+						},
+						{
+							"name": "deployArtifactsStorageAccount",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Deploy Artifacts Storage Account",
+							"defaultValue": true,
+							"toolTip": "Deploy the artifacts storage account and managed identity. The managed identity is granted Storage Blob Data Reader. Disable only when all image customizations use fully-qualified public URIs or an external storage account."
+						},
+						{
+							"name": "deployBuildLogsStorageAccount",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Deploy Build Logs Storage Account",
+							"defaultValue": false,
+							"toolTip": "Deploy a dedicated storage account for image build logs. Blobs are automatically purged after 7 days. The managed identity is granted Storage Blob Data Contributor. Pass the buildLogsStorageAccountResourceId output to imageBuild deployments as existingLogStorageAccountResourceId."
+						},
+						{
+							"name": "storageSettings",
+							"type": "Microsoft.Common.Section",
+							"label": "Storage Configuration",
+							"visible": "[or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount)]",
+							"elements": [
+								{
+									"name": "storageNetworkAccess",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Network Access",
+									"defaultValue": "PublicEndpoint",
+									"toolTip": "Network access configuration applied to both storage accounts. Private Endpoint disables public access and routes traffic over the Microsoft backbone. Service Endpoint restricts access to specific subnets — this template configures the storage network ACL rules but does NOT deploy service endpoints to the subnets.",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "Public Endpoint",
+												"value": "PublicEndpoint"
+											},
+											{
+												"label": "Private Endpoint",
+												"value": "PrivateEndpoint"
+											},
+											{
+												"label": "Service Endpoint",
+												"value": "ServiceEndpoint"
+											}
+										]
+									}
+								},
+								{
+									"name": "permittedIPsInfo",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Permitted IP Addresses / CIDR Ranges (optional)",
+										"style": "Heading"
+									}
+								},
+								{
+									"name": "permittedIPsDescription",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Restrict public access to specific IP addresses or CIDR ranges. Leave empty to allow all public traffic (or fully disable it via Private Endpoint with no IPs). When Private Endpoint is selected alongside IP rules, the private endpoint handles internal traffic while those IPs are permitted over the public endpoint. Has no effect on service endpoint subnet rules."
+									}
+								},
+								{
+									"name": "storagePermittedIPs",
+									"type": "Microsoft.Common.EditableGrid",
+									"label": "Permitted IP Addresses / CIDR Ranges",
+									"visible": true,
+									"toolTip": "",
+									"ariaLabel": "Permitted IP Addresses or CIDR Ranges",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 0,
+												"max": 10
+											}
+										},
+										"columns": [
+											{
+												"id": "ipAddress",
+												"header": "IP Address or CIDR Range",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
+													"constraints": {
+														"required": true,
+														"validations": [
+															{
+																"regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
+																"message": "Must be a valid IPv4 address or CIDR range (e.g. 10.0.0.1 or 10.0.0.0/24)."
+															}
+														]
+													}
+												}
+											}
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "privateEndpointSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Private Endpoint Configuration",
+							"visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'))]",
+							"elements": [
+								{
+									"name": "virtualNetworksApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), not(empty(steps('basics').scope.subscription)))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+									}
+								},
+								{
+									"name": "virtualNetwork",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Virtual Network",
+									"multiLine": true,
+									"toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the primary region are shown.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('storageAccounts').privateEndpointSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+									}
+								},
+								{
+									"name": "subnetsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('storageAccounts').privateEndpointSection.virtualNetwork))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('storageAccounts').privateEndpointSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+									}
+								},
+								{
+									"name": "privateEndpointSubnet",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Private Endpoint Subnet",
+									"toolTip": "Select the subnet for storage account private endpoints. Subnets with delegations are excluded.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('storageAccounts').privateEndpointSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+									}
+								}
+							]
+						},
+						{
+							"name": "privateDnsSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Private DNS Zone",
+							"visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'))]",
+							"elements": [
+								{
+									"name": "enablePrivateDNSIntegration",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Private DNS Zone Integration",
+									"defaultValue": true,
+									"toolTip": "Register storage private endpoint A records in an Azure Private DNS Zone for proper name resolution."
+								},
+								{
+									"name": "privateDNSZonesSubscription",
+									"type": "Microsoft.Common.DropDown",
+									"visible": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
+									"label": "Private DNS Zone Subscription",
+									"defaultValue": "[steps('basics').scope.subscription.displayName]",
+									"toolTip": "Select the subscription containing your Private DNS Zones. In hub-and-spoke topologies this is typically the connectivity subscription.",
+									"constraints": {
+										"required": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+									}
+								},
+								{
+									"name": "privateDNSZonesApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('storageAccounts').privateDnsSection.privateDNSZonesSubscription)))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('storageAccounts').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+									}
+								},
+								{
+									"name": "blobPrivateDnsZone",
+									"type": "Microsoft.Common.DropDown",
+									"visible": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
+									"label": "Blob Storage Private DNS Zone",
+									"multiLine": true,
+									"defaultValue": "[first(map(filter(steps('storageAccounts').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'blob')), (zone) => zone.name))]",
+									"toolTip": "Select the Private DNS Zone for Blob storage (privatelink.blob.core.windows.net or privatelink.blob.core.usgovcloudapi.net for Azure Government).",
+									"constraints": {
+										"required": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
+										"allowedValues": "[map(filter(steps('storageAccounts').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'blob')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+									}
+								}
+							]
+						},
+						{
+							"name": "serviceEndpointSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Service Endpoint Configuration",
+							"visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'))]",
+							"elements": [
+								{
+									"name": "serviceEndpointInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Warning",
+										"text": "This template adds the selected subnets to the storage account network ACL to allow access via service endpoints. It does NOT deploy service endpoints to the subnets. Microsoft.Storage service endpoints must already be configured on each subnet. Only subnets with an existing Microsoft.Storage service endpoint are listed below."
+									}
+								},
+								{
+									"name": "virtualNetworksApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), not(empty(steps('basics').scope.subscription)))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+									}
+								},
+								{
+									"name": "virtualNetwork",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Virtual Network",
+									"multiLine": true,
+									"toolTip": "Select the virtual network containing the subnets that will access storage via service endpoints.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('storageAccounts').serviceEndpointSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+									}
+								},
+								{
+									"name": "subnetsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('storageAccounts').serviceEndpointSection.virtualNetwork))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('storageAccounts').serviceEndpointSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+									}
+								},
+								{
+									"name": "serviceEndpointSubnets",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Subnets with Microsoft.Storage Service Endpoint",
+									"multiSelect": true,
+									"selectAll": true,
+									"toolTip": "Select all subnets that need access to the storage accounts via service endpoint. Only subnets with an existing Microsoft.Storage service endpoint are listed.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('storageAccounts').serviceEndpointSection.subnetsApi.value, (snet) => not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage'))))), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "encryption",
+					"label": "Encryption Key Management",
+					"elements": [
+						{
+							"name": "storage",
+							"type": "Microsoft.Common.Section",
+							"label": "Storage Account Encryption",
+							"elements": [
+								{
+									"name": "storageEncryptionInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "Storage accounts are encrypted at rest by default. Platform-managed keys require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys."
+									}
+								},
+								{
+									"name": "keyManagement",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Key Management",
+									"defaultValue": "PlatformManaged",
+									"toolTip": "Encryption key management applied to all resources in this deployment — storage accounts and gallery image versions. Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "Platform-Managed Keys",
+												"value": "PlatformManaged"
+											},
+											{
+												"label": "Customer-Managed Keys",
+												"value": "CustomerManaged"
+											},
+											{
+												"label": "Customer-Managed Keys (HSM-backed)",
+												"value": "CustomerManagedHSM"
+											}
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "gallery",
+							"type": "Microsoft.Common.Section",
+							"label": "Gallery Image Version Encryption",
+							"elements": [
+								{
+									"name": "galleryEncryptionInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "Gallery image versions are encrypted at rest by default. Platform-managed keys require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys."
+									}
+								},
+								{
+									"name": "keyManagement",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Key Management",
+									"defaultValue": "PlatformManaged",
+
+									"toolTip": "Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "Platform-Managed Keys",
+												"value": "PlatformManaged"
+											},
+											{
+												"label": "Customer-Managed Keys",
+												"value": "CustomerManaged"
+											},
+											{
+												"label": "Customer-Managed Keys (HSM-backed)",
+												"value": "CustomerManagedHSM"
+											},
+											{
+												"label": "Platform-Managed and Customer-Managed Keys (Double Encryption)",
+												"value": "PlatformManagedAndCustomerManaged"
+											},
+											{
+												"label": "Platform-Managed and Customer-Managed Keys, HSM-backed (Double Encryption)",
+												"value": "PlatformManagedAndCustomerManagedHSM"
+											}
+										]
+									}
+								}
+							]
+						},						
+						{
+							"name": "keyVaultSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Key Vault & Rotation",
+							"visible": "[or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged')))]",
+							"elements": [
+								{
+									"name": "cmkInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "Customer-managed keys require an existing Premium SKU Key Vault with soft delete and purge protection enabled. Deploy the Key Vault using the keyVaults template before running this deployment. The deploying identity requires the Key Vault Crypto Officer role on the vault. The same vault and key rotation policy apply to both storage accounts and gallery image versions."
+									}
+								},
+								{
+									"name": "keyVaultsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('basics').scope.subscription))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
+									}
+								},
+								{
+									"name": "encryptionKeyVault",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Encryption Key Vault",
+									"multiLine": true,
+									"toolTip": "Select the Premium SKU Key Vault that holds the customer-managed encryption keys. Only Premium SKU vaults are listed. The same vault is used for storage account and gallery image version encryption.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('encryption').keyVaultSection.keyVaultsApi.value, (kv) => equals(kv.properties.sku.name, 'premium')), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
+									}
+								},
+								{
+									"name": "keyExpirationInDays",
+									"type": "Microsoft.Common.Slider",
+									"label": "Key Rotation (Days)",
+									"toolTip": "Number of days before the customer-managed encryption key expires and auto-rotates. Applies to all encrypted resources in this deployment.",
+									"min": 7,
+									"max": 365,
+									"defaultValue": 180,
+									"showStepMarkers": false
+								}
+							]
+						},
+						{
+							"name": "cvmDesSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Confidential VM Gallery Disk Encryption Set",
+							"visible": "[not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))]",
+							"elements": [
+								{
+									"name": "cvmDesInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "A Confidential VM Disk Encryption Set (ConfidentialVmEncryptedWithCustomerKey) is required to encrypt gallery image versions that will be used to deploy ConfidentialVM session hosts with customer-managed key encryption of the VM Guest State. This option requires an HSM-backed key management selection. The CVM Orchestrator enterprise application (app ID: bf7b6499-ff71-4aa2-97a4-f372087be7f0) must be created in your tenant before proceeding."
+									}
+								},
+								{
+									"name": "cvmDesWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Warning",
+										"text": "IMPORTANT: The Confidential VM encryption key release policy is immutable once set. This deployment will fail on subsequent runs if the key already exists. Enable this option only on the first deployment per region. Disable it on all future redeployments."
+									}
+								},
+								{
+									"name": "createConfidentialVmGalleryDes",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Create Confidential VM Gallery Disk Encryption Set",
+									"toolTip": "Creates a second DES of type ConfidentialVmEncryptedWithCustomerKey for encrypting gallery image versions intended for ConfidentialVM session host deployments. First deployment only — see warning above.",
+									"defaultValue": false
+								},
+								{
+									"name": "confidentialVMOrchestratorObjectId",
+									"type": "Microsoft.Common.TextBox",
+									"label": "CVM Orchestrator Object ID",
+									"toolTip": "Object ID of the Confidential VM Orchestrator enterprise application in your tenant. Run: Get-AzADServicePrincipal -ApplicationId 'bf7b6499-ff71-4aa2-97a4-f372087be7f0' | Select-Object -ExpandProperty Id",
+									"visible": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
+									"constraints": {
+										"required": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
+										"regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+										"validationMessage": "Must be a valid GUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "tags",
+					"label": "Tags",
+					"elements": [
+						{
+							"name": "infoBox",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Apply tags to the deployed resources. Tags are applied per resource type."
+							}
+						},
+						{
+							"name": "resourceTags",
+							"type": "Microsoft.Common.TagsByResource",
+							"resources": [
+								"Microsoft.Resources/resourceGroups",
+								"Microsoft.Compute/galleries",
+								"Microsoft.Storage/storageAccounts",
+								"Microsoft.ManagedIdentity/userAssignedIdentities",
+								"Microsoft.Network/privateEndpoints"
+							]
+						}
+					]
+				}
+			]
+		},
+		"outputs": {
+			"kind": "Subscription",
+			"location": "[steps('basics').scope.location.name]",
+			"subscriptionId": "[steps('basics').scope.subscription.id]",
+			"parameters": {
+				"location": "[steps('basics').scope.location.name]",
+				"nameConvResTypeAtEnd": "[steps('basics').naming.nameConvResTypeAtEnd]",
+				"deployArtifactsStorageAccount": "[steps('storageAccounts').deployArtifactsStorageAccount]",
+				"deployBuildLogsStorageAccount": "[steps('storageAccounts').deployBuildLogsStorageAccount]",
+				"storageNetworkAccess": "[if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), steps('storageAccounts').storageSettings.storageNetworkAccess, 'PublicEndpoint')]",
+				"privateEndpointSubnetResourceId": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateEndpointSection.privateEndpointSubnet, '')]",
+				"azureBlobPrivateDnsZoneResourceId": "[if(and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration), steps('storageAccounts').privateDnsSection.blobPrivateDnsZone, '')]",
+				"storageServiceEndpointSubnetResourceIds": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), steps('storageAccounts').serviceEndpointSection.serviceEndpointSubnets, parse('[]'))]",
+				"storagePermittedIPs": "[filter(map(steps('storageAccounts').storageSettings.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
+				"keyManagementStorageAccounts": "[steps('encryption').storage.keyManagement]",
+				"keyManagementGalleryImageVersions": "[steps('encryption').gallery.keyManagement]",
+				"encryptionKeyVaultResourceId": "[if(or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.encryptionKeyVault, '')]",
+				"keyExpirationInDays": "[if(or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.keyExpirationInDays, 180)]",
+				"createConfidentialVmGalleryDes": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
+				"confidentialVMOrchestratorObjectId": "[if(steps('encryption').cvmDesSection.createConfidentialVmGalleryDes, steps('encryption').cvmDesSection.confidentialVMOrchestratorObjectId, '')]",
+				"tags": "[steps('tags').resourceTags]"
+			}
+		}
+	}
+}

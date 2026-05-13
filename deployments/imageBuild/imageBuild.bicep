@@ -1,8 +1,8 @@
 targetScope = 'subscription'
 
-metadata name = 'Zero Trust Architecture Custom Windows Image Builder'
-metadata description = 'This solution allows you to create a custom image much like Azure VM Image Builder, but utilizes zero trust architecture and does not require that service.'
-metadata author = 'shawn.meyer@microsoft.com'
+// Builds a custom Windows image for Azure Virtual Desktop using a zero-trust architecture.
+// Creates a temporary build VM, applies software customizations, captures the result to an Azure Compute Gallery,
+// and cleans up all temporary resources. Does not require the Azure VM Image Builder service.
 
 @description('Value appended to the deployment names.')
 param timeStamp string = utcNow('yyyyMMddHHmmss')
@@ -101,6 +101,21 @@ param teamsCloudType string = 'Commercial'
 @description('Optional. Apply the Windows Desktop Optimization Tool customizations.')
 param applyWindowsDesktopOptimizations bool = false
 
+@description('''Optional. Disable automatic software updates baked into the image.
+Provide an array containing one or more of the following values to disable those update channels.
+Omit a value to leave that channel enabled.
+Valid values:
+  disableWindowsUpdate
+  disableM365Update
+  disableTeamsUpdate
+  disableOneDriveUpdate
+  disableEdgeUpdate
+  disableWebView2Update
+  disableStoreAutoUpdate
+Example: ["disableWindowsUpdate", "disableEdgeUpdate"]
+''')
+param disableSoftwareUpdates array = []
+
 @description('''An array of image customization objects that are executed first before any restarts or updates.
 Each object contains the following properties:
 -name: Required. The name of the script or application that is running minus extension
@@ -148,13 +163,26 @@ param cleanupDesktop bool = false
 @description('Optional. Collect image customization logs.')
 param collectCustomizationLogs bool = false
 
-@description('Optional. Log Storage Account Network Access Configuration.')
+@description('Optional. Resource ID of an existing storage account (deployed by imageManagement with deployBuildLogsStorageAccount = true) to use for build customization logs. Required when collectCustomizationLogs is true.')
+param logStorageAccountResourceId string = ''
+
+@description('Optional. Name of the blob container in the logs storage account to write customization logs to.')
+param logContainerName string = 'image-customization-logs'
+
+@description('Optional. Resource ID of an existing Disk Encryption Set to use for gallery image version encryption. Created by the imageManagement template; pass its diskEncryptionSetResourceId output here to share the same DES across all image builds.')
+param diskEncryptionSetResourceId string = ''
+
+@description('Optional. Confidential VM encryption type applied to each image version replication target region. Only relevant when the image definition SecurityType is ConfidentialVM or ConfidentialVMSupported.')
 @allowed([
-  'PrivateEndpoint'
-  'PublicEndpoint'
-  'ServiceEndpoint'
+  ''
+  'EncryptedWithPmk'
+  'EncryptedWithCmk'
+  'EncryptedVMGuestStateOnlyWithPmk'
 ])
-param logStorageAccountNetworkAccess string = 'PublicEndpoint'
+param galleryImageVersionConfidentialVMEncryptionType string = ''
+
+@description('Optional. Resource ID of an existing Disk Encryption Set to use for Confidential VM guest state encryption in gallery image version replicas. When provided, no new DES is created. Only used when galleryImageVersionConfidentialVMEncryptionType is EncryptedWithCmk.')
+param confidentialVMDiskEncryptionSetResourceId string = ''
 
 @description('Optional. Determines if the latest updates from the specified update service will be installed.')
 param installUpdates bool = true
@@ -163,26 +191,14 @@ param installUpdates bool = true
 param updateUwpApps bool = false
 
 @allowed([
-  'WU'
   'MU'
   'WSUS'
-  'DCAT'
-  'STORE'
-  'OTHER'
 ])
 @description('Optional. The update service.')
 param updateService string = 'MU'
 
 @description('Conditional. The WSUS Server Url if WSUS is specified. (i.e., https://wsus.corp.contoso.com:8531)')
 param wsusServer string = ''
-
-@description('''Optional. The resource id of the existing Azure storage account blob service private dns zone.
-Used for the Customization Logs Storage Account.
-This zone must be linked to or resolvable from the vnet referenced in the [privateEndpointSubnetResourceId] parameter.''')
-param blobPrivateDnsZoneResourceId string = ''
-
-@description('Optional. The resource id of the private endpoint subnet. Used for the Customization Logs Storage Account.')
-param privateEndpointSubnetResourceId string = ''
 
 @description('Optional. The resource id of an existing Image Definition in the Compute gallery.')
 param imageDefinitionResourceId string = ''
@@ -286,7 +302,9 @@ param tags object = {}
 
 // * VARIABLE DECLARATIONS * //
 
-var deploymentSuffix = startsWith(deployment().name, 'Microsoft.Template-') ? substring(deployment().name, 19, 14) : timeStamp
+var deploymentSuffix = startsWith(deployment().name, 'Microsoft.Template-')
+  ? substring(deployment().name, 19, 14)
+  : timeStamp
 
 // Function to ensure unique names in customization arrays by appending index to duplicates
 var uniqueCustomizers = map(range(0, length(customizations)), i => {
@@ -309,37 +327,18 @@ var uniqueVdiCustomizers = map(range(0, length(vdiCustomizations)), i => {
 var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes
 #disable-next-line BCP329
-var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location)-5) : location
-var locations = startsWith(cloud, 'us') ? (loadJsonContent('../../.common/data/locations.json')).other : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
+var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
+var locationsData = loadJsonContent('../../.common/data/locations.json')
+var locations = startsWith(cloud, 'us') ? locationsData.other : locationsData[environment().name]
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 var downloads = startsWith(cloud, 'usn')
-  ? loadJsonContent('../imageManagement/parameters/topsecret.downloads.parameters.json')
+  ? loadJsonContent('../../.common/data/topsecret.downloads.parameters.json')
   : startsWith(cloud, 'uss')
-      ? loadJsonContent('../imageManagement/parameters/secret.downloads.parameters.json')
-      : loadJsonContent('../imageManagement/parameters/public.downloads.parameters.json')
+      ? loadJsonContent('../../.common/data/secret.downloads.parameters.json')
+      : loadJsonContent('../../.common/data/public.downloads.parameters.json')
 
 var computeLocation = vnet.location
 var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''
-var logStorageAccountName = take(
-  replace(toLower('sa${depPrefix}log${uniqueString(subscription().id,imageBuildResourceGroupName)}'), '-', ''),
-  24
-)
-
-var vnetName = !empty(privateEndpointSubnetResourceId) ? split(privateEndpointSubnetResourceId, '/')[8] : ''
-var privateEndpointNameConv = replace(
-  '${nameConvResTypeAtEnd ? 'RESOURCE-SUBRESOURCE-${vnetName}-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-${vnetName}'}',
-  'RESOURCETYPE',
-  resourceAbbreviations.privateEndpoints
-)
-var privateEndpointName = replace(
-  replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'),
-  'RESOURCE',
-  logStorageAccountName
-)
-var customNetworkInterfaceName = nameConvResTypeAtEnd
-  ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}'
-  : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
-
 var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
   ? (empty(customBuildResourceGroupName)
       ? nameConvResTypeAtEnd
@@ -351,18 +350,23 @@ var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
 var adminPw = '1qaz@WSX${uniqueString(subscription().id, imageBuildResourceGroupName)}'
 var adminUserName = 'vmadmin'
 
-var logContainerName = 'image-customization-logs'
-var logContainerUri = collectCustomizationLogs
-  ? '${logsStorageAccount!.outputs.primaryBlobEndpoint}${logContainerName}/'
+var existingLogStorageAccountName = empty(logStorageAccountResourceId)
+  ? ''
+  : last(split(logStorageAccountResourceId, '/'))
+var logContainerUri = collectCustomizationLogs && !empty(logStorageAccountResourceId)
+  ? 'https://${existingLogStorageAccountName}.blob.${environment().suffixes.storage}/${logContainerName}/'
   : ''
 
 var imageDefinitionFeatures = empty(imageDefinitionResourceId)
-  ? filter([
-      imageDefinitionIsHibernateSupported ? { name: 'IsHibernateSupported', value: 'True' } : null
-      imageDefinitionIsAcceleratedNetworkSupported ? { name: 'IsAcceleratedNetworkSupported', value: 'True' } : null
-      imageDefinitionIsHigherStoragePerformanceSupported ? { name: 'DiskControllerTypes', value: 'SCSI, NVMe' } : null
-      imageDefinitionSecurityType != 'Standard' ? { name: 'SecurityType', value: imageDefinitionSecurityType } : null
-    ], item => item != null)
+  ? filter(
+      [
+        imageDefinitionIsHibernateSupported ? { name: 'IsHibernateSupported', value: 'True' } : null
+        imageDefinitionIsAcceleratedNetworkSupported ? { name: 'IsAcceleratedNetworkSupported', value: 'True' } : null
+        imageDefinitionIsHigherStoragePerformanceSupported ? { name: 'DiskControllerTypes', value: 'SCSI, NVMe' } : null
+        imageDefinitionSecurityType != 'Standard' ? { name: 'SecurityType', value: imageDefinitionSecurityType } : null
+      ],
+      item => item != null
+    )
   : existingImageDefinition!.properties.features
 
 var galleryImageDefinitionHyperVGeneration = endsWith(mpSku, 'g2') || startsWith(mpSku, 'win11') ? 'V2' : 'V1'
@@ -370,28 +374,30 @@ var galleryImageDefinitionName = empty(imageDefinitionResourceId)
   ? empty(customImageDefinitionName)
       ? nameConvResTypeAtEnd
           ? replace(
-              '${replace(galleryImageDefinitionPublisher, '-', '')}-${replace(galleryImageDefinitionOffer, '-', '')}-${replace(galleryImageDefinitionSku, '-', '')}-${resourceAbbreviations.imageDefinitions}',
+              '${replace(effectiveGalleryImageDefinitionPublisher, '-', '')}-${replace(effectiveGalleryImageDefinitionOffer, '-', '')}-${replace(effectiveGalleryImageDefinitionSku, '-', '')}-${resourceAbbreviations.imageDefinitions}',
               ' ',
               ''
             )
           : replace(
-              '${resourceAbbreviations.imageDefinitions}-${replace(galleryImageDefinitionPublisher, '-', '')}-${replace(galleryImageDefinitionOffer, '-', '')}-${replace(galleryImageDefinitionSku, '-', '')}',
+              '${resourceAbbreviations.imageDefinitions}-${replace(effectiveGalleryImageDefinitionPublisher, '-', '')}-${replace(effectiveGalleryImageDefinitionOffer, '-', '')}-${replace(effectiveGalleryImageDefinitionSku, '-', '')}',
               ' ',
               ''
             )
       : customImageDefinitionName
   : last(split(imageDefinitionResourceId, '/'))
-var galleryImageDefinitionOffer = !empty(imageDefinitionOffer) ? replace(imageDefinitionOffer, ' ', '') : mpOffer
-var galleryImageDefinitionPublisher = !empty(imageDefinitionPublisher)
+var effectiveGalleryImageDefinitionOffer = !empty(imageDefinitionOffer)
+  ? replace(imageDefinitionOffer, ' ', '')
+  : mpOffer
+var effectiveGalleryImageDefinitionPublisher = !empty(imageDefinitionPublisher)
   ? replace(imageDefinitionPublisher, ' ', '')
   : mpPublisher
 
-var galleryImageDefinitionSecurityType = empty(imageDefinitionResourceId)
+var effectiveGalleryImageDefinitionSecurityType = empty(imageDefinitionResourceId)
   ? imageDefinitionSecurityType
   : !empty(filter(existingImageDefinition!.properties.features, feature => feature.name == 'SecurityType'))
       ? filter(existingImageDefinition!.properties.features, feature => feature.name == 'SecurityType')[0].value
       : 'Standard'
-var galleryImageDefinitionSku = !empty(imageDefinitionSku) ? replace(imageDefinitionSku, ' ', '') : mpSku
+var effectiveGalleryImageDefinitionSku = !empty(imageDefinitionSku) ? replace(imageDefinitionSku, ' ', '') : mpSku
 // build an image version from the ISO 8601 timestamp
 var autoImageVersionName = '${substring(deploymentSuffix, 0, 4)}.${substring(deploymentSuffix, 4, 4)}.${substring(deploymentSuffix, 8, 4)}'
 var imageVersionName = imageMajorVersion != -1 && imageMajorVersion != -1 && imagePatch != -1
@@ -428,28 +434,61 @@ var imageVersionReplicationRegions = empty(remoteComputeGalleryResourceId)
       ? union(localImageVersionTargetRegions, defaultRemoteImageVersionTargetRegions)
       : localImageVersionTargetRegions
 
-var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0 ? dateTimeAdd(deploymentSuffix, 'P${imageVersionEOLinDays}D') : ''
+// Note: auto-creation of a ConfidentialVM DES (ConfidentialVmEncryptedWithCustomerKey type) is a feature gap.
+// CVM DES provisioning requires a Confidential VM Orchestrator service principal key-release role assignment
+// that cannot be reliably automated here. Supply an existing DES via confidentialVMDiskEncryptionSetResourceId.
+var effectiveConfidentialVmDiskEncryptionSetResourceId = galleryImageVersionConfidentialVMEncryptionType == 'EncryptedWithCmk'
+  ? confidentialVMDiskEncryptionSetResourceId
+  : ''
+
+var imageVersionReplicationRegionsWithEncryption = empty(diskEncryptionSetResourceId)
+  ? imageVersionReplicationRegions
+  : map(
+      imageVersionReplicationRegions,
+      region =>
+        union(region, {
+          encryption: {
+            osDiskImage: union(
+              { diskEncryptionSetId: diskEncryptionSetResourceId },
+              !empty(galleryImageVersionConfidentialVMEncryptionType)
+                ? {
+                    securityProfile: union(
+                      { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
+                      !empty(effectiveConfidentialVmDiskEncryptionSetResourceId)
+                        ? { secureVMDiskEncryptionSetId: effectiveConfidentialVmDiskEncryptionSetResourceId }
+                        : {}
+                    )
+                  }
+                : {}
+            )
+          }
+        })
+    )
+
+var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0
+  ? dateTimeAdd(deploymentSuffix, 'P${imageVersionEOLinDays}D')
+  : ''
 
 var imageVmName = take('${depPrefix}vmimg-${uniqueString(deploymentSuffix)}', 15)
 var orchestrationVmName = take('${depPrefix}vmorc-${uniqueString(deploymentSuffix)}', 15)
 
-var vmSecurityType = galleryImageDefinitionSecurityType == 'TrustedLaunch'
+var vmSecurityType = effectiveGalleryImageDefinitionSecurityType == 'TrustedLaunch'
   ? 'TrustedLaunch'
-  : galleryImageDefinitionSecurityType == 'ConfidentialVM' ? 'ConfidentialVM' : 'Standard'
+  : effectiveGalleryImageDefinitionSecurityType == 'ConfidentialVM' ? 'ConfidentialVM' : 'Standard'
 
 var remoteLocation = !empty(remoteComputeGalleryResourceId) ? remoteComputeGallery!.location : ''
 
 var vmAcceleratedNetworking = !empty(filter(
-            imageDefinitionFeatures,
-            feature => feature.name == 'IsAcceleratedNetworkSupported'
-          ))
-          ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsAcceleratedNetworkSupported')[0]!.value)
-          : false
+    imageDefinitionFeatures,
+    feature => feature.name == 'IsAcceleratedNetworkSupported'
+  ))
+  ? bool(filter(imageDefinitionFeatures, feature => feature.name == 'IsAcceleratedNetworkSupported')[0]!.value)
+  : false
 var vmDiskControllerType = !empty(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes'))
-      ? contains(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0]!.value, 'NVMe')
-          ? 'NVMe'
-          : 'SCSI'
+  ? contains(filter(imageDefinitionFeatures, feature => feature.name == 'DiskControllerTypes')[0]!.value, 'NVMe')
+      ? 'NVMe'
       : 'SCSI'
+  : 'SCSI'
 
 // * Prerequisite Resources * //
 
@@ -468,14 +507,14 @@ resource imageBuildRg 'Microsoft.Resources/resourceGroups@2023-07-01' = if (empt
 
 // * Managed Identity * //
 
-module userAssignedIdentity '../sharedModules/resources/managed-identity/user-assigned-identity/main.bicep' = if (empty(userAssignedIdentityResourceId)) {
+module userAssignedIdentity '../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (empty(userAssignedIdentityResourceId)) {
   name: '${depPrefix}ManagedIdentity-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     location: location
     name: nameConvResTypeAtEnd
       ? 'avd-image-builder-${locations[varLocation].abbreviation}-${resourceAbbreviations.userAssignedIdentities}'
-      : '${resourceAbbreviations.userAssignedIdentities}-image-builder-${locations[varLocation].abbreviation}'
+      : '${resourceAbbreviations.userAssignedIdentities}-avd-image-builder-${locations[varLocation].abbreviation}'
     tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
   }
   dependsOn: [
@@ -491,13 +530,18 @@ resource existingUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIde
 // * Image Definition * //
 
 resource existingImageDefinition 'Microsoft.Compute/galleries/images@2024-03-03' existing = if (!empty(imageDefinitionResourceId)) {
-  name: '${split(imageDefinitionResourceId, '/')[8]}/${last(split(imageDefinitionResourceId, '/'))}'
-  scope: resourceGroup(split(imageDefinitionResourceId, '/')[2], split(imageDefinitionResourceId, '/')[4])
+  name: !empty(imageDefinitionResourceId)
+    ? '${split(imageDefinitionResourceId, '/')[8]}/${last(split(imageDefinitionResourceId, '/'))}'
+    : 'placeholder/placeholder'
+  scope: resourceGroup(
+    !empty(imageDefinitionResourceId) ? split(imageDefinitionResourceId, '/')[2] : subscription().subscriptionId,
+    !empty(imageDefinitionResourceId) ? split(imageDefinitionResourceId, '/')[4] : 'placeholder'
+  )
 }
 
-module imageDefinition '../sharedModules/resources/compute/gallery/image/main.bicep' = if (empty(imageDefinitionResourceId)) {
+module imageDefinition '../../.common/bicepModules/compute/galleries/images/deploy.bicep' = if (empty(imageDefinitionResourceId)) {
   name: '${depPrefix}Gallery-Image-Definition-${deploymentSuffix}'
-  scope: resourceGroup(split(computeGalleryResourceId, '/')[4])
+  scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
     location: location
     features: imageDefinitionFeatures
@@ -506,9 +550,9 @@ module imageDefinition '../sharedModules/resources/compute/gallery/image/main.bi
     hyperVGeneration: galleryImageDefinitionHyperVGeneration
     osType: 'Windows'
     osState: 'Generalized'
-    publisher: galleryImageDefinitionPublisher
-    offer: galleryImageDefinitionOffer
-    sku: galleryImageDefinitionSku
+    publisher: effectiveGalleryImageDefinitionPublisher
+    offer: effectiveGalleryImageDefinitionOffer
+    sku: effectiveGalleryImageDefinitionSku
     tags: tags[?'Microsoft.Compute/galleries/images'] ?? {}
   }
 }
@@ -518,7 +562,7 @@ resource remoteComputeGallery 'Microsoft.Compute/galleries@2024-03-03' existing 
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
 }
 
-module remoteImageDefinition '../sharedModules/resources/compute/gallery/image/main.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
+module remoteImageDefinition '../../.common/bicepModules/compute/galleries/images/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
   name: '${depPrefix}Remote-Gallery-Image-Definition-${deploymentSuffix}'
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {
@@ -532,13 +576,13 @@ module remoteImageDefinition '../sharedModules/resources/compute/gallery/image/m
     osType: 'Windows'
     osState: 'Generalized'
     publisher: empty(imageDefinitionResourceId)
-      ? galleryImageDefinitionPublisher
+      ? effectiveGalleryImageDefinitionPublisher
       : existingImageDefinition!.properties.identifier.publisher
     offer: empty(imageDefinitionResourceId)
-      ? galleryImageDefinitionOffer
+      ? effectiveGalleryImageDefinitionOffer
       : existingImageDefinition!.properties.identifier.offer
     sku: empty(imageDefinitionResourceId)
-      ? galleryImageDefinitionSku
+      ? effectiveGalleryImageDefinitionSku
       : existingImageDefinition!.properties.identifier.sku
     tags: tags[?'Microsoft.Compute/galleries/images'] ?? {}
   }
@@ -546,7 +590,7 @@ module remoteImageDefinition '../sharedModules/resources/compute/gallery/image/m
 
 // * Role Assignments * //
 
-module roleAssignmentContributorBuildRg '../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = {
+module roleAssignmentContributorBuildRg '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   name: '${depPrefix}RA-MI-VirtMachContr-BuildRG-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -561,167 +605,56 @@ module roleAssignmentContributorBuildRg '../sharedModules/resources/authorizatio
   ]
 }
 
-module roleAssignmentBlobDataContributorBuilderRg '../sharedModules/resources/authorization/role-assignment/resource-group/main.bicep' = if (collectCustomizationLogs) {
-  name: '${depPrefix}RA-MI-StorBlobDataContr-BuildRG-${deploymentSuffix}'
-  scope: resourceGroup(imageBuildResourceGroupName)
+module roleAssignmentBlobDataContributorExistingStorage '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (collectCustomizationLogs && !empty(logStorageAccountResourceId) && empty(userAssignedIdentityResourceId)) {
+  // Only needed when imageBuild creates its own UAI — when the imageManagement UAI is supplied via
+  // userAssignedIdentityResourceId it already has Blob Data Contributor granted by imageManagement.
+  name: '${depPrefix}RA-MI-StorBlobDataContr-ExistingLogsRG-${deploymentSuffix}'
+  scope: resourceGroup(split(logStorageAccountResourceId, '/')[2], split(logStorageAccountResourceId, '/')[4])
   params: {
-    principalId: empty(userAssignedIdentityResourceId)
-      ? userAssignedIdentity!.outputs.principalId
-      : existingUserAssignedIdentity!.properties.principalId
+    principalId: userAssignedIdentity!.outputs.principalId
     roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
     principalType: 'ServicePrincipal'
   }
 }
 
-// * Logging * //
-
-module logsStorageAccount '../sharedModules/resources/storage/storage-account/main.bicep' = if (collectCustomizationLogs) {
-  name: '${depPrefix}Logs-StorageAccount-${deploymentSuffix}'
-  scope: resourceGroup(imageBuildResourceGroupName)
-  params: {
-    #disable-next-line BCP335
-    name: logStorageAccountName
-    location: computeLocation
-    allowCrossTenantReplication: false
-    allowSharedKeyAccess: true
-    requireInfrastructureEncryption: true
-    blobServices: {
-      containers: [
-        {
-          name: logContainerName
-          publicAccess: 'None'
-        }
-      ]
-    }
-    kind: 'StorageV2'
-    managementPolicyRules: [
-      {
-        enabled: true
-        name: 'Delete Blobs after 7 days'
-        type: 'Lifecycle'
-        definition: {
-          actions: {
-            baseBlob: {
-              delete: {
-                daysAfterModificationGreaterThan: 7
-              }
-            }
-          }
-          filters: {
-            blobTypes: [
-              'blockBlob'
-              'appendBlob'
-            ]
-          }
-        }
-      }
-    ]
-    privateEndpoints: logStorageAccountNetworkAccess == 'PrivateEndpoint' && !empty(privateEndpointSubnetResourceId)
-      ? [
-          {
-            name: privateEndpointName
-            customNetworkInterfaceName: customNetworkInterfaceName
-            privateDnsZoneGroup: empty(blobPrivateDnsZoneResourceId)
-              ? null
-              : {
-                  privateDNSResourceIds: ['${blobPrivateDnsZoneResourceId}']
-                }
-            service: 'blob'
-            subnetResourceId: privateEndpointSubnetResourceId
-            tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
-          }
-        ]
-      : null
-    publicNetworkAccess: logStorageAccountNetworkAccess == 'PrivateEndpoint' ? 'Disabled' : 'Enabled'
-    networkAcls: logStorageAccountNetworkAccess == 'PrivateEndpoint'
-      ? {
-          bypass: 'None'
-          defaultAction: 'Deny'
-        }
-      : logStorageAccountNetworkAccess == 'ServiceEndpoint'
-          ? {
-              bypass: 'None'
-              defaultAction: 'Deny'
-              ipRules: []
-              virtualNetworkRules: [
-                {
-                  id: subnetResourceId
-                  action: 'Allow'
-                }
-              ]
-            }
-          : {
-              bypass: 'None'
-              defaultAction: 'Allow'
-            }
-    sasExpirationPeriod: '180.00:00:00'
-    skuName: 'Standard_LRS'
-    tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
-  }
-  dependsOn: [
-    imageBuildRg
-  ]
-}
-
 // * Orchestration VM * //
 
-module orchestrationVm '../sharedModules/resources/compute/virtual-machine/main.bicep' = {
+module orchestrationVm '../../.common/bicepModules/compute/virtualMachines/deploy.bicep' = {
   name: '${depPrefix}Orchestration-VM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     location: computeLocation
     name: orchestrationVmName
+    nicName: '${orchestrationVmName}-nic'
+    osDiskName: '${orchestrationVmName}-osdisk'
     adminPassword: adminPw
     adminUsername: adminUserName
-    diskControllerType: vmDiskControllerType
+    enableAcceleratedNetworking: vmAcceleratedNetworking
     encryptionAtHost: encryptionAtHost
-    imageReference: {
-      publisher: 'MicrosoftWindowsServer'
-      offer: 'WindowsServer'
-      sku: '2019-datacenter-core-g2'
-      version: 'latest'
-    }
-    nicConfigurations: [
-      {
-        deleteOption: 'Delete'
-        enableAcceleratedNetworking: vmAcceleratedNetworking
-        ipConfigurations: [
-          {
-            name: 'ipconfig01'
-            subnetResourceId: subnetResourceId
-          }
-        ]
-        nicSuffix: '-nic-01'
-      }
-    ]
-    osDisk: {
-      caching: 'ReadWrite'
-      createOption: 'fromImage'
-      deleteOption: 'Delete'
-      managedDisk: {
-        storageAccountType: 'Standard_LRS'
-      }
-    }
-    osType: 'Windows'
+    imagePublisher: 'MicrosoftWindowsServer'
+    imageOffer: 'WindowsServer'
+    imageSku: '2019-datacenter-core-g2'
+    licenseType: 'Windows_Server'
+    diskControllerType: vmDiskControllerType
+    securityType: 'TrustedLaunch'
+    secureBootEnabled: true
+    vTpmEnabled: true
+    diskEncryptionSetResourceId: diskEncryptionSetResourceId
+    subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
-    userAssignedIdentities: empty(userAssignedIdentityResourceId)
-      ? {
-          '${userAssignedIdentity!.outputs.resourceId}': {}
-        }
-      : {
-          '${userAssignedIdentityResourceId}': {}
-        }
+    userAssignedIdentityResourceIds: [
+      empty(userAssignedIdentityResourceId) ? userAssignedIdentity!.outputs.resourceId : userAssignedIdentityResourceId
+    ]
     vmSize: vmSize
   }
   dependsOn: [
     imageBuildRg
-    roleAssignmentContributorBuildRg
   ]
 }
 
 // * Image VM * //
 
-module imageVm '../sharedModules/resources/compute/virtual-machine/main.bicep' = {
+module imageVm '../../.common/bicepModules/compute/virtualMachines/deploy.bicep' = {
   name: '${depPrefix}Image-VM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -730,55 +663,35 @@ module imageVm '../sharedModules/resources/compute/virtual-machine/main.bicep' =
       : false
     location: computeLocation
     name: imageVmName
+    nicName: '${imageVmName}-nic'
+    osDiskName: '${imageVmName}-osdisk'
     adminPassword: adminPw
     adminUsername: adminUserName
-    bootDiagnostics: false
+    customImageResourceId: customSourceImageResourceId
+    imagePublisher: mpPublisher
+    imageOffer: mpOffer
+    imageSku: mpSku
+    osDiskSku: 'Premium_LRS'
+    osDiskSizeGB: diskSizeGB
     diskControllerType: vmDiskControllerType
     encryptionAtHost: encryptionAtHost
-    imageReference: empty(customSourceImageResourceId)
-      ? {
-          publisher: mpPublisher
-          offer: mpOffer
-          sku: mpSku
-          version: 'latest'
-        }
-      : {
-          id: customSourceImageResourceId
-        }
-    nicConfigurations: [
-      {
-        enableAcceleratedNetworking: vmAcceleratedNetworking
-        deleteOption: 'Delete'
-        ipConfigurations: [
-          {
-            name: 'ipconfig01'
-            subnetResourceId: subnetResourceId
-          }
-        ]
-        nicSuffix: '-nic-01'
-      }
-    ]
-    osDisk: {
-      caching: 'ReadWrite'
-      createOption: 'fromImage'
-      deleteOption: 'Delete'
-      diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
-      managedDisk: {
-        storageAccountType: 'Premium_LRS'
-      }
-    }
-    osType: 'Windows'
+    enableAcceleratedNetworking: vmAcceleratedNetworking
     securityType: vmSecurityType
     secureBootEnabled: vmSecurityType == 'TrustedLaunch' ? true : false
     vTpmEnabled: vmSecurityType == 'TrustedLaunch' ? true : false
+    // For CVM builds, prefer the CVM DES on the image VM OS disk; fall back to the standard gallery DES when no CVM DES is provided
+    // (e.g. when EncryptedWithPmk guest state is selected but a policy requires a DES on all VM disks).
+    // For all other builds, apply the standard gallery DES.
+    diskEncryptionSetResourceId: vmSecurityType == 'ConfidentialVM'
+      ? (!empty(effectiveConfidentialVmDiskEncryptionSetResourceId)
+          ? effectiveConfidentialVmDiskEncryptionSetResourceId
+          : diskEncryptionSetResourceId)
+      : diskEncryptionSetResourceId
+    subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
-    userAssignedIdentities: empty(userAssignedIdentityResourceId)
-      ? {
-          '${userAssignedIdentity!.outputs.resourceId}': {}
-        }
-      : {
-          '${userAssignedIdentityResourceId}': {}
-        }
+    userAssignedIdentityResourceIds: [
+      empty(userAssignedIdentityResourceId) ? userAssignedIdentity!.outputs.resourceId : userAssignedIdentityResourceId
+    ]
     vmSize: vmSize
   }
   dependsOn: [
@@ -788,15 +701,15 @@ module imageVm '../sharedModules/resources/compute/virtual-machine/main.bicep' =
 
 // * Resize OS Disk Partition * //
 
-module resizeDisk '../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = if (diskSizeGB != 0 && diskSizeGB != 128) {
+module resizeDisk '../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = if (diskSizeGB != 0 && diskSizeGB != 128) {
   name: '${depPrefix}Resize-ImageVM-OSDisk-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     location: computeLocation
     name: 'ResizeDisk'
+    virtualMachineName: imageVm.outputs.name
     script: loadTextContent('../../.common/scripts/Resize-Disk.ps1')
     treatFailureAsDeploymentFailure: true
-    virtualMachineName: imageVm.outputs.name
   }
 }
 
@@ -806,7 +719,6 @@ module customizeImage 'modules/customizeImage.bicep' = {
   name: '${depPrefix}Customize-Image-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
-    adminPw: adminPw
     cloud: cloud
     appsToRemove: appsToRemove
     location: computeLocation
@@ -816,6 +728,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     installOneDrive: installOneDrive
     installTeams: installTeams
     applyWindowsDesktopOptimizations: applyWindowsDesktopOptimizations
+    disableSoftwareUpdates: disableSoftwareUpdates
     userAssignedIdentityClientId: empty(userAssignedIdentityResourceId)
       ? userAssignedIdentity!.outputs.clientId
       : existingUserAssignedIdentity!.properties.clientId
@@ -845,15 +758,14 @@ module generalizeImageVM 'modules/generalizeVm.bicep' = {
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     adminPw: adminPw
-    checkCbsAndRestart: empty(vdiCustomizations) ? true : false
     deploymentSuffix: deploymentSuffix
     imageVmName: imageVm.outputs.name
     location: location
     logBlobContainerUri: logContainerUri
     orchestrationVmName: orchestrationVm.outputs.name
     userAssignedIdentityClientId: empty(userAssignedIdentityResourceId)
-          ? userAssignedIdentity!.outputs.clientId
-          : existingUserAssignedIdentity!.properties.clientId
+      ? userAssignedIdentity!.outputs.clientId
+      : existingUserAssignedIdentity!.properties.clientId
   }
   dependsOn: [
     customizeImage
@@ -869,7 +781,7 @@ module captureImage 'modules/captureImage.bicep' = {
     depPrefix: depPrefix
     hyperVGeneration: galleryImageDefinitionHyperVGeneration
     imageBuildResourceGroupName: imageBuildResourceGroupName
-    imageDefinitionSecurityType: galleryImageDefinitionSecurityType
+    imageDefinitionSecurityType: effectiveGalleryImageDefinitionSecurityType
     imageName: !empty(imageDefinitionResourceId)
       ? last(split(imageDefinitionResourceId, '/'))
       : imageDefinition!.outputs.name
@@ -877,11 +789,14 @@ module captureImage 'modules/captureImage.bicep' = {
     imageVersionDefaultStorageAccountType: imageVersionDefaultStorageAccountType
     imageVersionExcludeFromLatest: imageVersionExcludeFromLatest
     imageVersionName: imageVersionName
-    imageVersionReplicationRegions: imageVersionReplicationRegions
+    imageVersionReplicationRegions: imageVersionReplicationRegionsWithEncryption
     imageVersionEndOfLifeDate: imageVersionEndOfLifeDate
     location: computeLocation
     tags: tags
     deploymentSuffix: deploymentSuffix
+    diskEncryptionSetId: diskEncryptionSetResourceId
+    confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType
+    secureVMDiskEncryptionSetId: effectiveConfidentialVmDiskEncryptionSetResourceId
     virtualMachineResourceId: imageVm.outputs.resourceId
   }
   dependsOn: [
@@ -891,18 +806,18 @@ module captureImage 'modules/captureImage.bicep' = {
 
 // * Cleanup Temporary Resources * //
 
-module removeImageBuildResources '../sharedModules/resources/compute/virtual-machine/runCommand/main.bicep' = {
+module removeImageBuildResources '../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: '${depPrefix}Remove-Image-Image-Build-Resources-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     asyncExecution: true
     location: computeLocation
     name: 'RemoveImageBuildResources'
+    virtualMachineName: orchestrationVm.outputs.name
+    script: loadTextContent('../../.common/scripts/Remove-ImageBuildResources.ps1')
+    treatFailureAsDeploymentFailure: false
     parameters: [
-      {
-        name: 'ResourceManagerUri'
-        value: environment().resourceManager
-      }
+      { name: 'ResourceManagerUri', value: environment().resourceManager }
       {
         name: 'UserAssignedIdentityClientId'
         value: empty(userAssignedIdentityResourceId)
@@ -911,31 +826,24 @@ module removeImageBuildResources '../sharedModules/resources/compute/virtual-mac
       }
       {
         name: 'ImageResourceId'
-        value: contains(galleryImageDefinitionSecurityType, 'Supported') ? captureImage.outputs.managedImageId : ''
+        value: contains(effectiveGalleryImageDefinitionSecurityType, 'Supported')
+          ? captureImage.outputs.managedImageId
+          : ''
       }
-      {
-        name: 'ImageVmResourceId'
-        value: imageVm.outputs.resourceId
-      }
-      {
-        name: 'ManagementVmResourceId'
-        value: orchestrationVm.outputs.resourceId
-      }
+      { name: 'ImageVmResourceId', value: imageVm.outputs.resourceId }
+      { name: 'ManagementVmResourceId', value: orchestrationVm.outputs.resourceId }
     ]
-    script: loadTextContent('../../.common/scripts/Remove-ImageBuildResources.ps1')
-    treatFailureAsDeploymentFailure: false
-    virtualMachineName: orchestrationVm.outputs.name
   }
 }
 
-module remoteImageVersion '../sharedModules/resources/compute/gallery/image/version/main.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
+module remoteImageVersion '../../.common/bicepModules/compute/galleries/images/versions/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
   name: '${depPrefix}Remote-ImageVersion-${deploymentSuffix}'
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {
     location: location
     name: imageVersionName
     galleryName: last(split(remoteComputeGalleryResourceId, '/'))
-    imageName: remoteImageDefinition!.outputs.name
+    imageDefinitionName: remoteImageDefinition!.outputs.name
     endOfLifeDate: imageVersionEndOfLifeDate
     excludeFromLatest: remoteImageVersionExcludeFromLatest
     replicaCount: remoteImageVersionDefaultReplicaCount
