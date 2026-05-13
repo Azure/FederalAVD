@@ -64,7 +64,7 @@ try {
                 if ($LASTEXITCODE -ne 0) { Write-Log "  Failed to clear event log '$($_.LogName)' - Exit Code [$LASTEXITCODE]" }
                 else { Write-Log "  Cleared event log '$($_.LogName)'" }
             }
-            catch { Write-Log "  Failed to clear event log '$($_.LogName)' with Exception '$($_.Exception.Message)'" }
+            catch { Write-Log $($_.Exception.Message) }
         }
 
     Write-Log "Disk cleanup complete."
