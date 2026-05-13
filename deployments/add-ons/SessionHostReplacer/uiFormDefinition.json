@@ -3341,7 +3341,7 @@
 				"azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureFunctionAppPrivateDnsZone, '')]",
 				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureBlobPrivateDnsZone, '')]",
 				"azureTablePrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureTablePrivateDnsZone, '')]",
-				"permittedIPs": "[if(steps('infrastructure').configureZeroTrustNetworking, map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), parse('[]'))]",
+				"permittedIPs": "[if(steps('infrastructure').configureZeroTrustNetworking, filter(map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
 				"identitySolution": "[steps('identity').solution]",
 				"domainName": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.domainName, '')]",
 				"ouPath": "[if(or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraDomainServices')), steps('identity').virtualMachines.ouPath, '')]",

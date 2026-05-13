@@ -451,7 +451,7 @@
 				"privateEndpoint": "[steps('networking').privateEndpoint]",
 				"privateEndpointSubnetResourceId": "[if(steps('networking').privateEndpoint, steps('networking').networkSection.privateEndpointSubnet, '')]",
 				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.keyVaultPrivateDnsZone, '')]",
-				"permittedIPs": "[map(steps('networking').permittedIPsSection.permittedIPs, (item) => item.ipAddress)]",
+				"permittedIPs": "[filter(map(steps('networking').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
 				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
 				"tags": "[steps('tags').resourceTags]"
 			}

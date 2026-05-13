@@ -537,7 +537,7 @@
 				"privateEndpointSubnetResourceId": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateEndpointSection.privateEndpointSubnet, '')]",
 				"azureBlobPrivateDnsZoneResourceId": "[if(and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration), steps('storageAccounts').privateDnsSection.blobPrivateDnsZone, '')]",
 				"storageServiceEndpointSubnetResourceIds": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), steps('storageAccounts').serviceEndpointSection.serviceEndpointSubnets, parse('[]'))]",
-				"storagePermittedIPs": "[map(steps('storageAccounts').storageSettings.storagePermittedIPs, (item) => item.ipAddress)]",
+				"storagePermittedIPs": "[filter(map(steps('storageAccounts').storageSettings.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
 				"keyManagementStorageAccounts": "[steps('encryption').storage.keyManagement]",
 				"keyManagementGalleryImageVersions": "[steps('encryption').gallery.keyManagement]",
 				"encryptionKeyVaultResourceId": "[if(or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.encryptionKeyVault, '')]",

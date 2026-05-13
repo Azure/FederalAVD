@@ -794,7 +794,7 @@
         "privateEndpointSubnetResourceId": "[if(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').functionAppPrivateEndpointSubnet, '')]",
         "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureBlobPrivateDnsZone, '')]",
         "azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureFunctionAppPrivateDnsZone, '')]",
-        "permittedIPs": "[if(steps('infrastructure').configureZeroTrustNetworking, map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), parse('[]'))]",
+        "permittedIPs": "[if(steps('infrastructure').configureZeroTrustNetworking, filter(map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
         "logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
         "privateLinkScopeResourceId": "[if(steps('monitoring').enableAMPLS, steps('monitoring').privateLinkScope.id, '')]",
         "functionAppNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
