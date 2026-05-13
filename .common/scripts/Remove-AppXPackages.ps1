@@ -18,9 +18,8 @@ function Write-Log {
 }
 
 try {
-    Write-Log "*********************************"
-    Write-Log "Removing Built-In Windows Apps"
-    Write-Log "*********************************"
+    Write-Log "Starting Remove-Apps script with the following parameters:"
+    Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)
     [array]$apps = $AppsToRemove.replace('\"', '"') | ConvertFrom-Json
 
     $ProvisionedApps = Get-AppxProvisionedPackage -online

@@ -1,10 +1,14 @@
-function Write-OutputWithTimeStamp {
+$ErrorActionPreference = 'Stop'
+$LogFile = "$env:SystemRoot\Logs\Check-CbsAndRestart.log"
+
+function Write-Log {
     param([string]$Message)
-    $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'
-    Write-Output "[$Timestamp] $Message"
+    $Entry = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message"
+    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue
+    Write-Output $Entry
 }
 
-Write-OutputWithTimeStamp "Checking CBS (Component Based Servicing) state before sysprep."
+Write-Log "Checking CBS (Component Based Servicing) state before sysprep."
 
 $RebootPendingPaths = @(
     'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'
@@ -15,7 +19,7 @@ $RebootPendingPaths = @(
 $RebootRequired = $false
 foreach ($Path in $RebootPendingPaths) {
     if (Test-Path $Path) {
-        Write-OutputWithTimeStamp "Pending reboot detected: $Path"
+        Write-Log "Pending reboot detected: $Path"
         $RebootRequired = $true
         break
     }
@@ -25,7 +29,7 @@ if (-not $RebootRequired) {
     if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\SessionsPending') {
         $Exclusive = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\SessionsPending' -ErrorAction SilentlyContinue).Exclusive
         if ($Exclusive -gt 0) {
-            Write-OutputWithTimeStamp "CBS has $Exclusive pending exclusive session(s). Scheduling restart to allow CBS to settle."
+            Write-Log "CBS has $Exclusive pending exclusive session(s). Scheduling restart to allow CBS to settle."
             $RebootRequired = $true
         }
     }
@@ -34,8 +38,8 @@ if (-not $RebootRequired) {
 if ($RebootRequired) {
     # shutdown /r /t N is fire-and-forget - the command returns immediately and the timer runs independently.
     # The script exits and ARM records success before the restart happens. No scheduled task needed.
-    Write-OutputWithTimeStamp "Initiating restart in 30 seconds to allow pending CBS operations to complete before sysprep."
+    Write-Log "Initiating restart in 30 seconds to allow pending CBS operations to complete before sysprep."
     shutdown /r /t 30 /f
 } else {
-    Write-OutputWithTimeStamp "No restart required. CBS is settled."
+    Write-Log "No restart required. CBS is settled."
 }

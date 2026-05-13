@@ -332,10 +332,10 @@ var locationsData = loadJsonContent('../../.common/data/locations.json')
 var locations = startsWith(cloud, 'us') ? locationsData.other : locationsData[environment().name]
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 var downloads = startsWith(cloud, 'usn')
-  ? loadJsonContent('../imageManagement/parameters/topsecret.downloads.parameters.json')
+  ? loadJsonContent('../../.common/data/topsecret.downloads.parameters.json')
   : startsWith(cloud, 'uss')
-      ? loadJsonContent('../imageManagement/parameters/secret.downloads.parameters.json')
-      : loadJsonContent('../imageManagement/parameters/public.downloads.parameters.json')
+      ? loadJsonContent('../../.common/data/secret.downloads.parameters.json')
+      : loadJsonContent('../../.common/data/public.downloads.parameters.json')
 
 var computeLocation = vnet.location
 var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''

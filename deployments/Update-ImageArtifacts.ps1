@@ -38,10 +38,13 @@ When specified, skips downloading new software versions from the internet.
 Use this in air-gapped environments or when the artifacts directory already contains
 the correct content and you just want to re-upload.
 
-.PARAMETER ParameterFilePrefix
-Custom prefix for the downloads parameter file.
-Overrides the automatic environment detection (public / secret / topsecret).
-Example: 'contoso' resolves to 'deployments/imageManagement/parameters/contoso.downloads.parameters.json'
+.PARAMETER AdditionalDownloadsFilePath
+Full path to an additional downloads JSON file to merge with the base environment downloads file.
+Entries in this file are merged on top of the base file — existing keys are overwritten, new keys are added.
+The base file (public / secret / topsecret) is always selected automatically based on the current Azure environment.
+
+Example:
+  .\Update-ImageArtifacts.ps1 -StorageAccountName 'sa123' -ResourceGroupName 'rg-avd' -AdditionalDownloadsFilePath 'C:\configs\extra.downloads.json'
 
 .PARAMETER TempDir
 Temporary directory used during artifact packaging. Defaults to $Env:Temp.
@@ -69,11 +72,11 @@ Use a path on a high-performance drive when processing large artifact sets.
     -DeleteExistingBlobs
 
 .EXAMPLE
-# Custom parameter file prefix (useful for multiple environments)
+# Merge additional downloads on top of the auto-detected base file
 .\Update-ImageArtifacts.ps1 `
     -StorageAccountName "saimgassetsuse2abc123" `
     -ResourceGroupName "rg-avd-image-management-use2" `
-    -ParameterFilePrefix "production"
+    -AdditionalDownloadsFilePath "C:\configs\extra.downloads.json"
 #>
 
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'ByResourceId')]
@@ -94,7 +97,7 @@ param(
     [switch]$SkipDownloadingNewSources,
 
     [Parameter(Mandatory = $false)]
-    [string]$ParameterFilePrefix,
+    [string]$AdditionalDownloadsFilePath,
 
     [Parameter(Mandatory = $false)]
     [string]$TempDir = "$Env:Temp"
@@ -113,20 +116,14 @@ $Environment = $Context.Environment.Name
 $StorageEndpointSuffix = $Context.Environment.StorageEndpointSuffix
 $EnvSuffix = $StorageEndpointSuffix.Substring(5, ($StorageEndpointSuffix.Length - 5))
 
-If ($ParameterFilePrefix -ne '' -and $null -ne $ParameterFilePrefix) {
-    Write-Output "Using custom parameter file prefix: '$ParameterFilePrefix'."
-    $downloadsParametersPrefix = $ParameterFilePrefix
+If ($Environment -eq 'AzureCloud' -or $Environment -eq 'AzureUSGovernment') {
+    $downloadsParametersPrefix = 'public'
+}
+ElseIf ($Environment -match 'USN') {
+    $downloadsParametersPrefix = 'topsecret'
 }
 Else {
-    If ($Environment -eq 'AzureCloud' -or $Environment -eq 'AzureUSGovernment') {
-        $downloadsParametersPrefix = 'public'
-    }
-    ElseIf ($Environment -match 'USN') {
-        $downloadsParametersPrefix = 'topsecret'
-    }
-    Else {
-        $downloadsParametersPrefix = 'secret'
-    }
+    $downloadsParametersPrefix = 'secret'
 }
 
 $ArtifactsContainerName = 'artifacts'
@@ -537,7 +534,7 @@ function Get-EvergreenAppUri {
 
 #region Download New Sources
 
-$downloadFilePath = (Join-Path -Path "$PSScriptRoot\imageManagement\parameters" -ChildPath "$downloadsParametersPrefix.downloads.parameters.json")
+$downloadFilePath = (Join-Path -Path "$PSScriptRoot\.." -ChildPath ".common\data\$downloadsParametersPrefix.downloads.parameters.json")
 if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
 
     Write-Output ""
@@ -553,6 +550,25 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
     }
     catch {
         Write-Error "Configuration JSON content could not be converted to a PowerShell object" -ErrorAction 'Stop'
+    }
+
+    # Merge additional downloads file if provided
+    if (-not [string]::IsNullOrEmpty($AdditionalDownloadsFilePath)) {
+        if (-not (Test-Path -Path $AdditionalDownloadsFilePath)) {
+            Write-Error "AdditionalDownloadsFilePath '$AdditionalDownloadsFilePath' was not found." -ErrorAction 'Stop'
+        }
+        Write-Output "Merging additional downloads from '$AdditionalDownloadsFilePath'."
+        $additionalJson = Get-Content -Path $AdditionalDownloadsFilePath -Raw -ErrorAction 'Stop'
+        $additionalJson = $additionalJson -replace 'ENVSUFFIX', $EnvSuffix
+        try {
+            $AdditionalDownloads = $additionalJson | ConvertFrom-Json -ErrorAction 'Stop'
+        }
+        catch {
+            Write-Error "Additional downloads JSON content could not be converted to a PowerShell object" -ErrorAction 'Stop'
+        }
+        foreach ($key in $AdditionalDownloads.PSObject.Properties.Name) {
+            $Downloads | Add-Member -NotePropertyName $key -NotePropertyValue $AdditionalDownloads.$key -Force
+        }
     }
 
     # Check if any download requires Evergreen and install if needed

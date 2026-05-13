@@ -22,23 +22,6 @@
             "STIGs"
         ]
     },
-    "FSLogix": {
-        "Description": "Required: FSLogix",
-        "DownloadUrl": "https://aka.ms/fslogix_download",
-        "DestinationFileName": "FSLogix.zip",
-        "DestinationFolders": [
-            "",
-            "Install-FSLogix"
-        ]
-    },
-    "Office365DeploymentTool": {
-        "Description": "Required: Office 365 Deployment Tool",
-        "DownloadUrl": "https://officecdn.microsoft.com/pr/wsus/setup.exe",
-        "DestinationFileName": "Office365DeploymentTool.exe",
-        "DestinationFolders": [
-            ""
-        ]
-    },
     "Office365AdministrativeTemplates": {
         "Description": "Optional: Office 365 Administrative Templates. Used for Office 365 policy configuration via LGPO.",
         "DownloadUrl": "https://download.microsoft.com/download/2/e/e/2eeec938-c014-419d-bb4b-d184871450f1/admintemplates_x64_5486-1000_en-us.exe",
@@ -47,55 +30,6 @@
         "DestinationFileName": "AdminTemplates_x64.exe",
         "DestinationFolders": [
             "Configure-Office365Policy"
-        ]
-    },
-    "OneDrive": {
-        "Description": "Required: OneDrive Sync Client",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=844652",
-        "DestinationFileName": "OneDriveSetup.exe",
-        "DestinationFolders": [
-            ""
-        ]
-    },
-    "TeamsBootstrapper": {
-        "Description": "Required: Microsoft Teams Bootstrapper",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2243204&clcid=0x409",
-        "DestinationFileName": "teamsbootstrapper.exe",
-        "DestinationFolders": [
-            ""
-        ]
-    },
-    "Teams64BitMSIX": {
-        "Description": "Required: Microsoft Teams 64-bit MSIX",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2196106",
-        "DestinationFileName": "MSTeams-x64.msix",
-        "DestinationFolders": [
-            ""
-        ]
-    },
-    "WebView2Runtime": {
-        "Description": "Required: Microsoft Edge WebView2 Runtime",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2124703",
-        "DestinationFileName": "WebView2.exe",
-        "DestinationFolders": [
-            ""
-        ]
-    },
-    "RemoteDesktopWebRTCRedirectorService": {
-        "Description": "Required: Microsoft Remote Desktop WebRTC Redirector Service",
-        "DownloadUrl": "https://aka.ms/msrdcwebrtcsvc/msi",
-        "DestinationFileName": "MsRdcWebRTCSvc.msi",
-        "DestinationFolders": [
-            ""
-        ]
-    },
-    "VisualStudioRedistributables": {
-        "Description": "Optional: Visual Studio C++ Redistributables",
-        "DownloadUrl": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
-        "DestinationFileName": "vc_redist.x64.exe",
-        "DestinationFolders": [
-            "",
-            "VisualCPlusPlusRedistributables"
         ]
     },
     "EdgeEnterpriseAdministrativeTemplates": {
@@ -119,7 +53,7 @@
         "Description": "Optional: PowerShell 7",
         "GitHubRepo": "PowerShell/PowerShell",
         "GitHubFileNamePattern": "*win-x64.msi",
-        "DestinationFileName": "Powershell.msi",
+        "DestinationFileName": "PowerShell7.msi",
         "DestinationFolders": [
             ""
         ]
@@ -150,16 +84,8 @@
             "STIGs"
         ]
     },
-    "WindowsDesktopOptimizationTool": {
-        "Description": "Optional: Windows Desktop Optimization Tool (WDOT) used by the image build solution when selected.",
-        "DownloadUrl": "https://codeload.github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool/zip/refs/heads/main",
-        "DestinationFileName": "WDOT.zip",
-        "DestinationFolders": [
-            ""
-        ]
-    },
     "GitForWindows": {
-        "Description":"Optional: Git for Windows Installer",
+        "Description": "Optional: Git for Windows Installer",
         "GitHubRepo": "git-for-windows/git",
         "GitHubFileNamePattern": "*64-bit.exe",
         "DestinationFileName": "Git-64-bit.exe",

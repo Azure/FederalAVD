@@ -32,11 +32,13 @@ Three sequential phases:
 
 ### Required Files
 
-- Downloads parameter file in `deployments/imageManagement/parameters/`:
-  - `public.downloads.parameters.json` (commercial / government)
-  - `secret.downloads.parameters.json` (IL6)
-  - `topsecret.downloads.parameters.json` (IL7)
-  - Or a custom prefix file: `<prefix>.downloads.parameters.json`
+Base downloads parameter files are in `.common/data/` and are selected automatically based on the connected Azure environment — no action needed:
+  - `.common/data/public.downloads.parameters.json` (commercial / government)
+  - `.common/data/secret.downloads.parameters.json` (IL6)
+  - `.common/data/topsecret.downloads.parameters.json` (IL7)
+
+To download **optional** software (e.g., PowerShell 7, VS Code, LGPO, Git), supply an additional JSON file via `-AdditionalDownloadsFilePath`. A ready-to-use example for public cloud environments is provided at:
+  - `deployments/imageManagement/parameters/public.downloads.optional.parameters.json`
 
 ## Parameters
 
@@ -61,7 +63,7 @@ The storage account can be identified by **either** its full resource ID **or** 
 |-----------|------|---------|-------------|
 | **DeleteExistingBlobs** | Switch | `$false` | Delete all existing blobs in the container before uploading. Use for a clean refresh rather than incremental update. |
 | **SkipDownloadingNewSources** | Switch | `$false` | Skip downloading new software. Use in air-gapped environments or when the artifacts directory is already current. |
-| **ParameterFilePrefix** | String | *(auto-detected)* | Override automatic environment detection with a custom downloads parameter file prefix. |
+| **AdditionalDownloadsFilePath** | String | *(none)* | Full path to an additional downloads JSON file to merge with the base environment file. Entries in this file are merged on top — existing keys are overwritten, new keys are added. |
 | **TempDir** | String | `$Env:Temp` | Temporary directory for packaging. Use a path on a high-performance drive for large artifact sets. |
 
 ## Usage Examples
@@ -110,29 +112,31 @@ Delete all existing blobs first, then upload fresh:
     -DeleteExistingBlobs
 ```
 
-### Custom Downloads Configuration
+### Include Optional Software
 
-Use a custom parameter file prefix (e.g., for a non-standard environment):
+Merge additional downloads (e.g., PowerShell 7, VS Code, LGPO) on top of the auto-detected base file:
 
 ```powershell
 .\Update-ImageArtifacts.ps1 `
     -StorageAccountName "saimgassetsusgvabc123" `
     -ResourceGroupName "rg-avd-image-management-usgv" `
-    -ParameterFilePrefix "production"
+    -AdditionalDownloadsFilePath "C:\repos\FederalAVD\deployments\imageManagement\parameters\public.downloads.optional.parameters.json"
 ```
+
+You can supply any JSON file in the same format — only entries present in the file are merged.
 
 ## Environment Detection
 
-The script automatically selects the downloads parameter file based on the connected Azure environment:
+The script automatically selects the base downloads file from `.common/data/` based on the connected Azure environment:
 
-| Azure Environment | Default Prefix | Parameter File |
-|-------------------|----------------|----------------|
-| AzureCloud | public | public.downloads.parameters.json |
-| AzureUSGovernment | public | public.downloads.parameters.json |
-| Azure Secret (IL6) | secret | secret.downloads.parameters.json |
-| Azure Top Secret (IL7) | topsecret | topsecret.downloads.parameters.json |
+| Azure Environment | Base File |
+|-------------------|-----------|
+| AzureCloud | `.common/data/public.downloads.parameters.json` |
+| AzureUSGovernment | `.common/data/public.downloads.parameters.json` |
+| Azure Secret (IL6) | `.common/data/secret.downloads.parameters.json` |
+| Azure Top Secret (IL7) | `.common/data/topsecret.downloads.parameters.json` |
 
-Override with `-ParameterFilePrefix` when needed.
+The base files contain the software entries that are required by the image build template (FSLogix, M365, OneDrive, Teams, WebView2, etc.). Use `-AdditionalDownloadsFilePath` to include optional software on top.
 
 ## Software Download Configuration
 
@@ -207,8 +211,8 @@ Pass this URL as `artifactsContainerUri` in image build deployments.
 - Use `-SkipDownloadingNewSources` and manually place files in `.common/artifacts/` for air-gapped scenarios
 
 **Parameter file not found**
-- Confirm the file exists at `deployments/imageManagement/parameters/<prefix>.downloads.parameters.json`
-- Use `-ParameterFilePrefix` to explicitly specify the prefix
+- The base downloads files are in `.common/data/` and are included with the repository — they should always be present
+- Verify the `-AdditionalDownloadsFilePath` value (if provided) points to an existing file with a valid full path
 
 ## Related Resources
 

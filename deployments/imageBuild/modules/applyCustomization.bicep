@@ -24,14 +24,6 @@ resource applyCustomization 'Microsoft.Compute/virtualMachines/runCommands@2023-
   parent: imageVm
   properties: {
     asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-${customization.name}-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -39,7 +31,7 @@ resource applyCustomization 'Microsoft.Compute/virtualMachines/runCommands@2023-
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-${customization.name}-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-${customization.name}-${deploymentSuffix}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Uri'

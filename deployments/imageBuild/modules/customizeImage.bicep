@@ -181,14 +181,6 @@ resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-
   location: location
   parent: imageVm
   properties: {
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-Remove-AppxPackages-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -196,7 +188,7 @@ resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Remove-AppxPackages-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Remove-AppxPackages-${deploymentSuffix}.log'
     parameters: [
       {
         name: 'AppsToRemove'
@@ -210,53 +202,12 @@ resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-
   }
 }
 
-resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (updateUwpApps) {
-  name: 'update-builtInUwpApps'
-  location: location
-  parent: imageVm
-  properties: {
-    asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-error-${deploymentSuffix}.log'
-    outputBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    outputBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-output-${deploymentSuffix}.log'
-    parameters: []
-    source: {
-      script: loadTextContent('../../../.common/scripts/Update-UwpApps.ps1')
-    }
-    treatFailureAsDeploymentFailure: true
-  }
-  dependsOn: [
-    removeAppxPackages
-  ]
-}
-
 resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if (installFsLogix) {
   name: 'fslogix'
   location: location
   parent: imageVm
   properties: {
     asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-FSLogix-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -264,7 +215,7 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-FSLogix-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-FSLogix-${deploymentSuffix}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Name'
@@ -285,7 +236,6 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
   dependsOn: [
     createBuildDir
     removeAppxPackages
-    updateBuiltInApps
   ]
 }
 
@@ -295,14 +245,6 @@ resource office 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if 
   parent: imageVm
   properties: {
     asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-Office-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -310,7 +252,7 @@ resource office 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if 
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Office-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Office-${deploymentSuffix}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Environment'
@@ -339,7 +281,6 @@ resource office 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if 
   dependsOn: [
     createBuildDir
     removeAppxPackages
-    updateBuiltInApps
     fslogix
   ]
 }
@@ -350,14 +291,6 @@ resource onedrive 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = i
   parent: imageVm
   properties: {
     asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-OneDrive-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -365,7 +298,7 @@ resource onedrive 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = i
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-OneDrive-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-OneDrive-${deploymentSuffix}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Name'
@@ -386,7 +319,6 @@ resource onedrive 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = i
   dependsOn: [
     createBuildDir
     removeAppxPackages
-    updateBuiltInApps
     fslogix
     office
   ]
@@ -398,14 +330,6 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
   parent: imageVm
   properties: {
     asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-Teams-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -413,7 +337,7 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Teams-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Teams-${deploymentSuffix}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Name'
@@ -440,7 +364,6 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
   dependsOn: [
     createBuildDir
     removeAppxPackages
-    updateBuiltInApps
     fslogix
     office
     onedrive
@@ -483,7 +406,6 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
   dependsOn: [
     createBuildDir
     removeAppxPackages
-    updateBuiltInApps
     fslogix
     onedrive
     office
@@ -491,7 +413,7 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
   ]
 }
 
-resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(appsToRemove) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || updateUwpApps) {
+resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(appsToRemove) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams) {
   name: 'restart-post-microsoft-software'
   location: location
   parent: orchestrationVm
@@ -506,7 +428,6 @@ resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands
   dependsOn: [
     createBuildDir
     removeAppxPackages
-    updateBuiltInApps
     fslogix
     office
     onedrive
@@ -567,14 +488,6 @@ resource microsoftUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03
   parent: imageVm
   properties: {
     asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-Install-Updates-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -582,7 +495,7 @@ resource microsoftUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Install-Updates-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Install-Updates-${deploymentSuffix}.log'
     parameters: updateService == 'WSUS'
       ? [
           {
@@ -628,18 +541,12 @@ resource restartUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
   ]
 }
 
-resource wdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (applyWindowsDesktopOptimizations) {
-  name: 'wdot'
+resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (updateUwpApps) {
+  name: 'update-builtInUwpApps'
   location: location
   parent: imageVm
   properties: {
     asyncExecution: false
-    errorBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    errorBlobUri: empty(logBlobContainerUri) ? null : '${logBlobContainerUri}${imageVmName}-wdot-error-${deploymentSuffix}.log'
     outputBlobManagedIdentity: empty(logBlobContainerUri)
       ? null
       : {
@@ -647,7 +554,35 @@ resource wdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (a
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-wdot-output-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-${deploymentSuffix}.log'
+    parameters: []
+    source: {
+      script: loadTextContent('../../../.common/scripts/Update-UwpApps.ps1')
+    }
+    treatFailureAsDeploymentFailure: true
+  }
+  dependsOn: [
+    removeAppxPackages
+    restartMicrosoftSoftware
+    restartCustomizations
+    restartUpdates
+  ]
+}
+
+resource wdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (applyWindowsDesktopOptimizations) {
+  name: 'wdot'
+  location: location
+  parent: imageVm
+  properties: {
+    asyncExecution: false
+    outputBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    outputBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-wdot-${deploymentSuffix}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Name'
@@ -671,6 +606,7 @@ resource wdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (a
     restartMicrosoftSoftware
     restartCustomizations
     restartUpdates
+    updateBuiltInApps
   ]
 }
 
@@ -699,14 +635,6 @@ resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-
     parent: imageVm
     properties: {
       asyncExecution: false
-      errorBlobManagedIdentity: empty(logBlobContainerUri)
-        ? null
-        : {
-            clientId: userAssignedIdentityClientId
-          }
-      errorBlobUri: empty(logBlobContainerUri)
-        ? null
-        : '${logBlobContainerUri}${imageVmName}-${customizer.name}-error-${deploymentSuffix}.log'
       outputBlobManagedIdentity: empty(logBlobContainerUri)
         ? null
         : {
@@ -714,7 +642,7 @@ resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-
           }
       outputBlobUri: empty(logBlobContainerUri)
         ? null
-        : '${logBlobContainerUri}${imageVmName}-${customizer.name}-output-${deploymentSuffix}.log'
+        : '${logBlobContainerUri}${imageVmName}-${customizer.name}-${deploymentSuffix}.log'
       parameters: union(commonScriptParams, [
         {
           name: 'Uri'
@@ -740,6 +668,7 @@ resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-
       restartCustomizations
       restartUpdates
       restartWDOT
+      updateBuiltInApps
     ]
   }
 ]
@@ -764,6 +693,7 @@ resource cleanupPublicDesktop 'Microsoft.Compute/virtualMachines/runCommands@202
     restartUpdates
     restartWDOT
     vdiApplications
+    updateBuiltInApps
   ]
 }
 
@@ -788,6 +718,15 @@ resource disableSoftwareUpdatesRunCommand 'Microsoft.Compute/virtualMachines/run
   parent: imageVm
   properties: {
     asyncExecution: false
+    outputBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    outputBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-Disable-SoftwareUpdates-${deploymentSuffix}.log'
+    
     parameters: disableSoftwareUpdatesParams
     source: {
       script: loadTextContent('../../../.common/scripts/Disable-SoftwareUpdates.ps1')
@@ -801,6 +740,7 @@ resource disableSoftwareUpdatesRunCommand 'Microsoft.Compute/virtualMachines/run
     restartUpdates
     restartWDOT
     vdiApplications
+    updateBuiltInApps
   ]
 }
 
@@ -810,6 +750,14 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
   parent: imageVm
   properties: {
     asyncExecution: false
+    outputBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    outputBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-Cleanup-Image-${deploymentSuffix}.log'
     parameters: [
       {
         name: 'BuildDir'
@@ -829,5 +777,6 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
     restartWDOT
     vdiApplications
     disableSoftwareUpdatesRunCommand
+    updateBuiltInApps
   ]
 }
