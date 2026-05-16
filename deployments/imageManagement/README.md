@@ -18,6 +18,7 @@ Provide foundational resources for AVD image management:
 - **Storage Account** - Host build artifacts (scripts, installers, packages) (optional, default on)
 - **Build Logs Storage Account** - Persist image customization logs from image builds (optional, default off)
 - **Managed Identity** - Authenticate to storage without credentials (deployed when either storage account is enabled)
+- **Image Build Resource Group** - Pre-created persistent RG for image build operators who lack subscription-level RG creation rights (optional, default on)
 - **Remote Gallery (Optional)** - Disaster recovery in secondary region
 - **Private Endpoint (Optional)** - Zero Trust network isolation
 
@@ -44,6 +45,8 @@ Subscription
 │   ├── Gallery Confidential VM Disk Encryption Set (createConfidentialVmGalleryDes = true)
 │   └── Private Endpoint(s) (optional, one per storage account)
 │       └── Network Interface
+├── Image Build Resource Group (deployImageBuildResourceGroup = true)
+│   └── RBAC: Managed Identity → Contributor
 ```
 
 ### Identity & Access
@@ -55,6 +58,14 @@ The managed identity is automatically assigned:
 - Used by image build VMs to download artifacts and write customization logs without storage account keys
 
 ## Prerequisites
+
+### Required Deployer Permissions
+
+The Azure identity running this deployment needs:
+
+| Role | Scope | Why |
+|---|---|---|
+| Owner **or** Contributor + User Access Administrator | Subscription | Creates resource groups; assigns Contributor to the managed identity on the image build RG, Storage Blob Data Reader on the artifacts storage account, and Storage Blob Data Contributor on the build logs storage account |
 
 ### Required Information
 
@@ -197,6 +208,21 @@ Image version replication to a remote region is configured per imageBuild deploy
 - **Default:** `false`
 - **Description:** Deploy a dedicated storage account for persisting image build customization logs. When enabled, pass the `buildLogsStorageAccountResourceId` output to imageBuild deployments as `logStorageAccountResourceId`. The managed identity is automatically granted **Storage Blob Data Contributor** on this account.
 
+### Image Build Resource Group
+
+#### `deployImageBuildResourceGroup`
+
+- **Type:** Boolean
+- **Default:** `true`
+- **Description:** Pre-creates a persistent resource group dedicated to image builds and grants the imageManagement managed identity **Contributor** on it. The primary purpose is **delegation**: image build operators who do not have subscription-level permissions to create resource groups can run image builds by pointing imageBuild to this pre-created resource group via the `imageBuildResourceGroupId` parameter. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level. Pass the `imageBuildResourceGroupResourceId` output directly to imageBuild as `imageBuildResourceGroupId`.
+
+#### `customImageBuildResourceGroupName`
+
+- **Type:** String
+- **Optional**
+- **Description:** Override the auto-generated image build resource group name. Leave empty to use the standard naming convention. Pass the `imageBuildResourceGroupResourceId` output directly to imageBuild as `imageBuildResourceGroupId`.
+- **Example:** `rg-avd-image-builds-use2`
+
 ## Parameter Files
 
 Example parameter files are provided in the `parameters\` directory. Copy and rename one to match your environment, then fill in the placeholder values (`<...>`).
@@ -318,6 +344,13 @@ az deployment sub create \
 - **Description:** Resource ID of the Confidential VM Disk Encryption Set (`ConfidentialVmEncryptedWithCustomerKey`). Empty string when `createConfidentialVmGalleryDes = false`.
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/diskEncryptionSets/des-image-management-gallery-confidential-vm-keys-use2`
 - **Used by:** Pass as `confidentialVMDiskEncryptionSetResourceId` in imageBuild deployments targeting ConfidentialVM image definitions.
+
+### `imageBuildResourceGroupResourceId`
+
+- **Type:** String
+- **Description:** Full resource ID of the pre-created image build resource group. Empty string when `deployImageBuildResourceGroup = false`.
+- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-builds-use2`
+- **Used by:** Pass directly to imageBuild as `imageBuildResourceGroupId`.
 
 ### 1. Upload Artifacts to Storage
 

@@ -93,16 +93,34 @@
 									"visible": "[equals(steps('basics').resGroup.useExResGroup, true)]"
 								},
 								{
+									"name": "existingRgIdentityWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('basics').resGroup.useExResGroup, true)]",
+									"options": {
+										"style": "Warning",
+										"text": "When using an existing resource group, the User Assigned Identity selected below must already have the 'Contributor' role on that resource group. This deployment will NOT grant that role. Use the imageManagement deployment with 'Deploy Image Build Resource Group' enabled to pre-create the resource group and pre-grant the required role on the managed identity."
+									}
+								},
+								{
+									"name": "newRgTemporaryWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('basics').resGroup.useExResGroup, false)]",
+									"options": {
+										"style": "Warning",
+										"text": "The image build resource group is TEMPORARY. A new uniquely-named resource group is created at the start of each build (timestamp suffix appended automatically) and is deleted along with all its contents when the build completes. Do not place resources you want to keep in this resource group."
+									}
+								},
+								{
 									"name": "customBuildResourceGroupName",
 									"type": "Microsoft.Common.TextBox",
-									"label": "Custom Build Resource Group Name",
-									"subLabel": "Leave blank if you want to allow this deployment to create a resource group automatically named with CAF principals.",
+									"label": "Custom Build Resource Group Base Name",
+									"subLabel": "Optional. A deployment timestamp will be appended automatically to ensure uniqueness. Leave blank to use the default CAF-compliant name.",
 									"placeholder": "rg-image-build-resources-<environment>-<location>",
-									"toolTip": "The custom name of the resource group where the image build and management vms will be created.",
+									"toolTip": "Optional base name for the temporary image build resource group. A timestamp suffix (yyyyMMddHHmmss) is always appended. The resource group is deleted automatically when the build completes.",
 									"constraints": {
 										"required": false,
-										"regex": "^[a-z0-9A-Z-]{2,90}$",
-										"validationMessage": "If provided the value must be between 2 and 90 characters."
+										"regex": "^[a-z0-9A-Z-]{2,75}$",
+										"validationMessage": "If provided the value must be between 2 and 75 characters (a 14-character timestamp suffix will be appended)."
 									},
 									"visible": "[equals(steps('basics').resGroup.useExResGroup, false)]"
 								}
@@ -385,22 +403,22 @@
 								{
 									"name": "userAssignedIdentityInfo",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]",
+									"visible": true,
 									"options": {
 										"style": "Info",
-										"text": "Select a User Assigned Identity to attach to the build VMs. It must have 'Storage Blob Data Reader' on the artifacts storage account (if zero-trust storage is enabled) and 'Storage Blob Data Contributor' on the logs storage account (if log collection is enabled). The managed identity output from the imageManagement deployment already has both roles when configured correctly."
+										"text": "Select a User Assigned Identity to attach to the build VMs. A UAI is required when using an existing resource group or when storage features (zero-trust artifacts or log collection) are enabled. This deployment grants no storage or resource group roles — all required permissions must be pre-granted: 'Virtual Machine Contributor' on the image build resource group (existing RG only), 'Storage Blob Data Reader' on the artifacts storage account (if zero-trust storage is enabled), and 'Storage Blob Data Contributor' on the logs storage account (if log collection is enabled). When creating a new resource group without storage features, the UAI is optional — one will be auto-created and granted VM Contributor. The managed identity output from the imageManagement deployment satisfies all requirements when configured correctly."
 									}
 								},
 								{
 									"name": "userAssignedIdentity",
 									"type": "Microsoft.Solutions.ResourceSelector",
 									"label": "User Assigned Identity",
-									"toolTip": "Select an existing User Assigned Identity to attach to the build VMs. It must have 'Storage Blob Data Reader' on the artifacts storage account and/or 'Storage Blob Data Contributor' on the logs storage account, depending on which features are enabled.",
+									"toolTip": "Select an existing User Assigned Identity to attach to the build VMs. All required roles (VM Contributor on the build resource group, storage roles if applicable) must be pre-granted before running this deployment.",
 									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
 									"constraints": {
-										"required": true
+										"required": "[or(equals(steps('basics').resGroup.useExResGroup, true), steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]"
 									},
-									"visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]"
+									"visible": true
 								}
 							]
 						},
@@ -2198,7 +2216,7 @@
 				"customBuildResourceGroupName": "[if(equals(steps('basics').resGroup.useExResGroup, false), steps('basics').resGroup.customBuildResourceGroupName, '')]",
 				"computeGalleryResourceId": "[steps('prereqs').gallery.gallery.id]",
 				"artifactsContainerUri": "[if(steps('prereqs').storage.enableZeroTrustStorage, concat(steps('prereqs').storage.storageAccount.blobEndpoint, steps('prereqs').storage.container), '')]",
-				"userAssignedIdentityResourceId": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs), coalesce(steps('prereqs').storage.userAssignedIdentity.id, ''), '')]",
+				"userAssignedIdentityResourceId": "[coalesce(steps('prereqs').storage.userAssignedIdentity.id, '')]",
 				"subnetResourceId": "[steps('prereqs').network.subnet]",
 				"vmSize": "[steps('vmProps').vmSize]",
 				"encryptionAtHost": "[steps('vmProps').encryptionAtHost]",

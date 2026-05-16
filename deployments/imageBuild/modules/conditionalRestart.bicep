@@ -56,14 +56,6 @@ resource waitForCbsRestart 'Microsoft.Compute/virtualMachines/runCommands@2023-0
   parent: orchestrationVm
   properties: {
     asyncExecution: false
-    outputBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    outputBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-WaitForConditionalRestart-${context}-${deploymentSuffix}.log'
     parameters: waitForRestartParameters
     source: {
       script: loadTextContent('../../../.common/scripts/Wait-ForVmRestart.ps1')

@@ -75,7 +75,15 @@ param confidentialVMOrchestratorObjectId string = ''
 // ── Build Logs Storage Account ────────────────────────────────────────────────
 
 @description('Optional. Deploy a dedicated storage account in the imageManagement resource group to persist image build customization logs. When enabled, pass the `buildLogsStorageAccountResourceId` output to imageBuild as `existingLogStorageAccountResourceId`.')
-param deployBuildLogsStorageAccount bool = false
+param deployBuildLogsStorageAccount bool = true
+
+// ── Image Build Resource Group ─────────────────────────────────────────────────────
+
+@description('Optional. Pre-create a persistent resource group dedicated to image builds and grant the managed identity Contributor on it. Enables image build operators who do not have subscription-level resource group creation rights to run image builds by pointing imageBuild to this resource group via imageBuildResourceGroupId. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level.')
+param deployImageBuildResourceGroup bool = true
+
+@description('Optional. Custom name for the pre-created image build resource group. Leave empty to use the standard naming convention (matches what imageBuild calculates automatically).')
+param customImageBuildResourceGroupName string = ''
 
 @description('DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddhhmm')
@@ -105,6 +113,13 @@ var resourceGroupName = replace(
   'RESOURCETYPE',
   resourceAbbreviations.resourceGroups
 )
+// Image build RG name — matches the naming logic in imageBuild.bicep exactly so imageBuild
+// deployments that omit imageBuildResourceGroupId will land in the pre-created RG automatically.
+var imageBuildRgName = empty(customImageBuildResourceGroupName)
+  ? nameConvResTypeAtEnd
+      ? 'avd-image-builds-${locations[varLocation].abbreviation}-${resourceAbbreviations.resourceGroups}'
+      : '${resourceAbbreviations.resourceGroups}-avd-image-builds-${locations[varLocation].abbreviation}'
+  : customImageBuildResourceGroupName
 var artifactsBlobContainerName = 'artifacts'
 var galleryName = replace(
   replace(
@@ -210,7 +225,33 @@ module imageGallery '../../.common/bicepModules/compute/galleries/deploy.bicep' 
   dependsOn: [resourceGroup]
 }
 
-module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (deployArtifactsStorageAccount || deployBuildLogsStorageAccount) {
+// Image Build Resource Group: pre-created so imageBuild deployments can reference it via
+// imageBuildResourceGroupId without waiting for RG creation during the build.
+module imageBuildResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployImageBuildResourceGroup) {
+  name: 'Image-Build-ResourceGroup-${timeStamp}'
+  params: {
+    name: imageBuildRgName
+    location: location
+    tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
+  }
+}
+
+// Grant the imageManagement UAI Contributor on the image build RG so it can create and manage
+// build VMs, managed images, and all other resources without needing elevated subscription-level
+// permissions. Contributor is required (over VM Contributor) because the cleanup script must also
+// delete managed images (Microsoft.Compute/images/delete) which VM Contributor does not include.
+module imageBuildRgContributorAssignment '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (deployImageBuildResourceGroup) {
+  name: 'RA-MI-Contributor-ImageBuildRG-${timeStamp}'
+  scope: az.resourceGroup(imageBuildRgName)
+  params: {
+    principalId: managedIdentity!.outputs.principalId
+    roleDefinitionId: 'b24988ac-6180-42a0-ab88-20f7382dd24c' // Contributor
+    principalType: 'ServicePrincipal'
+  }
+  dependsOn: [imageBuildResourceGroup]
+}
+
+module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (deployArtifactsStorageAccount || deployBuildLogsStorageAccount || deployImageBuildResourceGroup) {
   name: 'Managed-Identity-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -243,11 +284,10 @@ module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/custome
 // DES for gallery image version encryption — created once here so imageBuild deployments
 // can pass `diskEncryptionSetResourceId` as `existingDiskEncryptionSetResourceId`,
 // suppressing per-build DES creation and KV dependency during image builds.
-module diskCmk '../hostpools/modules/diskCmk/diskCmk.bicep' = if (keyManagementGalleryImageVersions != 'PlatformManaged') {
+module diskCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementGalleryImageVersions != 'PlatformManaged') {
   name: 'Disk-CMK-${timeStamp}'
-  scope: subscription()
+  scope: az.resourceGroup(resourceGroupName)
   params: {
-    resourceGroupName: resourceGroupName
     keyVaultResourceId: encryptionKeyVaultResourceId
     keyManagementType: contains(keyManagementGalleryImageVersions, 'HSM')
       ? (contains(keyManagementGalleryImageVersions, 'Platform')
@@ -260,8 +300,13 @@ module diskCmk '../hostpools/modules/diskCmk/diskCmk.bicep' = if (keyManagementG
     location: location
     tags: tags
     deploymentSuffix: '${timeStamp}-gal'
-    keyName: galleryDiskEncryptionKeyName
-    diskEncryptionSetName: galleryDiskEncryptionSetName
+    diskEncryptionConfigs: [
+      {
+        keyName: galleryDiskEncryptionKeyName
+        diskEncryptionSetName: galleryDiskEncryptionSetName
+        confidentialVMOSDiskEncryption: false
+      }
+    ]
   }
   dependsOn: [resourceGroup]
 }
@@ -494,7 +539,7 @@ output artifactsBlobContainerName string = deployArtifactsStorageAccount ? asset
 output artifactsBlobContainerUrl string = deployArtifactsStorageAccount
   ? 'https://${artifactsStorageAccountName}.blob.${environment().suffixes.storage}/${artifactsBlobContainerName}'
   : ''
-output managedIdentityResourceId string = (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)
+output managedIdentityResourceId string = (deployArtifactsStorageAccount || deployBuildLogsStorageAccount || deployImageBuildResourceGroup)
   ? managedIdentity!.outputs.resourceId
   : ''
 output computeGalleryResourceId string = imageGallery!.outputs.resourceId
@@ -505,8 +550,11 @@ output buildLogsContainerUri string = deployBuildLogsStorageAccount
   ? 'https://${logsStorageName}.blob.${environment().suffixes.storage}/${logsContainerName}'
   : ''
 output diskEncryptionSetResourceId string = keyManagementGalleryImageVersions != 'PlatformManaged'
-  ? diskCmk!.outputs.diskEncryptionSetResourceId
+  ? diskCmk!.outputs.diskResults[0].diskEncryptionSetResourceId
   : ''
 output confidentialVmDiskEncryptionSetResourceId string = createConfidentialVmGalleryDes
   ? confidentialVmCmk!.outputs.diskResults[0].diskEncryptionSetResourceId
+  : ''
+output imageBuildResourceGroupResourceId string = deployImageBuildResourceGroup
+  ? '/subscriptions/${subscription().subscriptionId}/resourceGroups/${imageBuildRgName}'
   : ''

@@ -87,6 +87,15 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
 
 ## Prerequisites
 
+### Required Deployer Permissions
+
+The Azure identity running this deployment needs different rights depending on which resource group path you use:
+
+| Path | Required role | Why |
+|---|---|---|
+| **New RG** (`imageBuildResourceGroupId` empty) | Owner **or** Contributor + User Access Administrator at **subscription** scope | Creates a temporary resource group; assigns Contributor to the orchestration VM's system-assigned identity on that RG |
+| **Existing RG** (`imageBuildResourceGroupId` set) | **Contributor** on the image build resource group | Deploys VMs into the pre-existing RG only — no role assignments |
+
 ### Required Azure Resources
 
 1. **Azure Compute Gallery**
@@ -103,9 +112,11 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
    - Contains artifacts (scripts, installers, config files)
    - User-assigned managed identity with "Storage Blob Data Reader" role
 
-4. **User-Assigned Managed Identity** (Zero Trust)
-   - Assigned "Storage Blob Data Reader" on artifacts storage
-   - Automatically assigned "Virtual Machine Contributor" and "Storage Blob Data Contributor" on build resource group
+4. **User-Assigned Managed Identity**
+   - Required when using an existing resource group, zero-trust artifacts storage, or log collection
+   - Must be pre-granted: **Contributor** on the image build resource group (existing RG only), **Storage Blob Data Reader** on the artifacts storage account (if zero-trust storage is enabled), **Storage Blob Data Contributor** on the log storage account (if log collection is enabled)
+   - This deployment grants no roles on the existing RG path — use the imageManagement deployment to pre-stage the resource group and identity with the correct permissions
+   - Not required when creating a new resource group with no storage features enabled — the orchestration VM uses its system-assigned identity
 
 ### Optional Resources
 
@@ -161,14 +172,14 @@ See [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) for
 #### `imageBuildResourceGroupId`
 
 - **Type:** String
-- **Description:** Existing resource group ID for build resources (leave empty to create new)
+- **Description:** Resource ID of an existing resource group to use as the persistent build workspace. Leave empty to have this deployment create a **temporary** resource group that is automatically deleted when the build completes. Each deployment that creates a new resource group generates a unique timestamp-suffixed name to support parallel builds.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/rg-image-build`
 
 #### `customBuildResourceGroupName`
 
 - **Type:** String
-- **Description:** Custom name for new build resource group (only if not using existing)
-- **Example:** `rg-avd-image-builds-prod`
+- **Description:** Optional base name for the temporary build resource group (only used when `imageBuildResourceGroupId` is empty). A deployment timestamp suffix (`yyyyMMddHHmmss`) is always appended to ensure uniqueness. Leave empty to use the default CAF-compliant name. **The resource group is temporary — it is deleted automatically when the build completes.**
+- **Example:** `rg-avd-image-builds-prod` → becomes `rg-avd-image-builds-prod-20260515143022`
 
 ### Prerequisites
 
@@ -187,8 +198,8 @@ See [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) for
 #### `userAssignedIdentityResourceId`
 
 - **Type:** String
-- **Default:** `''` (empty — deployment creates its own identity)
-- **Description:** Optional. Resource ID of a managed identity to attach to the build VM. Required when zero-trust artifacts storage (`artifactsContainerUri`) or log collection (`collectCustomizationLogs`) is enabled. The identity must have **Storage Blob Data Reader** on the artifacts container and/or **Storage Blob Data Contributor** on the log storage account. When empty, the deployment creates its own UAI and assigns it Contributor and Storage Blob Data Contributor on the build resource group.
+- **Default:** `''` (empty)
+- **Description:** Resource ID of a managed identity to attach to the build VMs. **Required when using an existing resource group** (`imageBuildResourceGroupId`), zero-trust artifacts storage (`artifactsContainerUri`), or log collection (`collectCustomizationLogs`). All required roles must be pre-granted — this deployment grants no roles on the existing RG path: **Contributor** on the image build resource group (existing RG only), **Storage Blob Data Reader** on the artifacts storage account (if zero-trust storage is enabled), **Storage Blob Data Contributor** on the log storage account (if log collection is enabled). Use the imageManagement deployment to pre-stage the identity with all required permissions. Optional when creating a new resource group with no storage features — the orchestration VM uses its system-assigned identity.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity}`
 
 #### `subnetResourceId`

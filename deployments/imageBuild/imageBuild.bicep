@@ -339,12 +339,15 @@ var downloads = startsWith(cloud, 'usn')
 
 var computeLocation = vnet.location
 var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''
+// The auto-generated and custom names include the deployment timestamp so each build gets a unique
+// resource group name. This allows parallel builds and prevents naming conflicts.
+// The orchestration VM deletes the entire resource group at the end of the build.
 var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
   ? (empty(customBuildResourceGroupName)
       ? nameConvResTypeAtEnd
-          ? 'avd-image-builds-${locations[varLocation].abbreviation}-${resourceAbbreviations.resourceGroups}'
-          : '${resourceAbbreviations.resourceGroups}-avd-image-builds-${locations[varLocation].abbreviation}'
-      : customBuildResourceGroupName)
+          ? '${depPrefix}avd-image-builds-${locations[varLocation].abbreviation}-${deploymentSuffix}-${resourceAbbreviations.resourceGroups}'
+          : '${resourceAbbreviations.resourceGroups}-${depPrefix}avd-image-builds-${locations[varLocation].abbreviation}-${deploymentSuffix}'
+      : '${customBuildResourceGroupName}-${deploymentSuffix}')
   : last(split(imageBuildResourceGroupId, '/'))
 
 var adminPw = '1qaz@WSX${uniqueString(subscription().id, imageBuildResourceGroupName)}'
@@ -507,21 +510,6 @@ resource imageBuildRg 'Microsoft.Resources/resourceGroups@2023-07-01' = if (empt
 
 // * Managed Identity * //
 
-module userAssignedIdentity '../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (empty(userAssignedIdentityResourceId)) {
-  name: '${depPrefix}ManagedIdentity-${deploymentSuffix}'
-  scope: resourceGroup(imageBuildResourceGroupName)
-  params: {
-    location: location
-    name: nameConvResTypeAtEnd
-      ? 'avd-image-builder-${locations[varLocation].abbreviation}-${resourceAbbreviations.userAssignedIdentities}'
-      : '${resourceAbbreviations.userAssignedIdentities}-avd-image-builder-${locations[varLocation].abbreviation}'
-    tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
-  }
-  dependsOn: [
-    imageBuildRg
-  ]
-}
-
 resource existingUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = if (!empty(userAssignedIdentityResourceId)) {
   scope: resourceGroup(split(userAssignedIdentityResourceId, '/')[2], split(userAssignedIdentityResourceId, '/')[4])
   name: last(split(userAssignedIdentityResourceId, '/'))
@@ -590,29 +578,16 @@ module remoteImageDefinition '../../.common/bicepModules/compute/galleries/image
 
 // * Role Assignments * //
 
-module roleAssignmentContributorBuildRg '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
-  name: '${depPrefix}RA-MI-VirtMachContr-BuildRG-${deploymentSuffix}'
+// When creating a new resource group, grant the orchestration VM's system-assigned identity Contributor
+// on the build RG. Contributor allows the cleanup script to delete the entire RG after the build.
+// When an existing resource group is provided, all required roles must be pre-granted on the supplied UAI
+// (use the imageManagement deployment with deployImageBuildResourceGroup=true to pre-stage this).
+module roleAssignmentContributorBuildRg '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (empty(imageBuildResourceGroupId)) {
+  name: '${depPrefix}RA-OrchVM-Contributor-BuildRG-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
-    principalId: empty(userAssignedIdentityResourceId)
-      ? userAssignedIdentity!.outputs.principalId
-      : existingUserAssignedIdentity!.properties.principalId
-    roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
-    principalType: 'ServicePrincipal'
-  }
-  dependsOn: [
-    imageBuildRg
-  ]
-}
-
-module roleAssignmentBlobDataContributorExistingStorage '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (collectCustomizationLogs && !empty(logStorageAccountResourceId) && empty(userAssignedIdentityResourceId)) {
-  // Only needed when imageBuild creates its own UAI — when the imageManagement UAI is supplied via
-  // userAssignedIdentityResourceId it already has Blob Data Contributor granted by imageManagement.
-  name: '${depPrefix}RA-MI-StorBlobDataContr-ExistingLogsRG-${deploymentSuffix}'
-  scope: resourceGroup(split(logStorageAccountResourceId, '/')[2], split(logStorageAccountResourceId, '/')[4])
-  params: {
-    principalId: userAssignedIdentity!.outputs.principalId
-    roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
+    principalId: orchestrationVm.outputs.principalId
+    roleDefinitionId: 'b24988ac-6180-42a0-ab88-20f7382dd24c' // Contributor
     principalType: 'ServicePrincipal'
   }
 }
@@ -642,9 +617,10 @@ module orchestrationVm '../../.common/bicepModules/compute/virtualMachines/deplo
     diskEncryptionSetResourceId: diskEncryptionSetResourceId
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
-    userAssignedIdentityResourceIds: [
-      empty(userAssignedIdentityResourceId) ? userAssignedIdentity!.outputs.resourceId : userAssignedIdentityResourceId
-    ]
+    systemAssignedIdentity: empty(imageBuildResourceGroupId)
+    userAssignedIdentityResourceIds: empty(imageBuildResourceGroupId)
+      ? []
+      : [userAssignedIdentityResourceId]
     vmSize: vmSize
   }
   dependsOn: [
@@ -689,9 +665,9 @@ module imageVm '../../.common/bicepModules/compute/virtualMachines/deploy.bicep'
       : diskEncryptionSetResourceId
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Compute/virtualMachines'] ?? {}
-    userAssignedIdentityResourceIds: [
-      empty(userAssignedIdentityResourceId) ? userAssignedIdentity!.outputs.resourceId : userAssignedIdentityResourceId
-    ]
+    userAssignedIdentityResourceIds: !empty(userAssignedIdentityResourceId)
+      ? [userAssignedIdentityResourceId]
+      : []
     vmSize: vmSize
   }
   dependsOn: [
@@ -729,8 +705,8 @@ module customizeImage 'modules/customizeImage.bicep' = {
     installTeams: installTeams
     applyWindowsDesktopOptimizations: applyWindowsDesktopOptimizations
     disableSoftwareUpdates: disableSoftwareUpdates
-    userAssignedIdentityClientId: empty(userAssignedIdentityResourceId)
-      ? userAssignedIdentity!.outputs.clientId
+    userAssignedIdentityClientId: empty(imageBuildResourceGroupId)
+      ? ''
       : existingUserAssignedIdentity!.properties.clientId
     orchestrationVmName: orchestrationVm.outputs.name
     office365AppsToInstall: office365AppsToInstall
@@ -748,6 +724,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
   }
   dependsOn: [
     resizeDisk
+    roleAssignmentContributorBuildRg
   ]
 }
 
@@ -763,8 +740,8 @@ module generalizeImageVM 'modules/generalizeVm.bicep' = {
     location: location
     logBlobContainerUri: logContainerUri
     orchestrationVmName: orchestrationVm.outputs.name
-    userAssignedIdentityClientId: empty(userAssignedIdentityResourceId)
-      ? userAssignedIdentity!.outputs.clientId
+    userAssignedIdentityClientId: empty(imageBuildResourceGroupId)
+      ? ''
       : existingUserAssignedIdentity!.properties.clientId
   }
   dependsOn: [
@@ -820,9 +797,15 @@ module removeImageBuildResources '../../.common/bicepModules/compute/virtualMach
       { name: 'ResourceManagerUri', value: environment().resourceManager }
       {
         name: 'UserAssignedIdentityClientId'
-        value: empty(userAssignedIdentityResourceId)
-          ? userAssignedIdentity!.outputs.clientId
+        value: empty(imageBuildResourceGroupId)
+          ? ''
           : existingUserAssignedIdentity!.properties.clientId
+      }
+      {
+        name: 'ResourceGroupId'
+        value: empty(imageBuildResourceGroupId)
+          ? '/subscriptions/${subscription().subscriptionId}/resourceGroups/${imageBuildResourceGroupName}'
+          : ''
       }
       {
         name: 'ImageResourceId'

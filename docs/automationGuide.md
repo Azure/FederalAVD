@@ -121,11 +121,13 @@ Script invocation:
 | `managedIdentityResourceId` | Image Build — `userAssignedIdentityResourceId` parameter |
 | `buildLogsStorageAccountResourceId` | Image Build — `logStorageAccountResourceId` parameter |
 | `diskEncryptionSetResourceId` | Image Build — `diskEncryptionSetResourceId` parameter (only when CMK enabled) |
+| `imageBuildResourceGroupResourceId` | Image Build — `imageBuildResourceGroupId` parameter (existing RG path only) |
 
 ### Notes
 
 - Add `-UpdateArtifacts` to the script call to roll Steps 2 and 3 into a single invocation for first-time setup.
 - If `deployArtifactsStorageAccount = false` in the parameter file, the artifacts-related outputs will be empty strings — skip Step 3 and omit `artifactsContainerUri` / `userAssignedIdentityResourceId` in Step 4.
+- The `managedIdentityResourceId` output (→ `userAssignedIdentityResourceId`) is only **required** when using the existing resource group path (`imageBuildResourceGroupId` is set), zero-trust artifacts storage, or log collection. Leave it empty to use the **temporary RG path** (see Step 4 notes).
 
 ---
 
@@ -162,6 +164,7 @@ Inputs from Step 2:
   managedIdentityResourceId     →  imageBuild parameter: userAssignedIdentityResourceId
   buildLogsStorageAccountResourceId  →  imageBuild parameter: logStorageAccountResourceId (optional)
   diskEncryptionSetResourceId →  imageBuild parameter: diskEncryptionSetResourceId (only when CMK enabled)
+  imageBuildResourceGroupResourceId  →  imageBuild parameter: imageBuildResourceGroupId (existing RG path only)
 
 Script invocation:
   .\Invoke-ImageBuilds.ps1 -Location <region> -ParameterFilePrefixes @('prefix1','prefix2')
@@ -181,6 +184,8 @@ These values are typically pre-populated in the image build parameter files afte
 - The `imageDefinitionId` output points at the gallery image definition. For the host pool, pass the **latest version** resource ID or use the `/versions/latest` alias:  
   `<imageDefinitionId>/versions/latest`
 - Build time is typically 45–90 minutes. Factor this into pipeline timeouts.
+- **Temporary RG path:** If `imageBuildResourceGroupId` is empty in your parameter file, each build creates a new uniquely-named temporary resource group and **deletes the entire resource group on completion**. Do not query or reference the build resource group after the deployment finishes — it will not exist. This path requires no pre-staging with imageManagement and no UAI unless storage features are enabled.
+- **Existing RG path:** If `imageBuildResourceGroupId` is set, imageBuild deploys VMs into that resource group and deletes only the VMs on completion. The resource group persists and can be inspected after the build.
 
 ---
 

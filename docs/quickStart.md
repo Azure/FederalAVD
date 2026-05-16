@@ -78,6 +78,17 @@ Before deploying, ensure you have these essentials ready:
 - ✅ **AVD Licenses** - [Verify licensing requirements](https://learn.microsoft.com/azure/virtual-desktop/overview#requirements)
 - ✅ **Resource Provider** - Enable `Microsoft.DesktopVirtualization` in your subscription
 
+### Required Deployer Roles by Deployment
+
+| Deployment | Required role | Why |
+|---|---|---|
+| **imageManagement** | Owner **or** Contributor + User Access Administrator at subscription scope | Creates resource groups; assigns Contributor to managed identity on image build RG, Storage Blob Data Reader on artifacts storage, Storage Blob Data Contributor on logs storage |
+| **imageBuild — new RG path** (no `imageBuildResourceGroupId`) | Owner **or** Contributor + User Access Administrator at subscription scope | Creates a temporary resource group; assigns Contributor to the orchestration VM's system-assigned identity on that RG |
+| **imageBuild — existing RG path** (`imageBuildResourceGroupId` set) | Contributor on the image build resource group | No role assignments; deploys VMs into the pre-existing RG only |
+| **hostpool** | Contributor at subscription scope (+ Key Vault Crypto Officer if CMK) | Creates resource groups and resources; no role assignments |
+
+> **Tip — least privilege for imageBuild:** Using an existing resource group (pre-staged by imageManagement) lets you run imageBuild with Contributor on the RG only — no subscription-level role assignment rights required. This is the recommended approach for separation of duties in production environments.
+
 ### Required for Custom Software (Steps 2 & 3)
 
 - ✅ **Storage Blob Data Contributor** role on the image management storage account — required because the storage account disables shared key access by default (Zero Trust). `Contributor` or `Owner` alone is not sufficient; see [why data plane roles are required separately](hostpoolDeployment.md#security-prerequisites-optional).
@@ -390,7 +401,11 @@ This step has two parts: deploying the Azure infrastructure once, then uploading
 
 ### Part A: Deploy Infrastructure (One-Time)
 
-Deploys the compute gallery, artifacts storage account, and managed identity.
+Deploys everything imageBuild needs when using the **existing resource group path** (recommended for production): compute gallery, artifacts storage account, build logs storage account, managed identity (pre-granted all required roles), and the image build resource group.
+
+> **Why imageManagement handles all of this:** The imageBuild deployment grants no RBAC roles on the existing RG path. The identity you supply must already have **Contributor** on the build resource group, **Storage Blob Data Reader** on the artifacts account, and **Storage Blob Data Contributor** on the logs account. imageManagement creates all of these resources and grants all of these roles in a single deployment — so image builders only need permission to run the imageBuild template, not to create resource groups or assign roles.
+>
+> **Alternative — Temporary RG path:** Leave `imageBuildResourceGroupId` empty and skip pre-staging the resource group in imageManagement. imageBuild will create a uniquely-named, temporary resource group on each run and **automatically delete the entire resource group** when the build completes. No UAI is required unless you are using storage features (artifacts container or log collection).
 
 **Option 1: Azure Portal (Blue Button)** — Commercial & Government clouds only
 
@@ -412,6 +427,16 @@ Example parameter files are in `deployments\imageManagement\parameters\` (`basic
 
 If you did **not** use `-UpdateArtifacts`, note the `artifactsStorageAccountResourceId` output — you'll need it in Part B.
 
+**Key imageManagement outputs to pass to imageBuild:**
+
+| imageManagement output | imageBuild parameter |
+|---|---|
+| `computeGalleryResourceId` | `computeGalleryResourceId` |
+| `artifactsBlobContainerUrl` | `artifactsContainerUri` |
+| `managedIdentityResourceId` | `userAssignedIdentityResourceId` |
+| `buildLogsStorageAccountResourceId` | `logStorageAccountResourceId` |
+| `imageBuildResourceGroupResourceId` | `imageBuildResourceGroupId` |
+
 ### Part B: Upload Artifacts (Run Whenever Software Changes)
 
 > **⏭️ Skip if** you already used `-UpdateArtifacts` in Part A.
@@ -430,6 +455,24 @@ cd deployments
 - **[Update-ImageArtifacts Script Reference](updateImageArtifacts.md)** — All script parameters and examples
 - **[Artifacts Guide](artifactsGuide.md)** — Creating custom artifact packages
 - **[Air-Gapped Cloud Instructions](airGappedClouds.md)** — Secret/Top Secret cloud considerations
+
+### Part C: Pass imageManagement Outputs to imageBuild
+
+> **This is the standard recommended workflow for production.** imageManagement pre-stages all infrastructure and grants all required roles. imageBuild deployments never assign roles — they simply consume pre-staged resources.
+
+Deploy imageManagement with all defaults enabled (`deployArtifactsStorageAccount = true`, `deployBuildLogsStorageAccount = true`, `deployImageBuildResourceGroup = true`). The managed identity is granted:
+- **Contributor** on the image build resource group
+- **Storage Blob Data Reader** on the artifacts storage account
+- **Storage Blob Data Contributor** on the build logs storage account
+
+Image builders then supply these three outputs to imageBuild:
+- `imageBuildResourceGroupId` — pre-created persistent RG; imageBuild deploys VMs into it each run and deletes only the VMs on completion (the RG is left intact)
+- `userAssignedIdentityResourceId` — the managed identity with all roles pre-granted
+- `logStorageAccountResourceId` + `logContainerName` — for build log collection
+
+This enables least-privilege: the person running imageBuild needs no rights to create resource groups or assign roles.
+
+> **Temporary RG alternative:** Leave `imageBuildResourceGroupId` empty and do not pre-stage the RG in imageManagement. Each run creates a new uniquely-named temporary resource group (timestamp-suffixed) and **deletes the entire resource group** on completion. The `userAssignedIdentityResourceId` is only needed when using storage features on this path.
 
 ---
 

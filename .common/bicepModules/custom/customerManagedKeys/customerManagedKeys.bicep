@@ -15,17 +15,8 @@
 //                   mode is also supported (ConfidentialVmEncryptedWithCustomerKey
 //                   + release-user role for the CVMOrchestrator service principal).
 //
-// Callers that previously used per-solution inline CMK logic should switch to
-// this module and consume its outputs instead of duplicating key/identity/RA
-// boilerplate.
-//
 // Role assignments are made at Key Vault key scope — the most restrictive and
-// recommended scope. After this module completes, role assignments are in the
-// ARM control plane. Because this module must complete (including RA propagation)
-// before storage accounts or VMs are deployed, the run-command polling pattern
-// used in the legacy disk-CMK module is unnecessary and has been removed.
-// Simply ensuring this module's deployment completes before dependent resources
-// provides sufficient ordering for AAD propagation.
+// recommended scope.
 // ============================================================================
 
 // ─── Common parameters ───────────────────────────────────────────────────────
