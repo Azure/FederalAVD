@@ -33,6 +33,8 @@ graph TD
 
 **Then choose your deployment approach:**
 
+> **💡 Fastest path:** If you have an existing VNet and want a working AVD environment with marketplace images, you need nothing else. Jump straight to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool) — FSLogix storage, monitoring, and optional CMK are all handled inline by the `Complete` deployment type. Add custom images or tighter security controls later.
+
 - **PoC or marketplace images only?** → Jump directly to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool) *(CMK optional — deployed inline, no Key Vault pre-deploy needed)*
 - **Need custom software on session hosts, no CMK?** → [Step 2: Image Management](#step-2-deploy-image-management-resources) first, then:
   - **Install at runtime only?** → [Step 4: Host Pool](#step-4-deploy-host-pool)
@@ -84,10 +86,13 @@ Before deploying, ensure you have these essentials ready:
 |---|---|---|
 | **imageManagement** | Owner **or** Contributor + User Access Administrator at subscription scope | Creates resource groups; assigns Contributor to managed identity on image build RG, Storage Blob Data Reader on artifacts storage, Storage Blob Data Contributor on logs storage |
 | **imageBuild — new RG path** (no `imageBuildResourceGroupId`) | Owner **or** Contributor + User Access Administrator at subscription scope | Creates a temporary resource group; assigns Contributor to the orchestration VM's system-assigned identity on that RG |
-| **imageBuild — existing RG path** (`imageBuildResourceGroupId` set) | Contributor on the image build resource group | No role assignments; deploys VMs into the pre-existing RG only |
-| **hostpool** | Contributor at subscription scope (+ Key Vault Crypto Officer if CMK) | Creates resource groups and resources; no role assignments |
+| **imageBuild — existing RG path** (`imageBuildResourceGroupId` set) | `Microsoft.Resources/deployments/write` at **subscription scope** (the template is subscription-scoped) + Contributor on the **image build RG** + Contributor on the **compute gallery RG** (+ Contributor on the remote gallery RG if replicating to a second region) | No resource group creation or role assignments; deploys VMs into the pre-existing build RG; creates the image version and (if not pre-existing) image definition in the compute gallery RG. Subscription-level deployment write is unavoidable because `imageBuild.bicep` uses `targetScope = 'subscription'`. |
+| **hostpool** | Owner **or** Contributor + User Access Administrator at subscription scope (+ Key Vault Crypto Officer on the key vault if CMK) | `targetScope = 'subscription'` — subscription scope is required regardless. Creates resource groups; assigns roles at subscription scope (AVD service principal for Start VM On Connect / Scaling Plan), at control plane RG scope (Desktop Virtualization User to Entra groups on the app group), and at multiple RG scopes (deployment VM UAI roles, Entra-based VM login, FSLogix storage roles) |
+| **hostpool — `SessionHostsOnly`** | `Microsoft.Resources/deployments/write` at **subscription scope** + **Contributor** on the existing **hosts RG** + **Desktop Virtualization Host Pool Contributor** on the existing **control plane RG** | `targetScope = 'subscription'` — subscription deployment write is unavoidable. No resource group creation or role assignments; deploys session host VMs into the pre-existing hosts RG and updates the host pool registration token in the control plane RG only. |
 
-> **Tip — least privilege for imageBuild:** Using an existing resource group (pre-staged by imageManagement) lets you run imageBuild with Contributor on the RG only — no subscription-level role assignment rights required. This is the recommended approach for separation of duties in production environments.
+> **Tip — least privilege for imageBuild:** Using an existing resource group (pre-staged by imageManagement) eliminates the need for subscription-level resource group creation and role assignment rights. You still need `Microsoft.Resources/deployments/write` at subscription scope because `imageBuild.bicep` uses `targetScope = 'subscription'` — but this is far narrower than full `Contributor` at subscription scope. See the [Custom RBAC Roles Guide](customRoles.md#3-imagebuild-operator--existing-rg-path) for a role definition that grants exactly this.
+
+> **Custom roles:** For organizations that need to constrain operators beyond built-in roles — for example, preventing arbitrary resource creation or limiting which role definition IDs can be assigned — see the [Custom RBAC Roles Guide](customRoles.md) for ready-to-use JSON definitions for each deployment path.
 
 ### Required for Custom Software (Steps 2 & 3)
 

@@ -54,9 +54,9 @@ The Azure identity running this deployment (user, service principal, or managed 
 | Path | Required role | Why |
 |---|---|---|
 | **New RG** (`imageBuildResourceGroupId` empty) | Owner **or** Contributor + User Access Administrator at **subscription** scope | Deployment creates a temporary resource group and assigns **Contributor** to the orchestration VM's system-assigned identity on that RG |
-| **Existing RG** (`imageBuildResourceGroupId` set) | **Contributor** on the image build resource group | Deployment creates VMs in the pre-existing RG only — no role assignments are made |
+| **Existing RG** (`imageBuildResourceGroupId` set) | `Microsoft.Resources/deployments/write` at **subscription** scope + **Contributor** on the image build resource group + **Contributor** on the compute gallery resource group | `imageBuild.bicep` uses `targetScope = 'subscription'` — subscription deployment write is unavoidable. No resource group creation or role assignments; deploys VMs into the pre-existing build RG; creates the image version (and image definition if not pre-existing) in the compute gallery RG. |
 
-> **Least-privilege recommendation:** Use the existing RG path (pre-stage with imageManagement). Your image build pipeline or service principal only needs Contributor on the build RG — no subscription-level role assignment rights required.
+> **Least-privilege recommendation:** Use the existing RG path (pre-stage with imageManagement). Your image build principal only needs `Microsoft.Resources/deployments/write` at subscription scope (unavoidable due to `targetScope = 'subscription'`) plus Contributor on the build and gallery resource groups — no subscription-level role assignment rights required. See [Custom RBAC Roles](customRoles.md#3-imagebuild-operator--existing-rg-path) for a ready-to-use role definition.
 
 ### Required - Image Management Resources
 

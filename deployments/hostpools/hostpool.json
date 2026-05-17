@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "7566782295900813716"
+      "templateHash": "4031641072875474056"
     }
   },
   "parameters": {
@@ -310,6 +310,13 @@
       "maxValue": 5000,
       "metadata": {
         "description": "Optional. The number of session hosts to deploy in the host pool. Ensure you have the approved quota to deploy the desired count."
+      }
+    },
+    "deploySessionHosts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Deploy session hosts as part of this deployment. When false, all host pool infrastructure (control plane, storage, monitoring) is deployed but no session host VMs are created. Useful for staging the environment before adding hosts. Always true for SessionHostsOnly deployments."
       }
     },
     "sessionHostIndex": {
@@ -16473,6 +16480,7 @@
       ]
     },
     {
+      "condition": "[or(parameters('deploySessionHosts'), equals(parameters('deploymentType'), 'SessionHostsOnly'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Session-Hosts-{0}', variables('deploymentSuffix'))]",
@@ -20614,9 +20622,7 @@
             "value": "[variables('deploymentSuffix')]"
           },
           "userAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
-          "virtualMachineNames": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
-          }
+          "virtualMachineNames": "[if(or(parameters('deploySessionHosts'), equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value), createObject('value', createArray()))]"
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
@@ -21259,7 +21265,7 @@
     },
     "virtualMachineNames": {
       "type": "array",
-      "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
+      "value": "[if(or(parameters('deploySessionHosts'), equals(parameters('deploymentType'), 'SessionHostsOnly')), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value, createArray())]"
     }
   }
 }

@@ -193,6 +193,9 @@ param virtualMachineNamePrefix string
 @description('Optional. The number of session hosts to deploy in the host pool. Ensure you have the approved quota to deploy the desired count.')
 param sessionHostCount int = 1
 
+@description('Optional. Deploy session hosts as part of this deployment. When false, all host pool infrastructure (control plane, storage, monitoring) is deployed but no session host VMs are created. Useful for staging the environment before adding hosts. Always true for SessionHostsOnly deployments.')
+param deploySessionHosts bool = true
+
 @maxValue(4999)
 @minValue(0)
 @description('Optional. The starting number for the session hosts. This is important when adding virtual machines to ensure an update deployment is not performed on an exiting, active session host.')
@@ -1430,7 +1433,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
 }
 
 // Session Hosts
-module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
+module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = if (deploySessionHosts || deploymentType == 'SessionHostsOnly') {
   name: 'Session-Hosts-${deploymentSuffix}'
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
@@ -1579,7 +1582,7 @@ module cleanUp 'modules/cleanUp/cleanUp.bicep' = if (createDeploymentVm) {
     userAssignedIdentityClientId: createDeploymentVm
       ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
       : ''
-    virtualMachineNames: sessionHosts.outputs.virtualMachineNames
+    virtualMachineNames: (deploySessionHosts || deploymentType == 'SessionHostsOnly') ? sessionHosts!.outputs.virtualMachineNames : []
   }
   dependsOn: [
     deploymentResourceGroup
@@ -1596,4 +1599,4 @@ output workspaceResourceId string = empty(existingFeedWorkspaceResourceId)
 output fslogixLocalStorageAccountResourceIds array = deploymentType != 'SessionHostsOnly' && deployFSLogixStorage
   ? fslogix!.outputs.storageAccountResourceIds
   : fslogixExistingLocalStorageAccountResourceIds
-output virtualMachineNames array = sessionHosts.outputs.virtualMachineNames
+output virtualMachineNames array = (deploySessionHosts || deploymentType == 'SessionHostsOnly') ? sessionHosts!.outputs.virtualMachineNames : []
