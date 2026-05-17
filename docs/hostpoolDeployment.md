@@ -228,7 +228,7 @@ The `deploymentType` parameter determines which resources are deployed. Choose b
 | `HostpoolOnly` | Everything in `Complete` **except** shared monitoring infra — references an existing Log Analytics workspace via `logAnalyticsWorkspaceResourceId` | Adding a new host pool to an environment that already has shared monitoring resources |
 | `SessionHostsOnly` | Session host VMs only, added to an existing host pool and resource group | Adding or replacing VMs in an already-deployed environment; `sessionHostIndex` controls the starting VM name suffix to avoid collisions |
 
-> **Infrastructure-only deployment (`deploySessionHosts: false`):** Use with `Complete` or `HostpoolOnly` to deploy all host pool infrastructure — control plane, FSLogix storage, monitoring — without creating any session host VMs. This is useful when VM quota or images are not yet ready, or when you want to validate the environment before committing to VM costs. Add hosts later by redeploying with `deploymentType: SessionHostsOnly`.
+> **Infrastructure-only deployment:** To deploy all host pool infrastructure without creating session host VMs, use `deploymentType: Complete` or `HostpoolOnly` with `sessionHostCount: 0`. This lets you validate storage, networking, and control plane configuration before committing to VM costs. Add hosts later by redeploying with `deploymentType: SessionHostsOnly`.
 
 #### Basic Configuration
 
@@ -238,7 +238,6 @@ The `deploymentType` parameter determines which resources are deployed. Choose b
 | **index** | Host pool index for sharding (0-99) | `0`, `1`, `-1` (no index) |
 | **hostPoolType** | Pooled or Personal | `Pooled` |
 | **deploymentType** | Which resources to deploy — see table above | `Complete` |
-| **deploySessionHosts** | Deploy session host VMs as part of this deployment. Set `false` to deploy infrastructure only (control plane, FSLogix, monitoring). Ignored for `SessionHostsOnly` (always deploys hosts). | `true` |
 | **sessionHostCount** | Number of session hosts to deploy | `3` |
 | **sessionHostIndex** | Starting index for VM names | `1` |
 

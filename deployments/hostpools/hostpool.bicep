@@ -193,9 +193,6 @@ param virtualMachineNamePrefix string
 @description('Optional. The number of session hosts to deploy in the host pool. Ensure you have the approved quota to deploy the desired count.')
 param sessionHostCount int = 1
 
-@description('Optional. Deploy session hosts as part of this deployment. When false, all host pool infrastructure (control plane, storage, monitoring) is deployed but no session host VMs are created. Useful for staging the environment before adding hosts. Always true for SessionHostsOnly deployments.')
-param deploySessionHosts bool = true
-
 @maxValue(4999)
 @minValue(0)
 @description('Optional. The starting number for the session hosts. This is important when adding virtual machines to ensure an update deployment is not performed on an exiting, active session host.')
@@ -714,8 +711,14 @@ var diskEncryptionSetName = confidentialVMOSDiskEncryption
                 ? resourceNames.outputs.diskEncryptionSetNames.platformAndCustomerManaged
                 : null
 
+// NOTE: the name formula below must stay in sync with azureFiles.bicep: '${storageAccountNamePrefix}${padLeft(i + storageIndex, 2, '0')}'
 var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
-  ? { fslLocalStorageAccountNames: string(map(fslogix!.outputs.storageAccountResourceIds, id => last(split(id, '/')))) }
+  ? {
+      fslLocalStorageAccountNames: string(map(
+        range(0, fslogixStorageCount),
+        i => '${resourceNames.outputs.storageAccountNames.fslogix}${padLeft(i + fslogixStorageIndex, 2, '0')}'
+      ))
+    }
   : !empty(fslogixExistingLocalStorageAccountResourceIds)
       ? {
           fslLocalStorageAccountNames: string(map(
@@ -732,8 +735,15 @@ var fslRemoteStorageAccountNames = !empty(fslogixExistingRemoteStorageAccountRes
       ))
     }
   : {}
+// NOTE: the resource ID path below must stay in sync with azureNetAppFiles.bicep scoped to resourceGroupStorage.
 var fslLocalNetAppVolumeResourceIds = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureNetAppFiles')
-  ? { fslLocalNetAppVolumeResourceIds: string(fslogix!.outputs.netAppVolumeResourceIds) }
+  ? {
+      fslLocalNetAppVolumeResourceIds: string(map(
+        resourceNames.outputs.fslogixFileShareNames[fslogixContainerType],
+        share =>
+          '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceNames.outputs.resourceGroupStorage}/providers/Microsoft.NetApp/netAppAccounts/${resourceNames.outputs.netAppAccountName}/capacityPools/${resourceNames.outputs.netAppCapacityPoolName}/volumes/${share}'
+      ))
+    }
   : !empty(fslogixExistingLocalNetAppVolumeResourceIds)
       ? { fslLocalNetAppVolumeResourceIds: string(fslogixExistingLocalNetAppVolumeResourceIds) }
       : {}
@@ -741,12 +751,15 @@ var fslRemoteNetAppVolumeResourceIds = !empty(fslogixExistingRemoteNetAppVolumeR
   ? { fslRemoteNetAppVolumeResourceIds: string(fslogixExistingRemoteNetAppVolumeResourceIds) }
   : {}
 
-// FSLogix configuration tags for hosts resource group
-var fslogixConfigurationTags = fslogixConfigureSessionHosts
+// FSLogix configuration tags for hosts resource group.
+// Applied whenever any storage is associated (deployed or existing) so that a future
+// SessionHostsOnly deployment can read them back regardless of fslogixConfigureSessionHosts.
+var hasAssociatedFslStorage = deployFSLogixStorage || !empty(fslogixExistingLocalStorageAccountResourceIds) || !empty(fslogixExistingLocalNetAppVolumeResourceIds)
+var fslogixConfigurationTags = hasAssociatedFslStorage
   ? union(
       { fslContainerType: fslogixContainerType },
       { fslContainerSizeInMBs: fslogixSizeInMBs },
-      { fslStorageService: split(fslogixStorageService, '')[0] },
+      { fslStorageService: split(fslogixStorageService, ' ')[0] },
       { fslFileShareNames: string(resourceNames.outputs.fslogixFileShareNames[fslogixContainerType]) },
       { fslSharding: fslogixShardOptions },
       fslLocalStorageAccountNames,
@@ -1005,19 +1018,8 @@ module globalFeedResourceGroup '../../.common/bicepModules/resources/resourceGro
   }
 }
 
-// Host Resource Group without Tags to prevent circular dependency between deployment prerequisites and outputs from fslogix.
-
-module hostsResourceGroupNoTags '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType != 'SessionHostsOnly') {
+module hostsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType != 'SessionHostsOnly') {
   name: 'Resource-Group-Hosts-${deploymentSuffix}'
-  params: {
-    location: virtualMachinesRegion
-    name: resourceNames.outputs.resourceGroupHosts
-    tags: {}
-  }
-}
-
-module hostsResourceGroupWithTags '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType != 'SessionHostsOnly') {
-  name: 'Resource-Group-Hosts-Tags-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
     name: resourceNames.outputs.resourceGroupHosts
@@ -1183,7 +1185,7 @@ module diskCmk 'modules/cmk/diskCmk.bicep' = if (deployTopLevelDiskCmk) {
       : resourceNames.outputs.diskEncryptionSetNames.platformAndCustomerManaged
   }
   dependsOn: [
-    hostsResourceGroupNoTags
+    hostsResourceGroup
   ]
 }
 
@@ -1209,7 +1211,7 @@ module cvmDiskCmk 'modules/cmk/cvmDiskCmk.bicep' = if (deployCvmDiskCmk) {
     deploymentSuffix: deploymentSuffix
   }
   dependsOn: [
-    hostsResourceGroupNoTags
+    hostsResourceGroup
   ]
 }
 
@@ -1433,7 +1435,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
 }
 
 // Session Hosts
-module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = if (deploySessionHosts || deploymentType == 'SessionHostsOnly') {
+module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
   name: 'Session-Hosts-${deploymentSuffix}'
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
@@ -1563,7 +1565,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = if (deploySessio
     vTpmEnabled: vTpmEnabled
   }
   dependsOn: [
-    hostsResourceGroupWithTags
+    hostsResourceGroup
   ]
 }
 
@@ -1582,7 +1584,7 @@ module cleanUp 'modules/cleanUp/cleanUp.bicep' = if (createDeploymentVm) {
     userAssignedIdentityClientId: createDeploymentVm
       ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
       : ''
-    virtualMachineNames: (deploySessionHosts || deploymentType == 'SessionHostsOnly') ? sessionHosts!.outputs.virtualMachineNames : []
+    virtualMachineNames: sessionHosts.outputs.virtualMachineNames
   }
   dependsOn: [
     deploymentResourceGroup
@@ -1599,4 +1601,4 @@ output workspaceResourceId string = empty(existingFeedWorkspaceResourceId)
 output fslogixLocalStorageAccountResourceIds array = deploymentType != 'SessionHostsOnly' && deployFSLogixStorage
   ? fslogix!.outputs.storageAccountResourceIds
   : fslogixExistingLocalStorageAccountResourceIds
-output virtualMachineNames array = (deploySessionHosts || deploymentType == 'SessionHostsOnly') ? sessionHosts!.outputs.virtualMachineNames : []
+output virtualMachineNames array = sessionHosts.outputs.virtualMachineNames
