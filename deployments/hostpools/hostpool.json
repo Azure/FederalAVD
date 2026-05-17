@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "2991227042510095980"
+      "templateHash": "12584382940836175508"
     }
   },
   "parameters": {
@@ -1086,7 +1086,6 @@
     "beginAvSetRange": "[div(parameters('sessionHostIndex'), variables('maxAvSetMembers'))]",
     "endAvSetRange": "[div(add(parameters('sessionHostCount'), parameters('sessionHostIndex')), variables('maxAvSetMembers'))]",
     "availabilitySetsCount": "[length(range(variables('beginAvSetRange'), add(sub(variables('endAvSetRange'), variables('beginAvSetRange')), 1)))]",
-    "deployDiskAccessResource": "[if(and(and(contains(parameters('hostPoolType'), 'Personal'), parameters('recoveryServices')), parameters('deployPrivateEndpoints')), true(), false())]",
     "deployRecoveryServices": "[and(and(parameters('recoveryServices'), not(equals(parameters('deploymentType'), 'SessionHostsOnly'))), or(equals(parameters('deploymentType'), 'Complete'), not(empty(parameters('existingRecoveryServicesVaultResourceId')))))]"
   },
   "resources": [
@@ -12031,7 +12030,7 @@
           "existingRecoveryServicesVaultResourceId": {
             "value": "[parameters('existingRecoveryServicesVaultResourceId')]"
           },
-          "vaultName": "[if(contains(parameters('hostPoolType'), 'Personal'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultNames.value.vms), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultNames.value.fslogix))]",
+          "vaultName": "[if(equals(if(equals(parameters('deploymentType'), 'SessionHostsOnly'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingHostPoolResourceId'), '/')[2], split(parameters('existingHostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('existingHostPoolResourceId'), '/'))), '2024-04-03').hostPoolType, split(parameters('hostPoolType'), ' ')[0]), 'Personal'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultNames.value.vms), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultNames.value.fslogix))]",
           "resourceGroupOperations": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupOperations.value]"
           },
@@ -12074,7 +12073,7 @@
             "value": "[parameters('virtualMachinesTimeZone')]"
           },
           "pooledHostPool": {
-            "value": "[equals(split(parameters('hostPoolType'), ' ')[0], 'Pooled')]"
+            "value": "[equals(if(equals(parameters('deploymentType'), 'SessionHostsOnly'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingHostPoolResourceId'), '/')[2], split(parameters('existingHostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('existingHostPoolResourceId'), '/'))), '2024-04-03').hostPoolType, split(parameters('hostPoolType'), ' ')[0]), 'Pooled')]"
           }
         },
         "template": {
@@ -16468,9 +16467,7 @@
           "deployDiskAccessPolicy": {
             "value": "[parameters('deployDiskAccessPolicy')]"
           },
-          "deployDiskAccessResource": {
-            "value": "[variables('deployDiskAccessResource')]"
-          },
+          "deployDiskAccessResource": "[if(and(and(equals(if(equals(parameters('deploymentType'), 'SessionHostsOnly'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingHostPoolResourceId'), '/')[2], split(parameters('existingHostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('existingHostPoolResourceId'), '/'))), '2024-04-03').hostPoolType, split(parameters('hostPoolType'), ' ')[0]), 'Personal'), parameters('recoveryServices')), parameters('deployPrivateEndpoints')), createObject('value', true()), createObject('value', false()))]",
           "deploymentType": {
             "value": "[parameters('deploymentType')]"
           },
@@ -16589,7 +16586,7 @@
           "networkInterfaceNameConv": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNicNameConv.value]"
           },
-          "recoveryServices": "[if(contains(parameters('hostPoolType'), 'Personal'), createObject('value', parameters('recoveryServices')), createObject('value', false()))]",
+          "recoveryServices": "[if(equals(if(equals(parameters('deploymentType'), 'SessionHostsOnly'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingHostPoolResourceId'), '/')[2], split(parameters('existingHostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('existingHostPoolResourceId'), '/'))), '2024-04-03').hostPoolType, split(parameters('hostPoolType'), ' ')[0]), 'Personal'), createObject('value', parameters('recoveryServices')), createObject('value', false()))]",
           "resourceGroupHosts": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Names-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupHosts.value), createObject('value', parameters('existingHostsResourceGroupName')))]",
           "securityType": {
             "value": "[parameters('securityType')]"
