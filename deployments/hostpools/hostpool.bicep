@@ -895,7 +895,7 @@ var beginAvSetRange = sessionHostIndex / maxAvSetMembers // This determines the 
 var endAvSetRange = (sessionHostCount + sessionHostIndex) / maxAvSetMembers // This determines the availability set to end with.
 var availabilitySetsCount = length(range(beginAvSetRange, (endAvSetRange - beginAvSetRange) + 1))
 
-var deployDiskAccessResource = effectiveHostPoolType == 'Personal' && recoveryServices && deployPrivateEndpoints
+var deployDiskAccessResource = contains(hostPoolType, 'Personal') && recoveryServices && deployPrivateEndpoints
   ? true
   : false
 
@@ -931,16 +931,6 @@ resource vmVirtualNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existin
   name: split(virtualMachineSubnetResourceId, '/')[8]
   scope: resourceGroup(split(virtualMachineSubnetResourceId, '/')[2], split(virtualMachineSubnetResourceId, '/')[4])
 }
-
-// Existing host pool — used for SessionHostsOnly to read actual pool type rather than relying on the param.
-resource existingHostPool 'Microsoft.DesktopVirtualization/hostPools@2024-04-03' existing = if (deploymentType == 'SessionHostsOnly') {
-  name: last(split(existingHostPoolResourceId, '/'))
-  scope: resourceGroup(split(existingHostPoolResourceId, '/')[2], split(existingHostPoolResourceId, '/')[4])
-}
-
-// For SessionHostsOnly, read the actual host pool type from the existing resource.
-// For other deployment types, use the param (pool hasn't been created yet).
-var effectiveHostPoolType = deploymentType == 'SessionHostsOnly' ? existingHostPool!.properties.hostPoolType : split(hostPoolType, ' ')[0]
 
 // Existing  Virtual Network for the AVD Private Link Global Feed Private Endpoint
 resource avdPrivateLinkGlobalFeedNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existing = if (!empty(globalFeedPrivateEndpointSubnetResourceId)) {
@@ -1334,7 +1324,7 @@ module recoveryServicesModule 'modules/operations/recoveryServices.bicep' = if (
   params: {
     createVault: deploymentType == 'Complete'
     existingRecoveryServicesVaultResourceId: existingRecoveryServicesVaultResourceId
-    vaultName: effectiveHostPoolType == 'Personal'
+    vaultName: contains(hostPoolType, 'Personal')
       ? resourceNames.outputs.recoveryServicesVaultNames.vms
       : resourceNames.outputs.recoveryServicesVaultNames.fslogix
     resourceGroupOperations: resourceNames.outputs.resourceGroupOperations
@@ -1358,7 +1348,7 @@ module recoveryServicesModule 'modules/operations/recoveryServices.bicep' = if (
       : controlPlane!.outputs.hostPoolResourceId
     tags: tags
     timeZone: virtualMachinesTimeZone
-    pooledHostPool: effectiveHostPoolType == 'Pooled'
+    pooledHostPool: split(hostPoolType, ' ')[0] == 'Pooled'
   }
   dependsOn: [
     operationsResourceGroup
@@ -1465,7 +1455,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     availabilitySetsIndex: beginAvSetRange
     availabilityZones: availabilityZones
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
     customImageResourceId: customImageResourceId
     dataCollectionEndpointResourceId: enableMonitoring
@@ -1479,7 +1468,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     deployDiskAccessResource: deployDiskAccessResource
     deploymentType: deploymentType
     diskAccessName: resourceNames.outputs.diskAccessName
-    diskEncryptionSetNames: resourceNames.outputs.diskEncryptionSetNames
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     #disable-next-line BCP422
@@ -1501,10 +1489,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     encryptionAtHost: encryptionAtHost
     hasAmdGpu: hasAmdGpu
     hasNvidiaGpu: hasNvidiaGpu
-    encryptionKeyName: confidentialVMOSDiskEncryption
-      ? resourceNames.outputs.encryptionKeyNames.confidentialVMs
-      : resourceNames.outputs.encryptionKeyNames.virtualMachines
-    encryptionKeyVaultResourceId: effectiveEncryptionKeyVaultResourceId
     existingDiskAccessResourceId: existingDiskAccessResourceId
     existingDiskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     existingRecoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
@@ -1532,8 +1516,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     imageSku: imageSku
     integrityMonitoring: integrityMonitoring
     intuneEnrollment: intuneEnrollment
-    keyExpirationInDays: keyExpirationInDays
-    keyManagementDisks: keyManagementDisks
     location: virtualMachinesRegion
     osDiskNameConv: resourceNames.outputs.virtualMachineDiskNameConv
     ouPath: vmOUPath
@@ -1541,7 +1523,8 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     networkInterfaceNameConv: resourceNames.outputs.virtualMachineNicNameConv
-    recoveryServices: effectiveHostPoolType == 'Personal' ? recoveryServices : false
+    hostPoolType: hostPoolType
+    recoveryServices: recoveryServices
     resourceGroupHosts: deploymentType != 'SessionHostsOnly'
       ? resourceNames.outputs.resourceGroupHosts
       : existingHostsResourceGroupName

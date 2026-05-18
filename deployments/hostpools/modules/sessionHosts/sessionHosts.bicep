@@ -28,8 +28,6 @@ param availabilityZones array
 param avdInsightsDataCollectionRulesResourceId string
 @description('Required. Resource ID of the private DNS zone for Azure Blob Storage private endpoints.')
 param azureBlobPrivateDnsZoneResourceId string
-@description('Required. Object ID of the Confidential VM Orchestrator service principal. Required when deploying confidential VMs with VMGuestState encryption.')
-param confidentialVMOrchestratorObjectId string
 @description('Required. When true, enables OS disk encryption with VMGuestState for confidential VMs, protecting disk contents from the host.')
 param confidentialVMOSDiskEncryption bool
 @description('Optional. Resource ID of an Azure Compute Gallery image version to use as the VM OS image. Leave empty to use a marketplace image defined by imagePublisher, imageOffer, and imageSku.')
@@ -50,8 +48,6 @@ param domainJoinUserPassword string
 @description('Required. User principal name of the domain join service account (e.g. "domainjoin@contoso.com").')
 @secure()
 param domainJoinUserPrincipalName string
-@description('Required. Object containing disk encryption set names keyed by key management type. Used to resolve the correct DES resource for this deployment.')
-param diskEncryptionSetNames object
 @description('Required. Name of the DiskAccess resource used to enforce managed disk network access restrictions.')
 param diskAccessName string
 @description('Required. OS disk size in GB. Set to 0 to inherit the default size from the source image.')
@@ -66,14 +62,10 @@ param enableAcceleratedNetworking bool
 param enableIPv6 bool
 @description('Required. When true, enables encryption at the VM host for all disks and cache (host-based encryption).')
 param encryptionAtHost bool
-@description('Required. Name of the Customer Managed Key in the Key Vault used for disk encryption set configuration.')
-param encryptionKeyName string
 @description('Required. When true, installs the AMD GPU driver extension on session host VMs.')
 param hasAmdGpu bool
 @description('Required. When true, installs the NVIDIA GPU driver extension on session host VMs.')
 param hasNvidiaGpu bool
-@description('Required. Resource ID of the Key Vault containing Customer Managed Keys for disk encryption set configuration.')
-param encryptionKeyVaultResourceId string
 @description('Optional. Resource ID of a pre-existing DiskAccess resource. Used instead of creating a new resource when deployDiskAccessResource is false.')
 param existingDiskAccessResourceId string
 @description('Optional. Resource ID of a pre-existing Disk Encryption Set. When provided, bypasses inline DES creation.')
@@ -116,10 +108,6 @@ param imageSku string
 param integrityMonitoring bool
 @description('Required. When true, enrolls session hosts into Microsoft Intune during provisioning (requires EntraIdIntuneEnrollment identity solution).')
 param intuneEnrollment bool
-@description('Required. Number of days before Customer Managed Keys expire and must be rotated. Only relevant when keyManagementDisks is not "PlatformManaged".')
-param keyExpirationInDays int
-@description('Required. Key management type for OS disks: "PlatformManaged", "CustomerManaged", or "CustomerManagedHSM".')
-param keyManagementDisks string
 @description('Required. Azure region where session host VMs and compute resources are deployed.')
 param location string
 @description('Required. Name convention string for private endpoint resources, containing RESOURCETYPE, SUBRESOURCE, and RESOURCE placeholders.')
@@ -136,6 +124,8 @@ param networkInterfaceNameConv string
 param osDiskNameConv string
 @description('Required. Distinguished name of the Active Directory OU for session host computer accounts (e.g. "OU=AVD,DC=contoso,DC=com"). Leave empty for Entra ID join.')
 param ouPath string
+@description('Required. Host pool type string as provided by the caller (e.g. "Pooled DepthFirst", "Personal Automatic"). Used when deploymentType is not SessionHostsOnly; otherwise the actual type is read from the existing host pool resource.')
+param hostPoolType string
 @description('Required. When true, deploys a Recovery Services Vault and configures daily VM backup for session hosts.')
 param recoveryServices bool
 @description('Required. Name of the resource group where session host VMs and compute resources are deployed.')
@@ -231,6 +221,9 @@ resource hostPoolGet 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' exis
   scope: resourceGroup(split(hostPoolResourceId, '/')[2], split(hostPoolResourceId, '/')[4])
 }
 
+// Gate used in module if-conditions (must be calculable at deployment start — uses param, not resource property).
+var recoveryServicesEnabled = recoveryServices && contains(hostPoolType, 'Personal')
+
 // Required for EntraID login
 module roleAssignment_VirtualMachineUserLogin '../../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for i in range(0, length(appGroupSecurityGroups)): if (deploymentType != 'SessionHostsOnly' && !contains(identitySolution, 'DomainServices')) {
@@ -248,7 +241,7 @@ module hostPoolUpdate 'modules/hostPoolUpdate.bicep' = if(deploymentType == 'Ses
   name: 'HostPoolRegistrationTokenUpdate-${deploymentSuffix}'
   scope: resourceGroup(split(hostPoolResourceId, '/')[2], split(hostPoolResourceId, '/')[4])
   params: {
-    hostPoolType: deploymentType == 'SessionHostsOnly' ? hostPoolGet!.properties.hostPoolType : ''
+    hostPoolType: hostPoolGet!.properties.hostPoolType
     loadBalancerType: deploymentType == 'SessionHostsOnly' ? hostPoolGet!.properties.loadBalancerType : ''
     location: deploymentType == 'SessionHostsOnly' ? hostPoolGet!.location : location
     name: deploymentType == 'SessionHostsOnly' ? hostPoolGet.name : ''
@@ -287,33 +280,6 @@ module diskAccessPolicy 'modules/diskNetworkAccessPolicy.bicep' = if (deployment
     diskAccessId: deployDiskAccessResource ? diskAccessResource!.outputs.resourceId : ''
     location: location
     resourceGroupName: resourceGroupHosts
-  }
-}
-
-module customerManagedKeys '../../../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (deploymentType != 'SessionHostsOnly' && confidentialVMOSDiskEncryption) {
-  name: 'Customer-Managed-Keys-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupHosts)
-  params: {
-    keyVaultResourceId: encryptionKeyVaultResourceId
-    keyManagementType: contains(keyManagementDisks, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
-    keyExpirationInDays: keyExpirationInDays
-    location: location
-    tags: tags
-    parentResourceId: hostPoolResourceId
-    deploymentSuffix: deploymentSuffix
-    diskEncryptionConfigs: [
-      {
-        keyName: encryptionKeyName
-        diskEncryptionSetName: confidentialVMOSDiskEncryption
-          ? diskEncryptionSetNames.confidentialVMs
-          : (!contains(keyManagementDisks, 'Platform')
-              ? diskEncryptionSetNames.customerManaged
-              : diskEncryptionSetNames.platformAndCustomerManaged)
-        confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
-        confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
-        skipKeyCreation: confidentialVMOSDiskEncryption // key pre-created by Run Command for CVM
-      }
-    ]
   }
 }
 
@@ -367,7 +333,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     dedicatedHostGroupZones: !empty(dedicatedHostGroupName) ? dedicatedHostGroup!.zones : []
     dedicatedHostResourceId: dedicatedHostResourceId
     diskAccessId: deploymentType != 'SessionHostsOnly' ? deployDiskAccessResource ? diskAccessResource!.outputs.resourceId : '' : existingDiskAccessResourceId
-    diskEncryptionSetResourceId: ( deploymentType != 'SessionHostsOnly' && confidentialVMOSDiskEncryption ) ? customerManagedKeys!.outputs.diskResults[0].diskEncryptionSetResourceId : !empty(existingDiskEncryptionSetResourceId) ? existingDiskEncryptionSetResourceId : ''
+    diskEncryptionSetResourceId: existingDiskEncryptionSetResourceId
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     domainJoinUserPassword: domainJoinUserPassword
@@ -425,7 +391,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
   ]
 }]
 
-module protectedItems_Vm '../operations/vmBackupItems.bicep' = [for i in range(1, sessionHostBatchCount): if (recoveryServices && !empty(existingRecoveryServicesVaultResourceId)) {
+module protectedItems_Vm '../operations/vmBackupItems.bicep' = [for i in range(1, sessionHostBatchCount): if (recoveryServicesEnabled && !empty(existingRecoveryServicesVaultResourceId)) {
   name: 'BackupProtectedItems-VirtualMachines-${i-1}-${deploymentSuffix}'
   scope: resourceGroup(split(existingRecoveryServicesVaultResourceId, '/')[4])
   params: {
