@@ -544,7 +544,7 @@ Once the image build completes and replicates to your target region, reference i
 
 The Session Host Replacer add-on automatically detects new image versions and replaces session hosts with zero downtime.
 
-**[Session Host Replacer Documentation](../deployments/add-ons/SessionHostReplacer/readme.md)**
+**[Session Host Replacer Documentation](../deployments/add-ons/sessionHostReplacer/readme.md)**
 
 ---
 

@@ -140,10 +140,11 @@ Optional add-ons extend the base AVD deployment with advanced lifecycle manageme
 
 | Add-On | Purpose | Documentation |
 |--------|---------|---------------|
-| 🔄 **Session Host Replacer** | Automates rolling replacement of session hosts when new images are available with zero-downtime updates | [Session Host Replacer](deployments/add-ons/SessionHostReplacer/README.md) |
-| 📊 **Storage Quota Manager** | Monitors and automatically increases Azure Files Premium share quotas for FSLogix storage | [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/README.md) |
-| 🔑 **Update Storage Keys** | Updates FSLogix storage account keys on session hosts for Entra ID-only deployments | [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/README.md) |
-| 📝 **Run Commands on VMs** | Execute scripts on selected virtual machines from a resource group | [Run Commands](deployments/add-ons/RunCommandsOnVms/README.md) |
+| 🔄 **Session Host Replacer** | Automates rolling replacement of session hosts when new images are available with zero-downtime updates | [Session Host Replacer](deployments/add-ons/sessionHostReplacer/README.md) |
+| 📊 **Storage Quota Manager** | Monitors and automatically increases Azure Files Premium share quotas for FSLogix storage | [Storage Quota Manager](deployments/add-ons/storageQuotaManager/README.md) |
+| 🔑 **Update Storage Keys** | Updates FSLogix storage account keys on session hosts for Entra ID-only deployments | [Update Storage Keys](deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md) |
+| 📝 **Run Commands on VMs** | Execute scripts on selected virtual machines from a resource group | [Run Commands](deployments/add-ons/runCommandsOnVms/README.md) |
+| 🖥️ **Session Hosts** | Deploy session hosts into an existing host pool without touching host pool infrastructure | [Session Hosts](deployments/add-ons/sessionHosts/README.md) |
 
 ---
 
@@ -208,10 +209,11 @@ Support for multiple identity configurations to meet organizational requirements
 
 ### Add-Ons
 
-- 🔄 [Session Host Replacer](deployments/add-ons/SessionHostReplacer/README.md)
-- 📊 [Storage Quota Manager](deployments/add-ons/StorageQuotaManager/README.md)
-- 🔑 [Update Storage Keys](deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/README.md)
-- 📝 [Run Commands on VMs](deployments/add-ons/RunCommandsOnVms/README.md)
+- 🔄 [Session Host Replacer](deployments/add-ons/sessionHostReplacer/README.md)
+- 📊 [Storage Quota Manager](deployments/add-ons/storageQuotaManager/README.md)
+- 🔑 [Update Storage Keys](deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md)
+- 📝 [Run Commands on VMs](deployments/add-ons/runCommandsOnVms/README.md)
+- 🖥️ [Session Hosts](deployments/add-ons/sessionHosts/README.md)
 
 ---
 

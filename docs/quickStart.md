@@ -572,10 +572,10 @@ New-AzDeployment `
 
 **Explore operational automation:**
 
-- 🔄 **[Session Host Replacer](../deployments/add-ons/SessionHostReplacer/readme.md)** - Zero-downtime host replacements on image updates
-- 💾 **[Storage Quota Manager](../deployments/add-ons/StorageQuotaManager/readme.md)** - Automated FSLogix profile quota management
-- 🔑 **[Update Storage Keys](../deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md)** - Automated key rotation
-- ⚡ **[Run Commands on VMs](../deployments/add-ons/RunCommandsOnVms/readme.md)** - Execute scripts across session hosts
+- 🔄 **[Session Host Replacer](../deployments/add-ons/sessionHostReplacer/readme.md)** - Zero-downtime host replacements on image updates
+- 💾 **[Storage Quota Manager](../deployments/add-ons/storageQuotaManager/readme.md)** - Automated FSLogix profile quota management
+- 🔑 **[Update Storage Keys](../deployments/add-ons/updateStorageAccountKeyOnSessionHosts/readme.md)** - Automated key rotation
+- ⚡ **[Run Commands on VMs](../deployments/add-ons/runCommandsOnVms/readme.md)** - Execute scripts across session hosts
 
 ### Learn More
 

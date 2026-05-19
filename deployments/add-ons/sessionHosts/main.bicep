@@ -186,8 +186,8 @@ param sessionHostNames array = []
 // ── Naming mode: convention (prefix + index range) ───────────────────────────
 // Used when deploying manually via the portal UI without pre-computed names.
 // Ignored when sessionHostNames is non-empty.
-@description('Optional. Short prefix for VM names (e.g. "vm-avd-"). Required when sessionHostNames is empty.')
-param virtualMachineNamePrefix string = ''
+@description('Optional. Short prefix for session host names (e.g. "avd-vm-"). Required when sessionHostNames is empty.')
+param sessionHostNamePrefix string = ''
 
 @minValue(0)
 @description('Optional. Number of session hosts to deploy in convention mode. Required when sessionHostNames is empty.')
@@ -220,14 +220,69 @@ param vmInsightsDataCollectionRulesResourceId string = ''
 
 // Variables
 
-var avSetNameConv = empty(availabilitySetNameConv)
-  ? 'as-${substring(effectiveSessionHostNames[0], 0, length(effectiveSessionHostNames[0])-sessionHostNameIndexLength)}-##'
-  : availabilitySetNameConv
+// ── Naming convention auto-detection ─────────────────────────────────────────
+// Detects whether the host pool uses resource-type-at-end (reversed) or at-start convention
+// by inspecting the host pool name, mirroring the same logic used in the Session Host Replacer.
+var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
+var locationsObject = loadJsonContent('../../../.common/data/locations.json')
+var cloud = toLower(environment().name)
+var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : environment().name
+var locations = locationsObject[locationsEnvProperty]
+#disable-next-line BCP329
+var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
+var regionAbbreviation = locations[varLocation].abbreviation
+
+var hostPoolName = last(split(hostPoolResourceId, '/'))
+var nameConvReversed = startsWith(hostPoolName, '${resourceAbbreviations.hostPools}-')
+  ? false // Resource type at beginning (e.g., "hp-avd-01-eus")
+  : endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}')
+      ? true // Resource type at end (e.g., "avd-01-eus-hp")
+      : false // Default fallback
+
+var arrHostPoolName = split(hostPoolName, '-')
+var hpBaseName = nameConvReversed
+  ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-') // Remove last 2 segments (location-hp)
+  : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-') // Remove first (hp) and last (location)
+var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
+var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
+var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
+
+// Effective naming conventions — override params take precedence; auto-detected values are the fallback.
+var effectiveVirtualMachineNameConv = !empty(virtualMachineNameConv)
+  ? virtualMachineNameConv
+  : nameConvReversed
+      ? 'SHNAME-${resourceAbbreviations.virtualMachines}'
+      : '${resourceAbbreviations.virtualMachines}-SHNAME'
+
+var effectiveNetworkInterfaceNameConv = !empty(networkInterfaceNameConv)
+  ? networkInterfaceNameConv
+  : nameConvReversed
+      ? 'SHNAME-${resourceAbbreviations.networkInterfaces}'
+      : '${resourceAbbreviations.networkInterfaces}-SHNAME'
+
+var effectiveOsDiskNameConv = !empty(osDiskNameConv)
+  ? osDiskNameConv
+  : nameConvReversed
+      ? 'SHNAME-${resourceAbbreviations.osdisks}'
+      : '${resourceAbbreviations.osdisks}-SHNAME'
+
+var generatedAvSetNameConv = nameConvReversed
+  ? replace(
+      replace(
+        replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', resourceAbbreviations.availabilitySets),
+        'LOCATION',
+        regionAbbreviation
+      ),
+      'TOKEN-',
+      ''
+    )
+  : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', regionAbbreviation), 'TOKEN-', '')}-##'
+
+var avSetNameConv = !empty(availabilitySetNameConv) ? availabilitySetNameConv : generatedAvSetNameConv
 
 var deploymentSuffix = uniqueString(deployment().name)
 
 // Agent download URL construction with environment-based fallback
-var cloud = toLower(environment().name)
 var cloudSuffix = replace(
   replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''),
   '/',
@@ -254,7 +309,7 @@ var confidentialVMOSDiskEncryptionType = confidentialVMOSDiskEncryption ? 'DiskW
 // Resolve effective session host names from either explicit list or convention (prefix + index range).
 // Explicit list (sessionHostNames) takes precedence — used by the SHR function app.
 // Convention mode is used for manual/portal deployments.
-var generatedSessionHostNames = [for i in range(sessionHostIndex, sessionHostCount): '${virtualMachineNamePrefix}${padLeft(i, sessionHostNameIndexLength, '0')}']
+var generatedSessionHostNames = [for i in range(sessionHostIndex, sessionHostCount): '${sessionHostNamePrefix}${padLeft(i, sessionHostNameIndexLength, '0')}']
 var effectiveSessionHostNames = !empty(sessionHostNames) ? sessionHostNames : generatedSessionHostNames
 
 // Batching logic: Dynamically calculate max VMs per batch based on resources per VM
@@ -395,8 +450,8 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       integrityMonitoring: integrityMonitoring
       intuneEnrollment: intuneEnrollment
       location: location
-      networkInterfaceNameConv: networkInterfaceNameConv
-      osDiskNameConv: osDiskNameConv
+      networkInterfaceNameConv: effectiveNetworkInterfaceNameConv
+      osDiskNameConv: effectiveOsDiskNameConv
       ouPath: ouPath
       sessionHostCustomizations: sessionHostCustomizations
       secureBootEnabled: secureBootEnabled
@@ -410,7 +465,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       timeZone: timeZone
       virtualMachineAdminPassword: kvCredentials.getSecret('VirtualMachineAdminPassword')
       virtualMachineAdminUserName: kvCredentials.getSecret('VirtualMachineAdminUserName')
-      virtualMachineNameConv: virtualMachineNameConv
+      virtualMachineNameConv: effectiveVirtualMachineNameConv
       virtualMachineSize: virtualMachineSize
       vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId
       vTpmEnabled: vTpmEnabled

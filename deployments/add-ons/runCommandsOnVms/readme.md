@@ -11,7 +11,7 @@ This solution will allow you to run one or multiple scripts on selected virtual 
 
 ### Azure portal UI
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FRunCommandsOnVms%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FRunCommandsOnVms%2FuiFormDefinition.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FRunCommandsOnVms%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FRunCommandsOnVms%2FuiFormDefinition.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FrunCommandsOnVms%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FrunCommandsOnVms%2FuiFormDefinition.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FrunCommandsOnVms%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FrunCommandsOnVms%2FuiFormDefinition.json)
 
 ### PowerShell
 
@@ -22,7 +22,7 @@ Run a single PowerShell script from a public URI on selected VMs. This is the si
 ```powershell
 New-AzSubscriptionDeployment `
     -Location 'usgovvirginia' `
-    -TemplateFile 'https://raw.githubusercontent.com/Azure/federalavd/main/deployments/add-ons/RunCommandsOnVms/main.json' `
+    -TemplateFile 'https://raw.githubusercontent.com/Azure/federalavd/main/deployments/add-ons/runCommandsOnVms/main.json' `
     -resourceGroupName 'rg-avd-sessionhosts-usgv' `
     -vmNames @('avd-vm-01', 'avd-vm-02', 'avd-vm-03') `
     -runCommandName 'InstallSoftware' `
@@ -64,7 +64,7 @@ $scripts = @(
 # Deploy with storage account and managed identity
 New-AzSubscriptionDeployment `
     -Location 'usgovvirginia' `
-    -TemplateFile 'https://raw.githubusercontent.com/Azure/federalavd/main/deployments/add-ons/RunCommandsOnVms/main.json' `
+    -TemplateFile 'https://raw.githubusercontent.com/Azure/federalavd/main/deployments/add-ons/runCommandsOnVms/main.json' `
     -resourceGroupName 'rg-avd-sessionhosts-usgv' `
     -vmNames @('avd-vm-01', 'avd-vm-02', 'avd-vm-03') `
     -scripts $scripts `
@@ -105,7 +105,7 @@ Write-Host "Windows Defender configured successfully"
 # Deploy with inline script content
 New-AzSubscriptionDeployment `
     -Location 'usgovvirginia' `
-    -TemplateFile 'https://raw.githubusercontent.com/Azure/federalavd/main/deployments/add-ons/RunCommandsOnVms/main.json' `
+    -TemplateFile 'https://raw.githubusercontent.com/Azure/federalavd/main/deployments/add-ons/runCommandsOnVms/main.json' `
     -resourceGroupName 'rg-avd-sessionhosts-usgv' `
     -vmNames @('avd-vm-01', 'avd-vm-02', 'avd-vm-03') `
     -runCommandName 'ConfigureDefender' `

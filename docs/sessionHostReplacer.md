@@ -2,7 +2,7 @@
 
 # Session Host Replacer Add-On
 
-> **Note:** The Session Host Replacer is now available as a standalone add-on. For complete documentation, deployment instructions, and configuration details, see the **[Session Host Replacer Add-On Documentation](../deployments/add-ons/SessionHostReplacer/readme.md)**.
+> **Note:** The Session Host Replacer is now available as a standalone add-on. For complete documentation, deployment instructions, and configuration details, see the **[Session Host Replacer Add-On Documentation](../deployments/add-ons/sessionHostReplacer/readme.md)**.
 
 ## Overview
 
@@ -39,13 +39,13 @@ The Session Host Replacer is an automated Azure Function that manages the lifecy
 - **Device cleanup required**: Graph API permissions mandatory
 - **Best for**: Cost-sensitive environments, resource constraints (IPs/quotas), dedicated hosts
 
-See the [complete mode comparison](../deployments/add-ons/SessionHostReplacer/readme.md#replacement-modes) for detailed decision guidance.
+See the [complete mode comparison](../deployments/add-ons/sessionHostReplacer/readme.md#replacement-modes) for detailed decision guidance.
 
 ## Quick Start
 
 For detailed deployment instructions, prerequisites, and configuration options, refer to the complete add-on documentation:
 
-**[Session Host Replacer Add-On - Complete Documentation](../deployments/add-ons/SessionHostReplacer/readme.md)**
+**[Session Host Replacer Add-On - Complete Documentation](../deployments/add-ons/sessionHostReplacer/readme.md)**
 
 ## Key Capabilities
 

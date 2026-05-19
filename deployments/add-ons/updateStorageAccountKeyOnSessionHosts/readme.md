@@ -13,14 +13,14 @@ This solution will update the FSLogix Storage Account Key on Session Hosts to su
 
 ### Azure portal UI
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FUpdateStorageAccountKeyOnSessionHosts%2FUpdateStorageAccountKeyOnSessionHosts.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FUpdateStorageAccountKeyOnSessionHosts%2FuiFormDefinition.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FUpdateStorageAccountKeyOnSessionHosts%2FUpdateStorageAccountKeyOnSessionHosts.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FUpdateStorageAccountKeyOnSessionHosts%2FuiFormDefinition.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FupdateStorageAccountKeyOnSessionHosts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FupdateStorageAccountKeyOnSessionHosts%2FuiFormDefinition.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FupdateStorageAccountKeyOnSessionHosts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FupdateStorageAccountKeyOnSessionHosts%2FuiFormDefinition.json)
 
 ### PowerShell
 
 ```powershell
 New-AzResourceGroupDeployment `
     -Location '<Azure location>' `
-    -TemplateFile 'https://raw.githubusercontent.com/Azure/federalavd/main/deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/UpdateStorageAccountKeyOnSessionHosts.json' `
+    -TemplateFile 'https://raw.githubusercontent.com/Azure/federalavd/main/deployments/add-ons/updateStorageAccountKeyOnSessionHosts/main.json' `
     -storageAccountResourceId '<FSLogix Storage Account Resource ID' `
     -storageAccountKey <Key - Either 1 or 2> `
     -vmNames @(comma separated list of Virtual Machines) `
