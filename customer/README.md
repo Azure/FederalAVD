@@ -7,7 +7,7 @@ repo updates so your files are never overwritten.
 
 Mirror the `deployments/` structure for whichever deployments you use:
 
-```
+```text
 customer/
   hostpools/
     parameters/
