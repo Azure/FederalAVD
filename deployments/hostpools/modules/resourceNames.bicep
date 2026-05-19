@@ -112,25 +112,6 @@ var resourceGroupMonitoring = replace(
   resourceAbbreviations.resourceGroups
 )
 var uniqueStringOperations = take(uniqueString(subscription().subscriptionId, resourceGroupOperations), 6)
-var appServicePlanName = replace(
-  replace(
-    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
-    'LOCATION',
-    virtualMachinesRegionAbbreviation
-  ),
-  'TOKEN-',
-  ''
-)
-
-var sessionHostTemplateSpecName = replace(
-  replace(
-    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.templateSpecs),
-    'LOCATION',
-    virtualMachinesRegionAbbreviation
-  ),
-  'TOKEN-',
-  'session-host-'
-)
 
 // Key Vault names are seeded on resourceGroupOperations so both the inline fallback
 // and the standalone keyVaults.bicep deployment produce identical names, preventing duplicates.
@@ -242,8 +223,6 @@ var scalingPlanName = replace(
 )
 
 // Common HostPool Specific Resource Naming Conventions
-var uniqueStringHosts = take(uniqueString(subscription().subscriptionId, resourceGroupHosts), 6)
-
 var privateEndpointNameConv = replace(
   nameConvReversed ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
   'RESOURCETYPE',
@@ -339,14 +318,11 @@ var netAppCapacityPoolName = replace(
   ''
 )
 
-// App Attach and FSLogix Storage Account Naming Convention (max 15 characters for domain join)
-var appAttachStorageAccountName = take('appattach${uniqueStringOperations}', 15)
+// FSLogix Storage Account Naming Convention (max 15 characters for domain join)
 var uniqueStringStorage = take(uniqueString(subscription().subscriptionId, resourceGroupStorage), 6)
 var fslogixStorageAccountNamePrefix = empty(fslogixStorageCustomPrefix)
   ? 'fslogix${uniqueStringStorage}'
   : toLower(fslogixStorageCustomPrefix)
-var increaseQuotaFAStorageAccountName = 'saquota${uniqueStringStorage}'
-var sessionHostReplacerFAStorageAccountName = 'shreplacer${uniqueStringHosts}'
 
 var fslogixfileShareNames = {
   CloudCacheProfileContainer: [
@@ -365,7 +341,6 @@ var fslogixfileShareNames = {
   ]
 }
 
-output appServicePlanName string = appServicePlanName
 output availabilitySetNameConv string = availabilitySetNameConv
 output dataCollectionEndpointName string = dataCollectionEndpointName
 output depVirtualMachineName string = depVirtualMachineName
@@ -386,10 +361,7 @@ output keyVaultNames object = {
   secrets: keyVaultNameSecrets
 }
 output encryptionKeyNames object = {
-  appAttach: 'encryption-key-appattach-${appAttachStorageAccountName}'
   fslogix: '${hpBaseName}-encryption-key-${fslogixStorageAccountNamePrefix}##'
-  increaseStorageQuota: '${hpBaseName}-encryption-key-${increaseQuotaFAStorageAccountName}'
-  sessionHostReplacement: '${hpBaseName}-encryption-key-${sessionHostReplacerFAStorageAccountName}'
   virtualMachines: '${hpBaseName}-encryption-key-vms'
   confidentialVMs: '${hpBaseName}-encryption-key-confidential-vms'
 }
@@ -411,12 +383,8 @@ output resourceGroupOperations string = resourceGroupOperations
 output resourceGroupMonitoring string = resourceGroupMonitoring
 output resourceGroupStorage string = resourceGroupStorage
 output scalingPlanName string = scalingPlanName
-output sessionHostTemplateSpecName string = sessionHostTemplateSpecName
 output storageAccountNames object = {
-  appAttach: appAttachStorageAccountName
   fslogix: fslogixStorageAccountNamePrefix
-  increaseStorageQuota: increaseQuotaFAStorageAccountName
-  sessionHostReplacement: sessionHostReplacerFAStorageAccountName
 }
 output userAssignedIdentityNameConv string = userAssignedIdentityNameConv
 output virtualMachineNameConv string = virtualMachineNameConv
