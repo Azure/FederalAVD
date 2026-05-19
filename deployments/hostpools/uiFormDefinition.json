@@ -1,4 +1,4 @@
-﻿{
+{
 	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
 	"view": {
 		"kind": "Form",
@@ -4599,7 +4599,7 @@
 				"existingFeedWorkspaceResourceId": "[if(or(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('controlPlane').workspace.createOption, 'update')), equals(steps('basics').deploymentType, 'HostpoolOnly')), steps('controlPlane').workspace.existingWorkspace, '')]",
 				"workspaceFriendlyName": "[if(and(equals(steps('basics').deploymentType, 'Complete'), not(equals(steps('controlPlane').workspace.createOption, 'update'))), steps('controlPlane').naming.workspaceFriendlyName, '')]",
 				"desktopFriendlyName": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), '', steps('controlPlane').naming.desktopFriendlyName)]",
-				"hostPoolType": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(equals(steps('controlPlane').hostPool.type, 'Pooled'), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.loadBalancerAlgorithm), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.assignmentType)), 'Pooled BreadthFirst')]",
+				"hostPoolType": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(equals(steps('controlPlane').hostPool.type, 'Pooled'), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.loadBalancerAlgorithm), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.assignmentType)), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Pooled'), concat('Pooled ', steps('basics').hostPoolProps.properties.loadBalancerType), concat('Personal ', steps('basics').hostPoolProps.properties.personalDesktopAssignmentType)))]",
 				"hostPoolMaxSessionLimit": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('controlPlane').hostPool.type, 'Pooled')), steps('controlPlane').hostPool.maxSessions, 1)]",
 				"hostPoolValidationEnvironment": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').hostPool.validation, false)]",
 				"hostPoolRDPProperties": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').hostPool.rdpProperties, '')]",

@@ -2,7 +2,20 @@
 
 # Quick Start Guide
 
-Get your Azure Virtual Desktop environment deployed quickly with this step-by-step guide. This guide helps you choose the right deployment path and complete the essential prerequisites.
+Get your Azure Virtual Desktop environment deployed quickly with this step-by-step guide. This guide helps you choose the right deployment path and complete the essential prerequisites. Use the tier table below to find your starting point, then follow the steps that apply.
+
+---
+
+## Deployment Tiers at a Glance
+
+| Tier | Who | Requirements | First Deployment | Jump To |
+|------|-----|-------------|-----------------|---------|
+| **1 — PoC / Marketplace** | Single admin | Azure subscription + existing VNet | ~20 min | [Step 4 only](#step-4-deploy-host-pool) |
+| **2 — Custom Images** | Single team | Tier 1 + storage account + compute gallery | ~2–3 hrs total | [Step 2 → 3 → 4](#step-2-deploy-image-management-resources) |
+| **3 — Multi-Team Production** | Network, Security, Image, AVD teams | All above + Key Vaults, RBAC delegation, param hand-off | ~4–8 hrs first time | [Tier 3 section](#tier-3-multi-tiered-administration) |
+| **4 — Fully Automated** | DevOps / platform team | Tier 3 + CI/CD tooling | ~1 week setup | [Automation Guide](automationGuide.md) |
+
+> **Just need a working AVD environment to test?** Jump directly to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool). A VNet with one subnet is the only hard prerequisite. CMK, FSLogix, monitoring, and private endpoints are all optional and can be added later.
 
 ---
 
@@ -32,6 +45,8 @@ graph TD
 - **Have existing VNet + subnet?** → Skip Step 0, continue below
 
 **Then choose your deployment approach:**
+
+> **💡 Fastest path:** If you have an existing VNet and want a working AVD environment with marketplace images, you need nothing else. Jump straight to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool) — FSLogix storage, monitoring, and optional CMK are all handled inline by the `Complete` deployment type. Add custom images or tighter security controls later.
 
 - **PoC or marketplace images only?** → Jump directly to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool) *(CMK optional — deployed inline, no Key Vault pre-deploy needed)*
 - **Need custom software on session hosts, no CMK?** → [Step 2: Image Management](#step-2-deploy-image-management-resources) first, then:
@@ -78,6 +93,20 @@ Before deploying, ensure you have these essentials ready:
 - ✅ **AVD Licenses** - [Verify licensing requirements](https://learn.microsoft.com/azure/virtual-desktop/overview#requirements)
 - ✅ **Resource Provider** - Enable `Microsoft.DesktopVirtualization` in your subscription
 
+### Required Deployer Roles by Deployment
+
+| Deployment | Required role | Why |
+|---|---|---|
+| **imageManagement** | Owner **or** Contributor + User Access Administrator at subscription scope | Creates resource groups; assigns Contributor to managed identity on image build RG, Storage Blob Data Reader on artifacts storage, Storage Blob Data Contributor on logs storage |
+| **imageBuild — new RG path** (no `imageBuildResourceGroupId`) | Owner **or** Contributor + User Access Administrator at subscription scope | Creates a temporary resource group; assigns Contributor to the orchestration VM's system-assigned identity on that RG |
+| **imageBuild — existing RG path** (`imageBuildResourceGroupId` set) | `Microsoft.Resources/deployments/write` at **subscription scope** (the template is subscription-scoped) + Contributor on the **image build RG** + Contributor on the **compute gallery RG** (+ Contributor on the remote gallery RG if replicating to a second region) | No resource group creation or role assignments; deploys VMs into the pre-existing build RG; creates the image version and (if not pre-existing) image definition in the compute gallery RG. Subscription-level deployment write is unavoidable because `imageBuild.bicep` uses `targetScope = 'subscription'`. |
+| **hostpool** | Owner **or** Contributor + User Access Administrator at subscription scope (+ Key Vault Crypto Officer on the key vault if CMK) | `targetScope = 'subscription'` — subscription scope is required regardless. Creates resource groups; assigns roles at subscription scope (AVD service principal for Start VM On Connect / Scaling Plan), at control plane RG scope (Desktop Virtualization User to Entra groups on the app group), and at multiple RG scopes (deployment VM UAI roles, Entra-based VM login, FSLogix storage roles) |
+| **hostpool — `SessionHostsOnly`** | `Microsoft.Resources/deployments/write` at **subscription scope** + **Contributor** on the existing **hosts RG** + **Desktop Virtualization Host Pool Contributor** on the existing **control plane RG** | `targetScope = 'subscription'` — subscription deployment write is unavoidable. No resource group creation or role assignments; deploys session host VMs into the pre-existing hosts RG and updates the host pool registration token in the control plane RG only. |
+
+> **Tip — least privilege for imageBuild:** Using an existing resource group (pre-staged by imageManagement) eliminates the need for subscription-level resource group creation and role assignment rights. You still need `Microsoft.Resources/deployments/write` at subscription scope because `imageBuild.bicep` uses `targetScope = 'subscription'` — but this is far narrower than full `Contributor` at subscription scope. See the [Custom RBAC Roles Guide](customRoles.md#3-imagebuild-operator--existing-rg-path) for a role definition that grants exactly this.
+>
+> **Custom roles:** For organizations that need to constrain operators beyond built-in roles — for example, preventing arbitrary resource creation or limiting which role definition IDs can be assigned — see the [Custom RBAC Roles Guide](customRoles.md) for ready-to-use JSON definitions for each deployment path.
+
 ### Required for Custom Software (Steps 2 & 3)
 
 - ✅ **Storage Blob Data Contributor** role on the image management storage account — required because the storage account disables shared key access by default (Zero Trust). `Contributor` or `Owner` alone is not sufficient; see [why data plane roles are required separately](hostpoolDeployment.md#security-prerequisites-optional).
@@ -89,7 +118,7 @@ Before deploying, ensure you have these essentials ready:
 
 ### Optional for Zero Trust / Production
 
-- 🔒 **Private DNS Zones** for private endpoints ([full list](hostpoolDeployment.md#dns-requirements))
+- 🔒 **Private DNS Zones** for private endpoints — can be deployed by the [networking template (Step 0)](#step-0-deploy-networking-infrastructure-greenfield) or brought from an existing hub. The resource IDs output by Step 0 are passed directly to imageManagement, imageBuild, and host pool deployments as `azure*PrivateDnsZoneResourceId` parameters. ([full list](hostpoolDeployment.md#dns-requirements))
 - 🔒 **Domain Services** for hybrid identity (AD DS or Entra Domain Services)
 - 🔒 **Domain Join Account** with permissions ([setup guide](hostpoolDeployment.md#domain-permissions))
 - 🔒 **Entra Kerberos** for Azure Files - [Hybrid Guide](entraKerberosHybrid.md) | [Cloud-Only Guide](entraKerberosCloudOnly.md)
@@ -231,7 +260,7 @@ The networking deployment provides a complete foundation for AVD, including:
 - **🛣️ Routing** - NAT gateway (default) or NVA (Network Virtual Appliance) force-tunnel routing
 - **🚦 NAT Gateway** - NAT gateway for secure outbound connectivity
 - **🔗 Hub Peering** - Optional peering to hub VNet for hybrid connectivity
-- **🔒 Private DNS Zones** - For Azure services (Blob, Files, Queue, Table, Key Vault, Backup, AVD)
+- **🔒 Private DNS Zones** - For all Azure services used by AVD (Blob, Files, Queue, Table, Key Vault, Backup, AVD feed/hostpool). **Deploying these here satisfies the `azure*PrivateDnsZoneResourceId` parameters required by imageManagement, imageBuild, and host pool deployments** — pass the resource IDs from the networking deployment outputs directly into those templates.
 - **🛡️ DDoS Protection** - Optional DDoS Network Protection
 - **📊 Diagnostics** - NSG flow logs to Log Analytics
 
@@ -277,7 +306,7 @@ New-AzDeployment `
 |---------|-------------|-------------|
 | **Hub Peering** | Peer spoke VNet to hub VNet | Hybrid connectivity, centralized routing |
 | **NVA Routing** | Route traffic through Network Virtual Appliance (with optional AVD bypass routes) | Centralized firewall/inspection |
-| **Private DNS Zones** | Create DNS zones for Azure services | Private endpoints, Zero Trust architecture |
+| **Private DNS Zones** | Create DNS zones for all AVD-related services (Blob, Files, Key Vault, Backup, AVD). Outputs feed directly into imageManagement, imageBuild, and host pool `azure*PrivateDnsZoneResourceId` parameters. | Private endpoints, Zero Trust architecture |
 | **DDoS Protection** | Enable DDoS Network Protection | Production environments, security requirements |
 | **Multiple Subnets** | Session hosts, private endpoints, functions | Segmentation, private link deployments |
 
@@ -390,7 +419,11 @@ This step has two parts: deploying the Azure infrastructure once, then uploading
 
 ### Part A: Deploy Infrastructure (One-Time)
 
-Deploys the compute gallery, artifacts storage account, and managed identity.
+Deploys everything imageBuild needs when using the **existing resource group path** (recommended for production): compute gallery, artifacts storage account, build logs storage account, managed identity (pre-granted all required roles), and the image build resource group.
+
+> **Why imageManagement handles all of this:** The imageBuild deployment grants no RBAC roles on the existing RG path. The identity you supply must already have **Contributor** on the build resource group, **Storage Blob Data Reader** on the artifacts account, and **Storage Blob Data Contributor** on the logs account. imageManagement creates all of these resources and grants all of these roles in a single deployment — so image builders only need permission to run the imageBuild template, not to create resource groups or assign roles.
+>
+> **Alternative — Temporary RG path:** Leave `imageBuildResourceGroupId` empty and skip pre-staging the resource group in imageManagement. imageBuild will create a uniquely-named, temporary resource group on each run and **automatically delete the entire resource group** when the build completes. No UAI is required unless you are using storage features (artifacts container or log collection).
 
 **Option 1: Azure Portal (Blue Button)** — Commercial & Government clouds only
 
@@ -412,6 +445,16 @@ Example parameter files are in `deployments\imageManagement\parameters\` (`basic
 
 If you did **not** use `-UpdateArtifacts`, note the `artifactsStorageAccountResourceId` output — you'll need it in Part B.
 
+**Key imageManagement outputs to pass to imageBuild:**
+
+| imageManagement output | imageBuild parameter |
+|---|---|
+| `computeGalleryResourceId` | `computeGalleryResourceId` |
+| `artifactsBlobContainerUrl` | `artifactsContainerUri` |
+| `managedIdentityResourceId` | `userAssignedIdentityResourceId` |
+| `buildLogsStorageAccountResourceId` | `logStorageAccountResourceId` |
+| `imageBuildResourceGroupResourceId` | `imageBuildResourceGroupId` |
+
 ### Part B: Upload Artifacts (Run Whenever Software Changes)
 
 > **⏭️ Skip if** you already used `-UpdateArtifacts` in Part A.
@@ -430,6 +473,24 @@ cd deployments
 - **[Update-ImageArtifacts Script Reference](updateImageArtifacts.md)** — All script parameters and examples
 - **[Artifacts Guide](artifactsGuide.md)** — Creating custom artifact packages
 - **[Air-Gapped Cloud Instructions](airGappedClouds.md)** — Secret/Top Secret cloud considerations
+
+### Part C: Pass imageManagement Outputs to imageBuild
+
+> **This is the standard recommended workflow for production.** imageManagement pre-stages all infrastructure and grants all required roles. imageBuild deployments never assign roles — they simply consume pre-staged resources.
+
+Deploy imageManagement with all defaults enabled (`deployArtifactsStorageAccount = true`, `deployBuildLogsStorageAccount = true`, `deployImageBuildResourceGroup = true`). The managed identity is granted:
+- **Contributor** on the image build resource group
+- **Storage Blob Data Reader** on the artifacts storage account
+- **Storage Blob Data Contributor** on the build logs storage account
+
+Image builders then supply these three outputs to imageBuild:
+- `imageBuildResourceGroupId` — pre-created persistent RG; imageBuild deploys VMs into it each run and deletes only the VMs on completion (the RG is left intact)
+- `userAssignedIdentityResourceId` — the managed identity with all roles pre-granted
+- `logStorageAccountResourceId` + `logContainerName` — for build log collection
+
+This enables least-privilege: the person running imageBuild needs no rights to create resource groups or assign roles.
+
+> **Temporary RG alternative:** Leave `imageBuildResourceGroupId` empty and do not pre-stage the RG in imageManagement. Each run creates a new uniquely-named temporary resource group (timestamp-suffixed) and **deletes the entire resource group** on completion. The `userAssignedIdentityResourceId` is only needed when using storage features on this path.
 
 ---
 
@@ -507,6 +568,72 @@ New-AzDeployment `
 
 ---
 
+## Tier 3: Multi-Tiered Administration
+
+In enterprise environments, different teams own different pieces of the infrastructure. The Federal AVD solution is designed so that each deployment step produces **outputs** that the next team consumes as **parameters** — enabling clean organizational boundaries without credential sharing or giving every team subscription Owner rights.
+
+### Recommended Team Ownership Model
+
+| Team | Owns | Deploys |
+|------|------|---------| 
+| **Platform / Network** | VNet, subnets, NSGs, DNS zones, hub peering | [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) |
+| **Security** | Key Vaults, encryption keys, secrets, RBAC | [Step 1: Key Vaults](#step-1-deploy-key-vaults-cmk-with-custom-images) |
+| **Image / Platform Engineering** | Compute gallery, artifacts storage, image builds | [Step 2: Image Management](#step-2-deploy-image-management-resources) + [Step 3: Image Build](#step-3-build-custom-image-optional) |
+| **AVD Team** | Host pools, session hosts, FSLogix, monitoring | [Step 4: Host Pool](#step-4-deploy-host-pool) |
+
+### Cross-Team Output Passing
+
+Each team saves their deployment outputs into parameter files that the next team consumes. No team needs to touch another team's infrastructure directly.
+
+| Source Team | Output | Destination Team | Parameter |
+|-------------|--------|-----------------|-----------|
+| Platform / Network | Subnet resource ID | All teams | `subnetResourceId` |
+| Platform / Network | Private DNS zone resource IDs (from networking deployment outputs) | Image, AVD | `azure*PrivateDnsZoneResourceId` |
+| Security | Secrets KV resource ID | AVD | `credentialsKeyVaultResourceId` |
+| Security | Encryption KV resource ID | Image, AVD | `encryptionKeyVaultResourceId` |
+| Image Team | `computeGalleryResourceId` | Image (builds) | `computeGalleryResourceId` |
+| Image Team | `artifactsBlobContainerUrl` | Image (builds) | `artifactsContainerUri` |
+| Image Team | `managedIdentityResourceId` | Image (builds) | `userAssignedIdentityResourceId` |
+| Image Team | Image definition resource ID | AVD | `customImageResourceId` |
+
+### RBAC: Least-Privilege Deployment Rights
+
+Assign these roles so each team can deploy their components without subscription-level Owner rights:
+
+| Component | Deploying team needs | Why |
+|-----------|---------------------|-----|
+| **imageBuild — existing RG** | `Microsoft.Resources/deployments/write` at subscription scope + `Contributor` on build RG + `Contributor` on gallery RG | Subscription-scope write unavoidable (`targetScope = 'subscription'`); no role assignments required |
+| **hostpool — SessionHostsOnly** | `Microsoft.Resources/deployments/write` at subscription scope + `Contributor` on hosts RG + `Desktop Virtualization Host Pool Contributor` on control plane RG | No RG creation or role assignments needed |
+| **hostpool — Complete** | `Owner` or `Contributor + User Access Administrator` at subscription scope | Creates RGs and assigns roles at subscription scope |
+
+> **Generating parameter files for each team:** The easiest way to create a parameter file is to deploy once using the Template Spec portal form, then **download the generated parameter file** before submitting. Remove the `timeStamp` parameter before saving for reuse. See the [air-gapped section](#-air-gapped-clouds-template-specs-optional-but-recommended) for details.
+
+---
+
+## Tier 4: Full Automation
+
+Once you have working manual deployments for each step (Tiers 1–3), you can chain them together into a pipeline. The Federal AVD solution is built for this pattern: each step is a standalone deployment that produces machine-readable outputs feeding the next step.
+
+The **[End-to-End Automation Guide](automationGuide.md)** covers:
+
+- **Output → Input mapping** — which output from each step feeds which parameter in the next
+- **Pipeline integration** — how to wire steps together in Azure DevOps, GitHub Actions, or any CI/CD tool
+- **Image refresh automation** — `Invoke-ImageBuilds.ps1` to trigger new image versions on a schedule
+- **Zero-downtime host replacement** — [Session Host Replacer add-on](../deployments/add-ons/sessionHostReplacer/README.md) monitors for new image versions and drains/replaces session hosts automatically
+
+```mermaid
+graph LR
+    KV[🔒 Key Vaults] -->|encryptionKeyVaultResourceId| IM
+    IM[📦 Image Management] -->|computeGalleryResourceId\nartifactsBlobContainerUrl\nmanagedIdentityResourceId| IB
+    IB[🎨 Image Build] -->|customImageResourceId| HP
+    HP[🏢 Host Pool] -->|hostPoolResourceId| SHR
+    SHR[🔄 Session Host Replacer] -.->|monitors new image versions| IB
+```
+
+> **Tip:** Export parameter files from the Template Spec UI after each team's first manual deployment. With those files in source control, your pipeline needs only to call `New-AzDeployment` with the right parameter file at each stage.
+
+---
+
 ## Validation & Next Steps
 
 ### Verify Deployment
@@ -524,18 +651,19 @@ New-AzDeployment `
 
 **Explore operational automation:**
 
-- 🔄 **[Session Host Replacer](../deployments/add-ons/SessionHostReplacer/readme.md)** - Zero-downtime host replacements on image updates
-- 💾 **[Storage Quota Manager](../deployments/add-ons/StorageQuotaManager/readme.md)** - Automated FSLogix profile quota management
-- 🔑 **[Update Storage Keys](../deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md)** - Automated key rotation
-- ⚡ **[Run Commands on VMs](../deployments/add-ons/RunCommandsOnVms/readme.md)** - Execute scripts across session hosts
+- 🔄 **[Session Host Replacer](../deployments/add-ons/sessionHostReplacer/readme.md)** - Zero-downtime host replacements on image updates
+- 💾 **[Storage Quota Manager](../deployments/add-ons/storageQuotaManager/readme.md)** - Automated FSLogix profile quota management
+- 🔑 **[Update Storage Keys](../deployments/add-ons/updateStorageAccountKeyOnSessionHosts/readme.md)** - Automated key rotation
+- ⚡ **[Run Commands on VMs](../deployments/add-ons/runCommandsOnVms/readme.md)** - Execute scripts across session hosts
 
 ### Learn More
 
+- 🤖 **[End-to-End Automation Guide](automationGuide.md)** - Chaining all steps into a pipeline
 - 📐 **[Design Overview](design.md)** - Architecture patterns and design decisions
 - ✨ **[Features](features.md)** - Complete feature list and capabilities
-- 🚧 **[Limitations](limitations.md)** - Known limitations and workarounds  
+- 🚧 **[Limitations](limitations.md)** - Known limitations and workarounds
 - 🔧 **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
-- ⚙️ **[Parameters Reference](parameters.md)** - Complete parameter documentation
+- ⚙️ **[Parameters Reference](parameters.md)** - Per-solution parameter documentation index
 
 ---
 
@@ -589,4 +717,4 @@ New-AzDeployment -Location "usgovvirginia" -Name $deploymentName -TemplateFile "
 
 ---
 
-**Ready to deploy? Start with [Step 2](#step-2-deploy-image-management-resources) or [jump to Step 4](#step-4-deploy-host-pool) for marketplace images!**
+**Tier 1 — no custom images?** [Jump to Step 4](#step-4-deploy-host-pool) and you're done. **Need images?** Follow [Steps 2 → 3 → 4](#step-2-deploy-image-management-resources). **Enterprise / multi-team?** See [Tier 3](#tier-3-multi-tiered-administration). **Automating everything?** Start with the [Automation Guide](automationGuide.md).

@@ -18,6 +18,7 @@ Provide foundational resources for AVD image management:
 - **Storage Account** - Host build artifacts (scripts, installers, packages) (optional, default on)
 - **Build Logs Storage Account** - Persist image customization logs from image builds (optional, default off)
 - **Managed Identity** - Authenticate to storage without credentials (deployed when either storage account is enabled)
+- **Image Build Resource Group** - Pre-created persistent RG for image build operators who lack subscription-level RG creation rights (optional, default on)
 - **Remote Gallery (Optional)** - Disaster recovery in secondary region
 - **Private Endpoint (Optional)** - Zero Trust network isolation
 
@@ -44,6 +45,8 @@ Subscription
 │   ├── Gallery Confidential VM Disk Encryption Set (createConfidentialVmGalleryDes = true)
 │   └── Private Endpoint(s) (optional, one per storage account)
 │       └── Network Interface
+├── Image Build Resource Group (deployImageBuildResourceGroup = true)
+│   └── RBAC: Managed Identity → Contributor
 ```
 
 ### Identity & Access
@@ -55,6 +58,14 @@ The managed identity is automatically assigned:
 - Used by image build VMs to download artifacts and write customization logs without storage account keys
 
 ## Prerequisites
+
+### Required Deployer Permissions
+
+The Azure identity running this deployment needs:
+
+| Role | Scope | Why |
+|---|---|---|
+| Owner **or** Contributor + User Access Administrator | Subscription | Creates resource groups; assigns Contributor to the managed identity on the image build RG, Storage Blob Data Reader on the artifacts storage account, and Storage Blob Data Contributor on the build logs storage account |
 
 ### Required Information
 
@@ -197,6 +208,21 @@ Image version replication to a remote region is configured per imageBuild deploy
 - **Default:** `false`
 - **Description:** Deploy a dedicated storage account for persisting image build customization logs. When enabled, pass the `buildLogsStorageAccountResourceId` output to imageBuild deployments as `logStorageAccountResourceId`. The managed identity is automatically granted **Storage Blob Data Contributor** on this account.
 
+### Image Build Resource Group
+
+#### `deployImageBuildResourceGroup`
+
+- **Type:** Boolean
+- **Default:** `true`
+- **Description:** Pre-creates a persistent resource group dedicated to image builds and grants the imageManagement managed identity **Contributor** on it. The primary purpose is **delegation**: image build operators who do not have subscription-level permissions to create resource groups can run image builds by pointing imageBuild to this pre-created resource group via the `imageBuildResourceGroupId` parameter. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level. Pass the `imageBuildResourceGroupResourceId` output directly to imageBuild as `imageBuildResourceGroupId`.
+
+#### `customImageBuildResourceGroupName`
+
+- **Type:** String
+- **Optional**
+- **Description:** Override the auto-generated image build resource group name. Leave empty to use the standard naming convention. Pass the `imageBuildResourceGroupResourceId` output directly to imageBuild as `imageBuildResourceGroupId`.
+- **Example:** `rg-avd-image-builds-use2`
+
 ## Parameter Files
 
 Example parameter files are provided in the `parameters\` directory. Copy and rename one to match your environment, then fill in the placeholder values (`<...>`).
@@ -319,6 +345,13 @@ az deployment sub create \
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/diskEncryptionSets/des-image-management-gallery-confidential-vm-keys-use2`
 - **Used by:** Pass as `confidentialVMDiskEncryptionSetResourceId` in imageBuild deployments targeting ConfidentialVM image definitions.
 
+### `imageBuildResourceGroupResourceId`
+
+- **Type:** String
+- **Description:** Full resource ID of the pre-created image build resource group. Empty string when `deployImageBuildResourceGroup = false`.
+- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-builds-use2`
+- **Used by:** Pass directly to imageBuild as `imageBuildResourceGroupId`.
+
 ### 1. Upload Artifacts to Storage
 
 After deployment, use the `Update-ImageArtifacts.ps1` script to download, package, and upload artifacts:
@@ -352,6 +385,87 @@ New-AzSubscriptionDeployment `
 ```
 
 > See [Image Build Guide](../../docs/imageBuild.md) for details
+
+## Examples
+
+### Minimal — Gallery + Artifacts Storage (Public Endpoint)
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {}
+}
+```
+
+All defaults: gallery + artifacts storage account, public endpoint. Suitable for PoC or air-gapped environments where a private endpoint is not required.
+
+### Private Endpoint (Zero Trust)
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageNetworkAccess": { "value": "PrivateEndpoint" },
+        "privateEndpointSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
+        },
+        "azureBlobPrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+        },
+        "deployBuildLogsStorageAccount": { "value": true }
+    }
+}
+```
+
+### Service Endpoint (Semi-Private)
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageNetworkAccess": { "value": "ServiceEndpoint" },
+        "storageServiceEndpointSubnetResourceIds": {
+            "value": [
+                "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
+            ]
+        },
+        "storagePermittedIPs": { "value": ["203.0.113.0/24"] }
+    }
+}
+```
+
+### Production — CMK, Build Logs, Remote Gallery, Tags
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageNetworkAccess": { "value": "PrivateEndpoint" },
+        "privateEndpointSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
+        },
+        "azureBlobPrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+        },
+        "deployBuildLogsStorageAccount": { "value": true },
+        "keyManagementStorageAccounts": { "value": "CustomerManaged" },
+        "keyManagementGalleryImageVersions": { "value": "CustomerManaged" },
+        "encryptionKeyVaultResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-operations-use2/providers/Microsoft.KeyVault/vaults/kv-avd-enc-use2-abc"
+        },
+        "tags": {
+            "value": {
+                "Microsoft.Storage/storageAccounts": { "environment": "Production", "team": "ImageManagement" },
+                "Microsoft.Compute/galleries": { "environment": "Production", "team": "ImageManagement" }
+            }
+        }
+    }
+}
+```
 
 ## Security Considerations
 

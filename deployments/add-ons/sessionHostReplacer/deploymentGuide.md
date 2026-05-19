@@ -106,7 +106,7 @@ From the repository root:
 
 ```powershell
 # Compress the function app
-$sourcePath = ".\deployments\add-ons\SessionHostReplacer\functions"
+$sourcePath = ".\deployments\add-ons\sessionHostReplacer\functions"
 $zipPath = ".\SessionHostReplacer.zip"
 
 Compress-Archive -Path "$sourcePath\*" -DestinationPath $zipPath -Force
@@ -124,7 +124,7 @@ Restart-AzFunctionApp -ResourceGroupName $resourceGroup -Name $functionAppName -
 ### Option 3: Deploy via Azure CLI
 ```bash
 # Zip the function folder
-cd deployments/add-ons/SessionHostReplacer
+cd deployments/add-ons/sessionHostReplacer
 zip -r SessionHostReplacer.zip functions/*
 
 # Deploy

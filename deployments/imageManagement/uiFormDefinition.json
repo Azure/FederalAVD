@@ -74,7 +74,7 @@
 							"name": "deployBuildLogsStorageAccount",
 							"type": "Microsoft.Common.CheckBox",
 							"label": "Deploy Build Logs Storage Account",
-							"defaultValue": false,
+							"defaultValue": true,
 							"toolTip": "Deploy a dedicated storage account for image build logs. Blobs are automatically purged after 7 days. The managed identity is granted Storage Blob Data Contributor. Pass the buildLogsStorageAccountResourceId output to imageBuild deployments as existingLogStorageAccountResourceId."
 						},
 						{
@@ -499,6 +499,44 @@
 					]
 				},
 				{
+					"name": "imageBuildRg",
+					"label": "Image Build Resource Group",
+					"elements": [
+						{
+							"name": "infoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"options": {
+								"style": "Info",
+							"text": "Pre-creates a stable, persistent resource group dedicated to image builds and grants the imageManagement managed identity Contributor on it. The primary purpose is delegation: image build operators who do not have subscription-level permissions to create resource groups can run image builds by pointing imageBuild to this pre-created resource group. Pass the imageBuildResourceGroupResourceId output from this deployment directly to imageBuild as imageBuildResourceGroupId."
+							}
+						},
+						{
+							"name": "deployImageBuildResourceGroup",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Pre-create Image Build Resource Group",
+							"defaultValue": true,
+						"toolTip": "Creates a persistent resource group for image builds and grants the managed identity Contributor on it. Enables image build operators who lack subscription-level resource group creation rights to run image builds. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level."
+						},
+						{
+							"name": "customImageBuildResourceGroupName",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Custom Resource Group Name",
+							"defaultValue": "",
+						"toolTip": "Optional. Override the auto-generated resource group name. Leave empty to use the standard naming convention. Pass the imageBuildResourceGroupResourceId output directly to imageBuild as imageBuildResourceGroupId.",
+							"visible": "[steps('imageBuildRg').deployImageBuildResourceGroup]",
+							"constraints": {
+								"required": false,
+								"validations": [
+									{
+										"regex": "^[a-zA-Z0-9_()\\-.]{0,90}$",
+										"message": "Resource group names may contain letters, numbers, underscores, parentheses, hyphens, and periods, up to 90 characters."
+									}
+								]
+							}
+						}
+					]
+				},
+				{
 					"name": "tags",
 					"label": "Tags",
 					"elements": [
@@ -544,6 +582,8 @@
 				"keyExpirationInDays": "[if(or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.keyExpirationInDays, 180)]",
 				"createConfidentialVmGalleryDes": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
 				"confidentialVMOrchestratorObjectId": "[if(steps('encryption').cvmDesSection.createConfidentialVmGalleryDes, steps('encryption').cvmDesSection.confidentialVMOrchestratorObjectId, '')]",
+				"deployImageBuildResourceGroup": "[steps('imageBuildRg').deployImageBuildResourceGroup]",
+				"customImageBuildResourceGroupName": "[if(steps('imageBuildRg').deployImageBuildResourceGroup, steps('imageBuildRg').customImageBuildResourceGroupName, '')]",
 				"tags": "[steps('tags').resourceTags]"
 			}
 		}

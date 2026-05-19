@@ -48,67 +48,6 @@
 							}
 						},
 						{
-							"name": "resGroup",
-							"type": "Microsoft.Common.Section",
-							"label": "Image Build Resource Group",
-							"elements": [
-								{
-									"name": "useExResGroup",
-									"type": "Microsoft.Common.OptionsGroup",
-									"label": "Use Existing Resource Group",
-									"defaultValue": "Yes",
-									"toolTip": "",
-									"constraints": {
-										"allowedValues": [
-											{
-												"label": "Yes",
-												"value": true
-											},
-											{
-												"label": "No",
-												"value": false
-											}
-										],
-										"required": false
-									}
-								},
-								{
-									"name": "resourceGroupsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('basics').scope.subscription))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/resourceGroups?api-version=2021-04-01')]"
-									}
-								},
-								{
-									"name": "resourceGroup",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Resource Group (for Image Build resources)",
-									"toolTip": "Select the name of the existing resource group where the image build virtual machines and associated resources will be created.",
-									"constraints": {
-										"allowedValues": "[map(steps('basics').resGroup.resourceGroupsApi.value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
-										"required": true
-									},
-									"visible": "[equals(steps('basics').resGroup.useExResGroup, true)]"
-								},
-								{
-									"name": "customBuildResourceGroupName",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Custom Build Resource Group Name",
-									"subLabel": "Leave blank if you want to allow this deployment to create a resource group automatically named with CAF principals.",
-									"placeholder": "rg-image-build-resources-<environment>-<location>",
-									"toolTip": "The custom name of the resource group where the image build and management vms will be created.",
-									"constraints": {
-										"required": false,
-										"regex": "^[a-z0-9A-Z-]{2,90}$",
-										"validationMessage": "If provided the value must be between 2 and 90 characters."
-									},
-									"visible": "[equals(steps('basics').resGroup.useExResGroup, false)]"
-								}
-							]
-						},
-						{
 							"name": "virtualNetworksApi",
 							"type": "Microsoft.Solutions.ArmApiControl",
 							"condition": "[not(empty(steps('basics').scope.subscription))]",
@@ -220,7 +159,7 @@
 				},
 				{
 					"name": "prereqs",
-					"label": "Imaging Prerequisites and Resources",
+					"label": "Prereqs and Management Resources",
 					"elements": [
 						{
 							"name": "infoPreReq",
@@ -381,83 +320,113 @@
 										"required": true,
 										"allowedValues": "[map(steps('prereqs').storage.logsContainersApi.value, (c) => parse(concat('{\"label\":\"', c.name, '\",\"value\":\"', c.name, '\"}')))]"
 									}
+								}
+							]
+						},
+						{
+							"name": "resGroup",
+							"type": "Microsoft.Common.Section",
+							"label": "Image Build Resource Group",
+							"elements": [
+								{
+									"name": "useExResGroup",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Use Existing Resource Group",
+									"defaultValue": "Yes",
+									"toolTip": "",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Yes",
+												"value": true
+											},
+											{
+												"label": "No",
+												"value": false
+											}
+										],
+										"required": false
+									}
 								},
+								{
+									"name": "resourceGroupsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('basics').scope.subscription))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').scope.subscription.id, '/resourceGroups?api-version=2021-04-01')]"
+									}
+								},
+								{
+									"name": "resourceGroup",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Resource Group (for Image Build resources)",
+									"toolTip": "Select the name of the existing resource group where the image build virtual machines and associated resources will be created.",
+									"constraints": {
+										"allowedValues": "[map(steps('prereqs').resGroup.resourceGroupsApi.value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+										"required": true
+									},
+									"visible": "[equals(steps('prereqs').resGroup.useExResGroup, true)]"
+								},
+								{
+									"name": "existingRgIdentityWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('prereqs').resGroup.useExResGroup, true)]",
+									"options": {
+										"style": "Warning",
+										"text": "When using an existing resource group, the User Assigned Identity selected below must already have the 'Contributor' role on that resource group. This deployment will NOT grant that role. Use the imageManagement deployment with 'Deploy Image Build Resource Group' enabled to pre-create the resource group and pre-grant the required role on the managed identity."
+									}
+								},
+								{
+									"name": "newRgTemporaryWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('prereqs').resGroup.useExResGroup, false)]",
+									"options": {
+										"style": "Warning",
+										"text": "The image build resource group is TEMPORARY. A new uniquely-named resource group is created at the start of each build (timestamp suffix appended automatically) and is deleted along with all its contents when the build completes. Do not place resources you want to keep in this resource group."
+									}
+								},
+								{
+									"name": "customBuildResourceGroupName",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Custom Build Resource Group Base Name",
+									"subLabel": "Optional. A deployment timestamp will be appended automatically to ensure uniqueness. Leave blank to use the default CAF-compliant name.",
+									"placeholder": "rg-image-build-resources-<environment>-<location>",
+									"toolTip": "Optional base name for the temporary image build resource group. A timestamp suffix (yyyyMMddHHmmss) is always appended. The resource group is deleted automatically when the build completes.",
+									"constraints": {
+										"required": false,
+										"regex": "^[a-z0-9A-Z-]{2,75}$",
+										"validationMessage": "If provided the value must be between 2 and 75 characters (a 14-character timestamp suffix will be appended)."
+									},
+									"visible": "[equals(steps('prereqs').resGroup.useExResGroup, false)]"
+								}
+							]
+						},
+						{
+							"name": "managedIdentity",
+							"type": "Microsoft.Common.Section",
+							"label": "Managed Identity",
+							"visible": "[or(equals(steps('prereqs').resGroup.useExResGroup, true), steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]",
+							"elements": [
 								{
 									"name": "userAssignedIdentityInfo",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]",
+									"visible": true,
 									"options": {
 										"style": "Info",
-										"text": "Select a User Assigned Identity to attach to the build VMs. It must have 'Storage Blob Data Reader' on the artifacts storage account (if zero-trust storage is enabled) and 'Storage Blob Data Contributor' on the logs storage account (if log collection is enabled). The managed identity output from the imageManagement deployment already has both roles when configured correctly."
+										"text": "Select a User Assigned Identity to attach to the build VMs. A UAI is required when using an existing resource group or when storage features (zero-trust artifacts or log collection) are enabled. This deployment grants no storage or resource group roles — all required permissions must be pre-granted: 'Virtual Machine Contributor' on the image build resource group (existing RG only), 'Storage Blob Data Reader' on the artifacts storage account (if zero-trust storage is enabled), and 'Storage Blob Data Contributor' on the logs storage account (if log collection is enabled). When creating a new resource group without storage features, the UAI is optional — one will be auto-created and granted VM Contributor. The managed identity output from the imageManagement deployment satisfies all requirements when configured correctly."
 									}
 								},
 								{
 									"name": "userAssignedIdentity",
 									"type": "Microsoft.Solutions.ResourceSelector",
 									"label": "User Assigned Identity",
-									"toolTip": "Select an existing User Assigned Identity to attach to the build VMs. It must have 'Storage Blob Data Reader' on the artifacts storage account and/or 'Storage Blob Data Contributor' on the logs storage account, depending on which features are enabled.",
+									"toolTip": "Select an existing User Assigned Identity to attach to the build VMs. All required roles (VM Contributor on the build resource group, storage roles if applicable) must be pre-granted before running this deployment.",
 									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
 									"constraints": {
-										"required": true
+										"required": "[or(equals(steps('prereqs').resGroup.useExResGroup, true), steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]"
 									},
-									"visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]"
-								}
-							]
-						},
-						{
-							"name": "network",
-							"type": "Microsoft.Common.Section",
-							"label": "Networking",
-							"elements": [
-								{
-									"name": "textBlockNetwork",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
-									"options": {
-										"text": "Select the Virtual Network and Subnet to which the image build virtual machine will be attached. The Virtual Network options listed below are based on the region selected under 'Image Build Location' on the 'Deployment Basics' page. If you don't find the desired virtual network, change the region on the 'Basics' page."
-									}
-								},
-								{
-									"name": "warningNetwork",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"style": "Warning",
-										"text": "Virtual machines must be able to resolve the blob private dns zone and route to the storage account endpoint for the storage account selected above. Select the appropriate subnet that meets these requirements."
-									},
-									"visible": "[steps('prereqs').storage.enableZeroTrustStorage]"
-								},
-								{
-									"name": "virtualNetwork",
-									"type": "Microsoft.Solutions.ResourceSelector",
-									"label": "Image Capture Virtual Network",
-									"resourceType": "Microsoft.Network/virtualNetworks",
-									"options": {
-										"filter": {
-											"subscription": "onBasics",
-											"location": "onBasics"
-										}
-									}
-								},
-								{
-									"name": "subnetsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('prereqs').network.virtualNetwork))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('prereqs').network.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-									}
-								},
-								{
-									"name": "subnet",
-									"type": "Microsoft.Common.DropDown",
-									"visible": true,
-									"label": "Image Capture Subnet",
-									"defaultValue": "",
-									"toolTip": "Select an existing subnet for the image capture.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(steps('prereqs').network.subnetsApi.value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]"
-									}
+									"visible": "[or(equals(steps('prereqs').resGroup.useExResGroup, true), steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]"
 								}
 							]
 						}
@@ -2054,7 +2023,6 @@
 									"constraints": {
 										"required": true,
 										"allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(des.location, steps('basics').scope.location.name), and(equals(toLower(first(skip(split(des.id, '/'), 4))), toLower(first(skip(split(steps('prereqs').gallery.gallery.id, '/'), 4)))), not(equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey'))))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
-
 									}
 								},
 								{
@@ -2092,7 +2060,6 @@
 									"constraints": {
 										"required": true,
 										"allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(des.location, steps('basics').scope.location.name), and(equals(toLower(first(skip(split(des.id, '/'), 4))), toLower(first(skip(split(steps('prereqs').gallery.gallery.id, '/'), 4)))), equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey')))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
-
 									}
 								}
 							]
@@ -2102,7 +2069,7 @@
 				{
 					"name": "vmProps",
 					"label": "Virtual Machine Properties",
-					"elements": [
+					"elements": [						
 						{
 							"name": "featureLimitationsInfoBox",
 							"type": "Microsoft.Common.InfoBox",
@@ -2122,14 +2089,6 @@
 								"allowedValues": "[map(if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, contains(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Confidential'), contains(steps('imageDest').imageDefinition.securityType, 'Confidential')), false), steps('basics').resourceSkusApi.transformed.confidentialVMSizes, if(and(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, steps('imageDest').imageDefinition.existingImageDefinition.IsHibernateSupported, steps('imageDest').imageDefinition.isHibernateSupported), false), coalesce(if(steps('imageDest').imageDefinition.useExImageDef, steps('imageDest').imageDefinition.existingImageDefinition.IsAcceleratedNetworkSupported, steps('imageDest').imageDefinition.isAcceleratedNetworkSupported), false)), steps('basics').resourceSkusApi.transformed.hibernationAccelNetVMSizes, if(and(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, contains(coalesce(steps('imageDest').imageDefinition.existingImageDefinition.DiskControllerTypes, ''), 'NVMe'), steps('imageDest').imageDefinition.isNVMeSupported), false), coalesce(if(steps('imageDest').imageDefinition.useExImageDef, steps('imageDest').imageDefinition.existingImageDefinition.IsAcceleratedNetworkSupported, steps('imageDest').imageDefinition.isAcceleratedNetworkSupported), false)), steps('basics').resourceSkusApi.transformed.nvmeAccelNetVMSizes, if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, steps('imageDest').imageDefinition.existingImageDefinition.IsHibernateSupported, steps('imageDest').imageDefinition.isHibernateSupported), false), steps('basics').resourceSkusApi.transformed.hibernationVMSizes, if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, contains(coalesce(steps('imageDest').imageDefinition.existingImageDefinition.DiskControllerTypes, ''), 'NVMe'), steps('imageDest').imageDefinition.isNVMeSupported), false), steps('basics').resourceSkusApi.transformed.nvmeVMSizes, if(coalesce(if(steps('imageDest').imageDefinition.useExImageDef, steps('imageDest').imageDefinition.existingImageDefinition.IsAcceleratedNetworkSupported, steps('imageDest').imageDefinition.isAcceleratedNetworkSupported), false), steps('basics').resourceSkusApi.transformed.acceleratedNetworkingVMSizes, steps('basics').resourceSkusApi.transformed.defaultVMSizes)))))), (item) => parse(concat('{\"label\":\"', item, '\",\"value\":\"', item, '\"}')))]"
 							},
 							"visible": "[not(or(and(equals(steps('imageDest').imageDefinition.useExImageDef, true), or(and(contains(coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), 'Confidential'), or(equals(steps('imageDest').imageDefinition.existingImageDefinition.IsHibernateSupported, true), equals(steps('imageDest').imageDefinition.existingImageDefinition.IsAcceleratedNetworkSupported, true), contains(coalesce(steps('imageDest').imageDefinition.existingImageDefinition.DiskControllerTypes, ''), 'NVMe'))), and(equals(steps('imageDest').imageDefinition.existingImageDefinition.IsHibernateSupported, true), contains(coalesce(steps('imageDest').imageDefinition.existingImageDefinition.DiskControllerTypes, ''), 'NVMe')), and(contains(coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), 'Confidential'), equals(length(steps('basics').resourceSkusApi.transformed.confidentialVMSizes), 0)), and(equals(steps('imageDest').imageDefinition.existingImageDefinition.IsHibernateSupported, true), equals(steps('imageDest').imageDefinition.existingImageDefinition.IsAcceleratedNetworkSupported, true), equals(length(steps('basics').resourceSkusApi.transformed.hibernationAccelNetVMSizes), 0)))), and(equals(steps('imageDest').imageDefinition.useExImageDef, false), equals(steps('imageDest').imageDefinition.isHibernateSupported, true), equals(steps('imageDest').imageDefinition.isAcceleratedNetworkSupported, true), equals(length(steps('basics').resourceSkusApi.transformed.hibernationAccelNetVMSizes), 0))))]"
-						},
-						{
-							"name": "encryptionAtHost",
-							"type": "Microsoft.Common.CheckBox",
-							"visible": true,
-							"label": "EncryptionAtHost",
-							"defaultValue": true,
-							"toolTip": "Check to enable 'EncryptionAtHost' for Disk Encryption."
 						},
 						{
 							"name": "diskSizeGB",
@@ -2163,6 +2122,71 @@
 								"required": true
 							},
 							"visible": true
+						},
+						{
+							"name": "encryptionAtHost",
+							"type": "Microsoft.Common.CheckBox",
+							"visible": true,
+							"label": "EncryptionAtHost",
+							"defaultValue": true,
+							"toolTip": "Check to enable 'EncryptionAtHost' for Disk Encryption."
+						},
+						{
+							"name": "network",
+							"type": "Microsoft.Common.Section",
+							"label": "Networking",
+							"elements": [
+								{
+									"name": "textBlockNetwork",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "Select the Virtual Network and Subnet to which the image build virtual machine will be attached. The Virtual Network options listed below are based on the region selected under 'Image Build Location' on the 'Deployment Basics' page. If you don't find the desired virtual network, change the region on the 'Basics' page."
+									}
+								},
+								{
+									"name": "warningNetwork",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Warning",
+										"text": "Virtual machines must be able to resolve the blob private dns zone and route to the storage account endpoint for the storage account(s) selected on the Prereqs and Management Resources screen. Select the appropriate subnet that meets these requirements."
+									},
+									"visible": "[steps('prereqs').storage.enableZeroTrustStorage]"
+								},
+								{
+									"name": "virtualNetwork",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Image Capture Virtual Network",
+									"resourceType": "Microsoft.Network/virtualNetworks",
+									"options": {
+										"filter": {
+											"subscription": "onBasics",
+											"location": "onBasics"
+										}
+									}
+								},
+								{
+									"name": "subnetsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('vmProps').network.virtualNetwork))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('vmProps').network.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+									}
+								},
+								{
+									"name": "subnet",
+									"type": "Microsoft.Common.DropDown",
+									"visible": true,
+									"label": "Image Capture Subnet",
+									"defaultValue": "",
+									"toolTip": "Select an existing subnet for the image capture.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(steps('vmProps').network.subnetsApi.value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]"
+									}
+								}
+							]
 						}
 					]
 				},
@@ -2194,12 +2218,12 @@
 				"location": "[steps('basics').scope.location.name]",
 				"deploymentPrefix": "[steps('basics').naming.deploymentPrefix]",
 				"nameConvResTypeAtEnd": "[steps('basics').naming.nameConvResTypeAtEnd]",
-				"imageBuildResourceGroupId": "[if(equals(steps('basics').resGroup.useExResGroup, true), concat(steps('basics').scope.subscription.id, '/resourceGroups/',steps('basics').resGroup.resourceGroup), '')]",
-				"customBuildResourceGroupName": "[if(equals(steps('basics').resGroup.useExResGroup, false), steps('basics').resGroup.customBuildResourceGroupName, '')]",
+				"imageBuildResourceGroupId": "[if(equals(steps('prereqs').resGroup.useExResGroup, true), concat(steps('basics').scope.subscription.id, '/resourceGroups/',steps('prereqs').resGroup.resourceGroup), '')]",
+				"customBuildResourceGroupName": "[if(equals(steps('prereqs').resGroup.useExResGroup, false), steps('prereqs').resGroup.customBuildResourceGroupName, '')]",
 				"computeGalleryResourceId": "[steps('prereqs').gallery.gallery.id]",
 				"artifactsContainerUri": "[if(steps('prereqs').storage.enableZeroTrustStorage, concat(steps('prereqs').storage.storageAccount.blobEndpoint, steps('prereqs').storage.container), '')]",
-				"userAssignedIdentityResourceId": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs), coalesce(steps('prereqs').storage.userAssignedIdentity.id, ''), '')]",
-				"subnetResourceId": "[steps('prereqs').network.subnet]",
+				"userAssignedIdentityResourceId": "[coalesce(steps('prereqs').managedIdentity.userAssignedIdentity.id, '')]",
+				"subnetResourceId": "[steps('vmProps').network.subnet]",
 				"vmSize": "[steps('vmProps').vmSize]",
 				"encryptionAtHost": "[steps('vmProps').encryptionAtHost]",
 				"diskSizeGB": "[steps('vmProps').diskSizeGB]",

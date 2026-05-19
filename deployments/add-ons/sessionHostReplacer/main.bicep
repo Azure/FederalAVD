@@ -604,7 +604,7 @@ var templateSpecNameFinal = !empty(templateSpecName)
       replace(
         replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.templateSpecs),
         'TOKEN',
-        'sessionhost'
+        'session-hosts'
       ),
       'LOCATION',
       functionAppRegionAbbreviation
@@ -780,9 +780,10 @@ module templateSpec '../../../.common/bicepModules/resources/templateSpecs/deplo
     location: location
     tags: tags[?'Microsoft.Resources/templateSpecs'] ?? {}
     version: templateSpecVersion
-    description: 'Template Spec for AVD Session Host deployment used by Session Host Replacer'
-    displayName: 'AVD Session Host Template'
-    mainTemplate: loadJsonContent('modules/sessionHosts/sessionHosts.json')
+    description: 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'
+    displayName: 'AVD Session Hosts'
+    mainTemplate: loadJsonContent('../sessionHosts/main.json')
+    uiFormDefinition: loadJsonContent('../sessionHosts/uiFormDefinition.json')
   }
 }
 

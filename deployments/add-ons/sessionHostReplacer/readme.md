@@ -261,10 +261,10 @@ The Session Host Replacer Function App supports two identity options:
    $objectId = $functionApp.Identity.PrincipalId
    ```
 
-2. Navigate to the SessionHostReplacer directory:
+2. Navigate to the sessionHostReplacer directory:
 
    ```powershell
-   cd deployments/add-ons/SessionHostReplacer
+   cd deployments/add-ons/sessionHostReplacer
    ```
 
 3. Run the permission script with your managed identity's Object ID:
@@ -2233,7 +2233,7 @@ Restart-AzFunctionApp -ResourceGroupName "rg-management" `
 **Option 3: Azure CLI**
 
 ```bash
-cd deployments/add-ons/SessionHostReplacer
+cd deployments/add-ons/sessionHostReplacer
 zip -r SessionHostReplacer.zip functions/*
 
 az functionapp deployment source config-zip \

@@ -48,14 +48,6 @@ resource generalizeVm 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
   parent: orchestrationVm
   properties: {
     asyncExecution: false
-    outputBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    outputBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-GeneralizeVM-${deploymentSuffix}.log'
     parameters: [
           {
             name: 'ResourceManagerUri'

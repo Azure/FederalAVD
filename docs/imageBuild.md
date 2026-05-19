@@ -47,17 +47,44 @@ The Federal AVD solution includes an automated custom image building capability.
 
 ## Prerequisites
 
+### Required Deployer Permissions
+
+The Azure identity running this deployment (user, service principal, or managed identity) needs different rights depending on which resource group path you use:
+
+| Path | Required role | Why |
+|---|---|---|
+| **New RG** (`imageBuildResourceGroupId` empty) | Owner **or** Contributor + User Access Administrator at **subscription** scope | Deployment creates a temporary resource group and assigns **Contributor** to the orchestration VM's system-assigned identity on that RG |
+| **Existing RG** (`imageBuildResourceGroupId` set) | `Microsoft.Resources/deployments/write` at **subscription** scope + **Contributor** on the image build resource group + **Contributor** on the compute gallery resource group | `imageBuild.bicep` uses `targetScope = 'subscription'` — subscription deployment write is unavoidable. No resource group creation or role assignments; deploys VMs into the pre-existing build RG; creates the image version (and image definition if not pre-existing) in the compute gallery RG. |
+
+> **Least-privilege recommendation:** Use the existing RG path (pre-stage with imageManagement). Your image build principal only needs `Microsoft.Resources/deployments/write` at subscription scope (unavoidable due to `targetScope = 'subscription'`) plus Contributor on the build and gallery resource groups — no subscription-level role assignment rights required. See [Custom RBAC Roles](customRoles.md#3-imagebuild-operator--existing-rg-path) for a ready-to-use role definition.
+
 ### Required - Image Management Resources
 
 Custom image building **requires** the Image Management resources to be deployed first. These resources provide the storage and infrastructure needed for artifacts and image distribution.
 
 **📦 [Deploy Image Management Resources](artifactsGuide.md#deploying-image-management-resources)**
 
-The Image Management deployment creates:
+The Image Management deployment creates and pre-configures everything imageBuild needs when using an **existing resource group** (the recommended production path):
 
-- Storage Account with artifacts blob container
-- Managed Identity with RBAC permissions
-- Azure Compute Gallery for image storage
+| Resource | Purpose |
+|---|---|
+| Azure Compute Gallery | Stores captured image versions for distribution |
+| Artifacts storage account + container | Holds scripts and installers used during the build |
+| Build logs storage account + container | Persists customization logs from each image build |
+| Managed Identity | Attached to build VMs; pre-granted all required roles (see below) |
+| Image build resource group | Pre-created persistent workspace; imageBuild deploys VMs into it each run |
+
+> **New resource group path:** If you leave `imageBuildResourceGroupId` empty, imageBuild will create a **temporary, uniquely-named resource group** on every deployment (timestamp-suffixed) and **automatically delete the entire resource group** when the build completes. No pre-staging with imageManagement is required for this path — the orchestration VM's system-assigned identity is granted Contributor on the new RG automatically.
+
+**Why imageManagement must deploy these for the existing RG path:**
+
+The imageBuild deployment grants **no RBAC roles** when using an existing resource group. The managed identity you supply must already have:
+- **Contributor** on the image build resource group
+- **Storage Blob Data Reader** on the artifacts storage account
+- **Storage Blob Data Contributor** on the build logs storage account
+
+imageManagement grants all three automatically. If you skip imageManagement and supply these resources manually, you are responsible for pre-granting every role before running imageBuild.
+
 - Private endpoints (optional, for Zero Trust)
 
 ### Required - Artifacts
@@ -118,13 +145,15 @@ graph TD
 
 ### Build Process Steps
 
-1. **Provision Build VM** - Bicep creates a temporary VM in your subscription
-2. **Download Artifacts** - Each artifact is downloaded from blob storage
-3. **Execute Customizations** - PowerShell scripts run sequentially via VM Run Commands using `Invoke-Customization.ps1`
-4. **Apply Updates** - Windows Updates are installed (optional)
-5. **Sysprep** - Image is generalized for deployment
-6. **Capture** - VM is captured as an image version
-7. **Distribute** - Image is stored in Compute Gallery and replicated to target regions
+1. **Provision Build Resource Group** - A uniquely-named temporary resource group is created (new RG path) or an existing resource group is used
+2. **Provision Build VM** - Bicep creates a temporary VM in the build resource group
+3. **Download Artifacts** - Each artifact is downloaded from blob storage
+4. **Execute Customizations** - PowerShell scripts run sequentially via VM Run Commands using `Invoke-Customization.ps1`
+5. **Apply Updates** - Windows Updates are installed (optional)
+6. **Sysprep** - Image is generalized for deployment
+7. **Capture** - VM is captured as an image version
+8. **Distribute** - Image is stored in Compute Gallery and replicated to target regions
+9. **Cleanup** - On the new RG path: the **entire temporary resource group is deleted** (VMs, disks, NICs, images). On the existing RG path: only the build VMs are deleted; the resource group is left intact.
 
 ### Customizations Array
 
@@ -190,7 +219,7 @@ These parameters reference Image Management outputs and belong in the same `<pre
 |-----------|-------------|---------|
 | **computeGalleryResourceId** | Resource ID of the Azure Compute Gallery | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.Compute/galleries/{gallery-name}` |
 | **artifactsContainerUri** | URI of the blob container with artifacts | `https://{storage-account}.blob.core.usgovcloudapi.net/artifacts` |
-| **userAssignedIdentityResourceId** | Optional. Managed identity to attach to the build VM. Required when zero-trust artifacts storage or log collection is enabled. Must have 'Storage Blob Data Reader' on the artifacts container and/or 'Storage Blob Data Contributor' on the log storage account. Leave empty to allow the deployment to create its own identity. | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity-name}` |
+| **userAssignedIdentityResourceId** | Managed identity to attach to the build VMs. **Required when using an existing resource group** — must be pre-granted **Contributor** on the build RG, **Storage Blob Data Reader** on artifacts storage (if enabled), and **Storage Blob Data Contributor** on log storage (if enabled). This deployment grants no roles on the existing RG path — use imageManagement to pre-stage the identity. Optional when creating a new resource group (the orchestration VM uses its system-assigned identity; the image VM runs without a UAI unless storage features are enabled). | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity-name}` |
 
 ### Automatic Image Versioning
 
@@ -329,7 +358,7 @@ Before enabling log collection, deploy the imageManagement solution with `deploy
 
 - All Run Command output and error logs are uploaded to the specified blob container
 - The `logStorageAccountResourceId` and `logContainerName` parameters (or Portal selectors) identify where logs are written
-- The `userAssignedIdentityResourceId` must reference an identity with **Storage Blob Data Contributor** on the log storage account
+- The `userAssignedIdentityResourceId` must reference an identity with **Storage Blob Data Contributor** on the log storage account — this role must be pre-granted (the imageManagement deployment grants it automatically when `deployBuildLogsStorageAccount = true`)
 - Logs from the imageManagement-deployed storage account are automatically retained per the lifecycle policy configured there
 
 **Log File Naming Convention:**
@@ -515,7 +544,7 @@ Once the image build completes and replicates to your target region, reference i
 
 The Session Host Replacer add-on automatically detects new image versions and replaces session hosts with zero downtime.
 
-**[Session Host Replacer Documentation](../deployments/add-ons/SessionHostReplacer/readme.md)**
+**[Session Host Replacer Documentation](../deployments/add-ons/sessionHostReplacer/readme.md)**
 
 ---
 

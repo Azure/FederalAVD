@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "1857975357495727053"
+      "templateHash": "6121982958942420536"
     }
   },
   "parameters": {
@@ -276,8 +276,37 @@
     },
     "imageReference": {
       "type": "object",
+      "defaultValue": {},
       "metadata": {
-        "description": "Image reference object containing either marketplace image details or compute gallery image version resource ID."
+        "description": "Optional. Image reference object containing either marketplace image details or compute gallery image version resource ID. When provided, takes precedence over imageOffer/imageSku/customImageResourceId. Used by the Session Host Replacer."
+      }
+    },
+    "imageOffer": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Marketplace image offer (e.g. \"windows-11\"). Used when imageReference is empty and customImageResourceId is empty."
+      }
+    },
+    "imagePublisher": {
+      "type": "string",
+      "defaultValue": "MicrosoftWindowsDesktop",
+      "metadata": {
+        "description": "Optional. Marketplace image publisher. Used when imageReference is empty and customImageResourceId is empty."
+      }
+    },
+    "imageSku": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Marketplace image SKU (e.g. \"win11-24h2-avd\"). Used when imageReference is empty and customImageResourceId is empty."
+      }
+    },
+    "customImageResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Resource ID of a custom image version in an Azure Compute Gallery. When provided, overrides marketplace image params."
       }
     },
     "integrityMonitoring": {
@@ -361,13 +390,37 @@
       "minValue": 1,
       "maxValue": 4,
       "metadata": {
-        "description": "Number of digits used in the session host name index. Determines how many characters from the end represent the VM number."
+        "description": "Number of digits used in the session host name index. Determines how many characters from the end represent the VM number. Used in both naming modes."
       }
     },
     "sessionHostNames": {
       "type": "array",
+      "defaultValue": [],
       "metadata": {
-        "description": "Array of session host names to deploy. Names should follow the pattern <prefix><index> where index length matches sessionHostNameIndexLength."
+        "description": "Optional. Explicit array of session host names to deploy (e.g. [\"vm-avd-01\",\"vm-avd-02\"]). When non-empty, overrides convention mode. Used by the SHR function app."
+      }
+    },
+    "sessionHostNamePrefix": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Short prefix for session host names (e.g. \"avd-vm-\"). Required when sessionHostNames is empty."
+      }
+    },
+    "sessionHostCount": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "metadata": {
+        "description": "Optional. Number of session hosts to deploy in convention mode. Required when sessionHostNames is empty."
+      }
+    },
+    "sessionHostIndex": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "metadata": {
+        "description": "Optional. Starting index for VM name generation in convention mode (e.g. 1 → vm-avd-01). Required when sessionHostNames is empty."
       }
     },
     "subnetResourceId": {
@@ -421,20 +474,331 @@
   "variables": {
     "copy": [
       {
+        "name": "generatedSessionHostNames",
+        "count": "[length(range(parameters('sessionHostIndex'), parameters('sessionHostCount')))]",
+        "input": "[format('{0}{1}', parameters('sessionHostNamePrefix'), padLeft(range(parameters('sessionHostIndex'), parameters('sessionHostCount'))[copyIndex('generatedSessionHostNames')], parameters('sessionHostNameIndexLength'), '0'))]"
+      },
+      {
         "name": "vmNumbersForAvSet",
-        "count": "[length(parameters('sessionHostNames'))]",
-        "input": "[int(substring(parameters('sessionHostNames')[copyIndex('vmNumbersForAvSet')], sub(length(parameters('sessionHostNames')[copyIndex('vmNumbersForAvSet')]), parameters('sessionHostNameIndexLength')), parameters('sessionHostNameIndexLength')))]"
+        "count": "[length(variables('effectiveSessionHostNames'))]",
+        "input": "[int(substring(variables('effectiveSessionHostNames')[copyIndex('vmNumbersForAvSet')], sub(length(variables('effectiveSessionHostNames')[copyIndex('vmNumbersForAvSet')]), parameters('sessionHostNameIndexLength')), parameters('sessionHostNameIndexLength')))]"
       }
     ],
-    "avSetNameConv": "[if(empty(parameters('availabilitySetNameConv')), format('as-{0}-##', substring(parameters('sessionHostNames')[0], 0, sub(length(parameters('sessionHostNames')[0]), parameters('sessionHostNameIndexLength')))), parameters('availabilitySetNameConv'))]",
-    "deploymentSuffix": "[uniqueString(deployment().name)]",
+    "$fxv#0": {
+      "applicationInsights": "appi",
+      "appServicePlans": "asp",
+      "availabilitySets": "as",
+      "computeGalleries": "gal",
+      "dataCollectionEndpoints": "dce",
+      "dataCollectionRules": "dcr",
+      "desktopApplicationGroups": "vddag",
+      "diskAccesses": "da",
+      "remoteApplicationGroups": "vdrag",
+      "diskEncryptionSets": "des",
+      "functionApps": "fa",
+      "hostPools": "vdpool",
+      "keyVaults": "kv",
+      "logAnalyticsWorkspaces": "law",
+      "natGateways": "ng",
+      "netAppAccounts": "naa",
+      "netAppCapacityPools": "nacp",
+      "networkInterfaces": "nic",
+      "networkSecurityGroups": "nsg",
+      "osdisks": "osdisk",
+      "privateEndpoints": "pe",
+      "privateLinkScopes": "pls",
+      "publicIPAddresses": "pip",
+      "recoveryServicesVaults": "rsv",
+      "resourceGroups": "rg",
+      "routeTables": "rt",
+      "scalingPlans": "vdscaling",
+      "storageAccounts": "sa",
+      "templateSpecs": "ts",
+      "userAssignedIdentities": "uai",
+      "virtualMachines": "vm",
+      "workbooks": "wb",
+      "workspaces": "vdws",
+      "imageDefinitions": "vmid"
+    },
+    "$fxv#1": {
+      "AzureCloud": {
+        "australiacentral": {
+          "abbreviation": "auc",
+          "recoveryServicesGeo": "acl"
+        },
+        "australiacentral2": {
+          "abbreviation": "auc2",
+          "recoveryServicesGeo": "acl2"
+        },
+        "australiaeast": {
+          "abbreviation": "aue",
+          "recoveryServicesGeo": "ae"
+        },
+        "australiasoutheast": {
+          "abbreviation": "ause",
+          "recoveryServicesGeo": "ase"
+        },
+        "brazilsouth": {
+          "abbreviation": "brs",
+          "recoveryServicesGeo": "brs"
+        },
+        "brazilsoutheast": {
+          "abbreviation": "brse",
+          "recoveryServicesGeo": "bse"
+        },
+        "canadacentral": {
+          "abbreviation": "cac",
+          "recoveryServicesGeo": "cnc"
+        },
+        "canadaeast": {
+          "abbreviation": "cae",
+          "recoveryServicesGeo": "cne"
+        },
+        "centralindia": {
+          "abbreviation": "inc",
+          "recoveryServicesGeo": "inc"
+        },
+        "centralus": {
+          "abbreviation": "usc",
+          "recoveryServicesGeo": "cus"
+        },
+        "eastasia": {
+          "abbreviation": "ase",
+          "recoveryServicesGeo": "ea"
+        },
+        "eastus": {
+          "abbreviation": "use",
+          "recoveryServicesGeo": "eus"
+        },
+        "eastus2": {
+          "abbreviation": "use2",
+          "recoveryServicesGeo": "eus2"
+        },
+        "francecentral": {
+          "abbreviation": "frc",
+          "recoveryServicesGeo": "frc"
+        },
+        "francesouth": {
+          "abbreviation": "frs",
+          "recoveryServicesGeo": "frs"
+        },
+        "germanynorth": {
+          "abbreviation": "den",
+          "recoveryServicesGeo": "gn"
+        },
+        "germanywestcentral": {
+          "abbreviation": "dewc",
+          "recoveryServicesGeo": "gwc"
+        },
+        "israelcentral": {
+          "abbreviation": "ilc",
+          "recoveryServicesGeo": "ilc"
+        },
+        "italynorth": {
+          "abbreviation": "itn",
+          "recoveryServicesGeo": "itn"
+        },
+        "japaneast": {
+          "abbreviation": "jpe",
+          "recoveryServicesGeo": "jpe"
+        },
+        "japanwest": {
+          "abbreviation": "jpw",
+          "recoveryServicesGeo": "jpw"
+        },
+        "jioindiacentral": {
+          "abbreviation": "injc",
+          "recoveryServicesGeo": "jic"
+        },
+        "jioindiawest": {
+          "abbreviation": "injw",
+          "recoveryServicesGeo": "jiw"
+        },
+        "koreacentral": {
+          "abbreviation": "krc",
+          "recoveryServicesGeo": "krc"
+        },
+        "koreasouth": {
+          "abbreviation": "krs",
+          "recoveryServicesGeo": "krs"
+        },
+        "northcentralus": {
+          "abbreviation": "usnc",
+          "recoveryServicesGeo": "ncus"
+        },
+        "northeurope": {
+          "abbreviation": "eun",
+          "recoveryServicesGeo": "ne"
+        },
+        "norwayeast": {
+          "abbreviation": "noe",
+          "recoveryServicesGeo": "nwe"
+        },
+        "norwaywest": {
+          "abbreviation": "now",
+          "recoveryServicesGeo": "nww"
+        },
+        "polandcentral": {
+          "abbreviation": "plc",
+          "recoveryServicesGeo": "plc"
+        },
+        "qatarcentral": {
+          "abbreviation": "qac",
+          "recoveryServicesGeo": "qac"
+        },
+        "southafricanorth": {
+          "abbreviation": "zan",
+          "recoveryServicesGeo": "san"
+        },
+        "southafricawest": {
+          "abbreviation": "zaw",
+          "recoveryServicesGeo": "saw"
+        },
+        "southcentralus": {
+          "abbreviation": "ussc",
+          "recoveryServicesGeo": "scus"
+        },
+        "southeastasia": {
+          "abbreviation": "asse",
+          "recoveryServicesGeo": "sea"
+        },
+        "southindia": {
+          "abbreviation": "ins",
+          "recoveryServicesGeo": "ins"
+        },
+        "swedencentral": {
+          "abbreviation": "sec",
+          "recoveryServicesGeo": "sdc"
+        },
+        "switzerlandnorth": {
+          "abbreviation": "chn",
+          "recoveryServicesGeo": "szn"
+        },
+        "switzerlandwest": {
+          "abbreviation": "chw",
+          "recoveryServicesGeo": "szw"
+        },
+        "uaecentral": {
+          "abbreviation": "aec",
+          "recoveryServicesGeo": "uac"
+        },
+        "uaenorth": {
+          "abbreviation": "aen",
+          "recoveryServicesGeo": "uan"
+        },
+        "uksouth": {
+          "abbreviation": "uks",
+          "recoveryServicesGeo": "uks"
+        },
+        "ukwest": {
+          "abbreviation": "ukw",
+          "recoveryServicesGeo": "ukw"
+        },
+        "westcentralus": {
+          "abbreviation": "uswc",
+          "recoveryServicesGeo": "wcus"
+        },
+        "westeurope": {
+          "abbreviation": "euw",
+          "recoveryServicesGeo": "we"
+        },
+        "westindia": {
+          "abbreviation": "inw",
+          "recoveryServicesGeo": "inw"
+        },
+        "westus": {
+          "abbreviation": "usw",
+          "recoveryServicesGeo": "wus"
+        },
+        "westus2": {
+          "abbreviation": "usw2",
+          "recoveryServicesGeo": "wus2"
+        },
+        "westus3": {
+          "abbreviation": "usw3",
+          "recoveryServicesGeo": "wus3"
+        }
+      },
+      "AzureUSGovernment": {
+        "usdodcentral": {
+          "abbreviation": "dodc",
+          "recoveryServicesGeo": "udc"
+        },
+        "usdodeast": {
+          "abbreviation": "dode",
+          "recoveryServicesGeo": "ude"
+        },
+        "usgovarizona": {
+          "abbreviation": "az",
+          "recoveryServicesGeo": "uga"
+        },
+        "usgovtexas": {
+          "abbreviation": "tx",
+          "recoveryServicesGeo": "ugt"
+        },
+        "usgovvirginia": {
+          "abbreviation": "va",
+          "recoveryServicesGeo": "ugv"
+        }
+      },
+      "other": {
+        "north": {
+          "abbreviation": "no"
+        },
+        "east": {
+          "abbreviation": "ea"
+        },
+        "south": {
+          "abbreviation": "so"
+        },
+        "west": {
+          "abbreviation": "we"
+        },
+        "central": {
+          "abbreviation": "ce"
+        },
+        "northcentral": {
+          "abbreviation": "noce"
+        },
+        "eastcentral": {
+          "abbreviation": "wece"
+        },
+        "southcentral": {
+          "abbreviation": "soce"
+        },
+        "westcentral": {
+          "abbreviation": "wece"
+        }
+      }
+    },
+    "resourceAbbreviations": "[variables('$fxv#0')]",
+    "locationsObject": "[variables('$fxv#1')]",
     "cloud": "[toLower(environment().name)]",
+    "locationsEnvProperty": "[if(startsWith(variables('cloud'), 'us'), 'other', environment().name)]",
+    "locations": "[variables('locationsObject')[variables('locationsEnvProperty')]]",
+    "varLocation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), parameters('location'))]",
+    "regionAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
+    "hostPoolName": "[last(split(parameters('hostPoolResourceId'), '/'))]",
+    "nameConvReversed": "[if(startsWith(variables('hostPoolName'), format('{0}-', variables('resourceAbbreviations').hostPools)), false(), if(endsWith(variables('hostPoolName'), format('-{0}', variables('resourceAbbreviations').hostPools)), true(), false()))]",
+    "arrHostPoolName": "[split(variables('hostPoolName'), '-')]",
+    "hpBaseName": "[if(variables('nameConvReversed'), join(take(variables('arrHostPoolName'), sub(length(variables('arrHostPoolName')), 2)), '-'), join(take(skip(variables('arrHostPoolName'), 1), sub(length(variables('arrHostPoolName')), 2)), '-'))]",
+    "hpResPrfx": "[if(variables('nameConvReversed'), variables('hpBaseName'), format('RESOURCETYPE-{0}', variables('hpBaseName')))]",
+    "nameConvSuffix": "[if(variables('nameConvReversed'), 'LOCATION-RESOURCETYPE', 'LOCATION')]",
+    "nameConv_HP_Resources": "[format('{0}-TOKEN-{1}', variables('hpResPrfx'), variables('nameConvSuffix'))]",
+    "effectiveVirtualMachineNameConv": "[if(not(empty(parameters('virtualMachineNameConv'))), parameters('virtualMachineNameConv'), if(variables('nameConvReversed'), format('SHNAME-{0}', variables('resourceAbbreviations').virtualMachines), format('{0}-SHNAME', variables('resourceAbbreviations').virtualMachines)))]",
+    "effectiveNetworkInterfaceNameConv": "[if(not(empty(parameters('networkInterfaceNameConv'))), parameters('networkInterfaceNameConv'), if(variables('nameConvReversed'), format('SHNAME-{0}', variables('resourceAbbreviations').networkInterfaces), format('{0}-SHNAME', variables('resourceAbbreviations').networkInterfaces)))]",
+    "effectiveOsDiskNameConv": "[if(not(empty(parameters('osDiskNameConv'))), parameters('osDiskNameConv'), if(variables('nameConvReversed'), format('SHNAME-{0}', variables('resourceAbbreviations').osdisks), format('{0}-SHNAME', variables('resourceAbbreviations').osdisks)))]",
+    "generatedAvSetNameConv": "[if(variables('nameConvReversed'), replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('regionAbbreviation')), 'TOKEN-', ''), format('{0}-##', replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('regionAbbreviation')), 'TOKEN-', '')))]",
+    "avSetNameConv": "[if(not(empty(parameters('availabilitySetNameConv'))), parameters('availabilitySetNameConv'), variables('generatedAvSetNameConv'))]",
+    "effectiveImageReference": "[if(not(empty(parameters('imageReference'))), parameters('imageReference'), if(not(empty(parameters('customImageResourceId'))), createObject('id', parameters('customImageResourceId')), createObject('publisher', parameters('imagePublisher'), 'offer', parameters('imageOffer'), 'sku', parameters('imageSku'), 'version', 'latest')))]",
+    "deploymentSuffix": "[uniqueString(deployment().name)]",
     "cloudSuffix": "[replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')]",
     "agentBootLoaderUrl": "[if(not(empty(parameters('agentBootLoaderDownloadUrl'))), parameters('agentBootLoaderDownloadUrl'), if(startsWith(variables('cloud'), 'us'), format('https://aka.{0}/avdRDAgentBootLoader', variables('cloudSuffix')), 'https://go.microsoft.com/fwlink/?linkid=2311028'))]",
     "agentUrl": "[if(not(empty(parameters('agentDownloadUrl'))), parameters('agentDownloadUrl'), if(startsWith(variables('cloud'), 'us'), format('https://aka.{0}/avdRDAgent', variables('cloudSuffix')), 'https://go.microsoft.com/fwlink/?linkid=2310011'))]",
     "dscStorageAccount": "[if(startsWith(environment().name, 'USN'), 'wvdexportalcontainer', 'wvdportalstorageblob')]",
     "dscUrl": "[format('https://{0}.blob.{1}/galleryartifacts/{2}', variables('dscStorageAccount'), environment().suffixes.storage, parameters('avdAgentDscPackage'))]",
     "confidentialVMOSDiskEncryptionType": "[if(parameters('confidentialVMOSDiskEncryption'), 'DiskWithVMGuestState', 'VMGuestStateOnly')]",
+    "effectiveSessionHostNames": "[if(not(empty(parameters('sessionHostNames'))), parameters('sessionHostNames'), variables('generatedSessionHostNames'))]",
     "hasAmdGpu": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), 'as_v4'), endsWith(parameters('virtualMachineSize'), '_V710_v5')))]",
     "hasNvidiaGpu": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), '_v3'), endsWith(parameters('virtualMachineSize'), '_A10_v5')))]",
     "baseResourcesPerVM": 11,
@@ -445,7 +809,7 @@
     "totalResourcesPerVM": "[add(add(add(add(variables('baseResourcesPerVM'), variables('monitoringResourcesPerVM')), variables('gpuResourcesPerVM')), variables('integrityResourcesPerVM')), variables('customizationsResourcesPerVM'))]",
     "calculatedMaxVMs": "[div(800, variables('totalResourcesPerVM'))]",
     "maxVMsPerDeployment": "[if(less(variables('calculatedMaxVMs'), 20), 20, if(greater(variables('calculatedMaxVMs'), 45), 45, variables('calculatedMaxVMs')))]",
-    "totalVMCount": "[length(parameters('sessionHostNames'))]",
+    "totalVMCount": "[length(variables('effectiveSessionHostNames'))]",
     "divisionValue": "[div(variables('totalVMCount'), variables('maxVMsPerDeployment'))]",
     "divisionRemainderValue": "[mod(variables('totalVMCount'), variables('maxVMsPerDeployment'))]",
     "sessionHostBatchCount": "[if(greater(variables('divisionRemainderValue'), 0), add(variables('divisionValue'), 1), variables('divisionValue'))]",
@@ -767,7 +1131,7 @@
             "value": "[parameters('identitySolution')]"
           },
           "imageReference": {
-            "value": "[parameters('imageReference')]"
+            "value": "[variables('effectiveImageReference')]"
           },
           "integrityMonitoring": {
             "value": "[parameters('integrityMonitoring')]"
@@ -779,10 +1143,10 @@
             "value": "[parameters('location')]"
           },
           "networkInterfaceNameConv": {
-            "value": "[parameters('networkInterfaceNameConv')]"
+            "value": "[variables('effectiveNetworkInterfaceNameConv')]"
           },
           "osDiskNameConv": {
-            "value": "[parameters('osDiskNameConv')]"
+            "value": "[variables('effectiveOsDiskNameConv')]"
           },
           "ouPath": {
             "value": "[parameters('ouPath')]"
@@ -799,7 +1163,7 @@
           "sessionHostNameIndexLength": {
             "value": "[parameters('sessionHostNameIndexLength')]"
           },
-          "sessionHostNames": "[if(and(equals(range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), createObject('value', take(skip(parameters('sessionHostNames'), mul(sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1), variables('maxVMsPerDeployment'))), variables('divisionRemainderValue'))), createObject('value', take(skip(parameters('sessionHostNames'), mul(sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1), variables('maxVMsPerDeployment'))), variables('maxVMsPerDeployment'))))]",
+          "sessionHostNames": "[if(and(equals(range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), createObject('value', take(skip(variables('effectiveSessionHostNames'), mul(sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1), variables('maxVMsPerDeployment'))), variables('divisionRemainderValue'))), createObject('value', take(skip(variables('effectiveSessionHostNames'), mul(sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1), variables('maxVMsPerDeployment'))), variables('maxVMsPerDeployment'))))]",
           "subnetResourceId": {
             "value": "[parameters('subnetResourceId')]"
           },
@@ -826,7 +1190,7 @@
             }
           },
           "virtualMachineNameConv": {
-            "value": "[parameters('virtualMachineNameConv')]"
+            "value": "[variables('effectiveVirtualMachineNameConv')]"
           },
           "virtualMachineSize": {
             "value": "[parameters('virtualMachineSize')]"
@@ -845,7 +1209,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "4026508564603580690"
+              "templateHash": "16485200481598296877"
             }
           },
           "parameters": {
@@ -1063,7 +1427,7 @@
               {
                 "name": "osDiskNames",
                 "count": "[length(range(0, variables('sessionHostCount')))]",
-                "input": "[replace(parameters('osDiskNameConv'), 'SHNAME', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('osDiskNames')]])]"
+                "input": "[if(empty(parameters('osDiskNameConv')), format('{0}-osdisk', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('osDiskNames')]]), replace(parameters('osDiskNameConv'), 'SHNAME', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('osDiskNames')]]))]"
               }
             ],
             "$fxv#0": "[CmdletBinding(SupportsShouldProcess = $true)]\r\nparam (\r\n    # Agent Installation Parameters\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$ApiVersion,\r\n    \r\n    [Parameter(Mandatory = $false)]\r\n    [string]$StorageSuffix,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [ValidateNotNullOrEmpty()]\r\n    [string]$RegistrationToken,\r\n    \r\n    [Parameter(Mandatory = $true)]\r\n    [ValidateNotNullOrEmpty()]\r\n    [string]$AgentBootLoaderUrl,\r\n    \r\n    [Parameter(Mandatory = $false)]\r\n    [string]$AgentUrl,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$FallbackUrl,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [ValidateSet('true', 'false', '')]\r\n    [string]$AADJoin,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$MdmId,\r\n    \r\n    [Parameter(Mandatory = $false)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    # Session Host Configuration Parameters\r\n    [Parameter(Mandatory = $true)]\r\n    [string]$TimeZone,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$AmdVmSize = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$NvidiaVmSize = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$ConfigureFSLogix = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$CloudCache = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$IdentitySolution = '',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$LocalNetAppServers = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$LocalStorageAccountNames = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$LocalStorageAccountKeys = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$OSSGroups = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$RemoteNetAppServers = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$RemoteStorageAccountNames = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$RemoteStorageAccountKeys = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$Shares = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$SizeInMBs = '30000',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$StorageService = ''\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n\r\n$Script:Name = 'Initialize-SessionHost'\r\n$Script:LogPath = Join-Path -Path $env:SystemRoot -ChildPath \"Logs\\$Script:Name.log\"\r\n\r\n# Convert string parameters to boolean for internal use\r\n$AADJoinBool = if ([string]::IsNullOrEmpty($AADJoin)) { $false } else { [System.Convert]::ToBoolean($AADJoin) }\r\n\r\n#region Helper Functions\r\n\r\nfunction Write-Log {\r\n    Param (\r\n        [Parameter(Mandatory = $false, Position = 0)]\r\n        [ValidateSet(\"Info\", \"Warning\", \"Error\")]\r\n        $Category = 'Info',\r\n        [Parameter(Mandatory = $true, Position = 1)]\r\n        $Message\r\n    )\r\n\r\n    $DateTime = Get-Date -Format 'MM-dd-yyyy HH:mm:ss'\r\n    $Content = \"[$DateTime]`t$Category`t`t$Message`n\" \r\n    Add-Content $Script:LogPath $content -ErrorAction Stop\r\n\r\n    Switch ($Category) {\r\n        'Info' { Write-Host $content }\r\n        'Error' { Write-Error $Content }\r\n        'Warning' { Write-Warning $Content }\r\n    }\r\n}\r\n\r\nfunction Invoke-MsiWithRetry {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$DisplayName,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string[]]$ArgumentList,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string]$LogPath    \r\n    )\r\n\r\n    $ArgumentList += \"/liwemo+! `\"$LogPath`\"\"\r\n   \r\n    $MaxRetries = 20\r\n    $RetryDelay = 30\r\n    $RetryCount = 0\r\n    $ExitCode = $null\r\n    \r\n    do {        \r\n        if ($RetryCount -gt 0) {\r\n            Write-Log -Message \"Retrying Install $DisplayName in $RetryDelay seconds (Exit code: $ExitCode) - Retry $RetryCount\"\r\n            Start-Sleep -Seconds $RetryDelay\r\n        }\r\n        Write-Log -Message \"Installing $DisplayName\"\r\n        $Process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $ArgumentList -Wait -PassThru -NoNewWindow\r\n        $ExitCode = $Process.ExitCode        \r\n        $RetryCount++\r\n    } while ($ExitCode -eq 1618 -and $RetryCount -lt $MaxRetries) # 1618 = ERROR_INSTALL_ALREADY_RUNNING\r\n    \r\n    if ($ExitCode -eq 1618) {\r\n        $ErrorMsg = \"Install $DisplayName failed after $MaxRetries retries with Exit code $ExitCode (ERROR_INSTALL_ALREADY_RUNNING)\"\r\n        Write-Log -Category Error -Message $ErrorMsg\r\n        throw $ErrorMsg\r\n    }\r\n    \r\n    Write-Log -Message \"Install $DisplayName finished with Exit code: $ExitCode\"\r\n    \r\n    # Exit codes: 0 = success, 3010 = success but restart required\r\n    if ($ExitCode -notin @(0, 3010)) {\r\n        Write-Log -Category Warning -Message \"$DisplayName installation completed with Exit code: $ExitCode\"\r\n    }\r\n    \r\n    return $ExitCode\r\n}\r\n\r\nfunction Get-RegistrationTokenClaims {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$Token\r\n    )\r\n    \r\n    try {\r\n        $ClaimsSection = $Token.Split('.')[1].Replace('-', '+').Replace('_', '/')\r\n        \r\n        # Pad with '=' to make it valid base64\r\n        while ($ClaimsSection.Length % 4) {\r\n            $ClaimsSection += '='\r\n        }\r\n        \r\n        $ClaimsByteArray = [System.Convert]::FromBase64String($ClaimsSection)\r\n        $ClaimsJson = [System.Text.Encoding]::ASCII.GetString($ClaimsByteArray)\r\n        $Claims = $ClaimsJson | ConvertFrom-Json\r\n        \r\n        return $Claims\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Failed to parse registration token: $($_.Exception.Message)\"\r\n        throw\r\n    }\r\n}\r\n\r\nfunction Get-AgentDownloadUrl {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$BrokerAgentApi\r\n    )\r\n    \r\n    try {\r\n        Write-Log -Message \"Querying broker for agent download URL: $BrokerAgentApi\"\r\n        \r\n        $Response = Invoke-WebRequest -Uri $BrokerAgentApi -UseBasicParsing\r\n        $ResponseJson = $Response.Content | ConvertFrom-Json\r\n        \r\n        Write-Log -Message \"Obtained agent endpoint: $($ResponseJson.agentEndpoint)\"\r\n        \r\n        return $ResponseJson.agentEndpoint\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Failed to get agent download URL: $($_.Exception.Message)\"\r\n        return $null\r\n    }\r\n}\r\n\r\nfunction Get-LatestAgentInstaller {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$RegistrationToken,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string]$DownloadFolder\r\n    )\r\n    \r\n    try {\r\n        # Parse the registration token to get broker endpoint\r\n        $Claims = Get-RegistrationTokenClaims -Token $RegistrationToken\r\n        \r\n        if (-not $Claims.GlobalBrokerResourceIdUri) {\r\n            Write-Log -Message \"Unable to obtain broker endpoint from registration token\"\r\n            return $null\r\n        }\r\n        \r\n        # Build the agent API URL\r\n        $BrokerUri = [System.UriBuilder]$Claims.GlobalBrokerResourceIdUri\r\n        $BrokerUri.Path = 'api/agentMsi/v1/agentVersion'\r\n        $BrokerAgentApi = $BrokerUri.Uri.AbsoluteUri\r\n        \r\n        Write-Log -Message \"Broker agent API: $BrokerAgentApi\"\r\n        \r\n        # Get the agent download URL\r\n        $AgentDownloadUrl = Get-AgentDownloadUrl -BrokerAgentApi $BrokerAgentApi\r\n        \r\n        if (-not $AgentDownloadUrl) {\r\n            Write-Log -Message \"Unable to obtain agent download URL from broker\"\r\n            return $null\r\n        }\r\n        \r\n        # Create download folder\r\n        if (-not (Test-Path $DownloadFolder)) {\r\n            New-Item -Path $DownloadFolder -ItemType Directory -Force | Out-Null\r\n        }\r\n        \r\n        $AgentPath = Join-Path $DownloadFolder 'RDAgent.msi'\r\n        \r\n        # Try primary endpoint\r\n        try {\r\n            Write-Log -Message \"Downloading agent from: $AgentDownloadUrl\"\r\n            Invoke-WebRequest -Uri $AgentDownloadUrl -OutFile $AgentPath -UseBasicParsing\r\n            Write-Log -Message \"Successfully downloaded agent to: $AgentPath\"\r\n            return $AgentPath\r\n        }\r\n        catch {\r\n            Write-Log -Message \"Failed to download from primary endpoint: $($_.Exception.Message)\"\r\n        }\r\n        \r\n        # Try private link endpoint\r\n        try {\r\n            $PrivateLinkUri = [System.UriBuilder]$AgentDownloadUrl\r\n            $PrivateLinkUri.Host = \"$($Claims.EndpointPoolId).$($PrivateLinkUri.Host)\"\r\n            $PrivateLinkUrl = $PrivateLinkUri.Uri.AbsoluteUri\r\n            \r\n            Write-Log -Message \"Trying private link endpoint: $PrivateLinkUrl\"\r\n            Invoke-WebRequest -Uri $PrivateLinkUrl -OutFile $AgentPath -UseBasicParsing\r\n            Write-Log -Message \"Successfully downloaded agent from private link endpoint\"\r\n            return $AgentPath\r\n        }\r\n        catch {\r\n            Write-Log -Category Error -Message \"Failed to download from private link endpoint: $($_.Exception.Message)\"\r\n        }\r\n        \r\n        return $null\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Error getting latest agent installer: $($_.Exception.Message)\"\r\n        return $null\r\n    }\r\n}\r\n\r\nfunction Get-InstallerFromUrl {\r\n    param (\r\n        [string]$ApiVersion = $script:ApiVersion,\r\n        [string]$StorageSuffix = $script:StorageSuffix,\r\n        [string]$ClientId = $script:UserAssignedIdentityClientId,\r\n        [string]$Url,\r\n        [string]$DestinationPath,\r\n        [string]$DisplayName\r\n    )\r\n    \r\n    try {\r\n        $WebClient = New-Object System.Net.WebClient\r\n        \r\n        # If URL is Azure Storage and we have a managed identity, authenticate\r\n        if (-not [string]::IsNullOrEmpty($StorageSuffix) -and $Url -match $StorageSuffix -and -not [string]::IsNullOrEmpty($ClientId)) {\r\n            Write-Log -Message \"Authenticating to Azure Storage using managed identity\"\r\n            $StorageEndpoint = ($Url -split \"://\")[0] + \"://\" + ($Url -split \"/\")[2] + \"/\"\r\n            $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$ApiVersion&resource=$StorageEndpoint&client_id=$ClientId\"\r\n            $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n            $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n            $WebClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n        }\r\n\r\n        Write-Log -Message \"Downloading $DisplayName from: $Url\"\r\n        $WebClient.DownloadFile(\"$Url\", \"$DestinationPath\")\r\n        $WebClient = $null\r\n        Write-Log -Message \"Successfully downloaded $DisplayName to: $DestinationPath\"\r\n        return $true\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Failed to download $DisplayName : $($_.Exception.Message)\"\r\n        $WebClient = $null\r\n        return $false\r\n    }\r\n}\r\n\r\nfunction Wait-ForBootLoaderService {\r\n    $ServiceName = 'RDAgentBootLoader'\r\n    $MaxRetries = 6\r\n    $RetryDelay = 30\r\n    $RetryCount = 0\r\n    \r\n    while (-not (Get-Service $ServiceName -ErrorAction SilentlyContinue)) {\r\n        if ($RetryCount -ge $MaxRetries) {\r\n            $ErrorMsg = \"Service $ServiceName not found after $MaxRetries retries\"\r\n            Write-Log -Category Error -Message $ErrorMsg\r\n            throw $ErrorMsg\r\n        }\r\n        \r\n        Write-Log -Message \"Service $ServiceName not found. Retrying in $RetryDelay seconds (Retry $RetryCount of $MaxRetries)\"\r\n        Start-Sleep -Seconds $RetryDelay\r\n        $RetryCount++\r\n    }\r\n    \r\n    Write-Log -Message \"Starting service: $ServiceName\"\r\n    Start-Service $ServiceName\r\n    \r\n    Write-Log -Message \"Service $ServiceName started successfully\"\r\n}\r\n\r\nfunction Get-SessionHostName {\r\n    $Wmi = Get-WmiObject win32_computersystem\r\n    \r\n    if ($Wmi.Domain -eq 'WORKGROUP') {\r\n        return $Wmi.DNSHostName\r\n    }\r\n    \r\n    return \"$($Wmi.DNSHostName).$($Wmi.Domain)\"\r\n}\r\n\r\nFunction ConvertFrom-JsonString {\r\n    [CmdletBinding()]\r\n    param (\r\n        [string]$JsonString,\r\n        [string]$Name,\r\n        [switch]$SensitiveValues      \r\n    )\r\n    If ($JsonString -ne '[]' -and $null -ne $JsonString) {\r\n        [array]$Array = $JsonString.replace('\\', '') | ConvertFrom-Json\r\n        If ($Array.Length -gt 0) {\r\n            If ($SensitiveValues) { Write-Log -message \"Array '$Name' has $($Array.Length) members\" } Else { Write-Log -message \"$($Name): '$($Array -join \"', '\")'\" }\r\n            Return $Array\r\n        }\r\n        Else {\r\n            Return $null\r\n        }            \r\n    }\r\n    Else {\r\n        Return $null\r\n    }    \r\n}\r\n\r\nFunction Convert-GroupToSID {\r\n    [CmdletBinding()]\r\n    Param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$DomainName,\r\n\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$GroupName\r\n    )\r\n    Begin {\r\n        [string]$groupSID = ''\r\n    }\r\n    Process {\r\n        Try {\r\n            $groupSID = (New-Object System.Security.Principal.NTAccount(\"$GroupName\")).Translate([System.Security.Principal.SecurityIdentifier]).Value\r\n        }\r\n        Catch {\r\n            Try {\r\n                $groupSID = (New-Object System.Security.Principal.NTAccount($DomainName, \"$GroupName\")).Translate([System.Security.Principal.SecurityIdentifier]).Value\r\n            }\r\n            Catch {\r\n                Write-Error -Message \"Failed to convert group name '$GroupName' to SID.\"\r\n            }\r\n        }\r\n        Write-Output -InputObject $groupSID\r\n    }\r\n}\r\n\r\nFunction Set-RegistryValue {\r\n    [CmdletBinding()]\r\n    param (\r\n        [Parameter()]\r\n        [string]$Name,\r\n        [Parameter()]\r\n        [string]$Path,\r\n        [Parameter()]\r\n        [string]$PropertyType,\r\n        [Parameter()]\r\n        $Value\r\n    )\r\n    If (!(Test-Path -Path $Path)) {\r\n        New-Item -Path $Path -Force | Out-Null\r\n    }\r\n    $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue\r\n    If ($RemoteValue) {\r\n        $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name\r\n        If ($Value -ne $CurrentValue) {\r\n            Write-Log -message \"Registry update: $Name = $Value (was: $CurrentValue)\"\r\n            Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null\r\n        }\r\n    }\r\n    Else {\r\n        Write-Log -message \"Registry create: $Name = $Value\"\r\n        New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null\r\n    }\r\n    Start-Sleep -Milliseconds 500\r\n}\r\n\r\nfunction Get-AgentInstallersFromFallbackUrl {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$FallbackUrl,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string]$DownloadFolder\r\n    )\r\n    \r\n    try {\r\n        Write-Log -Message \"Extracting agent installers from fallback URL: $FallbackUrl\"\r\n        \r\n        # Create fallback extraction location\r\n        $FallbackExtractPath = Join-Path -Path $DownloadFolder -ChildPath 'FallbackExtract'\r\n        New-Item -Path $FallbackExtractPath -ItemType Directory -Force | Out-Null\r\n        \r\n        # Download and extract configuration.zip\r\n        $ConfigZipPath = Join-Path -Path $FallbackExtractPath -ChildPath 'configuration.zip'\r\n        $Success = Get-InstallerFromUrl -Url $FallbackUrl -DestinationPath $ConfigZipPath -DisplayName 'Configuration Package'\r\n        \r\n        if (-not $Success) {\r\n            Write-Log -Category Error -Message \"Failed to download configuration.zip from: $FallbackUrl\"\r\n            return $null\r\n        }\r\n        \r\n        $ConfigExtractPath = Join-Path -Path $FallbackExtractPath -ChildPath 'ConfigExtracted'\r\n        Expand-Archive -Path $ConfigZipPath -DestinationPath $ConfigExtractPath -Force\r\n        \r\n        # Look for DeployAgent.zip inside the extracted configuration\r\n        $DeployAgentZip = Get-ChildItem -Path $ConfigExtractPath -Filter 'DeployAgent.zip' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1\r\n        \r\n        if (-not $DeployAgentZip) {\r\n            Write-Log -Category Error -Message \"DeployAgent.zip not found in configuration.zip\"\r\n            return $null\r\n        }\r\n        \r\n        $DeployAgentExtractPath = Join-Path -Path $FallbackExtractPath -ChildPath 'DeployAgent'\r\n        Expand-Archive -Path $DeployAgentZip.FullName -DestinationPath $DeployAgentExtractPath -Force\r\n        \r\n        # Locate the MSI files\r\n        $BootLoaderMsi = Get-ChildItem -Path $DeployAgentExtractPath -Filter '*.msi' -Recurse | Where-Object { $_.Name -like '*BootLoader*' -or $_.Directory.Name -like '*BootLoader*' } | Select-Object -First 1\r\n        $AgentMsi = Get-ChildItem -Path $DeployAgentExtractPath -Filter '*.msi' -Recurse | Where-Object { $_.Name -notlike '*BootLoader*' -and $_.Directory.Name -notlike '*BootLoader*' -and ($_.Name -like '*Agent*' -or $_.Directory.Name -like '*Agent*') } | Select-Object -First 1\r\n        \r\n        if (-not $BootLoaderMsi) {\r\n            Write-Log -Category Error -Message \"RDAgentBootLoader MSI not found in DeployAgent.zip\"\r\n            return $null\r\n        }\r\n        \r\n        if (-not $AgentMsi) {\r\n            Write-Log -Category Error -Message \"RDAgent MSI not found in DeployAgent.zip\"\r\n            return $null\r\n        }\r\n        \r\n        # Copy MSIs to download folder for installation\r\n        $BootLoaderDestination = Join-Path -Path $DownloadFolder -ChildPath 'RDAgentBootLoader.msi'\r\n        $AgentDestination = Join-Path -Path $DownloadFolder -ChildPath 'RDAgent.msi'\r\n        \r\n        Copy-Item -Path $BootLoaderMsi.FullName -Destination $BootLoaderDestination -Force\r\n        Copy-Item -Path $AgentMsi.FullName -Destination $AgentDestination -Force\r\n        \r\n        # Clean up extraction folder\r\n        try {\r\n            Remove-Item -Path $FallbackExtractPath -Force -Recurse -ErrorAction SilentlyContinue\r\n        }\r\n        catch {\r\n            Write-Log -Category Warning -Message \"Failed to clean up fallback extract folder: $($_.Exception.Message)\"\r\n        }\r\n        \r\n        return @{\r\n            AgentPath = $AgentDestination\r\n            BootLoaderPath = $BootLoaderDestination\r\n        }\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Failed to extract agent installers from fallback URL: $($_.Exception.Message)\"\r\n        Write-Log -Category Error -Message \"Stack trace: $($_.ScriptStackTrace)\"\r\n        return $null\r\n    }\r\n}\r\n\r\n#endregion Helper Functions\r\n\r\n#region FSLogix Redirections XML Templates\r\n\r\n$redirectionsXMLStart = @'\r\n<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<FrxProfileFolderRedirection ExcludeCommonFolders=\"0\">\r\n<Excludes>\r\n'@\r\n\r\n$redirectionsXMLExcludesTeams = @'\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\Logs</Exclude>\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\PerfLog</Exclude>\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\EBWebView\\WV2Profile_tfw\\GPUCache</Exclude>\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\TempState</Exclude>\r\n'@\r\n\r\n$redirectionsXMLExcludesAzCLI = @'\r\n<Exclude Copy=\"0\">.Azure</Exclude>\r\n'@\r\n\r\n$redirectionsXMLEnd = @'\r\n</Excludes>\r\n<Includes>\r\n</Includes>\r\n</FrxProfileFolderRedirection>\r\n'@\r\n\r\n#endregion FSLogix Redirections XML Templates\r\n\r\n#region Main Script\r\n\r\ntry {\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'AVD Session Host Initialization Starting'\r\n    Write-Log -Message '========================================='\r\n    \r\n    Write-Log -Message \"TimeZone=$TimeZone | ConfigureFSLogix=$ConfigureFSLogix | AmdVmSize=$AmdVmSize | NvidiaVmSize=$NvidiaVmSize\"\r\n    Write-Log -Message \"AADJoin=$AADJoin | AgentBootLoaderUrl=$AgentBootLoaderUrl$(if ($AgentUrl) { \" | AgentUrl=$AgentUrl\" })$(if ($MdmId) { \" | MdmId=$MdmId\" })\"\r\n    \r\n    #region Phase 1: Session Host Configuration\r\n    \r\n    Write-Log -Message ''\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'Phase 1: Session Host Configuration'\r\n    Write-Log -Message '========================================='\r\n    \r\n    # Configure Time Zone\r\n    Set-TimeZone -Id \"$TimeZone\"\r\n    Write-Log -Message \"Time Zone set to: $TimeZone\"\r\n    \r\n    # Initialize registry settings array\r\n    $RegSettings = New-Object System.Collections.ArrayList\r\n    \r\n    # Convert boolean parameters\r\n    [bool]$ConfigureFSLogixBool = [System.Convert]::ToBoolean($ConfigureFSLogix)\r\n    \r\n    # Enable Time Zone Redirection\r\n    $RegSettings.Add(@{Path = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services'; Name = 'fEnableTimeZoneRedirection'; PropertyType = 'DWORD'; Value = 1 })\r\n    \r\n    # Add GPU Settings if applicable\r\n    if ($AmdVmSize -eq 'true' -or $NvidiaVmSize -eq 'true') {\r\n        Write-Log -Message \"Adding GPU Settings\"\r\n        $RegSettings.Add(@{Path = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services'; Name = 'bEnumerateHWBeforeSW'; PropertyType = 'DWORD'; Value = 1 })\r\n        $RegSettings.Add(@{Path = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services'; Name = 'AVC444ModePreferred'; PropertyType = 'DWORD'; Value = 1 })\r\n    }\r\n    \r\n    if ($NvidiaVmSize -eq 'true') {\r\n        Write-Log -Message \"Adding Nvidia GPU Settings\"\r\n        $RegSettings.Add(@{Path = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services'; Name = 'AVChardwareEncodePreferred'; PropertyType = 'DWORD'; Value = 1 })\r\n    }\r\n    \r\n    # Configure FSLogix if specified\r\n    If ($ConfigureFSLogixBool) {\r\n        Write-Log -Message ''\r\n        Write-Log -Message 'Configuring FSLogix'\r\n        Write-Log -Message \"IdentitySolution: $IdentitySolution\"\r\n        \r\n        # Convert parameters\r\n        $CloudCacheBool = [System.Convert]::ToBoolean($CloudCache)\r\n        Write-Log -Message \"CloudCache: $CloudCacheBool\"\r\n        \r\n        [array]$SharesArray = ConvertFrom-JsonString -JsonString $Shares -Name 'Shares'\r\n        $ProfileShareName = $SharesArray[0]\r\n        if ($SharesArray.Count -gt 1) {\r\n            $OfficeShareName = $SharesArray[1]\r\n        }\r\n        Else {\r\n            $OfficeShareName = $null\r\n        }\r\n        \r\n        Write-Log -message \"ProfileShareName: $ProfileShareName\"\r\n        Write-Log -message \"OfficeShareName: $OfficeShareName\"\r\n        Write-Log -message \"StorageService: $StorageService\"\r\n        \r\n        if ($SizeInMBs -ne '' -and $null -ne $SizeInMBs) {\r\n            [int]$SizeInMBsInt = $SizeInMBs\r\n            Write-Log -message \"SizeInMBs: $SizeInMBsInt\"\r\n        }\r\n        Else {\r\n            [int]$SizeInMBsInt = 30000\r\n            Write-Log -message \"SizeInMBs not specified. Defaulting to: $SizeInMBsInt\"\r\n        }\r\n        \r\n        $AzCLIInstalled = Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match 'Azure CLI' } | Select-Object -First 1\r\n        $TeamsInstalled = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq 'MSTeams' }\r\n        \r\n        # Create Array Lists for storage paths\r\n        [System.Collections.ArrayList]$LocalProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$LocalCloudCacheProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$LocalOfficeContainerPaths = @()\r\n        [System.Collections.ArrayList]$LocalCloudCacheOfficeContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteCloudCacheProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteOfficeContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteCloudCacheOfficeContainerPaths = @()\r\n        \r\n        # Process storage accounts based on service type\r\n        switch ($StorageService) {\r\n            'AzureFiles' {\r\n                Write-Log -message \"Gathering Azure Files Storage Account Parameters\"\r\n                [array]$OSSGroupsArray = ConvertFrom-JsonString -JsonString $OSSGroups -Name 'OSSGroups'\r\n                [array]$LocalStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountNames -Name 'LocalStorageAccountNames'\r\n                [array]$LocalStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountKeys -Name 'LocalStorageAccountKeys' -SensitiveValues\r\n                [array]$RemoteStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountNames -Name 'RemoteStorageAccountNames'\r\n                [array]$RemoteStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountKeys -Name 'RemoteStorageAccountKeys' -SensitiveValues\r\n                \r\n                # Process Local Storage Accounts\r\n                Write-Log -message \"Processing Local Storage Accounts\"\r\n                For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {\r\n                    $SAFQDN = \"$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix\"\r\n                    Write-Log -message \"Local storage [$i]: $SAFQDN\"\r\n                    \r\n                    If ($LocalStorageAccountKeysArray.Count -gt 0 -and $LocalStorageAccountKeysArray[$i]) {\r\n                        Write-Log -message \"Adding storage key for '$SAFQDN' to Credential Manager\"\r\n                        Start-Process -FilePath 'cmdkey.exe' -ArgumentList \"/add:$SAFQDN /user:localhost\\$($LocalStorageAccountNamesArray[$i]) /pass:$($LocalStorageAccountKeysArray[$i])\" -NoNewWindow -Wait\r\n                    }\r\n                    \r\n                    If ($OfficeShareName) {\r\n                        $LocalOfficeContainerPaths.Add(\"\\\\$SAFQDN\\$OfficeShareName\") | Out-Null\r\n                        $LocalCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($OfficeShareName)\") | Out-Null\r\n                    }\r\n                    $LocalProfileContainerPaths.Add(\"\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                    $LocalCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                }\r\n                \r\n                # Process Remote Storage Accounts\r\n                If ($RemoteStorageAccountNamesArray.Count -gt 0) {\r\n                    Write-Log -message \"Processing Remote Storage Accounts\"\r\n                    For ($i = 0; $i -lt $RemoteStorageAccountNamesArray.Count; $i++) {\r\n                        $SAFQDN = \"$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix\"\r\n                        Write-Log -message \"Remote storage [$i]: $SAFQDN\"\r\n                        \r\n                        If ($RemoteStorageAccountKeysArray.Count -gt 0 -and $RemoteStorageAccountKeysArray[$i]) {\r\n                            Write-Log -message \"Adding storage key for '$SAFQDN' to Credential Manager\"\r\n                            Start-Process -FilePath 'cmdkey.exe' -ArgumentList \"/add:$($SAFQDN) /user:localhost\\$($RemoteStorageAccountNamesArray[$i]) /pass:$($RemoteStorageAccountKeysArray[$i])\" -NoNewWindow -Wait\r\n                        }\r\n                        \r\n                        If ($OfficeShareName) {\r\n                            $RemoteOfficeContainerPaths.Add(\"\\\\$($SAFQDN)\\$($OfficeShareName)\") | Out-Null\r\n                            $RemoteCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($OfficeShareName)\") | Out-Null\r\n                        }\r\n                        $RemoteProfileContainerPaths.Add(\"\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                        $RemoteCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                    }\r\n                }\r\n            }\r\n            'AzureNetAppFiles' {\r\n                Write-Log -message \"Gathering Azure NetApp Files Storage Account Parameters\"\r\n                [array]$LocalNetAppServersArray = ConvertFrom-JsonString -JsonString $LocalNetAppServers -Name 'LocalNetAppServers'\r\n                [array]$RemoteNetAppServersArray = ConvertFrom-JsonString -JsonString $RemoteNetAppServers -Name 'RemoteNetAppServers'\r\n                \r\n                Write-Log -message \"Local NetApp: $($LocalNetAppServersArray[0])\"\r\n                $LocalProfileContainerPaths.Add(\"\\\\$($LocalNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                $LocalCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($LocalNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                \r\n                If ($LocalNetAppServersArray.Length -gt 1 -and $OfficeShareName) {            \r\n                    $LocalOfficeContainerPaths.Add(\"\\\\$($LocalNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                    $LocalCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($LocalNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                }\r\n                \r\n                If ($RemoteNetAppServersArray.Count -gt 0) {\r\n                    Write-Log -message \"Remote NetApp: $($RemoteNetAppServersArray[0])\"\r\n                    $RemoteProfileContainerPaths.Add(\"\\\\$($RemoteNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                    $RemoteCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($RemoteNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                    \r\n                    If ($RemoteNetAppServersArray.Length -gt 1 -and $OfficeShareName) {\r\n                        $RemoteOfficeContainerPaths.Add(\"\\\\$($RemoteNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                        $RemoteCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($RemoteNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                    }        \r\n                }\r\n            }\r\n        }\r\n        \r\n        # Add Common FSLogix Registry Settings\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'CleanupInvalidSessions'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Apps'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'Enabled'; Path = 'HKLM:\\SOFTWARE\\Fslogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'DeleteLocalProfileWhenVHDShouldApply'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'FlipFlopProfileDirectoryName'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithFailure'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithTempProfile'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachIntervalSeconds'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 15 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachRetryCount'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 3 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = $SizeInMBsInt })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'String'; Value = 'VHDX' })\r\n        \r\n        If ($LocalStorageAccountKeysArray.Count -gt 0) {\r\n            $RegSettings.Add([PSCustomObject]@{Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        }\r\n        \r\n        if ($CloudCacheBool -eq $True) {\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'ClearCacheOnLogoff'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        }\r\n        \r\n        # Office Container Settings\r\n        If ($LocalOfficeContainerPaths.Count -gt 0) {\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'Enabled'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })   \r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'FlipFlopProfileDirectoryName'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'LockedRetryCount'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 3 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'LockedRetryInterval'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 15 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithFailure'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithTempProfile'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })    \r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachIntervalSeconds'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 15 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachRetryCount'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 3 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = $SizeInMBsInt })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'String'; Value = 'VHDX' })\r\n            \r\n            If ($LocalStorageAccountKeysArray.Count -gt 0) {\r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            }\r\n            \r\n            If ($CloudCacheBool -eq $True) {\r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'ClearCacheOnLogoff'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            }   \r\n        }\r\n        \r\n        # Object Specific Settings or Standard VHDLocations/CCDLocations\r\n        If ($OSSGroupsArray.Count -gt 0) {\r\n            Write-Log -message \"Adding Object Specific Settings\"\r\n            $DomainName = Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object -ExpandProperty Domain\r\n            Write-Log -message \"DomainName: $DomainName\"\r\n            \r\n            For ($i = 0; $i -lt $OSSGroupsArray.Count; $i++) {\r\n                Write-Log -message \"Getting SID for $($OSSGroupsArray[$i])\"        \r\n                $OSSGroupSID = Convert-GroupToSID -DomainName $DomainName -GroupName $OSSGroupsArray[$i]\r\n                [string]$LocalProfileContainerPath = $LocalProfileContainerPaths[$i]\r\n                [string]$LocalCloudCacheProfileContainerPath = $LocalCloudCacheProfileContainerPaths[$i]\r\n\r\n                If ($RemoteStorageAccountNamesArray) {\r\n                    [string]$RemoteProfileContainerPath = $RemoteProfileContainerPaths[$i]\r\n                    [string]$RemoteCloudCacheProfileContainerPath = $RemoteCloudCacheProfileContainerPaths[$i]\r\n                    [array]$ProfileContainerPathsForGroup = @($LocalProfileContainerPath, $RemoteProfileContainerPath)\r\n                    [array]$CloudCacheProfileContainerPathsForGroup = @($LocalCloudCacheProfileContainerPath, $RemoteCloudCacheProfileContainerPath)\r\n                }\r\n                Else {\r\n                    [array]$ProfileContainerPathsForGroup = @($LocalProfileContainerPath)\r\n                    [array]$CloudCacheProfileContainerPathsForGroup = @($LocalCloudCacheProfileContainerPath)\r\n                }\r\n\r\n                If ($CloudCacheBool -eq $True) {\r\n                    Write-Log -message \"Adding Cloud Cache Profile Container Settings: $OSSGroupSID : '$($CloudCacheProfileContainerPathsForGroup -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = \"HKLM:\\SOFTWARE\\FSLogix\\Profiles\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $CloudCacheProfileContainerPathsForGroup })\r\n                }\r\n                Else {\r\n                    Write-Log -message \"Adding Profile Container Settings: $OSSGroupSID : '$($ProfileContainerPathsForGroup -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = \"HKLM:\\SOFTWARE\\FSLogix\\Profiles\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $ProfileContainerPathsForGroup })\r\n                }   \r\n\r\n                If ($LocalOfficeContainerPaths.Count -gt 0) {\r\n                    [string]$LocalOfficeContainerPath = $LocalOfficeContainerPaths[$i]\r\n                    [string]$LocalCloudCacheOfficeContainerPath = $LocalCloudCacheOfficeContainerPaths[$i]\r\n                    \r\n                    If ($RemoteStorageAccountNamesArray) {\r\n                        [string]$RemoteOfficeContainerPath = $RemoteOfficeContainerPaths[$i]\r\n                        [string]$RemoteCloudCacheOfficeContainerPath = $RemoteCloudCacheOfficeContainerPaths[$i]\r\n                        [array]$OfficeContainerPathsForGroup = @($LocalOfficeContainerPath, $RemoteOfficeContainerPath)\r\n                        [array]$CloudCacheOfficeContainerPathsForGroup = @($LocalCloudCacheOfficeContainerPath, $RemoteCloudCacheOfficeContainerPath)\r\n                    }\r\n                    Else {\r\n                        [array]$OfficeContainerPathsForGroup = @($LocalOfficeContainerPath)\r\n                        [array]$CloudCacheOfficeContainerPathsForGroup = @($LocalCloudCacheOfficeContainerPath)\r\n                    }\r\n                    \r\n                    If ($CloudCacheBool -eq $True) {\r\n                        Write-Log -message \"Adding Cloud Cache Office Container Settings: $OSSGroupSID : '$($CloudCacheOfficeContainerPathsForGroup -join \"', '\")'\"\r\n                        $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = \"HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $CloudCacheOfficeContainerPathsForGroup })\r\n                    }\r\n                    Else {\r\n                        Write-Log -message \"Adding Office Container Settings: $OSSGroupSID : '$($OfficeContainerPathsForGroup -join \"', '\")'\"\r\n                        $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = \"HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $OfficeContainerPathsForGroup })\r\n                    }\r\n                }  \r\n            }          \r\n        }\r\n        Else {\r\n            # No OSS Groups, use standard VHDLocations/CCDLocations\r\n            If ($RemoteStorageAccountNamesArray.Count -gt 0) {\r\n                $ProfileContainerPaths = $LocalProfileContainerPaths + $RemoteProfileContainerPaths\r\n                $CloudCacheProfileContainerPaths = $LocalCloudCacheProfileContainerPaths + $RemoteCloudCacheProfileContainerPaths\r\n            }\r\n            Else {\r\n                $ProfileContainerPaths = $LocalProfileContainerPaths\r\n                $CloudCacheProfileContainerPaths = $LocalCloudCacheProfileContainerPaths\r\n            }\r\n            \r\n            If ($CloudCacheBool -eq $True) {\r\n                Write-Log -message \"Adding Cloud Cache Profile Container Settings: '$($CloudCacheProfileContainerPaths -join \"', '\")'\"   \r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'MultiString'; Value = $CloudCacheProfileContainerPaths })             \r\n            }\r\n            Else {\r\n                Write-Log -message \"Adding Profile Container Settings: '$($ProfileContainerPaths -join \"', '\")'\"\r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'MultiString'; Value = $ProfileContainerPaths })\r\n            }\r\n            \r\n            If ($LocalOfficeContainerPaths.Count -gt 0) {\r\n                If ($RemoteStorageAccountNamesArray.Count -gt 0) {\r\n                    $OfficeContainerPaths = $LocalOfficeContainerPaths + $RemoteOfficeContainerPaths\r\n                    $CloudCacheOfficeContainerPaths = $LocalCloudCacheOfficeContainerPaths + $RemoteCloudCacheOfficeContainerPaths\r\n                }\r\n                Else {\r\n                    $OfficeContainerPaths = $LocalOfficeContainerPaths\r\n                    $CloudCacheOfficeContainerPaths = $LocalCloudCacheOfficeContainerPaths\r\n                }\r\n                \r\n                If ($CloudCacheBool -eq $True) {\r\n                    Write-Log -message \"Adding Cloud Cache Office Container Settings: '$($CloudCacheOfficeContainerPaths -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'MultiString'; Value = $CloudCacheOfficeContainerPaths })\r\n                }\r\n                Else {\r\n                    Write-Log -message \"Adding Office Container Settings: '$($OfficeContainerPaths -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'MultiString'; Value = $OfficeContainerPaths })\r\n                }\r\n            }    \r\n        }\r\n        \r\n        # FSLogix Redirections for Teams and Az CLI\r\n        If ($TeamsInstalled -or $AzCLIInstalled) {\r\n            $customRedirFolder = \"$env:ProgramData\\FSLogix_CustomRedirections\"\r\n            Write-Log -message \"Creating custom redirections.xml file in $customRedirFolder\"\r\n            If (-not (Test-Path $customRedirFolder )) {\r\n                New-Item -Path $customRedirFolder -ItemType Directory -Force | Out-Null\r\n            }\r\n            $customRedirFilePath = \"$customRedirFolder\\redirections.xml\"\r\n            $redirectionsXMLContent = $redirectionsXMLStart\r\n            if ($AzCLIInstalled) {\r\n                $redirectionsXMLContent = $redirectionsXMLContent + \"`n\" + $redirectionsXMLExcludesAzCLI\r\n            }\r\n            if ($TeamsInstalled) {\r\n                $redirectionsXMLContent = $redirectionsXMLContent + \"`n\" + $redirectionsXMLExcludesTeams\r\n            }\r\n            $redirectionsXMLContent = $redirectionsXMLContent + \"`n\" + $redirectionsXMLEnd\r\n            $redirectionsXMLContent | Out-File -FilePath $customRedirFilePath -Encoding unicode\r\n            \r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'RedirXMLSourceFolder'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'String'; Value = $customRedirFolder })\r\n        }\r\n        \r\n        # Entra Kerberos Cloud Kerberos Ticket Retrieval\r\n        If ($IdentitySolution -match 'EntraKerberos') {\r\n            Write-Log -message \"Adding Entra Kerberos Cloud Kerberos Ticket Retrieval Setting\"\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'CloudKerberosTicketRetrievalEnabled'; Path = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\Kerberos\\Parameters'; PropertyType = 'DWord'; Value = 1 })\r\n        }\r\n\r\n        # Windows Defender Exclusions for FSLogix\r\n        $LocalPathExclusions = @(\r\n            \"$env:ProgramData\\FSLogix\",\r\n            \"$env:ProgramData\\FSLogix\\Cache\",\r\n            \"$env:ProgramData\\FSLogix\\Proxy\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\",\r\n            \"$env:SystemDrive\\Users\\*\\AppData\\Local\\FSLogix\",\r\n            \"$env:SystemRoot\\Temp\\*\\*.vhdx\",\r\n            \"$env:SystemDrive\\users\\*\\AppData\\Local\\Temp\\*.vhdx\"\r\n        )\r\n        \r\n        # Build UNC Path Exclusions from storage account paths\r\n        $UncPathExclusions = @()\r\n        $UncPathExclusions += $LocalProfileContainerPaths | ForEach-Object { \"$_\\*\\*.vhdx\" }\r\n        $UncPathExclusions += $LocalOfficeContainerPaths | ForEach-Object { \"$_\\*\\*.vhdx\" }\r\n        $UncPathExclusions += $RemoteProfileContainerPaths | ForEach-Object { \"$_\\*\\*.vhdx\" }\r\n        $UncPathExclusions += $RemoteOfficeContainerPaths | ForEach-Object { \"$_\\*\\*.vhdx\" }\r\n        $UncPathExclusions = $UncPathExclusions | Where-Object { $_ }\r\n\r\n        $PathExclusions = $LocalPathExclusions + $UncPathExclusions\r\n\r\n        $ProcessExclusions = @(\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxsvc.exe\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxccds.exe\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxdrv.sys\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxdrvvt.sys\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxccd.sys\"\r\n        )\r\n\r\n        Try {\r\n            ForEach ($Path in $PathExclusions) {\r\n                Add-MpPreference -ExclusionPath $Path -ErrorAction SilentlyContinue\r\n            }\r\n            ForEach ($Process in $ProcessExclusions) {\r\n                Add-MpPreference -ExclusionProcess $Process -ErrorAction SilentlyContinue\r\n            }\r\n            Write-Log -message \"Added $($PathExclusions.Count) Defender path exclusions and $($ProcessExclusions.Count) process exclusions\"\r\n        }\r\n        Catch {\r\n            Write-Log -Category Warning -Message \"Failed to add Windows Defender exclusions: $_\"\r\n        }\r\n\r\n        # Add local administrator to FSLogix exclude lists\r\n        $LocalAdministrator = (Get-LocalUser | Where-Object { $_.SID -like '*-500' }).Name\r\n        $LocalGroups = 'FSLogix Profile Exclude List', 'FSLogix ODFC Exclude List'\r\n        ForEach ($Group in $LocalGroups) {\r\n            If (-not (Get-LocalGroupMember -Group $Group -ErrorAction SilentlyContinue | Where-Object { $_.Name -like \"*$LocalAdministrator\" })) {\r\n                Write-Log -message \"Adding $LocalAdministrator to $Group\"\r\n                Add-LocalGroupMember -Group $Group -Member $LocalAdministrator -ErrorAction SilentlyContinue\r\n            }\r\n        }\r\n    }\r\n    \r\n    # Apply all registry settings\r\n    ForEach ($Setting in $RegSettings) {\r\n        Set-RegistryValue -Name $Setting.Name -Path $Setting.Path -PropertyType $Setting.PropertyType -Value $Setting.Value\r\n    }\r\n    \r\n    # Resize OS Disk\r\n    Write-Log -Message \"Resizing OS Disk\"\r\n    try {\r\n        $driveLetter = $env:SystemDrive.Substring(0, 1)\r\n        $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop\r\n        $currentSizeGB = [math]::Round($currentPartition.Size / 1GB, 2)\r\n        Write-Log -Message \"Current partition size: $currentSizeGB GB (drive: $driveLetter)\"\r\n\r\n        $size = Get-PartitionSupportedSize -DriveLetter $driveLetter -ErrorAction Stop\r\n        $maxSizeGB = [math]::Round($size.SizeMax / 1GB, 2)\r\n        $minSizeGB = [math]::Round($size.SizeMin / 1GB, 2)\r\n        Write-Log -Message \"Partition supported size range: Min=$minSizeGB GB, Max=$maxSizeGB GB\"\r\n\r\n        if ($null -eq $size -or $size.SizeMax -eq 0) {\r\n            Write-Log -Message \"Get-PartitionSupportedSize returned null or zero SizeMax. Skipping resize.\" -Category 'Warning'\r\n        }\r\n        elseif ($currentPartition.Size -ge $size.SizeMax) {\r\n            Write-Log -Message \"OS Disk partition ($currentSizeGB GB) is already at or above maximum supported size ($maxSizeGB GB). No resize needed.\"\r\n        }\r\n        else {\r\n            Resize-Partition -DriveLetter $driveLetter -Size $size.SizeMax -ErrorAction Stop\r\n            Write-Log -Message \"OS Disk resized successfully from $currentSizeGB GB to $maxSizeGB GB\"\r\n        }\r\n    }\r\n    catch {\r\n        if ($_.Exception.Message -like \"*already the requested size*\") {\r\n            Write-Log -Message \"OS Disk is already at maximum size. No resize needed.\"\r\n        }\r\n        else {\r\n            Write-Log -Message \"Failed to resize OS Disk: $($_.Exception.Message)\" -Category 'Warning'\r\n            Write-Log -Message \"Continuing with deployment...\"\r\n        }\r\n    }\r\n    \r\n    Write-Log -Message \"Phase 1: Session Host Configuration Complete\"\r\n    \r\n    #endregion Phase 1: Session Host Configuration\r\n    \r\n    #region Phase 2: AVD Agent Installation and Registration\r\n    \r\n    Write-Log -Message ''\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'Phase 2: AVD Agent Installation'\r\n    Write-Log -Message '========================================='\r\n    \r\n    # Install RDS-RD-Server feature if this is a Server OS\r\n    $IsServer = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion' -ErrorAction SilentlyContinue).InstallationType -eq 'Server'\r\n    Write-Log -Message \"Operating System Type: $(if ($IsServer) { 'Server' } else { 'Client' })\"\r\n    if ($IsServer) {\r\n        $rdFeature = Get-WindowsFeature -Name 'RDS-RD-Server' -ErrorAction SilentlyContinue\r\n        if ($rdFeature -and -not $rdFeature.Installed) {\r\n            Write-Log -Message 'Installing RDS-RD-Server feature'\r\n            Install-WindowsFeature -Name 'RDS-RD-Server' -ErrorAction Stop | Out-Null\r\n            Write-Log -Message 'RDS-RD-Server feature installed successfully'\r\n        }\r\n    }\r\n    \r\n    # Check if already registered\r\n    $RDInfraReg = Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -ErrorAction SilentlyContinue\r\n    \r\n    if ($RDInfraReg -and $RDInfraReg.IsRegistered -eq 1 -and $RDInfraReg.RegistrationToken -eq '') {\r\n        Write-Log -Message 'VM is already registered with RDInfraAgent. Skipping installation.'\r\n        exit 0\r\n    }\r\n    \r\n    Write-Log -Message 'VM is not registered. Proceeding with agent installation...'\r\n    \r\n    # Create temporary download folder\r\n    $DownloadFolder = Join-Path -Path $env:TEMP -ChildPath \"AVDAgentInstall_$(Get-Date -Format 'yyyyMMddHHmmss')\"\r\n    New-Item -Path $DownloadFolder -ItemType Directory -Force | Out-Null\r\n    \r\n    # Get Agent Installer with endpoint-first, URL-fallback logic\r\n    $AgentInstallerPath = $null\r\n    $BootLoaderInstallerPath = $null\r\n    \r\n    # Try endpoint first\r\n    Write-Log -Message 'Attempting to download latest agent from Azure endpoint'\r\n    $AgentInstallerPath = Get-LatestAgentInstaller -RegistrationToken $RegistrationToken -DownloadFolder $DownloadFolder\r\n        \r\n    # If endpoint failed and we have a URL, fall back to URL\r\n    if (-not $AgentInstallerPath -and -not [string]::IsNullOrEmpty($AgentUrl)) {\r\n        Write-Log -Message 'Endpoint download failed. Falling back to provided AgentUrl'\r\n        $AgentInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgent.msi'\r\n        $Success = Get-InstallerFromUrl -Url $AgentUrl -DestinationPath $AgentInstallerPath -DisplayName 'RD Agent'            \r\n        if (-not $Success) {\r\n            $AgentInstallerPath = $null\r\n            Write-Log -Category Warning -Message \"Failed to download RD Agent from fallback URL: $AgentUrl\"\r\n        }\r\n    }\r\n    \r\n    # If both endpoint and AgentUrl failed (or AgentUrl wasn't provided), try extracting from FallbackUrl\r\n    if (-not $AgentInstallerPath -and -not [string]::IsNullOrEmpty($FallbackUrl)) {\r\n        Write-Log -Message 'Attempting to extract installers from fallback package...'\r\n        \r\n        $FallbackInstallers = Get-AgentInstallersFromFallbackUrl -FallbackUrl $FallbackUrl -DownloadFolder $DownloadFolder\r\n        \r\n        if ($FallbackInstallers) {\r\n            $AgentInstallerPath = $FallbackInstallers.AgentPath\r\n            $BootLoaderInstallerPath = $FallbackInstallers.BootLoaderPath\r\n            Write-Log -Message 'Successfully extracted agent installers from fallback package'\r\n        }\r\n        else {\r\n            Write-Log -Category Error -Message 'Failed to extract installers from fallback package'\r\n        }\r\n    }\r\n    \r\n    # Final check - if we still don't have the agent installer, fail\r\n    if (-not $AgentInstallerPath) {\r\n        throw 'Failed to obtain RD Agent installer from all available sources (Azure endpoint, AgentUrl, and FallbackUrl)'\r\n    }\r\n    \r\n    # Get Agent Boot Loader Installer (if not already obtained from fallback)\r\n    if (-not $BootLoaderInstallerPath) {\r\n        Write-Log -Message 'Downloading agent boot loader from provided URL'\r\n        $BootLoaderInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgentBootLoader.msi'\r\n        $Success = Get-InstallerFromUrl -Url $AgentBootLoaderUrl -DestinationPath $BootLoaderInstallerPath -DisplayName 'RD Agent Boot Loader'\r\n        \r\n        if (-not $Success) {\r\n            $BootLoaderInstallerPath = $null\r\n            Write-Log -Category Warning -Message 'Failed to download RD Agent Boot Loader from provided URL'\r\n            \r\n            # If BootLoader download fails and we have FallbackUrl, try extracting from there\r\n            if (-not [string]::IsNullOrEmpty($FallbackUrl)) {\r\n                Write-Log -Message 'Attempting to extract boot loader from fallback package...'\r\n                \r\n                $FallbackInstallers = Get-AgentInstallersFromFallbackUrl -FallbackUrl $FallbackUrl -DownloadFolder $DownloadFolder\r\n                \r\n                if ($FallbackInstallers -and $FallbackInstallers.BootLoaderPath) {\r\n                    $BootLoaderInstallerPath = $FallbackInstallers.BootLoaderPath\r\n                    # Also update agent path if we didn't have it\r\n                    if (-not $AgentInstallerPath) {\r\n                        $AgentInstallerPath = $FallbackInstallers.AgentPath\r\n                    }\r\n                    Write-Log -Message 'Successfully extracted boot loader installer from fallback package'\r\n                }\r\n            }\r\n            \r\n            if (-not $BootLoaderInstallerPath) {\r\n                throw 'Failed to download or extract RD Agent Boot Loader from all available sources'\r\n            }\r\n        }\r\n    }\r\n    \r\n    # Final verification that we have both installers\r\n    if (-not $AgentInstallerPath -or -not $BootLoaderInstallerPath) {\r\n        throw 'Failed to obtain required installers. Agent: ' + $(if ($AgentInstallerPath) { 'OK' } else { 'FAILED' }) + ', BootLoader: ' + $(if ($BootLoaderInstallerPath) { 'OK' } else { 'FAILED' })\r\n    }\r\n    \r\n    # Install RD Infra Agent\r\n    Write-Log -Message \"Installing RD Infra Agent from: $AgentInstallerPath\"\r\n    \r\n    Invoke-MsiWithRetry `\r\n        -DisplayName 'RD Infra Agent' `\r\n        -ArgumentList @(\"/i\", $AgentInstallerPath, \"/quiet\", \"/qn\", \"/norestart\", \"/passive\", \"REGISTRATIONTOKEN=$RegistrationToken\") `\r\n        -LogPath \"$env:TEMP\\RDAgentInstall.log\"\r\n    \r\n    # Install RD Agent Boot Loader\r\n    Write-Log -Message \"Installing RD Agent Boot Loader from: $BootLoaderInstallerPath\"\r\n    \r\n    Invoke-MsiWithRetry `\r\n        -DisplayName 'RD Agent Boot Loader' `\r\n        -ArgumentList @(\"/i\", $BootLoaderInstallerPath, \"/quiet\", \"/qn\", \"/norestart\", \"/passive\") `\r\n        -LogPath \"$env:TEMP\\RDAgentBootLoaderInstall.log\"\r\n    \r\n    # Wait for and start the boot loader service\r\n    Wait-ForBootLoaderService\r\n    \r\n    # Clean up download folder\r\n    try {\r\n        Write-Log -Message \"Cleaning up download folder: $DownloadFolder\"\r\n        Remove-Item -Path $DownloadFolder -Force -Recurse -ErrorAction SilentlyContinue\r\n    }\r\n    catch {\r\n        Write-Log -Message \"Warning: Failed to clean up download folder: $($_.Exception.Message)\"\r\n    }\r\n      \r\n    # Get and log the session host name\r\n    $SessionHostName = Get-SessionHostName\r\n    Write-Log -Message \"Successfully registered session host: $SessionHostName\"\r\n    \r\n    Write-Log -Message \"Phase 2: AVD Agent Installation Complete\"\r\n    \r\n    #endregion Phase 2: AVD Agent Installation and Registration\r\n    \r\n    Write-Log -Message ''\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'Session Host Initialization Complete'\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message \"Log file location: $Script:LogPath\"    \r\n    exit 0\r\n}\r\ncatch {\r\n    Write-Log -Category Error -Message \"Initialization failed: $($_.Exception.Message)\"\r\n    Write-Log -Category Error -Message \"Stack Trace: $($_.ScriptStackTrace)\"\r\n    Write-Log -Message \"Log file location: $Script:LogPath\"    \r\n    exit 1\r\n}\r\n\r\n#endregion Main Script\r\n",
@@ -1535,7 +1899,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "1500641470629823555"
+                      "templateHash": "14461482022356584299"
                     }
                   },
                   "parameters": {
@@ -1568,7 +1932,7 @@
                         }
                       }
                     ],
-                    "$fxv#0": "param(\r\n  [string]$APIVersion,\r\n  [string]$Arguments='',\r\n  [string]$BlobStorageSuffix,\r\n  [string]$BuildDir='',\r\n  [string]$Name,\r\n  [string]$Uri,\r\n  [string]$UserAssignedIdentityClientId\r\n)\r\n\r\nfunction Write-OutputWithTimeStamp {\r\n  param(\r\n      [string]$Message\r\n  )    \r\n  $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'\r\n  $Entry = '[' + $Timestamp + '] ' + $Message\r\n  Write-Output $Entry\r\n}\r\n\r\nFunction Split-ArgumentString {\r\n    param (\r\n        [string]$ArgumentString\r\n    )\r\n\r\n    if ([string]::IsNullOrWhiteSpace($ArgumentString)) {\r\n        return @()\r\n    }\r\n\r\n    # For PowerShell execution with &, we want individual arguments, not combined ones\r\n    $arguments = @()\r\n    $currentArg = \"\"\r\n    $inQuotes = $false\r\n    \r\n    for ($i = 0; $i -lt $ArgumentString.Length; $i++) {\r\n        $char = $ArgumentString[$i]\r\n        \r\n        if ($char -eq '\"' -and ($i -eq 0 -or $ArgumentString[$i-1] -ne '\\')) {\r\n            $inQuotes = !$inQuotes\r\n            $currentArg += $char\r\n        }\r\n        elseif ($char -eq ' ' -and !$inQuotes) {\r\n            if ($currentArg.Length -gt 0) {\r\n                # Handle boolean conversion\r\n                $value = $currentArg.Trim('\"')\r\n                if ($value -eq 'true') {\r\n                    $arguments += '$true'\r\n                }\r\n                elseif ($value -eq 'false') {\r\n                    $arguments += '$false'\r\n                }\r\n                else {\r\n                    $arguments += $value\r\n                }\r\n                $currentArg = \"\"\r\n            }\r\n        }\r\n        else {\r\n            $currentArg += $char\r\n        }\r\n    }\r\n    \r\n    # Add the last argument\r\n    if ($currentArg.Length -gt 0) {\r\n        $value = $currentArg.Trim('\"')\r\n        if ($value -eq 'true') {\r\n            $arguments += '$true'\r\n        }\r\n        elseif ($value -eq 'false') {\r\n            $arguments += '$false'\r\n        }\r\n        else {\r\n            $arguments += $value\r\n        }\r\n    }\r\n    \r\n    return $arguments\r\n}\r\n\r\nFunction ConvertTo-ParametersSplat {\r\n    param (\r\n        [string]$ArgumentString\r\n    )\r\n\r\n    if ([string]::IsNullOrWhiteSpace($ArgumentString)) {\r\n        return @{}\r\n    }\r\n\r\n    $tokens = Split-ArgumentString -ArgumentString $ArgumentString\r\n    $parameters = @{}\r\n    \r\n    $i = 0\r\n    while ($i -lt $tokens.Count) {\r\n        $token = $tokens[$i]\r\n        \r\n        # If this is a parameter (starts with -)\r\n        if ($token -match '^-(\\w+)$') {\r\n            $paramName = $matches[1]  # Remove the dash\r\n            \r\n            # Check if there's a value following this parameter\r\n            if (($i + 1) -lt $tokens.Count -and $tokens[$i + 1] -notmatch '^-\\w+$') {\r\n                # Parameter with value\r\n                $i++  # Move to the value\r\n                $value = $tokens[$i]\r\n                \r\n                # Handle PowerShell booleans\r\n                if ($value -eq '$true') {\r\n                    $parameters[$paramName] = $true\r\n                }\r\n                elseif ($value -eq '$false') {\r\n                    $parameters[$paramName] = $false\r\n                }\r\n                else {\r\n                    # Remove quotes if present\r\n                    $cleanValue = $value.Trim('\"')\r\n                    $parameters[$paramName] = $cleanValue\r\n                }\r\n            }\r\n            else {\r\n                # This is a switch parameter (no value)\r\n                $parameters[$paramName] = $true\r\n            }\r\n        }\r\n        else {\r\n            # Handle positional arguments (rare in this context)\r\n            # You could add logic here if needed\r\n        }\r\n        \r\n        $i++\r\n    }\r\n    \r\n    return $parameters\r\n}\r\n\r\nStart-Transcript -Path \"$env:SystemRoot\\Logs\\$Name.log\" -Force\r\nWrite-OutputWithTimeStamp \"Starting '$Name' script with the following parameters.\"\r\nWrite-Output ( $PSBoundParameters | Format-Table -AutoSize )\r\nIf ($Arguments -eq '') { $Arguments = $null }\r\nIf ($BuildDir -ne '') {\r\n  $TempDir = Join-Path $BuildDir -ChildPath $Name\r\n} Else {\r\n  $TempDir = Join-Path $Env:TEMP -ChildPath $Name\r\n}\r\nNew-Item -Path $TempDir -ItemType Directory -Force | Out-Null\r\n$WebClient = New-Object System.Net.WebClient\r\nIf ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n  Write-OutputWithTimeStamp \"Getting access token for '$Uri' using User Assigned Identity.\"\r\n  $StorageEndpoint = ($Uri -split \"://\")[0] + \"://\" + ($Uri -split \"/\")[2] + \"/\"\r\n  $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n  $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n  $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n  $webClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n}\r\n$SourceFileName = ($Uri -Split \"/\")[-1]\r\nWrite-OutputWithTimeStamp \"Downloading '$Uri' to '$TempDir'.\"\r\n$DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName\r\n$webClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\nStart-Sleep -Seconds 10\r\nIf (!(Test-Path -Path $DestFile)) { Write-Error \"Failed to download $SourceFileName\"; Exit 1 }\r\nWrite-OutputWithTimeStamp 'Finished downloading'\r\nSet-Location -Path $TempDir\r\n$Ext = [System.IO.Path]::GetExtension($DestFile).ToLower().Replace('.','')\r\nswitch ($Ext) {\r\n  'exe' {\r\n      If ($Arguments) {\r\n        Write-OutputWithTimeStamp \"Executing '`\"$DestFile`\" $Arguments'\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -ArgumentList (Split-ArgumentString -ArgumentString $Arguments) -NoNewWindow -Wait -PassThru\r\n        Write-OutputWithTimeStamp \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }\r\n      Else {\r\n        Write-OutputWithTimeStamp \"Executing `\"$DestFile`\"\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -NoNewWindow -Wait -PassThru\r\n        Write-OutputWithTimeStamp \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }      \r\n    }\r\n  'msi' {\r\n    If ($Arguments) {\r\n      $Arguments = Split-ArgumentString -ArgumentString $Arguments\r\n      If ($Arguments -notcontains $DestFile) {\r\n        $InstallArg = \"/i $DestFile\"\r\n        $Arguments = @($InstallArg) + $Arguments\r\n      }\r\n      Write-OutputWithTimeStamp \"Executing 'msiexec.exe $Arguments'\"\r\n      $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $Arguments -Wait -PassThru\r\n      Write-OutputWithTimeStamp \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Executing 'msiexec.exe /i $DestFile /qn'\"\r\n      $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList \"/i $DestFile /qn\" -Wait -PassThru\r\n      Write-OutputWithTimeStamp \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n    }    \r\n  }\r\n  'bat' {\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Executing 'cmd.exe `\"$DestFile`\" $Arguments'\"\r\n      $Arguments = Split-ArgumentString -ArgumentString $Arguments\r\n      If ($Arguments -notcontains $DestFile) {\r\n        $Arguments = @(\"$DestFile\") + $Arguments\r\n      }\r\n      Start-Process -FilePath cmd.exe -ArgumentList $Arguments -Wait\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Executing 'cmd.exe `\"$DestFile`\"'\"\r\n      Start-Process -FilePath cmd.exe -ArgumentList \"`\"$DestFile`\"\" -Wait\r\n    }\r\n  }\r\n  'ps1' {\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile' with arguments '$Arguments'\"\r\n      $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n      & $DestFile @parameterSplat\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile'\"\r\n      & $DestFile\r\n    }\r\n  }\r\n  'zip' {\r\n    $DestinationPath = Join-Path -Path \"$TempDir\" -ChildPath $([System.IO.Path]::GetFileNameWithoutExtension($SourceFileName))\r\n    Write-OutputWithTimeStamp \"Extracting '$DestFile' to '$DestinationPath'.\"\r\n    Expand-Archive -Path $DestFile -DestinationPath $DestinationPath -Force\r\n    Write-OutputWithTimeStamp \"Finding PowerShell script in root of '$DestinationPath'.\"\r\n    $PSScript = (Get-ChildItem -Path $DestinationPath -filter '*.ps1').FullName\r\n    If ($PSScript.count -gt 1) { $PSScript = $PSScript[0] }\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile' with arguments '$Arguments'\"\r\n      $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n      & $PSScript @parameterSplat\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$PSScript'\"         \r\n      & $PSScript\r\n    }\r\n  }\r\n}\r\nIf ((Split-Path $TempDir -Parent) -eq $Env:Temp) {Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue}\r\nStop-Transcript",
+                    "$fxv#0": "param(\r\n  [string]$APIVersion,\r\n  [string]$Arguments = '',\r\n  [string]$BlobStorageSuffix,\r\n  [string]$BuildDir = '',\r\n  [string]$Name,\r\n  [string]$Uri,\r\n  [string]$UserAssignedIdentityClientId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$LogFile = \"$env:SystemRoot\\Logs\\$Name.log\"\r\n\r\nfunction Write-Log {\r\n  param([string]$Message)\r\n  $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n  Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n  Write-Output $Entry\r\n}\r\n\r\nfunction Split-ArgumentString {\r\n  param([string]$ArgumentString)\r\n\r\n  if ([string]::IsNullOrWhiteSpace($ArgumentString)) { return @() }\r\n\r\n  $arguments = @()\r\n  $currentArg = ''\r\n  $inQuotes = $false\r\n\r\n  for ($i = 0; $i -lt $ArgumentString.Length; $i++) {\r\n    $char = $ArgumentString[$i]\r\n    if ($char -eq '\"' -and ($i -eq 0 -or $ArgumentString[$i - 1] -ne '\\')) {\r\n      $inQuotes = !$inQuotes\r\n      $currentArg += $char\r\n    }\r\n    elseif ($char -eq ' ' -and !$inQuotes) {\r\n      if ($currentArg.Length -gt 0) {\r\n        $value = $currentArg.Trim('\"')\r\n        if ($value -eq 'true') { $arguments += '$true' }\r\n        elseif ($value -eq 'false') { $arguments += '$false' }\r\n        else { $arguments += $value }\r\n        $currentArg = ''\r\n      }\r\n    }\r\n    else {\r\n      $currentArg += $char\r\n    }\r\n  }\r\n  if ($currentArg.Length -gt 0) {\r\n    $value = $currentArg.Trim('\"')\r\n    if ($value -eq 'true') { $arguments += '$true' }\r\n    elseif ($value -eq 'false') { $arguments += '$false' }\r\n    else { $arguments += $value }\r\n  }\r\n  return $arguments\r\n}\r\n\r\nfunction ConvertTo-ParametersSplat {\r\n  param([string]$ArgumentString)\r\n\r\n  if ([string]::IsNullOrWhiteSpace($ArgumentString)) { return @{} }\r\n\r\n  $tokens = Split-ArgumentString -ArgumentString $ArgumentString\r\n  $parameters = @{}\r\n  $i = 0\r\n  while ($i -lt $tokens.Count) {\r\n    $token = $tokens[$i]\r\n    if ($token -match '^-(\\w+)$') {\r\n      $paramName = $matches[1]\r\n      if (($i + 1) -lt $tokens.Count -and $tokens[$i + 1] -notmatch '^-\\w+$') {\r\n        $i++\r\n        $value = $tokens[$i]\r\n        if ($value -eq '$true') { $parameters[$paramName] = $true }\r\n        elseif ($value -eq '$false') { $parameters[$paramName] = $false }\r\n        else { $parameters[$paramName] = $value.Trim('\"') }\r\n      }\r\n      else {\r\n        $parameters[$paramName] = $true\r\n      }\r\n    }\r\n    $i++\r\n  }\r\n  return $parameters\r\n}\r\n\r\ntry {\r\n  Write-Log \"Starting '$Name' customization.\"\r\n  Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n\r\n  If ($Arguments -eq '') { $Arguments = $null }\r\n\r\n  If ($BuildDir -ne '') {\r\n    $TempDir = Join-Path $BuildDir -ChildPath $Name\r\n  }\r\n  Else {\r\n    $TempDir = Join-Path $Env:TEMP -ChildPath $Name\r\n  }\r\n  New-Item -Path $TempDir -ItemType Directory -Force | Out-Null\r\n\r\n  $WebClient = New-Object System.Net.WebClient\r\n  If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n    Write-Log \"Getting access token for '$Uri' using User Assigned Identity.\"\r\n    $StorageEndpoint = ($Uri -split '://')[0] + '://' + ($Uri -split '/')[2] + '/'\r\n    $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n    $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true} -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n    $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n    $WebClient.Headers.Add('Authorization', \"Bearer $AccessToken\")\r\n  }\r\n\r\n  $SourceFileName = ($Uri -split '/')[-1]\r\n  Write-Log \"Downloading '$Uri' to '$TempDir'.\"\r\n  $DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName\r\n  $WebClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\n  Start-Sleep -Seconds 10\r\n\r\n  If (!(Test-Path -Path $DestFile)) {\r\n    Write-Log \"Download completed but '$DestFile' not found on disk.\"\r\n    Exit 1\r\n  }\r\n  Write-Log 'Download complete.'\r\n\r\n  Set-Location -Path $TempDir\r\n  $Ext = [System.IO.Path]::GetExtension($DestFile).ToLower().Replace('.', '')\r\n  switch ($Ext) {\r\n    'exe' {\r\n      If ($Arguments) {\r\n        Write-Log \"Executing '`\"$DestFile`\" $Arguments'\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -ArgumentList (Split-ArgumentString -ArgumentString $Arguments) -NoNewWindow -Wait -PassThru\r\n        Write-Log \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }\r\n      Else {\r\n        Write-Log \"Executing '$DestFile'\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -NoNewWindow -Wait -PassThru\r\n        Write-Log \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }\r\n    }\r\n    'msi' {\r\n      If ($Arguments) {\r\n        $Arguments = Split-ArgumentString -ArgumentString $Arguments\r\n        If ($Arguments -notcontains $DestFile) {\r\n          $Arguments = @(\"/i $DestFile\") + $Arguments\r\n        }\r\n        Write-Log \"Executing 'msiexec.exe $Arguments'\"\r\n        $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $Arguments -Wait -PassThru\r\n        Write-Log \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n      }\r\n      Else {\r\n        Write-Log \"Executing 'msiexec.exe /i $DestFile /qn'\"\r\n        $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList \"/i $DestFile /qn\" -Wait -PassThru\r\n        Write-Log \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n      }\r\n    }\r\n    'bat' {\r\n      If ($Arguments) {\r\n        Write-Log \"Executing 'cmd.exe `\"$DestFile`\" $Arguments'\"\r\n        $BatArgs = Split-ArgumentString -ArgumentString $Arguments\r\n        If ($BatArgs -notcontains $DestFile) { $BatArgs = @(\"$DestFile\") + $BatArgs }\r\n        Start-Process -FilePath cmd.exe -ArgumentList $BatArgs -Wait\r\n      }\r\n      Else {\r\n        Write-Log \"Executing 'cmd.exe `\"$DestFile`\"'\"\r\n        Start-Process -FilePath cmd.exe -ArgumentList \"`\"$DestFile`\"\" -Wait\r\n      }\r\n    }\r\n    'ps1' {\r\n      If ($Arguments) {\r\n        Write-Log \"Calling '$DestFile' with arguments '$Arguments'\"\r\n        $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n        & $DestFile @parameterSplat\r\n      }\r\n      Else {\r\n        Write-Log \"Calling '$DestFile'\"\r\n        & $DestFile\r\n      }\r\n    }\r\n    'zip' {\r\n      $DestinationPath = Join-Path -Path $TempDir -ChildPath ([System.IO.Path]::GetFileNameWithoutExtension($SourceFileName))\r\n      Write-Log \"Extracting '$DestFile' to '$DestinationPath'.\"\r\n      Expand-Archive -Path $DestFile -DestinationPath $DestinationPath -Force\r\n      Write-Log \"Finding PowerShell script in '$DestinationPath'.\"\r\n      $PSScript = (Get-ChildItem -Path $DestinationPath -Filter '*.ps1').FullName\r\n      If ($PSScript.Count -gt 1) { $PSScript = $PSScript[0] }\r\n      If ($Arguments) {\r\n        Write-Log \"Calling '$PSScript' with arguments '$Arguments'\"\r\n        $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n        & $PSScript @parameterSplat\r\n      }\r\n      Else {\r\n        Write-Log \"Calling '$PSScript'\"\r\n        & $PSScript\r\n      }\r\n    }\r\n  }\r\n\r\n  If ((Split-Path $TempDir -Parent) -eq $Env:TEMP) {\r\n    Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue\r\n  }\r\n  Write-Log \"'$Name' customization complete.\"\r\n}\r\ncatch {\r\n  Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n  If ($_.Exception.InnerException) {\r\n    Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\"\r\n  }\r\n  Write-Log $_.ScriptStackTrace\r\n  Exit 1\r\n}",
                     "apiVersion": "[if(startsWith(environment().name, 'USN'), '2017-08-01', '2018-02-01')]"
                   },
                   "resources": [

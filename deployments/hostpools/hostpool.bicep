@@ -681,6 +681,9 @@ var deployKeyVaults = deploymentType == 'Complete' && (deploySecretsKeyVault || 
 // completes during the monitoring/controlPlane phases — well before VMs or storage deploy.
 var deployTopLevelDiskCmk = deploymentType != 'SessionHostsOnly' && contains(keyManagementDisks, 'CustomerManaged') && !confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
 var deployTopLevelStorageCmk = deploymentType != 'SessionHostsOnly' && deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && keyManagementStorageAccounts != 'MicrosoftManaged' && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
+// CVM CMK: CVM keys must be created via Key Vault data plane (Run Command) because ARM key PUT
+// does not support key release policies. The DES is then created by the shared CMK module with skipKeyCreation=true.
+var deployCvmDiskCmk = deploymentType != 'SessionHostsOnly' && confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
 
 var hostPoolVmTemplate = deploymentType != 'SessionHostsOnly'
   ? {
@@ -708,8 +711,14 @@ var diskEncryptionSetName = confidentialVMOSDiskEncryption
                 ? resourceNames.outputs.diskEncryptionSetNames.platformAndCustomerManaged
                 : null
 
+// NOTE: the name formula below must stay in sync with azureFiles.bicep: '${storageAccountNamePrefix}${padLeft(i + storageIndex, 2, '0')}'
 var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
-  ? { fslLocalStorageAccountNames: string(map(fslogix!.outputs.storageAccountResourceIds, id => last(split(id, '/')))) }
+  ? {
+      fslLocalStorageAccountNames: string(map(
+        range(0, fslogixStorageCount),
+        i => '${resourceNames.outputs.storageAccountNames.fslogix}${padLeft(i + fslogixStorageIndex, 2, '0')}'
+      ))
+    }
   : !empty(fslogixExistingLocalStorageAccountResourceIds)
       ? {
           fslLocalStorageAccountNames: string(map(
@@ -726,8 +735,15 @@ var fslRemoteStorageAccountNames = !empty(fslogixExistingRemoteStorageAccountRes
       ))
     }
   : {}
+// NOTE: the resource ID path below must stay in sync with azureNetAppFiles.bicep scoped to resourceGroupStorage.
 var fslLocalNetAppVolumeResourceIds = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureNetAppFiles')
-  ? { fslLocalNetAppVolumeResourceIds: string(fslogix!.outputs.netAppVolumeResourceIds) }
+  ? {
+      fslLocalNetAppVolumeResourceIds: string(map(
+        resourceNames.outputs.fslogixFileShareNames[fslogixContainerType],
+        share =>
+          '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceNames.outputs.resourceGroupStorage}/providers/Microsoft.NetApp/netAppAccounts/${resourceNames.outputs.netAppAccountName}/capacityPools/${resourceNames.outputs.netAppCapacityPoolName}/volumes/${share}'
+      ))
+    }
   : !empty(fslogixExistingLocalNetAppVolumeResourceIds)
       ? { fslLocalNetAppVolumeResourceIds: string(fslogixExistingLocalNetAppVolumeResourceIds) }
       : {}
@@ -735,12 +751,15 @@ var fslRemoteNetAppVolumeResourceIds = !empty(fslogixExistingRemoteNetAppVolumeR
   ? { fslRemoteNetAppVolumeResourceIds: string(fslogixExistingRemoteNetAppVolumeResourceIds) }
   : {}
 
-// FSLogix configuration tags for hosts resource group
-var fslogixConfigurationTags = fslogixConfigureSessionHosts
+// FSLogix configuration tags for hosts resource group.
+// Applied whenever any storage is associated (deployed or existing) so that a future
+// SessionHostsOnly deployment can read them back regardless of fslogixConfigureSessionHosts.
+var hasAssociatedFslStorage = deployFSLogixStorage || !empty(fslogixExistingLocalStorageAccountResourceIds) || !empty(fslogixExistingLocalNetAppVolumeResourceIds)
+var fslogixConfigurationTags = hasAssociatedFslStorage
   ? union(
       { fslContainerType: fslogixContainerType },
       { fslContainerSizeInMBs: fslogixSizeInMBs },
-      { fslStorageService: split(fslogixStorageService, '')[0] },
+      { fslStorageService: split(fslogixStorageService, ' ')[0] },
       { fslFileShareNames: string(resourceNames.outputs.fslogixFileShareNames[fslogixContainerType]) },
       { fslSharding: fslogixShardOptions },
       fslLocalStorageAccountNames,
@@ -900,10 +919,12 @@ var encryptionKeyVaultUri = !empty(encryptionKeyVaultResourceId)
   ? kvEncryption!.properties.vaultUri
   : (deployInlineEncryptionKv ? keyVaults!.outputs.encryptionKeyVaultUri : '')
 
-// Effective DES resource ID: top-level CMK output takes precedence over a user-provided pre-existing DES.
+// Effective DES resource ID: top-level disk CMK or CVM CMK output takes precedence over a user-provided pre-existing DES.
 var effectiveDiskEncryptionSetResourceId = deployTopLevelDiskCmk
   ? diskCmk!.outputs.diskEncryptionSetResourceId
-  : existingDiskEncryptionSetResourceId
+  : deployCvmDiskCmk
+      ? cvmDiskCmk!.outputs.diskEncryptionSetResourceId
+      : existingDiskEncryptionSetResourceId
 
 // Existing Session Host Virtual Network location
 resource vmVirtualNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existing = {
@@ -997,19 +1018,8 @@ module globalFeedResourceGroup '../../.common/bicepModules/resources/resourceGro
   }
 }
 
-// Host Resource Group without Tags to prevent circular dependency between deployment prerequisites and outputs from fslogix.
-
-module hostsResourceGroupNoTags '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType != 'SessionHostsOnly') {
+module hostsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType != 'SessionHostsOnly') {
   name: 'Resource-Group-Hosts-${deploymentSuffix}'
-  params: {
-    location: virtualMachinesRegion
-    name: resourceNames.outputs.resourceGroupHosts
-    tags: {}
-  }
-}
-
-module hostsResourceGroupWithTags '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deploymentType != 'SessionHostsOnly') {
-  name: 'Resource-Group-Hosts-Tags-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
     name: resourceNames.outputs.resourceGroupHosts
@@ -1156,8 +1166,8 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
 
 // Disk CMK: DES + key + role assignment — runs in parallel with monitoring/controlPlane,
 // giving sufficient RBAC propagation buffer before sessionHosts needs the DES.
-// Confidential VM disk encryption is excluded here; it still uses a run command inside sessionHosts.
-module diskCmk 'modules/diskCmk/diskCmk.bicep' = if (deployTopLevelDiskCmk) {
+// Confidential VM disk encryption is handled separately by cvmDiskCmk below.
+module diskCmk 'modules/cmk/diskCmk.bicep' = if (deployTopLevelDiskCmk) {
   name: 'Disk-CMK-${deploymentSuffix}'
   params: {
     resourceGroupName: resourceNames.outputs.resourceGroupHosts
@@ -1175,13 +1185,39 @@ module diskCmk 'modules/diskCmk/diskCmk.bicep' = if (deployTopLevelDiskCmk) {
       : resourceNames.outputs.diskEncryptionSetNames.platformAndCustomerManaged
   }
   dependsOn: [
-    hostsResourceGroupNoTags
+    hostsResourceGroup
+  ]
+}
+
+// CVM CMK: two-step flow — Run Command creates the key with a release policy (Key Vault data plane),
+// then the shared CMK module creates the DES + role assignments (ARM, skipKeyCreation=true).
+// Must run after deploymentPrereqs so the deployment VM and its Key Vault Crypto Officer role
+// assignment are in place before the Run Command executes.
+module cvmDiskCmk 'modules/cmk/cvmDiskCmk.bicep' = if (deployCvmDiskCmk) {
+  name: 'CVM-Disk-CMK-${deploymentSuffix}'
+  params: {
+    resourceGroupHosts: resourceNames.outputs.resourceGroupHosts
+    resourceGroupDeployment: resourceNames.outputs.resourceGroupDeployment
+    keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
+    keyVaultUri: encryptionKeyVaultUri
+    keyName: resourceNames.outputs.encryptionKeyNames.confidentialVMs
+    diskEncryptionSetName: resourceNames.outputs.diskEncryptionSetNames.confidentialVMs
+    confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
+    deploymentVirtualMachineName: deploymentPrereqs!.outputs.virtualMachineName
+    deploymentUserAssignedIdentityClientId: deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
+    location: virtualMachinesRegion
+    tags: tags
+    hostPoolResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceNames.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${resourceNames.outputs.hostPoolName}'
+    deploymentSuffix: deploymentSuffix
+  }
+  dependsOn: [
+    hostsResourceGroup
   ]
 }
 
 // Storage CMK: UAI + keys + role assignments for FSLogix AzureFiles storage accounts.
 // Runs in parallel with monitoring/controlPlane so role assignments propagate before azureFiles deploys.
-module storageCmk 'modules/storageCmk/storageCmk.bicep' = if (deployTopLevelStorageCmk) {
+module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployTopLevelStorageCmk) {
   name: 'Storage-CMK-${deploymentSuffix}'
   params: {
     resourceGroupName: resourceNames.outputs.resourceGroupStorage
@@ -1419,7 +1455,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     availabilitySetsIndex: beginAvSetRange
     availabilityZones: availabilityZones
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
     customImageResourceId: customImageResourceId
     dataCollectionEndpointResourceId: enableMonitoring
@@ -1433,7 +1468,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     deployDiskAccessResource: deployDiskAccessResource
     deploymentType: deploymentType
     diskAccessName: resourceNames.outputs.diskAccessName
-    diskEncryptionSetNames: resourceNames.outputs.diskEncryptionSetNames
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     #disable-next-line BCP422
@@ -1455,10 +1489,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     encryptionAtHost: encryptionAtHost
     hasAmdGpu: hasAmdGpu
     hasNvidiaGpu: hasNvidiaGpu
-    encryptionKeyName: confidentialVMOSDiskEncryption
-      ? resourceNames.outputs.encryptionKeyNames.confidentialVMs
-      : resourceNames.outputs.encryptionKeyNames.virtualMachines
-    encryptionKeyVaultResourceId: effectiveEncryptionKeyVaultResourceId
     existingDiskAccessResourceId: existingDiskAccessResourceId
     existingDiskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     existingRecoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
@@ -1486,8 +1516,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     imageSku: imageSku
     integrityMonitoring: integrityMonitoring
     intuneEnrollment: intuneEnrollment
-    keyExpirationInDays: keyExpirationInDays
-    keyManagementDisks: keyManagementDisks
     location: virtualMachinesRegion
     osDiskNameConv: resourceNames.outputs.virtualMachineDiskNameConv
     ouPath: vmOUPath
@@ -1495,7 +1523,8 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     privateEndpointNICNameConv: resourceNames.outputs.privateEndpointNICNameConv
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     networkInterfaceNameConv: resourceNames.outputs.virtualMachineNicNameConv
-    recoveryServices: contains(hostPoolType, 'Personal') ? recoveryServices : false
+    hostPoolType: hostPoolType
+    recoveryServices: recoveryServices
     resourceGroupHosts: deploymentType != 'SessionHostsOnly'
       ? resourceNames.outputs.resourceGroupHosts
       : existingHostsResourceGroupName
@@ -1529,7 +1558,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     vTpmEnabled: vTpmEnabled
   }
   dependsOn: [
-    hostsResourceGroupWithTags
+    hostsResourceGroup
   ]
 }
 

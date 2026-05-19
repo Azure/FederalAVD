@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$ResourceManagerUri,
 
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [string]$UserAssignedIdentityClientId,
 
     [Parameter(Mandatory=$true)]
@@ -15,9 +15,10 @@ $WarningPreference = 'SilentlyContinue'
 Try {
     $ResourceManagerUriFixed = if ($ResourceManagerUri[-1] -eq '/') { $ResourceManagerUri.Substring(0, $ResourceManagerUri.Length - 1) } else { $ResourceManagerUri }
 
-    $AzureManagementAccessToken = (Invoke-RestMethod `
-        -Headers @{Metadata = "true" } `
-        -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token
+    # Get an access token — use UAI client_id when provided, otherwise fall back to system-assigned identity
+    $TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed
+    if (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }
+    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata = "true" } -Uri $TokenUri).access_token
 
     $AzureManagementHeader = @{
         'Content-Type'  = 'application/json'

@@ -116,10 +116,11 @@ if ($createHostPool) {
 
 if ($CreateAddOns) {
     $addOns = @(
-        @{ Name = 'run-commands-on-vms'; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines'; FolderName = 'RunCommandsOnVms' },
-        @{ Name = 'update-storage-account-key-on-session-hosts'; DisplayName = 'AVD Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'UpdateStorageAccountKeyOnSessionHosts' },
-        @{ Name = 'avd-storage-quota-manager'; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'StorageQuotaManager' },
-        @{ Name = 'avd-session-host-replacer'; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'SessionHostReplacer' }
+        @{ Name = 'run-commands-on-vms'; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines'; FolderName = 'runCommandsOnVms' },
+        @{ Name = 'update-storage-account-key-on-session-hosts'; DisplayName = 'AVD Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'updateStorageAccountKeyOnSessionHosts' },
+        @{ Name = 'avd-storage-quota-manager'; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'storageQuotaManager' },
+        @{ Name = 'avd-session-host-replacer'; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'sessionHostReplacer' }
+        @{ Name = 'avd-session-hosts'; DisplayName = 'AVD Session Hosts'; Description = 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'; FolderName = 'sessionHosts' }
     )
 
     foreach ($addOn in $addOns) {

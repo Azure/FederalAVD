@@ -134,8 +134,20 @@ param hostPoolResourceId string
 @description('Identity solution for session hosts. Valid values: ActiveDirectoryDomainServices, EntraDomainServices, EntraId, EntraKerberos-CloudOnly, EntraKerberos-Hybrid.')
 param identitySolution string
 
-@description('Image reference object containing either marketplace image details or compute gallery image version resource ID.')
-param imageReference object
+@description('Optional. Image reference object containing either marketplace image details or compute gallery image version resource ID. When provided, takes precedence over imageOffer/imageSku/customImageResourceId. Used by the Session Host Replacer.')
+param imageReference object = {}
+
+@description('Optional. Marketplace image offer (e.g. "windows-11"). Used when imageReference is empty and customImageResourceId is empty.')
+param imageOffer string = ''
+
+@description('Optional. Marketplace image publisher. Used when imageReference is empty and customImageResourceId is empty.')
+param imagePublisher string = 'MicrosoftWindowsDesktop'
+
+@description('Optional. Marketplace image SKU (e.g. "win11-24h2-avd"). Used when imageReference is empty and customImageResourceId is empty.')
+param imageSku string = ''
+
+@description('Optional. Resource ID of a custom image version in an Azure Compute Gallery. When provided, overrides marketplace image params.')
+param customImageResourceId string = ''
 
 @description('Enable Microsoft Defender for Cloud integrity monitoring on session hosts.')
 param integrityMonitoring bool = false
@@ -174,11 +186,28 @@ param sessionHostCustomizations array = []
 
 @minValue(1)
 @maxValue(4)
-@description('Number of digits used in the session host name index. Determines how many characters from the end represent the VM number.')
+@description('Number of digits used in the session host name index. Determines how many characters from the end represent the VM number. Used in both naming modes.')
 param sessionHostNameIndexLength int = 2
 
-@description('Array of session host names to deploy. Names should follow the pattern <prefix><index> where index length matches sessionHostNameIndexLength.')
-param sessionHostNames array
+// ── Naming mode: explicit list ────────────────────────────────────────────────
+// Used by the Session Host Replacer function app, which pre-computes exact names.
+// When provided, takes precedence over convention mode params below.
+@description('Optional. Explicit array of session host names to deploy (e.g. ["vm-avd-01","vm-avd-02"]). When non-empty, overrides convention mode. Used by the SHR function app.')
+param sessionHostNames array = []
+
+// ── Naming mode: convention (prefix + index range) ───────────────────────────
+// Used when deploying manually via the portal UI without pre-computed names.
+// Ignored when sessionHostNames is non-empty.
+@description('Optional. Short prefix for session host names (e.g. "avd-vm-"). Required when sessionHostNames is empty.')
+param sessionHostNamePrefix string = ''
+
+@minValue(0)
+@description('Optional. Number of session hosts to deploy in convention mode. Required when sessionHostNames is empty.')
+param sessionHostCount int = 0
+
+@minValue(0)
+@description('Optional. Starting index for VM name generation in convention mode (e.g. 1 → vm-avd-01). Required when sessionHostNames is empty.')
+param sessionHostIndex int = 0
 
 @description('Resource ID of the subnet where session host network interfaces will be placed.')
 param subnetResourceId string
@@ -203,14 +232,77 @@ param vmInsightsDataCollectionRulesResourceId string = ''
 
 // Variables
 
-var avSetNameConv = empty(availabilitySetNameConv)
-  ? 'as-${substring(sessionHostNames[0], 0, length(sessionHostNames[0])-sessionHostNameIndexLength)}-##'
-  : availabilitySetNameConv
+// ── Naming convention auto-detection ─────────────────────────────────────────
+// Detects whether the host pool uses resource-type-at-end (reversed) or at-start convention
+// by inspecting the host pool name, mirroring the same logic used in the Session Host Replacer.
+var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
+var locationsObject = loadJsonContent('../../../.common/data/locations.json')
+var cloud = toLower(environment().name)
+var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : environment().name
+var locations = locationsObject[locationsEnvProperty]
+#disable-next-line BCP329
+var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
+var regionAbbreviation = locations[varLocation].abbreviation
+
+var hostPoolName = last(split(hostPoolResourceId, '/'))
+var nameConvReversed = startsWith(hostPoolName, '${resourceAbbreviations.hostPools}-')
+  ? false // Resource type at beginning (e.g., "hp-avd-01-eus")
+  : endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}')
+      ? true // Resource type at end (e.g., "avd-01-eus-hp")
+      : false // Default fallback
+
+var arrHostPoolName = split(hostPoolName, '-')
+var hpBaseName = nameConvReversed
+  ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-') // Remove last 2 segments (location-hp)
+  : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-') // Remove first (hp) and last (location)
+var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
+var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
+var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
+
+// Effective naming conventions — override params take precedence; auto-detected values are the fallback.
+var effectiveVirtualMachineNameConv = !empty(virtualMachineNameConv)
+  ? virtualMachineNameConv
+  : nameConvReversed
+      ? 'SHNAME-${resourceAbbreviations.virtualMachines}'
+      : '${resourceAbbreviations.virtualMachines}-SHNAME'
+
+var effectiveNetworkInterfaceNameConv = !empty(networkInterfaceNameConv)
+  ? networkInterfaceNameConv
+  : nameConvReversed
+      ? 'SHNAME-${resourceAbbreviations.networkInterfaces}'
+      : '${resourceAbbreviations.networkInterfaces}-SHNAME'
+
+var effectiveOsDiskNameConv = !empty(osDiskNameConv)
+  ? osDiskNameConv
+  : nameConvReversed
+      ? 'SHNAME-${resourceAbbreviations.osdisks}'
+      : '${resourceAbbreviations.osdisks}-SHNAME'
+
+var generatedAvSetNameConv = nameConvReversed
+  ? replace(
+      replace(
+        replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', resourceAbbreviations.availabilitySets),
+        'LOCATION',
+        regionAbbreviation
+      ),
+      'TOKEN-',
+      ''
+    )
+  : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', regionAbbreviation), 'TOKEN-', '')}-##'
+
+var avSetNameConv = !empty(availabilitySetNameConv) ? availabilitySetNameConv : generatedAvSetNameConv
+
+// Resolve effective image reference: explicit imageReference param (SHR path) takes precedence,
+// then customImageResourceId, then marketplace fields.
+var effectiveImageReference = !empty(imageReference)
+  ? imageReference
+  : !empty(customImageResourceId)
+      ? { id: customImageResourceId }
+      : { publisher: imagePublisher, offer: imageOffer, sku: imageSku, version: 'latest' }
 
 var deploymentSuffix = uniqueString(deployment().name)
 
 // Agent download URL construction with environment-based fallback
-var cloud = toLower(environment().name)
 var cloudSuffix = replace(
   replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''),
   '/',
@@ -234,6 +326,12 @@ var dscUrl = 'https://${dscStorageAccount}.blob.${environment().suffixes.storage
 
 var confidentialVMOSDiskEncryptionType = confidentialVMOSDiskEncryption ? 'DiskWithVMGuestState' : 'VMGuestStateOnly'
 
+// Resolve effective session host names from either explicit list or convention (prefix + index range).
+// Explicit list (sessionHostNames) takes precedence — used by the SHR function app.
+// Convention mode is used for manual/portal deployments.
+var generatedSessionHostNames = [for i in range(sessionHostIndex, sessionHostCount): '${sessionHostNamePrefix}${padLeft(i, sessionHostNameIndexLength, '0')}']
+var effectiveSessionHostNames = !empty(sessionHostNames) ? sessionHostNames : generatedSessionHostNames
+
 // Batching logic: Dynamically calculate max VMs per batch based on resources per VM
 // Empirically measured: 915 resources / 61 VMs = 15 with monitoring, so base = 11 without monitoring
 var hasAmdGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(
@@ -252,7 +350,7 @@ var customizationsResourcesPerVM = !empty(sessionHostCustomizations) ? (1 + leng
 var totalResourcesPerVM = baseResourcesPerVM + monitoringResourcesPerVM + gpuResourcesPerVM + integrityResourcesPerVM + customizationsResourcesPerVM
 var calculatedMaxVMs = 800 / totalResourcesPerVM // ARM template limit is 800 resources per template
 var maxVMsPerDeployment = calculatedMaxVMs < 20 ? 20 : (calculatedMaxVMs > 45 ? 45 : calculatedMaxVMs) // Safety bounds: minimum 20, maximum 45 VMs per batch
-var totalVMCount = length(sessionHostNames)
+var totalVMCount = length(effectiveSessionHostNames)
 var divisionValue = totalVMCount / maxVMsPerDeployment
 var divisionRemainderValue = totalVMCount % maxVMsPerDeployment
 var sessionHostBatchCount = divisionRemainderValue > 0 ? divisionValue + 1 : divisionValue
@@ -260,7 +358,7 @@ var sessionHostBatchCount = divisionRemainderValue > 0 ? divisionValue + 1 : div
 // Availability Set logic: Max 200 VMs per availability set
 // Extract VM numbers from names to determine which availability sets are needed
 var vmNumbersForAvSet = [
-  for name in sessionHostNames: int(substring(
+  for name in effectiveSessionHostNames: int(substring(
     name,
     length(name) - sessionHostNameIndexLength,
     sessionHostNameIndexLength
@@ -302,7 +400,7 @@ module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if (fsl
   }
 }
 
-module availabilitySets '../../../../../.common/bicepModules/compute/availabilitySets/deploy.bicep' = [
+module availabilitySets '../../../.common/bicepModules/compute/availabilitySets/deploy.bicep' = [
   for i in range(0, calculatedAvailabilitySetsCount): if (availability == 'AvailabilitySets') {
     name: 'shr-availabilitySet-${padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
     params: {
@@ -368,26 +466,26 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       fslogixStorageService: fslogixStorageService
       hostPoolResourceId: hostPoolResourceId
       identitySolution: identitySolution
-      imageReference: imageReference
+      imageReference: effectiveImageReference
       integrityMonitoring: integrityMonitoring
       intuneEnrollment: intuneEnrollment
       location: location
-      networkInterfaceNameConv: networkInterfaceNameConv
-      osDiskNameConv: osDiskNameConv
+      networkInterfaceNameConv: effectiveNetworkInterfaceNameConv
+      osDiskNameConv: effectiveOsDiskNameConv
       ouPath: ouPath
       sessionHostCustomizations: sessionHostCustomizations
       secureBootEnabled: secureBootEnabled
       securityType: securityType
       sessionHostNameIndexLength: sessionHostNameIndexLength
       sessionHostNames: i == sessionHostBatchCount && divisionRemainderValue > 0
-        ? take(skip(sessionHostNames, (i - 1) * maxVMsPerDeployment), divisionRemainderValue)
-        : take(skip(sessionHostNames, (i - 1) * maxVMsPerDeployment), maxVMsPerDeployment)
+        ? take(skip(effectiveSessionHostNames, (i - 1) * maxVMsPerDeployment), divisionRemainderValue)
+        : take(skip(effectiveSessionHostNames, (i - 1) * maxVMsPerDeployment), maxVMsPerDeployment)
       subnetResourceId: subnetResourceId
       tags: tags
       timeZone: timeZone
       virtualMachineAdminPassword: kvCredentials.getSecret('VirtualMachineAdminPassword')
       virtualMachineAdminUserName: kvCredentials.getSecret('VirtualMachineAdminUserName')
-      virtualMachineNameConv: virtualMachineNameConv
+      virtualMachineNameConv: effectiveVirtualMachineNameConv
       virtualMachineSize: virtualMachineSize
       vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId
       vTpmEnabled: vTpmEnabled
