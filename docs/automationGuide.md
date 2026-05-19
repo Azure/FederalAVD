@@ -29,7 +29,9 @@ flowchart TD
         IM_O4(["managedIdentityResourceId"])
         IM_O5(["buildLogsStorageAccountResourceId"])
         IM_O6(["diskEncryptionSetResourceId"])
-        IM_RUN --> IM_O1 & IM_O2 & IM_O3 & IM_O4 & IM_O5 & IM_O6
+        IM_O7(["confidentialVmDiskEncryptionSetResourceId"])
+        IM_O8(["imageBuildResourceGroupResourceId"])
+        IM_RUN --> IM_O1 & IM_O2 & IM_O3 & IM_O4 & IM_O5 & IM_O6 & IM_O7 & IM_O8
     end
 
     subgraph UA["⬆️ Step 3 · Upload Artifacts"]
@@ -67,6 +69,8 @@ flowchart TD
     IM_O4 -->|"→ userAssignedIdentityResourceId"| IB_RUN
     IM_O5 -->|"→ logStorageAccountResourceId"| IB_RUN
     IM_O6 -->|"→ diskEncryptionSetResourceId"| IB_RUN
+    IM_O7 -->|"→ confidentialVMDiskEncryptionSetResourceId"| IB_RUN
+    IM_O8 -->|"→ imageBuildResourceGroupId"| IB_RUN
 
     %% Upload Artifacts → Image Build (data dependency, no parameter)
     UA_DONE -.->|"artifacts ready"| IB_RUN
@@ -121,6 +125,7 @@ Script invocation:
 | `managedIdentityResourceId` | Image Build — `userAssignedIdentityResourceId` parameter |
 | `buildLogsStorageAccountResourceId` | Image Build — `logStorageAccountResourceId` parameter |
 | `diskEncryptionSetResourceId` | Image Build — `diskEncryptionSetResourceId` parameter (only when CMK enabled) |
+| `confidentialVmDiskEncryptionSetResourceId` | Image Build — `confidentialVMDiskEncryptionSetResourceId` parameter (only when Confidential VM encryption type is `EncryptedWithCmk`) |
 | `imageBuildResourceGroupResourceId` | Image Build — `imageBuildResourceGroupId` parameter (existing RG path only) |
 
 ### Notes
@@ -148,7 +153,7 @@ This step has **no Azure deployment outputs** — it only writes blobs to storag
 
 - For air-gapped environments, use `-SkipDownloadingNewSources` and pre-stage files in `.common/artifacts/` manually before running.
 - Use `-DeleteExistingBlobs` for a clean upload when removing old packages.
-- Use `-ParameterFilePrefix` to point at a custom downloads configuration file.
+- Use `-AdditionalDownloadsFilePath` to merge a custom downloads JSON file on top of the auto-selected base file.
 
 ---
 
@@ -163,7 +168,8 @@ Inputs from Step 2:
   artifactsBlobContainerUrl     →  imageBuild parameter: artifactsContainerUri
   managedIdentityResourceId     →  imageBuild parameter: userAssignedIdentityResourceId
   buildLogsStorageAccountResourceId  →  imageBuild parameter: logStorageAccountResourceId (optional)
-  diskEncryptionSetResourceId →  imageBuild parameter: diskEncryptionSetResourceId (only when CMK enabled)
+  diskEncryptionSetResourceId        →  imageBuild parameter: diskEncryptionSetResourceId (only when CMK enabled)
+  confidentialVmDiskEncryptionSetResourceId  →  imageBuild parameter: confidentialVMDiskEncryptionSetResourceId (only when Confidential VM with CMK)
   imageBuildResourceGroupResourceId  →  imageBuild parameter: imageBuildResourceGroupId (existing RG path only)
 
 Script invocation:

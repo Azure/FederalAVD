@@ -42,18 +42,77 @@ During session host deployment (host pool creation and Session Host Replacer ope
 
 ## Custom Image Build
 
-The following table provides specific instructions for preparing your air-gapped environment for building custom images. This assumes that you have already created the image management storage account and blob container. The **Storage Account Provided** and **Download Latest Microsoft Content** columns represent the `artifactsContainerUri` and the `downloadLatestMicrosoftContent` image build parameters respectively.
+### How the Downloads Configuration Works
 
-| Software | Storage Account</br>Provided | Download Latest</br>Microsoft Content | Instructions and Caveats |
-| :-- | :--: | :--: | :-- |
-| FSLogix | Yes | Yes / No | **✅ Available in Azure Toolbox!** <ol><li>Within your air-gapped cloud, download the latest FSLogix installer from the Azure Toolbox.</li><li>Save it as **FSLogix.zip** in the storage account and container specified.</li></ol>**Note:** No internet access or cross-network file transfer required! Alternatively, you can still download from [aka.ms/fslogix_download](https://aka.ms/fslogix_download) on an internet-connected system and transfer it. |
-| FSLogix | No | Yes / No | <span style="color:red">Not supported</span> - Storage account is required because automated script downloads from Azure Toolbox require authentication. |
-| Office | Yes | No | On your air-gapped management system, execute [Deploy-ImageManagement.ps1](quickStart.md#deploy-image-management-resources) or download the Office Deployment Tool from the appropriate Microsoft 365 Apps link below and save it to the blob storage container as **Office365DeploymentTool.exe**. |
-| Office | Yes / No | Yes | The air-gapped cloud Office Deployment Tool Setup.exe download url must be accessible from the image build virtual machine. |
-| OneDrive | Yes | No |  On your air-gapped management system, execute [Deploy-ImageManagement.ps1](quickStart.md#deploy-image-management-resources) or download OneDriveSetup.exe from the appropriate air-gapped download url and save it as **OneDriveSetup.exe** in the blob container.|
-| OneDrive | Yes / No | Yes | The appropriate Air-Gapped cloud OneDriveSetup.exe download url must be accessible from the image build virtual machine. |
-| Teams | Yes | No | <ol><li>On a system with access to the public Internet:</br><ul><li>Download the latest [WebView2 Runtime](https://go.microsoft.com/fwlink/?linkid=2124703) and save it as **WebView2.exe**</li><li>Download the lastest [Visual Studio Redistributables](https://aka.ms/vs/17/release/vc_redist.x64.exe) and save it as **vc_redist.x64.exe**.</li><li>Download the latest [Remote Desktop Web RTC Service installer](https://aka.ms/msrdcwebrtcsvc/msi) and save it as **MsRdcWebRTCSvc.msi**.</li></ul><li>Transfer all three files to the air-gapped network and upload them to the storage account blob container.</li><li>On your air-gapped management system, execute [Deploy-ImageManagement.ps1](quickStart.md#deploy-image-management-resources) or  download:<ul><li>The latest Teams Bootstrapper from the appropriate air-gapped cloud Microsoft Teams reference site and upload it to the storage blob container as **teamsbootstrapper.exe**.</li><li>The latest Teams 64-bit MSIX file from appropriate Air-Gapped download sites and upload it to the storage blob container as **MSTeams-x64.msix**.</li></ul></ol> |
-| Teams | Yes | Yes | <ol><li>On a system with access to the public Internet:</br><ul><li>Download the latest [WebView2 Runtime](https://go.microsoft.com/fwlink/?linkid=2124703) and save it as **WebView2.exe**.</li><li>Download the lastest [Visual Studio Redistributables](https://aka.ms/vs/17/release/vc_redist.x64.exe) and save it as **vc_redist.x64.exe**.</li><li>Download the latest [Remote Desktop Web RTC Service installer](https://aka.ms/msrdcwebrtcsvc/msi) and save it as **MsRdcWebRTCSvc.msi**.</li></ul><li>Transfer all three files to the air-gapped network and upload them to the storage account blob container.</li><li>Ensure that the image build virtual machine can access The latest Teams Bootstrapper and the latest Teams 64-bit MSIX file from appropriate air-gapped cloud Microsoft Teams download site. |
-| Teams | No | Yes | Ensure that the image build virtual machine can access The latest Teams Bootstrapper and MSIX file downloads available on the Air-Gapped network. **Note:**<span style="color:red">Teams media optimizations will not be enabled in this scenario.</span> |
-| Teams | No | No | <span style="color:red">Not supported</span> |
-| WDOT | Yes | Yes / No | <ol><li>On a system with access to the public Internet, download the latest [WDOT](https://codeload.github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool/zip/refs/heads/main) and save it as **WDOT.zip**.</li><li>Transfer it to an air-gapped system and upload it to the storage account container. |
+The `Update-ImageArtifacts.ps1` script automatically selects the correct downloads configuration file from `.common/data/` based on the connected Azure environment:
+
+| Azure Environment | Base File |
+|---|---|
+| AzureCloud / AzureUSGovernment | `.common/data/public.downloads.parameters.json` |
+| Azure Government Secret (IL6) | `.common/data/secret.downloads.parameters.json` |
+| Azure Government Top Secret (IL7) | `.common/data/topsecret.downloads.parameters.json` |
+
+The secret and top secret files are already in the repository. Each entry either has a working air-gapped cloud URL (the script downloads it automatically) or an **empty `DownloadUrl`** (you must place the file manually before running the script).
+
+To add software not in the base file, pass an additional JSON file via `-AdditionalDownloadsFilePath`. See [Update-ImageArtifacts Script Guide](updateImageArtifacts.md) for the file format.
+
+---
+
+### Items That Must Be Placed Manually
+
+The following artifacts have empty `DownloadUrl` entries in the secret and top secret downloads files — no automated download source is configured. If you wish, you can obtain these files from a reachable source (internet-connected system, Azure Toolbox, vendor portal, etc.) and place them at the paths shown before running `Update-ImageArtifacts.ps1`.
+
+| Software | Destination Filename | Place In | Notes |
+|---|---|---|---|
+| **FSLogix** | `FSLogix.zip` | `.common/artifacts/` | Available from Azure Toolbox in air-gapped clouds. Also available at [aka.ms/fslogix_download](https://aka.ms/fslogix_download) on internet-connected systems. |
+| **WebView2 Runtime** | `WebView2.exe` | `.common/artifacts/` | Required by Teams. Download from [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) on an internet-connected system. |
+| **Visual Studio Redistributables** | `vc_redist.x64.exe` | `.common/artifacts/` | Required by Teams. Download from [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) on an internet-connected system. |
+| **Remote Desktop WebRTC Service** | `MsRdcWebRTCSvc.msi` | `.common/artifacts/` | Required for Teams media optimizations. Download from [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) on an internet-connected system. |
+| **WDOT** | `WDOT.zip` | `.common/artifacts/` | Required if `applyWindowsDesktopOptimizations = true`. Download from [GitHub](https://codeload.github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool/zip/refs/heads/main) on an internet-connected system. |
+
+> **Transfer tip:** Download all of the above on an internet-connected system, copy them to the air-gapped network, then drop them into the `.common/artifacts/` directory before running the upload script.
+
+---
+
+### Items Downloaded Automatically from Air-Gapped Network URLs
+
+The following artifacts have working URLs in the secret and top secret downloads files (using air-gapped cloud endpoints). `Update-ImageArtifacts.ps1` downloads them automatically when the URLs are reachable from the management system:
+
+| Software | Destination Filename | Air-Gapped URL Pattern |
+|---|---|---|
+| **Office 365 Deployment Tool** | `Office365DeploymentTool.exe` | `officexo.azurefd.<env-suffix>/...` |
+| **OneDrive** | `OneDriveSetup.exe` | `update.azure.odsync.<env-suffix>/...` |
+| **Teams Bootstrapper** | `teamsbootstrapper.exe` | `statics.teams.<env-suffix>/...` |
+| **Teams 64-bit MSIX** | `MSTeams-x64.msix` | `statics.teams.<env-suffix>/...` |
+
+If these URLs are not reachable from your management system, download the files manually from the appropriate air-gapped cloud software distribution site and place them in `.common/artifacts/` before running with `-SkipDownloadingNewSources`.
+
+---
+
+### Upload Artifacts to Storage
+
+After placing manual files and (optionally) allowing the script to download air-gapped-URL items:
+
+```powershell
+Connect-AzAccount -Environment <YourAirGappedEnvironment>
+Set-AzContext -Subscription "<subscription-id>"
+cd C:\repos\FederalAVD\deployments
+
+# If air-gapped URLs are reachable — download auto-downloadable items and upload everything:
+.\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
+
+# If no internet/network downloads are possible — skip downloading, just package and upload:
+.\Update-ImageArtifacts.ps1 `
+    -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
+    -SkipDownloadingNewSources
+```
+
+> The `artifactsStorageAccountResourceId` is an output of the imageManagement deployment. See [Quick Start — Step 2](quickStart.md#step-2-deploy-image-management-resources).
+
+---
+
+### Image Build Parameter Notes
+
+In air-gapped environments, set `downloadLatestMicrosoftContent = false` (default). The build VM will not have internet access to download software — all content must come from the artifacts storage account pre-populated above.
+
+📖 **Full script reference:** [Update-ImageArtifacts.ps1 Script Guide](updateImageArtifacts.md)
