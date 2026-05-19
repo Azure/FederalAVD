@@ -134,8 +134,20 @@ param hostPoolResourceId string
 @description('Identity solution for session hosts. Valid values: ActiveDirectoryDomainServices, EntraDomainServices, EntraId, EntraKerberos-CloudOnly, EntraKerberos-Hybrid.')
 param identitySolution string
 
-@description('Image reference object containing either marketplace image details or compute gallery image version resource ID.')
-param imageReference object
+@description('Optional. Image reference object containing either marketplace image details or compute gallery image version resource ID. When provided, takes precedence over imageOffer/imageSku/customImageResourceId. Used by the Session Host Replacer.')
+param imageReference object = {}
+
+@description('Optional. Marketplace image offer (e.g. "windows-11"). Used when imageReference is empty and customImageResourceId is empty.')
+param imageOffer string = ''
+
+@description('Optional. Marketplace image publisher. Used when imageReference is empty and customImageResourceId is empty.')
+param imagePublisher string = 'MicrosoftWindowsDesktop'
+
+@description('Optional. Marketplace image SKU (e.g. "win11-24h2-avd"). Used when imageReference is empty and customImageResourceId is empty.')
+param imageSku string = ''
+
+@description('Optional. Resource ID of a custom image version in an Azure Compute Gallery. When provided, overrides marketplace image params.')
+param customImageResourceId string = ''
 
 @description('Enable Microsoft Defender for Cloud integrity monitoring on session hosts.')
 param integrityMonitoring bool = false
@@ -279,6 +291,14 @@ var generatedAvSetNameConv = nameConvReversed
   : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', regionAbbreviation), 'TOKEN-', '')}-##'
 
 var avSetNameConv = !empty(availabilitySetNameConv) ? availabilitySetNameConv : generatedAvSetNameConv
+
+// Resolve effective image reference: explicit imageReference param (SHR path) takes precedence,
+// then customImageResourceId, then marketplace fields.
+var effectiveImageReference = !empty(imageReference)
+  ? imageReference
+  : !empty(customImageResourceId)
+      ? { id: customImageResourceId }
+      : { publisher: imagePublisher, offer: imageOffer, sku: imageSku, version: 'latest' }
 
 var deploymentSuffix = uniqueString(deployment().name)
 
@@ -446,7 +466,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [
       fslogixStorageService: fslogixStorageService
       hostPoolResourceId: hostPoolResourceId
       identitySolution: identitySolution
-      imageReference: imageReference
+      imageReference: effectiveImageReference
       integrityMonitoring: integrityMonitoring
       intuneEnrollment: intuneEnrollment
       location: location
