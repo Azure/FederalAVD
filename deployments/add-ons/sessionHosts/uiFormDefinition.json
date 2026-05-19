@@ -1,0 +1,1497 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+	"view": {
+		"kind": "Form",
+		"properties": {
+			"title": "Azure Virtual Desktop - Add Session Hosts",
+			"steps": [
+				{
+					"name": "basics",
+					"label": "Basics",
+					"elements": [
+						{
+							"name": "subscriptionsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "GET",
+								"path": "/subscriptions?api-version=2022-12-01"
+							}
+						},
+						{
+							"name": "infoBox1",
+							"type": "Microsoft.Common.TextBlock",
+							"options": {
+								"text": "Deploy Azure Virtual Desktop session hosts into an existing host pool resource group. Select the target host pool and configure naming, network, image, and identity settings below.",
+								"link": {
+									"label": "Learn more about AVD Session Hosts",
+									"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/session-host-update"
+								}
+							}
+						},
+						{
+							"name": "subscription",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Subscription",
+							"toolTip": "Select the subscription containing the target host pool and resources. This is used to query available host pools, virtual networks, and other resources.",
+							"constraints": {
+								"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+								"required": true
+							}
+						},
+						{
+							"name": "hostPool",
+							"type": "Microsoft.Solutions.ResourceSelector",
+							"label": "Host Pool",
+							"toolTip": "Select the existing AVD host pool to add session hosts to.",
+							"resourceType": "Microsoft.DesktopVirtualization/hostPools",
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "hostPoolProps",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('basics').hostPool))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').hostPool.id, '?api-version=2024-04-03')]"
+							}
+						},
+						{
+							"name": "hostsRGProps",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(not(empty(steps('basics').hostPool)), not(empty(steps('basics').hostPoolProps.tags.hostsResourceGroupId)))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').hostPoolProps.tags.hostsResourceGroupId, '?api-version=2021-04-01')]"
+							}
+						},
+						{
+							"name": "sessionHostsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('basics').hostPool))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').hostPool.id, '/sessionHosts?api-version=2024-04-03&isDescending=true')]",
+								"transforms": {
+									"lastname": "value[*].name|[0]"
+								}
+							}
+						},
+						{
+							"name": "locationsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('basics').subscription.id))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').subscription.id, '/locations?api-version=2022-12-01')]",
+								"transforms": {
+									"list": "sort_by(value, &displayName)[?name!='global' && !contains(displayName, '(Stage)')] | [*].{label: displayName, value: { displayName: displayName, name: name }}"
+								}
+							}
+						},
+						{
+							"name": "location",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Region",
+							"defaultValue": "[first(map(filter(steps('basics').locationsApi.value, (loc) => equals(loc.name, steps('basics').hostPoolProps.location)), (loc) => loc.displayName))]",
+							"toolTip": "Select the Azure region where session hosts will be deployed. Defaults to the host pool region.",
+							"constraints": {
+								"allowedValues": "[steps('basics').locationsApi.transformed.list]",
+								"required": true
+							}
+						},
+						{
+							"name": "timeZone",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Virtual Machines Time Zone",
+							"defaultValue": "(UTC-05:00) Eastern Time (US & Canada)",
+							"toolTip": "Select the time zone for the virtual machines.",
+							"constraints": {
+								"required": true,
+								"allowedValues": [
+									{ "label": "(UTC-10:00) Hawaii", "value": "Hawaiian Standard Time" },
+									{ "label": "(UTC-09:00) Alaska", "value": "Alaskan Standard Time" },
+									{ "label": "(UTC-08:00) Pacific Time (US & Canada)", "value": "Pacific Standard Time" },
+									{ "label": "(UTC-07:00) Arizona", "value": "US Mountain Standard Time" },
+									{ "label": "(UTC-07:00) Mountain Time (US & Canada)", "value": "Mountain Standard Time" },
+									{ "label": "(UTC-06:00) Central Time (US & Canada)", "value": "Central Standard Time" },
+									{ "label": "(UTC-05:00) Eastern Time (US & Canada)", "value": "Eastern Standard Time" },
+									{ "label": "(UTC+00:00) Dublin, Edinburgh, Lisbon, London", "value": "GMT Standard Time" },
+									{ "label": "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris", "value": "Romance Standard Time" },
+									{ "label": "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb", "value": "Central European Standard Time" },
+									{ "label": "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague", "value": "Central Europe Standard Time" },
+									{ "label": "(UTC+01:00) West Central Africa", "value": "W. Central Africa Standard Time" },
+									{ "label": "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna", "value": "W. Europe Standard Time" },
+									{ "label": "(UTC+02:00) Jerusalem", "value": "Israel Standard Time" },
+									{ "label": "(UTC+03:00) Kuwait, Riyadh", "value": "Arab Standard Time" },
+									{ "label": "(UTC+03:00) Nairobi", "value": "E. Africa Standard Time" },
+									{ "label": "(UTC+09:00) Osaka, Sapporo, Tokyo", "value": "Tokyo Standard Time" },
+									{ "label": "(UTC+09:00) Seoul", "value": "Korea Standard Time" },
+									{ "label": "(UTC+10:00) Guam, Port Moresby", "value": "West Pacific Standard Time" }
+								]
+							}
+						},
+						{
+							"name": "naming",
+							"type": "Microsoft.Common.Section",
+							"label": "Virtual Machine Naming",
+							"elements": [
+								{
+									"name": "namingInfoBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Specify the VM name prefix and starting index. VMs will be named <prefix><zero-padded-index>, e.g., prefix 'avdvm-' with index 1 and 2-digit padding yields 'avdvm-01', 'avdvm-02'. The starting index is auto-calculated from the last existing session host when a host pool is selected."
+									}
+								},
+								{
+									"name": "virtualMachineNamePrefix",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Virtual Machine Name Prefix",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmNamePrefix, '')]",
+									"toolTip": "Provide a VM name prefix. Combined with the index padding, the total length cannot exceed 15 characters.",
+									"constraints": {
+										"required": true,
+										"validations": [
+											{
+												"regex": "^(?!-)(?!_)(?![0-9]+$)[A-Za-z0-9_-]+$",
+												"message": "Only alphanumeric characters, hyphens, and underscores are allowed. Cannot start with a hyphen or underscore, or consist entirely of digits."
+											},
+											{
+												"isValid": "[if(lessOrEquals(add(length(steps('basics').naming.virtualMachineNamePrefix), steps('basics').naming.indexPadding), 15), true, false)]",
+												"message": "The prefix length plus the index padding cannot exceed 15 characters total."
+											}
+										]
+									}
+								},
+								{
+									"name": "index",
+									"type": "Microsoft.Common.Slider",
+									"label": "Starting Index",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmIndexPadding), 1, add(int(substring(steps('basics').sessionHostsApi.transformed.lastname, sub(length(steps('basics').sessionHostsApi.transformed.lastname), int(steps('basics').hostsRGProps.tags.vmIndexPadding)), int(steps('basics').hostsRGProps.tags.vmIndexPadding))), 1))]",
+									"toolTip": "Select the starting number for the first VM in this batch. Auto-calculated as last session host index + 1 when a host pool with existing hosts is selected.",
+									"min": 0,
+									"max": 998,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "indexPadding",
+									"type": "Microsoft.Common.Slider",
+									"label": "Index Padding (number of digits)",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmIndexPadding), 2, int(steps('basics').hostsRGProps.tags.vmIndexPadding))]",
+									"toolTip": "Select the number of digits used for the VM name index suffix (e.g., 2 = '01', 3 = '001'). Must match existing session hosts if adding to a pool.",
+									"min": 1,
+									"max": 3,
+									"showStepMarkers": true,
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "count",
+									"type": "Microsoft.Common.Slider",
+									"label": "Number of Virtual Machines",
+									"defaultValue": 1,
+									"toolTip": "Select the number of session hosts to deploy in this batch.",
+									"min": 1,
+									"max": 999,
+									"showStepMarkers": false,
+									"constraints": {
+										"required": true
+									}
+								}
+							]
+						},
+						{
+							"name": "credentialsKeyVault",
+							"type": "Microsoft.Solutions.ResourceSelector",
+							"label": "Credentials Key Vault",
+							"toolTip": "Select the Key Vault containing the required secrets: 'VirtualMachineAdminUserName', 'VirtualMachineAdminPassword', and (for domain-joined deployments) 'DomainJoinUserPrincipalName' and 'DomainJoinUserPassword'.",
+							"resourceType": "Microsoft.KeyVault/vaults",
+							"constraints": {
+								"required": true
+							}
+						}
+					]
+				},
+				{
+					"name": "identity",
+					"label": "Identity",
+					"elements": [
+						{
+							"name": "solution",
+							"type": "Microsoft.Common.DropDown",
+							"multiLine": true,
+							"label": "Identity Provider",
+							"defaultValue": "[if(equals(steps('basics').hostsRGProps.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'CloudOnly'), 'Entra Kerberos (Cloud Only Identities) (Preview)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Active Directory Domain Services (ADDS)'))))]",
+							"toolTip": "Choose the identity solution for session hosts. Must match the configuration used by the existing host pool.",
+							"constraints": {
+								"required": true,
+								"allowedValues": [
+									{
+										"label": "Active Directory Domain Services (ADDS)",
+										"value": "ActiveDirectoryDomainServices",
+										"description": "Session hosts will be domain-joined to an ADDS domain. Users are sourced from ADDS."
+									},
+									{
+										"label": "Entra Domain Services",
+										"value": "EntraDomainServices",
+										"description": "Session hosts will be joined to Microsoft Entra Domain Services."
+									},
+									{
+										"label": "Entra Id (Cloud Only Identities)",
+										"value": "EntraId",
+										"description": "Session hosts join Entra ID only. FSLogix uses storage account keys for authentication."
+									},
+									{
+										"label": "Entra Kerberos (Cloud Only Identities) (Preview)",
+										"value": "EntraKerberos-CloudOnly",
+										"description": "Session hosts join Entra ID. FSLogix uses Entra Kerberos. Preview, Azure Commercial only."
+									},
+									{
+										"label": "Entra Kerberos (Hybrid Identities)",
+										"value": "EntraKerberos-Hybrid",
+										"description": "Users sourced from ADDS, session hosts join Entra ID. FSLogix uses Entra Kerberos."
+									}
+								]
+							}
+						},
+						{
+							"name": "domainJoin",
+							"type": "Microsoft.Common.Section",
+							"label": "Domain Join",
+							"visible": "[contains(steps('identity').solution, 'DomainServices')]",
+							"elements": [
+								{
+									"name": "domainName",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Domain Name",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmDomain, '')]",
+									"toolTip": "Provide the fully qualified domain name (FQDN) to join session hosts to.",
+									"placeholder": "Example: contoso.com",
+									"constraints": {
+										"required": true,
+										"regex": "^([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$",
+										"validationMessage": "Provide a valid fully qualified domain name."
+									}
+								},
+								{
+									"name": "ouPath",
+									"type": "Microsoft.Common.TextBox",
+									"label": "OU Path",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmOUPath, '')]",
+									"visible": "[or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraDomainServices'))]",
+									"toolTip": "Organizational Unit distinguished name for session host computer objects. Leave empty for the default Computers container.",
+									"placeholder": "Example: OU=AVD,OU=Computers,DC=contoso,DC=com",
+									"constraints": {
+										"required": false
+									}
+								}
+							]
+						},
+						{
+							"name": "entraId",
+							"type": "Microsoft.Common.Section",
+							"label": "Entra ID Options",
+							"visible": "[not(contains(steps('identity').solution, 'DomainServices'))]",
+							"elements": [
+								{
+									"name": "intuneInfoBox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Warning",
+										"text": "Intune Enrollment is not available in Azure Secret or Azure Top Secret cloud environments."
+									}
+								},
+								{
+									"name": "intuneEnrollment",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Intune Enrollment",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment), false, bool(steps('basics').hostsRGProps.tags.vmIntuneEnrollment))]",
+									"toolTip": "Automatically enroll session hosts in Microsoft Intune during deployment."
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "hosts",
+					"label": "Session Hosts",
+					"elements": [
+						{
+							"name": "resourceSkusApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(not(empty(steps('basics').subscription.id)), not(empty(steps('basics').location)))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('basics').location.name, decodeUriComponent('%27'))]",
+								"transforms": {
+									"confidentialVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'ConfidentialComputingType'].value | [0] != null] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] |[*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])])}",
+									"genericVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] |[*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])])}",
+									"genericVMSizesNames": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].name",
+									"hibernationVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'HibernationSupported'].value | [0] == 'True'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].name"
+								}
+							}
+						},
+						{
+							"name": "encryptionAtHostFeatureApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('basics').subscription.id))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Features/providers/Microsoft.Compute/features/encryptionAtHost?api-version=2021-07-01')]"
+							}
+						},
+						{
+							"name": "image",
+							"type": "Microsoft.Common.Section",
+							"label": "Image",
+							"elements": [
+								{
+									"name": "source",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Image Source",
+									"defaultValue": "[if(equals(steps('basics').hostsRGProps.tags.vmImageType, 'CustomImage'), 'Compute Gallery', 'Marketplace')]",
+									"toolTip": "Select whether to use a marketplace image or a custom image from an Azure Compute Gallery.",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{ "label": "Marketplace", "value": "marketplace" },
+											{ "label": "Compute Gallery", "value": "gallery" }
+										]
+									}
+								},
+								{
+									"name": "offer",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Offer",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmImageOffer, 'Office-365')]",
+									"toolTip": "Select the marketplace image offer.",
+									"visible": "[equals(steps('hosts').image.source, 'marketplace')]",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{ "label": "Office-365 (Windows with M365 Apps)", "value": "Office-365" },
+											{ "label": "Windows-10", "value": "Windows-10" },
+											{ "label": "Windows-11", "value": "Windows-11" },
+											{ "label": "WindowsServer", "value": "WindowsServer" }
+										]
+									}
+								},
+								{
+									"name": "skuApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(not(empty(steps('basics').subscription.id)), not(empty(steps('basics').location)), not(empty(steps('hosts').image.offer)), equals(steps('hosts').image.source, 'marketplace'))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Compute/locations/', steps('basics').location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]"
+									}
+								},
+								{
+									"name": "sku",
+									"type": "Microsoft.Common.DropDown",
+									"label": "SKU",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmImageSku, 'win11-25h2-avd-m365')]",
+									"toolTip": "Select the marketplace image SKU. Filtered to Windows Enterprise and AVD-optimized SKUs.",
+									"visible": "[equals(steps('hosts').image.source, 'marketplace')]",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('hosts').image.skuApi, (sku) => and(startsWith(sku.name, 'win'), or(contains(sku.name, 'ent'), contains(sku.name, 'avd')))), (sku) => parse(concat('{\"label\":\"', sku.name, '\",\"value\":\"', sku.name, '\"}')))]"
+									}
+								},
+								{
+									"name": "gallerySubscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Compute Gallery Subscription",
+									"defaultValue": "[steps('basics').subscription.displayName]",
+									"toolTip": "Select the subscription containing the Compute Gallery.",
+									"visible": "[equals(steps('hosts').image.source, 'gallery')]",
+									"constraints": {
+										"required": false,
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]"
+									}
+								},
+								{
+									"name": "galleriesApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.gallerySubscription.id)))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('hosts').image.gallerySubscription.id, '/providers/Microsoft.Compute/galleries?api-version=2024-03-03')]"
+									}
+								},
+								{
+									"name": "computeGallery",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Compute Gallery",
+									"multiLine": true,
+									"defaultValue": "[if(not(empty(steps('basics').hostsRGProps.tags.vmCustomImageId)), first(skip(split(steps('basics').hostsRGProps.tags.vmCustomImageId, '/'), 8)), '')]",
+									"visible": "[and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.gallerySubscription)))]",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(steps('hosts').image.galleriesApi.value, (gal) => parse(concat('{\"label\":\"', gal.name, '\",\"description\":\"Resource Group: ', first(skip(split(gal.id, '/'), 4)), ', Location: ', gal.location, '\",\"value\":\"', gal.id, '\"}')))]"
+									}
+								},
+								{
+									"name": "imageDefinitionsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.computeGallery)))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('hosts').image.computeGallery, '/images?api-version=2024-03-03')]",
+										"transforms": {
+											"list": "value|[*].{label:name, value:id}"
+										}
+									}
+								},
+								{
+									"name": "imageDefinition",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Image Definition",
+									"defaultValue": "[if(not(empty(steps('basics').hostsRGProps.tags.vmCustomImageId)), last(split(steps('basics').hostsRGProps.tags.vmCustomImageId, '/')), '')]",
+									"visible": "[and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.computeGallery)))]",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[steps('hosts').image.imageDefinitionsApi.transformed.list]"
+									}
+								},
+								{
+									"name": "imageDefinitionApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('hosts').image.imageDefinition))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('hosts').image.imageDefinition, '?api-version=2024-03-03')]",
+										"transforms": {
+											"IsAcceleratedNetworkSupported": "properties.features[?name=='IsAcceleratedNetworkSupported'].value | [0]",
+											"SecurityType": "properties.features[?name=='SecurityType'].value | [0]"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "security",
+							"type": "Microsoft.Common.Section",
+							"label": "Security",
+							"elements": [
+								{
+									"name": "securityType",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Security Type",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmSecurityType, 'TrustedLaunch')]",
+									"toolTip": "Select the security type. TrustedLaunch is recommended for most deployments. ConfidentialVM provides hardware-based isolation.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), or(equals(steps('hosts').image.source, 'marketplace'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunchAndConfidentialVmSupported'))), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVM')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch')), parse('[{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]')))))]"
+									}
+								},
+								{
+									"name": "secureBootEnabled",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Secure Boot",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmSecureBoot), true, bool(steps('basics').hostsRGProps.tags.vmSecureBoot))]",
+									"toolTip": "Secure boot protects VMs against boot kits, rootkits, and kernel-level malware.",
+									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
+								},
+								{
+									"name": "vTpmEnabled",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable vTPM",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmVirtualTPM), true, bool(steps('basics').hostsRGProps.tags.vmVirtualTPM))]",
+									"toolTip": "Virtual Trusted Platform Module validates VM boot integrity and stores keys and secrets securely.",
+									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
+								},
+								{
+									"name": "integrityMonitoring",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Integrity Monitoring",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmIntegrityMonitoring), true, bool(steps('basics').hostsRGProps.tags.vmIntegrityMonitoring))]",
+									"toolTip": "Enables cryptographic attestation and verification of VM boot integrity with monitoring alerts.",
+									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
+								}
+							]
+						},
+						{
+							"name": "specs",
+							"type": "Microsoft.Common.Section",
+							"label": "Capacity and Performance",
+							"elements": [
+								{
+									"name": "diskSku",
+									"type": "Microsoft.Common.DropDown",
+									"label": "OS Disk SKU",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmOSDiskType, 'Premium_LRS')]",
+									"toolTip": "Select the managed disk type for the OS disk.",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{ "label": "Premium SSD (Premium_LRS)", "value": "Premium_LRS" },
+											{ "label": "Standard SSD (StandardSSD_LRS)", "value": "StandardSSD_LRS" },
+											{ "label": "Standard HDD (Standard_LRS)", "value": "Standard_LRS" }
+										]
+									}
+								},
+								{
+									"name": "diskSizeGB",
+									"type": "Microsoft.Common.DropDown",
+									"label": "OS Disk Size (GB)",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmDiskSizeGB, '128')]",
+									"toolTip": "Select the OS disk size. Select 'Default' to use the image-defined size.",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{ "label": "Default (image size)", "value": 0 },
+											{ "label": "128 GB", "value": 128 },
+											{ "label": "256 GB", "value": 256 },
+											{ "label": "512 GB", "value": 512 },
+											{ "label": "1024 GB (1 TB)", "value": 1024 },
+											{ "label": "2048 GB (2 TB)", "value": 2048 }
+										]
+									}
+								},
+								{
+									"name": "sizeGeneric",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Virtual Machine Size",
+									"multiLine": true,
+									"filter": true,
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmSize, if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v7'), 'Standard_D16s_v7', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v6'), 'Standard_D16s_v6', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v5'), 'Standard_D16s_v5', 'Standard_D16s_v3'))))]",
+									"toolTip": "Select the VM size. Multi-session hosts typically use 4–24 vCPUs. Single-session hosts use 2+ vCPUs.",
+									"visible": "[not(equals(steps('hosts').security.securityType, 'ConfidentialVM'))]",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[steps('hosts').resourceSkusApi.transformed.genericVMSizes]"
+									}
+								},
+								{
+									"name": "sizeConfidentialVM",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Virtual Machine Size (Confidential VM)",
+									"defaultValue": "Standard_DC16eds_v5",
+									"multiLine": true,
+									"toolTip": "Select the confidential VM size. Only sizes with confidential computing capabilities are listed.",
+									"visible": "[equals(steps('hosts').security.securityType, 'ConfidentialVM')]",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[steps('hosts').resourceSkusApi.transformed.confidentialVMSizes]"
+									}
+								},
+								{
+									"name": "enableAcceleratedNetworking",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Accelerated Networking",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking), true, bool(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking))]",
+									"toolTip": "Provides low-latency, high-throughput networking. Requires a supported VM size and OS image.",
+									"visible": "[and(not(equals(steps('hosts').security.securityType, 'ConfidentialVM')), bool(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value)), false)), or(equals(steps('hosts').image.source, 'marketplace'), bool(coalesce(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported, false))))]"
+								}
+							]
+						},
+						{
+							"name": "network",
+							"type": "Microsoft.Common.Section",
+							"label": "Network",
+							"elements": [
+								{
+									"name": "virtualNetworksApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('basics').subscription.id))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+									}
+								},
+								{
+									"name": "virtualNetwork",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Virtual Network",
+									"multiLine": true,
+									"defaultValue": "[if(not(empty(steps('basics').hostsRGProps.tags.vmSubnetId)), coalesce(first(skip(split(steps('basics').hostsRGProps.tags.vmSubnetId, '/'), 8)), ''), '')]",
+									"toolTip": "Select the virtual network for session host NICs. Filtered to the selected region.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+									}
+								},
+								{
+									"name": "subnetsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('hosts').network.virtualNetwork))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('hosts').network.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+									}
+								},
+								{
+									"name": "subnet",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Subnet",
+									"defaultValue": "[if(not(empty(steps('basics').hostsRGProps.tags.vmSubnetId)), coalesce(last(split(steps('basics').hostsRGProps.tags.vmSubnetId, '/')), ''), '')]",
+									"toolTip": "Select the subnet for the session host NICs.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(steps('hosts').network.subnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]"
+									}
+								},
+								{
+									"name": "enableIPv6",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable IPv6",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmIPv6), false, bool(steps('basics').hostsRGProps.tags.vmIPv6))]",
+									"toolTip": "Enable IPv6 support on the network interface. Edge case scenario, not recommended for most deployments."
+								}
+							]
+						},
+						{
+							"name": "availability",
+							"type": "Microsoft.Common.Section",
+							"label": "Availability",
+							"visible": "[not(steps('hosts').dedicatedHosts.deployToDedicatedHosts)]",
+							"elements": [
+								{
+									"name": "availability",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Availability Option",
+									"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmAvailability, 'No infrastructure redundancy required')]",
+									"toolTip": "Select the availability configuration for the virtual machines. Must match existing session host configuration when adding to a host pool.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[if(empty(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (sku) => sku.zones))), parse('[{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"},{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"}]'), parse('[{\"label\":\"Availability Zones\",\"value\":\"AvailabilityZones\"},{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"},{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'))]"
+									}
+								},
+								{
+									"name": "availabilityZones",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Select Availability Zones",
+									"defaultValue": [ "Zone 1", "Zone 2", "Zone 3" ],
+									"multiselect": true,
+									"selectAll": true,
+									"toolTip": "Select the availability zones to distribute session hosts across.",
+									"visible": "[equals(steps('hosts').availability.availability, 'AvailabilityZones')]",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (sku) => sku.zones)), (zone) => parse(concat('{\"label\":\"Zone ', zone, '\",\"value\":\"', zone, '\"}')))]"
+									}
+								}
+							]
+						},
+						{
+							"name": "dedicatedHosts",
+							"type": "Microsoft.Common.Section",
+							"label": "Dedicated Hosts",
+							"elements": [
+								{
+									"name": "dedicatedHostsInfobox",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"text": "Azure Dedicated Host provides physical servers able to host one or more virtual machines assigned to your subscription. Required in some IL5 environments. Click for more information.",
+										"uri": "https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#compute-isolation",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "deployToDedicatedHosts",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Deploy to Dedicated Hosts",
+									"toolTip": "Deploy VMs to existing Azure Dedicated Host(s). When enabled, the Availability section above is ignored."
+								},
+								{
+									"name": "hostGroupsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(not(empty(steps('basics').subscription.id)), steps('hosts').dedicatedHosts.deployToDedicatedHosts)]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Compute/hostGroups?api-version=2023-09-01')]"
+									}
+								},
+								{
+									"name": "dedicatedHostGroup",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Dedicated Host Group",
+									"multiLine": true,
+									"toolTip": "Select the dedicated host group. VMs will be placed in this group using automatic host selection unless a specific host is chosen below.",
+									"visible": "[steps('hosts').dedicatedHosts.deployToDedicatedHosts]",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('hosts').dedicatedHosts.hostGroupsApi.value, (hg) => equals(hg.location, steps('basics').location.name)), (hg) => parse(concat('{\"label\":\"', hg.name, '\",\"description\":\"Resource Group: ', first(skip(split(hg.id, '/'), 4)), '\",\"value\":\"', hg.id, '\"}')))]"
+									}
+								},
+								{
+									"name": "dedicatedHostsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('hosts').dedicatedHosts.dedicatedHostGroup))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('hosts').dedicatedHosts.dedicatedHostGroup, '/hosts?api-version=2023-09-01')]"
+									}
+								},
+								{
+									"name": "dedicatedHost",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Dedicated Host (optional — leave blank for auto-placement)",
+									"multiLine": true,
+									"defaultValue": "",
+									"toolTip": "Optionally select a specific dedicated host. Leave blank to use automatic placement within the host group.",
+									"visible": "[steps('hosts').dedicatedHosts.deployToDedicatedHosts]",
+									"constraints": {
+										"required": false,
+										"allowedValues": "[map(steps('hosts').dedicatedHosts.dedicatedHostsApi.value, (dh) => parse(concat('{\"label\":\"', dh.name, '\",\"description\":\"SKU: ', dh.sku.name, '\",\"value\":\"', dh.id, '\"}')))]"
+									}
+								}
+							]
+						},
+						{
+							"name": "diskEncryption",
+							"type": "Microsoft.Common.Section",
+							"label": "Disk Encryption",
+							"elements": [
+								{
+									"name": "encryptionAtHostTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Encryption at host enhances Azure Disk Storage Server-Side Encryption to ensure that all temp disks and disk caches are encrypted at rest.",
+										"link": {
+											"label": "Learn more",
+											"uri": "http://go.microsoft.com/fwlink/?LinkId=2133517"
+										}
+									}
+								},
+								{
+									"name": "encryptionAtHost",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Encryption At Host",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmEncryptionAtHost), true, bool(steps('basics').hostsRGProps.tags.vmEncryptionAtHost))]",
+									"toolTip": "Enable encryption of temp disks and disk caches on the VM host.",
+									"visible": "[not(equals(steps('hosts').security.securityType, 'ConfidentialVM'))]"
+								},
+								{
+									"name": "encryptionAtHostNotRegisteredErrorBox",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(not(equals(steps('hosts').encryptionAtHostFeatureApi.properties.state, 'Registered')), steps('hosts').diskEncryption.encryptionAtHost)]",
+									"options": {
+										"style": "Error",
+										"text": "The 'Encryption At Host' feature is not registered in your subscription. Follow the link to enable it before deploying.",
+										"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-enable-host-based-encryption-portal?tabs=azure-powershell"
+									}
+								},
+								{
+									"name": "confidentialVMOSDiskEncryption",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Confidential OS Disk Encryption",
+									"defaultValue": true,
+									"toolTip": "Binds OS disk encryption keys to the virtual machine's TPM. Only available with Confidential VM security type.",
+									"visible": "[equals(steps('hosts').security.securityType, 'ConfidentialVM')]"
+								},
+								{
+									"name": "selectDiskEncryptionSet",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Customer-Managed Keys on OS Disk",
+									"defaultValue": "[not(empty(steps('basics').hostsRGProps.tags.vmDiskEncryptionSetName))]",
+									"toolTip": "Use an existing Disk Encryption Set to encrypt OS disks with customer-managed keys."
+								},
+								{
+									"name": "diskEncryptionSetsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(not(empty(steps('basics').subscription.id)), steps('hosts').diskEncryption.selectDiskEncryptionSet)]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02')]",
+										"transforms": {
+											"list": "value|[*].{label:name, description:resourceGroup, value:id}"
+										}
+									}
+								},
+								{
+									"name": "existingDiskEncryptionSet",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Disk Encryption Set",
+									"defaultValue": "[steps('basics').hostsRGProps.tags.vmDiskEncryptionSetName]",
+									"multiLine": true,
+									"toolTip": "Select the existing Disk Encryption Set to use for OS disk encryption.",
+									"visible": "[steps('hosts').diskEncryption.selectDiskEncryptionSet]",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[steps('hosts').diskEncryption.diskEncryptionSetsApi.transformed.list]"
+									}
+								}
+							]
+						},
+						{
+							"name": "customizations",
+							"type": "Microsoft.Common.Section",
+							"label": "Customizations",
+							"elements": [
+								{
+									"name": "customizationsIntro",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Optionally customize your session host deployment by overriding the AVD Agent download sources and/or adding custom scripts or software to install during deployment."
+									}
+								},
+								{
+									"name": "customizeAgentDownload",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Customize Agent Download Sources",
+									"defaultValue": false,
+									"toolTip": "Override default AVD Agent and Boot Loader download URLs. Useful for air-gapped environments or custom artifact hosting."
+								},
+								{
+									"name": "addCustomScripts",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Add Custom Scripts or Software",
+									"defaultValue": false,
+									"toolTip": "Run custom scripts or install software on session hosts during deployment."
+								},
+								{
+									"name": "storageHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
+									"options": {
+										"text": "Artifacts Storage"
+									}
+								},
+								{
+									"name": "storageIntro",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
+									"options": {
+										"text": "Optionally select a storage account and blob container hosting your artifacts, and a User Assigned Managed Identity with 'Storage Blob Data Reader' access. If specified, you can provide blob names instead of full URLs in the fields below."
+									}
+								},
+								{
+									"name": "storageAccountSubscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Storage Account Subscription",
+									"defaultValue": "[steps('basics').subscription.displayName]",
+									"toolTip": "Select the subscription containing the artifacts storage account.",
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
+									"constraints": {
+										"required": false,
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]"
+									}
+								},
+								{
+									"name": "storageAccountsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('hosts').customizations.storageAccountSubscription))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('hosts').customizations.storageAccountSubscription.id, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01')]"
+									}
+								},
+								{
+									"name": "storageAccount",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Artifacts Storage Account",
+									"multiLine": true,
+									"toolTip": "Select the storage account containing your deployment artifacts.",
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
+									"constraints": {
+										"required": false,
+										"allowedValues": "[map(steps('hosts').customizations.storageAccountsApi.value, (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Location: ', sa.location, ' | Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\",\"value\":{\"id\":\"', sa.id, '\",\"blobEndpoint\":\"', sa.properties.primaryEndpoints.blob, '\"}}')))]"
+									}
+								},
+								{
+									"name": "containerApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('hosts').customizations.storageAccount))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('hosts').customizations.storageAccount.id, '/blobServices/default/containers?api-version=2023-01-01')]"
+									}
+								},
+								{
+									"name": "container",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Artifacts Container",
+									"defaultValue": "",
+									"toolTip": "Select the blob container containing your artifact files.",
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
+									"constraints": {
+										"required": false,
+										"allowedValues": "[map(steps('hosts').customizations.containerApi.value, (con) => parse(concat('{\"label\":\"', con.name, '\",\"value\":\"', con.name, '\"}')))]"
+									}
+								},
+								{
+									"name": "managedIdentity",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Storage Access User Assigned Identity",
+									"toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role on the artifacts storage account.",
+									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
+									"constraints": {
+										"required": false
+									}
+								},
+								{
+									"name": "agentDownloadHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('hosts').customizations.customizeAgentDownload]",
+									"options": {
+										"text": "AVD Agent Download URLs"
+									}
+								},
+								{
+									"name": "agentBootLoaderUrl",
+									"type": "Microsoft.Common.TextBox",
+									"label": "[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent Boot Loader URL', 'AVD Agent Boot Loader URL or Blob Name')]",
+									"defaultValue": "[if(empty(steps('hosts').customizations.storageAccount), 'https://go.microsoft.com/fwlink/?linkid=2311028', 'Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi')]",
+									"visible": "[steps('hosts').customizations.customizeAgentDownload]",
+									"toolTip": "Full URL or blob name for the AVD Agent Boot Loader MSI installer.",
+									"constraints": {
+										"required": false
+									}
+								},
+								{
+									"name": "agentUrl",
+									"type": "Microsoft.Common.TextBox",
+									"label": "[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent URL', 'AVD Agent URL or Blob Name')]",
+									"defaultValue": "[if(empty(steps('hosts').customizations.storageAccount), 'https://go.microsoft.com/fwlink/?linkid=2310011', 'Microsoft.RDInfra.RDAgent.Installer-x64.msi')]",
+									"visible": "[steps('hosts').customizations.customizeAgentDownload]",
+									"toolTip": "Full URL or blob name for the AVD Agent MSI installer.",
+									"constraints": {
+										"required": false
+									}
+								},
+								{
+									"name": "customScriptsHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('hosts').customizations.addCustomScripts]",
+									"options": {
+										"text": "Custom Scripts and Software"
+									}
+								},
+								{
+									"name": "customScriptsIntro",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('hosts').customizations.addCustomScripts]",
+									"options": {
+										"text": "Specify each customization's name, blob name (or full URI), and optional arguments. These are executed via Run Command on each session host before it is registered with the host pool."
+									}
+								},
+								{
+									"name": "customScripts",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Custom Script Customizations",
+									"label": "Customizations",
+									"visible": "[steps('hosts').customizations.addCustomScripts]",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 0,
+												"max": 10
+											}
+										},
+										"columns": [
+											{
+												"id": "name",
+												"header": "Name",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "Example: InstallVSCode",
+													"constraints": {
+														"required": true,
+														"validations": [
+															{
+																"regex": "^(?![_.-])[A-Za-z0-9_.-]{1,20}(?<![_.-])$",
+																"message": "Must be 1–20 characters, alphanumeric with hyphens/underscores/periods. Cannot start or end with a special character."
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "blobNameOrUri",
+												"header": "Blob Name or Full URI",
+												"width": "2fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "Example: Install-VSCode.ps1",
+													"constraints": {
+														"required": true
+													}
+												}
+											},
+											{
+												"id": "arguments",
+												"header": "Arguments (optional)",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "Example: /S /install",
+													"constraints": {
+														"required": false
+													}
+												}
+											}
+										]
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "userProfiles",
+					"label": "User Profiles",
+					"elements": [
+						{
+							"name": "personalHostPoolInfoBox",
+							"type": "Microsoft.Common.InfoBox",
+							"visible": "[equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')]",
+							"options": {
+								"style": "Info",
+								"text": "This host pool is a Personal host pool. Personal host pools use local profiles stored directly on each session host. FSLogix configuration is not applicable and will be skipped."
+							}
+						},
+						{
+							"name": "configureSessionHosts",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Configure FSLogix on Session Hosts",
+							"defaultValue": false,
+							"visible": "[not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'))]",
+							"toolTip": "Configure FSLogix profile registry settings on the session hosts during deployment."
+						},
+						{
+							"name": "fslogixContainerType",
+							"type": "Microsoft.Common.DropDown",
+							"label": "FSLogix Container Type",
+							"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.fslContainerType, 'Profile Container')]",
+							"visible": "[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts)]",
+							"toolTip": "Select the FSLogix container type.",
+							"constraints": {
+								"required": true,
+								"allowedValues": [
+									{ "label": "Cloud Cache, Profile Container", "value": "CloudCacheProfileContainer" },
+									{ "label": "Cloud Cache, Profile & Office Container", "value": "CloudCacheProfileOfficeContainer" },
+									{ "label": "Profile Container", "value": "ProfileContainer" },
+									{ "label": "Profile & Office Container", "value": "ProfileOfficeContainer" }
+								]
+							}
+						},
+						{
+							"name": "sizeInMBs",
+							"type": "Microsoft.Common.Slider",
+							"label": "FSLogix VHD/VHDX Max Size (MB)",
+							"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs), 30720, int(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs))]",
+							"toolTip": "Set the maximum size of FSLogix profile containers in megabytes.",
+							"min": 10240,
+							"max": 1048576,
+							"showStepMarkers": false,
+							"visible": "[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts)]",
+							"constraints": {
+								"required": true
+							}
+						},
+						{
+							"name": "storageService",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Storage Service",
+							"defaultValue": "[if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureNetAppFiles'), 'Azure NetApp Files', 'Azure Files')]",
+							"visible": "[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts)]",
+							"toolTip": "Select the storage service hosting the FSLogix file shares.",
+							"constraints": {
+								"required": true,
+								"allowedValues": [
+									{ "label": "Azure Files", "value": "AzureFiles" },
+									{ "label": "Azure NetApp Files", "value": "AzureNetAppFiles" }
+								]
+							}
+						},
+						{
+							"name": "azureFiles",
+							"type": "Microsoft.Common.Section",
+							"label": "Azure Files — Existing Storage Accounts",
+							"visible": "[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'))]",
+							"elements": [
+								{
+									"name": "storageAccountsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(not(empty(steps('basics').subscription.id)), steps('userProfiles').configureSessionHosts)]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01')]",
+										"transforms": {
+											"list": "sort_by(value, &name)|[*].{name:name, id:id, location:location}"
+										}
+									}
+								},
+								{
+									"name": "localStorageAccountsHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Local Storage Accounts"
+									}
+								},
+								{
+									"name": "localStorageAccountsIntro",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Select one or more existing Azure Files storage accounts in the same region as the session hosts. Session hosts will be configured to store user profiles on these accounts."
+									}
+								},
+								{
+									"name": "existingLocalStorageAccounts",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Local Storage Accounts",
+									"multiLine": true,
+									"multiselect": true,
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
+									"toolTip": "Select one or more storage accounts hosting FSLogix file shares in the session host region.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.location, steps('basics').location.name)), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\",\"value\":\"', sa.id, '\"}')))]"
+									}
+								},
+								{
+									"name": "remoteStorageAccountsHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[contains(steps('userProfiles').fslogixContainerType, 'CloudCache')]",
+									"options": {
+										"text": "Remote Storage Accounts (Cloud Cache)"
+									}
+								},
+								{
+									"name": "remoteStorageAccountsIntro",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[contains(steps('userProfiles').fslogixContainerType, 'CloudCache')]",
+									"options": {
+										"text": "Optionally select existing storage accounts in a remote region for FSLogix Cloud Cache active/active disaster recovery."
+									}
+								},
+								{
+									"name": "remoteLocation",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Remote Storage Region",
+									"toolTip": "Select the remote region where the Cloud Cache secondary storage accounts are located.",
+									"visible": "[contains(steps('userProfiles').fslogixContainerType, 'CloudCache')]",
+									"constraints": {
+										"required": false,
+										"allowedValues": "[map(filter(steps('basics').locationsApi.transformed.list, (loc) => not(equals(loc.value.name, steps('basics').location.name))), (loc) => parse(concat('{\"label\":\"', loc.label, '\",\"value\":\"', loc.value.name, '\"}')))]"
+									}
+								},
+								{
+									"name": "existingRemoteStorageAccounts",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Remote Storage Accounts",
+									"multiLine": true,
+									"multiselect": true,
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
+									"toolTip": "Optionally select remote storage accounts for Cloud Cache DR.",
+									"visible": "[and(contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(empty(steps('userProfiles').azureFiles.remoteLocation)))]",
+									"constraints": {
+										"required": false,
+										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.location, steps('userProfiles').azureFiles.remoteLocation)), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\",\"value\":\"', sa.id, '\"}')))]"
+									}
+								}
+							]
+						},
+						{
+							"name": "azureNetAppFiles",
+							"type": "Microsoft.Common.Section",
+							"label": "Azure NetApp Files — Existing Volumes",
+							"visible": "[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles'))]",
+							"elements": [
+								{
+									"name": "netAppSubscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "NetApp Files Subscription",
+									"defaultValue": "[steps('basics').subscription.displayName]",
+									"toolTip": "Select the subscription containing the Azure NetApp Files volumes.",
+									"constraints": {
+										"required": false,
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]"
+									}
+								},
+								{
+									"name": "netAppAccountsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(not(empty(steps('userProfiles').azureNetAppFiles.netAppSubscription)), steps('userProfiles').configureSessionHosts)]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('userProfiles').azureNetAppFiles.netAppSubscription.id, '/providers/Microsoft.NetApp/netAppAccounts?api-version=2023-11-01')]"
+									}
+								},
+								{
+									"name": "localNetAppAccount",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Local NetApp Account",
+									"toolTip": "Select the NetApp account in the session host region.",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.netAppAccountsApi)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[8], '')]",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => equals(account.location, steps('basics').location.name)), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Resource Group: ', first(skip(split(account.id, '/'), 4)), '\",\"value\":\"', account.id, '\"}')))]"
+									}
+								},
+								{
+									"name": "localCapacityPoolsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('userProfiles').azureNetAppFiles.localNetAppAccount))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('userProfiles').azureNetAppFiles.localNetAppAccount, '/capacityPools?api-version=2023-11-01')]"
+									}
+								},
+								{
+									"name": "localCapacityPool",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Local Capacity Pool",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.localCapacityPoolsApi)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[10], '')]",
+									"toolTip": "Select an existing capacity pool from the selected NetApp account.",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.localCapacityPoolsApi.value, (pool) => parse(concat('{\"label\":\"', last(split(pool.name, '/')), '\",\"value\":\"', pool.id, '\"}')))]"
+									}
+								},
+								{
+									"name": "localVolumesApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('userProfiles').azureNetAppFiles.localCapacityPool))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('userProfiles').azureNetAppFiles.localCapacityPool, '/volumes?api-version=2023-11-01')]"
+									}
+								},
+								{
+									"name": "localVolumes",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Local Volume(s)",
+									"multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
+									"toolTip": "Select the volume(s) for FSLogix containers. Select both profile and office volumes if using Profile & Office Container type.",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.localVolumesApi)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
+									"constraints": {
+										"required": true,
+										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.localVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]"
+									}
+								},
+								{
+									"name": "remoteVolumeHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[contains(steps('userProfiles').fslogixContainerType, 'CloudCache')]",
+									"options": {
+										"text": "Remote Volumes (Cloud Cache)"
+									}
+								},
+								{
+									"name": "remoteNetAppAccount",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Remote NetApp Account",
+									"visible": "[contains(steps('userProfiles').fslogixContainerType, 'CloudCache')]",
+									"toolTip": "Optionally select a NetApp account in a remote region for Cloud Cache.",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.netAppAccountsApi)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds)), '/')[8], '')]",
+									"constraints": {
+										"required": false,
+										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => not(equals(account.location, steps('basics').location.name))), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Location: ', account.location, ', Resource Group: ', first(skip(split(account.id, '/'), 4)), '\",\"value\":\"', account.id, '\"}')))]"
+									}
+								},
+								{
+									"name": "remoteCapacityPoolsApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('userProfiles').azureNetAppFiles.remoteNetAppAccount))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('userProfiles').azureNetAppFiles.remoteNetAppAccount, '/capacityPools?api-version=2023-11-01')]"
+									}
+								},
+								{
+									"name": "remoteCapacityPool",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Remote Capacity Pool",
+									"visible": "[contains(steps('userProfiles').fslogixContainerType, 'CloudCache')]",
+									"toolTip": "Select the remote capacity pool.",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.remoteCapacityPoolsApi)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds)), '/')[10], '')]",
+									"constraints": {
+										"required": false,
+										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.remoteCapacityPoolsApi.value, (pool) => parse(concat('{\"label\":\"', last(split(pool.name, '/')), '\",\"value\":\"', pool.id, '\"}')))]"
+									}
+								},
+								{
+									"name": "remoteVolumesApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[not(empty(steps('userProfiles').azureNetAppFiles.remoteCapacityPool))]",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('userProfiles').azureNetAppFiles.remoteCapacityPool, '/volumes?api-version=2023-11-01')]"
+									}
+								},
+								{
+									"name": "remoteVolumes",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Remote Volume(s)",
+									"multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
+									"visible": "[and(contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(empty(steps('userProfiles').azureNetAppFiles.remoteCapacityPool)))]",
+									"defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumesApi)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
+									"toolTip": "Select the remote volume(s) for Cloud Cache DR.",
+									"constraints": {
+										"required": false,
+										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.remoteVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]"
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "monitoring",
+					"label": "Monitoring",
+					"elements": [
+						{
+							"name": "enableMonitoring",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Enable AVD Insights and VM Insights Monitoring",
+							"defaultValue": false,
+							"toolTip": "Attach the Azure Monitor Agent and associate existing Data Collection Rules and a Data Collection Endpoint to the session hosts."
+						},
+						{
+							"name": "monitoringSubscription",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Monitoring Resources Subscription",
+							"defaultValue": "[steps('basics').subscription.displayName]",
+							"toolTip": "Select the subscription containing the existing monitoring resources (DCRs, DCE).",
+							"visible": "[steps('monitoring').enableMonitoring]",
+							"constraints": {
+								"required": true,
+								"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]"
+							}
+						},
+						{
+							"name": "dataCollectionRulesApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(steps('monitoring').enableMonitoring, not(empty(steps('monitoring').monitoringSubscription)))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('monitoring').monitoringSubscription.id, '/providers/Microsoft.Insights/dataCollectionRules?api-version=2023-03-11')]"
+							}
+						},
+						{
+							"name": "avdInsightsDataCollectionRule",
+							"type": "Microsoft.Common.DropDown",
+							"label": "AVD Insights Data Collection Rule",
+							"multiLine": true,
+							"defaultValue": "[first(map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('microsoft-avdi-', steps('basics').location.name))), (dcr) => dcr.name))]",
+							"visible": "[steps('monitoring').enableMonitoring]",
+							"toolTip": "Select the existing AVD Insights Data Collection Rule for the session host region. Typically named 'microsoft-avdi-<region>'.",
+							"constraints": {
+								"required": false,
+								"allowedValues": "[map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'avdi'), equals(dcr.location, steps('basics').location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]"
+							}
+						},
+						{
+							"name": "vmInsightsDataCollectionRule",
+							"type": "Microsoft.Common.DropDown",
+							"label": "VM Insights Data Collection Rule",
+							"multiLine": true,
+							"defaultValue": "[first(map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('MSVMI-', steps('basics').location.name))), (dcr) => dcr.name))]",
+							"visible": "[steps('monitoring').enableMonitoring]",
+							"toolTip": "Select the existing VM Insights Data Collection Rule for the session host region. Typically named 'MSVMI-<region>'.",
+							"constraints": {
+								"required": false,
+								"allowedValues": "[map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'MSVMI'), equals(dcr.location, steps('basics').location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]"
+							}
+						},
+						{
+							"name": "dataCollectionEndpointsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[and(steps('monitoring').enableMonitoring, not(empty(steps('monitoring').monitoringSubscription)))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('monitoring').monitoringSubscription.id, '/providers/Microsoft.Insights/dataCollectionEndpoints?api-version=2023-03-11')]"
+							}
+						},
+						{
+							"name": "dataCollectionEndpoint",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Data Collection Endpoint",
+							"multiLine": true,
+							"defaultValue": "[first(map(filter(steps('monitoring').dataCollectionEndpointsApi.value, (dce) => and(contains(dce.name, 'avd'), equals(dce.location, steps('basics').location.name))), (dce) => dce.name))]",
+							"visible": "[steps('monitoring').enableMonitoring]",
+							"toolTip": "Select the existing Data Collection Endpoint for the session host region.",
+							"constraints": {
+								"required": false,
+								"allowedValues": "[map(filter(steps('monitoring').dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('basics').location.name)), (dce) => parse(concat('{\"label\":\"', dce.name, '\",\"description\":\"Resource Group: ', first(skip(split(dce.id, '/'), 4)), ', Location: ', dce.location, '\",\"value\":\"', dce.id, '\"}')))]"
+							}
+						}
+					]
+				},
+				{
+					"name": "tags",
+					"label": "Tags",
+					"elements": [
+						{
+							"name": "tags",
+							"type": "Microsoft.Common.TagsByResource",
+							"resources": [
+								"Microsoft.Compute/availabilitySets",
+								"Microsoft.Compute/virtualMachines",
+								"Microsoft.Network/networkInterfaces"
+							]
+						}
+					]
+				}
+			]
+		},
+		"outputs": {
+			"kind": "ResourceGroup",
+			"location": "[steps('basics').location.name]",
+			"parameters": {
+				"hostPoolResourceId": "[steps('basics').hostPool.id]",
+				"credentialsKeyVaultResourceId": "[steps('basics').credentialsKeyVault.id]",
+				"location": "[steps('basics').location.name]",
+				"timeZone": "[steps('basics').timeZone]",
+				"virtualMachineNamePrefix": "[steps('basics').naming.virtualMachineNamePrefix]",
+				"sessionHostIndex": "[steps('basics').naming.index]",
+				"sessionHostNameIndexLength": "[steps('basics').naming.indexPadding]",
+				"sessionHostCount": "[steps('basics').naming.count]",
+				"sessionHostNames": "[parse('[]')]",
+				"identitySolution": "[steps('identity').solution]",
+				"domainName": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').domainJoin.domainName, '')]",
+				"ouPath": "[if(or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraDomainServices')), steps('identity').domainJoin.ouPath, '')]",
+				"intuneEnrollment": "[if(not(contains(steps('identity').solution, 'DomainServices')), steps('identity').entraId.intuneEnrollment, false)]",
+				"imageReference": "[if(equals(steps('hosts').image.source, 'marketplace'), parse(concat('{\"publisher\":\"MicrosoftWindowsDesktop\",\"offer\":\"', steps('hosts').image.offer, '\",\"sku\":\"', steps('hosts').image.sku, '\"}')), parse(concat('{\"id\":\"', steps('hosts').image.imageDefinition, '\"}')))]",
+				"securityType": "[steps('hosts').security.securityType]",
+				"secureBootEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.secureBootEnabled)]",
+				"vTpmEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
+				"integrityMonitoring": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.integrityMonitoring)]",
+				"diskSku": "[steps('hosts').specs.diskSku]",
+				"diskSizeGB": "[steps('hosts').specs.diskSizeGB]",
+				"virtualMachineSize": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric)]",
+				"enableAcceleratedNetworking": "[if(and(not(equals(steps('hosts').security.securityType, 'ConfidentialVM')), bool(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value)), false)), or(equals(steps('hosts').image.source, 'marketplace'), bool(coalesce(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported, false)))), steps('hosts').specs.enableAcceleratedNetworking, false)]",
+				"subnetResourceId": "[steps('hosts').network.subnet.id]",
+				"enableIPv6": "[steps('hosts').network.enableIPv6]",
+				"availability": "[if(steps('hosts').dedicatedHosts.deployToDedicatedHosts, 'None', steps('hosts').availability.availability)]",
+				"availabilityZones": "[if(and(not(steps('hosts').dedicatedHosts.deployToDedicatedHosts), equals(steps('hosts').availability.availability, 'AvailabilityZones')), steps('hosts').availability.availabilityZones, parse('[]'))]",
+				"dedicatedHostGroupResourceIds": "[if(steps('hosts').dedicatedHosts.deployToDedicatedHosts, parse(concat('[\"', steps('hosts').dedicatedHosts.dedicatedHostGroup, '\"]')), parse('[]'))]",
+				"dedicatedHostResourceIds": "[if(and(steps('hosts').dedicatedHosts.deployToDedicatedHosts, not(empty(steps('hosts').dedicatedHosts.dedicatedHost))), parse(concat('[\"', steps('hosts').dedicatedHosts.dedicatedHost, '\"]')), parse('[]'))]",
+				"encryptionAtHost": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), false, steps('hosts').diskEncryption.encryptionAtHost)]",
+				"confidentialVMOSDiskEncryption": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, false)]",
+				"diskEncryptionSetResourceId": "[if(steps('hosts').diskEncryption.selectDiskEncryptionSet, steps('hosts').diskEncryption.existingDiskEncryptionSet, '')]",
+				"artifactsContainerUri": "[if(and(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container), '')]",
+				"artifactsUserAssignedIdentityResourceId": "[if(and(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), not(empty(steps('hosts').customizations.managedIdentity))), steps('hosts').customizations.managedIdentity.id, '')]",
+				"agentBootLoaderDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentBootLoaderUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentBootLoaderUrl), steps('hosts').customizations.agentBootLoaderUrl), '')]",
+				"agentDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentUrl), steps('hosts').customizations.agentUrl), '')]",
+				"sessionHostCustomizations": "[if(steps('hosts').customizations.addCustomScripts, steps('hosts').customizations.customScripts, parse('[]'))]",
+				"fslogixConfigureSessionHosts": "[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), false, steps('userProfiles').configureSessionHosts)]",
+				"fslogixContainerType": "[if(and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts), steps('userProfiles').fslogixContainerType, 'ProfileContainer')]",
+				"fslogixSizeInMBs": "[if(and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts), steps('userProfiles').sizeInMBs, 30720)]",
+				"fslogixStorageService": "[if(and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts), steps('userProfiles').storageService, 'AzureFiles')]",
+				"fslogixLocalStorageAccountResourceIds": "[if(and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingLocalStorageAccounts, parse('[]'))]",
+				"fslogixRemoteStorageAccountResourceIds": "[if(and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
+				"fslogixLocalNetAppVolumeResourceIds": "[if(and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), steps('userProfiles').azureNetAppFiles.localVolumes, parse('[]'))]",
+				"fslogixRemoteNetAppVolumeResourceIds": "[if(and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), steps('userProfiles').azureNetAppFiles.remoteVolumes, parse('[]'))]",
+				"enableMonitoring": "[steps('monitoring').enableMonitoring]",
+				"avdInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').avdInsightsDataCollectionRule, '')]",
+				"vmInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').vmInsightsDataCollectionRule, '')]",
+				"dataCollectionEndpointResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').dataCollectionEndpoint, '')]",
+				"networkInterfaceNameConv": "[if(endsWith(steps('basics').hostPool.name, '-vdpool'), 'SHNAME-nic', 'nic-SHNAME')]",
+				"osDiskNameConv": "[if(endsWith(steps('basics').hostPool.name, '-vdpool'), 'SHNAME-osdisk', 'osdisk-SHNAME')]",
+				"virtualMachineNameConv": "[if(endsWith(steps('basics').hostPool.name, '-vdpool'), 'SHNAME-vm', 'vm-SHNAME')]",
+				"tags": "[steps('tags').tags]"
+			}
+		}
+	}
+}

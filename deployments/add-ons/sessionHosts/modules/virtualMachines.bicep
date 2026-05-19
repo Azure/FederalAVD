@@ -121,7 +121,7 @@ var networkInterfaceNames = [for i in range(0, sessionHostCount): empty(networkI
 var virtualMachineNames = [for i in range(0, sessionHostCount): empty(virtualMachineNameConv) ? sessionHostNames[i] : replace(virtualMachineNameConv, 'SHNAME', sessionHostNames[i])]
 
 // Compute OS disk names once to avoid complex array access in resource loop
-var osDiskNames = [for i in range(0, sessionHostCount): replace(osDiskNameConv, 'SHNAME', sessionHostNames[i])]
+var osDiskNames = [for i in range(0, sessionHostCount): empty(osDiskNameConv) ? '${sessionHostNames[i]}-osdisk' : replace(osDiskNameConv, 'SHNAME', sessionHostNames[i])]
 
 // call on the host pool to get the registration token
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
@@ -593,7 +593,7 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
             }
           ]
       source: {
-        script: loadTextContent('../../../../../../.common/scripts/Initialize-SessionHost.ps1')
+        script: loadTextContent('../../../../.common/scripts/Initialize-SessionHost.ps1')
       }
       treatFailureAsDeploymentFailure: true
       timeoutInSeconds: 900
@@ -610,7 +610,7 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
   }
 ]
 
-module updateOSDiskNetworkAccess '../../../../../../.common/bicepModules/custom/disableOSDiskPublicAccess/getOSDisk.bicep' = [
+module updateOSDiskNetworkAccess '../../../../.common/bicepModules/custom/disableOSDiskPublicAccess/getOSDisk.bicep' = [
   for i in range(0, sessionHostCount): {
     name: 'shr-${virtualMachineNames[i]}-disableDiskPublicAccess-${deploymentSuffix}'
     params: {
