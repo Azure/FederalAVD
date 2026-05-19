@@ -859,6 +859,130 @@ module imageBuild './imageBuild.bicep' = {
 }
 ```
 
+### Parameter File Examples (PowerShell / CLI)
+
+Use these JSON parameter files with `Invoke-ImageBuilds.ps1` or `New-AzDeployment` directly.
+
+#### Required Parameters Only
+
+Builds a Windows 11 AVD image from marketplace with Windows Updates; creates a new image definition based on the source image publisher/offer/sku.
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "computeGalleryResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/galleries/gal_avd_image_management_use2"
+        },
+        "subnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
+        },
+        "userAssignedIdentityResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-use2"
+        },
+        "artifactsContainerUri": {
+            "value": "https://saimgassetsuse2abc123.blob.core.windows.net/artifacts/"
+        }
+    }
+}
+```
+
+#### Custom Software Installations
+
+Builds an image with LGPO and VS Code installed from the artifacts storage account.
+
+> **Note:** The `blobNameOrUri` value is case-sensitive.
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "computeGalleryResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/galleries/gal_avd_image_management_use2"
+        },
+        "subnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
+        },
+        "userAssignedIdentityResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-use2"
+        },
+        "artifactsContainerUri": {
+            "value": "https://saimgassetsuse2abc123.blob.core.windows.net/artifacts/"
+        },
+        "customizations": {
+            "value": [
+                { "name": "LGPO", "blobNameOrUri": "LGPO.zip" },
+                { "name": "VSCode", "blobNameOrUri": "VSCode.zip", "arguments": "/verysilent" }
+            ]
+        }
+    }
+}
+```
+
+#### Windows Updates via WSUS
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "computeGalleryResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/galleries/gal_avd_image_management_use2"
+        },
+        "subnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
+        },
+        "userAssignedIdentityResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-use2"
+        },
+        "artifactsContainerUri": {
+            "value": "https://saimgassetsuse2abc123.blob.core.windows.net/artifacts/"
+        },
+        "installUpdates": { "value": true },
+        "updateService": { "value": "WSUS" },
+        "wsusServer": { "value": "https://wsus.contoso.com:8531" }
+    }
+}
+```
+
+#### Multi-Region Distribution with Custom Image Definition
+
+Creates a new named image definition and replicates the image version to multiple regions.
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "computeGalleryResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/galleries/gal_avd_image_management_use2"
+        },
+        "subnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
+        },
+        "userAssignedIdentityResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-use2"
+        },
+        "artifactsContainerUri": {
+            "value": "https://saimgassetsuse2abc123.blob.core.windows.net/artifacts/"
+        },
+        "imageDefinitionPublisher": { "value": "Contoso" },
+        "imageDefinitionOffer": { "value": "Windows11" },
+        "imageDefinitionSku": { "value": "AVD-24H2-M365" },
+        "installUpdates": { "value": true },
+        "updateService": { "value": "MU" },
+        "imageVersionTargetRegions": {
+            "value": [
+                { "name": "eastus2", "replicaCount": 2, "storageAccountType": "Standard_LRS" },
+                { "name": "westus2", "replicaCount": 1, "storageAccountType": "Standard_LRS" }
+            ]
+        }
+    }
+}
+```
+
 ## Artifact Requirements
 
 ### Supported File Types

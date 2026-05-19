@@ -381,8 +381,8 @@ Subscription
 ### 📖 Complete Parameter Reference
 
 For a complete list of all 150+ parameters with detailed descriptions, see:
-- [Host Pool Deployment Guide - Parameters](../../ docs/hostpoolDeployment.md)
-- [Parameters Reference](../../docs/parameters.md)
+- [Host Pool Deployment Guide](../../docs/hostpoolDeployment.md)
+- [Parameters Reference Index](../../docs/parameters.md)
 
 ## Usage Examples
 
@@ -430,6 +430,102 @@ New-AzSubscriptionDeployment `
   -deployPrivateEndpointWorkspace $true `
   -privateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints" `
   -Name "avd-hostpool-secure-$(Get-Date -Format 'yyyyMMddHHmm')"
+```
+
+## Examples — Parameter Files
+
+Ready-to-use parameter files are in `parameters\`. Copy and rename one for your environment. The following annotated examples show the key patterns.
+
+### Minimal Pooled Desktop (Entra ID, Marketplace Image)
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "identitySolution": { "value": "EntraId" },
+        "identifier": { "value": "poc" },
+        "virtualMachineAdminUserName": { "value": "avdAdmin" },
+        "virtualMachineAdminPassword": { "value": "<REDACTED>" },
+        "virtualMachineNamePrefix": { "value": "avd-poc" },
+        "virtualMachineSize": { "value": "Standard_D4ads_v5" },
+        "virtualMachineCount": { "value": 2 },
+        "virtualMachineSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
+        }
+    }
+}
+```
+
+### Zero Trust with Private Endpoints
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "identitySolution": { "value": "ActiveDirectoryDomainServices" },
+        "identifier": { "value": "finance" },
+        "domainName": { "value": "contoso.com" },
+        "domainJoinUserPrincipalName": { "value": "svc-avd-join@contoso.com" },
+        "domainJoinUserPassword": { "value": "<REDACTED>" },
+        "virtualMachineAdminUserName": { "value": "avdAdmin" },
+        "virtualMachineAdminPassword": { "value": "<REDACTED>" },
+        "virtualMachineNamePrefix": { "value": "avd-fin" },
+        "virtualMachineSize": { "value": "Standard_D4ads_v5" },
+        "virtualMachineCount": { "value": 5 },
+        "virtualMachineSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
+        },
+        "deployPrivateEndpoints": { "value": true },
+        "hostPoolResourcesPrivateEndpointSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
+        },
+        "azureBlobPrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+        },
+        "azureFilesPrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net"
+        },
+        "azureKeyVaultPrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net"
+        },
+        "deployFSLogixStorage": { "value": true },
+        "enableMonitoring": { "value": true }
+    }
+}
+```
+
+### Custom Image with Customer Managed Keys
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "identitySolution": { "value": "EntraId" },
+        "identifier": { "value": "prod" },
+        "virtualMachineAdminUserName": { "value": "avdAdmin" },
+        "virtualMachineAdminPassword": { "value": "<REDACTED>" },
+        "virtualMachineNamePrefix": { "value": "avd-prod" },
+        "virtualMachineSize": { "value": "Standard_D4ads_v5" },
+        "virtualMachineCount": { "value": 10 },
+        "virtualMachineSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
+        },
+        "customImageResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/galleries/gal_avd_use2/images/win11-24h2-avd-m365/versions/latest"
+        },
+        "keyManagementDisks": { "value": "CustomerManaged" },
+        "keyManagementStorageAccounts": { "value": "CustomerManaged" },
+        "encryptionKeyVaultResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-operations-use2/providers/Microsoft.KeyVault/vaults/kv-avd-enc-use2-abc"
+        },
+        "deployFSLogixStorage": { "value": true },
+        "enableMonitoring": { "value": true },
+        "encryptionAtHost": { "value": true }
+    }
+}
 ```
 
 ### Example 4: Custom Image with GPU

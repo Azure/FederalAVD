@@ -386,6 +386,87 @@ New-AzSubscriptionDeployment `
 
 > See [Image Build Guide](../../docs/imageBuild.md) for details
 
+## Examples
+
+### Minimal — Gallery + Artifacts Storage (Public Endpoint)
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {}
+}
+```
+
+All defaults: gallery + artifacts storage account, public endpoint. Suitable for PoC or air-gapped environments where a private endpoint is not required.
+
+### Private Endpoint (Zero Trust)
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageNetworkAccess": { "value": "PrivateEndpoint" },
+        "privateEndpointSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
+        },
+        "azureBlobPrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+        },
+        "deployBuildLogsStorageAccount": { "value": true }
+    }
+}
+```
+
+### Service Endpoint (Semi-Private)
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageNetworkAccess": { "value": "ServiceEndpoint" },
+        "storageServiceEndpointSubnetResourceIds": {
+            "value": [
+                "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
+            ]
+        },
+        "storagePermittedIPs": { "value": ["203.0.113.0/24"] }
+    }
+}
+```
+
+### Production — CMK, Build Logs, Remote Gallery, Tags
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageNetworkAccess": { "value": "PrivateEndpoint" },
+        "privateEndpointSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
+        },
+        "azureBlobPrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+        },
+        "deployBuildLogsStorageAccount": { "value": true },
+        "keyManagementStorageAccounts": { "value": "CustomerManaged" },
+        "keyManagementGalleryImageVersions": { "value": "CustomerManaged" },
+        "encryptionKeyVaultResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-operations-use2/providers/Microsoft.KeyVault/vaults/kv-avd-enc-use2-abc"
+        },
+        "tags": {
+            "value": {
+                "Microsoft.Storage/storageAccounts": { "environment": "Production", "team": "ImageManagement" },
+                "Microsoft.Compute/galleries": { "environment": "Production", "team": "ImageManagement" }
+            }
+        }
+    }
+}
+```
+
 ## Security Considerations
 
 ### Storage Account Security

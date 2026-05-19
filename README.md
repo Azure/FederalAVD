@@ -187,10 +187,10 @@ Support for multiple identity configurations to meet organizational requirements
 
 ### Getting Started
 
-- 📖 [Quick Start Guide](docs/quickStart.md) - Step-by-step deployment instructions
+- 📖 [Quick Start Guide](docs/quickStart.md) - Step-by-step deployment instructions with tier guidance (PoC → multi-team → automated)
 - 🤖 [End-to-End Automation Guide](docs/automationGuide.md) - Chaining steps together and passing outputs
 - 🏗️ [Design](docs/design.md) - Architecture and resource organization
-- ⚙️ [Parameters Reference](docs/parameters.md) - Complete parameter documentation
+- ⚙️ [Parameters Reference](docs/parameters.md) - Per-solution parameter documentation index
 
 ### Deployment Guides
 
