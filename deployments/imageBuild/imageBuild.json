@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "18369990846874117533"
+      "templateHash": "14348819342524059236"
     }
   },
   "parameters": {
@@ -776,6 +776,22 @@
       "imageDefinitions": "vmid"
     },
     "$fxv#2": {
+      "AVDAgent": {
+        "Description": "Required: Azure Virtual Desktop Agent Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgent",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi",
+        "DestinationFolders": [
+          ""
+        ]
+      },
+      "AVDAgentBootloader": {
+        "Description": "Required: Azure Virtual Desktop Agent Bootloader Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgentBootloader",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi",
+        "DestinationFolders": [
+          ""
+        ]
+      },
       "Office365DeploymentTool": {
         "Description": "Required: Office 365 Deployment Tool",
         "DownloadUrl": "https://officexo.azurefd.ENVSUFFIX/prsstelecontainer/wsus/setup.exe",
@@ -849,6 +865,22 @@
       }
     },
     "$fxv#3": {
+      "AVDAgent": {
+        "Description": "Required: Azure Virtual Desktop Agent Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgent",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi",
+        "DestinationFolders": [
+          ""
+        ]
+      },
+      "AVDAgentBootloader": {
+        "Description": "Required: Azure Virtual Desktop Agent Bootloader Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgentBootloader",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi",
+        "DestinationFolders": [
+          ""
+        ]
+      },
       "Office365DeploymentTool": {
         "Description": "Required: Office 365 Deployment Tool",
         "DownloadUrl": "https://officexo.azurefd.ENVSUFFIX/prsstelecontainer/wsus/setup.exe",
@@ -924,6 +956,22 @@
       }
     },
     "$fxv#4": {
+      "AVDAgent": {
+        "Description": "Required: Azure Virtual Desktop Agent Installer",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2310011",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi",
+        "DestinationFolders": [
+          ""
+        ]
+      },
+      "AVDAgentBootloader": {
+        "Description": "Required: Azure Virtual Desktop Agent Bootloader Installer",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2311028",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi",
+        "DestinationFolders": [
+          ""
+        ]
+      },
       "FSLogix": {
         "Description": "Required: FSLogix",
         "DownloadUrl": "https://aka.ms/fslogix_download",

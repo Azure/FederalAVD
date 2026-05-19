@@ -1,4 +1,20 @@
 {
+    "AVDAgent": {
+        "Description": "Required: Azure Virtual Desktop Agent Installer",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2310011",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi",
+        "DestinationFolders": [
+            ""
+        ]
+    },
+    "AVDAgentBootloader": {
+        "Description": "Required: Azure Virtual Desktop Agent Bootloader Installer",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2311028",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi",
+        "DestinationFolders": [
+            ""
+        ]
+    },
     "FSLogix": {
         "Description": "Required: FSLogix",
         "DownloadUrl": "https://aka.ms/fslogix_download",

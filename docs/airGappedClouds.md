@@ -33,7 +33,7 @@ During session host deployment (host pool creation and Session Host Replacer ope
 
 | Component | Storage Account</br>Provided | Instructions |
 | :-- | :--: | :-- |
-| **AVD Agent &</br>Boot Loader** | Yes | For air-gapped environments where the permalinks are not accessible:<ol><li>Download the latest AVD Agent Boot Loader and AVD Agent MSI files from a system where they are accessible.</li><li>Upload them to your artifacts storage account blob container with the original filenames (e.g., **Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi** and **Microsoft.RDInfra.RDAgent.Installer-x64.msi**).</li><li>Configure the `agentBootLoaderDownloadUrl` and `agentDownloadUrl` parameters with the full URLs to the installers in blob storage to override the default permalinks.</li></ol>**Note:** The Agent download always tries the host pool API endpoint first for the latest version, then falls back to your custom URL. See [Parameters](parameters.md) for details. |
+| **AVD Agent &</br>Boot Loader** | Yes | Running `Update-ImageArtifacts.ps1` automatically downloads the AVD Agent and Bootloader from the air-gapped cloud URLs and uploads them to the artifacts storage account — no manual steps required. After running the script, set `agentBootLoaderDownloadUrl` and `agentDownloadUrl` to the corresponding blob storage URLs (e.g., `https://<storageAccount>.blob.<env-suffix>/artifacts/Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi`) to override the default permalinks.<br/><br/>If the air-gapped URLs are not reachable from the management system, download both MSI files manually, place them in `.common/artifacts/`, and run `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`.<br/><br/>**Note:** The Agent download always tries the host pool API endpoint first for the latest version, then falls back to the URL you configure. See [Parameters](parameters.md) for details. |
 | **AVD Agent &</br>Boot Loader** | No | The deployment uses the default cloud-specific permalinks (see network requirements above) for both components. For the Agent, the deployment always attempts the host pool API endpoint first for the latest version before falling back to the permalink. |
 
 📖 **Parameter Reference:** See the `agentDownloadUrl` and `agentBootLoaderDownloadUrl` parameters in [Parameters](parameters.md).
@@ -80,10 +80,14 @@ The following artifacts have working URLs in the secret and top secret downloads
 
 | Software | Destination Filename | Air-Gapped URL Pattern |
 |---|---|---|
+| **AVD Agent** | `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | `aka.<env-suffix>/avdRDAgent` |
+| **AVD Agent Bootloader** | `Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi` | `aka.<env-suffix>/avdRDAgentBootloader` |
 | **Office 365 Deployment Tool** | `Office365DeploymentTool.exe` | `officexo.azurefd.<env-suffix>/...` |
 | **OneDrive** | `OneDriveSetup.exe` | `update.azure.odsync.<env-suffix>/...` |
 | **Teams Bootstrapper** | `teamsbootstrapper.exe` | `statics.teams.<env-suffix>/...` |
 | **Teams 64-bit MSIX** | `MSTeams-x64.msix` | `statics.teams.<env-suffix>/...` |
+
+> **Note:** The AVD Agent and Bootloader are not used during custom image builds — they are included in this upload so that `agentDownloadUrl` and `agentBootLoaderDownloadUrl` host pool parameters can reference them from the artifacts storage account instead of relying on the permalink.
 
 If these URLs are not reachable from your management system, download the files manually from the appropriate air-gapped cloud software distribution site and place them in `.common/artifacts/` before running with `-SkipDownloadingNewSources`.
 
