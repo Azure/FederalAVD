@@ -461,7 +461,16 @@ var templateSpecSubscriptionId = !empty(sessionHostTemplateSpecResourceId)
   ? split(sessionHostTemplateSpecResourceId, '/')[2]
   : subscription().subscriptionId
 
-// Naming Convention Logic (derived from resourceNames.bicep)
+// ============================================================================
+// Naming Convention
+// Compile-time placeholders — resolved here by Bicep string substitution:
+//   RESOURCETYPE  → resource type abbreviation (e.g., 'asp', 'func', 'uai')
+//   LOCATION      → region abbreviation (e.g., 'eus', 'va')
+//   TOKEN         → per-resource differentiator in HP-scoped names (e.g., 'shr-abc123-')
+// Runtime placeholders — passed as strings to the Function App for substitution:
+//   SHNAME        → session host name prefix + padded index (e.g., 'avd0101')
+//   ##            → availability set numeric index (e.g., '01')
+// ============================================================================
 var cloud = toLower(environment().name)
 var locationsObject = loadJsonContent('../../../.common/data/locations.json')
 var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : cloud
@@ -500,18 +509,14 @@ var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
 // Generate unique identifiers for resource naming
 var uniqueStringHosts = take(uniqueString(virtualMachinesSubscriptionId, virtualMachinesResourceGroupName), 6)
 
-// App Service Plan naming convention
+// Shared (non-HP-scoped) naming convention — no TOKEN since these resources have no per-resource differentiator
 var nameConv_Shared_Resources = nameConvReversed
-  ? 'avd-TOKEN-${nameConvSuffix}'
-  : 'RESOURCETYPE-avd-TOKEN-${nameConvSuffix}'
+  ? 'avd-${nameConvSuffix}'
+  : 'RESOURCETYPE-avd-${nameConvSuffix}'
 var appServicePlanName = replace(
-  replace(
-    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
-    'LOCATION',
-    functionAppRegionAbbreviation
-  ),
-  'TOKEN-',
-  ''
+  replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
+  'LOCATION',
+  functionAppRegionAbbreviation
 )
 
 // Private endpoint naming conventions
@@ -536,15 +541,9 @@ var privateEndpointNICNameConv = replace(
 // Use explicit override if provided, otherwise derive from shared naming convention
 var appInsightsName = !empty(applicationInsightsNameOverride)
   ? applicationInsightsNameOverride
-  : replace(
-      replace(
-        replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
-        'TOKEN-',
-        'sessionhostreplacer-'
-      ),
-      'LOCATION',
-      functionAppRegionAbbreviation
-    )
+  : nameConvReversed
+      ? 'avd-sessionhostreplacer-${functionAppRegionAbbreviation}-${resourceAbbreviations.applicationInsights}'
+      : '${resourceAbbreviations.applicationInsights}-avd-sessionhostreplacer-${functionAppRegionAbbreviation}'
 
 // Enterprise Workbook naming - single workbook for all host pools across all regions
 // Azure Monitor Workbooks require GUID names for deterministic deployment
@@ -600,15 +599,9 @@ var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride
     )
 var templateSpecNameFinal = !empty(templateSpecName)
   ? templateSpecName
-  : replace(
-      replace(
-        replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.templateSpecs),
-        'TOKEN',
-        'session-hosts'
-      ),
-      'LOCATION',
-      functionAppRegionAbbreviation
-    )
+  : nameConvReversed
+      ? 'avd-session-hosts-${functionAppRegionAbbreviation}-${resourceAbbreviations.templateSpecs}'
+      : '${resourceAbbreviations.templateSpecs}-avd-session-hosts-${functionAppRegionAbbreviation}'
 
 // Virtual Machine naming conventions - use overrides if provided, otherwise derive from host pool naming
 var availabilitySetNameConv = !empty(availabilitySetNameConvOverride)

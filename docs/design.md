@@ -118,3 +118,49 @@ Because the Monitoring and Operations resource groups are shared across all host
 The code is idempotent, allowing you to scale storage and sessions hosts, but the core management resources will persist and update for any subsequent deployments. Some of those resources are the host pool, application group, and log analytics workspace.
 
 Both a personal or pooled host pool can be deployed with this solution. Either option will deploy a desktop application group with a role assignment. You can also deploy the required resources and configurations to fully enable FSLogix. This solution also automates many of the [features](features.md) that are usually enabled manually after deploying an AVD host pool.
+
+## Naming Convention Internals
+
+> **Audience:** contributors extending or debugging the naming logic. Operators deploying the template only need the parameter descriptions and the table above.
+
+All resource names are assembled at Bicep compile time from four base template strings. Each string contains one or more uppercase placeholders that are resolved through `replace()` calls before a name is ever emitted:
+
+| Placeholder | Resolved to |
+| ----------- | ----------- |
+| `RESOURCETYPE` | Resource type abbreviation from `resourceAbbreviations.json` (e.g. `rg`, `vm`, `kv`) |
+| `LOCATION` | Region abbreviation from `locations.json` (e.g. `va`, `tx`, `eus`) |
+| `TOKEN` | Per-resource differentiator — `hosts`, `storage`, `operations`, `sec-<uid>`, etc. |
+
+### Four base naming templates
+
+```
+nameConv_Shared_ResGroup   – shared resource groups  (monitoring, operations, control-plane)
+nameConv_Shared_Resources  – shared resources        (log analytics, key vaults, DCE/DCR)
+nameConv_HP_ResGroups      – host-pool resource groups (hosts, storage, deployment)
+nameConv_HP_Resources      – host-pool resources      (VMs, disk encryption sets, UAIs, …)
+```
+
+Their shape depends on `nameConvResTypeAtEnd`:
+
+| `nameConvResTypeAtEnd` | `nameConv_Shared_*` pattern | `nameConv_HP_Resources` pattern |
+| ---------------------- | --------------------------- | ------------------------------- |
+| `false` (default — CAF) | `RESOURCETYPE-avd-TOKEN-LOCATION` | `RESOURCETYPE-avd-<hpBaseName>-TOKEN-LOCATION` |
+| `true` (reversed) | `avd-TOKEN-LOCATION-RESOURCETYPE` | `avd-<hpBaseName>-TOKEN-LOCATION-RESOURCETYPE` |
+
+### Concrete examples (`identifier: hr`, `index: 01`, `location: va`)
+
+| Resource | Default (`false`) | Reversed (`true`) |
+| -------- | ----------------- | ----------------- |
+| Operations RG | `rg-avd-operations-va` | `avd-operations-va-rg` |
+| Secrets Key Vault | `kv-avd-sec-<uid>-va` *(truncated to 24 chars)* | `avd-sec-<uid>-va-kv` |
+| Hosts RG | `rg-avd-hr-01-hosts-va` | `avd-hr-01-hosts-va-rg` |
+| Host Pool | `hp-avd-hr-01-va` | `avd-hr-01-va-hp` |
+| VM name convention | `vm-hr###-va` | `hr###-va-vm` |
+
+### When `existingHostPoolResourceId` is provided
+
+The convention is **auto-detected** from the existing host pool name: if it starts with the `hp` abbreviation the convention is forward; if it ends with `hp` it is reversed. This drives `nameConvReversed` so that every other resource in the deployment matches the existing host pool's style, regardless of the `nameConvResTypeAtEnd` parameter.
+
+### Implementation location
+
+The full implementation lives in the **Naming Convention** section of [`deployments/hostpools/hostpool.bicep`](../deployments/hostpools/hostpool.bicep), directly above the resource group module declarations.

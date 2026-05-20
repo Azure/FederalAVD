@@ -15,7 +15,6 @@ The FSLogix Storage Quota Manager is an automated Azure Function that monitors a
 - **Flexible Infrastructure**: Deploy with new or existing App Service Plan
 - **Zero Trust Networking**: Optional private endpoints for function app and supporting storage account, plus VNet integration
 - **Customer-Managed Encryption**: Optional customer-managed keys (CMK) using Azure Key Vault for function app storage
-- **Comprehensive Monitoring**: Application Insights integration with detailed logging and diagnostics
 - **RBAC-Based Security**: Uses system-assigned managed identity with Storage Account Contributor role scoped to the storage resource group
 
 ## How It Works
@@ -25,7 +24,7 @@ The FSLogix Storage Quota Manager is an automated Azure Function that monitors a
 3. **Share Analysis**: For each storage account, enumerates all file shares and checks usage
 4. **Intelligent Scaling**: Applies tiered logic based on current quota and remaining capacity
 5. **Automatic Increase**: Issues REST API calls to increase quotas when thresholds are met
-6. **Detailed Logging**: Records all quota changes and decisions to Application Insights
+6. **Detailed Logging**: Records all quota changes and decisions to the Azure Functions execution log
 
 ## Prerequisites
 
@@ -57,7 +56,7 @@ Click the button for your target cloud to open the deployment UI in Azure Portal
    - **storageResourceGroupId**: Full resource ID of the resource group containing your FSLogix storage accounts
    - **functionAppResourceGroupName**: Name of the resource group where the function app will be deployed
    - **location**: Azure region for the function app
-6. Configure optional parameters as needed (host pool association, networking, encryption, monitoring)
+6. Configure optional parameters as needed (host pool association, networking, encryption)
 7. Review and create
 
 ### Azure CLI
@@ -129,13 +128,6 @@ New-AzSubscriptionDeployment `
 | `keyManagementStorageAccounts` | string | 'MicrosoftManaged' | Encryption key management. Options: `MicrosoftManaged`, `CustomerManaged`, `CustomerManagedHSM` |
 | `encryptionKeyVaultResourceId` | string | '' | Key Vault resource ID for customer-managed keys. **Required if** using `CustomerManaged` or `CustomerManagedHSM`. |
 
-#### Monitoring Configuration
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `logAnalyticsWorkspaceResourceId` | string | '' | Log Analytics Workspace for Application Insights. If empty, Application Insights will not be enabled. |
-| `privateLinkScopeResourceId` | string | '' | Azure Monitor Private Link Scope for Application Insights private connectivity. |
-
 #### Execution Configuration
 
 | Parameter | Type | Default | Description |
@@ -163,12 +155,7 @@ New-AzSubscriptionDeployment `
    - Default SKU: P1v3 (2 vCPU, 8 GB RAM); configurable via UI (P0v3–P3v3)
    - Zone redundancy: Optional
 
-4. **Application Insights** (optional)
-   - Created if `logAnalyticsWorkspaceResourceId` is provided
-   - Logs all quota checks and increases
-   - Integrated with Log Analytics Workspace
-
-5. **Private Endpoints** (optional, if `privateEndpoint=true`)
+4. **Private Endpoints** (optional, if `privateEndpoint=true`)
    - Function app storage: blob, file, queue, table
    - Function app: sites endpoint
 
@@ -247,44 +234,11 @@ THEN Increase quota by 500GB
 
 ## Monitoring and Logging
 
-### Application Insights Logs
+Function execution history is available directly in the Azure Portal without any additional resources:
 
-All quota checks and increases are logged to Application Insights. Log messages include:
-
-- Storage account and file share name
-- Current quota and usage
-- Remaining capacity
-- Actions taken (increase amount or no change)
-
-### Sample Log Queries
-
-View all quota increases:
-
-```kusto
-traces
-| where message contains "Increasing the file share quota"
-| project timestamp, message
-| order by timestamp desc
-```
-
-View quota check summary:
-
-```kusto
-traces
-| where message contains "Share Capacity" or message contains "Share Usage"
-| extend StorageInfo = extract(@"\[([^\]]+)\]", 1, message)
-| project timestamp, StorageInfo, message
-| order by timestamp desc
-```
-
-Check for errors:
-
-```kusto
-traces
-| where severityLevel >= 3  // Warning or Error
-| project timestamp, severityLevel, message
-| order by timestamp desc
-```
+- Navigate to **Function App → Functions → `auto-increase-file-share-quota` → Monitor**
+- View per-invocation logs, success/failure status, duration, and output
+- Set up Azure Monitor alerts on the Function App for failure notifications
 
 ### Metrics to Monitor
 
@@ -337,14 +291,13 @@ When private endpoints are enabled:
 
 ### Function Not Executing
 
-**Symptoms**: No logs in Application Insights, no quota increases
+**Symptoms**: No quota increases, no execution history in the Azure Functions Monitor tab
 
 **Checks**:
 
 1. Verify timer trigger schedule is correct
 2. Check function app is running (not stopped)
 3. Review function app configuration in Azure Portal
-4. Confirm Application Insights connection string is configured
 
 **Resolution**:
 
@@ -369,7 +322,7 @@ When private endpoints are enabled:
 
 3. **Storage Account Access**: Ensure storage accounts are not locked or have restrictive policies
 
-4. **Logs**: Review Application Insights for specific error messages
+4. **Logs**: Review the Azure Functions Monitor tab for specific error messages
 
 **Resolution**:
 
@@ -440,17 +393,15 @@ New-AzRoleAssignment -ObjectId $identity -RoleDefinitionName "Storage Account Co
 | **App Service Plan** | PremiumV3_P0v3 (1 instance, new) | ~$120/month |
 | **App Service Plan** | Shared with existing functions | ~$0/month (shared cost) |
 | **Function App Storage** | Standard_LRS, minimal usage | ~$2/month |
-| **Application Insights** | 5GB ingestion, 90-day retention | ~$10/month |
 | **Private Endpoints** | 5 endpoints (if enabled) | ~$20/month |
-| **Total (New Plan)** | - | ~$152/month |
-| **Total (Shared Plan)** | - | ~$32/month |
+| **Total (New Plan)** | - | ~$142/month |
+| **Total (Shared Plan)** | - | ~$22/month |
 
 ### Cost Optimization Tips
 
 1. **Share App Service Plan**: Use existing App Service Plan from another function to eliminate ~$75/month
 2. **Adjust Timer Schedule**: Less frequent checks reduce function execution costs (minimal impact)
-3. **Reduce Log Retention**: Lower Application Insights retention to 30 days
-4. **Skip Private Endpoints**: If not required for compliance, save ~$20/month
+3. **Skip Private Endpoints**: If not required for compliance, save ~$20/month
 5. **Right-Size App Service Plan**: If shared with minimal workload, consider B1 tier (~$13/month)
 
 ## Best Practices
@@ -459,12 +410,11 @@ New-AzRoleAssignment -ObjectId $identity -RoleDefinitionName "Storage Account Co
 
 - Deploy function app to the same Azure region as your storage accounts for optimal performance
 - Use an existing App Service Plan if available to reduce costs
-- Enable Application Insights for production deployments
 - Tag resources appropriately using the `tags` parameter
 
 ### Monitoring
 
-- Set up Azure Monitor alerts for function failures
+- Set up Azure Monitor alerts on the Function App for failure notifications
 - Review quota increase patterns monthly to understand growth
 - Monitor storage account metrics to validate quota increases align with usage
 

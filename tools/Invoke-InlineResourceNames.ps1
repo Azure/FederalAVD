@@ -1,28 +1,44 @@
-targetScope = 'subscription'
 
-@description('Required. Resource ID of an existing host pool. When provided, naming conventions are derived from the existing host pool name rather than constructed from scratch.')
-param existingHostPoolResourceId string
-@description('Optional. Resource ID of an existing global feed workspace to register this host pool with. Leave empty to skip global feed registration.')
-param existingFeedWorkspaceResourceId string = ''
-@description('Optional. Custom prefix for FSLogix storage account names. Overrides the default naming convention when set.')
-param fslogixStorageCustomPrefix string = ''
-@description('Optional. Short label for this host pool (e.g. "finance", "dev"). Used as the base segment in all generated resource names. Ignored when existingHostPoolResourceId is provided.')
-param identifier string = ''
-@description('Required. Numeric index for this host pool (e.g. 1 produces a -01 suffix). Used to differentiate multiple host pools sharing the same identifier.')
-param index int
-@description('Required. Azure region for AVD control plane resources: host pool, workspace, and application groups.')
-param controlPlaneRegion string
-@description('Optional. Azure region for the global feed workspace. Required only when creating a new global feed workspace resource.')
-param globalFeedRegion string = ''
-@description('Required. Azure region where session host VMs and associated compute and storage resources are deployed.')
-param virtualMachinesRegion string
-@description('Optional. When true, the resource type abbreviation is placed at the end of names (e.g. avd-01-eus-vm). When false, at the beginning (e.g. vm-avd-01-eus). Ignored when existingHostPoolResourceId is provided — convention is detected automatically from the existing name.')
-param nameConvResTypeAtEnd bool = false
-@description('Optional. Override prefix for virtual machine names. When empty, derived from the naming convention and identifier.')
-param virtualMachineNamePrefix string = ''
+<#
+.SYNOPSIS
+  Inlines deployments/hostpools/modules/resourceNames.bicep into hostpool.bicep,
+  replacing the module declaration and all resourceNames.outputs.* references.
+#>
 
+$file    = 'c:\repos\FederalAVD\deployments\hostpools\hostpool.bicep'
+$content = [System.IO.File]::ReadAllText($file).Replace("`r`n", "`n")
+
+# ── 1. Replace module block ────────────────────────────────────────────────────
+
+$oldModule = @'
+// Resource Names
+module resourceNames 'modules/resourceNames.bicep' = {
+  name: 'Resource-Names-${deploymentSuffix}'
+  params: {
+    existingFeedWorkspaceResourceId: existingFeedWorkspaceResourceId
+    existingHostPoolResourceId: existingHostPoolResourceId
+    fslogixStorageCustomPrefix: fslogixStorageCustomPrefix
+    identifier: identifier
+    index: index
+    controlPlaneRegion: effectiveControlPlaneRegion
+    globalFeedRegion: globalFeedRegion!
+    virtualMachinesRegion: virtualMachinesRegion
+    nameConvResTypeAtEnd: nameConvResTypeAtEnd
+    virtualMachineNamePrefix: virtualMachineNamePrefix
+  }
+}
+'@
+
+$newVars = @'
+// ============================================================================
+// Naming Convention
+// Compile-time placeholders — resolved here by Bicep string substitution:
+//   RESOURCETYPE  → resource type abbreviation (e.g., 'hp', 'vm', 'rg')
+//   LOCATION      → region abbreviation (e.g., 'eus', 'va')
+//   TOKEN         → per-resource differentiator (e.g., 'hosts', 'sec-abc123')
+// ============================================================================
 var cloud = toLower(environment().name)
-var locationsObject = loadJsonContent('../../../.common/data/locations.json')
+var locationsObject = loadJsonContent('../../.common/data/locations.json')
 var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : environment().name
 var locations = locationsObject[locationsEnvProperty]
 
@@ -30,14 +46,12 @@ var locations = locationsObject[locationsEnvProperty]
 var varLocationVirtualMachines = startsWith(cloud, 'us') ? substring(virtualMachinesRegion, 5, length(virtualMachinesRegion) - 5) : virtualMachinesRegion
 var virtualMachinesRegionAbbreviation = locations[varLocationVirtualMachines].abbreviation
 #disable-next-line BCP329
-var varLocationControlPlane = startsWith(cloud, 'us') ? substring(controlPlaneRegion, 5, length(controlPlaneRegion) - 5) : controlPlaneRegion
+var varLocationControlPlane = startsWith(cloud, 'us') ? substring(effectiveControlPlaneRegion, 5, length(effectiveControlPlaneRegion) - 5) : effectiveControlPlaneRegion
 var controlPlaneRegionAbbreviation = locations[varLocationControlPlane].abbreviation
 
-var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
+var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 
 var existingHostPoolName = empty(existingHostPoolResourceId) ? '' : last(split(existingHostPoolResourceId, '/'))
-
-// Dynamically determine naming convention from existing host pool name
 // nameConvReversed = true means resource type at end (e.g., "avd-01-eus-hp")
 // nameConvReversed = false means resource type at beginning (e.g., "hp-avd-01-eus")
 var nameConvReversed = !empty(existingHostPoolName)
@@ -49,9 +63,7 @@ var nameConvReversed = !empty(existingHostPoolName)
   : nameConvResTypeAtEnd
 
 var arrHostPoolName = split(existingHostPoolName, '-')
-
 var hpIndexString = index >= 0 ? format('{0:00}', index) : ''
-
 // Extract hpBaseName from existing host pool name by removing resource type and location
 // Not reversed: hp-{hpBaseName}-{location} → remove first segment (hp) and last segment (location)
 // Reversed: {hpBaseName}-{location}-hp → remove last two segments (location-hp)
@@ -64,22 +76,18 @@ var hpBaseName = !empty(existingHostPoolName)
 var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
 
 var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
-
-// Management, Monitoring, and Control Plane Resource Naming Conventions
 var nameConv_Shared_ResGroup = nameConvReversed
   ? 'avd-TOKEN-${nameConvSuffix}'
   : 'RESOURCETYPE-avd-TOKEN-${nameConvSuffix}'
 var nameConv_Shared_Resources = nameConvReversed
   ? 'avd-TOKEN-${nameConvSuffix}'
   : 'RESOURCETYPE-avd-TOKEN-${nameConvSuffix}'
-
-// HostPool Specific Resource Naming Conventions
 var nameConv_HP_ResGroups = nameConvReversed
   ? 'avd-${hpBaseName}-TOKEN-${nameConvSuffix}'
   : 'RESOURCETYPE-avd-${hpBaseName}-TOKEN-${nameConvSuffix}'
 var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
 
-// Deployment Resources (temporary resource group for deployment purposes)
+// Deployment Resources
 var resourceGroupDeployment = replace(
   replace(replace(nameConv_HP_ResGroups, 'TOKEN', 'deployment'), 'LOCATION', '${virtualMachinesRegionAbbreviation}'),
   'RESOURCETYPE',
@@ -98,9 +106,10 @@ var depVirtualMachineName = take('${depVirtualMachineNameTemp}${uniqueString(dep
 var depVirtualMachineDiskName = '${depVirtualMachineName}-${resourceAbbreviations.osdisks}'
 var depVirtualMachineNicName = '${depVirtualMachineName}-${resourceAbbreviations.networkInterfaces}'
 
-// Operations RG: Key Vaults, App Service Plan, Template Specs, App Attach storage — shared infrastructure
-// The standalone keyVaults.bicep deployment also targets this RG (identifier defaults to 'operations')
-// so both the inline fallback and the standalone path produce KVs in the same RG with identical names.
+// Operations / Monitoring Resource Groups (shared infrastructure)
+// The standalone keyVaults.bicep deployment also targets the operations RG (identifier defaults
+// to 'operations'), so both the inline fallback and the standalone path produce KVs in the same
+// RG with identical names — preventing duplicates.
 var resourceGroupOperations = replace(
   replace(replace(nameConv_Shared_ResGroup, 'TOKEN', 'operations'), 'LOCATION', virtualMachinesRegionAbbreviation),
   'RESOURCETYPE',
@@ -112,9 +121,8 @@ var resourceGroupMonitoring = replace(
   resourceAbbreviations.resourceGroups
 )
 var uniqueStringOperations = take(uniqueString(subscription().subscriptionId, resourceGroupOperations), 6)
-
-// Key Vault names are seeded on resourceGroupOperations so both the inline fallback
-// and the standalone keyVaults.bicep deployment produce identical names, preventing duplicates.
+// Key Vault names are seeded on resourceGroupOperations so the standalone keyVaults.bicep
+// deployment produces identical names to the inline fallback, preventing duplicates.
 var keyVaultNameSecrets = take(
   replace(
     replace(
@@ -149,7 +157,6 @@ var dataCollectionEndpointName = replace(
   'TOKEN-',
   ''
 )
-
 var logAnalyticsWorkspaceName = replace(
   replace(
     replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.logAnalyticsWorkspaces),
@@ -192,7 +199,6 @@ var resourceGroupControlPlane = empty(existingHostPoolResourceId)
         )
       : split(existingFeedWorkspaceResourceId, '/')[4]
   : split(existingHostPoolResourceId, '/')[4]
-
 var workspaceName = empty(existingFeedWorkspaceResourceId)
   ? replace(
       replace(
@@ -222,7 +228,7 @@ var scalingPlanName = replace(
   controlPlaneRegionAbbreviation
 )
 
-// Common HostPool Specific Resource Naming Conventions
+// Common HostPool Resource Naming
 var privateEndpointNameConv = replace(
   nameConvReversed ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
   'RESOURCETYPE',
@@ -266,7 +272,6 @@ var resourceGroupHosts = replace(
   'RESOURCETYPE',
   '${resourceAbbreviations.resourceGroups}'
 )
-
 var availabilitySetNameConv = nameConvReversed ? replace(replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '') : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '')}-##'
 var virtualMachineNameConv = nameConvReversed
   ? '${virtualMachineNamePrefix}###-${resourceAbbreviations.virtualMachines}'
@@ -286,12 +291,14 @@ var diskAccessName = replace(
   'TOKEN-',
   ''
 )
-// Disk Encryption Set Names - Max length 80 Characters
 var diskEncryptionSetNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.diskEncryptionSets),
   'LOCATION',
   virtualMachinesRegionAbbreviation
 )
+var diskEncryptionSetNameConfidentialVMs = replace(diskEncryptionSetNameConv, 'TOKEN-', 'confvm-customer-keys-')
+var diskEncryptionSetNameCustomerManaged = replace(diskEncryptionSetNameConv, 'TOKEN-', 'customer-keys-')
+var diskEncryptionSetNamePlatformAndCustomerManaged = replace(diskEncryptionSetNameConv, 'TOKEN-', 'platform-and-customer-keys-')
 
 // Storage Resources
 var resourceGroupStorage = replace(
@@ -323,7 +330,9 @@ var uniqueStringStorage = take(uniqueString(subscription().subscriptionId, resou
 var fslogixStorageAccountNamePrefix = empty(fslogixStorageCustomPrefix)
   ? 'fslogix${uniqueStringStorage}'
   : toLower(fslogixStorageCustomPrefix)
-
+var encryptionKeyNameFSLogix = '${hpBaseName}-encryption-key-${fslogixStorageAccountNamePrefix}##'
+var encryptionKeyNameVMs = '${hpBaseName}-encryption-key-vms'
+var encryptionKeyNameConfidentialVMs = '${hpBaseName}-encryption-key-confidential-vms'
 var fslogixfileShareNames = {
   CloudCacheProfileContainer: [
     'profile-containers'
@@ -340,54 +349,89 @@ var fslogixfileShareNames = {
     'office-containers'
   ]
 }
+'@
 
-output availabilitySetNameConv string = availabilitySetNameConv
-output dataCollectionEndpointName string = dataCollectionEndpointName
-output depVirtualMachineName string = depVirtualMachineName
-output depVirtualMachineNicName string = depVirtualMachineNicName
-output depVirtualMachineDiskName string = depVirtualMachineDiskName
-output desktopApplicationGroupName string = desktopApplicationGroupName
-output diskAccessName string = diskAccessName
-output diskEncryptionSetNames object = {
-  confidentialVMs: replace(diskEncryptionSetNameConv, 'TOKEN-', 'confvm-customer-keys-')
-  customerManaged: replace(diskEncryptionSetNameConv, 'TOKEN-', 'customer-keys-')
-  platformAndCustomerManaged: replace(diskEncryptionSetNameConv, 'TOKEN-', 'platform-and-customer-keys-')
+# Normalize line endings
+$oldModule = $oldModule.Replace("`r`n", "`n")
+$newVars   = $newVars.Replace("`r`n", "`n")
+
+$before = $content.Length
+$content = $content.Replace($oldModule, $newVars)
+if ($content.Length -eq $before) {
+  Write-Error "Module block replacement FAILED — oldModule string not found. Check line endings or whitespace."
+  exit 1
 }
-output fslogixFileShareNames object = fslogixfileShareNames
-output globalFeedWorkspaceName string = globalFeedWorkspaceName
-output hostPoolName string = hostPoolName
-output keyVaultNames object = {
-  encryptionKeys: keyVaultNameEncryption
-  secrets: keyVaultNameSecrets
+Write-Host "Module block replaced."
+
+# ── 2. Replace all resourceNames.outputs.* references ─────────────────────────
+
+$replacements = [ordered]@{
+  # Object property accesses — most specific first (longer paths before shorter)
+  'resourceNames.outputs.diskEncryptionSetNames.confidentialVMs'        = 'diskEncryptionSetNameConfidentialVMs'
+  'resourceNames.outputs.diskEncryptionSetNames.customerManaged'        = 'diskEncryptionSetNameCustomerManaged'
+  'resourceNames.outputs.diskEncryptionSetNames.platformAndCustomerManaged' = 'diskEncryptionSetNamePlatformAndCustomerManaged'
+  'resourceNames.outputs.keyVaultNames.encryptionKeys'                  = 'keyVaultNameEncryption'
+  'resourceNames.outputs.keyVaultNames.secrets'                         = 'keyVaultNameSecrets'
+  'resourceNames.outputs.encryptionKeyNames.fslogix'                    = 'encryptionKeyNameFSLogix'
+  'resourceNames.outputs.encryptionKeyNames.virtualMachines'            = 'encryptionKeyNameVMs'
+  'resourceNames.outputs.encryptionKeyNames.confidentialVMs'            = 'encryptionKeyNameConfidentialVMs'
+  'resourceNames.outputs.recoveryServicesVaultNames.vms'                = 'recoveryServicesVaultNameVMs'
+  'resourceNames.outputs.recoveryServicesVaultNames.fslogix'            = 'recoveryServicesVaultNameFSLogix'
+  'resourceNames.outputs.storageAccountNames.fslogix'                   = 'fslogixStorageAccountNamePrefix'
+  'resourceNames.outputs.fslogixFileShareNames'                         = 'fslogixfileShareNames'
+  # Simple direct replacements
+  'resourceNames.outputs.availabilitySetNameConv'                       = 'availabilitySetNameConv'
+  'resourceNames.outputs.dataCollectionEndpointName'                    = 'dataCollectionEndpointName'
+  'resourceNames.outputs.depVirtualMachineName'                         = 'depVirtualMachineName'
+  'resourceNames.outputs.depVirtualMachineNicName'                      = 'depVirtualMachineNicName'
+  'resourceNames.outputs.depVirtualMachineDiskName'                     = 'depVirtualMachineDiskName'
+  'resourceNames.outputs.desktopApplicationGroupName'                   = 'desktopApplicationGroupName'
+  'resourceNames.outputs.diskAccessName'                                = 'diskAccessName'
+  'resourceNames.outputs.globalFeedWorkspaceName'                       = 'globalFeedWorkspaceName'
+  'resourceNames.outputs.hostPoolName'                                  = 'hostPoolName'
+  'resourceNames.outputs.logAnalyticsWorkspaceName'                     = 'logAnalyticsWorkspaceName'
+  'resourceNames.outputs.netAppAccountName'                             = 'netAppAccountName'
+  'resourceNames.outputs.netAppCapacityPoolName'                        = 'netAppCapacityPoolName'
+  'resourceNames.outputs.privateEndpointNameConv'                       = 'privateEndpointNameConv'
+  'resourceNames.outputs.privateEndpointNICNameConv'                    = 'privateEndpointNICNameConv'
+  'resourceNames.outputs.resourceGroupControlPlane'                     = 'resourceGroupControlPlane'
+  'resourceNames.outputs.resourceGroupDeployment'                       = 'resourceGroupDeployment'
+  'resourceNames.outputs.resourceGroupGlobalFeed'                       = 'globalFeedResourceGroupName'
+  'resourceNames.outputs.resourceGroupHosts'                            = 'resourceGroupHosts'
+  'resourceNames.outputs.resourceGroupMonitoring'                       = 'resourceGroupMonitoring'
+  'resourceNames.outputs.resourceGroupOperations'                       = 'resourceGroupOperations'
+  'resourceNames.outputs.resourceGroupStorage'                          = 'resourceGroupStorage'
+  'resourceNames.outputs.scalingPlanName'                               = 'scalingPlanName'
+  'resourceNames.outputs.smbServerLocation'                             = 'virtualMachinesRegionAbbreviation'
+  'resourceNames.outputs.userAssignedIdentityNameConv'                  = 'userAssignedIdentityNameConv'
+  'resourceNames.outputs.virtualMachineNameConv'                        = 'virtualMachineNameConv'
+  'resourceNames.outputs.virtualMachineDiskNameConv'                    = 'diskNameConv'
+  'resourceNames.outputs.virtualMachineNicNameConv'                     = 'networkInterfaceNameConv'
+  'resourceNames.outputs.workspaceName'                                 = 'workspaceName'
 }
-output encryptionKeyNames object = {
-  fslogix: '${hpBaseName}-encryption-key-${fslogixStorageAccountNamePrefix}##'
-  virtualMachines: '${hpBaseName}-encryption-key-vms'
-  confidentialVMs: '${hpBaseName}-encryption-key-confidential-vms'
+
+foreach ($entry in $replacements.GetEnumerator()) {
+  $count = ([regex]::Matches($content, [regex]::Escape($entry.Key))).Count
+  if ($count -gt 0) {
+    $content = $content.Replace($entry.Key, $entry.Value)
+    Write-Host "  Replaced $count occurrence(s): $($entry.Key) → $($entry.Value)"
+  } else {
+    Write-Warning "  NOT FOUND: $($entry.Key)"
+  }
 }
-output smbServerLocation string = virtualMachinesRegionAbbreviation
-output logAnalyticsWorkspaceName string = logAnalyticsWorkspaceName
-output netAppAccountName string = netAppAccountName
-output netAppCapacityPoolName string = netAppCapacityPoolName
-output privateEndpointNameConv string = privateEndpointNameConv
-output privateEndpointNICNameConv string = privateEndpointNICNameConv
-output recoveryServicesVaultNames object = {
-  vms: recoveryServicesVaultNameVMs
-  fslogix: recoveryServicesVaultNameFSLogix
+
+# ── 3. Verify nothing remains ──────────────────────────────────────────────────
+
+$remaining = [regex]::Matches($content, 'resourceNames\.outputs\.[a-zA-Z.]+')
+if ($remaining.Count -gt 0) {
+  $unique = ($remaining | Select-Object -ExpandProperty Value | Sort-Object -Unique) -join ', '
+  Write-Warning "Still has $($remaining.Count) unreplaced reference(s): $unique"
+} else {
+  Write-Host "`nAll resourceNames.outputs references replaced successfully."
 }
-output resourceGroupControlPlane string = resourceGroupControlPlane
-output resourceGroupGlobalFeed string = globalFeedResourceGroupName
-output resourceGroupHosts string = resourceGroupHosts
-output resourceGroupDeployment string = resourceGroupDeployment
-output resourceGroupOperations string = resourceGroupOperations
-output resourceGroupMonitoring string = resourceGroupMonitoring
-output resourceGroupStorage string = resourceGroupStorage
-output scalingPlanName string = scalingPlanName
-output storageAccountNames object = {
-  fslogix: fslogixStorageAccountNamePrefix
-}
-output userAssignedIdentityNameConv string = userAssignedIdentityNameConv
-output virtualMachineNameConv string = virtualMachineNameConv
-output virtualMachineDiskNameConv string = diskNameConv
-output virtualMachineNicNameConv string = networkInterfaceNameConv
-output workspaceName string = workspaceName
+
+# ── 4. Write back ──────────────────────────────────────────────────────────────
+
+[System.IO.File]::WriteAllText($file, $content, [System.Text.UTF8Encoding]::new($false))
+Write-Host "Written: $file"
+Write-Host "Lines: $($content.Split("`n").Count)"

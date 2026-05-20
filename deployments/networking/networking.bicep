@@ -152,11 +152,11 @@ var recoveryServicesGeo = startsWith(cloud, 'us') ? azureRecoveryServicesGeoCode
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 var nameConvSuffix = nameConvResTypeAtEnd ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
 
-var nameConv_Shared_Resources = nameConvResTypeAtEnd ? 'avd-TOKEN-${nameConvSuffix}' : 'RESOURCETYPE-avd-TOKEN-${nameConvSuffix}'
-var natGatewayName = replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.natGateways), 'LOCATION', locationAbbreviation), 'TOKEN-', '')
-var publicIPName = replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.publicIPAddresses), 'LOCATION', locationAbbreviation), 'TOKEN-', '')
-var routeTableName = replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.routeTables), 'LOCATION', locationAbbreviation), 'TOKEN-',  '')
-var nsgName = replace(replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.networkSecurityGroups), 'LOCATION', locationAbbreviation), 'TOKEN-', '')
+var nameConv_Shared_Resources = nameConvResTypeAtEnd ? 'avd-${nameConvSuffix}' : 'RESOURCETYPE-avd-${nameConvSuffix}'
+var natGatewayName = replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.natGateways), 'LOCATION', locationAbbreviation)
+var publicIPName = replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.publicIPAddresses), 'LOCATION', locationAbbreviation)
+var routeTableName = replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.routeTables), 'LOCATION', locationAbbreviation)
+var nsgName = replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.networkSecurityGroups), 'LOCATION', locationAbbreviation)
 
 var privateDnsZones_AzureVirtualDesktop = {
   AzureCloud: 'privatelink.wvd.microsoft.com'
