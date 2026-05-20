@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "951013830653112062"
+      "templateHash": "2248098135300091728"
     }
   },
   "parameters": {
@@ -1349,25 +1349,13 @@
     "cmkIsRequested": "[or(or(contains(parameters('keyManagementStorageAccounts'), 'CustomerManaged'), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption'))]",
     "deployInlineEncryptionKv": "[and(and(equals(parameters('deploymentType'), 'Complete'), empty(parameters('encryptionKeyVaultResourceId'))), variables('cmkIsRequested'))]",
     "deployKeyVaults": "[and(equals(parameters('deploymentType'), 'Complete'), or(parameters('deploySecretsKeyVault'), variables('deployInlineEncryptionKv')))]",
-    "deployTopLevelDiskCmk": "[and(and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), contains(parameters('keyManagementDisks'), 'CustomerManaged')), not(parameters('confidentialVMOSDiskEncryption'))), or(variables('deployInlineEncryptionKv'), not(empty(parameters('encryptionKeyVaultResourceId')))))]",
+    "deployDiskCmk": "[and(and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), contains(parameters('keyManagementDisks'), 'CustomerManaged')), not(parameters('confidentialVMOSDiskEncryption'))), or(variables('deployInlineEncryptionKv'), not(empty(parameters('encryptionKeyVaultResourceId')))))]",
     "deployTopLevelStorageCmk": "[and(and(and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage')), equals(split(parameters('fslogixStorageService'), ' ')[0], 'AzureFiles')), not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))), or(variables('deployInlineEncryptionKv'), not(empty(parameters('encryptionKeyVaultResourceId')))))]",
     "deployCvmDiskCmk": "[and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('confidentialVMOSDiskEncryption')), or(variables('deployInlineEncryptionKv'), not(empty(parameters('encryptionKeyVaultResourceId')))))]",
     "hostPoolVmTemplate": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('namePrefix', parameters('virtualMachineNamePrefix'), 'hibernate', parameters('hibernationEnabled'), 'osDiskType', parameters('diskSku'), 'diskSizeGB', parameters('diskSizeGB'), 'securityType', parameters('securityType'), 'secureBoot', parameters('secureBootEnabled'), 'vTPM', parameters('vTpmEnabled'), 'vmInfrastructureType', 'Cloud', 'virtualProcessorCount', if(equals(parameters('vCPUs'), 0), null(), parameters('vCPUs')), 'memoryGB', if(equals(parameters('memoryGB'), 0), null(), parameters('memoryGB')), 'minimumMemoryGB', if(equals(parameters('memoryGB'), 0), null(), parameters('memoryGB')), 'dynamicMemoryConfig', false()), createObject())]",
-    "fslRemoteStorageAccountNames": "[if(not(empty(parameters('fslogixExistingRemoteStorageAccountResourceIds'))), createObject('fslRemoteStorageAccountNames', string(map(parameters('fslogixExistingRemoteStorageAccountResourceIds'), lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())]",
-    "fslRemoteNetAppVolumeResourceIds": "[if(not(empty(parameters('fslogixExistingRemoteNetAppVolumeResourceIds'))), createObject('fslRemoteNetAppVolumeResourceIds', string(parameters('fslogixExistingRemoteNetAppVolumeResourceIds'))), createObject())]",
-    "hasAssociatedFslStorage": "[or(or(parameters('deployFSLogixStorage'), not(empty(parameters('fslogixExistingLocalStorageAccountResourceIds')))), not(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))))]",
-    "vmIntuneEnrollment": "[if(contains(parameters('identitySolution'), 'DomainServices'), createObject(), createObject('vmIntuneEnrollment', parameters('intuneEnrollment')))]",
-    "vmDomain": "[if(and(contains(parameters('identitySolution'), 'DomainServices'), not(empty(parameters('domainName')))), createObject('vmDomain', parameters('domainName')), createObject())]",
-    "vmOU": "[if(and(contains(parameters('identitySolution'), 'DomainServices'), not(empty(parameters('vmOUPath')))), createObject('vmOUPath', parameters('vmOUPath')), createObject())]",
-    "vmCustomImageId": "[if(empty(parameters('customImageResourceId')), createObject(), createObject('vmCustomImageId', parameters('customImageResourceId')))]",
-    "vmImageOffer": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imageOffer'))), createObject(), createObject('vmImageOffer', parameters('imageOffer')))]",
-    "vmImagePublisher": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imagePublisher'))), createObject(), createObject('vmImagePublisher', parameters('imagePublisher')))]",
-    "vmImageSku": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imageSku'))), createObject(), createObject('vmImageSku', parameters('imageSku')))]",
     "scalingPlanSchedules": "[if(parameters('deployScalingPlan'), createArray(createObject('rampUpStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]))), 'peakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]))), 'rampDownStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]))), 'offPeakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]))), 'name', 'weekdays_schedule', 'daysOfWeek', createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 'rampUpLoadBalancingAlgorithm', parameters('scalingPlanRampUpSchedule').loadBalancingAlgorithm, 'rampUpMinimumHostsPct', parameters('scalingPlanRampUpSchedule').minimumHostsPct, 'rampUpCapacityThresholdPct', parameters('scalingPlanRampUpSchedule').capacityThresholdPct, 'peakLoadBalancingAlgorithm', parameters('scalingPlanPeakSchedule').loadBalancingAlgorithm, 'rampDownLoadBalancingAlgorithm', parameters('scalingPlanRampDownSchedule').loadBalancingAlgorithm, 'rampDownMinimumHostsPct', parameters('scalingPlanRampDownSchedule').minimumHostsPct, 'rampDownCapacityThresholdPct', parameters('scalingPlanRampDownSchedule').capacityThresholdPct, 'rampDownForceLogoffUsers', parameters('scalingPlanForceLogoff'), 'rampDownWaitTimeMinutes', parameters('scalingPlanMinsBeforeLogoff'), 'rampDownNotificationMessage', if(parameters('scalingPlanForceLogoff'), format('You will be logged off in {0} minutes. Make sure to save your work.', parameters('scalingPlanMinsBeforeLogoff')), null()), 'rampDownStopHostsWhen', 'ZeroSessions', 'offPeakLoadBalancingAlgorithm', parameters('scalingPlanOffPeakSchedule').loadBalancingAlgorithm)), createArray())]",
     "exclusionTag": "[if(and(not(empty(parameters('scalingPlanExclusionTag'))), parameters('deployScalingPlan')), createObject('Microsoft.Compute/virtualMachines', createObject(format('{0}', parameters('scalingPlanExclusionTag')), '')), createObject())]",
     "hostTags": "[if(not(empty(variables('exclusionTag'))), union(parameters('tags'), variables('exclusionTag')), parameters('tags'))]",
-    "fslogixFileShareNames": "[variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')]]",
-    "fslogixStorageCount": "[if(or(equals(parameters('identitySolution'), 'EntraId'), equals(parameters('fslogixShardOptions'), 'None')), 1, length(parameters('fslogixUserGroups')))]",
     "hasAmdGpu": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), 'as_v4'), endsWith(parameters('virtualMachineSize'), '_V710_v5')))]",
     "hasNvidiaGpu": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), '_v3'), endsWith(parameters('virtualMachineSize'), '_A10_v5')))]",
     "maxAvSetMembers": 200,
@@ -1416,6 +1404,18 @@
         "office-containers"
       ]
     },
+    "fslogixFileShareNames": "[variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')]]",
+    "fslogixStorageCount": "[if(or(equals(parameters('identitySolution'), 'EntraId'), equals(parameters('fslogixShardOptions'), 'None')), 1, length(parameters('fslogixUserGroups')))]",
+    "fslRemoteStorageAccountNames": "[if(not(empty(parameters('fslogixExistingRemoteStorageAccountResourceIds'))), createObject('fslRemoteStorageAccountNames', string(map(parameters('fslogixExistingRemoteStorageAccountResourceIds'), lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())]",
+    "fslRemoteNetAppVolumeResourceIds": "[if(not(empty(parameters('fslogixExistingRemoteNetAppVolumeResourceIds'))), createObject('fslRemoteNetAppVolumeResourceIds', string(parameters('fslogixExistingRemoteNetAppVolumeResourceIds'))), createObject())]",
+    "hasAssociatedFslStorage": "[or(or(parameters('deployFSLogixStorage'), not(empty(parameters('fslogixExistingLocalStorageAccountResourceIds')))), not(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))))]",
+    "vmIntuneEnrollment": "[if(contains(parameters('identitySolution'), 'DomainServices'), createObject(), createObject('vmIntuneEnrollment', parameters('intuneEnrollment')))]",
+    "vmDomain": "[if(and(contains(parameters('identitySolution'), 'DomainServices'), not(empty(parameters('domainName')))), createObject('vmDomain', parameters('domainName')), createObject())]",
+    "vmOU": "[if(and(contains(parameters('identitySolution'), 'DomainServices'), not(empty(parameters('vmOUPath')))), createObject('vmOUPath', parameters('vmOUPath')), createObject())]",
+    "vmCustomImageId": "[if(empty(parameters('customImageResourceId')), createObject(), createObject('vmCustomImageId', parameters('customImageResourceId')))]",
+    "vmImageOffer": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imageOffer'))), createObject(), createObject('vmImageOffer', parameters('imageOffer')))]",
+    "vmImagePublisher": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imagePublisher'))), createObject(), createObject('vmImagePublisher', parameters('imagePublisher')))]",
+    "vmImageSku": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imageSku'))), createObject(), createObject('vmImageSku', parameters('imageSku')))]",
     "deployRecoveryServices": "[and(and(parameters('recoveryServices'), not(equals(parameters('deploymentType'), 'SessionHostsOnly'))), or(equals(parameters('deploymentType'), 'Complete'), not(empty(parameters('existingRecoveryServicesVaultResourceId')))))]"
   },
   "resources": [
@@ -4065,7 +4065,7 @@
       ]
     },
     {
-      "condition": "[variables('deployTopLevelDiskCmk')]",
+      "condition": "[variables('deployDiskCmk')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Disk-CMK-{0}', variables('deploymentSuffix'))]",
@@ -16135,7 +16135,7 @@
           "existingDiskAccessResourceId": {
             "value": "[parameters('existingDiskAccessResourceId')]"
           },
-          "existingDiskEncryptionSetResourceId": "[if(variables('deployTopLevelDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), if(variables('deployCvmDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('CVM-Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('existingDiskEncryptionSetResourceId'))))]",
+          "existingDiskEncryptionSetResourceId": "[if(variables('deployDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), if(variables('deployCvmDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('CVM-Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('existingDiskEncryptionSetResourceId'))))]",
           "existingRecoveryServicesVaultResourceId": "[if(parameters('recoveryServices'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('RecoveryServices-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultResourceId.value), createObject('value', parameters('existingRecoveryServicesVaultResourceId'))), createObject('value', ''))]",
           "fslogixConfigureSessionHosts": {
             "value": "[parameters('fslogixConfigureSessionHosts')]"
