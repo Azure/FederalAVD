@@ -2,7 +2,7 @@
 
 [**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
-# Entra Kerberos for Azure Files (Cloud-Only Identities) [Preview]
+# Entra Kerberos for Azure Files (Cloud-Only Identities)
 
 ## Overview
 
@@ -159,5 +159,5 @@ Regardless of whether you use the Managed Identity or not, the following step is
 
 [^1]: [Grant Admin Consent to the New Service Principal](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cregkey#grant-admin-consent-to-the-new-service-principal)
 [^2]: [Update the identifier Uris](https://learn.microsoft.com/en-us/troubleshoot/azure/azure-storage/files/security/files-troubleshoot-smb-authentication?toc=%2Fazure%2Fstorage%2Ffiles%2Ftoc.json&tabs=azure-portal#error-1326---the-username-or-password-is-incorrect-when-using-private-link)
-[^3]: [Enable Cloud Group Support](https://learn.microsoft.com/en-us/entra/identity/authentication/kerberos#group-sid-limit-in-entra-kerberos-preview)
+[^3]: [Enable Cloud Group Support](https://learn.microsoft.com/en-us/entra/identity/authentication/kerberos#group-sid-limit-in-entra-kerberos)
 [^4]: [Configure File Level Permissions](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-configure-file-level-permissions)

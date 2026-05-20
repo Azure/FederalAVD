@@ -40,7 +40,7 @@ param nameConvResTypeAtEnd bool = false
   'ActiveDirectoryDomainServices' // User accounts are sourced from and Session Hosts are joined to same Active Directory domain.
   'EntraDomainServices' // User accounts are sourced from either Azure Active Directory or Active Directory Domain Services and Session Hosts are joined to Azure Active Directory Domain Services.
   'EntraKerberos-Hybrid' // User accounts are sourced from Active Directory and Session Hosts are joined to Entra Id.
-  'EntraKerberos-CloudOnly' // Preview feature with Kerberos support. User accounts and Session Hosts are located in Azure Active Directory Only (Cloud Only Scenario)
+  'EntraKerberos-CloudOnly' // User accounts and Session Hosts are located in Entra ID only. FSLogix uses Entra Kerberos for authentication. Supported in Azure Commercial and Azure US Government. Air-gapped cloud support is unknown.
   'EntraId' // User accounts and Session Hosts are located in Azure Active Directory Only (Cloud Only Scenario) 
 ])
 @description('Required. The service providing domain services for Azure Virtual Desktop.  This is needed to properly configure the session hosts and if applicable, the Azure Storage Account.')
