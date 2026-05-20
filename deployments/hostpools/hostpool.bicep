@@ -680,7 +680,7 @@ var deployKeyVaults = deploymentType == 'Complete' && (deploySecretsKeyVault || 
 // Top-level CMK: run keys + DES/UAI + role assignments early so RBAC propagation
 // completes during the monitoring/controlPlane phases — well before VMs or storage deploy.
 var deployDiskCmk = deploymentType != 'SessionHostsOnly' && contains(keyManagementDisks, 'CustomerManaged') && !confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
-var deployTopLevelStorageCmk = deploymentType != 'SessionHostsOnly' && deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && keyManagementStorageAccounts != 'MicrosoftManaged' && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
+var deployStorageCmk = deploymentType != 'SessionHostsOnly' && deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && keyManagementStorageAccounts != 'MicrosoftManaged' && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
 // CVM CMK: CVM keys must be created via Key Vault data plane (Run Command) because ARM key PUT
 // does not support key release policies. The DES is then created by the shared CMK module with skipKeyCreation=true.
 var deployCvmDiskCmk = deploymentType != 'SessionHostsOnly' && confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
@@ -1533,7 +1533,7 @@ var effectiveDiskEncryptionSetResourceId = deployDiskCmk
 
 // Storage CMK: UAI + keys + role assignments for FSLogix AzureFiles storage accounts.
 // Runs in parallel with monitoring/controlPlane so role assignments propagate before azureFiles deploys.
-module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployTopLevelStorageCmk) {
+module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
   name: 'Storage-CMK-${deploymentSuffix}'
   params: {
     resourceGroupName: resourceGroupStorage
@@ -1740,7 +1740,7 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
     permittedIPs: permittedIPs
     tags: tags
     deploymentSuffix: deploymentSuffix
-    encryptionUserAssignedIdentityResourceId: deployTopLevelStorageCmk
+    encryptionUserAssignedIdentityResourceId: deployStorageCmk
       ? storageCmk!.outputs.storageIdentityResourceId
       : ''
     recoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
