@@ -3437,18 +3437,6 @@
 										"required": true
 									},
 									"visible": "[and(steps('management').backup.recoveryServices, equals(steps('basics').deploymentType, 'HostpoolOnly'))]"
-								},
-								{
-									"name": "diskAccessesApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": false,
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Compute/diskAccesses?api-version=2024-03-02')]",
-										"transforms": {
-											"list": "value|[*].{label:name, value:id}"
-										}
-									}
 								}
 							]
 						},
