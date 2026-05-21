@@ -1,4 +1,4 @@
-{
+﻿{
 	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
 	"view": {
 		"kind": "Form",
@@ -1758,7 +1758,7 @@
 				},
 				{
 					"name": "monitoring",
-					"label": "Monitoring",
+					"label": "Monitoring and Management",
 					"elements": [
 						{
 							"name": "enableSessionHostMonitoring",
@@ -1836,6 +1836,57 @@
 								"allowedValues": "[map(filter(steps('monitoring').dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('hosts').scope.location.name)), (dce) => parse(concat('{\"label\":\"', dce.name, '\",\"description\":\"Resource Group: ', first(skip(split(dce.id, '/'), 4)), ', Location: ', dce.location, '\",\"value\":\"', dce.id, '\"}')))]",
 								"required": false
 							}
+						},
+						{
+							"name": "backup",
+							"type": "Microsoft.Common.Section",
+							"label": "Backup and Recovery",
+							"visible": "[equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')]",
+							"elements": [
+								{
+									"name": "recoveryServicesVaultApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(not(empty(steps('basics').subscription.subscriptionId)), steps('monitoring').backup.enableVmBackup)]",
+									"request": {
+										"method": "GET",
+										"path": "[concat('/subscriptions/', steps('basics').subscription.subscriptionId, '/providers/Microsoft.RecoveryServices/vaults?api-version=2024-10-01')]",
+										"transforms": {
+											"list": "value|[*].{label:name, value:id}"
+										}
+									}
+								},
+								{
+									"name": "enableVmBackup",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable VM Backup",
+									"defaultValue": false,
+									"toolTip": "Enable Azure Backup for session host virtual machines. Requires an existing Recovery Services Vault in the same subscription."
+								},
+								{
+									"name": "recoveryServicesVault",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Recovery Services Vault",
+									"defaultValue": "[first(steps('monitoring').backup.recoveryServicesVaultApi.transformed.list).label]",
+									"toolTip": "Select the existing Recovery Services Vault to register session host VMs for backup.",
+									"constraints": {
+										"allowedValues": "[steps('monitoring').backup.recoveryServicesVaultApi.transformed.list]",
+										"required": true
+									},
+									"visible": "[steps('monitoring').backup.enableVmBackup]"
+								},
+								{
+									"name": "vmBackupPolicyName",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Backup Policy Name (Optional)",
+									"defaultValue": "",
+									"placeholder": "AvdPolicyVm",
+									"toolTip": "Name of the backup policy in the vault to apply to session host VMs. Leave blank to use the default policy name 'AvdPolicyVm'.",
+									"constraints": {
+										"required": false
+									},
+									"visible": "[steps('monitoring').backup.enableVmBackup]"
+								}
+							]
 						}
 					]
 				},
@@ -2007,6 +2058,8 @@
 				"networkInterfaceNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, '')]",
 				"availabilitySetNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '')]",
 				"tags": "[steps('advanced').tagsSection.tags]",
+				"recoveryServicesVaultResourceId": "[if(steps('monitoring').backup.enableVmBackup, steps('monitoring').backup.recoveryServicesVault, '')]",
+				"vmBackupPolicyName": "[if(steps('monitoring').backup.enableVmBackup, steps('monitoring').backup.vmBackupPolicyName, '')]",
 				"subnetResourceId": "[steps('hosts').network.subnet.id]"
 			},
 			"kind": "ResourceGroup",

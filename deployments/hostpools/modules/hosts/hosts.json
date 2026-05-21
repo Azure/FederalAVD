@@ -1,501 +1,447 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "12790609706262855652"
+      "templateHash": "9653210425473501677"
     }
   },
   "parameters": {
+    "resourceGroupHosts": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Name of the resource group where session host VMs are deployed."
+      }
+    },
     "agentBootLoaderDownloadUrl": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. Override download URL for the AVD Agent Boot Loader installer. Leave empty to use the default Microsoft-hosted URL for the current cloud."
+        "description": "Optional. Override download URL for the AVD Agent Boot Loader installer."
       }
     },
     "agentDownloadUrl": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. Override download URL for the AVD Agent installer. Leave empty to use the default Microsoft-hosted URL for the current cloud."
+        "description": "Optional. Override download URL for the AVD Agent installer."
       }
     },
     "avdAgentDscPackage": {
       "type": "string",
-      "defaultValue": "Configuration_1.0.03362.1223.zip",
       "metadata": {
-        "description": "Optional. File name of the AVD Agent DSC configuration package blob used during session host registration."
+        "description": "Required. File name of the AVD Agent DSC configuration package blob."
       }
     },
     "artifactsContainerUri": {
       "type": "string",
-      "defaultValue": "",
       "metadata": {
-        "description": "Optional. URI of the blob storage container holding scripts and artifacts for session host customizations."
+        "description": "Required. URI of the blob storage container holding artifacts for session host customizations."
       }
     },
     "artifactsUserAssignedIdentityResourceId": {
       "type": "string",
-      "defaultValue": "",
       "metadata": {
-        "description": "Optional. Resource ID of the user-assigned managed identity with Storage Blob Data Reader access to the artifacts container."
+        "description": "Required. Resource ID of the user-assigned managed identity with Storage Blob Data Reader access."
       }
     },
     "availability": {
       "type": "string",
-      "defaultValue": "None",
-      "allowedValues": [
-        "AvailabilitySets",
-        "AvailabilityZones",
-        "None"
-      ],
       "metadata": {
-        "description": "Optional. VM availability strategy."
+        "description": "Required. VM availability strategy."
       }
     },
     "availabilitySetNameConv": {
       "type": "string",
-      "defaultValue": "",
       "metadata": {
-        "description": "Optional. Naming convention for availability sets with ## placeholder for index. Auto-detected from the host pool name when empty."
+        "description": "Required. Name convention string for availability sets."
+      }
+    },
+    "availabilitySetsCount": {
+      "type": "int",
+      "metadata": {
+        "description": "Required. Total number of availability sets to create."
+      }
+    },
+    "availabilitySetsIndex": {
+      "type": "int",
+      "metadata": {
+        "description": "Required. Starting index for availability set naming."
       }
     },
     "availabilityZones": {
       "type": "array",
-      "defaultValue": [],
       "metadata": {
-        "description": "Optional. Availability zones to spread session hosts across when availability is AvailabilityZones."
+        "description": "Required. List of availability zones."
       }
     },
     "avdInsightsDataCollectionRulesResourceId": {
       "type": "string",
-      "defaultValue": "",
       "metadata": {
-        "description": "Optional. Resource ID of the AVD Insights data collection rule."
+        "description": "Required. Resource ID of the AVD Insights data collection rule."
       }
     },
     "confidentialVMOSDiskEncryption": {
       "type": "bool",
-      "defaultValue": false,
       "metadata": {
-        "description": "Optional. When true, enables OS disk encryption with VMGuestState for confidential VMs."
-      }
-    },
-    "credentialsKeyVaultResourceId": {
-      "type": "string",
-      "metadata": {
-        "description": "Required. Resource ID of the Key Vault containing VirtualMachineAdminPassword, VirtualMachineAdminUserName, DomainJoinUserPassword, and DomainJoinUserPrincipalName secrets."
-      }
-    },
-    "dataCollectionEndpointResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Resource ID of the Azure Monitor data collection endpoint."
-      }
-    },
-    "dedicatedHostGroupResourceIds": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Per-VM array of dedicated host group resource IDs. One entry per session host, a single-entry array applied to all, or empty for no assignment."
-      }
-    },
-    "dedicatedHostResourceIds": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Per-VM array of dedicated host resource IDs. One entry per session host, a single-entry array applied to all, or empty for no assignment."
-      }
-    },
-    "preferredZones": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Per-VM preferred availability zones (as zone strings). One entry per session host, or empty for no preference."
-      }
-    },
-    "diskAccessId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Resource ID of the disk access resource to restrict managed disk network access."
-      }
-    },
-    "diskEncryptionSetResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Resource ID of the disk encryption set for customer-managed key encryption."
-      }
-    },
-    "diskSizeGB": {
-      "type": "int",
-      "defaultValue": 0,
-      "allowedValues": [
-        0,
-        32,
-        64,
-        128,
-        256,
-        512,
-        1024,
-        2048
-      ],
-      "metadata": {
-        "description": "Optional. OS disk size in GB. 0 inherits the image default."
-      }
-    },
-    "diskSku": {
-      "type": "string",
-      "defaultValue": "Premium_LRS",
-      "allowedValues": [
-        "Standard_LRS",
-        "StandardSSD_LRS",
-        "Premium_LRS"
-      ],
-      "metadata": {
-        "description": "Optional. Storage SKU for the OS disk."
-      }
-    },
-    "domainName": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Active Directory domain name for domain join. Leave empty for Entra ID join."
-      }
-    },
-    "enableAcceleratedNetworking": {
-      "type": "bool",
-      "defaultValue": true,
-      "metadata": {
-        "description": "Optional. Enable accelerated networking on session host NICs."
-      }
-    },
-    "enableIPv6": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Enable IPv6 on session host NICs."
-      }
-    },
-    "enableMonitoring": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Enable Azure Monitor on session hosts."
-      }
-    },
-    "encryptionAtHost": {
-      "type": "bool",
-      "defaultValue": true,
-      "metadata": {
-        "description": "Optional. Enable encryption at host for all disks and cache."
-      }
-    },
-    "fslogixConfigureSessionHosts": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Configure FSLogix profile container settings on session hosts."
-      }
-    },
-    "fslogixContainerType": {
-      "type": "string",
-      "defaultValue": "ProfileContainer",
-      "allowedValues": [
-        "CloudCacheProfileContainer",
-        "CloudCacheProfileOfficeContainer",
-        "ProfileContainer",
-        "ProfileOfficeContainer"
-      ],
-      "metadata": {
-        "description": "Optional. FSLogix container type."
-      }
-    },
-    "fslogixLocalNetAppVolumeResourceIds": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Resource IDs of local Azure NetApp Files volumes for FSLogix."
-      }
-    },
-    "fslogixLocalStorageAccountResourceIds": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Resource IDs of local storage accounts for FSLogix."
-      }
-    },
-    "fslogixOSSGroups": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Entra ID group object IDs for FSLogix Office container separation."
-      }
-    },
-    "fslogixRemoteNetAppVolumeResourceIds": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Resource IDs of remote Azure NetApp Files volumes for FSLogix cloud cache failover."
-      }
-    },
-    "fslogixRemoteStorageAccountResourceIds": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Resource IDs of remote storage accounts for FSLogix cloud cache failover."
-      }
-    },
-    "fslogixSizeInMBs": {
-      "type": "int",
-      "defaultValue": 30720,
-      "metadata": {
-        "description": "Optional. Maximum size of FSLogix VHD/VHDX in megabytes."
-      }
-    },
-    "fslogixStorageService": {
-      "type": "string",
-      "defaultValue": "AzureFiles",
-      "allowedValues": [
-        "AzureFiles",
-        "AzureNetAppFiles"
-      ],
-      "metadata": {
-        "description": "Optional. Storage service backing FSLogix containers."
-      }
-    },
-    "hibernationEnabled": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Enable VM hibernation on session hosts."
-      }
-    },
-    "hostPoolResourceId": {
-      "type": "string",
-      "metadata": {
-        "description": "Required. Resource ID of the AVD host pool that session hosts will be registered with."
-      }
-    },
-    "identitySolution": {
-      "type": "string",
-      "allowedValues": [
-        "ActiveDirectoryDomainServices",
-        "EntraDomainServices",
-        "EntraId",
-        "EntraKerberos-CloudOnly",
-        "EntraKerberos-Hybrid"
-      ],
-      "metadata": {
-        "description": "Required. Identity join method for session hosts."
-      }
-    },
-    "imageReference": {
-      "type": "object",
-      "defaultValue": {},
-      "metadata": {
-        "description": "Optional. Pre-built image reference object. When non-empty, takes precedence over imageOffer/imageSku/customImageResourceId."
-      }
-    },
-    "imageOffer": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Marketplace image offer. Used when imageReference and customImageResourceId are both empty."
-      }
-    },
-    "imagePublisher": {
-      "type": "string",
-      "defaultValue": "MicrosoftWindowsDesktop",
-      "metadata": {
-        "description": "Optional. Marketplace image publisher."
-      }
-    },
-    "imageSku": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Marketplace image SKU."
+        "description": "Required. When true, enables OS disk encryption with VMGuestState for confidential VMs."
       }
     },
     "customImageResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. Resource ID of an Azure Compute Gallery image version. Used when imageReference is empty."
+        "description": "Optional. Resource ID of a Compute Gallery image version."
+      }
+    },
+    "dataCollectionEndpointResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Resource ID of the Azure Monitor data collection endpoint."
+      }
+    },
+    "dedicatedHostGroupResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Resource ID of a dedicated host group."
+      }
+    },
+    "dedicatedHostResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Resource ID of a specific dedicated host."
+      }
+    },
+    "diskAccessId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Resource ID of the DiskAccess resource."
+      }
+    },
+    "domainJoinUserPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Required. Password for the domain join service account."
+      }
+    },
+    "domainJoinUserPrincipalName": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Required. UPN of the domain join service account."
+      }
+    },
+    "diskSizeGB": {
+      "type": "int",
+      "metadata": {
+        "description": "Required. OS disk size in GB."
+      }
+    },
+    "diskSku": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Storage SKU for the OS disk."
+      }
+    },
+    "domainName": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Active Directory domain name for domain join."
+      }
+    },
+    "enableAcceleratedNetworking": {
+      "type": "bool",
+      "metadata": {
+        "description": "Required. When true, enables accelerated networking."
+      }
+    },
+    "enableIPv6": {
+      "type": "bool",
+      "metadata": {
+        "description": "Required. When true, adds IPv6 IP configuration to NICs."
+      }
+    },
+    "encryptionAtHost": {
+      "type": "bool",
+      "metadata": {
+        "description": "Required. When true, enables encryption at host."
+      }
+    },
+    "hasAmdGpu": {
+      "type": "bool",
+      "metadata": {
+        "description": "Required. When true, installs AMD GPU driver extension."
+      }
+    },
+    "hasNvidiaGpu": {
+      "type": "bool",
+      "metadata": {
+        "description": "Required. When true, installs NVIDIA GPU driver extension."
+      }
+    },
+    "existingDiskEncryptionSetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Resource ID of a pre-existing Disk Encryption Set."
+      }
+    },
+    "fslogixFileShareNames": {
+      "type": "array",
+      "metadata": {
+        "description": "Required. Array of Azure Files share names for FSLogix."
+      }
+    },
+    "fslogixConfigureSessionHosts": {
+      "type": "bool",
+      "metadata": {
+        "description": "Required. When true, configures FSLogix settings on session hosts."
+      }
+    },
+    "fslogixContainerType": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. FSLogix container type."
+      }
+    },
+    "fslogixLocalNetAppVolumeResourceIds": {
+      "type": "array",
+      "metadata": {
+        "description": "Required. Resource IDs of local NetApp volumes for FSLogix."
+      }
+    },
+    "fslogixLocalStorageAccountResourceIds": {
+      "type": "array",
+      "metadata": {
+        "description": "Required. Resource IDs of local storage accounts for FSLogix."
+      }
+    },
+    "fslogixOSSGroups": {
+      "type": "array",
+      "metadata": {
+        "description": "Required. Entra ID group object IDs for FSLogix OSS."
+      }
+    },
+    "fslogixRemoteNetAppVolumeResourceIds": {
+      "type": "array",
+      "metadata": {
+        "description": "Required. Resource IDs of remote NetApp volumes for FSLogix cloud cache failover."
+      }
+    },
+    "fslogixRemoteStorageAccountResourceIds": {
+      "type": "array",
+      "metadata": {
+        "description": "Required. Resource IDs of remote storage accounts for FSLogix cloud cache failover."
+      }
+    },
+    "fslogixSizeInMBs": {
+      "type": "int",
+      "metadata": {
+        "description": "Required. Maximum size of FSLogix profile VHD/VHDX in MB."
+      }
+    },
+    "fslogixStorageService": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Storage service backing FSLogix containers."
+      }
+    },
+    "hibernationEnabled": {
+      "type": "bool",
+      "metadata": {
+        "description": "Required. When true, enables VM hibernation."
+      }
+    },
+    "hostPoolResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Resource ID of the AVD host pool."
+      }
+    },
+    "identitySolution": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Identity join method."
+      }
+    },
+    "imageOffer": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Marketplace image offer."
+      }
+    },
+    "imagePublisher": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Marketplace image publisher."
+      }
+    },
+    "imageSku": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Marketplace image SKU."
       }
     },
     "integrityMonitoring": {
       "type": "bool",
-      "defaultValue": false,
       "metadata": {
-        "description": "Optional. Enable Guest Attestation extension for boot integrity monitoring."
+        "description": "Required. When true, deploys the Guest Attestation extension."
       }
     },
     "intuneEnrollment": {
       "type": "bool",
-      "defaultValue": false,
       "metadata": {
-        "description": "Optional. Enroll session hosts in Microsoft Intune."
+        "description": "Required. When true, enrolls session hosts into Intune."
       }
     },
     "location": {
       "type": "string",
-      "defaultValue": "[resourceGroup().location]",
       "metadata": {
-        "description": "Optional. Azure region for session host VMs."
+        "description": "Required. Azure region for session host VMs."
+      }
+    },
+    "enableMonitoring": {
+      "type": "bool",
+      "metadata": {
+        "description": "Required. When true, deploys Azure Monitor Agent and DCRs."
       }
     },
     "networkInterfaceNameConv": {
       "type": "string",
-      "defaultValue": "",
       "metadata": {
-        "description": "Optional. Naming convention for NICs with SHNAME placeholder. Auto-detected from host pool name when empty."
+        "description": "Required. Name convention string for NICs, containing SHNAME placeholder."
       }
     },
     "osDiskNameConv": {
       "type": "string",
-      "defaultValue": "",
       "metadata": {
-        "description": "Optional. Naming convention for OS disks with SHNAME placeholder. Auto-detected from host pool name when empty."
+        "description": "Required. Name convention string for OS disks, containing SHNAME placeholder."
       }
     },
     "ouPath": {
       "type": "string",
-      "defaultValue": "",
       "metadata": {
-        "description": "Optional. OU path in Active Directory for session host computer accounts."
+        "description": "Required. Distinguished name of the AD OU."
       }
     },
     "secureBootEnabled": {
       "type": "bool",
-      "defaultValue": true,
       "metadata": {
-        "description": "Optional. Enable Secure Boot on session host VMs."
+        "description": "Required. When true, enables Secure Boot."
       }
     },
     "securityType": {
       "type": "string",
-      "defaultValue": "TrustedLaunch",
-      "allowedValues": [
-        "Standard",
-        "TrustedLaunch",
-        "ConfidentialVM"
-      ],
       "metadata": {
-        "description": "Optional. VM security profile type."
-      }
-    },
-    "sessionHostCustomizations": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Custom script extension configurations for post-provisioning session host customization."
-      }
-    },
-    "sessionHostNameIndexLength": {
-      "type": "int",
-      "defaultValue": 2,
-      "minValue": 1,
-      "maxValue": 4,
-      "metadata": {
-        "description": "Optional. Number of digits in the zero-padded VM index (used for both naming modes)."
-      }
-    },
-    "sessionHostNames": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Explicit array of session host computer names (e.g. [\"avd01\",\"avd02\"]). When non-empty, takes precedence over convention mode. Used by the Session Host Replacer."
-      }
-    },
-    "sessionHostNamePrefix": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Short prefix for session host computer names in convention mode (e.g. \"avd\"). Ignored when sessionHostNames is non-empty."
+        "description": "Required. VM security profile type."
       }
     },
     "sessionHostCount": {
       "type": "int",
-      "defaultValue": 0,
-      "minValue": 0,
       "metadata": {
-        "description": "Optional. Number of session hosts to deploy in convention mode. Ignored when sessionHostNames is non-empty."
+        "description": "Required. Total number of session host VMs to deploy."
+      }
+    },
+    "sessionHostCustomizations": {
+      "type": "array",
+      "metadata": {
+        "description": "Optional. Array of customization objects."
       }
     },
     "sessionHostIndex": {
       "type": "int",
-      "defaultValue": 0,
-      "minValue": 0,
       "metadata": {
-        "description": "Optional. Starting index for VM name generation in convention mode. Ignored when sessionHostNames is non-empty."
+        "description": "Required. Starting VM index number."
+      }
+    },
+    "vmNameIndexLength": {
+      "type": "int",
+      "metadata": {
+        "description": "Required. Number of digits in the zero-padded VM index."
       }
     },
     "subnetResourceId": {
       "type": "string",
       "metadata": {
-        "description": "Required. Resource ID of the subnet where session host NICs will be placed."
+        "description": "Required. Resource ID of the virtual network subnet."
       }
     },
     "tags": {
       "type": "object",
-      "defaultValue": {},
       "metadata": {
-        "description": "Optional. Tags applied to all deployed resources, keyed by resource type."
+        "description": "Required. Azure resource tags keyed by resource type."
+      }
+    },
+    "deploymentSuffix": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Short unique suffix for deployment names."
       }
     },
     "timeZone": {
       "type": "string",
-      "defaultValue": "Eastern Standard Time",
       "metadata": {
-        "description": "Optional. Windows time zone for session host VMs."
+        "description": "Required. Windows time zone for session host VMs."
       }
     },
     "virtualMachineNameConv": {
       "type": "string",
-      "defaultValue": "",
       "metadata": {
-        "description": "Optional. Naming convention for VM names with SHNAME placeholder. Auto-detected from host pool name when empty."
+        "description": "Required. Full name convention for VM names, containing SHNAME placeholder."
+      }
+    },
+    "virtualMachineNamePrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Short prefix for VM names."
       }
     },
     "virtualMachineSize": {
       "type": "string",
       "metadata": {
-        "description": "Required. Azure VM size for session hosts."
+        "description": "Required. Azure VM SKU for session hosts."
+      }
+    },
+    "virtualMachineAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Required. Local administrator password."
+      }
+    },
+    "virtualMachineAdminUserName": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Required. Local administrator username."
       }
     },
     "vTpmEnabled": {
       "type": "bool",
-      "defaultValue": true,
       "metadata": {
-        "description": "Optional. Enable virtual TPM on session host VMs."
+        "description": "Required. When true, enables virtual TPM."
       }
     },
     "vmInsightsDataCollectionRulesResourceId": {
       "type": "string",
-      "defaultValue": "",
       "metadata": {
-        "description": "Optional. Resource ID of the VM Insights data collection rule."
+        "description": "Required. Resource ID of the VM Insights data collection rule."
       }
     },
     "recoveryServicesVaultResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. Resource ID of an existing Recovery Services Vault to register session host VMs with for backup. When provided, VMs will be enrolled in the backup policy specified by vmBackupPolicyName. Intended for personal host pools."
+        "description": "Optional. Resource ID of the Recovery Services Vault for VM backup. Populated only for Personal host pools when backup is enabled."
       }
     },
     "vmBackupPolicyName": {
       "type": "string",
-      "defaultValue": "",
+      "defaultValue": "AvdPolicyVm",
       "metadata": {
-        "description": "Optional. Name of the backup policy within the Recovery Services Vault to apply to session host VMs. Defaults to the standard AVD VM policy name when empty."
+        "description": "Optional. Backup policy name for session host VMs."
       }
     }
   },
@@ -503,342 +449,17 @@
     "copy": [
       {
         "name": "generatedSessionHostNames",
-        "count": "[length(range(parameters('sessionHostIndex'), parameters('sessionHostCount')))]",
-        "input": "[format('{0}{1}', parameters('sessionHostNamePrefix'), padLeft(range(parameters('sessionHostIndex'), parameters('sessionHostCount'))[copyIndex('generatedSessionHostNames')], parameters('sessionHostNameIndexLength'), '0'))]"
-      },
-      {
-        "name": "vmNumbersForAvSet",
-        "count": "[length(variables('effectiveSessionHostNames'))]",
-        "input": "[int(substring(variables('effectiveSessionHostNames')[copyIndex('vmNumbersForAvSet')], sub(length(variables('effectiveSessionHostNames')[copyIndex('vmNumbersForAvSet')]), parameters('sessionHostNameIndexLength')), parameters('sessionHostNameIndexLength')))]"
+        "count": "[length(range(0, parameters('sessionHostCount')))]",
+        "input": "[format('{0}{1}', parameters('virtualMachineNamePrefix'), padLeft(add(range(0, parameters('sessionHostCount'))[copyIndex('generatedSessionHostNames')], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))]"
       }
-    ],
-    "$fxv#0": {
-      "applicationInsights": "appi",
-      "appServicePlans": "asp",
-      "availabilitySets": "as",
-      "computeGalleries": "gal",
-      "dataCollectionEndpoints": "dce",
-      "dataCollectionRules": "dcr",
-      "desktopApplicationGroups": "vddag",
-      "diskAccesses": "da",
-      "remoteApplicationGroups": "vdrag",
-      "diskEncryptionSets": "des",
-      "functionApps": "fa",
-      "hostPools": "vdpool",
-      "keyVaults": "kv",
-      "logAnalyticsWorkspaces": "law",
-      "natGateways": "ng",
-      "netAppAccounts": "naa",
-      "netAppCapacityPools": "nacp",
-      "networkInterfaces": "nic",
-      "networkSecurityGroups": "nsg",
-      "osdisks": "osdisk",
-      "privateEndpoints": "pe",
-      "privateLinkScopes": "pls",
-      "publicIPAddresses": "pip",
-      "recoveryServicesVaults": "rsv",
-      "resourceGroups": "rg",
-      "routeTables": "rt",
-      "scalingPlans": "vdscaling",
-      "storageAccounts": "sa",
-      "templateSpecs": "ts",
-      "userAssignedIdentities": "uai",
-      "virtualMachines": "vm",
-      "workbooks": "wb",
-      "workspaces": "vdws",
-      "imageDefinitions": "vmid"
-    },
-    "$fxv#1": {
-      "AzureCloud": {
-        "australiacentral": {
-          "abbreviation": "auc",
-          "recoveryServicesGeo": "acl"
-        },
-        "australiacentral2": {
-          "abbreviation": "auc2",
-          "recoveryServicesGeo": "acl2"
-        },
-        "australiaeast": {
-          "abbreviation": "aue",
-          "recoveryServicesGeo": "ae"
-        },
-        "australiasoutheast": {
-          "abbreviation": "ause",
-          "recoveryServicesGeo": "ase"
-        },
-        "brazilsouth": {
-          "abbreviation": "brs",
-          "recoveryServicesGeo": "brs"
-        },
-        "brazilsoutheast": {
-          "abbreviation": "brse",
-          "recoveryServicesGeo": "bse"
-        },
-        "canadacentral": {
-          "abbreviation": "cac",
-          "recoveryServicesGeo": "cnc"
-        },
-        "canadaeast": {
-          "abbreviation": "cae",
-          "recoveryServicesGeo": "cne"
-        },
-        "centralindia": {
-          "abbreviation": "inc",
-          "recoveryServicesGeo": "inc"
-        },
-        "centralus": {
-          "abbreviation": "usc",
-          "recoveryServicesGeo": "cus"
-        },
-        "eastasia": {
-          "abbreviation": "ase",
-          "recoveryServicesGeo": "ea"
-        },
-        "eastus": {
-          "abbreviation": "use",
-          "recoveryServicesGeo": "eus"
-        },
-        "eastus2": {
-          "abbreviation": "use2",
-          "recoveryServicesGeo": "eus2"
-        },
-        "francecentral": {
-          "abbreviation": "frc",
-          "recoveryServicesGeo": "frc"
-        },
-        "francesouth": {
-          "abbreviation": "frs",
-          "recoveryServicesGeo": "frs"
-        },
-        "germanynorth": {
-          "abbreviation": "den",
-          "recoveryServicesGeo": "gn"
-        },
-        "germanywestcentral": {
-          "abbreviation": "dewc",
-          "recoveryServicesGeo": "gwc"
-        },
-        "israelcentral": {
-          "abbreviation": "ilc",
-          "recoveryServicesGeo": "ilc"
-        },
-        "italynorth": {
-          "abbreviation": "itn",
-          "recoveryServicesGeo": "itn"
-        },
-        "japaneast": {
-          "abbreviation": "jpe",
-          "recoveryServicesGeo": "jpe"
-        },
-        "japanwest": {
-          "abbreviation": "jpw",
-          "recoveryServicesGeo": "jpw"
-        },
-        "jioindiacentral": {
-          "abbreviation": "injc",
-          "recoveryServicesGeo": "jic"
-        },
-        "jioindiawest": {
-          "abbreviation": "injw",
-          "recoveryServicesGeo": "jiw"
-        },
-        "koreacentral": {
-          "abbreviation": "krc",
-          "recoveryServicesGeo": "krc"
-        },
-        "koreasouth": {
-          "abbreviation": "krs",
-          "recoveryServicesGeo": "krs"
-        },
-        "northcentralus": {
-          "abbreviation": "usnc",
-          "recoveryServicesGeo": "ncus"
-        },
-        "northeurope": {
-          "abbreviation": "eun",
-          "recoveryServicesGeo": "ne"
-        },
-        "norwayeast": {
-          "abbreviation": "noe",
-          "recoveryServicesGeo": "nwe"
-        },
-        "norwaywest": {
-          "abbreviation": "now",
-          "recoveryServicesGeo": "nww"
-        },
-        "polandcentral": {
-          "abbreviation": "plc",
-          "recoveryServicesGeo": "plc"
-        },
-        "qatarcentral": {
-          "abbreviation": "qac",
-          "recoveryServicesGeo": "qac"
-        },
-        "southafricanorth": {
-          "abbreviation": "zan",
-          "recoveryServicesGeo": "san"
-        },
-        "southafricawest": {
-          "abbreviation": "zaw",
-          "recoveryServicesGeo": "saw"
-        },
-        "southcentralus": {
-          "abbreviation": "ussc",
-          "recoveryServicesGeo": "scus"
-        },
-        "southeastasia": {
-          "abbreviation": "asse",
-          "recoveryServicesGeo": "sea"
-        },
-        "southindia": {
-          "abbreviation": "ins",
-          "recoveryServicesGeo": "ins"
-        },
-        "swedencentral": {
-          "abbreviation": "sec",
-          "recoveryServicesGeo": "sdc"
-        },
-        "switzerlandnorth": {
-          "abbreviation": "chn",
-          "recoveryServicesGeo": "szn"
-        },
-        "switzerlandwest": {
-          "abbreviation": "chw",
-          "recoveryServicesGeo": "szw"
-        },
-        "uaecentral": {
-          "abbreviation": "aec",
-          "recoveryServicesGeo": "uac"
-        },
-        "uaenorth": {
-          "abbreviation": "aen",
-          "recoveryServicesGeo": "uan"
-        },
-        "uksouth": {
-          "abbreviation": "uks",
-          "recoveryServicesGeo": "uks"
-        },
-        "ukwest": {
-          "abbreviation": "ukw",
-          "recoveryServicesGeo": "ukw"
-        },
-        "westcentralus": {
-          "abbreviation": "uswc",
-          "recoveryServicesGeo": "wcus"
-        },
-        "westeurope": {
-          "abbreviation": "euw",
-          "recoveryServicesGeo": "we"
-        },
-        "westindia": {
-          "abbreviation": "inw",
-          "recoveryServicesGeo": "inw"
-        },
-        "westus": {
-          "abbreviation": "usw",
-          "recoveryServicesGeo": "wus"
-        },
-        "westus2": {
-          "abbreviation": "usw2",
-          "recoveryServicesGeo": "wus2"
-        },
-        "westus3": {
-          "abbreviation": "usw3",
-          "recoveryServicesGeo": "wus3"
-        }
-      },
-      "AzureUSGovernment": {
-        "usdodcentral": {
-          "abbreviation": "dodc",
-          "recoveryServicesGeo": "udc"
-        },
-        "usdodeast": {
-          "abbreviation": "dode",
-          "recoveryServicesGeo": "ude"
-        },
-        "usgovarizona": {
-          "abbreviation": "az",
-          "recoveryServicesGeo": "uga"
-        },
-        "usgovtexas": {
-          "abbreviation": "tx",
-          "recoveryServicesGeo": "ugt"
-        },
-        "usgovvirginia": {
-          "abbreviation": "va",
-          "recoveryServicesGeo": "ugv"
-        }
-      },
-      "other": {
-        "north": {
-          "abbreviation": "no"
-        },
-        "east": {
-          "abbreviation": "ea"
-        },
-        "south": {
-          "abbreviation": "so"
-        },
-        "west": {
-          "abbreviation": "we"
-        },
-        "central": {
-          "abbreviation": "ce"
-        },
-        "northcentral": {
-          "abbreviation": "noce"
-        },
-        "eastcentral": {
-          "abbreviation": "wece"
-        },
-        "southcentral": {
-          "abbreviation": "soce"
-        },
-        "westcentral": {
-          "abbreviation": "wece"
-        }
-      }
-    },
-    "resourceAbbreviations": "[variables('$fxv#0')]",
-    "locationsObject": "[variables('$fxv#1')]",
-    "cloud": "[toLower(environment().name)]",
-    "locationsEnvProperty": "[if(startsWith(variables('cloud'), 'us'), 'other', environment().name)]",
-    "locations": "[variables('locationsObject')[variables('locationsEnvProperty')]]",
-    "varLocation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), parameters('location'))]",
-    "regionAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
-    "hostPoolName": "[last(split(parameters('hostPoolResourceId'), '/'))]",
-    "nameConvReversed": "[if(startsWith(variables('hostPoolName'), format('{0}-', variables('resourceAbbreviations').hostPools)), false(), if(endsWith(variables('hostPoolName'), format('-{0}', variables('resourceAbbreviations').hostPools)), true(), false()))]",
-    "arrHostPoolName": "[split(variables('hostPoolName'), '-')]",
-    "hpBaseName": "[if(variables('nameConvReversed'), join(take(variables('arrHostPoolName'), sub(length(variables('arrHostPoolName')), 2)), '-'), join(take(skip(variables('arrHostPoolName'), 1), sub(length(variables('arrHostPoolName')), 2)), '-'))]",
-    "hpResPrfx": "[if(variables('nameConvReversed'), variables('hpBaseName'), format('RESOURCETYPE-{0}', variables('hpBaseName')))]",
-    "nameConv_HP_Resources": "[format('{0}-TOKEN-{1}', variables('hpResPrfx'), if(variables('nameConvReversed'), 'LOCATION-RESOURCETYPE', 'LOCATION'))]",
-    "effectiveVirtualMachineNameConv": "[if(not(empty(parameters('virtualMachineNameConv'))), parameters('virtualMachineNameConv'), if(variables('nameConvReversed'), format('SHNAME-{0}', variables('resourceAbbreviations').virtualMachines), format('{0}-SHNAME', variables('resourceAbbreviations').virtualMachines)))]",
-    "effectiveNetworkInterfaceNameConv": "[if(not(empty(parameters('networkInterfaceNameConv'))), parameters('networkInterfaceNameConv'), if(variables('nameConvReversed'), format('SHNAME-{0}', variables('resourceAbbreviations').networkInterfaces), format('{0}-SHNAME', variables('resourceAbbreviations').networkInterfaces)))]",
-    "effectiveOsDiskNameConv": "[if(not(empty(parameters('osDiskNameConv'))), parameters('osDiskNameConv'), if(variables('nameConvReversed'), format('SHNAME-{0}', variables('resourceAbbreviations').osdisks), format('{0}-SHNAME', variables('resourceAbbreviations').osdisks)))]",
-    "generatedAvSetNameConv": "[if(variables('nameConvReversed'), replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('regionAbbreviation')), 'TOKEN-', ''), format('{0}-##', replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('regionAbbreviation')), 'TOKEN-', '')))]",
-    "avSetNameConv": "[if(not(empty(parameters('availabilitySetNameConv'))), parameters('availabilitySetNameConv'), variables('generatedAvSetNameConv'))]",
-    "hasAmdGpu": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), 'as_v4'), endsWith(parameters('virtualMachineSize'), '_V710_v5')))]",
-    "hasNvidiaGpu": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), '_v3'), endsWith(parameters('virtualMachineSize'), '_A10_v5')))]",
-    "fslogixFileShareNames": "[if(contains(parameters('fslogixContainerType'), 'Office'), createArray('profile-containers', 'office-containers'), createArray('profile-containers'))]",
-    "effectiveSessionHostNames": "[if(not(empty(parameters('sessionHostNames'))), parameters('sessionHostNames'), variables('generatedSessionHostNames'))]",
-    "minVmNumber": "[min(variables('vmNumbersForAvSet'))]",
-    "maxVmNumber": "[max(variables('vmNumbersForAvSet'))]",
-    "maxAvSetMembers": 200,
-    "beginAvSetRange": "[div(variables('minVmNumber'), variables('maxAvSetMembers'))]",
-    "endAvSetRange": "[div(variables('maxVmNumber'), variables('maxAvSetMembers'))]",
-    "calculatedAvailabilitySetsCount": "[add(sub(variables('endAvSetRange'), variables('beginAvSetRange')), 1)]",
-    "calculatedAvailabilitySetsIndex": "[variables('beginAvSetRange')]",
-    "deploymentSuffix": "[uniqueString(deployment().name)]",
-    "vaultSubscriptionId": "[if(not(empty(parameters('recoveryServicesVaultResourceId'))), split(parameters('recoveryServicesVaultResourceId'), '/')[2], subscription().subscriptionId)]",
-    "vaultResourceGroup": "[if(not(empty(parameters('recoveryServicesVaultResourceId'))), split(parameters('recoveryServicesVaultResourceId'), '/')[4], resourceGroup().name)]",
-    "vaultName": "[if(not(empty(parameters('recoveryServicesVaultResourceId'))), last(split(parameters('recoveryServicesVaultResourceId'), '/')), '')]",
-    "effectiveVmBackupPolicyName": "[if(not(empty(parameters('vmBackupPolicyName'))), parameters('vmBackupPolicyName'), 'AvdPolicyVm')]"
+    ]
   },
   "resources": [
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('SessionHosts-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('Session-Hosts-{0}', parameters('deploymentSuffix'))]",
+      "resourceGroup": "[parameters('resourceGroupHosts')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -864,13 +485,13 @@
             "value": "[parameters('availability')]"
           },
           "availabilitySetNameConv": {
-            "value": "[variables('avSetNameConv')]"
+            "value": "[parameters('availabilitySetNameConv')]"
           },
           "availabilitySetsCount": {
-            "value": "[variables('calculatedAvailabilitySetsCount')]"
+            "value": "[parameters('availabilitySetsCount')]"
           },
           "availabilitySetsIndex": {
-            "value": "[variables('calculatedAvailabilitySetsIndex')]"
+            "value": "[parameters('availabilitySetsIndex')]"
           },
           "availabilityZones": {
             "value": "[parameters('availabilityZones')]"
@@ -887,20 +508,14 @@
           "dataCollectionEndpointResourceId": {
             "value": "[parameters('dataCollectionEndpointResourceId')]"
           },
-          "dedicatedHostGroupResourceIds": {
-            "value": "[parameters('dedicatedHostGroupResourceIds')]"
+          "dedicatedHostGroupResourceId": {
+            "value": "[parameters('dedicatedHostGroupResourceId')]"
           },
-          "dedicatedHostResourceIds": {
-            "value": "[parameters('dedicatedHostResourceIds')]"
-          },
-          "preferredZones": {
-            "value": "[parameters('preferredZones')]"
+          "dedicatedHostResourceId": {
+            "value": "[parameters('dedicatedHostResourceId')]"
           },
           "diskAccessId": {
             "value": "[parameters('diskAccessId')]"
-          },
-          "existingDiskEncryptionSetResourceId": {
-            "value": "[parameters('diskEncryptionSetResourceId')]"
           },
           "diskSizeGB": {
             "value": "[parameters('diskSizeGB')]"
@@ -908,8 +523,12 @@
           "diskSku": {
             "value": "[parameters('diskSku')]"
           },
-          "domainJoinUserPassword": "[if(contains(parameters('identitySolution'), 'DomainServices'), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))]",
-          "domainJoinUserPrincipalName": "[if(contains(parameters('identitySolution'), 'DomainServices'), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))]",
+          "domainJoinUserPassword": {
+            "value": "[parameters('domainJoinUserPassword')]"
+          },
+          "domainJoinUserPrincipalName": {
+            "value": "[parameters('domainJoinUserPrincipalName')]"
+          },
           "domainName": {
             "value": "[parameters('domainName')]"
           },
@@ -925,6 +544,15 @@
           "encryptionAtHost": {
             "value": "[parameters('encryptionAtHost')]"
           },
+          "hasAmdGpu": {
+            "value": "[parameters('hasAmdGpu')]"
+          },
+          "hasNvidiaGpu": {
+            "value": "[parameters('hasNvidiaGpu')]"
+          },
+          "existingDiskEncryptionSetResourceId": {
+            "value": "[parameters('existingDiskEncryptionSetResourceId')]"
+          },
           "fslogixConfigureSessionHosts": {
             "value": "[parameters('fslogixConfigureSessionHosts')]"
           },
@@ -932,13 +560,13 @@
             "value": "[parameters('fslogixContainerType')]"
           },
           "fslogixFileShareNames": {
-            "value": "[variables('fslogixFileShareNames')]"
-          },
-          "fslogixLocalNetAppVolumeResourceIds": {
-            "value": "[parameters('fslogixLocalNetAppVolumeResourceIds')]"
+            "value": "[parameters('fslogixFileShareNames')]"
           },
           "fslogixLocalStorageAccountResourceIds": {
             "value": "[parameters('fslogixLocalStorageAccountResourceIds')]"
+          },
+          "fslogixLocalNetAppVolumeResourceIds": {
+            "value": "[parameters('fslogixLocalNetAppVolumeResourceIds')]"
           },
           "fslogixOSSGroups": {
             "value": "[parameters('fslogixOSSGroups')]"
@@ -955,12 +583,6 @@
           "fslogixStorageService": {
             "value": "[parameters('fslogixStorageService')]"
           },
-          "hasAmdGpu": {
-            "value": "[variables('hasAmdGpu')]"
-          },
-          "hasNvidiaGpu": {
-            "value": "[variables('hasNvidiaGpu')]"
-          },
           "hibernationEnabled": {
             "value": "[parameters('hibernationEnabled')]"
           },
@@ -969,9 +591,6 @@
           },
           "identitySolution": {
             "value": "[parameters('identitySolution')]"
-          },
-          "imageReference": {
-            "value": "[parameters('imageReference')]"
           },
           "imageOffer": {
             "value": "[parameters('imageOffer')]"
@@ -992,10 +611,10 @@
             "value": "[parameters('location')]"
           },
           "networkInterfaceNameConv": {
-            "value": "[variables('effectiveNetworkInterfaceNameConv')]"
+            "value": "[parameters('networkInterfaceNameConv')]"
           },
           "osDiskNameConv": {
-            "value": "[variables('effectiveOsDiskNameConv')]"
+            "value": "[parameters('osDiskNameConv')]"
           },
           "ouPath": {
             "value": "[parameters('ouPath')]"
@@ -1010,38 +629,10 @@
             "value": "[parameters('sessionHostCustomizations')]"
           },
           "sessionHostNames": {
-            "value": "[variables('effectiveSessionHostNames')]"
+            "value": "[variables('generatedSessionHostNames')]"
           },
           "vmNameIndexLength": {
-            "value": "[parameters('sessionHostNameIndexLength')]"
-          },
-          "virtualMachineNameConv": {
-            "value": "[variables('effectiveVirtualMachineNameConv')]"
-          },
-          "virtualMachineSize": {
-            "value": "[parameters('virtualMachineSize')]"
-          },
-          "virtualMachineAdminPassword": {
-            "reference": {
-              "keyVault": {
-                "id": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))]"
-              },
-              "secretName": "VirtualMachineAdminPassword"
-            }
-          },
-          "virtualMachineAdminUserName": {
-            "reference": {
-              "keyVault": {
-                "id": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))]"
-              },
-              "secretName": "VirtualMachineAdminUserName"
-            }
-          },
-          "vTpmEnabled": {
-            "value": "[parameters('vTpmEnabled')]"
-          },
-          "vmInsightsDataCollectionRulesResourceId": {
-            "value": "[parameters('vmInsightsDataCollectionRulesResourceId')]"
+            "value": "[parameters('vmNameIndexLength')]"
           },
           "subnetResourceId": {
             "value": "[parameters('subnetResourceId')]"
@@ -1050,10 +641,28 @@
             "value": "[parameters('tags')]"
           },
           "deploymentSuffix": {
-            "value": "[variables('deploymentSuffix')]"
+            "value": "[parameters('deploymentSuffix')]"
           },
           "timeZone": {
             "value": "[parameters('timeZone')]"
+          },
+          "virtualMachineAdminPassword": {
+            "value": "[parameters('virtualMachineAdminPassword')]"
+          },
+          "virtualMachineAdminUserName": {
+            "value": "[parameters('virtualMachineAdminUserName')]"
+          },
+          "virtualMachineNameConv": {
+            "value": "[parameters('virtualMachineNameConv')]"
+          },
+          "virtualMachineSize": {
+            "value": "[parameters('virtualMachineSize')]"
+          },
+          "vmInsightsDataCollectionRulesResourceId": {
+            "value": "[parameters('vmInsightsDataCollectionRulesResourceId')]"
+          },
+          "vTpmEnabled": {
+            "value": "[parameters('vTpmEnabled')]"
           }
         },
         "template": {
@@ -2929,29 +2538,29 @@
       "condition": "[not(empty(parameters('recoveryServicesVaultResourceId')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('VmBackupRegistration-{0}', variables('deploymentSuffix'))]",
-      "subscriptionId": "[variables('vaultSubscriptionId')]",
-      "resourceGroup": "[variables('vaultResourceGroup')]",
+      "name": "[format('VmBackupRegistration-{0}', parameters('deploymentSuffix'))]",
+      "subscriptionId": "[split(parameters('recoveryServicesVaultResourceId'), '/')[2]]",
+      "resourceGroup": "[split(parameters('recoveryServicesVaultResourceId'), '/')[4]]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
         },
         "mode": "Incremental",
         "parameters": {
-          "recoveryServicesVaultName": {
-            "value": "[variables('vaultName')]"
-          },
-          "policyName": {
-            "value": "[variables('effectiveVmBackupPolicyName')]"
-          },
-          "resourceGroupHosts": {
-            "value": "[resourceGroup().name]"
-          },
-          "virtualMachineNames": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('SessionHosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
-          },
           "hostPoolResourceId": {
             "value": "[parameters('hostPoolResourceId')]"
+          },
+          "policyName": {
+            "value": "[parameters('vmBackupPolicyName')]"
+          },
+          "recoveryServicesVaultName": {
+            "value": "[last(split(parameters('recoveryServicesVaultResourceId'), '/'))]"
+          },
+          "resourceGroupHosts": {
+            "value": "[parameters('resourceGroupHosts')]"
+          },
+          "virtualMachineNames": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('Session-Hosts-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
           }
         },
         "template": {
@@ -3007,14 +2616,14 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', format('SessionHosts-{0}', variables('deploymentSuffix')))]"
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('Session-Hosts-{0}', parameters('deploymentSuffix')))]"
       ]
     }
   ],
   "outputs": {
     "virtualMachineNames": {
       "type": "array",
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('SessionHosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('Session-Hosts-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
     }
   }
 }

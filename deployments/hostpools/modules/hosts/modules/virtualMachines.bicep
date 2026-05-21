@@ -9,12 +9,11 @@ param availabilitySetNameConv string
 param availabilityZones array
 param avdInsightsDataCollectionRulesResourceId string
 param confidentialVMOSDiskEncryptionType string
-param customImageResourceId string
 param dataCollectionEndpointResourceId string
-param dedicatedHostGroupResourceId string
-param dedicatedHostGroupZones array
-param dedicatedHostResourceId string
-param diskAccessId string
+param dedicatedHostGroupResourceIds array
+param dedicatedHostResourceIds array
+param preferredZones array
+param diskAccessId string = ''
 param diskEncryptionSetResourceId string
 param diskSizeGB int
 param diskSku string
@@ -37,12 +36,10 @@ param fslogixRemoteNetAppServerFqdns array
 param fslogixRemoteStorageAccountResourceIds array
 param fslogixSizeInMBs int
 param fslogixStorageService string
-param hibernationEnabled bool
+param hibernationEnabled bool = false
 param hostPoolResourceId string
 param identitySolution string
-param imageOffer string
-param imagePublisher string
-param imageSku string
+param imageReference object
 param integrityMonitoring bool
 param intuneEnrollment bool
 param location string
@@ -50,12 +47,10 @@ param networkInterfaceNameConv string
 param osDiskNameConv string
 param ouPath string
 param sessionHostCustomizations array
-param sessionHostCount int
-param sessionHostIndex int
-param vmNameIndexLength int
+param sessionHostNames array
+param vmNumbers array
 param securityType string
 param secureBootEnabled bool
-param storageSuffix string
 param subnetResourceId string
 param tags object
 param deploymentSuffix string
@@ -65,17 +60,18 @@ param virtualMachineAdminPassword string
 @secure()
 param virtualMachineAdminUserName string
 param virtualMachineNameConv string
-param virtualMachineNamePrefix string
 param virtualMachineSize string
 param vmInsightsDataCollectionRulesResourceId string
 param vTpmEnabled bool
 param hasAmdGpu bool
 param hasNvidiaGpu bool
 
-// Storage Accounts
+var storageSuffix = environment().suffixes.storage
+
+var sessionHostCount = length(sessionHostNames)
+
 var fslogixLocalStorageAccountNames = [for id in fslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
 var fslogixRemoteStorageAccountNames = [for id in fslogixRemoteStorageAccountResourceIds: last(split(id, '/'))]
-//  only get keys if EntraId
 var fslogixLocalSAKey1 = identitySolution == 'EntraId' && !empty(fslogixLocalStorageAccountResourceIds)
   ? [localStorageAccounts[0].listkeys().keys[0].value]
   : []
@@ -108,27 +104,15 @@ var identity = identityType != 'None'
     }
   : null
 
-var ImageReference = empty(customImageResourceId)
-  ? {
-      publisher: imagePublisher
-      offer: imageOffer
-      sku: imageSku
-      version: 'latest'
-    }
-  : {
-      id: customImageResourceId
-    }
+var networkInterfaceNames = [for i in range(0, sessionHostCount): empty(networkInterfaceNameConv) ? sessionHostNames[i] : replace(networkInterfaceNameConv, 'SHNAME', sessionHostNames[i])]
+var virtualMachineNames = [for i in range(0, sessionHostCount): empty(virtualMachineNameConv) ? sessionHostNames[i] : replace(virtualMachineNameConv, 'SHNAME', sessionHostNames[i])]
+var osDiskNames = [for i in range(0, sessionHostCount): empty(osDiskNameConv) ? '${sessionHostNames[i]}-osdisk' : replace(osDiskNameConv, 'SHNAME', sessionHostNames[i])]
 
-// All customizations now run BEFORE registration
-// The runAfterHostPoolJoin property is deprecated and ignored
-
-// call on the host pool to get the registration token
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
   name: last(split(hostPoolResourceId, '/'))
   scope: resourceGroup(split(hostPoolResourceId, '/')[2], split(hostPoolResourceId, '/')[4])
 }
 
-// call on new storage accounts only if we need the Storage Key(s)
 resource localStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [
   for resId in fslogixLocalStorageAccountResourceIds: if (identitySolution == 'EntraId' && !empty(fslogixLocalStorageAccountResourceIds)) {
     name: last(split(resId, '/'))
@@ -136,7 +120,6 @@ resource localStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' exi
   }
 ]
 
-// call on remote storage accounts only if we need the Storage Key(s)
 resource remoteStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [
   for resId in fslogixRemoteStorageAccountResourceIds: if (identitySolution == 'EntraId' && !empty(fslogixRemoteStorageAccountResourceIds)) {
     name: last(split(resId, '/'))
@@ -146,7 +129,7 @@ resource remoteStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' ex
 
 resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [
   for i in range(0, sessionHostCount): {
-    name: replace(networkInterfaceNameConv, '###', padLeft((i + sessionHostIndex), vmNameIndexLength, '0'))
+    name: networkInterfaceNames[i]
     location: location
     tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/networkInterfaces'] ?? {})
     properties: {
@@ -188,26 +171,22 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-05-01' = [
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [
   for i in range(0, sessionHostCount): {
-    name: replace(virtualMachineNameConv, '###', padLeft((i + sessionHostIndex), vmNameIndexLength, '0'))
+    name: virtualMachineNames[i]
     location: location
     tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
-    zones: !empty(dedicatedHostResourceId) || !empty(dedicatedHostGroupResourceId)
-      ? dedicatedHostGroupZones
+    zones: !empty(preferredZones) && i < length(preferredZones) && !empty(preferredZones[i])
+      ? [preferredZones[i]]
       : availability == 'AvailabilityZones' && !empty(availabilityZones)
-          ? [
-              availabilityZones[(i + sessionHostIndex) % length(availabilityZones)]
-            ]
+          ? [availabilityZones[int(vmNumbers[i] - 1) % length(availabilityZones)]]
           : null
     identity: identity
     properties: {
-      additionalCapabilities: {
-        hibernationEnabled: hibernationEnabled
-      }
+      additionalCapabilities: hibernationEnabled ? { hibernationEnabled: true } : null
       availabilitySet: availability == 'AvailabilitySets'
         ? {
             id: resourceId(
               'Microsoft.Compute/availabilitySets',
-              replace(availabilitySetNameConv, '##', padLeft((((i + sessionHostIndex) - 1) / 200) + 1, 2, '0'))
+              replace(availabilitySetNameConv, '##', padLeft(((vmNumbers[i] - 1) / 200) + 1, 2, '0'))
             )
           }
         : null
@@ -219,38 +198,28 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [
       hardwareProfile: {
         vmSize: virtualMachineSize
       }
-      host: !empty(dedicatedHostResourceId)
-        ? {
-            id: dedicatedHostResourceId
-          }
+      host: !empty(dedicatedHostResourceIds)
+        ? { id: length(dedicatedHostResourceIds) == 1 ? dedicatedHostResourceIds[0] : dedicatedHostResourceIds[i] }
         : null
-      hostGroup: !empty(dedicatedHostGroupResourceId) && empty(dedicatedHostResourceId)
-        ? {
-            id: dedicatedHostGroupResourceId
-          }
+      hostGroup: !empty(dedicatedHostGroupResourceIds) && empty(dedicatedHostResourceIds)
+        ? { id: length(dedicatedHostGroupResourceIds) == 1 ? dedicatedHostGroupResourceIds[0] : dedicatedHostGroupResourceIds[i] }
         : null
       storageProfile: {
-        imageReference: ImageReference
+        imageReference: imageReference
         osDisk: {
           diskSizeGB: diskSizeGB != 0 ? diskSizeGB : null
-          name: replace(osDiskNameConv, '###', padLeft((i + sessionHostIndex), vmNameIndexLength, '0'))
+          name: osDiskNames[i]
           osType: 'Windows'
           createOption: 'FromImage'
           caching: 'ReadWrite'
           deleteOption: 'Delete'
           managedDisk: {
             diskEncryptionSet: securityType != 'ConfidentialVM' && !empty(diskEncryptionSetResourceId)
-              ? {
-                  id: diskEncryptionSetResourceId
-                }
+              ? { id: diskEncryptionSetResourceId }
               : null
             securityProfile: securityType == 'ConfidentialVM'
               ? {
-                  diskEncryptionSet: !empty(diskEncryptionSetResourceId)
-                    ? {
-                        id: diskEncryptionSetResourceId
-                      }
-                    : null
+                  diskEncryptionSet: !empty(diskEncryptionSetResourceId) ? { id: diskEncryptionSetResourceId } : null
                   securityEncryptionType: confidentialVMOSDiskEncryptionType
                 }
               : null
@@ -260,7 +229,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [
         dataDisks: []
       }
       osProfile: {
-        computerName: '${virtualMachineNamePrefix}${padLeft((i + sessionHostIndex), vmNameIndexLength, '0')}'
+        computerName: sessionHostNames[i]
         adminUsername: virtualMachineAdminUserName
         adminPassword: virtualMachineAdminPassword
         windowsConfiguration: {
@@ -290,9 +259,9 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [
             }
           : null
       }
-      licenseType: ((imagePublisher == 'MicrosoftWindowsDesktop' || !empty(customImageResourceId))
+      licenseType: (!empty(imageReference.?id) || imageReference.?publisher == 'MicrosoftWindowsDesktop')
         ? 'Windows_Client'
-        : 'Windows_Server')
+        : 'Windows_Server'
     }
     dependsOn: [
       networkInterface
@@ -484,12 +453,12 @@ resource extension_NvidiaGpuDriverWindows 'Microsoft.Compute/virtualMachines/ext
 
 module customizations 'invokeCustomizations.bicep' = [
   for i in range(0, sessionHostCount): if (!empty(sessionHostCustomizations)) {
-    name: '${virtualMachine[i].name}-Customizations-${deploymentSuffix}'
+    name: '${virtualMachineNames[i]}-Customizations-${deploymentSuffix}'
     params: {
       artifactsContainerUri: artifactsContainerUri
       customizations: sessionHostCustomizations
       userAssignedIdentityClientId: artifactsUserAssignedIdentityClientId
-      virtualMachineName: virtualMachine[i].name
+      virtualMachineName: virtualMachineNames[i]
     }
     dependsOn: [
       extension_AADLoginForWindows[i]
@@ -502,7 +471,6 @@ module customizations 'invokeCustomizations.bicep' = [
   }
 ]
 
-// Initialize Session Host: Configure + Install Agents + Register
 resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = [
   for i in range(0, sessionHostCount): {
     parent: virtualMachine[i]
@@ -510,115 +478,37 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
     location: location
     properties: {
       parameters: [
-        {
-          name: 'AADJoin'
-          value: !contains(identitySolution, 'DomainServices') ? 'true' : 'false'
-        }
-        {
-          name: 'AgentBootLoaderUrl'
-          value: agentBootLoaderDownloadUrl
-        }
-        {
-          name: 'AgentUrl'
-          value: agentDownloadUrl
-        }
-        {
-          name: 'FallBackUrl'
-          value: agentFallBackDownloadUrl
-        }
-        {
-          name: 'ApiVersion'
-          value: startsWith(environment().name, 'USN') ? '2017-08-01' : '2018-02-01'
-        }
-        {
-          name: 'StorageSuffix'
-          value: storageSuffix
-        }
-        {
-          name: 'MdmId'
-          value: intuneEnrollment ? '0000000a-0000-0000-c000-000000000000' : ''
-        }
-        {
-          name: 'UserAssignedIdentityClientId'
-          value: artifactsUserAssignedIdentityClientId
-        }
-        {
-          name: 'TimeZone'
-          value: timeZone
-        }
-        {
-          name: 'AmdVmSize'
-          value: hasAmdGpu ? 'true' : 'false'
-        }
-        {
-          name: 'NvidiaVmSize'
-          value: hasNvidiaGpu ? 'true' : 'false'
-        }
-        {
-          name: 'ConfigureFSLogix'
-          value: fslogixConfigureSessionHosts ? 'true' : 'false'
-        }
-        {
-          name: 'CloudCache'
-          value: contains(fslogixContainerType, 'CloudCache') ? 'true' : 'false'
-        }
-        {
-          name: 'IdentitySolution'
-          value: identitySolution
-        }
-        {
-          name: 'LocalNetAppServers'
-          value: string(fslogixLocalNetAppServerFqdns)
-        }
-        {
-          name: 'LocalStorageAccountNames'
-          value: string(fslogixLocalStorageAccountNames)
-        }
-        {
-          name: 'OSSGroups'
-          value: string(fslogixOSSGroups)
-        }
-        {
-          name: 'RemoteNetAppServers'
-          value: string(fslogixRemoteNetAppServerFqdns)
-        }
-        {
-          name: 'RemoteStorageAccountNames'
-          value: string(fslogixRemoteStorageAccountNames)
-        }
-        {
-          name: 'Shares'
-          value: string(fslogixFileShareNames)
-        }
-        {
-          name: 'SizeInMBs'
-          value: string(fslogixSizeInMBs)
-        }
-        {
-          name: 'StorageService'
-          value: fslogixStorageService
-        }
+        { name: 'AADJoin', value: !contains(identitySolution, 'DomainServices') ? 'true' : 'false' }
+        { name: 'AgentBootLoaderUrl', value: agentBootLoaderDownloadUrl }
+        { name: 'AgentUrl', value: agentDownloadUrl }
+        { name: 'FallBackUrl', value: agentFallBackDownloadUrl }
+        { name: 'ApiVersion', value: startsWith(environment().name, 'USN') ? '2017-08-01' : '2018-02-01' }
+        { name: 'StorageSuffix', value: storageSuffix }
+        { name: 'MdmId', value: intuneEnrollment ? '0000000a-0000-0000-c000-000000000000' : '' }
+        { name: 'UserAssignedIdentityClientId', value: artifactsUserAssignedIdentityClientId }
+        { name: 'TimeZone', value: timeZone }
+        { name: 'AmdVmSize', value: hasAmdGpu ? 'true' : 'false' }
+        { name: 'NvidiaVmSize', value: hasNvidiaGpu ? 'true' : 'false' }
+        { name: 'ConfigureFSLogix', value: fslogixConfigureSessionHosts ? 'true' : 'false' }
+        { name: 'CloudCache', value: contains(fslogixContainerType, 'CloudCache') ? 'true' : 'false' }
+        { name: 'IdentitySolution', value: identitySolution }
+        { name: 'LocalNetAppServers', value: string(fslogixLocalNetAppServerFqdns) }
+        { name: 'LocalStorageAccountNames', value: string(fslogixLocalStorageAccountNames) }
+        { name: 'OSSGroups', value: string(fslogixOSSGroups) }
+        { name: 'RemoteNetAppServers', value: string(fslogixRemoteNetAppServerFqdns) }
+        { name: 'RemoteStorageAccountNames', value: string(fslogixRemoteStorageAccountNames) }
+        { name: 'Shares', value: string(fslogixFileShareNames) }
+        { name: 'SizeInMBs', value: string(fslogixSizeInMBs) }
+        { name: 'StorageService', value: fslogixStorageService }
       ]
       protectedParameters: fslogixConfigureSessionHosts
         ? [
-            {
-              name: 'RegistrationToken'
-              value: last(hostPool.listRegistrationTokens().value).token
-            }
-            {
-              name: 'LocalStorageAccountKeys'
-              value: string(fslogixLocalStorageAccountKeys)
-            }
-            {
-              name: 'RemoteStorageAccountKeys'
-              value: string(fslogixRemoteStorageAccountKeys)
-            }
+            { name: 'RegistrationToken', value: last(hostPool.listRegistrationTokens().value).token }
+            { name: 'LocalStorageAccountKeys', value: string(fslogixLocalStorageAccountKeys) }
+            { name: 'RemoteStorageAccountKeys', value: string(fslogixRemoteStorageAccountKeys) }
           ]
         : [
-            {
-              name: 'RegistrationToken'
-              value: last(hostPool.listRegistrationTokens().value).token
-            }
+            { name: 'RegistrationToken', value: last(hostPool.listRegistrationTokens().value).token }
           ]
       source: {
         script: loadTextContent('../../../../../.common/scripts/Initialize-SessionHost.ps1')
@@ -640,16 +530,15 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
 
 module updateOSDiskNetworkAccess '../../../../../.common/bicepModules/custom/disableOSDiskPublicAccess/getOSDisk.bicep' = [
   for i in range(0, sessionHostCount): {
-    name: '${virtualMachine[i].name}-disable-osDisk-PublicAccess-${deploymentSuffix}'
+    name: '${virtualMachineNames[i]}-disable-osDisk-PublicAccess-${deploymentSuffix}'
     params: {
       diskAccessId: diskAccessId
       diskName: virtualMachine[i].properties.storageProfile.osDisk.name
       location: location
       deploymentSuffix: deploymentSuffix
-      vmName: virtualMachine[i].name
+      vmName: virtualMachineNames[i]
     }
   }
 ]
 
-// debugging outputs
-output virtualMachineNames array = [for i in range(0, sessionHostCount): virtualMachine[i].name]
+output virtualMachineNames array = [for i in range(0, sessionHostCount): virtualMachineNames[i]]

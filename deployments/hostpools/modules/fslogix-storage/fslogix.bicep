@@ -132,6 +132,22 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   }
 }
 
+// ─── FSLogix Azure Files Backup Registration ──────────────────────────────────
+// Runs after azureFiles so storage account IDs are available. Scoped to the
+// vault's resource group so ARM child resources (containers, items) compile correctly.
+module fslogixBackupRegistration '../operations/fslogixBackupItems.bicep' = if (storageSolution == 'AzureFiles' && !empty(recoveryServicesVaultResourceId)) {
+  name: 'FSLogix-BackupRegistration-${deploymentSuffix}'
+  scope: resourceGroup(split(recoveryServicesVaultResourceId, '/')[2], split(recoveryServicesVaultResourceId, '/')[4])
+  params: {
+    vaultName: last(split(recoveryServicesVaultResourceId, '/'))!
+    location: location
+    fileShares: fslogixFileShares
+    storageAccountResourceIds: azureFiles!.outputs.storageAccountResourceIds
+    tags: tags
+    hostPoolResourceId: hostPoolResourceId
+  }
+}
+
 output encryptionUserAssignedIdentityResourceId string = encryptionUserAssignedIdentityResourceId
 output netAppVolumeResourceIds array = storageSolution == 'AzureNetAppFiles'
   ? azureNetAppFiles!.outputs.volumeResourceIds
