@@ -142,6 +142,10 @@ param virtualMachineAdminUserName string
 param vTpmEnabled bool
 @description('Required. Resource ID of the VM Insights data collection rule.')
 param vmInsightsDataCollectionRulesResourceId string
+@description('Optional. Resource ID of the Recovery Services Vault for VM backup registration.')
+param recoveryServicesVaultResourceId string = ''
+@description('Optional. Backup policy name for session host VMs.')
+param vmBackupPolicyName string = 'AvdPolicyVm'
 
 // === Computed image reference ===
 var confidentialVMOSDiskEncryptionType = confidentialVMOSDiskEncryption ? 'DiskWithVMGuestState' : 'VMGuestStateOnly'
@@ -284,6 +288,8 @@ module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostB
     virtualMachineSize: virtualMachineSize
     vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId
     vTpmEnabled: vTpmEnabled
+    recoveryServicesVaultResourceId: recoveryServicesVaultResourceId
+    vmBackupPolicyName: vmBackupPolicyName
   }
   dependsOn: [
     availabilitySets

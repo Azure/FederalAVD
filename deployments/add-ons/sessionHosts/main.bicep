@@ -287,10 +287,6 @@ var calculatedAvailabilitySetsIndex = beginAvSetRange
 // ── Deployment suffix ─────────────────────────────────────────────────────────
 var deploymentSuffix = uniqueString(deployment().name)
 
-// ── Backup vault coordinates (derived from param — computable at deployment start) ───
-var vaultSubscriptionId = !empty(recoveryServicesVaultResourceId) ? split(recoveryServicesVaultResourceId, '/')[2] : subscription().subscriptionId
-var vaultResourceGroup = !empty(recoveryServicesVaultResourceId) ? split(recoveryServicesVaultResourceId, '/')[4] : resourceGroup().name
-var vaultName = !empty(recoveryServicesVaultResourceId) ? last(split(recoveryServicesVaultResourceId, '/')) : ''
 var effectiveVmBackupPolicyName = !empty(vmBackupPolicyName) ? vmBackupPolicyName : 'AvdPolicyVm'
 
 // ── Credentials from Key Vault ────────────────────────────────────────────────
@@ -376,22 +372,8 @@ module sessionHosts '../../hostpools/modules/hosts/modules/sessionHosts.bicep' =
     tags: tags
     deploymentSuffix: deploymentSuffix
     timeZone: timeZone
-  }
-}
-
-// ── VM Backup Registration ────────────────────────────────────────────────────
-// Registers each deployed VM as a protected item in the Recovery Services Vault.
-// Only runs when recoveryServicesVaultResourceId is provided.
-// Scoped to the vault's resource group (may differ from the VM resource group).
-module vmBackupRegistration '../../hostpools/modules/operations/vmBackupItems.bicep' = if (!empty(recoveryServicesVaultResourceId)) {
-  name: 'VmBackupRegistration-${deploymentSuffix}'
-  scope: resourceGroup(vaultSubscriptionId, vaultResourceGroup)
-  params: {
-    recoveryServicesVaultName: vaultName
-    policyName: effectiveVmBackupPolicyName
-    resourceGroupHosts: resourceGroup().name
-    virtualMachineNames: sessionHosts.outputs.virtualMachineNames
-    hostPoolResourceId: hostPoolResourceId
+    recoveryServicesVaultResourceId: recoveryServicesVaultResourceId
+    vmBackupPolicyName: effectiveVmBackupPolicyName
   }
 }
 

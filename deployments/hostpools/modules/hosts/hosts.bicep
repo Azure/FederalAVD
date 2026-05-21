@@ -220,21 +220,8 @@ module sessionHosts 'modules/sessionHosts.bicep' = {
     virtualMachineSize: virtualMachineSize
     vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId
     vTpmEnabled: vTpmEnabled
-  }
-}
-
-// ─── VM Backup Registration ──────────────────────────────────────────────────
-// Runs after sessionHosts so VM names are available. Scoped to the vault's
-// resource group so ARM child resources (protectedItems) compile correctly.
-module vmBackupRegistration '../operations/vmBackupItems.bicep' = if (!empty(recoveryServicesVaultResourceId)) {
-  name: 'VmBackupRegistration-${deploymentSuffix}'
-  scope: resourceGroup(split(recoveryServicesVaultResourceId, '/')[2], split(recoveryServicesVaultResourceId, '/')[4])
-  params: {
-    hostPoolResourceId: hostPoolResourceId
-    policyName: vmBackupPolicyName
-    recoveryServicesVaultName: last(split(recoveryServicesVaultResourceId, '/'))!
-    resourceGroupHosts: resourceGroupHosts
-    virtualMachineNames: sessionHosts.outputs.virtualMachineNames
+    recoveryServicesVaultResourceId: recoveryServicesVaultResourceId
+    vmBackupPolicyName: vmBackupPolicyName
   }
 }
 

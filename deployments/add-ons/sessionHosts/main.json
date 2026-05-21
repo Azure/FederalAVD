@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "12790609706262855652"
+      "templateHash": "7210206543242786913"
     }
   },
   "parameters": {
@@ -829,9 +829,6 @@
     "calculatedAvailabilitySetsCount": "[add(sub(variables('endAvSetRange'), variables('beginAvSetRange')), 1)]",
     "calculatedAvailabilitySetsIndex": "[variables('beginAvSetRange')]",
     "deploymentSuffix": "[uniqueString(deployment().name)]",
-    "vaultSubscriptionId": "[if(not(empty(parameters('recoveryServicesVaultResourceId'))), split(parameters('recoveryServicesVaultResourceId'), '/')[2], subscription().subscriptionId)]",
-    "vaultResourceGroup": "[if(not(empty(parameters('recoveryServicesVaultResourceId'))), split(parameters('recoveryServicesVaultResourceId'), '/')[4], resourceGroup().name)]",
-    "vaultName": "[if(not(empty(parameters('recoveryServicesVaultResourceId'))), last(split(parameters('recoveryServicesVaultResourceId'), '/')), '')]",
     "effectiveVmBackupPolicyName": "[if(not(empty(parameters('vmBackupPolicyName'))), parameters('vmBackupPolicyName'), 'AvdPolicyVm')]"
   },
   "resources": [
@@ -1054,6 +1051,12 @@
           },
           "timeZone": {
             "value": "[parameters('timeZone')]"
+          },
+          "recoveryServicesVaultResourceId": {
+            "value": "[parameters('recoveryServicesVaultResourceId')]"
+          },
+          "vmBackupPolicyName": {
+            "value": "[variables('effectiveVmBackupPolicyName')]"
           }
         },
         "template": {
@@ -1063,7 +1066,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "957172821067822059"
+              "templateHash": "16483407304589228145"
             }
           },
           "parameters": {
@@ -1498,6 +1501,20 @@
               "metadata": {
                 "description": "Required. Resource ID of the VM Insights data collection rule."
               }
+            },
+            "recoveryServicesVaultResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the Recovery Services Vault for VM backup registration."
+              }
+            },
+            "vmBackupPolicyName": {
+              "type": "string",
+              "defaultValue": "AvdPolicyVm",
+              "metadata": {
+                "description": "Optional. Backup policy name for session host VMs."
+              }
             }
           },
           "variables": {
@@ -1923,6 +1940,12 @@
                   },
                   "vTpmEnabled": {
                     "value": "[parameters('vTpmEnabled')]"
+                  },
+                  "recoveryServicesVaultResourceId": {
+                    "value": "[parameters('recoveryServicesVaultResourceId')]"
+                  },
+                  "vmBackupPolicyName": {
+                    "value": "[parameters('vmBackupPolicyName')]"
                   }
                 },
                 "template": {
@@ -1932,7 +1955,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.42.1.51946",
-                      "templateHash": "2075427556119618690"
+                      "templateHash": "13448602883741132929"
                     }
                   },
                   "parameters": {
@@ -2126,6 +2149,14 @@
                     },
                     "hasNvidiaGpu": {
                       "type": "bool"
+                    },
+                    "recoveryServicesVaultResourceId": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "vmBackupPolicyName": {
+                      "type": "string",
+                      "defaultValue": "AvdPolicyVm"
                     }
                   },
                   "variables": {
@@ -2849,6 +2880,94 @@
                       "dependsOn": [
                         "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]"
                       ]
+                    },
+                    {
+                      "condition": "[not(empty(parameters('recoveryServicesVaultResourceId')))]",
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('VmBackupRegistration-{0}', parameters('deploymentSuffix'))]",
+                      "subscriptionId": "[split(parameters('recoveryServicesVaultResourceId'), '/')[2]]",
+                      "resourceGroup": "[split(parameters('recoveryServicesVaultResourceId'), '/')[4]]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "hostPoolResourceId": {
+                            "value": "[parameters('hostPoolResourceId')]"
+                          },
+                          "policyName": {
+                            "value": "[parameters('vmBackupPolicyName')]"
+                          },
+                          "recoveryServicesVaultName": {
+                            "value": "[last(split(parameters('recoveryServicesVaultResourceId'), '/'))]"
+                          },
+                          "resourceGroupHosts": {
+                            "value": "[resourceGroup().name]"
+                          },
+                          "virtualMachineNames": {
+                            "copy": [
+                              {
+                                "name": "value",
+                                "count": "[length(range(0, variables('sessionHostCount')))]",
+                                "input": "[variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[copyIndex('value')]]]"
+                              }
+                            ]
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.42.1.51946",
+                              "templateHash": "7268907933231436318"
+                            }
+                          },
+                          "parameters": {
+                            "policyName": {
+                              "type": "string"
+                            },
+                            "recoveryServicesVaultName": {
+                              "type": "string"
+                            },
+                            "resourceGroupHosts": {
+                              "type": "string"
+                            },
+                            "virtualMachineNames": {
+                              "type": "array"
+                            },
+                            "hostPoolResourceId": {
+                              "type": "string"
+                            }
+                          },
+                          "variables": {
+                            "v2VmContainer": "IaasVMContainer;iaasvmcontainerv2;",
+                            "v2Vm": "vm;iaasvmcontainerv2;"
+                          },
+                          "resources": [
+                            {
+                              "copy": {
+                                "name": "protectedItems_Vm",
+                                "count": "[length(parameters('virtualMachineNames'))]"
+                              },
+                              "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
+                              "apiVersion": "2024-10-01",
+                              "name": "[format('{0}/Azure/{1}{2};{3}/{4}{5};{6}', parameters('recoveryServicesVaultName'), variables('v2VmContainer'), parameters('resourceGroupHosts'), parameters('virtualMachineNames')[copyIndex()], variables('v2Vm'), parameters('resourceGroupHosts'), parameters('virtualMachineNames')[copyIndex()])]",
+                              "properties": {
+                                "protectedItemType": "Microsoft.Compute/virtualMachines",
+                                "policyId": "[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies', parameters('recoveryServicesVaultName'), parameters('policyName'))]",
+                                "sourceResourceId": "[resourceId(parameters('resourceGroupHosts'), 'Microsoft.Compute/virtualMachines', parameters('virtualMachineNames')[copyIndex()])]"
+                              },
+                              "tags": {
+                                "cm-resource-parent": "[parameters('hostPoolResourceId')]"
+                              }
+                            }
+                          ]
+                        }
+                      }
                     }
                   ],
                   "outputs": {
@@ -2924,91 +3043,6 @@
           }
         }
       }
-    },
-    {
-      "condition": "[not(empty(parameters('recoveryServicesVaultResourceId')))]",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('VmBackupRegistration-{0}', variables('deploymentSuffix'))]",
-      "subscriptionId": "[variables('vaultSubscriptionId')]",
-      "resourceGroup": "[variables('vaultResourceGroup')]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "recoveryServicesVaultName": {
-            "value": "[variables('vaultName')]"
-          },
-          "policyName": {
-            "value": "[variables('effectiveVmBackupPolicyName')]"
-          },
-          "resourceGroupHosts": {
-            "value": "[resourceGroup().name]"
-          },
-          "virtualMachineNames": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('SessionHosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
-          },
-          "hostPoolResourceId": {
-            "value": "[parameters('hostPoolResourceId')]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.42.1.51946",
-              "templateHash": "7268907933231436318"
-            }
-          },
-          "parameters": {
-            "policyName": {
-              "type": "string"
-            },
-            "recoveryServicesVaultName": {
-              "type": "string"
-            },
-            "resourceGroupHosts": {
-              "type": "string"
-            },
-            "virtualMachineNames": {
-              "type": "array"
-            },
-            "hostPoolResourceId": {
-              "type": "string"
-            }
-          },
-          "variables": {
-            "v2VmContainer": "IaasVMContainer;iaasvmcontainerv2;",
-            "v2Vm": "vm;iaasvmcontainerv2;"
-          },
-          "resources": [
-            {
-              "copy": {
-                "name": "protectedItems_Vm",
-                "count": "[length(parameters('virtualMachineNames'))]"
-              },
-              "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
-              "apiVersion": "2024-10-01",
-              "name": "[format('{0}/Azure/{1}{2};{3}/{4}{5};{6}', parameters('recoveryServicesVaultName'), variables('v2VmContainer'), parameters('resourceGroupHosts'), parameters('virtualMachineNames')[copyIndex()], variables('v2Vm'), parameters('resourceGroupHosts'), parameters('virtualMachineNames')[copyIndex()])]",
-              "properties": {
-                "protectedItemType": "Microsoft.Compute/virtualMachines",
-                "policyId": "[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies', parameters('recoveryServicesVaultName'), parameters('policyName'))]",
-                "sourceResourceId": "[resourceId(parameters('resourceGroupHosts'), 'Microsoft.Compute/virtualMachines', parameters('virtualMachineNames')[copyIndex()])]"
-              },
-              "tags": {
-                "cm-resource-parent": "[parameters('hostPoolResourceId')]"
-              }
-            }
-          ]
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', format('SessionHosts-{0}', variables('deploymentSuffix')))]"
-      ]
     }
   ],
   "outputs": {

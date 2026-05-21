@@ -65,6 +65,8 @@ param vmInsightsDataCollectionRulesResourceId string
 param vTpmEnabled bool
 param hasAmdGpu bool
 param hasNvidiaGpu bool
+param recoveryServicesVaultResourceId string = ''
+param vmBackupPolicyName string = 'AvdPolicyVm'
 
 var storageSuffix = environment().suffixes.storage
 
@@ -540,5 +542,17 @@ module updateOSDiskNetworkAccess '../../../../../.common/bicepModules/custom/dis
     }
   }
 ]
+
+module vmBackupRegistration '../../operations/vmBackupItems.bicep' = if (!empty(recoveryServicesVaultResourceId)) {
+  name: 'VmBackupRegistration-${deploymentSuffix}'
+  scope: resourceGroup(split(recoveryServicesVaultResourceId, '/')[2], split(recoveryServicesVaultResourceId, '/')[4])
+  params: {
+    hostPoolResourceId: hostPoolResourceId
+    policyName: vmBackupPolicyName
+    recoveryServicesVaultName: last(split(recoveryServicesVaultResourceId, '/'))!
+    resourceGroupHosts: resourceGroup().name
+    virtualMachineNames: [for i in range(0, sessionHostCount): virtualMachineNames[i]]
+  }
+}
 
 output virtualMachineNames array = [for i in range(0, sessionHostCount): virtualMachineNames[i]]

@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.39.26.7824",
-      "templateHash": "12933992451550985584"
+      "version": "0.43.8.12551",
+      "templateHash": "8034449113233514983"
     }
   },
   "parameters": {
@@ -1109,8 +1109,8 @@
       "metadata": {
         "_generator": {
           "name": "bicep",
-          "version": "0.39.26.7824",
-          "templateHash": "15697292747284598288"
+          "version": "0.42.1.51946",
+          "templateHash": "7210206543242786913"
         }
       },
       "parameters": {
@@ -1588,6 +1588,20 @@
           "metadata": {
             "description": "Optional. Resource ID of the VM Insights data collection rule."
           }
+        },
+        "recoveryServicesVaultResourceId": {
+          "type": "string",
+          "defaultValue": "",
+          "metadata": {
+            "description": "Optional. Resource ID of an existing Recovery Services Vault to register session host VMs with for backup. When provided, VMs will be enrolled in the backup policy specified by vmBackupPolicyName. Intended for personal host pools."
+          }
+        },
+        "vmBackupPolicyName": {
+          "type": "string",
+          "defaultValue": "",
+          "metadata": {
+            "description": "Optional. Name of the backup policy within the Recovery Services Vault to apply to session host VMs. Defaults to the standard AVD VM policy name when empty."
+          }
         }
       },
       "variables": {
@@ -1919,7 +1933,8 @@
         "endAvSetRange": "[[div(variables('maxVmNumber'), variables('maxAvSetMembers'))]",
         "calculatedAvailabilitySetsCount": "[[add(sub(variables('endAvSetRange'), variables('beginAvSetRange')), 1)]",
         "calculatedAvailabilitySetsIndex": "[[variables('beginAvSetRange')]",
-        "deploymentSuffix": "[[uniqueString(deployment().name)]"
+        "deploymentSuffix": "[[uniqueString(deployment().name)]",
+        "effectiveVmBackupPolicyName": "[[if(not(empty(parameters('vmBackupPolicyName'))), parameters('vmBackupPolicyName'), 'AvdPolicyVm')]"
       },
       "resources": [
         {
@@ -2096,23 +2111,14 @@
               "sessionHostCustomizations": {
                 "value": "[[parameters('sessionHostCustomizations')]"
               },
-              "sessionHostCount": {
-                "value": "[[length(variables('effectiveSessionHostNames'))]"
-              },
-              "sessionHostIndex": {
-                "value": 0
-              },
               "sessionHostNames": {
-                "value": "[[parameters('sessionHostNames')]"
+                "value": "[[variables('effectiveSessionHostNames')]"
               },
               "vmNameIndexLength": {
                 "value": "[[parameters('sessionHostNameIndexLength')]"
               },
               "virtualMachineNameConv": {
                 "value": "[[variables('effectiveVirtualMachineNameConv')]"
-              },
-              "virtualMachineNamePrefix": {
-                "value": "[[parameters('sessionHostNamePrefix')]"
               },
               "virtualMachineSize": {
                 "value": "[[parameters('virtualMachineSize')]"
@@ -2150,6 +2156,12 @@
               },
               "timeZone": {
                 "value": "[[parameters('timeZone')]"
+              },
+              "recoveryServicesVaultResourceId": {
+                "value": "[[parameters('recoveryServicesVaultResourceId')]"
+              },
+              "vmBackupPolicyName": {
+                "value": "[[variables('effectiveVmBackupPolicyName')]"
               }
             },
             "template": {
@@ -2158,8 +2170,8 @@
               "metadata": {
                 "_generator": {
                   "name": "bicep",
-                  "version": "0.39.26.7824",
-                  "templateHash": "6701410601705162066"
+                  "version": "0.42.1.51946",
+                  "templateHash": "16483407304589228145"
                 }
               },
               "parameters": {
@@ -2518,16 +2530,8 @@
                 },
                 "sessionHostNames": {
                   "type": "array",
-                  "defaultValue": [],
                   "metadata": {
-                    "description": "Optional. Explicit list of session host computer names to deploy. When provided, takes precedence over sessionHostCount/sessionHostIndex/virtualMachineNamePrefix."
-                  }
-                },
-                "sessionHostCount": {
-                  "type": "int",
-                  "defaultValue": 0,
-                  "metadata": {
-                    "description": "Required. Total number of session host VMs to deploy. Ignored when sessionHostNames is provided."
+                    "description": "Required. Resolved list of session host computer names to deploy."
                   }
                 },
                 "sessionHostCustomizations": {
@@ -2536,18 +2540,11 @@
                     "description": "Optional. Array of customization objects to execute on session hosts after provisioning."
                   }
                 },
-                "sessionHostIndex": {
-                  "type": "int",
-                  "defaultValue": 0,
-                  "metadata": {
-                    "description": "Required. Starting VM index number. Used to generate VM names when sessionHostNames is empty."
-                  }
-                },
                 "vmNameIndexLength": {
                   "type": "int",
                   "defaultValue": 2,
                   "metadata": {
-                    "description": "Required. Number of digits in the zero-padded VM index."
+                    "description": "Required. Number of digits in the zero-padded VM index. Used to extract the numeric suffix for availability zone and set assignment."
                   }
                 },
                 "subnetResourceId": {
@@ -2580,12 +2577,6 @@
                     "description": "Required. Full name convention string for VM names, containing SHNAME placeholder."
                   }
                 },
-                "virtualMachineNamePrefix": {
-                  "type": "string",
-                  "metadata": {
-                    "description": "Required. Short prefix for VM names used as the base for session host computer names."
-                  }
-                },
                 "virtualMachineSize": {
                   "type": "string",
                   "metadata": {
@@ -2615,20 +2606,33 @@
                   "metadata": {
                     "description": "Required. Resource ID of the VM Insights data collection rule."
                   }
+                },
+                "recoveryServicesVaultResourceId": {
+                  "type": "string",
+                  "defaultValue": "",
+                  "metadata": {
+                    "description": "Optional. Resource ID of the Recovery Services Vault for VM backup registration."
+                  }
+                },
+                "vmBackupPolicyName": {
+                  "type": "string",
+                  "defaultValue": "AvdPolicyVm",
+                  "metadata": {
+                    "description": "Optional. Backup policy name for session host VMs."
+                  }
                 }
               },
               "variables": {
                 "[string('copy')]": [
                   {
-                    "name": "computedSessionHostNames",
-                    "count": "[[length(range(0, parameters('sessionHostCount')))]",
-                    "input": "[[format('{0}{1}', parameters('virtualMachineNamePrefix'), padLeft(add(range(0, parameters('sessionHostCount'))[copyIndex('computedSessionHostNames')], parameters('sessionHostIndex')), parameters('vmNameIndexLength'), '0'))]"
+                    "name": "allVmNumbers",
+                    "count": "[[length(parameters('sessionHostNames'))]",
+                    "input": "[[int(substring(parameters('sessionHostNames')[copyIndex('allVmNumbers')], sub(length(parameters('sessionHostNames')[copyIndex('allVmNumbers')]), parameters('vmNameIndexLength')), parameters('vmNameIndexLength')))]"
                   }
                 ],
                 "confidentialVMOSDiskEncryptionType": "[[if(parameters('confidentialVMOSDiskEncryption'), 'DiskWithVMGuestState', 'VMGuestStateOnly')]",
                 "effectiveImageReference": "[[if(not(empty(parameters('imageReference'))), parameters('imageReference'), if(not(empty(parameters('customImageResourceId'))), createObject('id', parameters('customImageResourceId')), createObject('publisher', parameters('imagePublisher'), 'offer', parameters('imageOffer'), 'sku', parameters('imageSku'), 'version', 'latest')))]",
-                "effectiveSessionHostNames": "[[if(not(empty(parameters('sessionHostNames'))), parameters('sessionHostNames'), variables('computedSessionHostNames'))]",
-                "totalVmCount": "[[length(variables('effectiveSessionHostNames'))]",
+                "totalVmCount": "[[length(parameters('sessionHostNames'))]",
                 "effectiveDedicatedHostGroupResourceIds": "[[if(not(empty(parameters('dedicatedHostGroupResourceIds'))), parameters('dedicatedHostGroupResourceIds'), if(not(empty(parameters('dedicatedHostGroupResourceId'))), createArray(parameters('dedicatedHostGroupResourceId')), createArray()))]",
                 "effectiveDedicatedHostResourceIds": "[[if(not(empty(parameters('dedicatedHostResourceIds'))), parameters('dedicatedHostResourceIds'), if(not(empty(parameters('dedicatedHostResourceId'))), createArray(parameters('dedicatedHostResourceId')), createArray()))]",
                 "baseResourcesPerVM": 11,
@@ -2690,8 +2694,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.39.26.7824",
-                          "templateHash": "13106094525246318298"
+                          "version": "0.42.1.51946",
+                          "templateHash": "1140073301599974734"
                         }
                       },
                       "parameters": {
@@ -2788,8 +2792,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.39.26.7824",
-                          "templateHash": "11609031045672993663"
+                          "version": "0.42.1.51946",
+                          "templateHash": "12977708654141805100"
                         }
                       },
                       "parameters": {
@@ -2988,15 +2992,21 @@
                       "sessionHostCustomizations": {
                         "value": "[[parameters('sessionHostCustomizations')]"
                       },
-                      "sessionHostNameIndexLength": {
-                        "value": "[[parameters('vmNameIndexLength')]"
-                      },
                       "sessionHostNames": {
                         "[string('copy')]": [
                           {
                             "name": "value",
                             "count": "[[length(range(0, if(and(equals(range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment'))))]",
-                            "input": "[[variables('effectiveSessionHostNames')[add(mul(sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1), variables('maxVMsPerDeployment')), range(0, if(and(equals(range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment')))[copyIndex('value')])]]"
+                            "input": "[[parameters('sessionHostNames')[add(mul(sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1), variables('maxVMsPerDeployment')), range(0, if(and(equals(range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment')))[copyIndex('value')])]]"
+                          }
+                        ]
+                      },
+                      "vmNumbers": {
+                        "[string('copy')]": [
+                          {
+                            "name": "value",
+                            "count": "[[length(range(0, if(and(equals(range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment'))))]",
+                            "input": "[[variables('allVmNumbers')[add(mul(sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1), variables('maxVMsPerDeployment')), range(0, if(and(equals(range(1, variables('sessionHostBatchCount'))[copyIndex()], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment')))[copyIndex('value')])]]"
                           }
                         ]
                       },
@@ -3035,6 +3045,12 @@
                       },
                       "vTpmEnabled": {
                         "value": "[[parameters('vTpmEnabled')]"
+                      },
+                      "recoveryServicesVaultResourceId": {
+                        "value": "[[parameters('recoveryServicesVaultResourceId')]"
+                      },
+                      "vmBackupPolicyName": {
+                        "value": "[[parameters('vmBackupPolicyName')]"
                       }
                     },
                     "template": {
@@ -3043,8 +3059,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.39.26.7824",
-                          "templateHash": "8513431749511258676"
+                          "version": "0.42.1.51946",
+                          "templateHash": "13448602883741132929"
                         }
                       },
                       "parameters": {
@@ -3191,10 +3207,10 @@
                         "sessionHostCustomizations": {
                           "type": "array"
                         },
-                        "sessionHostNameIndexLength": {
-                          "type": "int"
-                        },
                         "sessionHostNames": {
+                          "type": "array"
+                        },
+                        "vmNumbers": {
                           "type": "array"
                         },
                         "securityType": {
@@ -3238,15 +3254,18 @@
                         },
                         "hasNvidiaGpu": {
                           "type": "bool"
+                        },
+                        "recoveryServicesVaultResourceId": {
+                          "type": "string",
+                          "defaultValue": ""
+                        },
+                        "vmBackupPolicyName": {
+                          "type": "string",
+                          "defaultValue": "AvdPolicyVm"
                         }
                       },
                       "variables": {
                         "[string('copy')]": [
-                          {
-                            "name": "vmNumbers",
-                            "count": "[[length(parameters('sessionHostNames'))]",
-                            "input": "[[int(substring(parameters('sessionHostNames')[copyIndex('vmNumbers')], sub(length(parameters('sessionHostNames')[copyIndex('vmNumbers')]), parameters('sessionHostNameIndexLength')), parameters('sessionHostNameIndexLength')))]"
-                          },
                           {
                             "name": "fslogixLocalStorageAccountNames",
                             "count": "[[length(parameters('fslogixLocalStorageAccountResourceIds'))]",
@@ -3307,11 +3326,11 @@
                           "name": "[[variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[copyIndex()]]]",
                           "location": "[[parameters('location')]",
                           "tags": "[[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))]",
-                          "zones": "[[if(and(and(not(empty(parameters('preferredZones'))), less(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('preferredZones')))), not(empty(parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]]))), createArray(parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]]), if(and(equals(parameters('availability'), 'AvailabilityZones'), not(empty(parameters('availabilityZones')))), createArray(parameters('availabilityZones')[mod(int(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1)), length(parameters('availabilityZones')))]), null()))]",
+                          "zones": "[[if(and(and(not(empty(parameters('preferredZones'))), less(range(0, variables('sessionHostCount'))[copyIndex()], length(parameters('preferredZones')))), not(empty(parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]]))), createArray(parameters('preferredZones')[range(0, variables('sessionHostCount'))[copyIndex()]]), if(and(equals(parameters('availability'), 'AvailabilityZones'), not(empty(parameters('availabilityZones')))), createArray(parameters('availabilityZones')[mod(int(sub(parameters('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1)), length(parameters('availabilityZones')))]), null()))]",
                           "identity": "[[variables('identity')]",
                           "properties": {
                             "additionalCapabilities": "[[if(parameters('hibernationEnabled'), createObject('hibernationEnabled', true()), null())]",
-                            "availabilitySet": "[[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(div(sub(variables('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), 200), 1), 2, '0')))), null())]",
+                            "availabilitySet": "[[if(equals(parameters('availability'), 'AvailabilitySets'), createObject('id', resourceId('Microsoft.Compute/availabilitySets', replace(parameters('availabilitySetNameConv'), '##', padLeft(add(div(sub(parameters('vmNumbers')[range(0, variables('sessionHostCount'))[copyIndex()]], 1), 200), 1), 2, '0')))), null())]",
                             "diagnosticsProfile": {
                               "bootDiagnostics": {
                                 "enabled": true
@@ -3491,7 +3510,7 @@
                           "condition": "[[and(parameters('enableMonitoring'), not(empty(parameters('dataCollectionEndpointResourceId'))))]",
                           "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                           "apiVersion": "2022-06-01",
-                          "scope": "[[format('Microsoft.Compute/virtualMachines/{0}', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
+                          "scope": "[[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
                           "name": "configurationAccessEndpoint",
                           "properties": {
                             "dataCollectionEndpointId": "[[parameters('dataCollectionEndpointResourceId')]",
@@ -3510,7 +3529,7 @@
                           "condition": "[[and(parameters('enableMonitoring'), not(empty(parameters('avdInsightsDataCollectionRulesResourceId'))))]",
                           "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                           "apiVersion": "2022-06-01",
-                          "scope": "[[format('Microsoft.Compute/virtualMachines/{0}', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
+                          "scope": "[[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
                           "name": "[[format('{0}-avdInsights-data-coll-rule-assoc', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
                           "properties": {
                             "dataCollectionRuleId": "[[parameters('avdInsightsDataCollectionRulesResourceId')]",
@@ -3530,7 +3549,7 @@
                           "condition": "[[and(parameters('enableMonitoring'), not(empty(parameters('vmInsightsDataCollectionRulesResourceId'))))]",
                           "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                           "apiVersion": "2022-06-01",
-                          "scope": "[[format('Microsoft.Compute/virtualMachines/{0}', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
+                          "scope": "[[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
                           "name": "[[format('{0}-vmInsights-data-coll-rule-assoc', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
                           "properties": {
                             "dataCollectionRuleId": "[[parameters('vmInsightsDataCollectionRulesResourceId')]",
@@ -3744,8 +3763,8 @@
                               "metadata": {
                                 "_generator": {
                                   "name": "bicep",
-                                  "version": "0.39.26.7824",
-                                  "templateHash": "301096897375006885"
+                                  "version": "0.42.1.51946",
+                                  "templateHash": "8886202151077445437"
                                 }
                               },
                               "parameters": {
@@ -3874,8 +3893,8 @@
                               "metadata": {
                                 "_generator": {
                                   "name": "bicep",
-                                  "version": "0.39.26.7824",
-                                  "templateHash": "14739742046096058044"
+                                  "version": "0.42.1.51946",
+                                  "templateHash": "16929907412779993527"
                                 }
                               },
                               "parameters": {
@@ -3925,8 +3944,8 @@
                                       "metadata": {
                                         "_generator": {
                                           "name": "bicep",
-                                          "version": "0.39.26.7824",
-                                          "templateHash": "17290095301135652436"
+                                          "version": "0.42.1.51946",
+                                          "templateHash": "1775484931921149215"
                                         }
                                       },
                                       "parameters": {
@@ -3966,6 +3985,94 @@
                           "dependsOn": [
                             "[[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]"
                           ]
+                        },
+                        {
+                          "condition": "[[not(empty(parameters('recoveryServicesVaultResourceId')))]",
+                          "type": "Microsoft.Resources/deployments",
+                          "apiVersion": "2025-04-01",
+                          "name": "[[format('VmBackupRegistration-{0}', parameters('deploymentSuffix'))]",
+                          "subscriptionId": "[[split(parameters('recoveryServicesVaultResourceId'), '/')[2]]",
+                          "resourceGroup": "[[split(parameters('recoveryServicesVaultResourceId'), '/')[4]]",
+                          "properties": {
+                            "expressionEvaluationOptions": {
+                              "scope": "inner"
+                            },
+                            "mode": "Incremental",
+                            "parameters": {
+                              "hostPoolResourceId": {
+                                "value": "[[parameters('hostPoolResourceId')]"
+                              },
+                              "policyName": {
+                                "value": "[[parameters('vmBackupPolicyName')]"
+                              },
+                              "recoveryServicesVaultName": {
+                                "value": "[[last(split(parameters('recoveryServicesVaultResourceId'), '/'))]"
+                              },
+                              "resourceGroupHosts": {
+                                "value": "[[resourceGroup().name]"
+                              },
+                              "virtualMachineNames": {
+                                "[string('copy')]": [
+                                  {
+                                    "name": "value",
+                                    "count": "[[length(range(0, variables('sessionHostCount')))]",
+                                    "input": "[[variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[copyIndex('value')]]]"
+                                  }
+                                ]
+                              }
+                            },
+                            "template": {
+                              "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                              "contentVersion": "1.0.0.0",
+                              "metadata": {
+                                "_generator": {
+                                  "name": "bicep",
+                                  "version": "0.42.1.51946",
+                                  "templateHash": "7268907933231436318"
+                                }
+                              },
+                              "parameters": {
+                                "policyName": {
+                                  "type": "string"
+                                },
+                                "recoveryServicesVaultName": {
+                                  "type": "string"
+                                },
+                                "resourceGroupHosts": {
+                                  "type": "string"
+                                },
+                                "virtualMachineNames": {
+                                  "type": "array"
+                                },
+                                "hostPoolResourceId": {
+                                  "type": "string"
+                                }
+                              },
+                              "variables": {
+                                "v2VmContainer": "IaasVMContainer;iaasvmcontainerv2;",
+                                "v2Vm": "vm;iaasvmcontainerv2;"
+                              },
+                              "resources": [
+                                {
+                                  "[string('copy')]": {
+                                    "name": "protectedItems_Vm",
+                                    "count": "[[length(parameters('virtualMachineNames'))]"
+                                  },
+                                  "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
+                                  "apiVersion": "2024-10-01",
+                                  "name": "[[format('{0}/Azure/{1}{2};{3}/{4}{5};{6}', parameters('recoveryServicesVaultName'), variables('v2VmContainer'), parameters('resourceGroupHosts'), parameters('virtualMachineNames')[copyIndex()], variables('v2Vm'), parameters('resourceGroupHosts'), parameters('virtualMachineNames')[copyIndex()])]",
+                                  "properties": {
+                                    "protectedItemType": "Microsoft.Compute/virtualMachines",
+                                    "policyId": "[[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies', parameters('recoveryServicesVaultName'), parameters('policyName'))]",
+                                    "sourceResourceId": "[[resourceId(parameters('resourceGroupHosts'), 'Microsoft.Compute/virtualMachines', parameters('virtualMachineNames')[copyIndex()])]"
+                                  },
+                                  "tags": {
+                                    "cm-resource-parent": "[[parameters('hostPoolResourceId')]"
+                                  }
+                                }
+                              ]
+                            }
+                          }
                         }
                       ],
                       "outputs": {
@@ -4010,8 +4117,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.39.26.7824",
-                          "templateHash": "11447244983080427176"
+                          "version": "0.42.1.51946",
+                          "templateHash": "6511691809511277955"
                         }
                       },
                       "parameters": {
@@ -5810,7 +5917,7 @@
             },
             {
               "name": "monitoring",
-              "label": "Monitoring",
+              "label": "Monitoring and Management",
               "elements": [
                 {
                   "name": "enableSessionHostMonitoring",
@@ -5888,6 +5995,57 @@
                     "allowedValues": "[[map(filter(steps('monitoring').dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('hosts').scope.location.name)), (dce) => parse(concat('{\"label\":\"', dce.name, '\",\"description\":\"Resource Group: ', first(skip(split(dce.id, '/'), 4)), ', Location: ', dce.location, '\",\"value\":\"', dce.id, '\"}')))]",
                     "required": false
                   }
+                },
+                {
+                  "name": "backup",
+                  "type": "Microsoft.Common.Section",
+                  "label": "Backup and Recovery",
+                  "visible": "[[equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')]",
+                  "elements": [
+                    {
+                      "name": "recoveryServicesVaultApi",
+                      "type": "Microsoft.Solutions.ArmApiControl",
+                      "condition": "[[and(not(empty(steps('basics').subscription.subscriptionId)), steps('monitoring').backup.enableVmBackup)]",
+                      "request": {
+                        "method": "GET",
+                        "path": "[[concat('/subscriptions/', steps('basics').subscription.subscriptionId, '/providers/Microsoft.RecoveryServices/vaults?api-version=2024-10-01')]",
+                        "transforms": {
+                          "list": "value|[*].{label:name, value:id}"
+                        }
+                      }
+                    },
+                    {
+                      "name": "enableVmBackup",
+                      "type": "Microsoft.Common.CheckBox",
+                      "label": "Enable VM Backup",
+                      "defaultValue": false,
+                      "toolTip": "Enable Azure Backup for session host virtual machines. Requires an existing Recovery Services Vault in the same subscription."
+                    },
+                    {
+                      "name": "recoveryServicesVault",
+                      "type": "Microsoft.Common.DropDown",
+                      "label": "Recovery Services Vault",
+                      "defaultValue": "[[first(steps('monitoring').backup.recoveryServicesVaultApi.transformed.list).label]",
+                      "toolTip": "Select the existing Recovery Services Vault to register session host VMs for backup.",
+                      "constraints": {
+                        "allowedValues": "[[steps('monitoring').backup.recoveryServicesVaultApi.transformed.list]",
+                        "required": true
+                      },
+                      "visible": "[[steps('monitoring').backup.enableVmBackup]"
+                    },
+                    {
+                      "name": "vmBackupPolicyName",
+                      "type": "Microsoft.Common.TextBox",
+                      "label": "Backup Policy Name (Optional)",
+                      "defaultValue": "",
+                      "placeholder": "AvdPolicyVm",
+                      "toolTip": "Name of the backup policy in the vault to apply to session host VMs. Leave blank to use the default policy name 'AvdPolicyVm'.",
+                      "constraints": {
+                        "required": false
+                      },
+                      "visible": "[[steps('monitoring').backup.enableVmBackup]"
+                    }
+                  ]
                 }
               ]
             },
@@ -6059,6 +6217,8 @@
             "networkInterfaceNameConvOverride": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, '')]",
             "availabilitySetNameConvOverride": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '')]",
             "tags": "[[steps('advanced').tagsSection.tags]",
+            "recoveryServicesVaultResourceId": "[[if(steps('monitoring').backup.enableVmBackup, steps('monitoring').backup.recoveryServicesVault, '')]",
+            "vmBackupPolicyName": "[[if(steps('monitoring').backup.enableVmBackup, steps('monitoring').backup.vmBackupPolicyName, '')]",
             "subnetResourceId": "[[steps('hosts').network.subnet.id]"
           },
           "kind": "ResourceGroup",
@@ -6185,8 +6345,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "10540414874423970871"
+              "version": "0.43.8.12551",
+              "templateHash": "11818824656167031491"
             }
           },
           "parameters": {
@@ -6320,8 +6480,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "5611607689301204181"
+              "version": "0.43.8.12551",
+              "templateHash": "13135189757702660001"
             }
           },
           "parameters": {
@@ -6410,8 +6570,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "10861582231171382063"
+              "version": "0.43.8.12551",
+              "templateHash": "17528306623679640166"
             }
           },
           "definitions": {
@@ -6501,7 +6661,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[format('Microsoft.KeyVault/vaults/{0}', parameters('keyVaultName'))]",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
               "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -6554,8 +6714,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "15647520222733292506"
+              "version": "0.43.8.12551",
+              "templateHash": "4607040991912780958"
             }
           },
           "parameters": {
@@ -6650,8 +6810,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "15647520222733292506"
+              "version": "0.43.8.12551",
+              "templateHash": "4607040991912780958"
             }
           },
           "parameters": {
@@ -6750,8 +6910,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "6703123689452334995"
+              "version": "0.43.8.12551",
+              "templateHash": "11766629778045529073"
             }
           },
           "parameters": {
@@ -6848,8 +7008,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "5403796250629971852"
+              "version": "0.43.8.12551",
+              "templateHash": "12139496427225971606"
             }
           },
           "definitions": {
@@ -6936,7 +7096,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[format('Microsoft.Resources/templateSpecs/{0}', parameters('templateSpecName'))]",
+              "scope": "[resourceId('Microsoft.Resources/templateSpecs', parameters('templateSpecName'))]",
               "name": "[guid(resourceId('Microsoft.Resources/templateSpecs', parameters('templateSpecName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -6993,8 +7153,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "18348983487760297408"
+              "version": "0.43.8.12551",
+              "templateHash": "9308507197777775204"
             }
           },
           "definitions": {
@@ -7084,7 +7244,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[format('Microsoft.Compute/galleries/{0}', parameters('galleryName'))]",
+              "scope": "[resourceId('Microsoft.Compute/galleries', parameters('galleryName'))]",
               "name": "[guid(resourceId('Microsoft.Compute/galleries', parameters('galleryName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -7140,8 +7300,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "1025380025253398934"
+              "version": "0.43.8.12551",
+              "templateHash": "17989996530327066224"
             }
           },
           "definitions": {
@@ -7228,7 +7388,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[format('Microsoft.ManagedIdentity/userAssignedIdentities/{0}', parameters('identityName'))]",
+              "scope": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]",
               "name": "[guid(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -7358,8 +7518,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "6305532924595442322"
+              "version": "0.43.8.12551",
+              "templateHash": "1609150334520108793"
             }
           },
           "parameters": {
@@ -7785,8 +7945,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "12025591670321114935"
+                      "version": "0.43.8.12551",
+                      "templateHash": "18067987585444669153"
                     }
                   },
                   "definitions": {
@@ -7989,8 +8149,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "2124421625946796921"
+                              "version": "0.43.8.12551",
+                              "templateHash": "3058719336033375780"
                             }
                           },
                           "parameters": {
@@ -8128,8 +8288,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "13041727118718956438"
+                              "version": "0.43.8.12551",
+                              "templateHash": "3176829335966308983"
                             }
                           },
                           "parameters": {
@@ -8214,8 +8374,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "7374398187158342276"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -8311,7 +8471,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -8385,8 +8545,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "2124421625946796921"
+                              "version": "0.43.8.12551",
+                              "templateHash": "3058719336033375780"
                             }
                           },
                           "parameters": {
@@ -8538,8 +8698,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "9232813763512653612"
+                              "version": "0.43.8.12551",
+                              "templateHash": "1494202011118404825"
                             }
                           },
                           "parameters": {
@@ -8684,8 +8844,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "7374398187158342276"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -8781,7 +8941,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -8846,8 +9006,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "7374398187158342276"
+                              "version": "0.43.8.12551",
+                              "templateHash": "15091676289629671152"
                             }
                           },
                           "definitions": {
@@ -8943,7 +9103,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -9031,8 +9191,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "17290229534485454366"
+                      "version": "0.43.8.12551",
+                      "templateHash": "15107852728170180576"
                     }
                   },
                   "parameters": {
@@ -9072,8 +9232,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "5758136482480486201"
+                              "version": "0.43.8.12551",
+                              "templateHash": "10817860410374762026"
                             }
                           },
                           "parameters": {
@@ -9138,8 +9298,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "2027363032243475202"
+                      "version": "0.43.8.12551",
+                      "templateHash": "16589231915538834957"
                     }
                   },
                   "definitions": {
@@ -9226,7 +9386,7 @@
                       },
                       "type": "Microsoft.Authorization/roleAssignments",
                       "apiVersion": "2022-04-01",
-                      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', parameters('storageAccountName'))]",
+                      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
                       "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                       "properties": {
                         "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -9317,8 +9477,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "5366415417088853"
+              "version": "0.43.8.12551",
+              "templateHash": "2999777255157491875"
             }
           },
           "parameters": {
@@ -9393,8 +9553,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "16841581105544725267"
+              "version": "0.43.8.12551",
+              "templateHash": "1737062625304249257"
             }
           },
           "parameters": {
