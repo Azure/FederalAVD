@@ -1,15 +1,11 @@
 targetScope = 'subscription'
 
-@description('Required. Deployment mode: "Complete" creates all AVD resources from scratch; "SessionHostsOnly" adds session hosts to an existing host pool.')
-param deploymentType string
 @description('Optional. Override download URL for the AVD Agent Boot Loader installer. Leave empty to use the default Microsoft-hosted URL for the current cloud.')
 param agentBootLoaderDownloadUrl string
 @description('Optional. Override download URL for the AVD Agent installer. Leave empty to use the default Microsoft-hosted URL for the current cloud.')
 param agentDownloadUrl string
 @description('Required. File name of the AVD Agent DSC configuration package blob (e.g. "Configuration_01-20-2023.zip"). Used during session host registration.')
 param avdAgentDscPackage string
-@description('Required. Array of Entra ID group object IDs assigned to the AVD application group. Members receive the Virtual Machine User Login role on the hosts resource group.')
-param appGroupSecurityGroups array
 @description('Required. URI of the blob storage container holding scripts and artifacts for session host customizations.')
 param artifactsContainerUri string
 @description('Required. Resource ID of the user-assigned managed identity with Storage Blob Data Reader access to the artifacts container.')
@@ -26,8 +22,6 @@ param availabilitySetsIndex int
 param availabilityZones array
 @description('Required. Resource ID of the AVD Insights data collection rule for session host diagnostics.')
 param avdInsightsDataCollectionRulesResourceId string
-@description('Required. Resource ID of the private DNS zone for Azure Blob Storage private endpoints.')
-param azureBlobPrivateDnsZoneResourceId string
 @description('Required. When true, enables OS disk encryption with VMGuestState for confidential VMs, protecting disk contents from the host.')
 param confidentialVMOSDiskEncryption bool
 @description('Optional. Resource ID of an Azure Compute Gallery image version to use as the VM OS image. Leave empty to use a marketplace image defined by imagePublisher, imageOffer, and imageSku.')
@@ -38,18 +32,14 @@ param dataCollectionEndpointResourceId string
 param dedicatedHostGroupResourceId string
 @description('Optional. Resource ID of a specific Azure Dedicated Host. When set, all VMs in this deployment are pinned to this host.')
 param dedicatedHostResourceId string
-@description('Required. When true, deploys a disk access policy restricting managed disk export and import to approved networks.')
-param deployDiskAccessPolicy bool
-@description('Required. When true, creates a new DiskAccess resource to enforce managed disk network access restrictions.')
-param deployDiskAccessResource bool
+@description('Optional. Resource ID of the DiskAccess resource used to restrict managed disk network access. When provided, OS disks are associated with this resource.')
+param diskAccessId string = ''
 @description('Required. Password for the domain join service account.')
 @secure()
 param domainJoinUserPassword string
 @description('Required. User principal name of the domain join service account (e.g. "domainjoin@contoso.com").')
 @secure()
 param domainJoinUserPrincipalName string
-@description('Required. Name of the DiskAccess resource used to enforce managed disk network access restrictions.')
-param diskAccessName string
 @description('Required. OS disk size in GB. Set to 0 to inherit the default size from the source image.')
 param diskSizeGB int
 @description('Required. Storage SKU for the OS disk (e.g. "Premium_LRS", "StandardSSD_LRS").')
@@ -66,12 +56,8 @@ param encryptionAtHost bool
 param hasAmdGpu bool
 @description('Required. When true, installs the NVIDIA GPU driver extension on session host VMs.')
 param hasNvidiaGpu bool
-@description('Optional. Resource ID of a pre-existing DiskAccess resource. Used instead of creating a new resource when deployDiskAccessResource is false.')
-param existingDiskAccessResourceId string
 @description('Optional. Resource ID of a pre-existing Disk Encryption Set. When provided, bypasses inline DES creation.')
 param existingDiskEncryptionSetResourceId string
-@description('Optional. Resource ID of a pre-existing Recovery Services Vault to register session hosts with for backup.')
-param existingRecoveryServicesVaultResourceId string
 @description('Required. Array of Azure Files share names to mount on session hosts for FSLogix profile containers.')
 param fslogixFileShareNames array
 @description('Required. When true, configures FSLogix profile container settings on session hosts via DSC.')
@@ -110,12 +96,6 @@ param integrityMonitoring bool
 param intuneEnrollment bool
 @description('Required. Azure region where session host VMs and compute resources are deployed.')
 param location string
-@description('Required. Name convention string for private endpoint resources, containing RESOURCETYPE, SUBRESOURCE, and RESOURCE placeholders.')
-param privateEndpointNameConv string
-@description('Required. Name convention string for private endpoint network interface cards.')
-param privateEndpointNICNameConv string
-@description('Required. Resource ID of the subnet where private endpoint NICs are placed.')
-param privateEndpointSubnetResourceId string
 @description('Required. When true, deploys Azure Monitor Agent and data collection rules on session hosts for diagnostics and VM Insights.')
 param enableMonitoring bool
 @description('Required. Name convention string for session host network interfaces, containing RESOURCETYPE and VMNAME placeholders.')
@@ -124,10 +104,6 @@ param networkInterfaceNameConv string
 param osDiskNameConv string
 @description('Required. Distinguished name of the Active Directory OU for session host computer accounts (e.g. "OU=AVD,DC=contoso,DC=com"). Leave empty for Entra ID join.')
 param ouPath string
-@description('Required. Host pool type string as provided by the caller (e.g. "Pooled DepthFirst", "Personal Automatic"). Used when deploymentType is not SessionHostsOnly; otherwise the actual type is read from the existing host pool resource.')
-param hostPoolType string
-@description('Required. When true, deploys a Recovery Services Vault and configures daily VM backup for session hosts.')
-param recoveryServices bool
 @description('Required. Name of the resource group where session host VMs and compute resources are deployed.')
 param resourceGroupHosts string
 @description('Required. When true, enables Secure Boot on session host VMs as part of Trusted Launch or Confidential VM security configuration.')
@@ -215,74 +191,6 @@ resource dedicatedHostGroup 'Microsoft.Compute/hostGroups@2024-11-01' existing =
   name: dedicatedHostGroupName
 }
 
-// Call on the hotspool
-resource hostPoolGet 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = if(deploymentType == 'SessionHostsOnly') {
-  name: last(split(hostPoolResourceId, '/'))
-  scope: resourceGroup(split(hostPoolResourceId, '/')[2], split(hostPoolResourceId, '/')[4])
-}
-
-// Gate used in module if-conditions (must be calculable at deployment start — uses param, not resource property).
-var recoveryServicesEnabled = recoveryServices && contains(hostPoolType, 'Personal')
-
-// Required for EntraID login
-module roleAssignment_VirtualMachineUserLogin '../../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
-  for i in range(0, length(appGroupSecurityGroups)): if (deploymentType != 'SessionHostsOnly' && !contains(identitySolution, 'DomainServices')) {
-    name: 'RA-Hosts-VMLoginUser-${i}-${deploymentSuffix}'
-    scope: resourceGroup(resourceGroupHosts)
-    params: {
-      principalId: appGroupSecurityGroups[i]
-      principalType: 'Group'
-      roleDefinitionId: 'fb879df8-f326-4884-b1cf-06f3ad86be52' // Virtual Machine User Login
-    }
-  }
-]
-
-module hostPoolUpdate 'modules/hostPoolUpdate.bicep' = if(deploymentType == 'SessionHostsOnly') {
-  name: 'HostPoolRegistrationTokenUpdate-${deploymentSuffix}'
-  scope: resourceGroup(split(hostPoolResourceId, '/')[2], split(hostPoolResourceId, '/')[4])
-  params: {
-    hostPoolType: hostPoolGet!.properties.hostPoolType
-    loadBalancerType: deploymentType == 'SessionHostsOnly' ? hostPoolGet!.properties.loadBalancerType : ''
-    location: deploymentType == 'SessionHostsOnly' ? hostPoolGet!.location : location
-    name: deploymentType == 'SessionHostsOnly' ? hostPoolGet.name : ''
-    preferredAppGroupType: deploymentType == 'SessionHostsOnly' ? hostPoolGet!.properties.preferredAppGroupType : ''
-  } 
-}
-
-module diskAccessResource '../../../../.common/bicepModules/compute/diskAccesses/deploy.bicep' = if (deploymentType != 'SessionHostsOnly' && deployDiskAccessResource) {
-  scope: resourceGroup(resourceGroupHosts)
-  name: 'DiskAccess-${deploymentSuffix}'
-  params: {
-    name: diskAccessName
-    location: location
-    tags: union({'cm-resource-parent': hostPoolResourceId}, tags[?'Microsoft.Compute/diskAccesses'] ?? {})
-  }
-}
-
-module diskAccessPrivateEndpoint '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deploymentType != 'SessionHostsOnly' && deployDiskAccessResource && !empty(privateEndpointSubnetResourceId)) {
-  scope: resourceGroup(resourceGroupHosts)
-  name: 'PE-DiskAccess-${deploymentSuffix}'
-  params: {
-    name: replace(replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'disks'), 'RESOURCE', diskAccessName), 'VNETID', split(privateEndpointSubnetResourceId, '/')[8])
-    customNetworkInterfaceName: replace(replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'disks'), 'RESOURCE', diskAccessName), 'VNETID', split(privateEndpointSubnetResourceId, '/')[8])
-    location: location
-    subnetResourceId: privateEndpointSubnetResourceId
-    privateLinkServiceId: diskAccessResource!.outputs.resourceId
-    groupId: 'disks'
-    privateDNSZoneIds: !empty(azureBlobPrivateDnsZoneResourceId) ? [azureBlobPrivateDnsZoneResourceId] : []
-    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
-  }
-}
-
-module diskAccessPolicy 'modules/diskNetworkAccessPolicy.bicep' = if (deploymentType != 'SessionHostsOnly' && deployDiskAccessPolicy) {
-  name: 'ManagedDisks-NetworkAccess-Policy-${deploymentSuffix}'
-  params: {
-    diskAccessId: deployDiskAccessResource ? diskAccessResource!.outputs.resourceId : ''
-    location: location
-    resourceGroupName: resourceGroupHosts
-  }
-}
-
 resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(artifactsUserAssignedIdentityResourceId)) {
   scope: resourceGroup(split(artifactsUserAssignedIdentityResourceId, '/')[2], split(artifactsUserAssignedIdentityResourceId, '/')[4])
   name: last(split(artifactsUserAssignedIdentityResourceId, '/'))
@@ -332,7 +240,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
     dedicatedHostGroupZones: !empty(dedicatedHostGroupName) ? dedicatedHostGroup!.zones : []
     dedicatedHostResourceId: dedicatedHostResourceId
-    diskAccessId: deploymentType != 'SessionHostsOnly' ? deployDiskAccessResource ? diskAccessResource!.outputs.resourceId : '' : existingDiskAccessResourceId
+    diskAccessId: diskAccessId
     diskEncryptionSetResourceId: existingDiskEncryptionSetResourceId
     diskSizeGB: diskSizeGB
     diskSku: diskSku
@@ -354,7 +262,7 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
     fslogixSizeInMBs: fslogixSizeInMBs    
     fslogixStorageService: fslogixStorageService
     hibernationEnabled: hibernationEnabled
-    hostPoolResourceId: deploymentType != 'SessionHostsOnly' ? hostPoolResourceId : hostPoolUpdate!.outputs.resourceId
+    hostPoolResourceId: hostPoolResourceId
     hasAmdGpu: hasAmdGpu
     hasNvidiaGpu: hasNvidiaGpu
     identitySolution: identitySolution
@@ -389,18 +297,6 @@ module virtualMachines 'modules/virtualMachines.bicep' = [for i in range(1, sess
   dependsOn: [
     availabilitySets
   ]
-}]
-
-module protectedItems_Vm '../operations/vmBackupItems.bicep' = [for i in range(1, sessionHostBatchCount): if (recoveryServicesEnabled && !empty(existingRecoveryServicesVaultResourceId)) {
-  name: 'BackupProtectedItems-VirtualMachines-${i-1}-${deploymentSuffix}'
-  scope: resourceGroup(split(existingRecoveryServicesVaultResourceId, '/')[4])
-  params: {
-    hostPoolResourceId: hostPoolResourceId
-    policyName: 'AvdPolicyVm'
-    recoveryServicesVaultName: last(split(existingRecoveryServicesVaultResourceId, '/'))
-    resourceGroupHosts: resourceGroupHosts
-    virtualMachineNames: virtualMachines[i-1].outputs.virtualMachineNames
-  }
 }]
 
 module getFlattenedVmNamesArray 'modules/flattenVirtualMachineNames.bicep' = {

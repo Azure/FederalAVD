@@ -59,9 +59,6 @@ param privateEndpointNameConv string
 @description('Required. Name convention for private endpoint NICs.')
 param privateEndpointNICNameConv string
 
-@description('Required. Resource ID of the host pool (used for the cm-resource-parent tag).')
-param hostPoolResourceId string
-
 @description('Required. Resource tags object.')
 param tags object
 
@@ -70,6 +67,8 @@ param timeZone string
 
 @description('Required. True when the host pool is pooled (file share backup). False when personal (VM backup).')
 param pooledHostPool bool
+param vmPolicyName string = 'AvdPolicyVm'
+param fileSharePolicyName string = 'filesharepolicy'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -106,7 +105,7 @@ module vmBackupPolicy '../../../../.common/bicepModules/recoveryServices/vaults/
   scope: resourceGroup(effectiveVaultSub, effectiveVaultRG)
   params: {
     recoveryServicesVaultName: effectiveVaultName
-    name: 'AvdPolicyVm'
+    name: vmPolicyName
     properties: {
       backupManagementType: 'AzureIaasVM'
       instantRpRetentionRangeInDays: 2
@@ -141,7 +140,7 @@ module fileShareBackupPolicy '../../../../.common/bicepModules/recoveryServices/
   scope: resourceGroup(effectiveVaultSub, effectiveVaultRG)
   params: {
     recoveryServicesVaultName: effectiveVaultName
-    name: 'filesharepolicy'
+    name: fileSharePolicyName
     properties: {
       backupManagementType: 'AzureStorage'
       workLoadType: 'AzureFileShare'

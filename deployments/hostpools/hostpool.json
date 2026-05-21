@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "6429470188532440885"
+      "templateHash": "460065079573047444"
     }
   },
   "parameters": {
@@ -1352,7 +1352,7 @@
     "deployDiskCmk": "[and(and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), contains(parameters('keyManagementDisks'), 'CustomerManaged')), not(parameters('confidentialVMOSDiskEncryption'))), or(variables('deployInlineEncryptionKv'), not(empty(parameters('encryptionKeyVaultResourceId')))))]",
     "deployStorageCmk": "[and(and(and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage')), equals(split(parameters('fslogixStorageService'), ' ')[0], 'AzureFiles')), not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))), or(variables('deployInlineEncryptionKv'), not(empty(parameters('encryptionKeyVaultResourceId')))))]",
     "deployCvmDiskCmk": "[and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('confidentialVMOSDiskEncryption')), or(variables('deployInlineEncryptionKv'), not(empty(parameters('encryptionKeyVaultResourceId')))))]",
-    "deployDiskAccessResource": "[if(and(and(and(not(equals(parameters('deploymentType'), 'sessionHostsOnly')), contains(parameters('hostPoolType'), 'Personal')), parameters('recoveryServices')), parameters('deployPrivateEndpoints')), true(), false())]",
+    "deployDiskAccessResource": "[and(and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), contains(parameters('hostPoolType'), 'Personal')), parameters('recoveryServices')), parameters('deployPrivateEndpoints'))]",
     "hostPoolVmTemplate": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('namePrefix', parameters('virtualMachineNamePrefix'), 'hibernate', parameters('hibernationEnabled'), 'osDiskType', parameters('diskSku'), 'diskSizeGB', parameters('diskSizeGB'), 'securityType', parameters('securityType'), 'secureBoot', parameters('secureBootEnabled'), 'vTPM', parameters('vTpmEnabled'), 'vmInfrastructureType', 'Cloud', 'virtualProcessorCount', if(equals(parameters('vCPUs'), 0), null(), parameters('vCPUs')), 'memoryGB', if(equals(parameters('memoryGB'), 0), null(), parameters('memoryGB')), 'minimumMemoryGB', if(equals(parameters('memoryGB'), 0), null(), parameters('memoryGB')), 'dynamicMemoryConfig', false()), createObject())]",
     "scalingPlanSchedules": "[if(parameters('deployScalingPlan'), createArray(createObject('rampUpStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]))), 'peakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]))), 'rampDownStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]))), 'offPeakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]))), 'name', 'weekdays_schedule', 'daysOfWeek', createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 'rampUpLoadBalancingAlgorithm', parameters('scalingPlanRampUpSchedule').loadBalancingAlgorithm, 'rampUpMinimumHostsPct', parameters('scalingPlanRampUpSchedule').minimumHostsPct, 'rampUpCapacityThresholdPct', parameters('scalingPlanRampUpSchedule').capacityThresholdPct, 'peakLoadBalancingAlgorithm', parameters('scalingPlanPeakSchedule').loadBalancingAlgorithm, 'rampDownLoadBalancingAlgorithm', parameters('scalingPlanRampDownSchedule').loadBalancingAlgorithm, 'rampDownMinimumHostsPct', parameters('scalingPlanRampDownSchedule').minimumHostsPct, 'rampDownCapacityThresholdPct', parameters('scalingPlanRampDownSchedule').capacityThresholdPct, 'rampDownForceLogoffUsers', parameters('scalingPlanForceLogoff'), 'rampDownWaitTimeMinutes', parameters('scalingPlanMinsBeforeLogoff'), 'rampDownNotificationMessage', if(parameters('scalingPlanForceLogoff'), format('You will be logged off in {0} minutes. Make sure to save your work.', parameters('scalingPlanMinsBeforeLogoff')), null()), 'rampDownStopHostsWhen', 'ZeroSessions', 'offPeakLoadBalancingAlgorithm', parameters('scalingPlanOffPeakSchedule').loadBalancingAlgorithm)), createArray())]",
     "exclusionTag": "[if(and(not(empty(parameters('scalingPlanExclusionTag'))), parameters('deployScalingPlan')), createObject('Microsoft.Compute/virtualMachines', createObject(format('{0}', parameters('scalingPlanExclusionTag')), '')), createObject())]",
@@ -1416,7 +1416,9 @@
     "vmImageOffer": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imageOffer'))), createObject(), createObject('vmImageOffer', parameters('imageOffer')))]",
     "vmImagePublisher": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imagePublisher'))), createObject(), createObject('vmImagePublisher', parameters('imagePublisher')))]",
     "vmImageSku": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imageSku'))), createObject(), createObject('vmImageSku', parameters('imageSku')))]",
-    "deployRecoveryServices": "[and(and(parameters('recoveryServices'), not(equals(parameters('deploymentType'), 'SessionHostsOnly'))), or(equals(parameters('deploymentType'), 'Complete'), not(empty(parameters('existingRecoveryServicesVaultResourceId')))))]"
+    "deployRecoveryServices": "[and(and(parameters('recoveryServices'), not(equals(parameters('deploymentType'), 'SessionHostsOnly'))), or(equals(parameters('deploymentType'), 'Complete'), not(empty(parameters('existingRecoveryServicesVaultResourceId')))))]",
+    "recoveryServicesVmPolicyName": "AvdPolicyVm",
+    "recoveryServicesFileSharePolicyName": "filesharepolicy"
   },
   "resources": [
     {
@@ -1943,6 +1945,159 @@
               "properties": {
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', '40c5ff49-9181-41f8-ae61-143b0e78555e')]",
                 "principalId": "[parameters('avdObjectId')]"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), not(contains(parameters('identitySolution'), 'DomainServices')))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('RA-Hosts-VMLoginUser-{0}', variables('deploymentSuffix'))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "resourceGroupHosts": {
+            "value": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation)), 'RESOURCETYPE', format('{0}', variables('abbr').resourceGroups))]"
+          },
+          "appGroupSecurityGroups": {
+            "value": "[map(parameters('appGroupSecurityGroups'), lambda('group', lambdaVariables('group').id))]"
+          },
+          "deploymentSuffix": {
+            "value": "[variables('deploymentSuffix')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "3860340320022929204"
+            }
+          },
+          "parameters": {
+            "resourceGroupHosts": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the resource group where session hosts are deployed."
+              }
+            },
+            "appGroupSecurityGroups": {
+              "type": "array",
+              "metadata": {
+                "description": "Required. Array of Entra ID group objects with an \"id\" property. Members receive the Virtual Machine User Login role."
+              }
+            },
+            "deploymentSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Short unique deployment suffix."
+              }
+            }
+          },
+          "resources": [
+            {
+              "copy": {
+                "name": "roleAssignment",
+                "count": "[length(range(0, length(parameters('appGroupSecurityGroups'))))]"
+              },
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('RA-Hosts-VMLoginUser-{0}-{1}', range(0, length(parameters('appGroupSecurityGroups')))[copyIndex()], parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupHosts')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "principalId": {
+                    "value": "[parameters('appGroupSecurityGroups')[range(0, length(parameters('appGroupSecurityGroups')))[copyIndex()]]]"
+                  },
+                  "principalType": {
+                    "value": "Group"
+                  },
+                  "roleDefinitionId": {
+                    "value": "fb879df8-f326-4884-b1cf-06f3ad86be52"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.43.8.12551",
+                      "templateHash": "11766629778045529073"
+                    }
+                  },
+                  "parameters": {
+                    "roleDefinitionId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                      }
+                    },
+                    "principalId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Principal ID of the identity receiving the role."
+                      }
+                    },
+                    "principalType": {
+                      "type": "string",
+                      "defaultValue": "ServicePrincipal",
+                      "allowedValues": [
+                        "ServicePrincipal",
+                        "Group",
+                        "User",
+                        "ForeignGroup",
+                        "Device",
+                        ""
+                      ],
+                      "metadata": {
+                        "description": "Principal type of the assigned principal."
+                      }
+                    },
+                    "assignmentDescription": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional description for the assignment."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
+                      "properties": {
+                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
+                    }
+                  }
+                }
               }
             }
           ]
@@ -11701,7 +11856,6 @@
           "privateEndpointNICNameConv": {
             "value": "[variables('privateEndpointNICNameConv')]"
           },
-          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
           "tags": {
             "value": "[parameters('tags')]"
           },
@@ -11710,6 +11864,12 @@
           },
           "pooledHostPool": {
             "value": "[equals(split(parameters('hostPoolType'), ' ')[0], 'Pooled')]"
+          },
+          "vmPolicyName": {
+            "value": "[variables('recoveryServicesVmPolicyName')]"
+          },
+          "fileSharePolicyName": {
+            "value": "[variables('recoveryServicesFileSharePolicyName')]"
           }
         },
         "template": {
@@ -11719,7 +11879,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "16601192754597272325"
+              "templateHash": "3222209291958046142"
             }
           },
           "parameters": {
@@ -11819,12 +11979,6 @@
                 "description": "Required. Name convention for private endpoint NICs."
               }
             },
-            "hostPoolResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the host pool (used for the cm-resource-parent tag)."
-              }
-            },
             "tags": {
               "type": "object",
               "metadata": {
@@ -11842,6 +11996,14 @@
               "metadata": {
                 "description": "Required. True when the host pool is pooled (file share backup). False when personal (VM backup)."
               }
+            },
+            "vmPolicyName": {
+              "type": "string",
+              "defaultValue": "AvdPolicyVm"
+            },
+            "fileSharePolicyName": {
+              "type": "string",
+              "defaultValue": "filesharepolicy"
             }
           },
           "variables": {
@@ -12125,7 +12287,7 @@
                     "value": "[variables('effectiveVaultName')]"
                   },
                   "name": {
-                    "value": "AvdPolicyVm"
+                    "value": "[parameters('vmPolicyName')]"
                   },
                   "properties": {
                     "value": {
@@ -12222,7 +12384,7 @@
                     "value": "[variables('effectiveVaultName')]"
                   },
                   "name": {
-                    "value": "filesharepolicy"
+                    "value": "[parameters('fileSharePolicyName')]"
                   },
                   "properties": {
                     "value": {
@@ -12468,7 +12630,6 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Operations-{0}', variables('deploymentSuffix')))]"
       ]
@@ -12598,7 +12759,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "14638560737087521059"
+              "templateHash": "5510205426498908679"
             }
           },
           "parameters": {
@@ -15876,136 +16037,6 @@
                   }
                 }
               }
-            },
-            {
-              "condition": "[and(equals(parameters('storageSolution'), 'AzureFiles'), not(empty(parameters('recoveryServicesVaultResourceId'))))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('FSLogix-BackupRegistration-{0}', parameters('deploymentSuffix'))]",
-              "subscriptionId": "[split(parameters('recoveryServicesVaultResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('recoveryServicesVaultResourceId'), '/')[4]]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "vaultName": {
-                    "value": "[last(split(parameters('recoveryServicesVaultResourceId'), '/'))]"
-                  },
-                  "location": {
-                    "value": "[parameters('location')]"
-                  },
-                  "resourceGroupStorage": {
-                    "value": "[parameters('resourceGroupStorage')]"
-                  },
-                  "storageAccountNamePrefix": {
-                    "value": "[parameters('storageAccountNamePrefix')]"
-                  },
-                  "storageCount": {
-                    "value": "[parameters('storageCount')]"
-                  },
-                  "storageIndex": {
-                    "value": "[parameters('storageIndex')]"
-                  },
-                  "fileShares": {
-                    "value": "[parameters('fslogixFileShares')]"
-                  },
-                  "storageAccountResourceIds": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupStorage')), 'Microsoft.Resources/deployments', format('Azure-Files-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value]"
-                  },
-                  "tags": {
-                    "value": "[parameters('tags')]"
-                  },
-                  "hostPoolResourceId": {
-                    "value": "[parameters('hostPoolResourceId')]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "2180995609648216390"
-                    }
-                  },
-                  "parameters": {
-                    "vaultName": {
-                      "type": "string"
-                    },
-                    "location": {
-                      "type": "string"
-                    },
-                    "resourceGroupStorage": {
-                      "type": "string"
-                    },
-                    "storageAccountNamePrefix": {
-                      "type": "string"
-                    },
-                    "storageCount": {
-                      "type": "int"
-                    },
-                    "storageIndex": {
-                      "type": "int"
-                    },
-                    "fileShares": {
-                      "type": "array"
-                    },
-                    "storageAccountResourceIds": {
-                      "type": "array"
-                    },
-                    "tags": {
-                      "type": "object",
-                      "defaultValue": {}
-                    },
-                    "hostPoolResourceId": {
-                      "type": "string"
-                    }
-                  },
-                  "resources": [
-                    {
-                      "copy": {
-                        "name": "protectionContainers",
-                        "count": "[length(range(0, parameters('storageCount')))]"
-                      },
-                      "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers",
-                      "apiVersion": "2024-04-01",
-                      "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}{3}', parameters('vaultName'), parameters('resourceGroupStorage'), parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))]",
-                      "properties": {
-                        "friendlyName": "[format('{0}{1}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))]",
-                        "sourceResourceId": "[parameters('storageAccountResourceIds')[range(0, parameters('storageCount'))[copyIndex()]]]",
-                        "backupManagementType": "AzureStorage",
-                        "containerType": "StorageContainer"
-                      },
-                      "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers'), createObject()))]"
-                    },
-                    {
-                      "copy": {
-                        "name": "protectedItems",
-                        "count": "[length(range(0, parameters('storageCount')))]"
-                      },
-                      "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
-                      "apiVersion": "2024-04-01",
-                      "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}{3}/AzureFileShare;{4}', parameters('vaultName'), parameters('resourceGroupStorage'), parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')), parameters('fileShares')[0])]",
-                      "location": "[parameters('location')]",
-                      "properties": {
-                        "protectedItemType": "AzureFileShareProtectedItem",
-                        "policyId": "[format('{0}/providers/Microsoft.RecoveryServices/vaults/{1}/backupPolicies/filesharepolicy', resourceGroup().id, parameters('vaultName'))]",
-                        "sourceResourceId": "[parameters('storageAccountResourceIds')[range(0, parameters('storageCount'))[copyIndex()]]]"
-                      },
-                      "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems'), createObject()))]",
-                      "dependsOn": [
-                        "protectionContainers"
-                      ]
-                    }
-                  ]
-                }
-              },
-              "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupStorage')), 'Microsoft.Resources/deployments', format('Azure-Files-{0}', parameters('deploymentSuffix')))]"
-              ]
             }
           ],
           "outputs": {
@@ -16035,9 +16066,10 @@
       ]
     },
     {
+      "condition": "[variables('deployDiskAccessResource')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Session-Hosts-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('DiskAccess-{0}', variables('deploymentSuffix'))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -16045,152 +16077,29 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "agentBootLoaderDownloadUrl": {
-            "value": "[parameters('agentBootLoaderDownloadUrl')]"
-          },
-          "agentDownloadUrl": {
-            "value": "[parameters('agentDownloadUrl')]"
-          },
-          "avdAgentDscPackage": {
-            "value": "[parameters('avdAgentDscPackage')]"
-          },
-          "appGroupSecurityGroups": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', map(parameters('appGroupSecurityGroups'), lambda('group', lambdaVariables('group').id))), createObject('value', createArray()))]",
-          "artifactsContainerUri": {
-            "value": "[parameters('artifactsContainerUri')]"
-          },
-          "artifactsUserAssignedIdentityResourceId": {
-            "value": "[parameters('artifactsUserAssignedIdentityResourceId')]"
-          },
-          "avdInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.avdInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingAVDInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
-          "availability": {
-            "value": "[parameters('availability')]"
-          },
-          "availabilitySetNameConv": "[if(variables('nameConvReversed'), createObject('value', replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', variables('abbr').availabilitySets), 'LOCATION', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation), 'TOKEN-', '')), createObject('value', format('{0}-##', replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('abbr').availabilitySets), 'LOCATION', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation), 'TOKEN-', ''))))]",
-          "availabilitySetsCount": {
-            "value": "[variables('availabilitySetsCount')]"
-          },
-          "availabilitySetsIndex": {
-            "value": "[variables('beginAvSetRange')]"
-          },
-          "availabilityZones": {
-            "value": "[parameters('availabilityZones')]"
-          },
-          "azureBlobPrivateDnsZoneResourceId": {
-            "value": "[parameters('azureBlobPrivateDnsZoneResourceId')]"
-          },
-          "confidentialVMOSDiskEncryption": {
-            "value": "[parameters('confidentialVMOSDiskEncryption')]"
-          },
-          "customImageResourceId": {
-            "value": "[parameters('customImageResourceId')]"
-          },
-          "dataCollectionEndpointResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointResourceId.value), createObject('value', parameters('existingDataCollectionEndpointResourceId'))), createObject('value', ''))]",
-          "dedicatedHostGroupResourceId": {
-            "value": "[parameters('dedicatedHostGroupResourceId')]"
-          },
-          "dedicatedHostResourceId": {
-            "value": "[parameters('dedicatedHostResourceId')]"
-          },
-          "deployDiskAccessPolicy": {
-            "value": "[parameters('deployDiskAccessPolicy')]"
-          },
-          "deployDiskAccessResource": {
-            "value": "[variables('deployDiskAccessResource')]"
-          },
-          "deploymentType": {
-            "value": "[parameters('deploymentType')]"
+          "resourceGroupHosts": {
+            "value": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation)), 'RESOURCETYPE', format('{0}', variables('abbr').resourceGroups))]"
           },
           "diskAccessName": {
             "value": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('abbr').diskAccesses), 'LOCATION', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation), 'TOKEN-', '')]"
           },
-          "diskSizeGB": {
-            "value": "[parameters('diskSizeGB')]"
-          },
-          "diskSku": {
-            "value": "[parameters('diskSku')]"
-          },
-          "domainJoinUserPassword": "[if(contains(parameters('identitySolution'), 'DomainServices'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
-          "domainJoinUserPrincipalName": "[if(contains(parameters('identitySolution'), 'DomainServices'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
-          "domainName": {
-            "value": "[parameters('domainName')]"
-          },
-          "enableAcceleratedNetworking": {
-            "value": "[parameters('enableAcceleratedNetworking')]"
-          },
-          "enableIPv6": {
-            "value": "[parameters('enableIPv6')]"
-          },
-          "enableMonitoring": {
-            "value": "[parameters('enableMonitoring')]"
-          },
-          "encryptionAtHost": {
-            "value": "[parameters('encryptionAtHost')]"
-          },
-          "hasAmdGpu": {
-            "value": "[variables('hasAmdGpu')]"
-          },
-          "hasNvidiaGpu": {
-            "value": "[variables('hasNvidiaGpu')]"
-          },
-          "existingDiskAccessResourceId": {
-            "value": "[parameters('existingDiskAccessResourceId')]"
-          },
-          "existingDiskEncryptionSetResourceId": "[if(variables('deployDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), if(variables('deployCvmDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('CVM-Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('existingDiskEncryptionSetResourceId'))))]",
-          "existingRecoveryServicesVaultResourceId": "[if(parameters('recoveryServices'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('RecoveryServices-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultResourceId.value), createObject('value', parameters('existingRecoveryServicesVaultResourceId'))), createObject('value', ''))]",
-          "fslogixConfigureSessionHosts": {
-            "value": "[parameters('fslogixConfigureSessionHosts')]"
-          },
-          "fslogixContainerType": {
-            "value": "[parameters('fslogixContainerType')]"
-          },
-          "fslogixFileShareNames": {
-            "value": "[variables('fslogixFileShareNames')]"
-          },
-          "fslogixLocalStorageAccountResourceIds": "[if(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value), createObject('value', parameters('fslogixExistingLocalStorageAccountResourceIds')))]",
-          "fslogixLocalNetAppVolumeResourceIds": "[if(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppVolumeResourceIds.value), createObject('value', parameters('fslogixExistingLocalNetAppVolumeResourceIds')))]",
-          "fslogixOSSGroups": "[if(equals(parameters('fslogixShardOptions'), 'ShardOSS'), createObject('value', map(parameters('fslogixUserGroups'), lambda('group', lambdaVariables('group').name))), createObject('value', createArray()))]",
-          "fslogixRemoteNetAppVolumeResourceIds": {
-            "value": "[parameters('fslogixExistingRemoteNetAppVolumeResourceIds')]"
-          },
-          "fslogixRemoteStorageAccountResourceIds": {
-            "value": "[parameters('fslogixExistingRemoteStorageAccountResourceIds')]"
-          },
-          "fslogixSizeInMBs": {
-            "value": "[parameters('fslogixSizeInMBs')]"
-          },
-          "fslogixStorageService": {
-            "value": "[split(parameters('fslogixStorageService'), ' ')[0]]"
-          },
-          "hibernationEnabled": {
-            "value": "[parameters('hibernationEnabled')]"
-          },
-          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
-          "identitySolution": {
-            "value": "[parameters('identitySolution')]"
-          },
-          "imageOffer": {
-            "value": "[parameters('imageOffer')]"
-          },
-          "imagePublisher": {
-            "value": "[parameters('imagePublisher')]"
-          },
-          "imageSku": {
-            "value": "[parameters('imageSku')]"
-          },
-          "integrityMonitoring": {
-            "value": "[parameters('integrityMonitoring')]"
-          },
-          "intuneEnrollment": {
-            "value": "[parameters('intuneEnrollment')]"
-          },
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "osDiskNameConv": {
-            "value": "[variables('diskNameConv')]"
+          "hostPoolResourceId": {
+            "value": "[reference(subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value]"
           },
-          "ouPath": {
-            "value": "[parameters('vmOUPath')]"
+          "deploymentSuffix": {
+            "value": "[variables('deploymentSuffix')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "deployPrivateEndpoint": {
+            "value": "[parameters('deployPrivateEndpoints')]"
+          },
+          "privateEndpointSubnetResourceId": {
+            "value": "[parameters('hostPoolResourcesPrivateEndpointSubnetResourceId')]"
           },
           "privateEndpointNameConv": {
             "value": "[variables('privateEndpointNameConv')]"
@@ -16198,66 +16107,8 @@
           "privateEndpointNICNameConv": {
             "value": "[variables('privateEndpointNICNameConv')]"
           },
-          "privateEndpointSubnetResourceId": {
-            "value": "[parameters('hostPoolResourcesPrivateEndpointSubnetResourceId')]"
-          },
-          "networkInterfaceNameConv": {
-            "value": "[variables('networkInterfaceNameConv')]"
-          },
-          "hostPoolType": {
-            "value": "[parameters('hostPoolType')]"
-          },
-          "recoveryServices": {
-            "value": "[parameters('recoveryServices')]"
-          },
-          "resourceGroupHosts": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation)), 'RESOURCETYPE', format('{0}', variables('abbr').resourceGroups))), createObject('value', parameters('existingHostsResourceGroupName')))]",
-          "securityType": {
-            "value": "[parameters('securityType')]"
-          },
-          "secureBootEnabled": {
-            "value": "[parameters('secureBootEnabled')]"
-          },
-          "sessionHostCount": {
-            "value": "[parameters('sessionHostCount')]"
-          },
-          "sessionHostCustomizations": {
-            "value": "[parameters('sessionHostCustomizations')]"
-          },
-          "sessionHostIndex": {
-            "value": "[parameters('sessionHostIndex')]"
-          },
-          "vmNameIndexLength": {
-            "value": "[parameters('vmNameIndexLength')]"
-          },
-          "storageSuffix": {
-            "value": "[environment().suffixes.storage]"
-          },
-          "subnetResourceId": {
-            "value": "[parameters('virtualMachineSubnetResourceId')]"
-          },
-          "tags": {
-            "value": "[variables('hostTags')]"
-          },
-          "deploymentSuffix": {
-            "value": "[variables('deploymentSuffix')]"
-          },
-          "timeZone": {
-            "value": "[parameters('virtualMachinesTimeZone')]"
-          },
-          "virtualMachineAdminPassword": "[if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminPassword')), createObject('value', parameters('virtualMachineAdminPassword')))]",
-          "virtualMachineAdminUserName": "[if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminUserName')), createObject('value', parameters('virtualMachineAdminUserName')))]",
-          "virtualMachineNameConv": {
-            "value": "[variables('virtualMachineNameConv')]"
-          },
-          "virtualMachineNamePrefix": {
-            "value": "[parameters('virtualMachineNamePrefix')]"
-          },
-          "virtualMachineSize": {
-            "value": "[parameters('virtualMachineSize')]"
-          },
-          "vmInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.vmInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingVMInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
-          "vTpmEnabled": {
-            "value": "[parameters('vTpmEnabled')]"
+          "azureBlobPrivateDnsZoneResourceId": {
+            "value": "[parameters('azureBlobPrivateDnsZoneResourceId')]"
           }
         },
         "template": {
@@ -16267,705 +16118,82 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "16542827216443727484"
+              "templateHash": "17148612768533281802"
             }
           },
           "parameters": {
-            "deploymentType": {
+            "resourceGroupHosts": {
               "type": "string",
               "metadata": {
-                "description": "Required. Deployment mode: \"Complete\" creates all AVD resources from scratch; \"SessionHostsOnly\" adds session hosts to an existing host pool."
-              }
-            },
-            "agentBootLoaderDownloadUrl": {
-              "type": "string",
-              "metadata": {
-                "description": "Optional. Override download URL for the AVD Agent Boot Loader installer. Leave empty to use the default Microsoft-hosted URL for the current cloud."
-              }
-            },
-            "agentDownloadUrl": {
-              "type": "string",
-              "metadata": {
-                "description": "Optional. Override download URL for the AVD Agent installer. Leave empty to use the default Microsoft-hosted URL for the current cloud."
-              }
-            },
-            "avdAgentDscPackage": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. File name of the AVD Agent DSC configuration package blob (e.g. \"Configuration_01-20-2023.zip\"). Used during session host registration."
-              }
-            },
-            "appGroupSecurityGroups": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Array of Entra ID group object IDs assigned to the AVD application group. Members receive the Virtual Machine User Login role on the hosts resource group."
-              }
-            },
-            "artifactsContainerUri": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. URI of the blob storage container holding scripts and artifacts for session host customizations."
-              }
-            },
-            "artifactsUserAssignedIdentityResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the user-assigned managed identity with Storage Blob Data Reader access to the artifacts container."
-              }
-            },
-            "availability": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. VM availability strategy: \"None\", \"AvailabilitySets\", or \"AvailabilityZones\"."
-              }
-            },
-            "availabilitySetNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name convention string for availability sets, containing RESOURCETYPE, TOKEN, and LOCATION placeholders."
-              }
-            },
-            "availabilitySetsCount": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Total number of availability sets to create for this host pool deployment."
-              }
-            },
-            "availabilitySetsIndex": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Starting index used when naming availability sets."
-              }
-            },
-            "availabilityZones": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. List of availability zones (e.g. [\"1\",\"2\",\"3\"]) across which session hosts are distributed. Used when availability is \"AvailabilityZones\"."
-              }
-            },
-            "avdInsightsDataCollectionRulesResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the AVD Insights data collection rule for session host diagnostics."
-              }
-            },
-            "azureBlobPrivateDnsZoneResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the private DNS zone for Azure Blob Storage private endpoints."
-              }
-            },
-            "confidentialVMOSDiskEncryption": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enables OS disk encryption with VMGuestState for confidential VMs, protecting disk contents from the host."
-              }
-            },
-            "customImageResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Optional. Resource ID of an Azure Compute Gallery image version to use as the VM OS image. Leave empty to use a marketplace image defined by imagePublisher, imageOffer, and imageSku."
-              }
-            },
-            "dataCollectionEndpointResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the Azure Monitor data collection endpoint for custom log ingestion."
-              }
-            },
-            "dedicatedHostGroupResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Optional. Resource ID of an Azure Dedicated Host Group to deploy session hosts onto. Mutually exclusive with dedicatedHostResourceId."
-              }
-            },
-            "dedicatedHostResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Optional. Resource ID of a specific Azure Dedicated Host. When set, all VMs in this deployment are pinned to this host."
-              }
-            },
-            "deployDiskAccessPolicy": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, deploys a disk access policy restricting managed disk export and import to approved networks."
-              }
-            },
-            "deployDiskAccessResource": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, creates a new DiskAccess resource to enforce managed disk network access restrictions."
-              }
-            },
-            "domainJoinUserPassword": {
-              "type": "securestring",
-              "metadata": {
-                "description": "Required. Password for the domain join service account."
-              }
-            },
-            "domainJoinUserPrincipalName": {
-              "type": "securestring",
-              "metadata": {
-                "description": "Required. User principal name of the domain join service account (e.g. \"domainjoin@contoso.com\")."
+                "description": "Required. Name of the resource group where the DiskAccess resource and its private endpoint will be deployed."
               }
             },
             "diskAccessName": {
               "type": "string",
               "metadata": {
-                "description": "Required. Name of the DiskAccess resource used to enforce managed disk network access restrictions."
-              }
-            },
-            "diskSizeGB": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. OS disk size in GB. Set to 0 to inherit the default size from the source image."
-              }
-            },
-            "diskSku": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Storage SKU for the OS disk (e.g. \"Premium_LRS\", \"StandardSSD_LRS\")."
-              }
-            },
-            "domainName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Active Directory domain name for domain join (e.g. \"contoso.com\"). Leave empty for Entra ID join."
-              }
-            },
-            "enableAcceleratedNetworking": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enables accelerated networking on session host NICs for lower latency and higher throughput."
-              }
-            },
-            "enableIPv6": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, adds an IPv6 IP configuration to session host network interfaces."
-              }
-            },
-            "encryptionAtHost": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enables encryption at the VM host for all disks and cache (host-based encryption)."
-              }
-            },
-            "hasAmdGpu": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, installs the AMD GPU driver extension on session host VMs."
-              }
-            },
-            "hasNvidiaGpu": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, installs the NVIDIA GPU driver extension on session host VMs."
-              }
-            },
-            "existingDiskAccessResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Optional. Resource ID of a pre-existing DiskAccess resource. Used instead of creating a new resource when deployDiskAccessResource is false."
-              }
-            },
-            "existingDiskEncryptionSetResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Optional. Resource ID of a pre-existing Disk Encryption Set. When provided, bypasses inline DES creation."
-              }
-            },
-            "existingRecoveryServicesVaultResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Optional. Resource ID of a pre-existing Recovery Services Vault to register session hosts with for backup."
-              }
-            },
-            "fslogixFileShareNames": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Array of Azure Files share names to mount on session hosts for FSLogix profile containers."
-              }
-            },
-            "fslogixConfigureSessionHosts": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, configures FSLogix profile container settings on session hosts via DSC."
-              }
-            },
-            "fslogixContainerType": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. FSLogix container type: \"CloudCacheProfileContainer\", \"ProfileContainer\", \"CloudCacheProfileOfficeContainer\", or \"ProfileOfficeContainer\"."
-              }
-            },
-            "fslogixLocalNetAppVolumeResourceIds": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Resource IDs of NetApp volumes in the session host region for FSLogix profile storage or cloud cache primary location."
-              }
-            },
-            "fslogixLocalStorageAccountResourceIds": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Resource IDs of Azure Storage accounts in the session host region for FSLogix profile storage or cloud cache primary location."
-              }
-            },
-            "fslogixOSSGroups": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Entra ID group object IDs for FSLogix Office container separation (users with Microsoft 365 subscriptions)."
-              }
-            },
-            "fslogixRemoteNetAppVolumeResourceIds": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Resource IDs of NetApp volumes in a remote region for FSLogix cloud cache failover or cross-region replication."
-              }
-            },
-            "fslogixRemoteStorageAccountResourceIds": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Resource IDs of Azure Storage accounts in a remote region for FSLogix cloud cache failover or cross-region replication."
-              }
-            },
-            "fslogixSizeInMBs": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Maximum size of the FSLogix profile VHD/VHDX in megabytes."
-              }
-            },
-            "fslogixStorageService": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Storage service backing FSLogix containers: \"AzureStorageAccount Premium\", \"AzureStorageAccount Standard\", \"AzureNetAppFiles Premium\", or \"AzureNetAppFiles Standard\"."
-              }
-            },
-            "hibernationEnabled": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enables VM hibernation on session hosts. Not compatible with all VM sizes or availability configurations."
-              }
-            },
-            "hostPoolResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the AVD host pool that session hosts will be registered with."
-              }
-            },
-            "identitySolution": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Identity join method for session hosts: \"ActiveDirectoryDomainServices\", \"EntraId\", or \"EntraIdIntuneEnrollment\"."
-              }
-            },
-            "imageOffer": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Marketplace image offer (e.g. \"windows-11\"). Used when customImageResourceId is empty."
-              }
-            },
-            "imagePublisher": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Marketplace image publisher (e.g. \"MicrosoftWindowsDesktop\"). Used when customImageResourceId is empty."
-              }
-            },
-            "imageSku": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Marketplace image SKU (e.g. \"win11-24h2-avd\"). Used when customImageResourceId is empty."
-              }
-            },
-            "integrityMonitoring": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, deploys the Guest Attestation extension to enable boot integrity monitoring for Trusted Launch VMs."
-              }
-            },
-            "intuneEnrollment": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enrolls session hosts into Microsoft Intune during provisioning (requires EntraIdIntuneEnrollment identity solution)."
+                "description": "Required. Name for the DiskAccess resource."
               }
             },
             "location": {
               "type": "string",
               "metadata": {
-                "description": "Required. Azure region where session host VMs and compute resources are deployed."
+                "description": "Required. Azure region for the DiskAccess resource."
               }
             },
-            "privateEndpointNameConv": {
+            "hostPoolResourceId": {
               "type": "string",
               "metadata": {
-                "description": "Required. Name convention string for private endpoint resources, containing RESOURCETYPE, SUBRESOURCE, and RESOURCE placeholders."
-              }
-            },
-            "privateEndpointNICNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name convention string for private endpoint network interface cards."
-              }
-            },
-            "privateEndpointSubnetResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the subnet where private endpoint NICs are placed."
-              }
-            },
-            "enableMonitoring": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, deploys Azure Monitor Agent and data collection rules on session hosts for diagnostics and VM Insights."
-              }
-            },
-            "networkInterfaceNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name convention string for session host network interfaces, containing RESOURCETYPE and VMNAME placeholders."
-              }
-            },
-            "osDiskNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name convention string for session host OS disks."
-              }
-            },
-            "ouPath": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Distinguished name of the Active Directory OU for session host computer accounts (e.g. \"OU=AVD,DC=contoso,DC=com\"). Leave empty for Entra ID join."
-              }
-            },
-            "hostPoolType": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Host pool type string as provided by the caller (e.g. \"Pooled DepthFirst\", \"Personal Automatic\"). Used when deploymentType is not SessionHostsOnly; otherwise the actual type is read from the existing host pool resource."
-              }
-            },
-            "recoveryServices": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, deploys a Recovery Services Vault and configures daily VM backup for session hosts."
-              }
-            },
-            "resourceGroupHosts": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the resource group where session host VMs and compute resources are deployed."
-              }
-            },
-            "secureBootEnabled": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enables Secure Boot on session host VMs as part of Trusted Launch or Confidential VM security configuration."
-              }
-            },
-            "securityType": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. VM security profile type: \"Standard\", \"TrustedLaunch\", or \"ConfidentialVM\"."
-              }
-            },
-            "sessionHostCount": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Total number of session host VMs to deploy."
-              }
-            },
-            "sessionHostCustomizations": {
-              "type": "array",
-              "metadata": {
-                "description": "Optional. Array of customization objects, each specifying a script and parameters to execute on session hosts after provisioning."
-              }
-            },
-            "sessionHostIndex": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Starting VM index number for this deployment batch. Used to generate unique VM names when deploying in multiple batches."
-              }
-            },
-            "vmNameIndexLength": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Number of digits in the zero-padded VM index (e.g. 2 → vm-01, 3 → vm-001)."
-              }
-            },
-            "storageSuffix": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Azure Storage endpoint suffix for the current cloud (e.g. \"core.windows.net\" for Azure Commercial)."
-              }
-            },
-            "subnetResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the virtual network subnet where session host NICs are connected."
-              }
-            },
-            "tags": {
-              "type": "object",
-              "metadata": {
-                "description": "Required. Azure resource tags applied to all deployed resources, keyed by resource type."
+                "description": "Required. Resource ID of the AVD host pool (used as the cm-resource-parent tag)."
               }
             },
             "deploymentSuffix": {
               "type": "string",
               "metadata": {
-                "description": "Required. Short unique suffix appended to deployment names to prevent naming collisions across concurrent deployments."
+                "description": "Required. Short unique deployment suffix."
               }
             },
-            "timeZone": {
-              "type": "string",
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
               "metadata": {
-                "description": "Required. Windows time zone for session host VMs (e.g. \"Eastern Standard Time\")."
+                "description": "Required. Resource tags object."
               }
             },
-            "virtualMachineNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Full name convention string for VM names, containing RESOURCETYPE, TOKEN, and LOCATION placeholders."
-              }
-            },
-            "virtualMachineNamePrefix": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Short prefix for VM names used as the TOKEN segment in the name convention (e.g. \"avd\", \"vdi\")."
-              }
-            },
-            "virtualMachineSize": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Azure VM SKU for session hosts (e.g. \"Standard_D4s_v5\")."
-              }
-            },
-            "virtualMachineAdminPassword": {
-              "type": "securestring",
-              "metadata": {
-                "description": "Required. Local administrator password for all session host VMs."
-              }
-            },
-            "virtualMachineAdminUserName": {
-              "type": "securestring",
-              "metadata": {
-                "description": "Required. Local administrator username for all session host VMs."
-              }
-            },
-            "vTpmEnabled": {
+            "deployPrivateEndpoint": {
               "type": "bool",
               "metadata": {
-                "description": "Required. When true, enables virtual TPM on session host VMs. Required for Trusted Launch and Confidential VM security types."
+                "description": "Required. Whether to deploy a private endpoint for the DiskAccess resource."
               }
             },
-            "vmInsightsDataCollectionRulesResourceId": {
+            "privateEndpointSubnetResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the subnet for the DiskAccess private endpoint."
+              }
+            },
+            "privateEndpointNameConv": {
               "type": "string",
               "metadata": {
-                "description": "Required. Resource ID of the VM Insights data collection rule for performance counters and dependency map data."
+                "description": "Required. Name convention string for private endpoint resources."
+              }
+            },
+            "privateEndpointNICNameConv": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name convention string for private endpoint NICs."
+              }
+            },
+            "azureBlobPrivateDnsZoneResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the Azure Blob private DNS zone for the disk access private endpoint."
               }
             }
           },
-          "variables": {
-            "confidentialVMOSDiskEncryptionType": "[if(parameters('confidentialVMOSDiskEncryption'), 'DiskWithVMGuestState', 'VMGuestStateOnly')]",
-            "baseResourcesPerVM": 11,
-            "monitoringResourcesPerVM": "[if(parameters('enableMonitoring'), 4, 0)]",
-            "gpuResourcesPerVM": "[if(or(parameters('hasAmdGpu'), parameters('hasNvidiaGpu')), 1, 0)]",
-            "integrityResourcesPerVM": "[if(parameters('integrityMonitoring'), 1, 0)]",
-            "customizationsResourcesPerVM": "[if(not(empty(parameters('sessionHostCustomizations'))), add(1, length(parameters('sessionHostCustomizations'))), 0)]",
-            "totalResourcesPerVM": "[add(add(add(add(variables('baseResourcesPerVM'), variables('monitoringResourcesPerVM')), variables('gpuResourcesPerVM')), variables('integrityResourcesPerVM')), variables('customizationsResourcesPerVM'))]",
-            "calculatedMaxVMs": "[div(800, variables('totalResourcesPerVM'))]",
-            "maxVMsPerDeployment": "[if(less(variables('calculatedMaxVMs'), 20), 20, if(greater(variables('calculatedMaxVMs'), 45), 45, variables('calculatedMaxVMs')))]",
-            "divisionValue": "[div(parameters('sessionHostCount'), variables('maxVMsPerDeployment'))]",
-            "divisionRemainderValue": "[mod(parameters('sessionHostCount'), variables('maxVMsPerDeployment'))]",
-            "sessionHostBatchCount": "[if(greater(variables('divisionRemainderValue'), 0), add(variables('divisionValue'), 1), variables('divisionValue'))]",
-            "cloud": "[toLower(environment().name)]",
-            "cloudSuffix": "[replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')]",
-            "agentBootLoaderUrl": "[if(not(empty(parameters('agentBootLoaderDownloadUrl'))), parameters('agentBootLoaderDownloadUrl'), if(startsWith(variables('cloud'), 'us'), format('https://aka.{0}/avdRDAgentBootLoader', variables('cloudSuffix')), 'https://go.microsoft.com/fwlink/?linkid=2311028'))]",
-            "agentUrl": "[if(not(empty(parameters('agentDownloadUrl'))), parameters('agentDownloadUrl'), if(startsWith(variables('cloud'), 'us'), format('https://aka.{0}/avdRDAgent', variables('cloudSuffix')), 'https://go.microsoft.com/fwlink/?linkid=2310011'))]",
-            "dscStorageAccount": "[if(startsWith(environment().name, 'USN'), 'wvdexportalcontainer', 'wvdportalstorageblob')]",
-            "dscUrl": "[format('https://{0}.blob.{1}/galleryartifacts/{2}', variables('dscStorageAccount'), environment().suffixes.storage, parameters('avdAgentDscPackage'))]",
-            "dedicatedHostGroupName": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[8], if(not(empty(parameters('dedicatedHostGroupResourceId'))), last(split(parameters('dedicatedHostGroupResourceId'), '/')), ''))]",
-            "dedicatedHostSub": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[2], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[2], ''))]",
-            "dedicatedHostRG": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[4], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[4], ''))]",
-            "recoveryServicesEnabled": "[and(parameters('recoveryServices'), contains(parameters('hostPoolType'), 'Personal'))]"
-          },
           "resources": [
             {
-              "copy": {
-                "name": "roleAssignment_VirtualMachineUserLogin",
-                "count": "[length(range(0, length(parameters('appGroupSecurityGroups'))))]"
-              },
-              "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), not(contains(parameters('identitySolution'), 'DomainServices')))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('RA-Hosts-VMLoginUser-{0}-{1}', range(0, length(parameters('appGroupSecurityGroups')))[copyIndex()], parameters('deploymentSuffix'))]",
-              "resourceGroup": "[parameters('resourceGroupHosts')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "principalId": {
-                    "value": "[parameters('appGroupSecurityGroups')[range(0, length(parameters('appGroupSecurityGroups')))[copyIndex()]]]"
-                  },
-                  "principalType": {
-                    "value": "Group"
-                  },
-                  "roleDefinitionId": {
-                    "value": "fb879df8-f326-4884-b1cf-06f3ad86be52"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "11766629778045529073"
-                    }
-                  },
-                  "parameters": {
-                    "roleDefinitionId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Principal ID of the identity receiving the role."
-                      }
-                    },
-                    "principalType": {
-                      "type": "string",
-                      "defaultValue": "ServicePrincipal",
-                      "allowedValues": [
-                        "ServicePrincipal",
-                        "Group",
-                        "User",
-                        "ForeignGroup",
-                        "Device",
-                        ""
-                      ],
-                      "metadata": {
-                        "description": "Principal type of the assigned principal."
-                      }
-                    },
-                    "assignmentDescription": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional description for the assignment."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
-                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "condition": "[equals(parameters('deploymentType'), 'SessionHostsOnly')]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('HostPoolRegistrationTokenUpdate-{0}', parameters('deploymentSuffix'))]",
-              "subscriptionId": "[split(parameters('hostPoolResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('hostPoolResourceId'), '/')[4]]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "hostPoolType": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').hostPoolType]"
-                  },
-                  "loadBalancerType": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').loadBalancerType), createObject('value', ''))]",
-                  "location": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05', 'full').location), createObject('value', parameters('location')))]",
-                  "name": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', last(split(parameters('hostPoolResourceId'), '/'))), createObject('value', ''))]",
-                  "preferredAppGroupType": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').preferredAppGroupType), createObject('value', ''))]"
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "8698349424985136456"
-                    }
-                  },
-                  "parameters": {
-                    "hostPoolType": {
-                      "type": "string"
-                    },
-                    "loadBalancerType": {
-                      "type": "string"
-                    },
-                    "location": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "preferredAppGroupType": {
-                      "type": "string"
-                    },
-                    "time": {
-                      "type": "string",
-                      "defaultValue": "[utcNow()]"
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.DesktopVirtualization/hostPools",
-                      "apiVersion": "2024-04-03",
-                      "name": "[parameters('name')]",
-                      "location": "[parameters('location')]",
-                      "properties": {
-                        "hostPoolType": "[parameters('hostPoolType')]",
-                        "loadBalancerType": "[parameters('loadBalancerType')]",
-                        "preferredAppGroupType": "[parameters('preferredAppGroupType')]",
-                        "registrationInfo": {
-                          "expirationTime": "[dateTimeAdd(parameters('time'), 'PT2H')]",
-                          "registrationTokenOperation": "Update"
-                        }
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('name'))]"
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployDiskAccessResource'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('DiskAccess-{0}', parameters('deploymentSuffix'))]",
@@ -17032,7 +16260,7 @@
               }
             },
             {
-              "condition": "[and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployDiskAccessResource')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
+              "condition": "[and(parameters('deployPrivateEndpoint'), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('PE-DiskAccess-{0}', parameters('deploymentSuffix'))]",
@@ -17187,166 +16415,828 @@
               "dependsOn": [
                 "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess-{0}', parameters('deploymentSuffix')))]"
               ]
+            }
+          ],
+          "outputs": {
+            "diskAccessId": {
+              "type": "string",
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]"
+      ]
+    },
+    {
+      "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployDiskAccessPolicy'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('ManagedDisks-NetworkAccess-Policy-{0}', variables('deploymentSuffix'))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "diskAccessId": "[if(variables('deployDiskAccessResource'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('DiskAccess-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskAccessId.value), createObject('value', ''))]",
+          "location": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
+          },
+          "resourceGroupName": {
+            "value": "[replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation)), 'RESOURCETYPE', format('{0}', variables('abbr').resourceGroups))]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "711228786282229453"
+            }
+          },
+          "parameters": {
+            "diskAccessId": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "resourceGroupName": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "parameters": "[if(not(empty(parameters('diskAccessId'))), createObject('diskAccessId', createObject('type', 'String', 'metadata', createObject('displayName', 'Disk Access Resource Id', 'description', 'The resource Id of the Disk Access to associate to the managed disks.'))), createObject())]",
+            "operations": "[if(not(empty(parameters('diskAccessId'))), createArray(createObject('operation', 'addOrReplace', 'field', 'Microsoft.Compute/disks/networkAccessPolicy', 'value', 'AllowPrivate'), createObject('operation', 'addOrReplace', 'field', 'Microsoft.Compute/disks/publicNetworkAccess', 'value', 'Disabled'), createObject('operation', 'addOrReplace', 'field', 'Microsoft.Compute/disks/diskAccessId', 'value', '[parameters(''diskAccessId'')]')), createArray(createObject('operation', 'addOrReplace', 'field', 'Microsoft.Compute/disks/networkAccessPolicy', 'value', 'DenyAll'), createObject('operation', 'addOrReplace', 'field', 'Microsoft.Compute/disks/publicNetworkAccess', 'value', 'Disabled')))]",
+            "policyName": "[if(not(empty(parameters('diskAccessId'))), 'DisableDisksPublicNetworkAccess', 'DisableDisksAllNetworkAccess')]",
+            "policyDescription": "[if(not(empty(parameters('diskAccessId'))), 'Disable public network access to managed disks', 'Disable public network access to managed disks, but allow private network access.')]",
+            "policyDisplayName": "[if(not(empty(parameters('diskAccessId'))), 'Disable public network access to managed disks', 'Disable all network access to managed disks')]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/policyDefinitions",
+              "apiVersion": "2021-06-01",
+              "name": "[variables('policyName')]",
+              "properties": {
+                "description": "[variables('policyDescription')]",
+                "displayName": "[variables('policyDisplayName')]",
+                "mode": "All",
+                "parameters": "[variables('parameters')]",
+                "policyRule": {
+                  "if": {
+                    "field": "type",
+                    "equals": "Microsoft.Compute/disks"
+                  },
+                  "then": {
+                    "effect": "modify",
+                    "details": {
+                      "roleDefinitionIds": [
+                        "/providers/Microsoft.Authorization/roleDefinitions/60fc6e62-5479-42d4-8bf4-67625fcc2840"
+                      ],
+                      "operations": "[variables('operations')]"
+                    }
+                  }
+                },
+                "policyType": "Custom"
+              }
             },
             {
-              "condition": "[and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployDiskAccessPolicy'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('ManagedDisks-NetworkAccess-Policy-{0}', parameters('deploymentSuffix'))]",
-              "location": "[deployment().location]",
+              "name": "DiskNetworkAccess",
+              "resourceGroup": "[parameters('resourceGroupName')]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
                 },
                 "mode": "Incremental",
                 "parameters": {
-                  "diskAccessId": "[if(parameters('deployDiskAccessResource'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value), createObject('value', ''))]",
                   "location": {
                     "value": "[parameters('location')]"
                   },
-                  "resourceGroupName": {
-                    "value": "[parameters('resourceGroupHosts')]"
+                  "diskAccessId": {
+                    "value": "[parameters('diskAccessId')]"
+                  },
+                  "policyDefinitionId": {
+                    "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('policyName'))]"
+                  },
+                  "policyDisplayName": {
+                    "value": "[reference(subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('policyName')), '2021-06-01').displayName]"
+                  },
+                  "policyName": {
+                    "value": "[reference(subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('policyName')), '2021-06-01').displayName]"
                   }
                 },
                 "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "711228786282229453"
+                      "templateHash": "11303942372742828501"
                     }
                   },
                   "parameters": {
-                    "diskAccessId": {
-                      "type": "string"
-                    },
                     "location": {
                       "type": "string"
                     },
-                    "resourceGroupName": {
+                    "diskAccessId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionId": {
+                      "type": "string"
+                    },
+                    "policyDisplayName": {
+                      "type": "string"
+                    },
+                    "policyName": {
                       "type": "string"
                     }
                   },
-                  "variables": {
-                    "parameters": "[if(not(empty(parameters('diskAccessId'))), createObject('diskAccessId', createObject('type', 'String', 'metadata', createObject('displayName', 'Disk Access Resource Id', 'description', 'The resource Id of the Disk Access to associate to the managed disks.'))), createObject())]",
-                    "operations": "[if(not(empty(parameters('diskAccessId'))), createArray(createObject('operation', 'addOrReplace', 'field', 'Microsoft.Compute/disks/networkAccessPolicy', 'value', 'AllowPrivate'), createObject('operation', 'addOrReplace', 'field', 'Microsoft.Compute/disks/publicNetworkAccess', 'value', 'Disabled'), createObject('operation', 'addOrReplace', 'field', 'Microsoft.Compute/disks/diskAccessId', 'value', '[parameters(''diskAccessId'')]')), createArray(createObject('operation', 'addOrReplace', 'field', 'Microsoft.Compute/disks/networkAccessPolicy', 'value', 'DenyAll'), createObject('operation', 'addOrReplace', 'field', 'Microsoft.Compute/disks/publicNetworkAccess', 'value', 'Disabled')))]",
-                    "policyName": "[if(not(empty(parameters('diskAccessId'))), 'DisableDisksPublicNetworkAccess', 'DisableDisksAllNetworkAccess')]",
-                    "policyDescription": "[if(not(empty(parameters('diskAccessId'))), 'Disable public network access to managed disks', 'Disable public network access to managed disks, but allow private network access.')]",
-                    "policyDisplayName": "[if(not(empty(parameters('diskAccessId'))), 'Disable public network access to managed disks', 'Disable all network access to managed disks')]"
-                  },
                   "resources": [
                     {
-                      "type": "Microsoft.Authorization/policyDefinitions",
-                      "apiVersion": "2021-06-01",
-                      "name": "[variables('policyName')]",
-                      "properties": {
-                        "description": "[variables('policyDescription')]",
-                        "displayName": "[variables('policyDisplayName')]",
-                        "mode": "All",
-                        "parameters": "[variables('parameters')]",
-                        "policyRule": {
-                          "if": {
-                            "field": "type",
-                            "equals": "Microsoft.Compute/disks"
-                          },
-                          "then": {
-                            "effect": "modify",
-                            "details": {
-                              "roleDefinitionIds": [
-                                "/providers/Microsoft.Authorization/roleDefinitions/60fc6e62-5479-42d4-8bf4-67625fcc2840"
-                              ],
-                              "operations": "[variables('operations')]"
-                            }
-                          }
-                        },
-                        "policyType": "Custom"
-                      }
-                    },
-                    {
-                      "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2025-04-01",
-                      "name": "DiskNetworkAccess",
-                      "resourceGroup": "[parameters('resourceGroupName')]",
-                      "properties": {
-                        "expressionEvaluationOptions": {
-                          "scope": "inner"
-                        },
-                        "mode": "Incremental",
-                        "parameters": {
-                          "location": {
-                            "value": "[parameters('location')]"
-                          },
-                          "diskAccessId": {
-                            "value": "[parameters('diskAccessId')]"
-                          },
-                          "policyDefinitionId": {
-                            "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('policyName'))]"
-                          },
-                          "policyDisplayName": {
-                            "value": "[reference(subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('policyName')), '2021-06-01').displayName]"
-                          },
-                          "policyName": {
-                            "value": "[reference(subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('policyName')), '2021-06-01').displayName]"
-                          }
-                        },
-                        "template": {
-                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                          "contentVersion": "1.0.0.0",
-                          "metadata": {
-                            "_generator": {
-                              "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "11303942372742828501"
-                            }
-                          },
-                          "parameters": {
-                            "location": {
-                              "type": "string"
-                            },
-                            "diskAccessId": {
-                              "type": "string"
-                            },
-                            "policyDefinitionId": {
-                              "type": "string"
-                            },
-                            "policyDisplayName": {
-                              "type": "string"
-                            },
-                            "policyName": {
-                              "type": "string"
-                            }
-                          },
-                          "resources": [
-                            {
-                              "type": "Microsoft.Authorization/policyAssignments",
-                              "apiVersion": "2022-06-01",
-                              "name": "[parameters('policyName')]",
-                              "location": "[parameters('location')]",
-                              "identity": {
-                                "type": "SystemAssigned"
-                              },
-                              "properties": {
-                                "displayName": "[parameters('policyDisplayName')]",
-                                "policyDefinitionId": "[parameters('policyDefinitionId')]",
-                                "parameters": "[if(not(empty(parameters('diskAccessId'))), createObject('diskAccessId', createObject('value', parameters('diskAccessId'))), createObject())]"
-                              }
-                            }
-                          ]
-                        }
+                      "type": "Microsoft.Authorization/policyAssignments",
+                      "apiVersion": "2022-06-01",
+                      "name": "[parameters('policyName')]",
+                      "location": "[parameters('location')]",
+                      "identity": {
+                        "type": "SystemAssigned"
                       },
-                      "dependsOn": [
-                        "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('policyName'))]"
-                      ]
+                      "properties": {
+                        "displayName": "[parameters('policyDisplayName')]",
+                        "policyDefinitionId": "[parameters('policyDefinitionId')]",
+                        "parameters": "[if(not(empty(parameters('diskAccessId'))), createObject('diskAccessId', createObject('value', parameters('diskAccessId'))), createObject())]"
+                      }
                     }
                   ]
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess-{0}', parameters('deploymentSuffix')))]"
+                "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('policyName'))]"
               ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('DiskAccess-{0}', variables('deploymentSuffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('Session-Hosts-{0}', variables('deploymentSuffix'))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "agentBootLoaderDownloadUrl": {
+            "value": "[parameters('agentBootLoaderDownloadUrl')]"
+          },
+          "agentDownloadUrl": {
+            "value": "[parameters('agentDownloadUrl')]"
+          },
+          "avdAgentDscPackage": {
+            "value": "[parameters('avdAgentDscPackage')]"
+          },
+          "artifactsContainerUri": {
+            "value": "[parameters('artifactsContainerUri')]"
+          },
+          "artifactsUserAssignedIdentityResourceId": {
+            "value": "[parameters('artifactsUserAssignedIdentityResourceId')]"
+          },
+          "avdInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.avdInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingAVDInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
+          "availability": {
+            "value": "[parameters('availability')]"
+          },
+          "availabilitySetNameConv": "[if(variables('nameConvReversed'), createObject('value', replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', variables('abbr').availabilitySets), 'LOCATION', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation), 'TOKEN-', '')), createObject('value', format('{0}-##', replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('abbr').availabilitySets), 'LOCATION', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation), 'TOKEN-', ''))))]",
+          "availabilitySetsCount": {
+            "value": "[variables('availabilitySetsCount')]"
+          },
+          "availabilitySetsIndex": {
+            "value": "[variables('beginAvSetRange')]"
+          },
+          "availabilityZones": {
+            "value": "[parameters('availabilityZones')]"
+          },
+          "confidentialVMOSDiskEncryption": {
+            "value": "[parameters('confidentialVMOSDiskEncryption')]"
+          },
+          "customImageResourceId": {
+            "value": "[parameters('customImageResourceId')]"
+          },
+          "dataCollectionEndpointResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.dataCollectionEndpointResourceId.value), createObject('value', parameters('existingDataCollectionEndpointResourceId'))), createObject('value', ''))]",
+          "dedicatedHostGroupResourceId": {
+            "value": "[parameters('dedicatedHostGroupResourceId')]"
+          },
+          "dedicatedHostResourceId": {
+            "value": "[parameters('dedicatedHostResourceId')]"
+          },
+          "diskAccessId": "[if(variables('deployDiskAccessResource'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('DiskAccess-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskAccessId.value), if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingDiskAccessResourceId')), createObject('value', '')))]",
+          "diskSizeGB": {
+            "value": "[parameters('diskSizeGB')]"
+          },
+          "diskSku": {
+            "value": "[parameters('diskSku')]"
+          },
+          "domainJoinUserPassword": "[if(contains(parameters('identitySolution'), 'DomainServices'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
+          "domainJoinUserPrincipalName": "[if(contains(parameters('identitySolution'), 'DomainServices'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
+          "domainName": {
+            "value": "[parameters('domainName')]"
+          },
+          "enableAcceleratedNetworking": {
+            "value": "[parameters('enableAcceleratedNetworking')]"
+          },
+          "enableIPv6": {
+            "value": "[parameters('enableIPv6')]"
+          },
+          "enableMonitoring": {
+            "value": "[parameters('enableMonitoring')]"
+          },
+          "encryptionAtHost": {
+            "value": "[parameters('encryptionAtHost')]"
+          },
+          "hasAmdGpu": {
+            "value": "[variables('hasAmdGpu')]"
+          },
+          "hasNvidiaGpu": {
+            "value": "[variables('hasNvidiaGpu')]"
+          },
+          "existingDiskEncryptionSetResourceId": "[if(variables('deployDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), if(variables('deployCvmDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('CVM-Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('existingDiskEncryptionSetResourceId'))))]",
+          "fslogixConfigureSessionHosts": {
+            "value": "[parameters('fslogixConfigureSessionHosts')]"
+          },
+          "fslogixContainerType": {
+            "value": "[parameters('fslogixContainerType')]"
+          },
+          "fslogixFileShareNames": {
+            "value": "[variables('fslogixFileShareNames')]"
+          },
+          "fslogixLocalStorageAccountResourceIds": "[if(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value), createObject('value', parameters('fslogixExistingLocalStorageAccountResourceIds')))]",
+          "fslogixLocalNetAppVolumeResourceIds": "[if(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppVolumeResourceIds.value), createObject('value', parameters('fslogixExistingLocalNetAppVolumeResourceIds')))]",
+          "fslogixOSSGroups": "[if(equals(parameters('fslogixShardOptions'), 'ShardOSS'), createObject('value', map(parameters('fslogixUserGroups'), lambda('group', lambdaVariables('group').name))), createObject('value', createArray()))]",
+          "fslogixRemoteNetAppVolumeResourceIds": {
+            "value": "[parameters('fslogixExistingRemoteNetAppVolumeResourceIds')]"
+          },
+          "fslogixRemoteStorageAccountResourceIds": {
+            "value": "[parameters('fslogixExistingRemoteStorageAccountResourceIds')]"
+          },
+          "fslogixSizeInMBs": {
+            "value": "[parameters('fslogixSizeInMBs')]"
+          },
+          "fslogixStorageService": {
+            "value": "[split(parameters('fslogixStorageService'), ' ')[0]]"
+          },
+          "hibernationEnabled": {
+            "value": "[parameters('hibernationEnabled')]"
+          },
+          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
+          "identitySolution": {
+            "value": "[parameters('identitySolution')]"
+          },
+          "imageOffer": {
+            "value": "[parameters('imageOffer')]"
+          },
+          "imagePublisher": {
+            "value": "[parameters('imagePublisher')]"
+          },
+          "imageSku": {
+            "value": "[parameters('imageSku')]"
+          },
+          "integrityMonitoring": {
+            "value": "[parameters('integrityMonitoring')]"
+          },
+          "intuneEnrollment": {
+            "value": "[parameters('intuneEnrollment')]"
+          },
+          "location": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
+          },
+          "osDiskNameConv": {
+            "value": "[variables('diskNameConv')]"
+          },
+          "ouPath": {
+            "value": "[parameters('vmOUPath')]"
+          },
+          "networkInterfaceNameConv": {
+            "value": "[variables('networkInterfaceNameConv')]"
+          },
+          "resourceGroupHosts": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation)), 'RESOURCETYPE', format('{0}', variables('abbr').resourceGroups))), createObject('value', parameters('existingHostsResourceGroupName')))]",
+          "securityType": {
+            "value": "[parameters('securityType')]"
+          },
+          "secureBootEnabled": {
+            "value": "[parameters('secureBootEnabled')]"
+          },
+          "sessionHostCount": {
+            "value": "[parameters('sessionHostCount')]"
+          },
+          "sessionHostCustomizations": {
+            "value": "[parameters('sessionHostCustomizations')]"
+          },
+          "sessionHostIndex": {
+            "value": "[parameters('sessionHostIndex')]"
+          },
+          "vmNameIndexLength": {
+            "value": "[parameters('vmNameIndexLength')]"
+          },
+          "storageSuffix": {
+            "value": "[environment().suffixes.storage]"
+          },
+          "subnetResourceId": {
+            "value": "[parameters('virtualMachineSubnetResourceId')]"
+          },
+          "tags": {
+            "value": "[variables('hostTags')]"
+          },
+          "deploymentSuffix": {
+            "value": "[variables('deploymentSuffix')]"
+          },
+          "timeZone": {
+            "value": "[parameters('virtualMachinesTimeZone')]"
+          },
+          "virtualMachineAdminPassword": "[if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminPassword')), createObject('value', parameters('virtualMachineAdminPassword')))]",
+          "virtualMachineAdminUserName": "[if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'VirtualMachineAdminUserName')), createObject('value', parameters('virtualMachineAdminUserName')))]",
+          "virtualMachineNameConv": {
+            "value": "[variables('virtualMachineNameConv')]"
+          },
+          "virtualMachineNamePrefix": {
+            "value": "[parameters('virtualMachineNamePrefix')]"
+          },
+          "virtualMachineSize": {
+            "value": "[parameters('virtualMachineSize')]"
+          },
+          "vmInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.vmInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingVMInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
+          "vTpmEnabled": {
+            "value": "[parameters('vTpmEnabled')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "13002793691868622901"
+            }
+          },
+          "parameters": {
+            "agentBootLoaderDownloadUrl": {
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Override download URL for the AVD Agent Boot Loader installer. Leave empty to use the default Microsoft-hosted URL for the current cloud."
+              }
             },
+            "agentDownloadUrl": {
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Override download URL for the AVD Agent installer. Leave empty to use the default Microsoft-hosted URL for the current cloud."
+              }
+            },
+            "avdAgentDscPackage": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. File name of the AVD Agent DSC configuration package blob (e.g. \"Configuration_01-20-2023.zip\"). Used during session host registration."
+              }
+            },
+            "artifactsContainerUri": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. URI of the blob storage container holding scripts and artifacts for session host customizations."
+              }
+            },
+            "artifactsUserAssignedIdentityResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the user-assigned managed identity with Storage Blob Data Reader access to the artifacts container."
+              }
+            },
+            "availability": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. VM availability strategy: \"None\", \"AvailabilitySets\", or \"AvailabilityZones\"."
+              }
+            },
+            "availabilitySetNameConv": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name convention string for availability sets, containing RESOURCETYPE, TOKEN, and LOCATION placeholders."
+              }
+            },
+            "availabilitySetsCount": {
+              "type": "int",
+              "metadata": {
+                "description": "Required. Total number of availability sets to create for this host pool deployment."
+              }
+            },
+            "availabilitySetsIndex": {
+              "type": "int",
+              "metadata": {
+                "description": "Required. Starting index used when naming availability sets."
+              }
+            },
+            "availabilityZones": {
+              "type": "array",
+              "metadata": {
+                "description": "Required. List of availability zones (e.g. [\"1\",\"2\",\"3\"]) across which session hosts are distributed. Used when availability is \"AvailabilityZones\"."
+              }
+            },
+            "avdInsightsDataCollectionRulesResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the AVD Insights data collection rule for session host diagnostics."
+              }
+            },
+            "confidentialVMOSDiskEncryption": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, enables OS disk encryption with VMGuestState for confidential VMs, protecting disk contents from the host."
+              }
+            },
+            "customImageResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Resource ID of an Azure Compute Gallery image version to use as the VM OS image. Leave empty to use a marketplace image defined by imagePublisher, imageOffer, and imageSku."
+              }
+            },
+            "dataCollectionEndpointResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Azure Monitor data collection endpoint for custom log ingestion."
+              }
+            },
+            "dedicatedHostGroupResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Resource ID of an Azure Dedicated Host Group to deploy session hosts onto. Mutually exclusive with dedicatedHostResourceId."
+              }
+            },
+            "dedicatedHostResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Resource ID of a specific Azure Dedicated Host. When set, all VMs in this deployment are pinned to this host."
+              }
+            },
+            "diskAccessId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the DiskAccess resource used to restrict managed disk network access. When provided, OS disks are associated with this resource."
+              }
+            },
+            "domainJoinUserPassword": {
+              "type": "securestring",
+              "metadata": {
+                "description": "Required. Password for the domain join service account."
+              }
+            },
+            "domainJoinUserPrincipalName": {
+              "type": "securestring",
+              "metadata": {
+                "description": "Required. User principal name of the domain join service account (e.g. \"domainjoin@contoso.com\")."
+              }
+            },
+            "diskSizeGB": {
+              "type": "int",
+              "metadata": {
+                "description": "Required. OS disk size in GB. Set to 0 to inherit the default size from the source image."
+              }
+            },
+            "diskSku": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Storage SKU for the OS disk (e.g. \"Premium_LRS\", \"StandardSSD_LRS\")."
+              }
+            },
+            "domainName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Active Directory domain name for domain join (e.g. \"contoso.com\"). Leave empty for Entra ID join."
+              }
+            },
+            "enableAcceleratedNetworking": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, enables accelerated networking on session host NICs for lower latency and higher throughput."
+              }
+            },
+            "enableIPv6": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, adds an IPv6 IP configuration to session host network interfaces."
+              }
+            },
+            "encryptionAtHost": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, enables encryption at the VM host for all disks and cache (host-based encryption)."
+              }
+            },
+            "hasAmdGpu": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, installs the AMD GPU driver extension on session host VMs."
+              }
+            },
+            "hasNvidiaGpu": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, installs the NVIDIA GPU driver extension on session host VMs."
+              }
+            },
+            "existingDiskEncryptionSetResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Resource ID of a pre-existing Disk Encryption Set. When provided, bypasses inline DES creation."
+              }
+            },
+            "fslogixFileShareNames": {
+              "type": "array",
+              "metadata": {
+                "description": "Required. Array of Azure Files share names to mount on session hosts for FSLogix profile containers."
+              }
+            },
+            "fslogixConfigureSessionHosts": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, configures FSLogix profile container settings on session hosts via DSC."
+              }
+            },
+            "fslogixContainerType": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. FSLogix container type: \"CloudCacheProfileContainer\", \"ProfileContainer\", \"CloudCacheProfileOfficeContainer\", or \"ProfileOfficeContainer\"."
+              }
+            },
+            "fslogixLocalNetAppVolumeResourceIds": {
+              "type": "array",
+              "metadata": {
+                "description": "Required. Resource IDs of NetApp volumes in the session host region for FSLogix profile storage or cloud cache primary location."
+              }
+            },
+            "fslogixLocalStorageAccountResourceIds": {
+              "type": "array",
+              "metadata": {
+                "description": "Required. Resource IDs of Azure Storage accounts in the session host region for FSLogix profile storage or cloud cache primary location."
+              }
+            },
+            "fslogixOSSGroups": {
+              "type": "array",
+              "metadata": {
+                "description": "Required. Entra ID group object IDs for FSLogix Office container separation (users with Microsoft 365 subscriptions)."
+              }
+            },
+            "fslogixRemoteNetAppVolumeResourceIds": {
+              "type": "array",
+              "metadata": {
+                "description": "Required. Resource IDs of NetApp volumes in a remote region for FSLogix cloud cache failover or cross-region replication."
+              }
+            },
+            "fslogixRemoteStorageAccountResourceIds": {
+              "type": "array",
+              "metadata": {
+                "description": "Required. Resource IDs of Azure Storage accounts in a remote region for FSLogix cloud cache failover or cross-region replication."
+              }
+            },
+            "fslogixSizeInMBs": {
+              "type": "int",
+              "metadata": {
+                "description": "Required. Maximum size of the FSLogix profile VHD/VHDX in megabytes."
+              }
+            },
+            "fslogixStorageService": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Storage service backing FSLogix containers: \"AzureStorageAccount Premium\", \"AzureStorageAccount Standard\", \"AzureNetAppFiles Premium\", or \"AzureNetAppFiles Standard\"."
+              }
+            },
+            "hibernationEnabled": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, enables VM hibernation on session hosts. Not compatible with all VM sizes or availability configurations."
+              }
+            },
+            "hostPoolResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the AVD host pool that session hosts will be registered with."
+              }
+            },
+            "identitySolution": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Identity join method for session hosts: \"ActiveDirectoryDomainServices\", \"EntraId\", or \"EntraIdIntuneEnrollment\"."
+              }
+            },
+            "imageOffer": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Marketplace image offer (e.g. \"windows-11\"). Used when customImageResourceId is empty."
+              }
+            },
+            "imagePublisher": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Marketplace image publisher (e.g. \"MicrosoftWindowsDesktop\"). Used when customImageResourceId is empty."
+              }
+            },
+            "imageSku": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Marketplace image SKU (e.g. \"win11-24h2-avd\"). Used when customImageResourceId is empty."
+              }
+            },
+            "integrityMonitoring": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, deploys the Guest Attestation extension to enable boot integrity monitoring for Trusted Launch VMs."
+              }
+            },
+            "intuneEnrollment": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, enrolls session hosts into Microsoft Intune during provisioning (requires EntraIdIntuneEnrollment identity solution)."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region where session host VMs and compute resources are deployed."
+              }
+            },
+            "enableMonitoring": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, deploys Azure Monitor Agent and data collection rules on session hosts for diagnostics and VM Insights."
+              }
+            },
+            "networkInterfaceNameConv": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name convention string for session host network interfaces, containing RESOURCETYPE and VMNAME placeholders."
+              }
+            },
+            "osDiskNameConv": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name convention string for session host OS disks."
+              }
+            },
+            "ouPath": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Distinguished name of the Active Directory OU for session host computer accounts (e.g. \"OU=AVD,DC=contoso,DC=com\"). Leave empty for Entra ID join."
+              }
+            },
+            "resourceGroupHosts": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the resource group where session host VMs and compute resources are deployed."
+              }
+            },
+            "secureBootEnabled": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, enables Secure Boot on session host VMs as part of Trusted Launch or Confidential VM security configuration."
+              }
+            },
+            "securityType": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. VM security profile type: \"Standard\", \"TrustedLaunch\", or \"ConfidentialVM\"."
+              }
+            },
+            "sessionHostCount": {
+              "type": "int",
+              "metadata": {
+                "description": "Required. Total number of session host VMs to deploy."
+              }
+            },
+            "sessionHostCustomizations": {
+              "type": "array",
+              "metadata": {
+                "description": "Optional. Array of customization objects, each specifying a script and parameters to execute on session hosts after provisioning."
+              }
+            },
+            "sessionHostIndex": {
+              "type": "int",
+              "metadata": {
+                "description": "Required. Starting VM index number for this deployment batch. Used to generate unique VM names when deploying in multiple batches."
+              }
+            },
+            "vmNameIndexLength": {
+              "type": "int",
+              "metadata": {
+                "description": "Required. Number of digits in the zero-padded VM index (e.g. 2 → vm-01, 3 → vm-001)."
+              }
+            },
+            "storageSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure Storage endpoint suffix for the current cloud (e.g. \"core.windows.net\" for Azure Commercial)."
+              }
+            },
+            "subnetResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the virtual network subnet where session host NICs are connected."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Required. Azure resource tags applied to all deployed resources, keyed by resource type."
+              }
+            },
+            "deploymentSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Short unique suffix appended to deployment names to prevent naming collisions across concurrent deployments."
+              }
+            },
+            "timeZone": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Windows time zone for session host VMs (e.g. \"Eastern Standard Time\")."
+              }
+            },
+            "virtualMachineNameConv": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Full name convention string for VM names, containing RESOURCETYPE, TOKEN, and LOCATION placeholders."
+              }
+            },
+            "virtualMachineNamePrefix": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Short prefix for VM names used as the TOKEN segment in the name convention (e.g. \"avd\", \"vdi\")."
+              }
+            },
+            "virtualMachineSize": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure VM SKU for session hosts (e.g. \"Standard_D4s_v5\")."
+              }
+            },
+            "virtualMachineAdminPassword": {
+              "type": "securestring",
+              "metadata": {
+                "description": "Required. Local administrator password for all session host VMs."
+              }
+            },
+            "virtualMachineAdminUserName": {
+              "type": "securestring",
+              "metadata": {
+                "description": "Required. Local administrator username for all session host VMs."
+              }
+            },
+            "vTpmEnabled": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. When true, enables virtual TPM on session host VMs. Required for Trusted Launch and Confidential VM security types."
+              }
+            },
+            "vmInsightsDataCollectionRulesResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the VM Insights data collection rule for performance counters and dependency map data."
+              }
+            }
+          },
+          "variables": {
+            "confidentialVMOSDiskEncryptionType": "[if(parameters('confidentialVMOSDiskEncryption'), 'DiskWithVMGuestState', 'VMGuestStateOnly')]",
+            "baseResourcesPerVM": 11,
+            "monitoringResourcesPerVM": "[if(parameters('enableMonitoring'), 4, 0)]",
+            "gpuResourcesPerVM": "[if(or(parameters('hasAmdGpu'), parameters('hasNvidiaGpu')), 1, 0)]",
+            "integrityResourcesPerVM": "[if(parameters('integrityMonitoring'), 1, 0)]",
+            "customizationsResourcesPerVM": "[if(not(empty(parameters('sessionHostCustomizations'))), add(1, length(parameters('sessionHostCustomizations'))), 0)]",
+            "totalResourcesPerVM": "[add(add(add(add(variables('baseResourcesPerVM'), variables('monitoringResourcesPerVM')), variables('gpuResourcesPerVM')), variables('integrityResourcesPerVM')), variables('customizationsResourcesPerVM'))]",
+            "calculatedMaxVMs": "[div(800, variables('totalResourcesPerVM'))]",
+            "maxVMsPerDeployment": "[if(less(variables('calculatedMaxVMs'), 20), 20, if(greater(variables('calculatedMaxVMs'), 45), 45, variables('calculatedMaxVMs')))]",
+            "divisionValue": "[div(parameters('sessionHostCount'), variables('maxVMsPerDeployment'))]",
+            "divisionRemainderValue": "[mod(parameters('sessionHostCount'), variables('maxVMsPerDeployment'))]",
+            "sessionHostBatchCount": "[if(greater(variables('divisionRemainderValue'), 0), add(variables('divisionValue'), 1), variables('divisionValue'))]",
+            "cloud": "[toLower(environment().name)]",
+            "cloudSuffix": "[replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')]",
+            "agentBootLoaderUrl": "[if(not(empty(parameters('agentBootLoaderDownloadUrl'))), parameters('agentBootLoaderDownloadUrl'), if(startsWith(variables('cloud'), 'us'), format('https://aka.{0}/avdRDAgentBootLoader', variables('cloudSuffix')), 'https://go.microsoft.com/fwlink/?linkid=2311028'))]",
+            "agentUrl": "[if(not(empty(parameters('agentDownloadUrl'))), parameters('agentDownloadUrl'), if(startsWith(variables('cloud'), 'us'), format('https://aka.{0}/avdRDAgent', variables('cloudSuffix')), 'https://go.microsoft.com/fwlink/?linkid=2310011'))]",
+            "dscStorageAccount": "[if(startsWith(environment().name, 'USN'), 'wvdexportalcontainer', 'wvdportalstorageblob')]",
+            "dscUrl": "[format('https://{0}.blob.{1}/galleryartifacts/{2}', variables('dscStorageAccount'), environment().suffixes.storage, parameters('avdAgentDscPackage'))]",
+            "dedicatedHostGroupName": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[8], if(not(empty(parameters('dedicatedHostGroupResourceId'))), last(split(parameters('dedicatedHostGroupResourceId'), '/')), ''))]",
+            "dedicatedHostSub": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[2], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[2], ''))]",
+            "dedicatedHostRG": "[if(not(empty(parameters('dedicatedHostResourceId'))), split(parameters('dedicatedHostResourceId'), '/')[4], if(not(empty(parameters('dedicatedHostGroupResourceId'))), split(parameters('dedicatedHostGroupResourceId'), '/')[4], ''))]"
+          },
+          "resources": [
             {
               "copy": {
                 "name": "availabilitySets",
@@ -17591,7 +17481,9 @@
                   "dedicatedHostResourceId": {
                     "value": "[parameters('dedicatedHostResourceId')]"
                   },
-                  "diskAccessId": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), if(parameters('deployDiskAccessResource'), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value), createObject('value', '')), createObject('value', parameters('existingDiskAccessResourceId')))]",
+                  "diskAccessId": {
+                    "value": "[parameters('diskAccessId')]"
+                  },
                   "diskEncryptionSetResourceId": {
                     "value": "[parameters('existingDiskEncryptionSetResourceId')]"
                   },
@@ -17651,7 +17543,9 @@
                   "hibernationEnabled": {
                     "value": "[parameters('hibernationEnabled')]"
                   },
-                  "hostPoolResourceId": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', parameters('hostPoolResourceId')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.Resources/deployments', format('HostPoolRegistrationTokenUpdate-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value))]",
+                  "hostPoolResourceId": {
+                    "value": "[parameters('hostPoolResourceId')]"
+                  },
                   "hasAmdGpu": {
                     "value": "[parameters('hasAmdGpu')]"
                   },
@@ -18684,97 +18578,7 @@
               },
               "dependsOn": [
                 "availabilitySets",
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('DiskAccess-{0}', parameters('deploymentSuffix')))]",
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.Resources/deployments', format('HostPoolRegistrationTokenUpdate-{0}', parameters('deploymentSuffix')))]",
                 "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix')))]"
-              ]
-            },
-            {
-              "copy": {
-                "name": "protectedItems_Vm",
-                "count": "[length(range(1, variables('sessionHostBatchCount')))]"
-              },
-              "condition": "[and(variables('recoveryServicesEnabled'), not(empty(parameters('existingRecoveryServicesVaultResourceId'))))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('BackupProtectedItems-VirtualMachines-{0}-{1}', sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1), parameters('deploymentSuffix'))]",
-              "resourceGroup": "[split(parameters('existingRecoveryServicesVaultResourceId'), '/')[4]]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "hostPoolResourceId": {
-                    "value": "[parameters('hostPoolResourceId')]"
-                  },
-                  "policyName": {
-                    "value": "AvdPolicyVm"
-                  },
-                  "recoveryServicesVaultName": {
-                    "value": "[last(split(parameters('existingRecoveryServicesVaultResourceId'), '/'))]"
-                  },
-                  "resourceGroupHosts": {
-                    "value": "[parameters('resourceGroupHosts')]"
-                  },
-                  "virtualMachineNames": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('VirtualMachines-Batch-{0}-of-{1}-({2}-VMs)-{3}', range(1, variables('sessionHostBatchCount'))[sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1)], variables('sessionHostBatchCount'), if(and(equals(range(1, variables('sessionHostBatchCount'))[sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1)], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment')), parameters('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "6531243142419261405"
-                    }
-                  },
-                  "parameters": {
-                    "policyName": {
-                      "type": "string"
-                    },
-                    "recoveryServicesVaultName": {
-                      "type": "string"
-                    },
-                    "resourceGroupHosts": {
-                      "type": "string"
-                    },
-                    "virtualMachineNames": {
-                      "type": "array"
-                    },
-                    "hostPoolResourceId": {
-                      "type": "string"
-                    }
-                  },
-                  "variables": {
-                    "v2VmContainer": "IaasVMContainer;iaasvmcontainerv2;",
-                    "v2Vm": "vm;iaasvmcontainerv2;"
-                  },
-                  "resources": [
-                    {
-                      "copy": {
-                        "name": "protectedItems_Vm",
-                        "count": "[length(parameters('virtualMachineNames'))]"
-                      },
-                      "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
-                      "apiVersion": "2024-10-01",
-                      "name": "[format('{0}/Azure/{1}{2};{3}/{4}{5};{6}', parameters('recoveryServicesVaultName'), variables('v2VmContainer'), parameters('resourceGroupHosts'), parameters('virtualMachineNames')[copyIndex()], variables('v2Vm'), parameters('resourceGroupHosts'), parameters('virtualMachineNames')[copyIndex()])]",
-                      "properties": {
-                        "protectedItemType": "Microsoft.Compute/virtualMachines",
-                        "policyId": "[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies', parameters('recoveryServicesVaultName'), parameters('policyName'))]",
-                        "sourceResourceId": "[resourceId(parameters('resourceGroupHosts'), 'Microsoft.Compute/virtualMachines', parameters('virtualMachineNames')[copyIndex()])]"
-                      },
-                      "tags": {
-                        "cm-resource-parent": "[parameters('hostPoolResourceId')]"
-                      }
-                    }
-                  ]
-                }
-              },
-              "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupHosts')), 'Microsoft.Resources/deployments', format('VirtualMachines-Batch-{0}-of-{1}-({2}-VMs)-{3}', range(1, variables('sessionHostBatchCount'))[sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1)], variables('sessionHostBatchCount'), if(and(equals(range(1, variables('sessionHostBatchCount'))[sub(range(1, variables('sessionHostBatchCount'))[copyIndex()], 1)], variables('sessionHostBatchCount')), greater(variables('divisionRemainderValue'), 0)), variables('divisionRemainderValue'), variables('maxVMsPerDeployment')), parameters('deploymentSuffix')))]"
               ]
             },
             {
@@ -18838,11 +18642,321 @@
       "dependsOn": [
         "[subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('CVM-Disk-CMK-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('DiskAccess-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Hosts-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('RecoveryServices-{0}', variables('deploymentSuffix')))]"
+        "[subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix')))]"
+      ]
+    },
+    {
+      "condition": "[variables('deployRecoveryServices')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('BackupRegistration-{0}', variables('deploymentSuffix'))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "recoveryServicesVaultResourceId": "[if(parameters('recoveryServices'), if(equals(parameters('deploymentType'), 'Complete'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('RecoveryServices-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.recoveryServicesVaultResourceId.value), createObject('value', parameters('existingRecoveryServicesVaultResourceId'))), createObject('value', ''))]",
+          "hostPoolResourceId": "[if(equals(parameters('deploymentType'), 'SessionHostsOnly'), createObject('value', parameters('existingHostPoolResourceId')), createObject('value', reference(subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolResourceId.value))]",
+          "deploymentSuffix": {
+            "value": "[variables('deploymentSuffix')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "registerFSLogix": {
+            "value": "[and(and(and(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), parameters('deployFSLogixStorage')), equals(split(parameters('fslogixStorageService'), ' ')[0], 'AzureFiles')), equals(split(parameters('hostPoolType'), ' ')[0], 'Pooled'))]"
+          },
+          "location": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
+          },
+          "fileShares": {
+            "value": "[variables('fslogixFileShareNames')]"
+          },
+          "storageAccountResourceIds": "[if(and(parameters('deployFSLogixStorage'), equals(split(parameters('fslogixStorageService'), ' ')[0], 'AzureFiles')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value), createObject('value', createArray()))]",
+          "registerVMs": {
+            "value": "[contains(parameters('hostPoolType'), 'Personal')]"
+          },
+          "vmPolicyName": {
+            "value": "[variables('recoveryServicesVmPolicyName')]"
+          },
+          "resourceGroupHosts": "[if(not(equals(parameters('deploymentType'), 'SessionHostsOnly')), createObject('value', replace(replace(replace(variables('nameConv_HP_ResGroups'), 'TOKEN', 'hosts'), 'LOCATION', format('{0}', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation)), 'RESOURCETYPE', format('{0}', variables('abbr').resourceGroups))), createObject('value', parameters('existingHostsResourceGroupName')))]",
+          "virtualMachineNames": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "17012091638388906586"
+            }
+          },
+          "parameters": {
+            "recoveryServicesVaultResourceId": {
+              "type": "string"
+            },
+            "hostPoolResourceId": {
+              "type": "string"
+            },
+            "deploymentSuffix": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            },
+            "registerFSLogix": {
+              "type": "bool",
+              "defaultValue": false
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "fileShares": {
+              "type": "array",
+              "defaultValue": []
+            },
+            "storageAccountResourceIds": {
+              "type": "array",
+              "defaultValue": []
+            },
+            "fileSharePolicyName": {
+              "type": "string",
+              "defaultValue": "filesharepolicy"
+            },
+            "registerVMs": {
+              "type": "bool",
+              "defaultValue": false
+            },
+            "vmPolicyName": {
+              "type": "string",
+              "defaultValue": "AvdPolicyVm"
+            },
+            "resourceGroupHosts": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "virtualMachineNames": {
+              "type": "array",
+              "defaultValue": []
+            }
+          },
+          "variables": {
+            "vaultSubscriptionId": "[split(parameters('recoveryServicesVaultResourceId'), '/')[2]]",
+            "vaultRG": "[split(parameters('recoveryServicesVaultResourceId'), '/')[4]]",
+            "vaultName": "[last(split(parameters('recoveryServicesVaultResourceId'), '/'))]"
+          },
+          "resources": [
+            {
+              "condition": "[parameters('registerFSLogix')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('FSLogix-BackupRegistration-{0}', parameters('deploymentSuffix'))]",
+              "subscriptionId": "[variables('vaultSubscriptionId')]",
+              "resourceGroup": "[variables('vaultRG')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "vaultName": {
+                    "value": "[variables('vaultName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "fileShares": {
+                    "value": "[parameters('fileShares')]"
+                  },
+                  "storageAccountResourceIds": {
+                    "value": "[parameters('storageAccountResourceIds')]"
+                  },
+                  "fileSharePolicyName": {
+                    "value": "[parameters('fileSharePolicyName')]"
+                  },
+                  "tags": {
+                    "value": "[parameters('tags')]"
+                  },
+                  "hostPoolResourceId": {
+                    "value": "[parameters('hostPoolResourceId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.43.8.12551",
+                      "templateHash": "7227510470586369501"
+                    }
+                  },
+                  "parameters": {
+                    "vaultName": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "fileShares": {
+                      "type": "array"
+                    },
+                    "storageAccountResourceIds": {
+                      "type": "array"
+                    },
+                    "fileSharePolicyName": {
+                      "type": "string",
+                      "defaultValue": "filesharepolicy"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "hostPoolResourceId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "copy": {
+                        "name": "protectionContainers",
+                        "count": "[length(parameters('storageAccountResourceIds'))]"
+                      },
+                      "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers",
+                      "apiVersion": "2024-04-01",
+                      "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}', parameters('vaultName'), split(parameters('storageAccountResourceIds')[copyIndex()], '/')[4], last(split(parameters('storageAccountResourceIds')[copyIndex()], '/')))]",
+                      "properties": {
+                        "friendlyName": "[last(split(parameters('storageAccountResourceIds')[copyIndex()], '/'))]",
+                        "sourceResourceId": "[parameters('storageAccountResourceIds')[copyIndex()]]",
+                        "backupManagementType": "AzureStorage",
+                        "containerType": "StorageContainer"
+                      },
+                      "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers'), createObject()))]"
+                    },
+                    {
+                      "copy": {
+                        "name": "protectedItems",
+                        "count": "[length(parameters('storageAccountResourceIds'))]"
+                      },
+                      "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
+                      "apiVersion": "2024-04-01",
+                      "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}/AzureFileShare;{3}', parameters('vaultName'), split(parameters('storageAccountResourceIds')[copyIndex()], '/')[4], last(split(parameters('storageAccountResourceIds')[copyIndex()], '/')), parameters('fileShares')[0])]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "protectedItemType": "AzureFileShareProtectedItem",
+                        "policyId": "[format('{0}/providers/Microsoft.RecoveryServices/vaults/{1}/backupPolicies/{2}', resourceGroup().id, parameters('vaultName'), parameters('fileSharePolicyName'))]",
+                        "sourceResourceId": "[parameters('storageAccountResourceIds')[copyIndex()]]"
+                      },
+                      "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems'), createObject()))]",
+                      "dependsOn": [
+                        "protectionContainers"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "condition": "[parameters('registerVMs')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('BackupProtectedItems-VirtualMachines-{0}', parameters('deploymentSuffix'))]",
+              "subscriptionId": "[variables('vaultSubscriptionId')]",
+              "resourceGroup": "[variables('vaultRG')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "hostPoolResourceId": {
+                    "value": "[parameters('hostPoolResourceId')]"
+                  },
+                  "policyName": {
+                    "value": "[parameters('vmPolicyName')]"
+                  },
+                  "recoveryServicesVaultName": {
+                    "value": "[variables('vaultName')]"
+                  },
+                  "resourceGroupHosts": {
+                    "value": "[parameters('resourceGroupHosts')]"
+                  },
+                  "virtualMachineNames": {
+                    "value": "[parameters('virtualMachineNames')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.43.8.12551",
+                      "templateHash": "6531243142419261405"
+                    }
+                  },
+                  "parameters": {
+                    "policyName": {
+                      "type": "string"
+                    },
+                    "recoveryServicesVaultName": {
+                      "type": "string"
+                    },
+                    "resourceGroupHosts": {
+                      "type": "string"
+                    },
+                    "virtualMachineNames": {
+                      "type": "array"
+                    },
+                    "hostPoolResourceId": {
+                      "type": "string"
+                    }
+                  },
+                  "variables": {
+                    "v2VmContainer": "IaasVMContainer;iaasvmcontainerv2;",
+                    "v2Vm": "vm;iaasvmcontainerv2;"
+                  },
+                  "resources": [
+                    {
+                      "copy": {
+                        "name": "protectedItems_Vm",
+                        "count": "[length(parameters('virtualMachineNames'))]"
+                      },
+                      "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
+                      "apiVersion": "2024-10-01",
+                      "name": "[format('{0}/Azure/{1}{2};{3}/{4}{5};{6}', parameters('recoveryServicesVaultName'), variables('v2VmContainer'), parameters('resourceGroupHosts'), parameters('virtualMachineNames')[copyIndex()], variables('v2Vm'), parameters('resourceGroupHosts'), parameters('virtualMachineNames')[copyIndex()])]",
+                      "properties": {
+                        "protectedItemType": "Microsoft.Compute/virtualMachines",
+                        "policyId": "[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies', parameters('recoveryServicesVaultName'), parameters('policyName'))]",
+                        "sourceResourceId": "[resourceId(parameters('resourceGroupHosts'), 'Microsoft.Compute/virtualMachines', parameters('virtualMachineNames')[copyIndex()])]"
+                      },
+                      "tags": {
+                        "cm-resource-parent": "[parameters('hostPoolResourceId')]"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId(variables('effectiveControlPlaneSubscription'), 'Microsoft.Resources/deployments', format('ControlPlane-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('FSLogix-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('RecoveryServices-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix')))]"
       ]
     },
     {

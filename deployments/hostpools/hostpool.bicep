@@ -690,9 +690,11 @@ var deployStorageCmk = deploymentType != 'SessionHostsOnly' && deployFSLogixStor
 // does not support key release policies. The DES is then created by the shared CMK module with skipKeyCreation=true.
 var deployCvmDiskCmk = deploymentType != 'SessionHostsOnly' && confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
 
-var deployDiskAccessResource = deploymentType != 'sessionHostsOnly' && contains(hostPoolType, 'Personal') && recoveryServices && deployPrivateEndpoints
-  ? true
-  : false
+var deployDiskAccessResource = deploymentType != 'SessionHostsOnly' && contains(hostPoolType, 'Personal') && recoveryServices && deployPrivateEndpoints
+
+var effectiveDiskAccessId = deployDiskAccessResource
+  ? diskAccess!.outputs.diskAccessId
+  : deploymentType == 'SessionHostsOnly' ? existingDiskAccessResourceId : ''
 
 var hostPoolVmTemplate = deploymentType != 'SessionHostsOnly'
   ? {
@@ -1323,8 +1325,8 @@ module storageResourceGroup '../../.common/bicepModules/resources/resourceGroups
   }
 }
 
-// Subscrpiption Level RBAC Assignments
-module rbac 'modules/rbac/rbac.bicep' = [
+// PowerOn/PowerOff/Restart VM Run Command permissions for AVD Service Principal
+module avdServicePrincipalRbac 'modules/rbac/avdServicePrincipalRbac.bicep' = [
   for (subId, i) in rbacSubs: if (deploymentType != 'SessionHostsOnly' && !empty(avdObjectId) && (deployScalingPlan || startVMOnConnect)) {
     name: 'Subscription-Role-Assignment-${i}-${deploymentSuffix}'
     scope: subscription(subId)
@@ -1335,6 +1337,16 @@ module rbac 'modules/rbac/rbac.bicep' = [
     }
   }
 ]
+
+// VM User Login — required for Entra ID-joined session hosts so users can sign in
+module roleAssignment_VirtualMachineUserLogin 'modules/rbac/vmUserLoginAssignments.bicep' = if (deploymentType != 'SessionHostsOnly' && !contains(identitySolution, 'DomainServices')) {
+  name: 'RA-Hosts-VMLoginUser-${deploymentSuffix}'
+  params: {
+    resourceGroupHosts: resourceGroupHosts
+    appGroupSecurityGroups: map(appGroupSecurityGroups, group => group.id)
+    deploymentSuffix: deploymentSuffix
+  }
+}
 
 // Deployment VM for Prerequisites
 module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeploymentVm) {
@@ -1597,9 +1609,14 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = if (deploymentTy
   ]
 }
 
+
+
 // Recovery Services — vault + policies + PE (Complete only, or HostPoolOnly with existing vault)
 // Deployed BEFORE fslogix and sessionHosts so the vault is ready for both phases to register items.
 var deployRecoveryServices = recoveryServices && deploymentType != 'SessionHostsOnly' && (deploymentType == 'Complete' || !empty(existingRecoveryServicesVaultResourceId))
+
+var recoveryServicesVmPolicyName = 'AvdPolicyVm'
+var recoveryServicesFileSharePolicyName = 'filesharepolicy'
 
 module recoveryServicesModule 'modules/operations/recoveryServices.bicep' = if (deployRecoveryServices) {
   name: 'RecoveryServices-${deploymentSuffix}'
@@ -1623,12 +1640,11 @@ module recoveryServicesModule 'modules/operations/recoveryServices.bicep' = if (
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
-    hostPoolResourceId: deploymentType == 'SessionHostsOnly'
-      ? existingHostPoolResourceId
-      : controlPlane!.outputs.hostPoolResourceId
     tags: tags
     timeZone: virtualMachinesTimeZone
     pooledHostPool: split(hostPoolType, ' ')[0] == 'Pooled'
+    vmPolicyName: recoveryServicesVmPolicyName
+    fileSharePolicyName: recoveryServicesFileSharePolicyName
   }
   dependsOn: [
     operationsResourceGroup
@@ -1642,7 +1658,7 @@ var effectiveRecoveryServicesVaultResourceId = recoveryServices
   : ''
 
 // FSLogix Storage
-module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionHostsOnly' && deployFSLogixStorage && split(hostPoolType, ' ')[0] == 'Pooled') {
+module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deploymentType != 'SessionHostsOnly' && deployFSLogixStorage && split(hostPoolType, ' ')[0] == 'Pooled') {
   name: 'FSLogix-${deploymentSuffix}'
   params: {
     activeDirectoryConnection: existingSharedActiveDirectoryConnection
@@ -1713,13 +1729,38 @@ module fslogix 'modules/fslogix/fslogix.bicep' = if (deploymentType != 'SessionH
 }
 
 // Session Hosts
-module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
+module diskAccess 'modules/hosts/modules/diskAccess.bicep' = if (deployDiskAccessResource) {
+  name: 'DiskAccess-${deploymentSuffix}'
+  params: {
+    resourceGroupHosts: resourceGroupHosts
+    diskAccessName: diskAccessName
+    location: virtualMachinesRegion
+    hostPoolResourceId: controlPlane!.outputs.hostPoolResourceId
+    deploymentSuffix: deploymentSuffix
+    tags: tags
+    deployPrivateEndpoint: deployPrivateEndpoints
+    privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
+    privateEndpointNameConv: privateEndpointNameConv
+    privateEndpointNICNameConv: privateEndpointNICNameConv
+    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
+  }
+}
+
+module diskAccessPolicy 'modules/hosts/modules/diskNetworkAccessPolicy.bicep' = if (deploymentType != 'SessionHostsOnly' && deployDiskAccessPolicy) {
+  name: 'ManagedDisks-NetworkAccess-Policy-${deploymentSuffix}'
+  params: {
+    diskAccessId: deployDiskAccessResource ? diskAccess!.outputs.diskAccessId : ''
+    location: virtualMachinesRegion
+    resourceGroupName: resourceGroupHosts
+  }
+}
+
+module sessionHosts 'modules/hosts/sessionHosts.bicep' = {
   name: 'Session-Hosts-${deploymentSuffix}'
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
     agentDownloadUrl: agentDownloadUrl
     avdAgentDscPackage: avdAgentDscPackage
-    appGroupSecurityGroups: deploymentType != 'SessionHostsOnly' ? map(appGroupSecurityGroups, group => group.id) : []
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     avdInsightsDataCollectionRulesResourceId: enableMonitoring
@@ -1732,7 +1773,6 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     availabilitySetsCount: availabilitySetsCount
     availabilitySetsIndex: beginAvSetRange
     availabilityZones: availabilityZones
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
     customImageResourceId: customImageResourceId
     dataCollectionEndpointResourceId: enableMonitoring
@@ -1742,10 +1782,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
       : ''
     dedicatedHostGroupResourceId: dedicatedHostGroupResourceId
     dedicatedHostResourceId: dedicatedHostResourceId
-    deployDiskAccessPolicy: deployDiskAccessPolicy
-    deployDiskAccessResource: deployDiskAccessResource
-    deploymentType: deploymentType
-    diskAccessName: diskAccessName
+    diskAccessId: effectiveDiskAccessId
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     #disable-next-line BCP422
@@ -1767,9 +1804,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     encryptionAtHost: encryptionAtHost
     hasAmdGpu: hasAmdGpu
     hasNvidiaGpu: hasNvidiaGpu
-    existingDiskAccessResourceId: existingDiskAccessResourceId
     existingDiskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
-    existingRecoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames
@@ -1797,12 +1832,7 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
     location: virtualMachinesRegion
     osDiskNameConv: diskNameConv
     ouPath: vmOUPath
-    privateEndpointNameConv: privateEndpointNameConv
-    privateEndpointNICNameConv: privateEndpointNICNameConv
-    privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     networkInterfaceNameConv: networkInterfaceNameConv
-    hostPoolType: hostPoolType
-    recoveryServices: recoveryServices
     resourceGroupHosts: deploymentType != 'SessionHostsOnly' ? resourceGroupHosts : existingHostsResourceGroupName
     securityType: securityType
     secureBootEnabled: secureBootEnabled
@@ -1836,6 +1866,29 @@ module sessionHosts 'modules/sessionHosts/sessionHosts.bicep' = {
   dependsOn: [
     hostsResourceGroup
   ]
+}
+
+// Backup Registration — single subscription-scoped shim so scope is computable at deployment start.
+module backupRegistration 'modules/operations/backupRegistration.bicep' = if (deployRecoveryServices) {
+  name: 'BackupRegistration-${deploymentSuffix}'
+  params: {
+    recoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
+    hostPoolResourceId: deploymentType == 'SessionHostsOnly' ? existingHostPoolResourceId : controlPlane!.outputs.hostPoolResourceId
+    deploymentSuffix: deploymentSuffix
+    tags: tags
+    // FSLogix Azure Files registration
+    registerFSLogix: deploymentType != 'SessionHostsOnly' && deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && split(hostPoolType, ' ')[0] == 'Pooled'
+    location: virtualMachinesRegion
+    fileShares: fslogixFileShareNames
+    storageAccountResourceIds: deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles'
+      ? fslogix!.outputs.storageAccountResourceIds
+      : []
+    // VM registration (Personal host pools only)
+    registerVMs: contains(hostPoolType, 'Personal')
+    vmPolicyName: recoveryServicesVmPolicyName
+    resourceGroupHosts: deploymentType != 'SessionHostsOnly' ? resourceGroupHosts : existingHostsResourceGroupName
+    virtualMachineNames: sessionHosts.outputs.virtualMachineNames
+  }
 }
 
 // Clean Up Deployment VM and Role Assignments

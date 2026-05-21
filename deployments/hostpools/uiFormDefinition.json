@@ -101,6 +101,15 @@
 							}
 						},
 						{
+							"name": "registrationTokenWarning",
+							"type": "Microsoft.Common.InfoBox",
+							"visible": "[and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('basics').existingHostPool)))]",
+							"options": {
+								"style": "Warning",
+								"text": "The selected host pool must have a valid registration token before deploying session hosts. Without one, the AVD agent cannot register the VMs and they will not appear in the host pool. To generate a new token, go to the host pool in the Azure portal → Overview → Registration key → Generate new key. [Learn more](https://learn.microsoft.com/azure/virtual-desktop/faq#how-often-should-i-turn-over-the-avd-registration-key)"
+							}
+						},
+						{
 							"name": "hostsRGProps",
 							"type": "Microsoft.Solutions.ArmApiControl",
 							"condition": "[and(not(empty(steps('basics').existingHostPool)), not(empty(steps('basics').hostPoolProps.tags.hostsResourceGroupId)))]",
