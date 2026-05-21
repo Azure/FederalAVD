@@ -517,7 +517,7 @@ param keyVaultRetentionInDays int = 90
 
 // Monitoring
 
-@description('Optional. Deploys the required monitoring resources to enable AVD and VM Insights and monitor features in the automation account.')
+@description('Optional. Deploys the required monitoring resources to enable AVD Insights and monitor features in the automation account.')
 param enableMonitoring bool = true
 
 @description('Optional. The subscription Id where monitoring resources will be deployed. If not provided, the deployment subscription will be used.')
@@ -528,9 +528,6 @@ param existingLogAnalyticsWorkspaceResourceId string = ''
 
 @description('Optional. The resource Id of an existing AVD Insights Data Collection Rule. When provided and enableMonitoring is true, uses this DCR instead of creating one inline.')
 param existingAVDInsightsDataCollectionRuleResourceId string = ''
-
-@description('Optional. The resource Id of an existing VM Insights Data Collection Rule. When provided and enableMonitoring is true, uses this DCR instead of creating one inline.')
-param existingVMInsightsDataCollectionRuleResourceId string = ''
 
 @description('Optional. The resource Id of an existing Data Collection Endpoint. When provided and enableMonitoring is true, uses this endpoint instead of creating one inline.')
 param existingDataCollectionEndpointResourceId string = ''
@@ -1322,6 +1319,9 @@ module roleAssignment_VirtualMachineUserLogin 'modules/rbac/vmUserLoginAssignmen
     appGroupSecurityGroups: map(appGroupSecurityGroups, group => group.id)
     deploymentSuffix: deploymentSuffix
   }
+  dependsOn: [
+    hostsResourceGroup
+  ]
 }
 
 // Deployment VM for Prerequisites
@@ -1824,11 +1824,6 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     virtualMachineNameConv: virtualMachineNameConv
     virtualMachineNamePrefix: virtualMachineNamePrefix
     virtualMachineSize: virtualMachineSize
-    vmInsightsDataCollectionRulesResourceId: enableMonitoring
-      ? (empty(existingVMInsightsDataCollectionRuleResourceId)
-          ? monitoring!.outputs.vmInsightsDataCollectionRulesResourceId
-          : existingVMInsightsDataCollectionRuleResourceId)
-      : ''
     vTpmEnabled: vTpmEnabled
     // VM backup registration — vault resource ID is only populated for Personal pools when backup is enabled
     recoveryServicesVaultResourceId: contains(hostPoolType, 'Personal') && deployRecoveryServices

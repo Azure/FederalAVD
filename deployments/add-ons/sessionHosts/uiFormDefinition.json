@@ -1744,12 +1744,12 @@
 					"label": "Monitoring and Management",
 					"elements": [
 						{
-							"name": "enableSessionHostMonitoring",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Enable Session Host Monitoring (AVD Insights & VM Insights)",
-							"defaultValue": true,
-							"toolTip": "Deploy the Azure Monitor Agent and configure data collection rules to enable AVD Insights and VM Insights for session hosts."
-						},
+						"name": "enableSessionHostMonitoring",
+						"type": "Microsoft.Common.CheckBox",
+						"label": "Enable Session Host Monitoring (AVD Insights)",
+						"defaultValue": true,
+						"toolTip": "Deploy the Azure Monitor Agent and configure the AVD Insights data collection rule for session hosts."
+					},
 						{
 							"name": "subscription",
 							"type": "Microsoft.Common.DropDown",
@@ -1781,19 +1781,6 @@
 							"toolTip": "Select the existing AVD Insights Data Collection Rule for session host monitoring.",
 							"constraints": {
 								"allowedValues": "[map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'avdi'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
-								"required": false
-							}
-						},
-						{
-							"name": "vmInsightsDataCollectionRule",
-							"type": "Microsoft.Common.DropDown",
-							"defaultValue": "[first(map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('MSVMI-', steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
-							"visible": "[steps('monitoring').enableSessionHostMonitoring]",
-							"label": "VM Insights Data Collection Rule",
-							"multiLine": true,
-							"toolTip": "Select the existing Virtual Machines Insights Data Collection Rule.",
-							"constraints": {
-								"allowedValues": "[map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'MSVMI'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
 								"required": false
 							}
 						},
@@ -2034,7 +2021,6 @@
 				"fslogixOSSGroups": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), not(equals(steps('identity').solution, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))), map(steps('userProfiles').azureFiles.userGroupPickerBlade.selectedObjects, (group) => group.displayName), parse('[]'))]",
 				"enableMonitoring": "[steps('monitoring').enableSessionHostMonitoring]",
 				"avdInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').enableSessionHostMonitoring, coalesce(steps('monitoring').avdInsightsDataCollectionRule, ''), '')]",
-				"vmInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').enableSessionHostMonitoring, coalesce(steps('monitoring').vmInsightsDataCollectionRule, ''), '')]",
 				"dataCollectionEndpointResourceId": "[if(steps('monitoring').enableSessionHostMonitoring, coalesce(steps('monitoring').dataCollectionEndpoint, ''), '')]",
 				"virtualMachineNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, '')]",
 				"diskNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.diskNameConvOverride, '')]",

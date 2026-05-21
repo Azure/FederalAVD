@@ -76,9 +76,9 @@ The key vault deployment creates `rg-avd-operations-{loc}` with:
 | Using CMK for disks or FSLogix storage | 🔒 **Deploy Security first** — pass `encryptionKeyVaultResourceId` to host pool |
 | Pre-provisioning credentials in a KV | 🔒 **Deploy Security first** — pass `credentialsKeyVaultResourceId` to host pool |
 | Multiple host pools sharing one encryption KV | 🔒 **Deploy Security first** — all host pools reference the same KV |
-| Simple PoC / dev with platform-managed keys | ✅ **Skip** — deploy host pool directly with `deploymentType = Complete` |
+| Simple PoC / dev with platform-managed keys | ✅ **Skip** — deploy host pool directly; Key Vaults will be created inline when CMK is requested |
 
-**Inline fallback:** If `encryptionKeyVaultResourceId` is empty and CMK is requested, the `Complete` deployment type creates both KVs inline in `rg-avd-operations-{loc}`. The inline KV names are derived using the same seed as the standalone security deployment, so the names will match if you later run the security deployment separately.
+**Inline fallback:** If `encryptionKeyVaultResourceId` is empty and CMK is requested, the host pool deployment creates both KVs inline in `rg-avd-operations-{loc}`. The inline KV names are derived using the same seed as the standalone security deployment, so the names will match if you later run the security deployment separately.
 
 > **Why data plane roles are required separately from ARM roles**
 >
@@ -218,17 +218,18 @@ deployments/hostpools/parameters/
 
 ### Key Parameters
 
-#### Deployment Mode
+#### Deployment Scope
 
-The `deploymentType` parameter determines which resources are deployed. Choose based on your scenario:
+The host pool deployment always creates all resources — resource groups, AVD control plane, session hosts, monitoring, Key Vaults — based on the options you select. Use individual **Use Existing** toggles (portal) or pre-populated resource ID parameters (automation) to reuse shared infrastructure instead of creating new resources:
 
-| `deploymentType` | What is deployed | Typical use |
+| Shared resource | "Use Existing" control | Parameter to supply |
 |---|---|---|
-| `Complete` | Resource groups + AVD control plane (host pool, workspace, app groups) + FSLogix storage + **shared monitoring infra** (Log Analytics workspace, DCRs, Application Insights) + inline Key Vaults (when CMK is requested and no pre-existing KV provided) + session hosts | **First-time deployment** of a new host pool environment |
-| `HostpoolOnly` | Everything in `Complete` **except** shared monitoring infra — references an existing Log Analytics workspace via `logAnalyticsWorkspaceResourceId` | Adding a new host pool to an environment that already has shared monitoring resources |
-| `SessionHostsOnly` | Session host VMs only, added to an existing host pool and resource group | Adding or replacing VMs in an already-deployed environment; `sessionHostIndex` controls the starting VM name suffix to avoid collisions |
+| AVD Workspace | **Workspace Creation Option → Update an existing Workspace** | `existingFeedWorkspaceResourceId` |
+| Monitoring (Log Analytics, DCR, DCE) | **Use Existing Monitoring Resources** checkbox | `existingLogAnalyticsWorkspaceResourceId` + DCR + DCE IDs |
+| Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox | `encryptionKeyVaultResourceId` |
+| Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingRecoveryServicesVaultResourceId` |
 
-> **Infrastructure-only deployment:** To deploy all host pool infrastructure without creating session host VMs, use `deploymentType: Complete` or `HostpoolOnly` with `sessionHostCount: 0`. This lets you validate storage, networking, and control plane configuration before committing to VM costs. Add hosts later by redeploying with `deploymentType: SessionHostsOnly`.
+To deploy all host pool infrastructure without creating session host VMs, set `sessionHostCount: 0`. This lets you validate storage, networking, and control plane configuration before committing to VM costs. Add hosts later using the **Session Hosts** add-on (`SessionHostsOnly` mode).
 
 #### Basic Configuration
 
@@ -237,7 +238,6 @@ The `deploymentType` parameter determines which resources are deployed. Choose b
 | **identifier** | Host pool persona identifier (max 9 chars) | `general`, `finance`, `dev` |
 | **index** | Host pool index for sharding (0-99) | `0`, `1`, `-1` (no index) |
 | **hostPoolType** | Pooled or Personal | `Pooled` |
-| **deploymentType** | Which resources to deploy — see table above | `Complete` |
 | **sessionHostCount** | Number of session hosts to deploy | `3` |
 | **sessionHostIndex** | Starting index for VM names | `1` |
 
@@ -501,21 +501,16 @@ Verify monitoring is working:
 
 ### Configure Backup (Optional)
 
-Backup behavior depends on host pool type, deployment mode, and the `recoveryServices` parameter:
+Backup behavior depends on host pool type and the `recoveryServices` parameter:
 
-| Host Pool Type | Deployment Mode | `recoveryServices` | Additional requirements | Vault | Backed Up |
+| Host Pool Type | `recoveryServices` | `useExistingRSV` | Additional requirements | Vault | Backed Up |
 |---|---|---|---|---|---|
-| **Personal** | Complete | `true` | — | Created inline | VM OS disks |
-| **Personal** | Complete | `false` | — | Not created | Nothing |
-| **Personal** | HostpoolOnly | `true` | Existing vault provided | Existing | VM OS disks |
-| **Personal** | HostpoolOnly | `false` | — | — | Nothing |
-| **Personal** | SessionHostsOnly | `true` | Existing vault provided | Existing | VM OS disks |
-| **Personal** | SessionHostsOnly | `false` | — | — | Nothing |
-| **Pooled** | Complete | `true` | `deployFSLogixStorage=true` + Azure Files | Created inline | FSLogix file shares |
-| **Pooled** | Complete | `false` | — | Not created | Nothing |
-| **Pooled** | HostpoolOnly | `true` | `deployFSLogixStorage=true` + Azure Files + existing vault | Existing | FSLogix file shares |
-| **Pooled** | HostpoolOnly | `false` | — | — | Nothing |
-| **Pooled** | SessionHostsOnly | any | — | N/A | Nothing — not supported |
+| **Personal** | `true` | `false` | — | Created inline | VM OS disks |
+| **Personal** | `true` | `true` | `existingRecoveryServicesVaultResourceId` required | Existing | VM OS disks |
+| **Personal** | `false` | — | — | Not created | Nothing |
+| **Pooled** | `true` | `false` | `deployFSLogixStorage=true` + Azure Files | Created inline | FSLogix file shares |
+| **Pooled** | `true` | `true` | `deployFSLogixStorage=true` + Azure Files + `existingRecoveryServicesVaultResourceId` | Existing | FSLogix file shares |
+| **Pooled** | `false` | — | — | Not created | Nothing |
 
 > **Pooled VMs are never backed up.** Users are stateless in pooled pools; profile data lives in FSLogix storage which is what gets backed up instead.
 >
@@ -547,8 +542,7 @@ Get-AzRecoveryServicesBackupItem -WorkloadType AzureStorage -VaultId $vaultId
 To add more session hosts to an existing pool:
 
 1. **Update parameter file** - Increase `sessionHostCount`
-2. **Set deployment type** - Use `SessionHostsOnly` deployment type
-3. **Redeploy**:
+2. **Redeploy using the Session Hosts add-on** (`SessionHostsOnly` mode):
 
    ```powershell
    # Update sessionHostCount in parameter file, then redeploy
@@ -575,8 +569,7 @@ To remove session hosts:
 To modify host pool settings without redeploying session hosts:
 
 1. **Update parameter file** with new settings
-2. **Set deployment type** - Use `HostpoolOnly` deployment type
-3. **Redeploy** - This updates only the control plane resources
+2. **Redeploy** - Run the host pool deployment; session hosts are not recreated if VM parameters are unchanged
 
 ---
 

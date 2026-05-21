@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "506422458718056805"
+      "templateHash": "10002624635270100277"
     }
   },
   "parameters": {
@@ -819,7 +819,7 @@
       "type": "bool",
       "defaultValue": true,
       "metadata": {
-        "description": "Optional. Deploys the required monitoring resources to enable AVD and VM Insights and monitor features in the automation account."
+        "description": "Optional. Deploys the required monitoring resources to enable AVD Insights and monitor features in the automation account."
       }
     },
     "monitoringSubscriptionId": {
@@ -841,13 +841,6 @@
       "defaultValue": "",
       "metadata": {
         "description": "Optional. The resource Id of an existing AVD Insights Data Collection Rule. When provided and enableMonitoring is true, uses this DCR instead of creating one inline."
-      }
-    },
-    "existingVMInsightsDataCollectionRuleResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. The resource Id of an existing VM Insights Data Collection Rule. When provided and enableMonitoring is true, uses this DCR instead of creating one inline."
       }
     },
     "existingDataCollectionEndpointResourceId": {
@@ -2088,7 +2081,10 @@
             }
           ]
         }
-      }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Hosts-{0}', variables('deploymentSuffix')))]"
+      ]
     },
     {
       "condition": "[variables('createDeploymentVm')]",
@@ -8662,7 +8658,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "13825656750057051261"
+              "templateHash": "6688209774431700042"
             }
           },
           "parameters": {
@@ -9164,133 +9160,6 @@
               ]
             },
             {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('VMInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))]",
-              "resourceGroup": "[parameters('resourceGroupMonitoring')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "location": {
-                    "value": "[parameters('location')]"
-                  },
-                  "tags": {
-                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/dataCollectionRules'), createObject())]"
-                  },
-                  "logAnalyticsWorkspaceResourceId": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
-                  },
-                  "dataCollectionEndpointId": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "18014681457178699785"
-                    }
-                  },
-                  "parameters": {
-                    "location": {
-                      "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
-                    },
-                    "tags": {
-                      "type": "object",
-                      "defaultValue": {}
-                    },
-                    "logAnalyticsWorkspaceResourceId": {
-                      "type": "string"
-                    },
-                    "dataCollectionEndpointId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. Resource ID of the data collection endpoint. Required when the workspace uses private link."
-                      }
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Insights/dataCollectionRules",
-                      "apiVersion": "2022-06-01",
-                      "name": "[format('microsoft-vminsights-{0}', toLower(parameters('location')))]",
-                      "location": "[parameters('location')]",
-                      "tags": "[parameters('tags')]",
-                      "kind": "Windows",
-                      "properties": {
-                        "dataCollectionEndpointId": "[if(not(empty(parameters('dataCollectionEndpointId'))), parameters('dataCollectionEndpointId'), null())]",
-                        "dataSources": {
-                          "performanceCounters": [
-                            {
-                              "name": "perfCounterDataSource60",
-                              "streams": [
-                                "Microsoft-InsightsMetrics"
-                              ],
-                              "samplingFrequencyInSeconds": 60,
-                              "counterSpecifiers": [
-                                "\\VmInsights\\DetailedMetrics"
-                              ]
-                            }
-                          ],
-                          "extensions": [
-                            {
-                              "name": "DependencyAgent",
-                              "streams": [
-                                "Microsoft-ServiceMap"
-                              ],
-                              "extensionName": "DependencyAgent",
-                              "extensionSettings": {}
-                            }
-                          ]
-                        },
-                        "destinations": {
-                          "logAnalytics": [
-                            {
-                              "name": "la-workspace",
-                              "workspaceResourceId": "[parameters('logAnalyticsWorkspaceResourceId')]"
-                            }
-                          ]
-                        },
-                        "dataFlows": [
-                          {
-                            "streams": [
-                              "Microsoft-InsightsMetrics",
-                              "Microsoft-ServiceMap"
-                            ],
-                            "destinations": [
-                              "la-workspace"
-                            ]
-                          }
-                        ]
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', format('microsoft-vminsights-{0}', toLower(parameters('location'))))]"
-                    },
-                    "name": {
-                      "type": "string",
-                      "value": "[format('microsoft-vminsights-{0}', toLower(parameters('location')))]"
-                    }
-                  }
-                }
-              },
-              "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix')))]",
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
-              ]
-            },
-            {
               "condition": "[not(empty(parameters('azureMonitorPrivateLinkScopeResourceId')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
@@ -9412,10 +9281,6 @@
             "logAnalyticsWorkspaceResourceId": {
               "type": "string",
               "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
-            },
-            "vmInsightsDataCollectionRulesResourceId": {
-              "type": "string",
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('VMInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
             }
           }
         }
@@ -12748,7 +12613,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "8057535690950653133"
+              "templateHash": "2556377267295337215"
             }
           },
           "parameters": {
@@ -16066,7 +15931,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "7227510470586369501"
+                      "templateHash": "15686823526751620387"
                     }
                   },
                   "parameters": {
@@ -16098,7 +15963,9 @@
                     {
                       "copy": {
                         "name": "protectionContainers",
-                        "count": "[length(parameters('storageAccountResourceIds'))]"
+                        "count": "[length(parameters('storageAccountResourceIds'))]",
+                        "mode": "serial",
+                        "batchSize": 1
                       },
                       "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers",
                       "apiVersion": "2024-04-01",
@@ -16114,7 +15981,9 @@
                     {
                       "copy": {
                         "name": "protectedItems",
-                        "count": "[length(parameters('storageAccountResourceIds'))]"
+                        "count": "[length(parameters('storageAccountResourceIds'))]",
+                        "mode": "serial",
+                        "batchSize": 1
                       },
                       "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
                       "apiVersion": "2024-04-01",
@@ -16875,7 +16744,6 @@
           "virtualMachineSize": {
             "value": "[parameters('virtualMachineSize')]"
           },
-          "vmInsightsDataCollectionRulesResourceId": "[if(parameters('enableMonitoring'), if(empty(parameters('existingVMInsightsDataCollectionRuleResourceId')), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.vmInsightsDataCollectionRulesResourceId.value), createObject('value', parameters('existingVMInsightsDataCollectionRuleResourceId'))), createObject('value', ''))]",
           "vTpmEnabled": {
             "value": "[parameters('vTpmEnabled')]"
           },
@@ -16891,7 +16759,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "8436867828250828207"
+              "templateHash": "13604711298048922211"
             }
           },
           "parameters": {
@@ -17310,12 +17178,6 @@
                 "description": "Required. When true, enables virtual TPM."
               }
             },
-            "vmInsightsDataCollectionRulesResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the VM Insights data collection rule."
-              }
-            },
             "recoveryServicesVaultResourceId": {
               "type": "string",
               "defaultValue": "",
@@ -17544,9 +17406,6 @@
                   "virtualMachineSize": {
                     "value": "[parameters('virtualMachineSize')]"
                   },
-                  "vmInsightsDataCollectionRulesResourceId": {
-                    "value": "[parameters('vmInsightsDataCollectionRulesResourceId')]"
-                  },
                   "vTpmEnabled": {
                     "value": "[parameters('vTpmEnabled')]"
                   },
@@ -17564,7 +17423,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "8314534379612861576"
+                      "templateHash": "2693945670846215208"
                     }
                   },
                   "parameters": {
@@ -17994,12 +17853,6 @@
                         "description": "Required. When true, enables virtual TPM on session host VMs."
                       }
                     },
-                    "vmInsightsDataCollectionRulesResourceId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Resource ID of the VM Insights data collection rule."
-                      }
-                    },
                     "recoveryServicesVaultResourceId": {
                       "type": "string",
                       "defaultValue": "",
@@ -18029,7 +17882,7 @@
                     "effectiveDedicatedHostGroupResourceIds": "[if(not(empty(parameters('dedicatedHostGroupResourceIds'))), parameters('dedicatedHostGroupResourceIds'), if(not(empty(parameters('dedicatedHostGroupResourceId'))), createArray(parameters('dedicatedHostGroupResourceId')), createArray()))]",
                     "effectiveDedicatedHostResourceIds": "[if(not(empty(parameters('dedicatedHostResourceIds'))), parameters('dedicatedHostResourceIds'), if(not(empty(parameters('dedicatedHostResourceId'))), createArray(parameters('dedicatedHostResourceId')), createArray()))]",
                     "baseResourcesPerVM": 11,
-                    "monitoringResourcesPerVM": "[if(parameters('enableMonitoring'), 4, 0)]",
+                    "monitoringResourcesPerVM": "[if(parameters('enableMonitoring'), 3, 0)]",
                     "gpuResourcesPerVM": "[if(or(parameters('hasAmdGpu'), parameters('hasNvidiaGpu')), 1, 0)]",
                     "integrityResourcesPerVM": "[if(parameters('integrityMonitoring'), 1, 0)]",
                     "customizationsResourcesPerVM": "[if(not(empty(parameters('sessionHostCustomizations'))), add(1, length(parameters('sessionHostCustomizations'))), 0)]",
@@ -18433,9 +18286,6 @@
                           "virtualMachineSize": {
                             "value": "[parameters('virtualMachineSize')]"
                           },
-                          "vmInsightsDataCollectionRulesResourceId": {
-                            "value": "[parameters('vmInsightsDataCollectionRulesResourceId')]"
-                          },
                           "vTpmEnabled": {
                             "value": "[parameters('vTpmEnabled')]"
                           },
@@ -18453,7 +18303,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.43.8.12551",
-                              "templateHash": "2108085548025574289"
+                              "templateHash": "10995790968743683607"
                             }
                           },
                           "parameters": {
@@ -18634,9 +18484,6 @@
                               "type": "string"
                             },
                             "virtualMachineSize": {
-                              "type": "string"
-                            },
-                            "vmInsightsDataCollectionRulesResourceId": {
                               "type": "string"
                             },
                             "vTpmEnabled": {
@@ -18927,26 +18774,6 @@
                               "properties": {
                                 "dataCollectionRuleId": "[parameters('avdInsightsDataCollectionRulesResourceId')]",
                                 "description": "AVD Insights data collection rule association"
-                              },
-                              "dependsOn": [
-                                "[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]], 'AzureMonitorWindowsAgent')]",
-                                "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
-                                "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]"
-                              ]
-                            },
-                            {
-                              "copy": {
-                                "name": "vmInsightsDataCollectionRuleAssociation",
-                                "count": "[length(range(0, variables('sessionHostCount')))]"
-                              },
-                              "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('vmInsightsDataCollectionRulesResourceId'))))]",
-                              "type": "Microsoft.Insights/dataCollectionRuleAssociations",
-                              "apiVersion": "2022-06-01",
-                              "scope": "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
-                              "name": "[format('{0}-vmInsights-data-coll-rule-assoc', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
-                              "properties": {
-                                "dataCollectionRuleId": "[parameters('vmInsightsDataCollectionRulesResourceId')]",
-                                "description": "VM Insights data collection rule association"
                               },
                               "dependsOn": [
                                 "[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]], 'AzureMonitorWindowsAgent')]",

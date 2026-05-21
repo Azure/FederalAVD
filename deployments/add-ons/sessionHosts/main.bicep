@@ -178,9 +178,6 @@ param virtualMachineNameConv string = ''
 param virtualMachineSize string
 @description('Optional. Enable virtual TPM on session host VMs.')
 param vTpmEnabled bool = true
-@description('Optional. Resource ID of the VM Insights data collection rule.')
-param vmInsightsDataCollectionRulesResourceId string = ''
-
 @description('Optional. Resource ID of an existing Recovery Services Vault to register session host VMs with for backup. When provided, VMs will be enrolled in the backup policy specified by vmBackupPolicyName. Intended for personal host pools.')
 param recoveryServicesVaultResourceId string = ''
 
@@ -367,7 +364,6 @@ module sessionHosts '../../hostpools/modules/hosts/modules/sessionHosts.bicep' =
     virtualMachineAdminPassword: kvCredentials.getSecret('VirtualMachineAdminPassword')
     virtualMachineAdminUserName: kvCredentials.getSecret('VirtualMachineAdminUserName')
     vTpmEnabled: vTpmEnabled
-    vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId
     subnetResourceId: subnetResourceId
     tags: tags
     deploymentSuffix: deploymentSuffix

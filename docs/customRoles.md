@@ -228,7 +228,7 @@ The role below covers both variants. When `imageDefinitionResourceId` is provide
 
 **Minimum scope:** Subscription (creates resource groups, assigns subscription-scoped roles to AVD service principal)
 
-The full hostpool deployment (`Complete` or `HostPoolOnly` + `SessionHostsAdd`) makes role assignments at three scopes:
+The full hostpool deployment (`SessionHostsAdd` for adding VMs only, or a full redeploy) makes role assignments at three scopes:
 - **Subscription** — AVD service principal for Start VM On Connect or Scaling Plan
 - **Control plane RG** — Desktop Virtualization User to Entra groups on the app group; deployment VM UAI cleanup roles
 - **Hosts RG** — VM User Login (Entra-only), deployment VM UAI roles, FSLogix storage roles

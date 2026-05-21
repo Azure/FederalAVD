@@ -140,8 +140,6 @@ param virtualMachineAdminPassword string
 param virtualMachineAdminUserName string
 @description('Required. When true, enables virtual TPM on session host VMs.')
 param vTpmEnabled bool
-@description('Required. Resource ID of the VM Insights data collection rule.')
-param vmInsightsDataCollectionRulesResourceId string
 @description('Optional. Resource ID of the Recovery Services Vault for VM backup registration.')
 param recoveryServicesVaultResourceId string = ''
 @description('Optional. Backup policy name for session host VMs.')
@@ -172,7 +170,7 @@ var effectiveDedicatedHostResourceIds = !empty(dedicatedHostResourceIds)
 // === Batching logic ===
 // Dynamically calculate max VMs per batch based on resources per VM
 var baseResourcesPerVM = 11
-var monitoringResourcesPerVM = enableMonitoring ? 4 : 0
+var monitoringResourcesPerVM = enableMonitoring ? 3 : 0
 var gpuResourcesPerVM = (hasAmdGpu || hasNvidiaGpu) ? 1 : 0
 var integrityResourcesPerVM = integrityMonitoring ? 1 : 0
 var customizationsResourcesPerVM = !empty(sessionHostCustomizations) ? (1 + length(sessionHostCustomizations)) : 0
@@ -286,7 +284,6 @@ module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostB
     virtualMachineAdminUserName: virtualMachineAdminUserName
     virtualMachineNameConv: virtualMachineNameConv
     virtualMachineSize: virtualMachineSize
-    vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId
     vTpmEnabled: vTpmEnabled
     recoveryServicesVaultResourceId: recoveryServicesVaultResourceId
     vmBackupPolicyName: vmBackupPolicyName

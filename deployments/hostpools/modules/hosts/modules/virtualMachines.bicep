@@ -61,7 +61,6 @@ param virtualMachineAdminPassword string
 param virtualMachineAdminUserName string
 param virtualMachineNameConv string
 param virtualMachineSize string
-param vmInsightsDataCollectionRulesResourceId string
 param vTpmEnabled bool
 param hasAmdGpu bool
 param hasNvidiaGpu bool
@@ -390,20 +389,6 @@ resource avdInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollec
     properties: {
       dataCollectionRuleId: avdInsightsDataCollectionRulesResourceId
       description: 'AVD Insights data collection rule association'
-    }
-    dependsOn: [
-      extension_AzureMonitorWindowsAgent[i]
-    ]
-  }
-]
-
-resource vmInsightsDataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = [
-  for i in range(0, sessionHostCount): if (enableMonitoring && !empty(vmInsightsDataCollectionRulesResourceId)) {
-    scope: virtualMachine[i]
-    name: '${virtualMachine[i].name}-vmInsights-data-coll-rule-assoc'
-    properties: {
-      dataCollectionRuleId: vmInsightsDataCollectionRulesResourceId
-      description: 'VM Insights data collection rule association'
     }
     dependsOn: [
       extension_AzureMonitorWindowsAgent[i]

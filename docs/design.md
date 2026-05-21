@@ -107,8 +107,8 @@ The diagram illustrates the following resource group distribution. In the table 
 | Purpose | Resources | Example Name | Notes |
 | ------- | :-------: | ------------ | ----- |
 | Global Feed | global feed workspace | rg-avd-global-feed | One per Tenant |
-| Monitoring | Log Analytics Workspace<br>Data Collection Rules<br>Data Collection Endpoint | rg-avd-monitoring-va | One per region |
-| Operations | Secrets Key Vault<br>Encryption Key Vault<br>Recovery Services Vault (optional) | rg-avd-operations-va | One per region. Created by the standalone KeyVault deployment or inline by the host pool `Complete` deployment type. Shared across all host pools in the same region. The Recovery Services Vault is deployed here when backup is enabled; backup policies are created conditionally — file share backup policy for pooled host pools, VM backup policy for personal host pools. |
+| Monitoring | Log Analytics Workspace<br>AVD Insights Data Collection Rule<br>Data Collection Endpoint | rg-avd-monitoring-va | One per region |
+| Operations | Secrets Key Vault<br>Encryption Key Vault<br>Recovery Services Vault (optional) | rg-avd-operations-va | One per region. Created by the standalone KeyVault deployment or inline by the host pool deployment. Shared across all host pools in the same region. The Recovery Services Vault is deployed here when backup is enabled; backup policies are created conditionally — file share backup policy for pooled host pools, VM backup policy for personal host pools. |
 | Control Plane | feed workspace<br>application groups<br>hostpools<br>scaling plans | rg-avd-control-plane-va | One per region |
 | Hosts | virtual machines<br>disk encryption set | rg-hr-01-hosts-va<br>rg-hr-02-hosts-va | One per identifier or per index (if specified). Disk Encryption Set is created here when CMK is used. |
 | Storage | NetApp Storage Accounts<br>Storage Account(s)<br>function app<br>storage encryption UAI | rg-hr-01-storage-va<br>rg-hr-02-storage-va | One per identifier or per index (if specified). Storage encryption User-Assigned Identity is created here when CMK is used for FSLogix storage. |

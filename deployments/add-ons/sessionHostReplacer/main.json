@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "8034449113233514983"
+      "templateHash": "4702670899614137823"
     }
   },
   "parameters": {
@@ -684,13 +684,6 @@
         "description": "Optional. AVD Insights data collection rules resource ID."
       }
     },
-    "vmInsightsDataCollectionRulesResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. VM Insights data collection rules resource ID."
-      }
-    },
     "dataCollectionEndpointResourceId": {
       "type": "string",
       "defaultValue": "",
@@ -1110,7 +1103,7 @@
         "_generator": {
           "name": "bicep",
           "version": "0.42.1.51946",
-          "templateHash": "7210206543242786913"
+          "templateHash": "9267878051738731438"
         }
       },
       "parameters": {
@@ -1580,13 +1573,6 @@
           "defaultValue": true,
           "metadata": {
             "description": "Optional. Enable virtual TPM on session host VMs."
-          }
-        },
-        "vmInsightsDataCollectionRulesResourceId": {
-          "type": "string",
-          "defaultValue": "",
-          "metadata": {
-            "description": "Optional. Resource ID of the VM Insights data collection rule."
           }
         },
         "recoveryServicesVaultResourceId": {
@@ -2142,9 +2128,6 @@
               "vTpmEnabled": {
                 "value": "[[parameters('vTpmEnabled')]"
               },
-              "vmInsightsDataCollectionRulesResourceId": {
-                "value": "[[parameters('vmInsightsDataCollectionRulesResourceId')]"
-              },
               "subnetResourceId": {
                 "value": "[[parameters('subnetResourceId')]"
               },
@@ -2171,7 +2154,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.42.1.51946",
-                  "templateHash": "16483407304589228145"
+                  "templateHash": "294212017478572625"
                 }
               },
               "parameters": {
@@ -2601,12 +2584,6 @@
                     "description": "Required. When true, enables virtual TPM on session host VMs."
                   }
                 },
-                "vmInsightsDataCollectionRulesResourceId": {
-                  "type": "string",
-                  "metadata": {
-                    "description": "Required. Resource ID of the VM Insights data collection rule."
-                  }
-                },
                 "recoveryServicesVaultResourceId": {
                   "type": "string",
                   "defaultValue": "",
@@ -2636,7 +2613,7 @@
                 "effectiveDedicatedHostGroupResourceIds": "[[if(not(empty(parameters('dedicatedHostGroupResourceIds'))), parameters('dedicatedHostGroupResourceIds'), if(not(empty(parameters('dedicatedHostGroupResourceId'))), createArray(parameters('dedicatedHostGroupResourceId')), createArray()))]",
                 "effectiveDedicatedHostResourceIds": "[[if(not(empty(parameters('dedicatedHostResourceIds'))), parameters('dedicatedHostResourceIds'), if(not(empty(parameters('dedicatedHostResourceId'))), createArray(parameters('dedicatedHostResourceId')), createArray()))]",
                 "baseResourcesPerVM": 11,
-                "monitoringResourcesPerVM": "[[if(parameters('enableMonitoring'), 4, 0)]",
+                "monitoringResourcesPerVM": "[[if(parameters('enableMonitoring'), 3, 0)]",
                 "gpuResourcesPerVM": "[[if(or(parameters('hasAmdGpu'), parameters('hasNvidiaGpu')), 1, 0)]",
                 "integrityResourcesPerVM": "[[if(parameters('integrityMonitoring'), 1, 0)]",
                 "customizationsResourcesPerVM": "[[if(not(empty(parameters('sessionHostCustomizations'))), add(1, length(parameters('sessionHostCustomizations'))), 0)]",
@@ -3040,9 +3017,6 @@
                       "virtualMachineSize": {
                         "value": "[[parameters('virtualMachineSize')]"
                       },
-                      "vmInsightsDataCollectionRulesResourceId": {
-                        "value": "[[parameters('vmInsightsDataCollectionRulesResourceId')]"
-                      },
                       "vTpmEnabled": {
                         "value": "[[parameters('vTpmEnabled')]"
                       },
@@ -3060,7 +3034,7 @@
                         "_generator": {
                           "name": "bicep",
                           "version": "0.42.1.51946",
-                          "templateHash": "13448602883741132929"
+                          "templateHash": "12338922135200599277"
                         }
                       },
                       "parameters": {
@@ -3241,9 +3215,6 @@
                           "type": "string"
                         },
                         "virtualMachineSize": {
-                          "type": "string"
-                        },
-                        "vmInsightsDataCollectionRulesResourceId": {
                           "type": "string"
                         },
                         "vTpmEnabled": {
@@ -3534,26 +3505,6 @@
                           "properties": {
                             "dataCollectionRuleId": "[[parameters('avdInsightsDataCollectionRulesResourceId')]",
                             "description": "AVD Insights data collection rule association"
-                          },
-                          "dependsOn": [
-                            "[[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]], 'AzureMonitorWindowsAgent')]",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
-                            "[[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]"
-                          ]
-                        },
-                        {
-                          "[string('copy')]": {
-                            "name": "vmInsightsDataCollectionRuleAssociation",
-                            "count": "[[length(range(0, variables('sessionHostCount')))]"
-                          },
-                          "condition": "[[and(parameters('enableMonitoring'), not(empty(parameters('vmInsightsDataCollectionRulesResourceId'))))]",
-                          "type": "Microsoft.Insights/dataCollectionRuleAssociations",
-                          "apiVersion": "2022-06-01",
-                          "scope": "[[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
-                          "name": "[[format('{0}-vmInsights-data-coll-rule-assoc', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
-                          "properties": {
-                            "dataCollectionRuleId": "[[parameters('vmInsightsDataCollectionRulesResourceId')]",
-                            "description": "VM Insights data collection rule association"
                           },
                           "dependsOn": [
                             "[[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]], 'AzureMonitorWindowsAgent')]",
@@ -4162,7 +4113,7 @@
       "view": {
         "kind": "Form",
         "properties": {
-          "title": "Azure Virtual Desktop Session Deployment",
+          "title": "Azure Virtual Desktop Session Host Deployment",
           "steps": [
             {
               "name": "basics",
@@ -4172,7 +4123,7 @@
                   "name": "infoBox1",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
-                    "text": "Configure the basic settings for deploying the Session Host Replacer function app and supporting resources."
+                    "text": "Deploy new session hosts into an existing Azure Virtual Desktop host pool. Select the target host pool and configure the number, size, and settings for the new virtual machines. The host pool must have a valid registration token before deployment."
                   }
                 },
                 {
@@ -4227,7 +4178,8 @@
                   "visible": "[[not(empty(steps('basics').hostPool))]",
                   "options": {
                     "style": "Warning",
-                    "text": "The selected host pool must have a valid registration token before deploying session hosts. Without one, the AVD agent cannot register the VMs and they will not appear in the host pool. To generate a new token, go to the host pool in the Azure portal → Overview → Registration key → Generate new key. [Learn more](https://learn.microsoft.com/azure/virtual-desktop/faq#how-often-should-i-turn-over-the-avd-registration-key)"
+                    "text": "The selected host pool must have a valid registration token before deploying session hosts. Without one, the AVD agent cannot register the VMs and they will not appear in the host pool. To generate a new token, open the host pool in the Azure portal → Overview → Registration key → Generate new key.",
+                    "uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/add-session-hosts-host-pool?tabs=portal%2Cgui&pivots=host-pool-standard"
                   }
                 },
                 {
@@ -4260,7 +4212,6 @@
                 {
                   "name": "solution",
                   "type": "Microsoft.Common.OptionsGroup",
-                  "visible": true,
                   "label": "Identity Provider",
                   "defaultValue": "[[if(equals(steps('basics').hostsRGProps.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'CloudOnly'), 'Entra Kerberos (Cloud Only Identities)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services'))))]",
                   "toolTip": "Choose the identity service provider for your users and session hosts.",
@@ -4328,7 +4279,6 @@
                 {
                   "name": "credentials",
                   "type": "Microsoft.Common.Section",
-                  "visible": true,
                   "label": "Credentials",
                   "elements": [
                     {
@@ -4512,8 +4462,7 @@
                           }
                         ],
                         "required": true
-                      },
-                      "visible": true
+                      }
                     }
                   ]
                 },
@@ -4561,8 +4510,7 @@
                             "message": "The length of the virtual machine name prefix and the index padding cannot exceed 15 characters."
                           }
                         ]
-                      },
-                      "visible": true
+                      }
                     },
                     {
                       "name": "index",
@@ -4575,8 +4523,7 @@
                       "showStepMarkers": true,
                       "constraints": {
                         "required": true
-                      },
-                      "visible": true
+                      }
                     },
                     {
                       "name": "indexPadding",
@@ -4589,17 +4536,14 @@
                       "showStepMarkers": true,
                       "constraints": {
                         "required": true
-                      },
-                      "visible": true
+                      }
                     }
-                  ],
-                  "visible": true
+                  ]
                 },
                 {
                   "name": "network",
                   "type": "Microsoft.Common.Section",
                   "label": "Network",
-                  "visible": true,
                   "elements": [
                     {
                       "name": "virtualNetworksApi",
@@ -4634,7 +4578,6 @@
                     {
                       "name": "subnet",
                       "type": "Microsoft.Common.DropDown",
-                      "visible": true,
                       "label": "Subnet",
                       "defaultValue": "[[coalesce(last(split(steps('basics').hostsRGProps.tags.vmSubnetId, '/')), '')]",
                       "toolTip": "Select an existing subnet for the AVD session hosts.",
@@ -4655,7 +4598,6 @@
                 {
                   "name": "image",
                   "type": "Microsoft.Common.Section",
-                  "visible": true,
                   "label": "Image",
                   "elements": [
                     {
@@ -4811,8 +4753,7 @@
                       "constraints": {
                         "allowedValues": "[[if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), or(equals(steps('hosts').image.source, 'marketplace'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunchAndConfidentialVmSupported'))), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVM')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch')), parse('[{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'Supported'))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), or(equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported'), empty(steps('hosts').image.imageDefinitionApi.transformed.SecurityType))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"}]'), parse('[]')))))))]",
                         "required": true
-                      },
-                      "visible": true
+                      }
                     },
                     {
                       "name": "secureBootEnabled",
@@ -4848,7 +4789,6 @@
                     {
                       "name": "encryptionAtHostTextBlock",
                       "type": "Microsoft.Common.TextBlock",
-                      "visible": true,
                       "options": {
                         "text": "Encryption at host enhances Azure Disk Storage Server-Side Encryption to ensure that all temp disks and disk caches are encrypted at rest and flow encrypted to the Storage clusters.",
                         "link": {
@@ -4984,8 +4924,7 @@
                       "showStepMarkers": true,
                       "constraints": {
                         "required": true
-                      },
-                      "visible": true
+                      }
                     },
                     {
                       "name": "diskSku",
@@ -5043,8 +4982,7 @@
                           }
                         ],
                         "required": true
-                      },
-                      "visible": true
+                      }
                     },
                     {
                       "name": "sizeGeneric",
@@ -5145,8 +5083,7 @@
                       },
                       "visible": "[[equals(steps('hosts').availability.availability, 'AvailabilityZones')]"
                     }
-                  ],
-                  "visible": true
+                  ]
                 },
                 {
                   "name": "management",
@@ -5179,7 +5116,6 @@
                     {
                       "name": "customizationsIntro",
                       "type": "Microsoft.Common.TextBlock",
-                      "visible": true,
                       "options": {
                         "text": "Optionally customize your session host deployment by selecting one or both of the options below. You can customize the AVD Agent and AVD Agent Boot Loader download Urls and/or add custom scripts or software to install during deployment."
                       }
@@ -5399,8 +5335,7 @@
                         ]
                       }
                     }
-                  ],
-                  "visible": true
+                  ]
                 }
               ]
             },
@@ -5412,7 +5347,6 @@
                   "name": "profileSolution",
                   "type": "Microsoft.Common.DropDown",
                   "defaultValue": "FSLogix",
-                  "visible": true,
                   "label": "Profile Solution",
                   "toolTip": "Select the user profile solution for your end users.",
                   "constraints": {
@@ -5922,10 +5856,9 @@
                 {
                   "name": "enableSessionHostMonitoring",
                   "type": "Microsoft.Common.CheckBox",
-                  "visible": true,
-                  "label": "Enable Session Host Monitoring (AVD Insights & VM Insights)",
+                  "label": "Enable Session Host Monitoring (AVD Insights)",
                   "defaultValue": true,
-                  "toolTip": "Deploy the Azure Monitor Agent and configure data collection rules to enable AVD Insights and VM Insights for session hosts."
+                  "toolTip": "Deploy the Azure Monitor Agent and configure the AVD Insights data collection rule for session hosts."
                 },
                 {
                   "name": "subscription",
@@ -5962,19 +5895,6 @@
                   }
                 },
                 {
-                  "name": "vmInsightsDataCollectionRule",
-                  "type": "Microsoft.Common.DropDown",
-                  "defaultValue": "[[first(map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('MSVMI-', steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
-                  "visible": "[[steps('monitoring').enableSessionHostMonitoring]",
-                  "label": "VM Insights Data Collection Rule",
-                  "multiLine": true,
-                  "toolTip": "Select the existing Virtual Machines Insights Data Collection Rule.",
-                  "constraints": {
-                    "allowedValues": "[[map(filter(steps('monitoring').dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'MSVMI'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
-                    "required": false
-                  }
-                },
-                {
                   "name": "dataCollectionEndpointsApi",
                   "condition": "[[and(not(empty(steps('monitoring').subscription.id)), steps('monitoring').enableSessionHostMonitoring)]",
                   "type": "Microsoft.Solutions.ArmApiControl",
@@ -6003,18 +5923,6 @@
                   "visible": "[[equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')]",
                   "elements": [
                     {
-                      "name": "recoveryServicesVaultApi",
-                      "type": "Microsoft.Solutions.ArmApiControl",
-                      "condition": "[[and(not(empty(steps('basics').subscription.subscriptionId)), steps('monitoring').backup.enableVmBackup)]",
-                      "request": {
-                        "method": "GET",
-                        "path": "[[concat('/subscriptions/', steps('basics').subscription.subscriptionId, '/providers/Microsoft.RecoveryServices/vaults?api-version=2024-10-01')]",
-                        "transforms": {
-                          "list": "value|[*].{label:name, value:id}"
-                        }
-                      }
-                    },
-                    {
                       "name": "enableVmBackup",
                       "type": "Microsoft.Common.CheckBox",
                       "label": "Enable VM Backup",
@@ -6022,9 +5930,22 @@
                       "toolTip": "Enable Azure Backup for session host virtual machines. Requires an existing Recovery Services Vault in the same subscription."
                     },
                     {
+                      "name": "recoveryServicesVaultApi",
+                      "type": "Microsoft.Solutions.ArmApiControl",
+                      "condition": "[[and(not(empty(steps('basics').subscription.subscriptionId)), steps('monitoring').backup.enableVmBackup)]",
+                      "request": {
+                        "method": "GET",
+                        "path": "[[concat('/subscriptions/', steps('basics').subscription.subscriptionId, '/providers/Microsoft.RecoveryServices/vaults?api-version=2024-10-01')]",
+                        "transforms": {
+                          "list": "value|[*].{label:name, description:location, value:id}"
+                        }
+                      }
+                    },
+                    {
                       "name": "recoveryServicesVault",
                       "type": "Microsoft.Common.DropDown",
                       "label": "Recovery Services Vault",
+                      "multiLine": true,
                       "defaultValue": "[[first(steps('monitoring').backup.recoveryServicesVaultApi.transformed.list).label]",
                       "toolTip": "Select the existing Recovery Services Vault to register session host VMs for backup.",
                       "constraints": {
@@ -6210,7 +6131,6 @@
             "fslogixOSSGroups": "[[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), not(equals(steps('identity').solution, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))), map(steps('userProfiles').azureFiles.userGroupPickerBlade.selectedObjects, (group) => group.displayName), parse('[]'))]",
             "enableMonitoring": "[[steps('monitoring').enableSessionHostMonitoring]",
             "avdInsightsDataCollectionRulesResourceId": "[[if(steps('monitoring').enableSessionHostMonitoring, coalesce(steps('monitoring').avdInsightsDataCollectionRule, ''), '')]",
-            "vmInsightsDataCollectionRulesResourceId": "[[if(steps('monitoring').enableSessionHostMonitoring, coalesce(steps('monitoring').vmInsightsDataCollectionRule, ''), '')]",
             "dataCollectionEndpointResourceId": "[[if(steps('monitoring').enableSessionHostMonitoring, coalesce(steps('monitoring').dataCollectionEndpoint, ''), '')]",
             "virtualMachineNameConvOverride": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, '')]",
             "diskNameConvOverride": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.diskNameConvOverride, '')]",
@@ -6287,7 +6207,6 @@
     "paramIntuneEnrollment": "[if(parameters('intuneEnrollment'), createObject('intuneEnrollment', parameters('intuneEnrollment')), createObject())]",
     "paramOuPath": "[if(not(empty(parameters('ouPath'))), createObject('ouPath', parameters('ouPath')), createObject())]",
     "paramSessionHostCustomizations": "[if(not(empty(parameters('sessionHostCustomizations'))), createObject('sessionHostCustomizations', parameters('sessionHostCustomizations')), createObject())]",
-    "paramVmInsightsDataCollectionRulesResourceId": "[if(not(empty(parameters('vmInsightsDataCollectionRulesResourceId'))), createObject('vmInsightsDataCollectionRulesResourceId', parameters('vmInsightsDataCollectionRulesResourceId')), createObject())]",
     "paramFslogixConfigureSessionHosts": "[if(parameters('fslogixConfigureSessionHosts'), createObject('fslogixConfigureSessionHosts', parameters('fslogixConfigureSessionHosts')), createObject())]",
     "paramFslogixContainerType": "[if(parameters('fslogixConfigureSessionHosts'), createObject('fslogixContainerType', parameters('fslogixContainerType')), createObject())]",
     "paramFslogixLocalNetAppVolumeResourceIds": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixLocalNetAppVolumeResourceIds')))), createObject('fslogixLocalNetAppVolumeResourceIds', parameters('fslogixLocalNetAppVolumeResourceIds')), createObject())]",
@@ -6297,7 +6216,7 @@
     "paramFslogixRemoteStorageAccountResourceIds": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixRemoteStorageAccountResourceIds')))), createObject('fslogixRemoteStorageAccountResourceIds', parameters('fslogixRemoteStorageAccountResourceIds')), createObject())]",
     "paramFslogixSizeInMBs": "[if(parameters('fslogixConfigureSessionHosts'), createObject('fslogixSizeInMBs', parameters('fslogixSizeInMBs')), createObject())]",
     "paramFslogixStorageService": "[if(parameters('fslogixConfigureSessionHosts'), createObject('fslogixStorageService', parameters('fslogixStorageService')), createObject())]",
-    "monitoringResourceGroupId": "[if(not(empty(parameters('avdInsightsDataCollectionRulesResourceId'))), format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('avdInsightsDataCollectionRulesResourceId'), '/')[2], split(parameters('avdInsightsDataCollectionRulesResourceId'), '/')[4]), if(not(empty(parameters('vmInsightsDataCollectionRulesResourceId'))), format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('vmInsightsDataCollectionRulesResourceId'), '/')[2], split(parameters('vmInsightsDataCollectionRulesResourceId'), '/')[4]), if(not(empty(parameters('dataCollectionEndpointResourceId'))), format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('dataCollectionEndpointResourceId'), '/')[2], split(parameters('dataCollectionEndpointResourceId'), '/')[4]), '')))]",
+    "monitoringResourceGroupId": "[if(not(empty(parameters('avdInsightsDataCollectionRulesResourceId'))), format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('avdInsightsDataCollectionRulesResourceId'), '/')[2], split(parameters('avdInsightsDataCollectionRulesResourceId'), '/')[4]), if(not(empty(parameters('dataCollectionEndpointResourceId'))), format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('dataCollectionEndpointResourceId'), '/')[2], split(parameters('dataCollectionEndpointResourceId'), '/')[4]), ''))]",
     "hostPoolResourceGroupId": "[format('/subscriptions/{0}/resourceGroups/{1}', variables('hostPoolSubscriptionId'), variables('hostPoolResourceGroupName'))]",
     "roleAssignmentsResourceGroups": "[union(createArray(createObject('resourceGroupId', variables('hostPoolResourceGroupId'), 'roleDefinitionId', 'e307426c-f9b6-4e81-87de-d99efb3c32bc', 'roleDescription', 'DVHPCont')), if(not(empty(variables('monitoringResourceGroupId'))), createArray(createObject('resourceGroupId', parameters('virtualMachinesResourceGroupId'), 'roleDefinitionId', '749f88d5-cbae-40b8-bcfc-e573ddc772fa', 'roleDescription', 'MonCont')), createArray()), if(and(not(empty(variables('monitoringResourceGroupId'))), not(equals(variables('monitoringResourceGroupId'), parameters('virtualMachinesResourceGroupId')))), createArray(createObject('resourceGroupId', variables('monitoringResourceGroupId'), 'roleDefinitionId', '749f88d5-cbae-40b8-bcfc-e573ddc772fa', 'roleDescription', 'MonCont')), createArray()))]"
   },
@@ -7458,7 +7377,7 @@
             "value": "[parameters('encryptionKeyVaultResourceId')]"
           },
           "functionAppAppSettings": {
-            "value": "[union(createArray(createObject('name', 'DeploymentPrefix', 'value', format('shr-{0}', variables('uniqueStringHosts'))), createObject('name', 'DrainGracePeriodHours', 'value', string(parameters('drainGracePeriodHours'))), createObject('name', 'MinimumDrainMinutes', 'value', string(parameters('minimumDrainMinutes'))), createObject('name', 'ReplacementMode', 'value', parameters('replacementMode')), createObject('name', 'MinimumCapacityPercentage', 'value', string(parameters('minimumCapacityPercentage')))), if(equals(parameters('replacementMode'), 'DeleteFirst'), createArray(createObject('name', 'MaxDeletionsPerCycle', 'value', string(parameters('maxDeletionsPerCycle')))), createArray()), createArray(createObject('name', 'EnableProgressiveScaleUp', 'value', string(parameters('enableProgressiveScaleUp'))), createObject('name', 'FixSessionHostTags', 'value', string(parameters('fixSessionHostTags'))), createObject('name', 'GraphEndpoint', 'value', variables('graphEndpoint')), createObject('name', 'HostPoolName', 'value', variables('hostPoolName')), createObject('name', 'HostPoolResourceGroupName', 'value', variables('hostPoolResourceGroupName')), createObject('name', 'HostPoolSubscriptionId', 'value', variables('hostPoolSubscriptionId')), createObject('name', 'IncludePreExistingSessionHosts', 'value', string(parameters('includePreExistingSessionHosts'))), createObject('name', 'InitialDeploymentPercentage', 'value', string(parameters('initialDeploymentPercentage')))), if(equals(parameters('replacementMode'), 'SideBySide'), createArray(createObject('name', 'MaxDeploymentBatchSize', 'value', string(parameters('maxDeploymentBatchSize')))), createArray()), createArray(createObject('name', 'MinimumHostIndex', 'value', string(parameters('minimumHostIndex')))), if(equals(parameters('replacementMode'), 'SideBySide'), createArray(createObject('name', 'EnableShutdownRetention', 'value', string(parameters('enableShutdownRetention')))), createArray()), if(equals(parameters('replacementMode'), 'SideBySide'), createArray(createObject('name', 'ShutdownRetentionDays', 'value', string(parameters('shutdownRetentionDays')))), createArray()), createArray(createObject('name', 'RemoveEntraDevice', 'value', string(parameters('removeEntraDevice'))), createObject('name', 'RemoveIntuneDevice', 'value', string(parameters('removeIntuneDevice'))), createObject('name', 'ReplaceSessionHostOnNewImageVersionDelayDays', 'value', string(parameters('replaceSessionHostOnNewImageVersionDelayDays'))), createObject('name', 'AllowImageVersionRollback', 'value', string(parameters('allowImageVersionRollback'))), createObject('name', 'ScaleUpIncrementPercentage', 'value', string(parameters('scaleUpIncrementPercentage'))), createObject('name', 'SessionHostNameIndexLength', 'value', string(parameters('sessionHostNameIndexLength'))), createObject('name', 'SessionHostNamePrefix', 'value', parameters('sessionHostNamePrefix')), createObject('name', 'SessionHostParameters', 'value', string(union(createObject('availability', parameters('availability'), 'availabilitySetNameConv', if(not(empty(parameters('availabilitySetNameConvOverride'))), parameters('availabilitySetNameConvOverride'), if(variables('nameConvReversed'), replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('locations')[if(startsWith(variables('cloud'), 'us'), substring(reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location, 5, sub(length(reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location), 5)), reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location)].abbreviation), 'TOKEN-', ''), format('{0}-##', replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('locations')[if(startsWith(variables('cloud'), 'us'), substring(reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location, 5, sub(length(reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location), 5)), reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location)].abbreviation), 'TOKEN-', '')))), 'credentialsKeyVaultResourceId', parameters('credentialsKeyVaultResourceId'), 'diskSizeGB', parameters('diskSizeGB'), 'diskSku', parameters('diskSku'), 'enableAcceleratedNetworking', parameters('enableAcceleratedNetworking'), 'enableIPv6', parameters('enableIPv6'), 'encryptionAtHost', parameters('encryptionAtHost'), 'hostPoolResourceId', parameters('hostPoolResourceId'), 'identitySolution', parameters('identitySolution'), 'imageReference', if(empty(parameters('customImageResourceId')), createObject('publisher', parameters('imagePublisher'), 'offer', parameters('imageOffer'), 'sku', parameters('imageSku')), createObject('id', parameters('customImageResourceId'))), 'location', reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location, 'networkInterfaceNameConv', variables('networkInterfaceNameConv'), 'osDiskNameConv', variables('diskNameConv'), 'secureBootEnabled', parameters('secureBootEnabled'), 'securityType', parameters('securityType'), 'sessionHostNameIndexLength', parameters('sessionHostNameIndexLength'), 'subnetResourceId', parameters('virtualMachineSubnetResourceId'), 'tags', parameters('tags'), 'timeZone', parameters('timeZone'), 'virtualMachineNameConv', variables('virtualMachineNameConv'), 'virtualMachineSize', parameters('virtualMachineSize'), 'vTpmEnabled', parameters('vTpmEnabled')), variables('paramAgentBootLoaderDownloadUrl'), variables('paramAgentDownloadUrl'), variables('paramArtifactsContainerUri'), variables('paramArtifactsUserAssignedIdentityResourceId'), variables('paramAvailabilityZones'), variables('paramAvdInsightsDataCollectionRulesResourceId'), variables('paramConfidentialVMOSDiskEncryption'), variables('paramDataCollectionEndpointResourceId'), variables('paramDiskEncryptionSetResourceId'), variables('paramDomainName'), variables('paramEnableMonitoring'), variables('paramIntegrityMonitoring'), variables('paramIntuneEnrollment'), variables('paramOuPath'), variables('paramSessionHostCustomizations'), variables('paramVmInsightsDataCollectionRulesResourceId'), variables('paramFslogixConfigureSessionHosts'), variables('paramFslogixContainerType'), variables('paramFslogixLocalNetAppVolumeResourceIds'), variables('paramFslogixLocalStorageAccountResourceIds'), variables('paramFslogixOSSGroups'), variables('paramFslogixRemoteNetAppVolumeResourceIds'), variables('paramFslogixRemoteStorageAccountResourceIds'), variables('paramFslogixSizeInMBs'), variables('paramFslogixStorageService')))), createObject('name', 'SessionHostTemplate', 'value', if(not(empty(parameters('sessionHostTemplateSpecResourceId'))), parameters('sessionHostTemplateSpecResourceId'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('functionAppResourceGroupName')), 'Microsoft.Resources/deployments', format('SessionHostTemplateSpec-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value)), createObject('name', 'SubscriptionId', 'value', subscription().subscriptionId), createObject('name', 'SuccessfulRunsBeforeScaleUp', 'value', string(parameters('successfulRunsBeforeScaleUp'))), createObject('name', 'Tag_DeployTimestamp', 'value', parameters('tagDeployTimestamp')), createObject('name', 'Tag_IncludeInAutomation', 'value', parameters('tagIncludeInAutomation')), createObject('name', 'Tag_PendingDrainTimestamp', 'value', parameters('tagPendingDrainTimestamp')), createObject('name', 'Tag_ShutdownTimestamp', 'value', parameters('tagShutdownTimestamp')), createObject('name', 'Tag_ScalingPlanExclusionTag', 'value', parameters('tagScalingPlanExclusionTag')), createObject('name', 'TargetSessionHostCount', 'value', string(parameters('targetSessionHostCount'))), createObject('name', 'VirtualMachinesResourceGroupName', 'value', variables('virtualMachinesResourceGroupName')), createObject('name', 'VirtualMachinesSubscriptionId', 'value', variables('virtualMachinesSubscriptionId')), createObject('name', 'WEBSITE_TIME_ZONE', 'value', parameters('timeZone'))))]"
+            "value": "[union(createArray(createObject('name', 'DeploymentPrefix', 'value', format('shr-{0}', variables('uniqueStringHosts'))), createObject('name', 'DrainGracePeriodHours', 'value', string(parameters('drainGracePeriodHours'))), createObject('name', 'MinimumDrainMinutes', 'value', string(parameters('minimumDrainMinutes'))), createObject('name', 'ReplacementMode', 'value', parameters('replacementMode')), createObject('name', 'MinimumCapacityPercentage', 'value', string(parameters('minimumCapacityPercentage')))), if(equals(parameters('replacementMode'), 'DeleteFirst'), createArray(createObject('name', 'MaxDeletionsPerCycle', 'value', string(parameters('maxDeletionsPerCycle')))), createArray()), createArray(createObject('name', 'EnableProgressiveScaleUp', 'value', string(parameters('enableProgressiveScaleUp'))), createObject('name', 'FixSessionHostTags', 'value', string(parameters('fixSessionHostTags'))), createObject('name', 'GraphEndpoint', 'value', variables('graphEndpoint')), createObject('name', 'HostPoolName', 'value', variables('hostPoolName')), createObject('name', 'HostPoolResourceGroupName', 'value', variables('hostPoolResourceGroupName')), createObject('name', 'HostPoolSubscriptionId', 'value', variables('hostPoolSubscriptionId')), createObject('name', 'IncludePreExistingSessionHosts', 'value', string(parameters('includePreExistingSessionHosts'))), createObject('name', 'InitialDeploymentPercentage', 'value', string(parameters('initialDeploymentPercentage')))), if(equals(parameters('replacementMode'), 'SideBySide'), createArray(createObject('name', 'MaxDeploymentBatchSize', 'value', string(parameters('maxDeploymentBatchSize')))), createArray()), createArray(createObject('name', 'MinimumHostIndex', 'value', string(parameters('minimumHostIndex')))), if(equals(parameters('replacementMode'), 'SideBySide'), createArray(createObject('name', 'EnableShutdownRetention', 'value', string(parameters('enableShutdownRetention')))), createArray()), if(equals(parameters('replacementMode'), 'SideBySide'), createArray(createObject('name', 'ShutdownRetentionDays', 'value', string(parameters('shutdownRetentionDays')))), createArray()), createArray(createObject('name', 'RemoveEntraDevice', 'value', string(parameters('removeEntraDevice'))), createObject('name', 'RemoveIntuneDevice', 'value', string(parameters('removeIntuneDevice'))), createObject('name', 'ReplaceSessionHostOnNewImageVersionDelayDays', 'value', string(parameters('replaceSessionHostOnNewImageVersionDelayDays'))), createObject('name', 'AllowImageVersionRollback', 'value', string(parameters('allowImageVersionRollback'))), createObject('name', 'ScaleUpIncrementPercentage', 'value', string(parameters('scaleUpIncrementPercentage'))), createObject('name', 'SessionHostNameIndexLength', 'value', string(parameters('sessionHostNameIndexLength'))), createObject('name', 'SessionHostNamePrefix', 'value', parameters('sessionHostNamePrefix')), createObject('name', 'SessionHostParameters', 'value', string(union(createObject('availability', parameters('availability'), 'availabilitySetNameConv', if(not(empty(parameters('availabilitySetNameConvOverride'))), parameters('availabilitySetNameConvOverride'), if(variables('nameConvReversed'), replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('locations')[if(startsWith(variables('cloud'), 'us'), substring(reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location, 5, sub(length(reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location), 5)), reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location)].abbreviation), 'TOKEN-', ''), format('{0}-##', replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('locations')[if(startsWith(variables('cloud'), 'us'), substring(reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location, 5, sub(length(reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location), 5)), reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location)].abbreviation), 'TOKEN-', '')))), 'credentialsKeyVaultResourceId', parameters('credentialsKeyVaultResourceId'), 'diskSizeGB', parameters('diskSizeGB'), 'diskSku', parameters('diskSku'), 'enableAcceleratedNetworking', parameters('enableAcceleratedNetworking'), 'enableIPv6', parameters('enableIPv6'), 'encryptionAtHost', parameters('encryptionAtHost'), 'hostPoolResourceId', parameters('hostPoolResourceId'), 'identitySolution', parameters('identitySolution'), 'imageReference', if(empty(parameters('customImageResourceId')), createObject('publisher', parameters('imagePublisher'), 'offer', parameters('imageOffer'), 'sku', parameters('imageSku')), createObject('id', parameters('customImageResourceId'))), 'location', reference(parameters('virtualMachinesResourceGroupId'), '2021-04-01', 'Full').location, 'networkInterfaceNameConv', variables('networkInterfaceNameConv'), 'osDiskNameConv', variables('diskNameConv'), 'secureBootEnabled', parameters('secureBootEnabled'), 'securityType', parameters('securityType'), 'sessionHostNameIndexLength', parameters('sessionHostNameIndexLength'), 'subnetResourceId', parameters('virtualMachineSubnetResourceId'), 'tags', parameters('tags'), 'timeZone', parameters('timeZone'), 'virtualMachineNameConv', variables('virtualMachineNameConv'), 'virtualMachineSize', parameters('virtualMachineSize'), 'vTpmEnabled', parameters('vTpmEnabled')), variables('paramAgentBootLoaderDownloadUrl'), variables('paramAgentDownloadUrl'), variables('paramArtifactsContainerUri'), variables('paramArtifactsUserAssignedIdentityResourceId'), variables('paramAvailabilityZones'), variables('paramAvdInsightsDataCollectionRulesResourceId'), variables('paramConfidentialVMOSDiskEncryption'), variables('paramDataCollectionEndpointResourceId'), variables('paramDiskEncryptionSetResourceId'), variables('paramDomainName'), variables('paramEnableMonitoring'), variables('paramIntegrityMonitoring'), variables('paramIntuneEnrollment'), variables('paramOuPath'), variables('paramSessionHostCustomizations'), variables('paramFslogixConfigureSessionHosts'), variables('paramFslogixContainerType'), variables('paramFslogixLocalNetAppVolumeResourceIds'), variables('paramFslogixLocalStorageAccountResourceIds'), variables('paramFslogixOSSGroups'), variables('paramFslogixRemoteNetAppVolumeResourceIds'), variables('paramFslogixRemoteStorageAccountResourceIds'), variables('paramFslogixSizeInMBs'), variables('paramFslogixStorageService')))), createObject('name', 'SessionHostTemplate', 'value', if(not(empty(parameters('sessionHostTemplateSpecResourceId'))), parameters('sessionHostTemplateSpecResourceId'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('functionAppResourceGroupName')), 'Microsoft.Resources/deployments', format('SessionHostTemplateSpec-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value)), createObject('name', 'SubscriptionId', 'value', subscription().subscriptionId), createObject('name', 'SuccessfulRunsBeforeScaleUp', 'value', string(parameters('successfulRunsBeforeScaleUp'))), createObject('name', 'Tag_DeployTimestamp', 'value', parameters('tagDeployTimestamp')), createObject('name', 'Tag_IncludeInAutomation', 'value', parameters('tagIncludeInAutomation')), createObject('name', 'Tag_PendingDrainTimestamp', 'value', parameters('tagPendingDrainTimestamp')), createObject('name', 'Tag_ShutdownTimestamp', 'value', parameters('tagShutdownTimestamp')), createObject('name', 'Tag_ScalingPlanExclusionTag', 'value', parameters('tagScalingPlanExclusionTag')), createObject('name', 'TargetSessionHostCount', 'value', string(parameters('targetSessionHostCount'))), createObject('name', 'VirtualMachinesResourceGroupName', 'value', variables('virtualMachinesResourceGroupName')), createObject('name', 'VirtualMachinesSubscriptionId', 'value', variables('virtualMachinesSubscriptionId')), createObject('name', 'WEBSITE_TIME_ZONE', 'value', parameters('timeZone'))))]"
           },
           "functionAppDelegatedSubnetResourceId": {
             "value": "[parameters('functionAppDelegatedSubnetResourceId')]"

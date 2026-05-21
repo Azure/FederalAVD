@@ -47,18 +47,6 @@ module avdInsightsDataCollectionRule 'modules/avdInsightsDataCollectionRule.bice
   }
 }
 
-// ─── VM Insights Data Collection Rule ─────────────────────────────────────────
-module vmInsightsDataCollectionRule 'modules/vmInsightsDataCollectionRule.bicep' = {
-  name: 'VMInsights-DataCollectionRule-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupMonitoring)
-  params: {
-    location: location
-    tags: tags[?'Microsoft.Insights/dataCollectionRules'] ?? {}
-    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspace.outputs.resourceId
-    dataCollectionEndpointId: dataCollectionEndpoint.outputs.resourceId
-  }
-}
-
 // ─── Azure Monitor Private Link Scope ─────────────────────────────────────────
 module updatePrivateLinkScope '../../../../.common/bicepModules/custom/get-PrivateLinkScope.bicep' = if (!empty(azureMonitorPrivateLinkScopeResourceId)) {
   name: 'PrivateLinkScope-${deploymentSuffix}'
@@ -75,4 +63,3 @@ module updatePrivateLinkScope '../../../../.common/bicepModules/custom/get-Priva
 output avdInsightsDataCollectionRulesResourceId string = avdInsightsDataCollectionRule.outputs.resourceId
 output dataCollectionEndpointResourceId string = dataCollectionEndpoint.outputs.resourceId
 output logAnalyticsWorkspaceResourceId string = logAnalyticsWorkspace.outputs.resourceId
-output vmInsightsDataCollectionRulesResourceId string = vmInsightsDataCollectionRule.outputs.resourceId

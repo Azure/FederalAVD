@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "7210206543242786913"
+      "templateHash": "9267878051738731438"
     }
   },
   "parameters": {
@@ -475,13 +475,6 @@
       "defaultValue": true,
       "metadata": {
         "description": "Optional. Enable virtual TPM on session host VMs."
-      }
-    },
-    "vmInsightsDataCollectionRulesResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Resource ID of the VM Insights data collection rule."
       }
     },
     "recoveryServicesVaultResourceId": {
@@ -1037,9 +1030,6 @@
           "vTpmEnabled": {
             "value": "[parameters('vTpmEnabled')]"
           },
-          "vmInsightsDataCollectionRulesResourceId": {
-            "value": "[parameters('vmInsightsDataCollectionRulesResourceId')]"
-          },
           "subnetResourceId": {
             "value": "[parameters('subnetResourceId')]"
           },
@@ -1066,7 +1056,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "16483407304589228145"
+              "templateHash": "294212017478572625"
             }
           },
           "parameters": {
@@ -1496,12 +1486,6 @@
                 "description": "Required. When true, enables virtual TPM on session host VMs."
               }
             },
-            "vmInsightsDataCollectionRulesResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the VM Insights data collection rule."
-              }
-            },
             "recoveryServicesVaultResourceId": {
               "type": "string",
               "defaultValue": "",
@@ -1531,7 +1515,7 @@
             "effectiveDedicatedHostGroupResourceIds": "[if(not(empty(parameters('dedicatedHostGroupResourceIds'))), parameters('dedicatedHostGroupResourceIds'), if(not(empty(parameters('dedicatedHostGroupResourceId'))), createArray(parameters('dedicatedHostGroupResourceId')), createArray()))]",
             "effectiveDedicatedHostResourceIds": "[if(not(empty(parameters('dedicatedHostResourceIds'))), parameters('dedicatedHostResourceIds'), if(not(empty(parameters('dedicatedHostResourceId'))), createArray(parameters('dedicatedHostResourceId')), createArray()))]",
             "baseResourcesPerVM": 11,
-            "monitoringResourcesPerVM": "[if(parameters('enableMonitoring'), 4, 0)]",
+            "monitoringResourcesPerVM": "[if(parameters('enableMonitoring'), 3, 0)]",
             "gpuResourcesPerVM": "[if(or(parameters('hasAmdGpu'), parameters('hasNvidiaGpu')), 1, 0)]",
             "integrityResourcesPerVM": "[if(parameters('integrityMonitoring'), 1, 0)]",
             "customizationsResourcesPerVM": "[if(not(empty(parameters('sessionHostCustomizations'))), add(1, length(parameters('sessionHostCustomizations'))), 0)]",
@@ -1935,9 +1919,6 @@
                   "virtualMachineSize": {
                     "value": "[parameters('virtualMachineSize')]"
                   },
-                  "vmInsightsDataCollectionRulesResourceId": {
-                    "value": "[parameters('vmInsightsDataCollectionRulesResourceId')]"
-                  },
                   "vTpmEnabled": {
                     "value": "[parameters('vTpmEnabled')]"
                   },
@@ -1955,7 +1936,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.42.1.51946",
-                      "templateHash": "13448602883741132929"
+                      "templateHash": "12338922135200599277"
                     }
                   },
                   "parameters": {
@@ -2136,9 +2117,6 @@
                       "type": "string"
                     },
                     "virtualMachineSize": {
-                      "type": "string"
-                    },
-                    "vmInsightsDataCollectionRulesResourceId": {
                       "type": "string"
                     },
                     "vTpmEnabled": {
@@ -2429,26 +2407,6 @@
                       "properties": {
                         "dataCollectionRuleId": "[parameters('avdInsightsDataCollectionRulesResourceId')]",
                         "description": "AVD Insights data collection rule association"
-                      },
-                      "dependsOn": [
-                        "[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]], 'AzureMonitorWindowsAgent')]",
-                        "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
-                        "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]"
-                      ]
-                    },
-                    {
-                      "copy": {
-                        "name": "vmInsightsDataCollectionRuleAssociation",
-                        "count": "[length(range(0, variables('sessionHostCount')))]"
-                      },
-                      "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('vmInsightsDataCollectionRulesResourceId'))))]",
-                      "type": "Microsoft.Insights/dataCollectionRuleAssociations",
-                      "apiVersion": "2022-06-01",
-                      "scope": "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
-                      "name": "[format('{0}-vmInsights-data-coll-rule-assoc', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
-                      "properties": {
-                        "dataCollectionRuleId": "[parameters('vmInsightsDataCollectionRulesResourceId')]",
-                        "description": "VM Insights data collection rule association"
                       },
                       "dependsOn": [
                         "[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]]], 'AzureMonitorWindowsAgent')]",

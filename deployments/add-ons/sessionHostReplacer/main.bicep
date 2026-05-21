@@ -364,9 +364,6 @@ param diskEncryptionSetResourceId string = ''
 @description('Optional. AVD Insights data collection rules resource ID.')
 param avdInsightsDataCollectionRulesResourceId string = ''
 
-@description('Optional. VM Insights data collection rules resource ID.')
-param vmInsightsDataCollectionRulesResourceId string = ''
-
 @description('Optional. Data collection endpoint resource ID.')
 param dataCollectionEndpointResourceId string = ''
 
@@ -674,9 +671,6 @@ var paramOuPath = !empty(ouPath) ? { ouPath: ouPath } : {}
 var paramSessionHostCustomizations = !empty(sessionHostCustomizations)
   ? { sessionHostCustomizations: sessionHostCustomizations }
   : {}
-var paramVmInsightsDataCollectionRulesResourceId = !empty(vmInsightsDataCollectionRulesResourceId)
-  ? { vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId }
-  : {}
 
 // FSLogix conditional parameters
 var paramFslogixConfigureSessionHosts = fslogixConfigureSessionHosts
@@ -752,7 +746,6 @@ var sessionHostParameters = union(
   paramIntuneEnrollment,
   paramOuPath,
   paramSessionHostCustomizations,
-  paramVmInsightsDataCollectionRulesResourceId,
   paramFslogixConfigureSessionHosts,
   paramFslogixContainerType,
   paramFslogixLocalNetAppVolumeResourceIds,
@@ -797,11 +790,9 @@ module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionApp
 
 var monitoringResourceGroupId = !empty(avdInsightsDataCollectionRulesResourceId)
   ? '/subscriptions/${split(avdInsightsDataCollectionRulesResourceId, '/')[2]}/resourceGroups/${split(avdInsightsDataCollectionRulesResourceId, '/')[4]}'
-  : !empty(vmInsightsDataCollectionRulesResourceId)
-      ? '/subscriptions/${split(vmInsightsDataCollectionRulesResourceId, '/')[2]}/resourceGroups/${split(vmInsightsDataCollectionRulesResourceId, '/')[4]}'
-      : !empty(dataCollectionEndpointResourceId)
-          ? '/subscriptions/${split(dataCollectionEndpointResourceId, '/')[2]}/resourceGroups/${split(dataCollectionEndpointResourceId, '/')[4]}'
-          : ''
+  : !empty(dataCollectionEndpointResourceId)
+      ? '/subscriptions/${split(dataCollectionEndpointResourceId, '/')[2]}/resourceGroups/${split(dataCollectionEndpointResourceId, '/')[4]}'
+      : ''
 
 var hostPoolResourceGroupId = '/subscriptions/${hostPoolSubscriptionId}/resourceGroups/${hostPoolResourceGroupName}'
 

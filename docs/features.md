@@ -810,7 +810,6 @@ This feature deploys the required resources to enable the AVD Insights workbook 
 - Data Collection Endpoint
 - Data Collection Rules
   - AVD Insights
-  - VM Insights
 - Azure Monitor Agent extension
 - System Assigned Identity on all deployed Virtual Machines
 - Diagnostic Settings

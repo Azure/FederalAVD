@@ -46,7 +46,7 @@ graph TD
 
 **Then choose your deployment approach:**
 
-> **💡 Fastest path:** If you have an existing VNet and want a working AVD environment with marketplace images, you need nothing else. Jump straight to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool) — FSLogix storage, monitoring, and optional CMK are all handled inline by the `Complete` deployment type. Add custom images or tighter security controls later.
+> **💡 Fastest path:** If you have an existing VNet and want a working AVD environment with marketplace images, you need nothing else. Jump straight to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool) — FSLogix storage, monitoring, and optional CMK are all handled inline by the host pool deployment. Add custom images or tighter security controls later.
 
 - **PoC or marketplace images only?** → Jump directly to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool) *(CMK optional — deployed inline, no Key Vault pre-deploy needed)*
 - **Need custom software on session hosts, no CMK?** → [Step 2: Image Management](#step-2-deploy-image-management-resources) first, then:
@@ -405,7 +405,7 @@ After deployment, note the Key Vault resource IDs from the deployment outputs:
 | `secretsKeyVaultResourceId` | Host pool deployment (`credentialsKeyVaultResourceId`) |
 | `encryptionKeyVaultResourceId` | Host pool deployment (`encryptionKeyVaultResourceId`) |
 
-> **Required RBAC on the Encryption KV** for the deploying identity: `Key Vault Crypto Officer` — needed to create encryption keys during host pool deployment. This applies whether the KV was pre-deployed here or created inline by the host pool `Complete` deployment type, because creating a vault does not grant the deploying identity any key operation rights (ARM control plane ≠ Key Vault data plane). This role can be removed after initial deployment once key rotation is handled separately. See the [full explanation and Confidential VM exception](hostpoolDeployment.md#security-prerequisites-optional).
+> **Required RBAC on the Encryption KV** for the deploying identity: `Key Vault Crypto Officer` — needed to create encryption keys during host pool deployment. This applies whether the KV was pre-deployed here or created inline by the host pool deployment, because creating a vault does not grant the deploying identity any key operation rights (ARM control plane ≠ Key Vault data plane). This role can be removed after initial deployment once key rotation is handled separately. See the [full explanation and Confidential VM exception](hostpoolDeployment.md#security-prerequisites-optional).
 
 ---
 

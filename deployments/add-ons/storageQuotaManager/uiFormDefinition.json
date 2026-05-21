@@ -539,9 +539,9 @@
               "name": "enableMonitoring",
               "type": "Microsoft.Common.CheckBox",
               "visible": true,
-              "label": "Enable Monitoring for the Function App and AVD and VM Insights",
+              "label": "Enable Monitoring for the Function App and AVD Insights",
               "defaultValue": true,
-              "toolTip": "Deploy the required resources to enable AVD and VM Insights."
+              "toolTip": "Deploy the required resources to enable AVD Insights monitoring."
             },
             {
               "name": "subscription",

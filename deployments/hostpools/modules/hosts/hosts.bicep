@@ -141,8 +141,7 @@ param virtualMachineAdminPassword string
 param virtualMachineAdminUserName string
 @description('Required. When true, enables virtual TPM.')
 param vTpmEnabled bool
-@description('Required. Resource ID of the VM Insights data collection rule.')
-param vmInsightsDataCollectionRulesResourceId string
+
 @description('Optional. Resource ID of the Recovery Services Vault for VM backup. Populated only for Personal host pools when backup is enabled.')
 param recoveryServicesVaultResourceId string = ''
 @description('Optional. Backup policy name for session host VMs.')
@@ -218,7 +217,6 @@ module sessionHosts 'modules/sessionHosts.bicep' = {
     virtualMachineAdminUserName: virtualMachineAdminUserName
     virtualMachineNameConv: virtualMachineNameConv
     virtualMachineSize: virtualMachineSize
-    vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId
     vTpmEnabled: vTpmEnabled
     recoveryServicesVaultResourceId: recoveryServicesVaultResourceId
     vmBackupPolicyName: vmBackupPolicyName

@@ -117,7 +117,7 @@ The template configures FSLogix `CCDLocations` registry keys on every session ho
 
 ### Prerequisites for Cross-Region Cloud Cache
 
-1. **Secondary-region storage must be pre-provisioned** — the host pool template does not create remote storage accounts. Deploy a second host pool in the secondary region using the same `identifier` and `index` (or use `deployFSLogixStorage = true` with `deploymentType = 'StorageOnly'` if that scope is available) to create the storage first, then pass its resource ID as `fslogixExistingRemoteStorageAccountResourceIds` in the primary region deployment.
+1. **Secondary-region storage must be pre-provisioned** — the host pool template does not create remote storage accounts. Deploy a second host pool in the secondary region using the same `identifier` and `index` (or set `deployFSLogixStorage = true` in a secondary region host pool deployment) to create the storage first, then pass its resource ID as `fslogixExistingRemoteStorageAccountResourceIds` in the primary region deployment.
 
 2. **Network reachability** — session hosts must be able to reach the remote storage account's SMB endpoint (port 445) over your WAN fabric (ExpressRoute, VPN, or VNet peering). Azure Private Endpoints on the secondary storage account must be resolvable from the primary region.
 

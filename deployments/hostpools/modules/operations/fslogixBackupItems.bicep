@@ -14,6 +14,7 @@ param tags object = {}
 param hostPoolResourceId string
 
 // ─── Protection Containers ─────────────────────────────────────────────────────
+@batchSize(1)
 resource protectionContainers 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers@2024-04-01' = [
   for saId in storageAccountResourceIds: {
     name: '${vaultName}/Azure/storagecontainer;Storage;${split(saId, '/')[4]};${last(split(saId, '/'))}'
@@ -28,6 +29,7 @@ resource protectionContainers 'Microsoft.RecoveryServices/vaults/backupFabrics/p
 ]
 
 // ─── Protected Items ───────────────────────────────────────────────────────────
+@batchSize(1)
 resource protectedItems 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems@2024-04-01' = [
   for (saId, i) in storageAccountResourceIds: {
     name: '${vaultName}/Azure/storagecontainer;Storage;${split(saId, '/')[4]};${last(split(saId, '/'))}/AzureFileShare;${fileShares[0]}'

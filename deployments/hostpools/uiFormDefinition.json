@@ -42,28 +42,7 @@
 								}
 							]
 						},
-						{
-							"name": "deploymentType",
-							"type": "Microsoft.Common.DropDown",
-							"label": "Deployment Mode",
-							"multiLine": true,
-							"defaultValue": "Complete",
-							"toolTip": "Select the deployment type",
-							"constraints": {
-								"allowedValues": [
-									{
-										"label": "Complete",
-										"value": "Complete",
-										"description": "This solution will deploy a fully functioning Azure Virtual Desktop hostpool along with associated resources depending on the options chosen. All resources and resource groups are named in accordance with Cloud Adoption Framework (CAF) naming standards."
-									},
-									{
-										"label": "Hostpool resources only",
-										"value": "HostpoolOnly",
-										"description": "The solution will deploy the resources necessary to support a hostpool including the hostpool object, desktop application group, virtual machines, and storage for FSLogix (if selected). You'll have the option to select existing management, monitoring, and control plane resources."
-									}
-								]
-							}
-						},
+
 						{
 							"name": "naming",
 							"type": "Microsoft.Common.Section",
@@ -444,14 +423,14 @@
 									"options": {
 										"text": "There is an existing AVD workspace in the control plane region you selected. This solution allows you to update the application group references of an existing AVD Workspace or create a new Workspace. Select the appropriate option below."
 									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]"
+									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))))]" 
 								},
 								{
 									"name": "createOption",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Workspace Creation Option",
 									"defaultValue": "Update an existing Workspace",
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]",
+									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))))]" ,
 									"constraints": {
 										"allowedValues": [
 											{
@@ -481,7 +460,7 @@
 									"options": {
 										"text": "Select an existing AVD Workspace below to which the Desktop Application Group will be registered."
 									},
-									"visible": "[and(or(equals(steps('basics').deploymentType, 'HostpoolOnly'), equals(steps('controlPlane').workspace.createOption, 'update') ), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]"
+									"visible": "[and(equals(steps('controlPlane').workspace.createOption, 'update'), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]"
 								},
 								{
 									"name": "existingWorkspace",
@@ -493,16 +472,7 @@
 										"required": true,
 										"allowedValues": "[map(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)), (vdws) => parse(concat('{\"label\":\"', vdws.name, '\",\"description\":\"Friendly Name: ', vdws.properties.friendlyName, ', Resource Group: ', first(skip(split(vdws.id, '/'), 4)), '\",\"value\":\"', vdws.id, '\"}')))]"
 									},
-									"visible": "[and(or(equals(steps('basics').deploymentType, 'HostpoolOnly'), equals(steps('controlPlane').workspace.createOption, 'update')), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]"
-								},
-								{
-									"name": "errorBox1",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(equals(steps('basics').deploymentType, 'HostpoolOnly'), empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))))]",
-									"options": {
-										"style": "Error",
-										"text": "There are no available workspaces in this region and subscription. Check your selections or choose a 'Complete' deployment on the 'Basics' page."
-									}
+									"visible": "[and(equals(steps('controlPlane').workspace.createOption, 'update'), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]"
 								}
 							]
 						},
@@ -521,7 +491,7 @@
 										"regex": "^.{1,64}$",
 										"validationMessage": "The value must be between 1 and 64 characters in length."
 									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), not(equals(steps('controlPlane').workspace.createOption, 'update')))]"
+									"visible": "[or(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))), not(equals(steps('controlPlane').workspace.createOption, 'update')))]"
 								},
 								{
 									"name": "desktopFriendlyName",
@@ -3399,7 +3369,7 @@
 								{
 									"name": "recoveryServicesVaultApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(equals(steps('basics').deploymentType, 'HostpoolOnly'), not(empty(steps('hosts').scope.subscription.subscriptionId)), steps('management').backup.recoveryServices)]",
+									"condition": "[and(steps('management').backup.useExistingRecoveryServicesVault, not(empty(steps('hosts').scope.subscription.subscriptionId)), steps('management').backup.recoveryServices)]",
 									"request": {
 										"method": "GET",
 										"path": "[concat('/subscriptions/', steps('hosts').scope.subscription.subscriptionId, '/providers/Microsoft.RecoveryServices/vaults?api-version=2024-10-01')]",
@@ -3413,7 +3383,15 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Recovery Services",
 									"defaultValue": true,
-									"toolTip": "Enable Azure Backup for this host pool. Personal host pools: backs up virtual machine OS disks. Pooled host pools: backs up FSLogix Azure Files file shares. Complete deployment creates a new vault; HostpoolOnly requires an existing vault."
+									"toolTip": "Enable Azure Backup for this host pool. Personal host pools: backs up virtual machine OS disks. Pooled host pools: backs up FSLogix Azure Files file shares."
+								},
+								{
+									"name": "useExistingRecoveryServicesVault",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Use Existing Recovery Services Vault",
+									"defaultValue": false,
+									"toolTip": "Check to select an existing Recovery Services Vault instead of creating a new one.",
+									"visible": "[steps('management').backup.recoveryServices]"
 								},
 								{
 									"name": "recoveryServicesVaultStorageRedundancy",
@@ -3425,7 +3403,7 @@
 										"required": true,
 										"allowedValues": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"},{\"label\":\"Zone Redundant\",\"value\":\"ZoneRedundant\"},{\"label\":\"Geo Redundant\",\"value\":\"GeoRedundant\"}]'), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"},{\"label\":\"Zone Redundant\",\"value\":\"ZoneRedundant\"}]'))]"
 									},
-									"visible": "[and(steps('management').backup.recoveryServices, equals(steps('basics').deploymentType, 'Complete'))]"
+									"visible": "[and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault))]"
 								},
 								{
 									"name": "recoveryServicesVault",
@@ -3436,7 +3414,7 @@
 										"allowedValues": "[steps('management').backup.recoveryServicesVaultApi.transformed.list]",
 										"required": true
 									},
-									"visible": "[and(steps('management').backup.recoveryServices, equals(steps('basics').deploymentType, 'HostpoolOnly'))]"
+									"visible": "[and(steps('management').backup.recoveryServices, steps('management').backup.useExistingRecoveryServicesVault)]"
 								}
 							]
 						},
@@ -3444,14 +3422,14 @@
 							"name": "keyVaults",
 							"type": "Microsoft.Common.Section",
 							"label": "Key Vaults",
-							"visible": "[or(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual')), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))]",
+							"visible": "[or(equals(steps('identity').credentials.source, 'manual'), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))]",
 							"elements": [
 								{
 									"name": "deploySecretsKeyVault",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Deploy VM Secrets Key Vault",
 									"toolTip": "Select to deploy a key vault and create secrets for VM Admin user and password and if applicable, the domain join username and password.",
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'))]"
+									"visible": "[equals(steps('identity').credentials.source, 'manual')]"
 								},
 								{
 									"name": "enableSoftDelete",
@@ -3478,7 +3456,7 @@
 									"toolTip": "The number of days Key Vaults are kept in the recycle bin. Soft delete is designed to prevent accidental deletion of your key vault and keys, secrets, and certificates stored inside key vault. When you delete a key vault or a key vault object, it remains recoverable for a user configurable retention period or a default of 90 days.",
 									"min": 7,
 									"max": 90,
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault))]"
+									"visible": "[or(and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('management').keyVaults.useExistingEncryptionKv)), steps('management').keyVaults.deploySecretsKeyVault)]"
 								},
 								{
 									"name": "useExistingEncryptionKv",
@@ -3486,7 +3464,7 @@
 									"label": "Use Existing Encryption Key Vault",
 									"defaultValue": false,
 									"toolTip": "Check to select an existing Encryption Key Vault (e.g., from the Security deployment) instead of creating one inline in the management resource group.",
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
+									"visible": "[or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))]"
 								},
 								{
 									"name": "existingEncryptionKeyVault",
@@ -3495,13 +3473,13 @@
 									"resourceType": "Microsoft.KeyVault/vaults",
 									"toolTip": "Select an existing Key Vault to use for Customer Managed Keys. Only key vaults in the session host location are shown.",
 									"constraints": {
-										"required": "[or(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').keyVaults.useExistingEncryptionKv)]"
+										"required": "[steps('management').keyVaults.useExistingEncryptionKv]"
 									},
 									"scope": {
 										"subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]",
 										"location": "[steps('hosts').scope.location.name]"
 									},
-									"visible": "[or(and(equals(steps('basics').deploymentType, 'HostpoolOnly'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('management').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))))]"
+									"visible": "[and(steps('management').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
 								},
 								{
 									"name": "keyExpirationInDays",
@@ -3524,16 +3502,24 @@
 								{
 									"name": "enableMonitoring",
 									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Monitoring for AVD and VM Insights",
+									"label": "Enable AVD Insights Monitoring",
 									"defaultValue": true,
-									"toolTip": "Deploy the required resources to enable AVD and VM Insights."
+									"toolTip": "Deploy the required resources to enable AVD Insights monitoring for session hosts."
+								},
+								{
+									"name": "useExistingMonitoring",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Use Existing Monitoring Resources",
+									"defaultValue": false,
+									"toolTip": "Select existing Log Analytics Workspace, Data Collection Rules, and Data Collection Endpoint instead of creating new ones. The DCRs and DCE must already be associated with the selected workspace.",
+									"visible": "[steps('management').monitoring.enableMonitoring]"
 								},
 								{
 									"name": "subscription",
 									"type": "Microsoft.Common.DropDown",
 									"label": "AVD Monitoring Subscription",
 									"defaultValue": "[steps('hosts').scope.subscription.displayName]",
-									"toolTip": "[if(equals(steps('basics').deploymentType, 'Complete'), 'Select the subscription where AVD monitoring resources will be deployed.', 'Select the subscription where existing AVD monitoring resources are located.')]",
+									"toolTip": "[if(steps('management').monitoring.useExistingMonitoring, 'Select the subscription where existing AVD monitoring resources are located.', 'Select the subscription where AVD monitoring resources will be deployed.')]",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
 										"required": true
@@ -3542,7 +3528,7 @@
 								},
 								{
 									"name": "logAnalyticsWorkspacesApi",
-									"condition": "[and(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').monitoring.enableMonitoring, not(empty(steps('management').monitoring.subscription)))]",
+									"condition": "[and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring, not(empty(steps('management').monitoring.subscription.id)))]",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
@@ -3552,19 +3538,19 @@
 								{
 									"name": "logAnalyticsWorkspace",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('management').monitoring.logAnalyticsWorkspacesApi.value, (la) => and(contains(la.name, '-avd-'), equals(la.location, steps('controlPlane').scope.location.name))), (la) => la.name))]",
-									"visible": "[and(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').monitoring.enableMonitoring)]",
+									"defaultValue": "[first(map(filter(steps('management').monitoring.logAnalyticsWorkspacesApi.value, (la) => and(contains(la.name, '-avd-'), equals(la.location, steps('hosts').scope.location.name))), (la) => la.name))]",
+									"visible": "[and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring)]",
 									"label": "Existing Log Analytics Workspace",
 									"multiLine": true,
-									"toolTip": "Select the existing Log Analytics Workspace to which AVD control plane and resource monitoring data will be sent.",
+									"toolTip": "Select the existing Log Analytics Workspace to which AVD Insights data will be sent.",
 									"constraints": {
-										"allowedValues": "[map(steps('management').monitoring.logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ', Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('management').monitoring.logAnalyticsWorkspacesApi.value, (la) => equals(la.location, steps('hosts').scope.location.name)), (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ', Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]",
 										"required": true
 									}
 								},
 								{
 									"name": "dataCollectionRulesApi",
-									"condition": "[and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring, not(empty(steps('management').monitoring.subscription)))]",
+									"condition": "[and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring, not(empty(steps('management').monitoring.subscription.id)))]",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
@@ -3574,32 +3560,19 @@
 								{
 									"name": "avdInsightsDataCollectionRule",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('management').monitoring.dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('microsoft-avdi-', steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
-									"visible": "[and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring)]",
+									"defaultValue": "[first(map(filter(steps('management').monitoring.dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'avdi'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
+									"visible": "[and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring)]",
 									"label": "AVD Insights Data Collection Rule",
 									"multiLine": true,
-									"toolTip": "Select the existing AVD Insights Data Collection Rule.",
+									"toolTip": "Select the existing AVD Insights Data Collection Rule associated with the selected workspace.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('management').monitoring.dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'avdi'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
-										"required": false
-									}
-								},
-								{
-									"name": "vmInsightsDataCollectionRule",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('management').monitoring.dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('MSVMI-', steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
-									"visible": "[and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring)]",
-									"label": "VM Insights Data Collection Rule",
-									"multiLine": true,
-									"toolTip": "Select the existing Virtual Machines Insights Data Collection Rule.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('management').monitoring.dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'MSVMI'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
-										"required": false
+										"required": true
 									}
 								},
 								{
 									"name": "dataCollectionEndpointsApi",
-									"condition": "[and(not(empty(steps('management').monitoring.subscription.id)), not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring)]",
+									"condition": "[and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring, not(empty(steps('management').monitoring.subscription.id)))]",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
@@ -3609,11 +3582,11 @@
 								{
 									"name": "dataCollectionEndpoint",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('management').monitoring.dataCollectionEndpointsApi.value, (dce) => and(contains(dce.name, 'avd'), equals(dce.location, steps('hosts').scope.location.name))), (dce) => dce.name))]",
-									"visible": "[and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring)]",
+									"defaultValue": "[first(map(filter(steps('management').monitoring.dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('hosts').scope.location.name)), (dce) => dce.name))]",
+									"visible": "[and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring)]",
 									"label": "Data Collection Endpoint",
 									"multiLine": true,
-									"toolTip": "Select the existing Data Collection Endpoint.",
+									"toolTip": "Select the existing Data Collection Endpoint associated with the selected workspace.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('management').monitoring.dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('hosts').scope.location.name)), (dce) => parse(concat('{\"label\":\"', dce.name, '\",\"description\":\"Resource Group: ', first(skip(split(dce.id, '/'), 4)), ', Location: ', dce.location, '\",\"value\":\"', dce.id, '\"}')))]",
 										"required": false
@@ -3642,7 +3615,7 @@
 							"name": "privateEndpoints",
 							"type": "Microsoft.Common.Section",
 							"label": "Private Endpoints",
-							"visible": "[or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), and(equals(steps('basics').deploymentType, 'Complete'), or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))))]",
+							"visible": "[or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, and(not(steps('management').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.deploySecretsKeyVault)]",
 							"elements": [
 								{
 									"name": "privateEndpointTextBlock1",
@@ -3700,7 +3673,7 @@
 										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault)), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(steps('management').keyVaults.deploySecretsKeyVault, and(not(steps('management').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "managementSubnetsApi",
@@ -3720,7 +3693,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.managementSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(steps('management').keyVaults.deploySecretsKeyVault, and(not(steps('management').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "hostpoolHeader",
@@ -3863,7 +3836,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": true
 									},
-									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, and(equals(steps('basics').deploymentType, 'Complete'), or(steps('management').keyVaults.deploySecretsKeyVault, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))))]"
+									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('management').keyVaults.useExistingEncryptionKv), or(steps('management').keyVaults.deploySecretsKeyVault, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
 								},
 								{
 									"name": "azureQueuePrivateDnsZone",
@@ -3937,7 +3910,6 @@
 							"name": "azureMonitor",
 							"type": "Microsoft.Common.Section",
 							"label": "Azure Monitor",
-							"visible": "[equals(steps('basics').deploymentType, 'Complete')]",
 							"elements": [
 								{
 									"name": "privateLinkTextBlock1",
@@ -4037,10 +4009,10 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "AVD Private Link Configuration",
 									"multiLine": true,
-									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'HostpoolOnly'), equals(steps('controlPlane').workspace.createOption, 'update')), 'Only remote session connections use private routes', 'Feed download and remote session connections use private routes')]",
+									"defaultValue": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), 'Only remote session connections use private routes', 'Feed download and remote session connections use private routes')]",
 									"toolTip": "Chooose the AVD Private Link Configuration.",
 									"constraints": {
-										"allowedValues": "[if(or(equals(steps('basics').deploymentType, 'HostpoolOnly'), equals(steps('controlPlane').workspace.createOption, 'update')), parse('[{\"label\":\"Only remote session connections use private routes\",\"description\":\"Only remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), if(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed'))), parse('[{\"label\":\"All parts of the connection use private routes\",\"description\":\"Initial feed discovery, feed download, and remote session connections use private routes.\",\"value\":\"All\"},{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), parse('[{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]')))]",
+										"allowedValues": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), parse('[{\"label\":\"Only remote session connections use private routes\",\"description\":\"Only remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), if(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed'))), parse('[{\"label\":\"All parts of the connection use private routes\",\"description\":\"Initial feed discovery, feed download, and remote session connections use private routes.\",\"value\":\"All\"},{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), parse('[{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]')))]",
 										"required": true
 									},
 									"visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]"
@@ -4378,10 +4350,10 @@
 				"virtualMachineAdminUserName": "[if(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.localAdminUsername, '')]",
 				"credentialsKeyVaultResourceId": "[if(equals(steps('identity').credentials.source, 'keyVault'), steps('identity').credentials.keyVault.id, '')]",
 				"existingHostPoolResourceId": "",
-				"controlPlaneSubscriptionId": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('controlPlane').scope.subscription.subscriptionId, '')]",
+				"controlPlaneSubscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]",
 				"controlPlaneLocation": "[steps('controlPlane').scope.location.name]",
-				"existingFeedWorkspaceResourceId": "[if(or(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('controlPlane').workspace.createOption, 'update')), equals(steps('basics').deploymentType, 'HostpoolOnly')), steps('controlPlane').workspace.existingWorkspace, '')]",
-				"workspaceFriendlyName": "[if(and(equals(steps('basics').deploymentType, 'Complete'), not(equals(steps('controlPlane').workspace.createOption, 'update'))), steps('controlPlane').naming.workspaceFriendlyName, '')]",
+				"existingFeedWorkspaceResourceId": "[if(and(not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))), equals(steps('controlPlane').workspace.createOption, 'update')), steps('controlPlane').workspace.existingWorkspace, '')]",
+				"workspaceFriendlyName": "[if(not(and(not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))), equals(steps('controlPlane').workspace.createOption, 'update'))), steps('controlPlane').naming.workspaceFriendlyName, '')]",
 				"desktopFriendlyName": "[steps('controlPlane').naming.desktopFriendlyName]",
 				"hostPoolType": "[if(equals(steps('controlPlane').hostPool.type, 'Pooled'), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.loadBalancerAlgorithm), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.assignmentType))]",
 				"hostPoolMaxSessionLimit": "[if(equals(steps('controlPlane').hostPool.type, 'Pooled'), steps('controlPlane').hostPool.maxSessions, 1)]",
@@ -4458,20 +4430,19 @@
 				"deploymentVmSize": "[if(or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName))), steps('management').deploymentVm.size, 'Standard_B2s')]",
 				"recoveryServices": "[steps('management').backup.recoveryServices]",
 				"recoveryServicesVaultStorageRedundancy": "[if(steps('management').backup.recoveryServices, steps('management').backup.recoveryServicesVaultStorageRedundancy, 'LocallyRedundant')]",
-				"existingRecoveryServicesVaultResourceId": "[if(and(steps('management').backup.recoveryServices, equals(steps('basics').deploymentType, 'HostpoolOnly')), steps('management').backup.recoveryServicesVault, '')]",
+				"existingRecoveryServicesVaultResourceId": "[if(and(steps('management').backup.recoveryServices, steps('management').backup.useExistingRecoveryServicesVault), steps('management').backup.recoveryServicesVault, '')]",
 				"existingDiskAccessResourceId": "",
-				"deploySecretsKeyVault": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual')), steps('management').keyVaults.deploySecretsKeyVault, false)]",
-				"secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault), steps('management').keyVaults.enableSoftDelete, false)]",
-				"secretsKeyVaultEnablePurgeProtection": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault, steps('management').keyVaults.enableSoftDelete), steps('management').keyVaults.enablePurgeProtection, false)]",
-				"keyVaultRetentionInDays": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(steps('management').keyVaults.deploySecretsKeyVault, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.keyVaultRetentionInDays, 7)]",
-				"encryptionKeyVaultResourceId": "[if(or(and(equals(steps('basics').deploymentType, 'HostpoolOnly'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('management').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))), steps('management').keyVaults.existingEncryptionKeyVault.id, '')]",
-				"keyExpirationInDays": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.keyExpirationInDays, 180)]",
+				"deploySecretsKeyVault": "[if(equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault, false)]",
+				"secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault), steps('management').keyVaults.enableSoftDelete, false)]",
+				"secretsKeyVaultEnablePurgeProtection": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault, steps('management').keyVaults.enableSoftDelete), steps('management').keyVaults.enablePurgeProtection, false)]",
+				"keyVaultRetentionInDays": "[if(or(steps('management').keyVaults.deploySecretsKeyVault, and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('management').keyVaults.useExistingEncryptionKv))), steps('management').keyVaults.keyVaultRetentionInDays, 7)]",
+				"encryptionKeyVaultResourceId": "[if(and(steps('management').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.existingEncryptionKeyVault.id, '')]",
+				"keyExpirationInDays": "[if(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), steps('management').keyVaults.keyExpirationInDays, 180)]",
 				"enableMonitoring": "[steps('management').monitoring.enableMonitoring]",
 				"monitoringSubscriptionId": "[if(steps('management').monitoring.enableMonitoring, steps('management').monitoring.subscription.subscriptionId, '')]",
-				"existingLogAnalyticsWorkspaceResourceId": "[if(and(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').monitoring.enableMonitoring), steps('management').monitoring.logAnalyticsWorkspace, '')]",
-				"existingAVDInsightsDataCollectionRuleResourceId": "[if(and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring), steps('management').monitoring.avdInsightsDataCollectionRule, '')]",
-				"existingVMInsightsDataCollectionRuleResourceId": "[if(and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring), steps('management').monitoring.vmInsightsDataCollectionRule, '')]",
-				"existingDataCollectionEndpointResourceId": "[if(and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring), steps('management').monitoring.dataCollectionEndpoint, '')]",
+				"existingLogAnalyticsWorkspaceResourceId": "[if(and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring), steps('management').monitoring.logAnalyticsWorkspace, '')]",
+				"existingAVDInsightsDataCollectionRuleResourceId": "[if(and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring), steps('management').monitoring.avdInsightsDataCollectionRule, '')]",
+				"existingDataCollectionEndpointResourceId": "[if(and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring), steps('management').monitoring.dataCollectionEndpoint, '')]",
 				"deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
 				"keyVaultPrivateEndpointSubnetResourceId": "[if(and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.keyVaultsSubnet.id, '')]",
 				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",

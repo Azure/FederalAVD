@@ -13,20 +13,14 @@ Deploy production-ready AVD environments with:
 - **Control Plane** - Host pools, application groups, workspaces
 - **Session Hosts** - Virtual machines with AVD agents and customizations
 - **Storage** - FSLogix profile storage with RBAC or Kerberos authentication
-- **Monitoring** - Log Analytics, Azure Monitor, VM Insights, diagnostic settings
+- **Monitoring** - Log Analytics, Azure Monitor, AVD Insights, diagnostic settings
 - **Security** - Private endpoints, managed identities, encryption, Key Vault integration
 - **Automation** - Auto-increase premium file share quota, session host lifecycle management
 - **Networking** - Virtual network integration, private endpoints, NSG configurations
 
 ## Architecture
 
-### Deployment Types
 
-| Type | Description | Use Case |
-|------|-------------|----------|
-| **Complete** | Deploy everything (control plane + session hosts + supporting resources) | New AVD environment |
-| **HostpoolOnly** | Deploy control plane + session hosts (use existing storage/monitoring) | Additional host pool in existing environment |
-| **SessionHostsOnly** | Deploy only session hosts to existing host pool | Add capacity to existing pool |
 
 ### Resource Deployments
 
@@ -61,7 +55,7 @@ Subscription
 │   └── RBAC Assignments or Kerberos Configuration
 └── Monitoring Resource Group (optional)
     ├── Log Analytics Workspace
-    ├── Data Collection Rules (VM Insights, session host logs)
+    ├── Data Collection Rules (AVD Insights — session host logs and performance counters)
     └── Data Collection Endpoint
 ```
 
@@ -96,7 +90,7 @@ Subscription
 
 ### Monitoring & Operations
 
-- **Azure Monitor** - VM Insights, performance counters, Windows Event logs
+- **Azure Monitor** - AVD Insights data collection rules, performance counters, Windows Event logs
 - **Data Collection Rules** - Centralized log collection configuration
 - **Storage Quota Automation** - Auto-increase Azure Files quota when threshold reached
 - **Session Host Replacer** - Automated session host lifecycle management (add-on)
@@ -143,12 +137,6 @@ Subscription
 ## Parameters
 
 ### Core Deployment Settings
-
-#### `deploymentType`
-- **Type:** String
-- **Allowed:** `Complete`, `HostpoolOnly`, `SessionHostsOnly`
-- **Default:** `Complete`
-- **Description:** Type of deployment to perform
 
 #### `identifier`
 - **Type:** String (max 9 chars)
@@ -214,7 +202,7 @@ Subscription
 
 #### `controlPlaneLocation`
 - **Type:** String
-- **Required when:** `deploymentType` is `Complete` or `HostpoolOnly`
+- **Required:** Yes
 - **Description:** Location for control plane resources
 - **Example:** `eastus2`, `usgovvirginia`
 
@@ -314,19 +302,24 @@ Subscription
 - **Type:** String
 - **Description:** Resource group for Log Analytics workspace
 
+#### `enableMonitoring`
+- **Type:** Boolean
+- **Default:** `true`
+- **Description:** Deploy AVD Insights monitoring resources (Log Analytics workspace, AVD Insights DCR, Data Collection Endpoint) and associate session hosts with the DCR.
+
 #### `logAnalyticsWorkspaceResourceId`
 - **Type:** String
-- **Description:** Existing Log Analytics workspace resource ID
+- **Description:** Existing Log Analytics workspace resource ID. When provided together with the existing DCR and DCE resource IDs, the deployment reuses these resources instead of creating new ones.
 
-#### `deployVMInsights`
-- **Type:** Boolean
-- **Default:** `false`
-- **Description:** Deploy Azure Monitor VM Insights
+#### `existingAVDInsightsDataCollectionRuleResourceId`
+- **Type:** String
+- **Optional**
+- **Description:** Resource ID of an existing AVD Insights Data Collection Rule. When provided along with `logAnalyticsWorkspaceResourceId` and `existingDataCollectionEndpointResourceId`, the deployment skips creating monitoring resources.
 
-#### `deploySessionHostInsights`
-- **Type:** Boolean
-- **Default:** `false`
-- **Description:** Collect AVD-specific performance counters and logs
+#### `existingDataCollectionEndpointResourceId`
+- **Type:** String
+- **Optional**
+- **Description:** Resource ID of an existing Data Collection Endpoint associated with the existing monitoring workspace.
 
 ### Backup
 
@@ -344,7 +337,7 @@ Subscription
 #### `existingRecoveryServicesVaultResourceId`
 - **Type:** String
 - **Optional**
-- **Description:** Resource ID of an existing Recovery Services vault. Required when `deploymentType` is `HostPoolOnly` or `SessionHostsOnly` and `recoveryServices` is `true`.
+- **Description:** Resource ID of an existing Recovery Services vault. Required when `recoveryServices` is `true` and **Use Existing Recovery Services Vault** is selected (or `existingRecoveryServicesVaultResourceId` is provided in a parameter file).
 
 ### Networking
 
@@ -375,7 +368,7 @@ Subscription
 #### `encryptionKeyVaultResourceId`
 - **Type:** String
 - **Optional**
-- **Description:** Resource ID of an existing Encryption Key Vault containing customer-managed keys. Typically provided from the Key Vaults (Foundation) deployment. Leave empty to have a Key Vault created automatically when CMK is enabled and `deploymentType` is `Complete`.
+- **Description:** Resource ID of an existing Encryption Key Vault containing customer-managed keys. Typically provided from the Key Vaults (Foundation) deployment. Leave empty to have a Key Vault created automatically when CMK is enabled.
 - **Example:** `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.KeyVault/vaults/{vault}`
 
 ### 📖 Complete Parameter Reference
@@ -393,7 +386,6 @@ New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\hostpool.json" `
   -TemplateParameterFile ".\parameters\finance.parameters.json" `
-  -deploymentType "Complete" `
   -identifier "finance" `
   -identitySolution "EntraDomainServices" `
   -domainName "contoso.com" `
@@ -408,8 +400,7 @@ New-AzSubscriptionDeployment `
 ```powershell
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
-  -TemplateFile ".\hostpool.json" `
-  -deploymentType "SessionHostsOnly" `
+  -TemplateFile ".\add-ons\sessionHosts\main.json" `
   -existingHostPoolResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.DesktopVirtualization/hostPools/hp-finance" `
   -virtualMachineCount 5 `
   -virtualMachineNamePrefix "avd-vm-fin-" `
