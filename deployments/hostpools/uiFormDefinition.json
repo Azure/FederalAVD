@@ -20,7 +20,6 @@
 						{
 							"name": "infoBox1",
 							"type": "Microsoft.Common.TextBlock",
-							"visible": true,
 							"options": {
 								"text": "This solution is designed to deploy an Azure Virtual Desktop hostpool according to Cloud Adoption Framework (CAF) best practices. Please complete the sections of this form to get started."
 							}
@@ -29,12 +28,10 @@
 							"name": "prereqs",
 							"type": "Microsoft.Common.Section",
 							"label": "Solution Prerequisites",
-							
 							"elements": [
 								{
 									"name": "textBlock1",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "This solution has several prerequisites documented at the link below and in the Federal AVD Repo.",
 										"link": {
@@ -63,20 +60,18 @@
 										"label": "Hostpool resources only",
 										"value": "HostpoolOnly",
 										"description": "The solution will deploy the resources necessary to support a hostpool including the hostpool object, desktop application group, virtual machines, and storage for FSLogix (if selected). You'll have the option to select existing management, monitoring, and control plane resources."
-									},
+									}
 								]
-							},
-							"visible": true
-						},						{
+							}
+						},
+						{
 							"name": "naming",
 							"type": "Microsoft.Common.Section",
 							"label": "Naming Components",
-							
 							"elements": [
 								{
 									"name": "namingIntroTextBlock",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"link": {
 											"label": "User Personas | Microsoft Learn",
@@ -107,7 +102,6 @@
 								{
 									"name": "indexTextBlock",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"link": {
 											"label": "Sharding pattern - Azure Architecture Center | Microsoft Learn",
@@ -173,7 +167,6 @@
 							"name": "solution",
 							"type": "Microsoft.Common.DropDown",
 							"multiLine": true,
-							"visible": true,
 							"label": "Identity Provider",
 							"defaultValue": "Active Directory Domain Services (ADDS)",
 							"toolTip": "Choose the identity service provider for your users and session hosts.",
@@ -256,7 +249,6 @@
 						{
 							"name": "credentials",
 							"type": "Microsoft.Common.Section",
-							"visible": true,
 							"label": "Credentials",
 							"elements": [
 								{
@@ -277,8 +269,7 @@
 											}
 										],
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "domainJoinUserPrincipalName",
@@ -378,14 +369,6 @@
 					"label": "Control Plane",
 					"elements": [
 						{
-							"name": "controlPlaneTextBlock0",
-							"type": "Microsoft.Common.TextBlock",
-							"visible": false,
-							"options": {
-								"text": "This page is intentionally blank when only completing a Session Host Deployment."
-							}
-						},
-						{
 							"name": "scope",
 							"type": "Microsoft.Common.Section",
 							"label": "Subscription and Location Details",
@@ -397,8 +380,8 @@
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
 										"required": true
-									},
-																	},
+									}
+								},
 								{
 									"type": "Microsoft.Common.LocationSelector",
 									"name": "location",
@@ -409,8 +392,8 @@
 									],
 									"scope": {
 										"subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
-									},
-																	},
+									}
+								},
 								{
 									"name": "desktopVirtualizationProviderApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
@@ -430,8 +413,8 @@
 										"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/prerequisites?tabs=portal"
 									}
 								}
-							],
-													},
+							]
+						},
 						{
 							"name": "virtualNetworksApi",
 							"condition": "[not(empty(steps('controlPlane').scope.subscription))]",
@@ -454,7 +437,6 @@
 							"name": "workspace",
 							"type": "Microsoft.Common.Section",
 							"label": "Workspace",
-							
 							"elements": [
 								{
 									"name": "textBlock1",
@@ -527,7 +509,6 @@
 						{
 							"name": "naming",
 							"type": "Microsoft.Common.Section",
-							
 							"label": "Naming",
 							"elements": [
 								{
@@ -559,7 +540,6 @@
 						{
 							"name": "hostPool",
 							"type": "Microsoft.Common.Section",
-							
 							"label": "Host Pool",
 							"elements": [
 								{
@@ -619,7 +599,6 @@
 								{
 									"name": "rdpProperties",
 									"type": "Microsoft.Common.TextBox",
-									"visible": true,
 									"label": "Custom RDP properties",
 									"toolTip": "Specify the configuration for the RDP properties on the AVD host pool.",
 									"constraints": {
@@ -679,7 +658,6 @@
 							"name": "assignments",
 							"type": "Microsoft.Common.Section",
 							"label": "Assignments",
-							
 							"elements": [
 								{
 									"name": "groupPickerBlade",
@@ -725,7 +703,6 @@
 									"keyPath": "displayName",
 									"descriptionKeyPath": "id",
 									"value": "[steps('controlPlane').assignments.groupPickerBlade.transformed.groups]",
-									"visible": true,
 									"barColor": "[if(empty(steps('controlPlane').assignments.groupPickerBlade), '#FF0000', '#7fba00')]",
 									"constraints": {
 										"required": true
@@ -757,8 +734,7 @@
 											}
 										],
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "exclusionTag",
@@ -1143,7 +1119,8 @@
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
 										"required": true
 									}
-								},								{
+								},
+								{
 									"name": "locationsApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"condition": "[not(empty(steps('hosts').scope.subscription.id))]",
@@ -1251,8 +1228,7 @@
 											}
 										],
 										"required": true
-									},
-									"visible": true
+									}
 								}
 							]
 						},
@@ -1304,8 +1280,7 @@
 												"message": "The length of the virtual machine name prefix and the index padding cannot exceed 15 characters."
 											}
 										]
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "index",
@@ -1318,8 +1293,7 @@
 									"showStepMarkers": true,
 									"constraints": {
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "indexPadding",
@@ -1332,17 +1306,14 @@
 									"showStepMarkers": true,
 									"constraints": {
 										"required": true
-									},
-									"visible": true
+									}
 								}
-							],
-							"visible": true
+							]
 						},
 						{
 							"name": "network",
 							"type": "Microsoft.Common.Section",
 							"label": "Network",
-							"visible": true,
 							"elements": [
 								{
 									"name": "virtualNetworksApi",
@@ -1377,7 +1348,6 @@
 								{
 									"name": "subnet",
 									"type": "Microsoft.Common.DropDown",
-									"visible": true,
 									"label": "Subnet",
 									"defaultValue": "",
 									"toolTip": "Select an existing subnet for the AVD session hosts.",
@@ -1398,7 +1368,6 @@
 						{
 							"name": "image",
 							"type": "Microsoft.Common.Section",
-							"visible": true,
 							"label": "Image",
 							"elements": [
 								{
@@ -1554,8 +1523,7 @@
 									"constraints": {
 										"allowedValues": "[if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), or(equals(steps('hosts').image.source, 'marketplace'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunchAndConfidentialVmSupported'))), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVM')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch')), parse('[{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'Supported'))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), or(equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported'), empty(steps('hosts').image.imageDefinitionApi.transformed.SecurityType))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"}]'), parse('[]')))))))]",
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "confidentialVMInfo",
@@ -1601,7 +1569,6 @@
 								{
 									"name": "diskEncryptionTextBlock",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "There are several types of encryption available for your managed disks including Azure Disk Storage Server-Side Encryption (SSE), Encryption at Host (EAH), and Confidential disk encryption (when the Confidential VM security type is selected)."
 									}
@@ -1609,7 +1576,6 @@
 								{
 									"name": "sseTextBlock",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Azure Disk Storage Server-Side Encryption is always enabled and automatically encrypts your data stored on Azure managed disks (OS and data disks) when persisting on the storage clusters."
 									}
@@ -1617,7 +1583,6 @@
 								{
 									"name": "encryptionAtHostTextBlock",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Encryption at host enhances Azure Disk Storage Server-Side Encryption to ensure that all temp disks and disk caches are encrypted at rest and flow encrypted to the Storage clusters.",
 										"link": {
@@ -1667,7 +1632,6 @@
 								{
 									"name": "keyManagementTextBlock1",
 									"type": "Microsoft.Common.TextBlock",
-									
 									"options": {
 										"text": "You can rely on platform-managed keys for the encryption of your managed disk, or you can manage encryption using your own keys. If you choose to manage encryption with your own keys, you can specify a customer-managed key to use for encrypting and decrypting all data in managed disks.",
 										"link": {
@@ -1677,48 +1641,8 @@
 									}
 								},
 								{
-									"name": "keyManagementTextBlock2",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": false,
-									"options": {
-										"text": "You can rely on platform-managed keys for the encryption of your managed disk, or you can manage encryption using your own keys. If you choose to manage encryption with your own keys, you must select the existing disk encryption set."
-									}
-								},
-								{
-									"name": "selectDiskEncryptionSet",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Customer-Managed Keys on OS Disk",
-									"defaultValue": false,
-									"toolTip": "Enables a zero trust configuration on the session host disks.",
-									"visible": false
-								},
-								{
-									"name": "diskEncryptionSetsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(not(empty(steps('hosts').scope.resourceGroup)), steps('hosts').diskEncryption.selectDiskEncryptionSet)]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02')]",
-										"transforms": {
-											"list": "value|[*].{label:name, value:id}"
-										}
-									}
-								},
-								{
-									"name": "existingDiskEncryptionSet",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "",
-									"label": "Disk Encryption Set",
-									"constraints": {
-										"allowedValues": "[steps('hosts').diskEncryption.diskEncryptionSetsApi.transformed.list]",
-										"required": true
-									},
-									"visible": false
-								},
-								{
 									"name": "keyManagementInfobox1",
 									"type": "Microsoft.Common.InfoBox",
-									
 									"options": {
 										"text": "In some environments it is required to utilize Customer Managed Keys and protect those keys in a premium key vault with the keys stored in a FIPS 140 validated Hardware Security Module. This is most common in IL5 type environments. Selecting a Customer Managed Key Hardware Security Module (HSM) option will ensure that all VM disks are protected with this configuration. Click this box for more information.",
 										"uri": "https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#storage-isolation",
@@ -1733,8 +1657,8 @@
 									"toolTip": "Platform-managed keys are key encryption keys that are generated, stored, and managed entirely by Azure. Choose Platform Managed for the best balance of security and ease of use. Customer-managed keys are key encryption keys that are generated, stored, and managed by you, the customer, in your Azure Key Vault. Choose Customer Managed if you need to meet specific compliance requirements. Platform-Managed and Customer-Managed Keys provide double encryption with an infrastructure encryption layer using platform-managed keys and a disk encryption layer using customer-managed keys.",
 									"constraints": {
 										"allowedValues": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"}]'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys\",\"value\":\"CustomerManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"},{\"label\":\"Platform-Managed and Customer-Managed Keys\",\"value\":\"PlatformManagedAndCustomerManaged\"},{\"label\":\"Platform-Managed and Customer-Managed Keys protected by HSM\",\"value\":\"PlatformManagedAndCustomerManagedHSM\"}]'))]"
-									},
-																	},
+									}
+								},
 								{
 									"name": "confOSDiskEncryptionWarning",
 									"type": "Microsoft.Common.InfoBox",
@@ -1809,7 +1733,6 @@
 								{
 									"name": "dedicatedHostsTextBlock1",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Azure Dedicated Host is a service that provides physical servers able to host one or more virtual machines assigned to one Azure subscription. Dedicated hosts are the same physical servers used in our data centers, provided instead as a directly accessible hardware resource.",
 										"link": {
@@ -1821,7 +1744,6 @@
 								{
 									"name": "dedicatedHostsInfobox1",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": true,
 									"options": {
 										"text": "In some environments it is required to have a dedicated Azure Host to isolate Compute. This is most common in IL5 type environments. Selecting this option will ensure the VMs are deployed to pre-existing Dedicated Host(s). Click this box for more information.",
 										"uri": "https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#compute-isolation",
@@ -1890,8 +1812,7 @@
 										"required": false
 									}
 								}
-							],
-							"visible": true
+							]
 						},
 						{
 							"name": "specs",
@@ -1909,8 +1830,7 @@
 									"showStepMarkers": true,
 									"constraints": {
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "diskSku",
@@ -1968,8 +1888,7 @@
 											}
 										],
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "imageHibernationInfo",
@@ -2034,7 +1953,7 @@
 									"defaultValue": true,
 									"toolTip": "Enables low latency and high throughput on the network interface.",
 									"visible": "[and(not(equals(steps('hosts').security.securityType, 'ConfidentialVM')), bool(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value)), false)), or(equals(steps('hosts').image.source, 'marketplace'), bool(coalesce(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported, false))))]"
-								}								
+								}
 							]
 						},
 						{
@@ -2105,7 +2024,6 @@
 								{
 									"name": "customizationsIntro",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Optionally customize your session host deployment by selecting one or both of the options below. You can customize the AVD Agent and AVD Agent Boot Loader download Urls and/or add custom scripts or software to install during deployment."
 									}
@@ -2316,8 +2234,7 @@
 										]
 									}
 								}
-							],
-							"visible": true
+							]
 						}
 					]
 				},
@@ -2338,7 +2255,6 @@
 							"name": "profileSolution",
 							"type": "Microsoft.Common.DropDown",
 							"defaultValue": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), 'Local Profiles Only', 'FSLogix')]",
-							"visible": true,
 							"label": "Profile Solution",
 							"toolTip": "Select the user profile solution for your end users.",
 							"constraints": {
@@ -3304,8 +3220,7 @@
 								{
 									"name": "configureAdminAccess",
 									"type": "Microsoft.Common.CheckBox",
-									"label": "Add Admin Access to File Share",
-									"visible": true
+									"label": "Add Admin Access to File Share"
 								},
 								{
 									"name": "groupPickerBlade",
@@ -3459,8 +3374,7 @@
 									"options": {
 										"style": "Info",
 										"text": "[concat('Based on your configuration choices, a deployment virtual machine is required to perform steps that cannot be completed via ARM templates. This virtual machine will be automatically deleted from Azure once the deployment is complete.', if(contains(steps('identity').solution, 'DomainServices'), 'Since you selected a Active Directory Domain Services or Entra Kerberos Domain Service as your identity solution and deployed FSLogix profile storage, the deployment virtual machine will also be joined to the domain and the same OU as the session hosts. You should remove the computer account for this VM once the deployment completes.', if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), 'Since you selected Entra Kerberos with Hybrid Identities as your identity solution, deployed FSLogix profile storage, and chose to either configure least privilege NTFS permissions or shard the storage, the deployment virtual machine will also be joined to the domain in the OU specified. The computer object for this virtual maachine should be deleted from the domain when the deployment is complete.','')))]"
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "size",
@@ -3472,8 +3386,7 @@
 									"constraints": {
 										"allowedValues": "[steps('hosts').resourceSkusApi.transformed.deploymentVMSizes]",
 										"required": true
-									},
-									"visible": true
+									}
 								}
 							]
 						},
@@ -3536,26 +3449,6 @@
 											"list": "value|[*].{label:name, value:id}"
 										}
 									}
-								},
-								{
-									"name": "associateDiskAccessResource",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Associate VM(s) with Disk Access Resource",
-									"defaultValue": "[not(empty(steps('management').backup.diskAccessesApi))]",
-									"toolTip": "Disk Access Resources are used to allow Azure Backup to access the managed disk over the private network in order to perform the backup.",
-									"visible": false
-								},
-								{
-									"name": "diskAccess",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Disk Access",
-									"defaultValue": "[first(steps('management').backup.diskAccessesApi.transformed.list).label]",
-									"toolTip": "Select the existing Disk Access Resource",
-									"constraints": {
-										"allowedValues": "[steps('management').backup.diskAccessesApi.transformed.list]",
-										"required": true
-									},
-									"visible": false
 								}
 							]
 						},
@@ -3639,12 +3532,10 @@
 							"name": "monitoring",
 							"type": "Microsoft.Common.Section",
 							"label": "Monitoring",
-							"visible": true,
 							"elements": [
 								{
 									"name": "enableMonitoring",
 									"type": "Microsoft.Common.CheckBox",
-									"visible": true,
 									"label": "Enable Monitoring for AVD and VM Insights",
 									"defaultValue": true,
 									"toolTip": "Deploy the required resources to enable AVD and VM Insights."
@@ -3749,14 +3640,6 @@
 					"label": "Zero Trust Configuration",
 					"elements": [
 						{
-							"name": "zeroTrusttextBlock0",
-							"type": "Microsoft.Common.TextBlock",
-							"visible": false,
-							"options": {
-								"text": "This page is intentionally blank when only completing a Session Host Deployment."
-							}
-						},
-						{
 							"name": "zeroTrusttextBlock1",
 							"type": "Microsoft.Common.TextBlock",
 							"options": {
@@ -3765,8 +3648,8 @@
 									"label": "Microsoft Learn | Zero Trust Security",
 									"uri": "https://learn.microsoft.com/en-us/azure/security/fundamentals/zero-trust"
 								}
-							},
-													},
+							}
+						},
 						{
 							"name": "privateEndpoints",
 							"type": "Microsoft.Common.Section",
@@ -4013,7 +3896,6 @@
 							"name": "permittedIPsSection",
 							"type": "Microsoft.Common.Section",
 							"label": "Permitted IP Addresses",
-							
 							"elements": [
 								{
 									"name": "permittedIPsInfo",
@@ -4072,7 +3954,6 @@
 								{
 									"name": "privateLinkTextBlock1",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Azure Monitor is a constellation of different interconnected services that work together to monitor your workloads. An Azure Monitor private link connects a private endpoint to a set of Azure Monitor resources to define the boundaries of your monitoring network. That set is called an Azure Monitor Private Link Scope (AMPLS).",
 										"link": {
@@ -4102,12 +3983,10 @@
 							"name": "policy",
 							"type": "Microsoft.Common.Section",
 							"label": "Policies",
-							
 							"elements": [
 								{
 									"name": "diskAccessTextBlock1",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), 'Check the following box to define and and assign a policy that disables public network access and automatically assigns a disk access resource to the virtual machine OS disks for private access.', 'Select the following check box to define and assign a policy that disables all network access to your managed disks.')]",
 										"link": {
@@ -4127,7 +4006,6 @@
 							"name": "avdPrivateLink",
 							"type": "Microsoft.Common.Section",
 							"label": "AVD Private Link",
-							
 							"elements": [
 								{
 									"name": "textBlock1",

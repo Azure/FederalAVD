@@ -502,7 +502,7 @@
 							"name": "sku",
 							"type": "Microsoft.Common.DropDown",
 							"label": "SKU",
-							"defaultValue": "win11-24h2-avd",
+							"defaultValue": "win11-25h2-avd",
 							"toolTip": "Select the desired marketplace image SKU.",
 							"constraints": {
 								"allowedValues": "[if(equals(steps('imageSource').publisher, 'MicrosoftWindowsServer'), map(steps('imageSource').skusApi, (sku) => parse(concat('{\"label\":\"', sku.name, '\",\"value\":\"', sku.name, '\"}'))), map(filter(steps('imageSource').skusApi, (sku) => and(contains(sku.name, 'win'), or(contains(sku.name, '-avd'), contains(sku.name, '-ent')))), (sku) => parse(concat('{\"label\":\"', sku.name, '\",\"value\":\"', sku.name, '\"}'))))]",

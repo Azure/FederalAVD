@@ -3,7 +3,7 @@
 	"view": {
 		"kind": "Form",
 		"properties": {
-			"title": "Azure Virtual Desktop Session Deployment",
+			"title": "Azure Virtual Desktop Session Host Deployment",
 			"steps": [
 				{
 					"name": "basics",
@@ -13,7 +13,7 @@
 							"name": "infoBox1",
 							"type": "Microsoft.Common.TextBlock",
 							"options": {
-								"text": "Configure the basic settings for deploying the Session Host Replacer function app and supporting resources."
+								"text": "Deploy new session hosts into an existing Azure Virtual Desktop host pool. Select the target host pool and configure the number, size, and settings for the new virtual machines. The host pool must have a valid registration token before deployment."
 							}
 						},
 						{
@@ -68,7 +68,8 @@
 							"visible": "[not(empty(steps('basics').hostPool))]",
 							"options": {
 								"style": "Warning",
-								"text": "The selected host pool must have a valid registration token before deploying session hosts. Without one, the AVD agent cannot register the VMs and they will not appear in the host pool. To generate a new token, go to the host pool in the Azure portal → Overview → Registration key → Generate new key. [Learn more](https://learn.microsoft.com/azure/virtual-desktop/faq#how-often-should-i-turn-over-the-avd-registration-key)"
+								"text": "The selected host pool must have a valid registration token before deploying session hosts. Without one, the AVD agent cannot register the VMs and they will not appear in the host pool. To generate a new token, open the host pool in the Azure portal → Overview → Registration key → Generate new key.",
+								"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/add-session-hosts-host-pool?tabs=portal%2Cgui&pivots=host-pool-standard"
 							}
 						},
 						{
@@ -101,7 +102,6 @@
 						{
 							"name": "solution",
 							"type": "Microsoft.Common.OptionsGroup",
-							"visible": true,
 							"label": "Identity Provider",
 							"defaultValue": "[if(equals(steps('basics').hostsRGProps.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'CloudOnly'), 'Entra Kerberos (Cloud Only Identities)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services'))))]",
 							"toolTip": "Choose the identity service provider for your users and session hosts.",
@@ -169,7 +169,6 @@
 						{
 							"name": "credentials",
 							"type": "Microsoft.Common.Section",
-							"visible": true,
 							"label": "Credentials",
 							"elements": [
 								{
@@ -353,8 +352,7 @@
 											}
 										],
 										"required": true
-									},
-									"visible": true
+									}
 								}
 							]
 						},
@@ -402,8 +400,7 @@
 												"message": "The length of the virtual machine name prefix and the index padding cannot exceed 15 characters."
 											}
 										]
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "index",
@@ -416,8 +413,7 @@
 									"showStepMarkers": true,
 									"constraints": {
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "indexPadding",
@@ -430,17 +426,14 @@
 									"showStepMarkers": true,
 									"constraints": {
 										"required": true
-									},
-									"visible": true
+									}
 								}
-							],
-							"visible": true
+							]
 						},
 						{
 							"name": "network",
 							"type": "Microsoft.Common.Section",
 							"label": "Network",
-							"visible": true,
 							"elements": [
 								{
 									"name": "virtualNetworksApi",
@@ -475,7 +468,6 @@
 								{
 									"name": "subnet",
 									"type": "Microsoft.Common.DropDown",
-									"visible": true,
 									"label": "Subnet",
 									"defaultValue": "[coalesce(last(split(steps('basics').hostsRGProps.tags.vmSubnetId, '/')), '')]",
 									"toolTip": "Select an existing subnet for the AVD session hosts.",
@@ -496,7 +488,6 @@
 						{
 							"name": "image",
 							"type": "Microsoft.Common.Section",
-							"visible": true,
 							"label": "Image",
 							"elements": [
 								{
@@ -652,8 +643,7 @@
 									"constraints": {
 										"allowedValues": "[if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), or(equals(steps('hosts').image.source, 'marketplace'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunchAndConfidentialVmSupported'))), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVM')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch')), parse('[{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'Supported'))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), or(equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported'), empty(steps('hosts').image.imageDefinitionApi.transformed.SecurityType))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"}]'), parse('[]')))))))]",
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "secureBootEnabled",
@@ -689,7 +679,6 @@
 								{
 									"name": "encryptionAtHostTextBlock",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Encryption at host enhances Azure Disk Storage Server-Side Encryption to ensure that all temp disks and disk caches are encrypted at rest and flow encrypted to the Storage clusters.",
 										"link": {
@@ -825,8 +814,7 @@
 									"showStepMarkers": true,
 									"constraints": {
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "diskSku",
@@ -884,8 +872,7 @@
 											}
 										],
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "sizeGeneric",
@@ -986,8 +973,7 @@
 									},
 									"visible": "[equals(steps('hosts').availability.availability, 'AvailabilityZones')]"
 								}
-							],
-							"visible": true
+							]
 						},
 						{
 							"name": "management",
@@ -1020,7 +1006,6 @@
 								{
 									"name": "customizationsIntro",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Optionally customize your session host deployment by selecting one or both of the options below. You can customize the AVD Agent and AVD Agent Boot Loader download Urls and/or add custom scripts or software to install during deployment."
 									}
@@ -1240,8 +1225,7 @@
 										]
 									}
 								}
-							],
-							"visible": true
+							]
 						}
 					]
 				},
@@ -1253,7 +1237,6 @@
 							"name": "profileSolution",
 							"type": "Microsoft.Common.DropDown",
 							"defaultValue": "FSLogix",
-							"visible": true,
 							"label": "Profile Solution",
 							"toolTip": "Select the user profile solution for your end users.",
 							"constraints": {
@@ -1763,7 +1746,6 @@
 						{
 							"name": "enableSessionHostMonitoring",
 							"type": "Microsoft.Common.CheckBox",
-							"visible": true,
 							"label": "Enable Session Host Monitoring (AVD Insights & VM Insights)",
 							"defaultValue": true,
 							"toolTip": "Deploy the Azure Monitor Agent and configure data collection rules to enable AVD Insights and VM Insights for session hosts."
@@ -1844,18 +1826,6 @@
 							"visible": "[equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')]",
 							"elements": [
 								{
-									"name": "recoveryServicesVaultApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(not(empty(steps('basics').subscription.subscriptionId)), steps('monitoring').backup.enableVmBackup)]",
-									"request": {
-										"method": "GET",
-										"path": "[concat('/subscriptions/', steps('basics').subscription.subscriptionId, '/providers/Microsoft.RecoveryServices/vaults?api-version=2024-10-01')]",
-										"transforms": {
-											"list": "value|[*].{label:name, value:id}"
-										}
-									}
-								},
-								{
 									"name": "enableVmBackup",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable VM Backup",
@@ -1863,9 +1833,22 @@
 									"toolTip": "Enable Azure Backup for session host virtual machines. Requires an existing Recovery Services Vault in the same subscription."
 								},
 								{
+									"name": "recoveryServicesVaultApi",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"condition": "[and(not(empty(steps('basics').subscription.subscriptionId)), steps('monitoring').backup.enableVmBackup)]",
+									"request": {
+										"method": "GET",
+										"path": "[concat('/subscriptions/', steps('basics').subscription.subscriptionId, '/providers/Microsoft.RecoveryServices/vaults?api-version=2024-10-01')]",
+										"transforms": {
+											"list": "value|[*].{label:name, description:location, value:id}"
+										}
+									}
+								},
+								{
 									"name": "recoveryServicesVault",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Recovery Services Vault",
+									"multiLine": true,
 									"defaultValue": "[first(steps('monitoring').backup.recoveryServicesVaultApi.transformed.list).label]",
 									"toolTip": "Select the existing Recovery Services Vault to register session host VMs for backup.",
 									"constraints": {
