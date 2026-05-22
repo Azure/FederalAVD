@@ -1819,7 +1819,13 @@
 									"toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role assigned to the storage account selected above.",
 									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
 									"constraints": {
-										"required": false
+										"required": false,
+										"validations": [
+											{
+												"isValid": "[or(not(empty(steps('hosts').customizations.managedIdentity)), and(empty(steps('hosts').customizations.storageAccount), not(contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.')), not(contains(steps('hosts').customizations.agentUrl, '.blob.core.'))))]",
+												"message": "A managed identity is required when accessing blob storage. Either select a storage account above or provide a managed identity."
+											}
+										]
 									},
 									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
 								},
@@ -3376,7 +3382,7 @@
 				"fslogixRemoteStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
 				"fslogixLocalNetAppVolumeResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), steps('userProfiles').azureNetAppFiles.localVolumes, parse(concat('[\"', steps('userProfiles').azureNetAppFiles.localVolumes, '\"]'))), parse('[]'))]",
 				"fslogixRemoteNetAppVolumeResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), coalesce(steps('userProfiles').azureNetAppFiles.remoteVolumes, parse('[]')), if(not(empty(coalesce(steps('userProfiles').azureNetAppFiles.remoteVolumes, ''))), parse(concat('[\"', steps('userProfiles').azureNetAppFiles.remoteVolumes, '\"]')), parse('[]'))), parse('[]'))]",
-				"fslogixOSSGroups": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), not(equals(steps('identity').solution, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))), map(steps('userProfiles').azureFiles.userGroupPickerBlade.selectedObjects, (group) => group.displayName), parse('[]'))]",
+				"fslogixOSSGroups": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('identity').solution, 'DomainServices'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardOSS')), map(steps('userProfiles').azureFiles.userGroupPickerBlade.selectedObjects, (group) => group.displayName), parse('[]'))]",
 				"enableMonitoring": "[steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring]",
 				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.logAnalyticsWorkspace, '')]",
 				"deployWorkbook": "[if(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook, false)]",

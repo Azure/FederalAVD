@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "14305778738917293730"
+      "templateHash": "10616616602296585356"
     }
   },
   "parameters": {
@@ -4987,7 +4987,13 @@
                       "toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role assigned to the storage account selected above.",
                       "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
                       "constraints": {
-                        "required": false
+                        "required": false,
+                        "validations": [
+                          {
+                            "isValid": "[[or(not(empty(steps('hosts').customizations.managedIdentity)), and(empty(steps('hosts').customizations.storageAccount), not(contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.')), not(contains(steps('hosts').customizations.agentUrl, '.blob.core.'))))]",
+                            "message": "A managed identity is required when accessing blob storage. Either select a storage account above or provide a managed identity."
+                          }
+                        ]
                       },
                       "visible": "[[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
                     },
@@ -5871,7 +5877,6 @@
             "domainName": "[[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.domainName, '')]",
             "ouPath": "[[if(or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraDomainServices')), steps('identity').virtualMachines.ouPath, '')]",
             "credentialsKeyVaultResourceId": "[[steps('identity').credentials.keyVault.id]",
-            "virtualMachinesResourceGroupId": "[[steps('hosts').scope.resourceGroup.id]",
             "timeZone": "[[steps('hosts').scope.timeZone]",
             "sessionHostNamePrefix": "[[steps('hosts').naming.sessionHostNamePrefix]",
             "sessionHostIndex": "[[steps('hosts').naming.index]",
@@ -5909,14 +5914,14 @@
             "fslogixRemoteStorageAccountResourceIds": "[[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
             "fslogixLocalNetAppVolumeResourceIds": "[[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), steps('userProfiles').azureNetAppFiles.localVolumes, parse(concat('[\"', steps('userProfiles').azureNetAppFiles.localVolumes, '\"]'))), parse('[]'))]",
             "fslogixRemoteNetAppVolumeResourceIds": "[[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), coalesce(steps('userProfiles').azureNetAppFiles.remoteVolumes, parse('[]')), if(not(empty(coalesce(steps('userProfiles').azureNetAppFiles.remoteVolumes, ''))), parse(concat('[\"', steps('userProfiles').azureNetAppFiles.remoteVolumes, '\"]')), parse('[]'))), parse('[]'))]",
-            "fslogixOSSGroups": "[[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), not(equals(steps('identity').solution, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))), map(steps('userProfiles').azureFiles.userGroupPickerBlade.selectedObjects, (group) => group.displayName), parse('[]'))]",
+            "fslogixOSSGroups": "[[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('identity').solution, 'DomainServices'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardOSS')), map(steps('userProfiles').azureFiles.userGroupPickerBlade.selectedObjects, (group) => group.displayName), parse('[]'))]",
             "enableMonitoring": "[[steps('monitoring').enableSessionHostMonitoring]",
             "avdInsightsDataCollectionRulesResourceId": "[[if(steps('monitoring').enableSessionHostMonitoring, coalesce(steps('monitoring').avdInsightsDataCollectionRule, ''), '')]",
             "dataCollectionEndpointResourceId": "[[if(steps('monitoring').enableSessionHostMonitoring, coalesce(steps('monitoring').dataCollectionEndpoint, ''), '')]",
-            "virtualMachineNameConvOverride": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, '')]",
-            "diskNameConvOverride": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.diskNameConvOverride, '')]",
-            "networkInterfaceNameConvOverride": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, '')]",
-            "availabilitySetNameConvOverride": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '')]",
+            "virtualMachineNameConv": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, '')]",
+            "osDiskNameConv": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.diskNameConvOverride, '')]",
+            "networkInterfaceNameConv": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, '')]",
+            "availabilitySetNameConv": "[[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '')]",
             "tags": "[[steps('advanced').tagsSection.tags]",
             "recoveryServicesVaultResourceId": "[[if(steps('monitoring').backup.enableVmBackup, steps('monitoring').backup.recoveryServicesVault, '')]",
             "vmBackupPolicyName": "[[if(steps('monitoring').backup.enableVmBackup, steps('monitoring').backup.vmBackupPolicyName, '')]",

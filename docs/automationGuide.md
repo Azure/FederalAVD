@@ -57,8 +57,8 @@ flowchart TD
     KV_O2 -->|"→ encryptionKeyVaultResourceId"| IM_RUN
 
     %% Key Vaults → Host Pool
-    KV_O1 -->|"→ credentialsKeyVaultResourceId"| HP_RUN
-    KV_O2 -->|"→ encryptionKeyVaultResourceId"| HP_RUN
+    KV_O1 -->|"→ existingCredentialsKeyVaultResourceId"| HP_RUN
+    KV_O2 -->|"→ existingEncryptionKeyVaultResourceId"| HP_RUN
 
     %% Image Management → Upload Artifacts
     IM_O2 -->|"→ StorageAccountResourceId"| UA_RUN
@@ -90,8 +90,8 @@ flowchart TD
 
 | Output | Used by |
 |--------|---------|
-| `secretsKeyVaultResourceId` | Host pool — `credentialsKeyVaultResourceId` parameter |
-| `encryptionKeyVaultResourceId` | Image Management — `encryptionKeyVaultResourceId`; Host Pool — `encryptionKeyVaultResourceId` |
+| `secretsKeyVaultResourceId` | Host pool — `existingCredentialsKeyVaultResourceId`; Session Host Replacer / Session Hosts add-on — `credentialsKeyVaultResourceId` |
+| `encryptionKeyVaultResourceId` | Image Management — `encryptionKeyVaultResourceId`; Host Pool — `existingEncryptionKeyVaultResourceId` |
 | `encryptionKeyVaultUri` | Available if needed for manual key references |
 
 ### Notes
@@ -205,8 +205,8 @@ Inputs from Step 4:
   imageDefinitionId + /versions/latest  →  hostpool parameter: customImageResourceId
 
 Inputs from Step 1 (if using pre-provisioned credentials or CMK):
-  secretsKeyVaultResourceId     →  hostpool parameter: credentialsKeyVaultResourceId
-  encryptionKeyVaultResourceId  →  hostpool parameter: encryptionKeyVaultResourceId
+  secretsKeyVaultResourceId     →  hostpool parameter: existingCredentialsKeyVaultResourceId
+  encryptionKeyVaultResourceId  →  hostpool parameter: existingEncryptionKeyVaultResourceId
 
 Example PowerShell invocation:
   $paramFile = "prod.hostpool.parameters.json"
@@ -230,7 +230,7 @@ Example PowerShell invocation:
 ### Notes
 
 - If `customImageResourceId` is empty, the host pool uses the marketplace image defined by `imagePublisher` / `imageOffer` / `imageSku`.
-- The host pool deployment always creates all resources. Use `existingLogAnalyticsWorkspaceResourceId`, `existingAVDInsightsDataCollectionRuleResourceId`, and `existingDataCollectionEndpointResourceId` in the parameter file to reuse shared monitoring infrastructure instead of creating new resources. Use `existingRecoveryServicesVaultResourceId` to reuse an existing backup vault, and `encryptionKeyVaultResourceId` to reference a pre-deployed encryption Key Vault.
+- The host pool deployment always creates all resources. Use `existingLogAnalyticsWorkspaceResourceId`, `existingAVDInsightsDataCollectionRuleResourceId`, and `existingDataCollectionEndpointResourceId` in the parameter file to reuse shared monitoring infrastructure instead of creating new resources. Use `existingRecoveryServicesVaultResourceId` to reuse an existing backup vault, and `existingEncryptionKeyVaultResourceId` to reference a pre-deployed encryption Key Vault.
 - For repeatable redeployments (e.g., after a new image build), keep your parameter file stable and just update `customImageResourceId` to the new image version.
 
 ---

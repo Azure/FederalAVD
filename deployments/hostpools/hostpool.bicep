@@ -56,7 +56,7 @@ This should be an account the resides within the domain you are joining. Require
 param domainJoinUserPrincipalName string = ''
 
 @description('Optional. The Resource Id of the Key Vault containing the credential secrets.')
-param credentialsKeyVaultResourceId string = ''
+param existingCredentialsKeyVaultResourceId string = ''
 
 @description('Optional. The name of the domain that provides ADDS to the AVD session hosts and is synchronized with Azure AD')
 param domainName string = ''
@@ -499,9 +499,9 @@ param recoveryServicesVaultStorageRedundancy string = 'LocallyRedundant'
 param existingRecoveryServicesVaultResourceId string = ''
 
 @description('Optional. The resource ID of an existing Encryption Key Vault containing customer-managed keys. When provided, the deployment uses this vault for CMK instead of creating one inline.')
-param encryptionKeyVaultResourceId string = ''
+param existingEncryptionKeyVaultResourceId string = ''
 
-@description('Optional. Deploys a Secrets Key Vault as part of this deployment to store session host credentials. When using an external Foundation deployment, leave this false and provide credentialsKeyVaultResourceId instead.')
+@description('Optional. Deploys a Secrets Key Vault as part of this deployment to store session host credentials. When using an external Foundation deployment, leave this false and provide existingCredentialsKeyVaultResourceId instead.')
 param deploySecretsKeyVault bool = false
 
 @description('Optional. Enables soft delete on the inline-created Secrets Key Vault.')
@@ -657,16 +657,16 @@ var cmkIsRequested = contains(keyManagementStorageAccounts, 'CustomerManaged') |
   keyManagementDisks,
   'CustomerManaged'
 ) || confidentialVMOSDiskEncryption
-var deployInlineEncryptionKv = empty(encryptionKeyVaultResourceId) && cmkIsRequested
+var deployInlineEncryptionKv = empty(existingEncryptionKeyVaultResourceId) && cmkIsRequested
 var deployKeyVaults = deploySecretsKeyVault || deployInlineEncryptionKv
 
 // Top-level CMK: run keys + DES/UAI + role assignments early so RBAC propagation
 // completes during the monitoring/controlPlane phases — well before VMs or storage deploy.
-var deployDiskCmk = contains(keyManagementDisks, 'CustomerManaged') && !confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
-var deployStorageCmk = deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && keyManagementStorageAccounts != 'MicrosoftManaged' && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
+var deployDiskCmk = contains(keyManagementDisks, 'CustomerManaged') && !confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
+var deployStorageCmk = deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && keyManagementStorageAccounts != 'MicrosoftManaged' && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
 // CVM CMK: CVM keys must be created via Key Vault data plane (Run Command) because ARM key PUT
 // does not support key release policies. The DES is then created by the shared CMK module with skipKeyCreation=true.
-var deployCvmDiskCmk = confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(encryptionKeyVaultResourceId))
+var deployCvmDiskCmk = confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
 
 var deployDiskAccessResource = contains(hostPoolType, 'Personal') && recoveryServices && deployPrivateEndpoints
 
@@ -779,16 +779,16 @@ resource avdPrivateLinkGlobalFeedNetwork 'Microsoft.Network/virtualNetworks@2023
 }
 
 // Existing Key Vaults for secrets (only used for UI deployments since you can specify references in Parameter files.)
-resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(credentialsKeyVaultResourceId)) {
-  name: last(split(credentialsKeyVaultResourceId, '/'))
-  scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
+resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(existingCredentialsKeyVaultResourceId)) {
+  name: last(split(existingCredentialsKeyVaultResourceId, '/'))
+  scope: resourceGroup(split(existingCredentialsKeyVaultResourceId, '/')[2], split(existingCredentialsKeyVaultResourceId, '/')[4])
 }
 
 // Existing Encryption Key Vault — provided from Foundation deployment or pre-existing KV.
 // Only referenced when encryptionKeyVaultResourceId is non-empty (not when inline creation is used).
-resource kvEncryption 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(encryptionKeyVaultResourceId)) {
-  name: last(split(encryptionKeyVaultResourceId, '/'))
-  scope: resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
+resource kvEncryption 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(existingEncryptionKeyVaultResourceId)) {
+  name: last(split(existingEncryptionKeyVaultResourceId, '/'))
+  scope: resourceGroup(split(existingEncryptionKeyVaultResourceId, '/')[2], split(existingEncryptionKeyVaultResourceId, '/')[4])
 }
 
 // Deployments
@@ -1328,13 +1328,13 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
     encryptionAtHost: encryptionAtHost
@@ -1354,11 +1354,11 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     tags: tags
     userAssignedIdentityNameConv: userAssignedIdentityNameConv
     #disable-next-line BCP422
-    virtualMachineAdminPassword: !empty(credentialsKeyVaultResourceId)
+    virtualMachineAdminPassword: !empty(existingCredentialsKeyVaultResourceId)
       ? kvCredentials!.getSecret('VirtualMachineAdminPassword')
       : virtualMachineAdminPassword
     #disable-next-line BCP422
-    virtualMachineAdminUserName: !empty(credentialsKeyVaultResourceId)
+    virtualMachineAdminUserName: !empty(existingCredentialsKeyVaultResourceId)
       ? kvCredentials!.getSecret('VirtualMachineAdminUserName')
       : virtualMachineAdminUserName
     virtualMachineName: depVirtualMachineName
@@ -1410,11 +1410,11 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
 
 // Effective encryption KV resource ID: prefer the externally-provided value (from Foundation or existing KV),
 // fall back to the inline-created one if the management module ran.
-var effectiveEncryptionKeyVaultResourceId = !empty(encryptionKeyVaultResourceId)
-  ? encryptionKeyVaultResourceId
+var effectiveEncryptionKeyVaultResourceId = !empty(existingEncryptionKeyVaultResourceId)
+  ? existingEncryptionKeyVaultResourceId
   : (deployInlineEncryptionKv ? keyVaults!.outputs.encryptionKeyVaultResourceId : '')
 #disable-next-line BCP318
-var effectiveEncryptionKeyVaultUri = !empty(encryptionKeyVaultResourceId)
+var effectiveEncryptionKeyVaultUri = !empty(existingEncryptionKeyVaultResourceId)
   ? kvEncryption!.properties.vaultUri
   : (deployInlineEncryptionKv ? keyVaults!.outputs.encryptionKeyVaultUri : '')
 
@@ -1637,13 +1637,13 @@ module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorag
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
     encryptionKeyVaultUri: effectiveEncryptionKeyVaultUri
@@ -1752,13 +1752,13 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     domainJoinUserPassword: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
-          : !empty(credentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
     enableAcceleratedNetworking: enableAcceleratedNetworking
@@ -1803,11 +1803,11 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     deploymentSuffix: deploymentSuffix
     timeZone: virtualMachinesTimeZone
     #disable-next-line BCP422
-    virtualMachineAdminPassword: !empty(credentialsKeyVaultResourceId)
+    virtualMachineAdminPassword: !empty(existingCredentialsKeyVaultResourceId)
       ? kvCredentials!.getSecret('VirtualMachineAdminPassword')
       : virtualMachineAdminPassword
     #disable-next-line BCP422
-    virtualMachineAdminUserName: !empty(credentialsKeyVaultResourceId)
+    virtualMachineAdminUserName: !empty(existingCredentialsKeyVaultResourceId)
       ? kvCredentials!.getSecret('VirtualMachineAdminUserName')
       : virtualMachineAdminUserName
     virtualMachineNameConv: virtualMachineNameConv

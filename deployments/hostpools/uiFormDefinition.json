@@ -2090,7 +2090,13 @@
 									"toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role assigned to the storage account selected above.",
 									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
 									"constraints": {
-										"required": false
+										"required": false,
+										"validations": [
+											{
+												"isValid": "[or(not(empty(steps('hosts').customizations.managedIdentity)), and(empty(steps('hosts').customizations.storageAccount), not(contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.')), not(contains(steps('hosts').customizations.agentUrl, '.blob.core.'))))]",
+												"message": "A managed identity is required when accessing blob storage. Either select a storage account above or provide a managed identity."
+											}
+										]
 									},
 									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
 								},
@@ -2224,11 +2230,12 @@
 						{
 							"name": "profileSolution",
 							"type": "Microsoft.Common.DropDown",
-							"defaultValue": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), 'Local Profiles Only', 'FSLogix')]",
+							"defaultValue": "FSLogix",
 							"label": "Profile Solution",
 							"toolTip": "Select the user profile solution for your end users.",
+							"visible": "[not(equals(steps('controlPlane').hostPool.type, 'Personal'))]",
 							"constraints": {
-								"allowedValues": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), parse('[{\"label\":\"Local Profiles Only\",\"value\":\"LocalProfilesOnly\"}]'), parse('[{\"label\":\"FSLogix\",\"value\":\"FSLogix\"},{\"label\":\"Other\",\"value\":\"Other\"}]'))]"
+								"allowedValues": "[parse('[{\"label\":\"FSLogix\",\"value\":\"FSLogix\"},{\"label\":\"Other\",\"value\":\"Other\"}]')]"
 							}
 						},
 						{
@@ -3178,7 +3185,7 @@
 							"name": "shareManagement",
 							"type": "Microsoft.Common.Section",
 							"label": "Share Management",
-							"visible": "[steps('userProfiles').deployStorage]",
+							"visible": "[and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage)]",
 							"elements": [
 								{
 									"name": "shareManagementTextBox2",
@@ -3615,7 +3622,7 @@
 							"name": "privateEndpoints",
 							"type": "Microsoft.Common.Section",
 							"label": "Private Endpoints",
-							"visible": "[or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, and(not(steps('management').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.deploySecretsKeyVault)]",
+							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('management').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('management').keyVaults.useExistingEncryptionKv)), and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault)))]",
 							"elements": [
 								{
 									"name": "privateEndpointTextBlock1",
@@ -3790,7 +3797,7 @@
 									"name": "azureBackupPrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
 									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => zone.name))]",
-									"visible": "[and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"visible": "[and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
 									"label": "Azure Backup",
 									"multiLine": true,
 									"toolTip": "Select the existing Geo Specific Private DNS Zone for Azure Backup Storage.",
@@ -3803,7 +3810,7 @@
 									"name": "azureBlobPrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
 									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
-									"visible": "[and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"visible": "[and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
 									"label": "Azure Blob Storage",
 									"multiLine": true,
 									"toolTip": "Select the existing Private DNS Zone for Azure Blob Storage.",
@@ -3842,7 +3849,7 @@
 									"name": "azureQueuePrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
 									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
-									"visible": "[and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"visible": "[and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
 									"label": "Azure Queue Storage",
 									"multiLine": true,
 									"toolTip": "Select the existing Private DNS Zone for Azure Queue Storage.",
@@ -3857,6 +3864,7 @@
 							"name": "permittedIPsSection",
 							"type": "Microsoft.Common.Section",
 							"label": "Permitted IP Addresses",
+							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('management').keyVaults.deploySecretsKeyVault, and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(steps('management').keyVaults.useExistingEncryptionKv)))]",
 							"elements": [
 								{
 									"name": "permittedIPsInfo",
@@ -4348,7 +4356,7 @@
 				"domainJoinUserPrincipalName": "[if(and(contains(steps('identity').solution, 'DomainServices'), equals(steps('identity').credentials.source, 'manual')), steps('identity').credentials.domainJoinUserPrincipalName, if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms')), not(equals(steps('userProfiles').azureFiles.credentialSource, 'keyVault'))), steps('userProfiles').azureFiles.domainJoinUserPrincipalName, ''))]",
 				"virtualMachineAdminPassword": "[if(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.localAdminPassword, '')]",
 				"virtualMachineAdminUserName": "[if(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.localAdminUsername, '')]",
-				"credentialsKeyVaultResourceId": "[if(equals(steps('identity').credentials.source, 'keyVault'), steps('identity').credentials.keyVault.id, '')]",
+				"existingCredentialsKeyVaultResourceId": "[if(equals(steps('identity').credentials.source, 'keyVault'), steps('identity').credentials.keyVault.id, '')]",
 				"existingHostPoolResourceId": "",
 				"controlPlaneSubscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]",
 				"controlPlaneLocation": "[steps('controlPlane').scope.location.name]",
@@ -4369,7 +4377,6 @@
 				"scalingPlanOffPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayOffPeakSchedule), parse('{}'))]",
 				"scalingPlanForceLogoff": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff, false)]",
 				"scalingPlanMinsBeforeLogoff": "[if(and(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff), steps('controlPlane').scalingPlan.minsToLogoff, 0)]",
-				"existingHostsResourceGroupName": "",
 				"virtualMachinesTimeZone": "[steps('hosts').scope.timeZone]",
 				"virtualMachineNamePrefix": "[steps('hosts').naming.virtualMachineNamePrefix]",
 				"sessionHostIndex": "[steps('hosts').naming.index]",
@@ -4409,8 +4416,8 @@
 				"sessionHostCustomizations": "[if(steps('hosts').customizations.addCustomScripts, steps('hosts').customizations.customScripts, parse('[]'))]",
 				"fslogixContainerType": "[if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').fslogixContainerType, 'ProfileContainer')]",
 				"fslogixSizeInMBs": "[if(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts), steps('userProfiles').sizeInMBs, 30720)]",
-				"deployFSLogixStorage": "[if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, false)]",
-				"fslogixConfigureSessionHosts": "[if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, false)]",
+				"deployFSLogixStorage": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), false, if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, false))]",
+				"fslogixConfigureSessionHosts": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), false, if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, false))]",
 				"fslogixOUPath": "[if(and(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').ouPath, '')]",
 				"fslogixStorageService": "[if(equals(steps('userProfiles').deployStorage, true), if(equals(steps('userProfiles').storageService, 'AzureFiles'), concat('AzureFiles ', steps('userProfiles').azureFiles.storageSku), concat('AzureNetAppFiles ', steps('userProfiles').azureNetAppFiles.storageSku)), if(steps('userProfiles').configureSessionHosts, if(equals(steps('userProfiles').storageService, 'AzureFiles'), 'AzureFiles Standard', 'AzureNetAppFiles Standard'), 'AzureFiles Standard'))]",
 				"netAppVolumesSubnetResourceId": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), steps('userProfiles').azureNetAppFiles.subnet.id, '')]",
@@ -4431,12 +4438,11 @@
 				"recoveryServices": "[steps('management').backup.recoveryServices]",
 				"recoveryServicesVaultStorageRedundancy": "[if(steps('management').backup.recoveryServices, steps('management').backup.recoveryServicesVaultStorageRedundancy, 'LocallyRedundant')]",
 				"existingRecoveryServicesVaultResourceId": "[if(and(steps('management').backup.recoveryServices, steps('management').backup.useExistingRecoveryServicesVault), steps('management').backup.recoveryServicesVault, '')]",
-				"existingDiskAccessResourceId": "",
 				"deploySecretsKeyVault": "[if(equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault, false)]",
 				"secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault), steps('management').keyVaults.enableSoftDelete, false)]",
 				"secretsKeyVaultEnablePurgeProtection": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault, steps('management').keyVaults.enableSoftDelete), steps('management').keyVaults.enablePurgeProtection, false)]",
 				"keyVaultRetentionInDays": "[if(or(steps('management').keyVaults.deploySecretsKeyVault, and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('management').keyVaults.useExistingEncryptionKv))), steps('management').keyVaults.keyVaultRetentionInDays, 7)]",
-				"encryptionKeyVaultResourceId": "[if(and(steps('management').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.existingEncryptionKeyVault.id, '')]",
+				"existingEncryptionKeyVaultResourceId": "[if(and(steps('management').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.existingEncryptionKeyVault.id, '')]",
 				"keyExpirationInDays": "[if(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), steps('management').keyVaults.keyExpirationInDays, 180)]",
 				"enableMonitoring": "[steps('management').monitoring.enableMonitoring]",
 				"monitoringSubscriptionId": "[if(steps('management').monitoring.enableMonitoring, steps('management').monitoring.subscription.subscriptionId, '')]",
@@ -4444,13 +4450,13 @@
 				"existingAVDInsightsDataCollectionRuleResourceId": "[if(and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring), steps('management').monitoring.avdInsightsDataCollectionRule, '')]",
 				"existingDataCollectionEndpointResourceId": "[if(and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring), steps('management').monitoring.dataCollectionEndpoint, '')]",
 				"deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
-				"operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault, and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
-				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",
-				"azureBackupPrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
-				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
-				"azureFilesPrivateDnsZoneResourceId": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilesPrivateDnsZone, '')]",
-				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, or(steps('management').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
-				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
+				"operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('management').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('management').keyVaults.useExistingEncryptionKv)), and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
+				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",
+				"azureBackupPrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
+				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
+				"azureFilesPrivateDnsZoneResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilesPrivateDnsZone, '')]",
+				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('management').keyVaults.useExistingEncryptionKv), or(steps('management').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
+				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
 				"azureMonitorPrivateLinkScopeResourceId": "[if(steps('zeroTrust').azureMonitor.privateLink, steps('zeroTrust').azureMonitor.azureMonitorPrivateLinkScope.id, '')]",
 				"deployDiskAccessPolicy": "[steps('zeroTrust').policy.deployDiskAccessPolicy]",
 				"avdPrivateLinkPrivateRoutes": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'None')]",
@@ -4458,11 +4464,11 @@
 				"workspaceFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool'))), steps('zeroTrust').avdPrivateLink.feedWorkspaceSubnet.id, '')]",
 				"avdPrivateDnsZoneResourceId": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.wvdPrivateLinkDnsZone, '')]",
 				"hostPoolPublicNetworkAccess": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.hostpoolPublicNetworkAccess, 'Enabled')]",
-				"workspacePublicNetworkAccess": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool'))), steps('zeroTrust').avdPrivateLink.feedWorkspacePublicNetworkAccess, 'Enabled')]",
+				"workspaceFeedPublicNetworkAccess": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool'))), steps('zeroTrust').avdPrivateLink.feedWorkspacePublicNetworkAccess, 'Enabled')]",
 				"existingGlobalFeedResourceId": "[first(map(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed')), (ws) => ws.id))]",
 				"globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
 				"globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
-				"permittedIPs": "[filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
+				"permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('management').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('management').keyVaults.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
 				"tags": "[steps('tags').tags]"
 			},
 			"kind": "Subscription",

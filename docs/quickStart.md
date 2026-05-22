@@ -402,8 +402,8 @@ After deployment, note the Key Vault resource IDs from the deployment outputs:
 | Security Output | Used In |
 |----------------|--------|
 | `encryptionKeyVaultResourceId` | Image Management deployment (CMK for storage/gallery) |
-| `secretsKeyVaultResourceId` | Host pool deployment (`credentialsKeyVaultResourceId`) |
-| `encryptionKeyVaultResourceId` | Host pool deployment (`encryptionKeyVaultResourceId`) |
+| `secretsKeyVaultResourceId` | Host pool deployment (`existingCredentialsKeyVaultResourceId`) |
+| `encryptionKeyVaultResourceId` | Host pool deployment (`existingEncryptionKeyVaultResourceId`) |
 
 > **Required RBAC on the Encryption KV** for the deploying identity: `Key Vault Crypto Officer` — needed to create encryption keys during host pool deployment. This applies whether the KV was pre-deployed here or created inline by the host pool deployment, because creating a vault does not grant the deploying identity any key operation rights (ARM control plane ≠ Key Vault data plane). This role can be removed after initial deployment once key rotation is handled separately. See the [full explanation and Confidential VM exception](hostpoolDeployment.md#security-prerequisites-optional).
 
@@ -589,7 +589,7 @@ Each team saves their deployment outputs into parameter files that the next team
 |-------------|--------|-----------------|-----------|
 | Platform / Network | Subnet resource ID | All teams | `subnetResourceId` |
 | Platform / Network | Private DNS zone resource IDs (from networking deployment outputs) | Image, AVD | `azure*PrivateDnsZoneResourceId` |
-| Security | Secrets KV resource ID | AVD | `credentialsKeyVaultResourceId` |
+| Security | Secrets KV resource ID | AVD | `existingCredentialsKeyVaultResourceId` |
 | Security | Encryption KV resource ID | Image, AVD | `encryptionKeyVaultResourceId` |
 | Image Team | `computeGalleryResourceId` | Image (builds) | `computeGalleryResourceId` |
 | Image Team | `artifactsBlobContainerUrl` | Image (builds) | `artifactsContainerUri` |

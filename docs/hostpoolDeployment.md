@@ -73,12 +73,12 @@ The key vault deployment creates `rg-avd-operations-{loc}` with:
 
 | Scenario | Recommendation |
 |----------|---------------|
-| Using CMK for disks or FSLogix storage | 🔒 **Deploy Security first** — pass `encryptionKeyVaultResourceId` to host pool |
-| Pre-provisioning credentials in a KV | 🔒 **Deploy Security first** — pass `credentialsKeyVaultResourceId` to host pool |
+| Using CMK for disks or FSLogix storage | 🔒 **Deploy Security first** — pass `existingEncryptionKeyVaultResourceId` to host pool |
+| Pre-provisioning credentials in a KV | 🔒 **Deploy Security first** — pass `existingCredentialsKeyVaultResourceId` to host pool |
 | Multiple host pools sharing one encryption KV | 🔒 **Deploy Security first** — all host pools reference the same KV |
 | Simple PoC / dev with platform-managed keys | ✅ **Skip** — deploy host pool directly; Key Vaults will be created inline when CMK is requested |
 
-**Inline fallback:** If `encryptionKeyVaultResourceId` is empty and CMK is requested, the host pool deployment creates both KVs inline in `rg-avd-operations-{loc}`. The inline KV names are derived using the same seed as the standalone security deployment, so the names will match if you later run the security deployment separately.
+**Inline fallback:** If `existingEncryptionKeyVaultResourceId` is empty and CMK is requested, the host pool deployment creates both KVs inline in `rg-avd-operations-{loc}`. The inline KV names are derived using the same seed as the standalone security deployment, so the names will match if you later run the security deployment separately.
 
 > **Why data plane roles are required separately from ARM roles**
 >
@@ -226,7 +226,8 @@ The host pool deployment always creates all resources — resource groups, AVD c
 |---|---|---|
 | AVD Workspace | **Workspace Creation Option → Update an existing Workspace** | `existingFeedWorkspaceResourceId` |
 | Monitoring (Log Analytics, DCR, DCE) | **Use Existing Monitoring Resources** checkbox | `existingLogAnalyticsWorkspaceResourceId` + DCR + DCE IDs |
-| Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox | `encryptionKeyVaultResourceId` |
+| Credentials Key Vault | **Credentials source → Key Vault** | `existingCredentialsKeyVaultResourceId` |
+| Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox | `existingEncryptionKeyVaultResourceId` |
 | Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingRecoveryServicesVaultResourceId` |
 
 To deploy all host pool infrastructure without creating session host VMs, set `sessionHostCount: 0`. This lets you validate storage, networking, and control plane configuration before committing to VM costs. Add hosts later using the **Session Hosts** add-on (`SessionHostsOnly` mode).
