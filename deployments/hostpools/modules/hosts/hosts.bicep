@@ -28,7 +28,7 @@ param domainName string
 param enableAcceleratedNetworking bool
 param enableIPv6 bool
 param encryptionAtHost bool
-param existingDiskEncryptionSetResourceId string = ''
+param diskEncryptionSetResourceId string = ''
 param fslogixFileShareNames array
 param fslogixConfigureSessionHosts bool
 param fslogixContainerType string
@@ -105,7 +105,7 @@ module sessionHosts 'modules/sessionHosts.bicep' = {
     enableIPv6: enableIPv6
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
-    existingDiskEncryptionSetResourceId: existingDiskEncryptionSetResourceId
+    diskEncryptionSetResourceId: diskEncryptionSetResourceId
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames

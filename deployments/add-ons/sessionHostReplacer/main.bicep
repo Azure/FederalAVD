@@ -66,12 +66,12 @@ param availabilitySetNameConvOverride string = ''
 param sessionHostReplacerUserAssignedIdentityResourceId string = ''
 
 @description('Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed.')
-param appServicePlanResourceId string = ''
+param existingAppServicePlanResourceId string = ''
 
 @description('Optional. The name of the resource group to deploy the new App Service Plan into. Leave empty to deploy into the same resource group as the function app. Useful when sharing a single App Service Plan across multiple add-ons in a central operations resource group.')
 param appServicePlanResourceGroupName string = ''
 
-@description('Optional. The SKU for the App Service Plan. Only applies if appServicePlanResourceId is not provided. Default is P0v3 for cost optimization.')
+@description('Optional. The SKU for the App Service Plan. Only applies if existingAppServicePlanResourceId is not provided. Default is P0v3 for cost optimization.')
 @allowed([
   'PremiumV3_P0v3'
   'PremiumV3_P1v3'
@@ -80,7 +80,7 @@ param appServicePlanResourceGroupName string = ''
 ])
 param appServicePlanSku string = 'PremiumV3_P0v3'
 
-@description('Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if appServicePlanResourceId is not provided. Default is false.')
+@description('Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if existingAppServicePlanResourceId is not provided. Default is false.')
 param zoneRedundant bool = false
 
 @description('Optional. Enable private endpoints for function app and storage. Default is false.')
@@ -774,7 +774,7 @@ module templateSpec '../../../.common/bicepModules/resources/templateSpecs/deplo
 }
 
 // Conditional App Service Plan deployment
-module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
+module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(existingAppServicePlanResourceId)) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
   scope: resourceGroup(aspResourceGroupName)
   params: {
@@ -1129,7 +1129,7 @@ module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
-    serverFarmId: !empty(appServicePlanResourceId) ? appServicePlanResourceId : hostingPlan!.outputs.hostingPlanId
+    serverFarmId: !empty(existingAppServicePlanResourceId) ? existingAppServicePlanResourceId : hostingPlan!.outputs.hostingPlanId
     storageAccountName: storageAccountName
     storageAccountRoleDefinitionIds: [
       '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor (for deployment state management)

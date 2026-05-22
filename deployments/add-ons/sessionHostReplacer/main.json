@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "9755437197628023740"
+      "templateHash": "14305778738917293730"
     }
   },
   "parameters": {
@@ -95,7 +95,7 @@
         "description": "Optional. The resource ID of the User-Assigned Managed Identity with Microsoft Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All). If not provided, the function app will use its system-assigned managed identity."
       }
     },
-    "appServicePlanResourceId": {
+    "existingAppServicePlanResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
@@ -119,14 +119,14 @@
         "PremiumV3_P3v3"
       ],
       "metadata": {
-        "description": "Optional. The SKU for the App Service Plan. Only applies if appServicePlanResourceId is not provided. Default is P0v3 for cost optimization."
+        "description": "Optional. The SKU for the App Service Plan. Only applies if existingAppServicePlanResourceId is not provided. Default is P0v3 for cost optimization."
       }
     },
     "zoneRedundant": {
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if appServicePlanResourceId is not provided. Default is false."
+        "description": "Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if existingAppServicePlanResourceId is not provided. Default is false."
       }
     },
     "privateEndpoint": {
@@ -1103,7 +1103,7 @@
         "_generator": {
           "name": "bicep",
           "version": "0.43.8.12551",
-          "templateHash": "17092646002810578594"
+          "templateHash": "7620379745148791468"
         }
       },
       "parameters": {
@@ -1985,7 +1985,7 @@
               "diskAccessId": {
                 "value": "[[parameters('diskAccessId')]"
               },
-              "existingDiskEncryptionSetResourceId": {
+              "diskEncryptionSetResourceId": {
                 "value": "[[parameters('diskEncryptionSetResourceId')]"
               },
               "diskSizeGB": {
@@ -2146,7 +2146,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.43.8.12551",
-                  "templateHash": "4086320713410922324"
+                  "templateHash": "8970563019747452832"
                 }
               },
               "parameters": {
@@ -2245,7 +2245,7 @@
                 "encryptionAtHost": {
                   "type": "bool"
                 },
-                "existingDiskEncryptionSetResourceId": {
+                "diskEncryptionSetResourceId": {
                   "type": "string",
                   "defaultValue": ""
                 },
@@ -2650,7 +2650,7 @@
                         "value": "[[parameters('diskAccessId')]"
                       },
                       "diskEncryptionSetResourceId": {
-                        "value": "[[parameters('existingDiskEncryptionSetResourceId')]"
+                        "value": "[[parameters('diskEncryptionSetResourceId')]"
                       },
                       "diskSizeGB": {
                         "value": "[[parameters('diskSizeGB')]"
@@ -3988,7 +3988,7 @@
                   "name": "solution",
                   "type": "Microsoft.Common.OptionsGroup",
                   "label": "Identity Provider",
-                  "defaultValue": "[[if(equals(steps('basics').hostsRGProps.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'CloudOnly'), 'Entra Kerberos (Cloud Only Identities)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services'))))]",
+                  "defaultValue": "[[if(equals(steps('basics').hostsRGProps.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(equals(steps('basics').hostsRGProps.tags.vmIdentityType, 'EntraKerberos-CloudOnly'), 'Entra Kerberos (Cloud Only Identities)', if(equals(steps('basics').hostsRGProps.tags.vmIdentityType, 'EntraKerberos-Hybrid'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services'))))]",
                   "toolTip": "Choose the identity service provider for your users and session hosts.",
                   "constraints": {
                     "required": true,
@@ -4006,7 +4006,7 @@
                         "value": "EntraId"
                       },
                       {
-                        "label": "Entra Kerberos (Cloud Only Identities) (Preview)",
+                        "label": "Entra Kerberos (Cloud Only Identities)",
                         "value": "EntraKerberos-CloudOnly"
                       },
                       {
@@ -5388,7 +5388,7 @@
                     {
                       "name": "shardHeader",
                       "type": "Microsoft.Common.TextBlock",
-                      "visible": "[[and(steps('userProfiles').configureSessionHosts, not(equals(steps('identity').solution, 'EntraId')))]",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('identity').solution, 'DomainServices'))]",
                       "options": {
                         "text": "Sharding and User Group(s) to Share Assignment(s)"
                       }
@@ -5399,7 +5399,7 @@
                       "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('identity').solution, 'DomainServices'))]",
                       "options": {
                         "style": "Info",
-                        "text": "If you chose to Shard the user profile storage, you must provide a group to assign to each storage account. You can choose 'Sharding via Permissions' for simpler configuration at the possible price of longer logon times, or 'Sharding via Object Specific Settings' for more advanced scenarios. You can find instructions on how to configure Object Specific Settings at the link provided.",
+                        "text": "Choose how user profiles are distributed across storage accounts. 'Sharding via Permissions' uses multiple accounts without requiring group assignment. 'Sharding via Object Specific Settings' (OSS) provides per-account group assignment and requires selecting one group per storage account.",
                         "uri": "https://learn.microsoft.com/en-us/fslogix/how-to-configure-object-specific-settings"
                       }
                     },
@@ -5409,9 +5409,9 @@
                       "label": "Sharding Options",
                       "defaultValue": "[[if(equals(steps('basics').hostsRGProps.tags.fslSharding, 'ShardPerms'), 'Sharding via Permissions', if(equals(steps('basics').hostsRGProps.tags.fslSharding, 'ShardOSS'), 'Sharding via Object Specific Settings', 'No Sharding'))]",
                       "constraints": {
-                        "allowedValues": "[[if(contains(steps('identity').solution, 'EntraKerberos'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
+                        "allowedValues": "[[parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]')]"
                       },
-                      "visible": "[[and(steps('userProfiles').configureSessionHosts, not(equals(steps('identity').solution, 'EntraId')))]"
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('identity').solution, 'DomainServices'))]"
                     },
                     {
                       "name": "userGroupSelector",
@@ -5420,7 +5420,7 @@
                       "keyPath": "displayName",
                       "descriptionKeyPath": "id",
                       "value": "[[steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups]",
-                      "visible": "[[and(steps('userProfiles').configureSessionHosts, not(equals(steps('identity').solution, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None')))]",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('identity').solution, 'DomainServices'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardOSS'))]",
                       "barColor": "[[if(empty(steps('userProfiles').azureFiles.userGroupPickerBlade), '#FF0000', '#7fba00')]",
                       "constraints": {
                         "required": true
@@ -5463,9 +5463,9 @@
                     {
                       "name": "storageAccountsRequiredTextBlock",
                       "type": "Microsoft.Common.TextBlock",
-                      "visible": "[[and(steps('userProfiles').configureSessionHosts, and(not(equals(steps('identity').solution, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('identity').solution, 'DomainServices'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardOSS'))]",
                       "options": {
-                        "text": "The number of groups selected or provided above determines the number of storage accounts that are required when selecting existing accounts."
+                        "text": "The number of groups selected above determines the number of storage accounts required."
                       }
                     },
                     {
@@ -5479,20 +5479,18 @@
                     {
                       "name": "noShardingTexBlock",
                       "type": "Microsoft.Common.TextBlock",
-                      "visible": "[[and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').azureFiles.shardingOption, 'None'))]",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('identity').solution, 'DomainServices'), equals(steps('userProfiles').azureFiles.shardingOption, 'None'))]",
                       "options": {
-                        "text": "A total of 1 storage account is required because you have chosen not to Shard your storage."
+                        "text": "A total of 1 storage account is required."
                       }
                     },
                     {
-                      "name": "storageCount",
-                      "type": "Microsoft.Common.Slider",
-                      "label": "Number of Existing Storage Accounts Required (Read Only)",
-                      "defaultValue": 1,
-                      "min": "[[if(or(equals(steps('identity').solution, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
-                      "max": "[[if(or(equals(steps('identity').solution, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
-                      "showStepMarkers": false,
-                      "visible": "[[steps('userProfiles').configureSessionHosts]"
+                      "name": "entraKerberosTextBox",
+                      "type": "Microsoft.Common.TextBlock",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('identity').solution, 'EntraKerberos'))]",
+                      "options": {
+                        "text": "Select one or more storage accounts from the same region as the session hosts."
+                      }
                     },
                     {
                       "name": "configureSessionHostsHeader",
@@ -5523,19 +5521,27 @@
                       }
                     },
                     {
-                      "name": "notDeployedOnlyOneSATextBox",
+                      "name": "oneSARequiredTextBox",
                       "type": "Microsoft.Common.TextBlock",
-                      "visible": "[[and(steps('userProfiles').configureSessionHosts, or(equals(steps('userProfiles').azureFiles.shardingOption, 'None'), equals(steps('identity').solution, 'EntraId')))]",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, or(equals(steps('identity').solution, 'EntraId'), and(contains(steps('identity').solution, 'DomainServices'), equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
                       "options": {
                         "text": "Select a single storage account from the same region as the session hosts. The session hosts will be configured to store user profiles on this storage account."
                       }
                     },
                     {
-                      "name": "notDeployedMorethanOneSATextBox",
+                      "name": "shardPermsTextBox",
                       "type": "Microsoft.Common.TextBlock",
-                      "visible": "[[and(steps('userProfiles').configureSessionHosts, not(equals(steps('identity').solution, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None')))]",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('identity').solution, 'DomainServices'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms'))]",
                       "options": {
-                        "text": "Select the same number of storage accounts as the groups selected/provided above from the same region as the session hosts. The session hosts will be configured to store user profiles on these storage accounts."
+                        "text": "Select the storage accounts to use for profile sharding. Multiple accounts are supported."
+                      }
+                    },
+                    {
+                      "name": "shardOSSTextBox",
+                      "type": "Microsoft.Common.TextBlock",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('identity').solution, 'DomainServices'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardOSS'))]",
+                      "options": {
+                        "text": "Select the same number of storage accounts as the groups selected above, from the same region as the session hosts."
                       }
                     },
                     {
@@ -5555,7 +5561,7 @@
                     {
                       "name": "wrongNumberOfLocalStorageAccounts",
                       "type": "Microsoft.Common.InfoBox",
-                      "visible": "[[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').azureFiles.storageCount, length(steps('userProfiles').azureFiles.existingLocalStorageAccounts))))]",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('identity').solution, 'DomainServices'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardOSS'), not(equals(length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups), length(steps('userProfiles').azureFiles.existingLocalStorageAccounts))))]",
                       "options": {
                         "style": "Error",
                         "text": "You have not selected the correct number of storage accounts. You must select the correct number before continuing or the session hosts will not be configured properly."
@@ -5614,7 +5620,7 @@
                     {
                       "name": "wrongNumberOfRemoteStorageAccounts",
                       "type": "Microsoft.Common.InfoBox",
-                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(equals(length(steps('userProfiles').azureFiles.existingRemoteStorageAccounts), 0)) , not(equals(steps('userProfiles').azureFiles.storageCount, length(steps('userProfiles').azureFiles.existingRemoteStorageAccounts))))]",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), contains(steps('identity').solution, 'DomainServices'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardOSS'), not(equals(length(steps('userProfiles').azureFiles.existingRemoteStorageAccounts), 0)), not(equals(length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups), length(steps('userProfiles').azureFiles.existingRemoteStorageAccounts))))]",
                       "options": {
                         "style": "Error",
                         "text": "You have not selected the correct number of storage accounts. You must select the correct number before continuing or the session hosts will not be configured properly."
@@ -6135,7 +6141,7 @@
       }
     },
     {
-      "condition": "[empty(parameters('appServicePlanResourceId'))]",
+      "condition": "[empty(parameters('existingAppServicePlanResourceId'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))]",
@@ -7187,7 +7193,7 @@
           "privateLinkScopeResourceId": {
             "value": "[parameters('privateLinkScopeResourceId')]"
           },
-          "serverFarmId": "[if(not(empty(parameters('appServicePlanResourceId'))), createObject('value', parameters('appServicePlanResourceId')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('aspResourceGroupName')), 'Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostingPlanId.value))]",
+          "serverFarmId": "[if(not(empty(parameters('existingAppServicePlanResourceId'))), createObject('value', parameters('existingAppServicePlanResourceId')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('aspResourceGroupName')), 'Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostingPlanId.value))]",
           "storageAccountName": {
             "value": "[variables('storageAccountName')]"
           },

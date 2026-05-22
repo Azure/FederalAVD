@@ -305,7 +305,7 @@ module sessionHosts '../../hostpools/modules/hosts/modules/sessionHosts.bicep' =
     dedicatedHostResourceIds: dedicatedHostResourceIds
     preferredZones: preferredZones
     diskAccessId: diskAccessId
-    existingDiskEncryptionSetResourceId: diskEncryptionSetResourceId
+    diskEncryptionSetResourceId: diskEncryptionSetResourceId
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     domainJoinUserPassword: contains(identitySolution, 'DomainServices')

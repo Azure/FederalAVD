@@ -29,7 +29,7 @@ param enableAcceleratedNetworking bool
 param enableIPv6 bool
 param enableMonitoring bool
 param encryptionAtHost bool
-param existingDiskEncryptionSetResourceId string = ''
+param diskEncryptionSetResourceId string = ''
 param fslogixConfigureSessionHosts bool
 param fslogixContainerType string
 param fslogixFileShareNames array
@@ -170,7 +170,7 @@ module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostB
     dedicatedHostResourceIds: effectiveDedicatedHostResourceIds
     preferredZones: preferredZones
     diskAccessId: diskAccessId
-    diskEncryptionSetResourceId: existingDiskEncryptionSetResourceId
+    diskEncryptionSetResourceId: diskEncryptionSetResourceId
     diskSizeGB: diskSizeGB
     diskSku: diskSku
     domainJoinUserPassword: domainJoinUserPassword

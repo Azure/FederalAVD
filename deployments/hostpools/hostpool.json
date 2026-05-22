@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "4572999643446569476"
+      "templateHash": "12212209153475908588"
     }
   },
   "parameters": {
@@ -16478,7 +16478,7 @@
           "encryptionAtHost": {
             "value": "[parameters('encryptionAtHost')]"
           },
-          "existingDiskEncryptionSetResourceId": "[if(variables('deployDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), if(variables('deployCvmDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('CVM-Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('existingDiskEncryptionSetResourceId'))))]",
+          "diskEncryptionSetResourceId": "[if(variables('deployDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), if(variables('deployCvmDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('CVM-Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('existingDiskEncryptionSetResourceId'))))]",
           "fslogixConfigureSessionHosts": {
             "value": "[parameters('fslogixConfigureSessionHosts')]"
           },
@@ -16595,7 +16595,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "10162798673672442261"
+              "templateHash": "4429063995670647901"
             }
           },
           "parameters": {
@@ -16683,7 +16683,7 @@
             "encryptionAtHost": {
               "type": "bool"
             },
-            "existingDiskEncryptionSetResourceId": {
+            "diskEncryptionSetResourceId": {
               "type": "string",
               "defaultValue": ""
             },
@@ -16912,8 +16912,8 @@
                   "encryptionAtHost": {
                     "value": "[parameters('encryptionAtHost')]"
                   },
-                  "existingDiskEncryptionSetResourceId": {
-                    "value": "[parameters('existingDiskEncryptionSetResourceId')]"
+                  "diskEncryptionSetResourceId": {
+                    "value": "[parameters('diskEncryptionSetResourceId')]"
                   },
                   "fslogixConfigureSessionHosts": {
                     "value": "[parameters('fslogixConfigureSessionHosts')]"
@@ -17037,7 +17037,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "4086320713410922324"
+                      "templateHash": "8970563019747452832"
                     }
                   },
                   "parameters": {
@@ -17136,7 +17136,7 @@
                     "encryptionAtHost": {
                       "type": "bool"
                     },
-                    "existingDiskEncryptionSetResourceId": {
+                    "diskEncryptionSetResourceId": {
                       "type": "string",
                       "defaultValue": ""
                     },
@@ -17541,7 +17541,7 @@
                             "value": "[parameters('diskAccessId')]"
                           },
                           "diskEncryptionSetResourceId": {
-                            "value": "[parameters('existingDiskEncryptionSetResourceId')]"
+                            "value": "[parameters('diskEncryptionSetResourceId')]"
                           },
                           "diskSizeGB": {
                             "value": "[parameters('diskSizeGB')]"

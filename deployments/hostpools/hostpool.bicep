@@ -1765,7 +1765,7 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     enableIPv6: enableIPv6
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
-    existingDiskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
+    diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames
