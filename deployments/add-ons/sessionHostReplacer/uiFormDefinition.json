@@ -1240,23 +1240,10 @@
 									"name": "offer",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Offer",
-									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), 'Office-365', steps('basics').hostsRGProps.tags.vmImageOffer)]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'Windows-11', 'Office-365'), steps('basics').hostsRGProps.tags.vmImageOffer)]",
 									"toolTip": "Select the desired marketplace image offer.",
 									"constraints": {
-										"allowedValues": [
-											{
-												"label": "Office-365",
-												"value": "Office-365"
-											},
-											{
-												"label": "Windows-10",
-												"value": "Windows-10"
-											},
-											{
-												"label": "Windows-11",
-												"value": "Windows-11"
-											}
-										],
+										"allowedValues": "[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), parse('[{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"},{\"label\":\"Windows Enterprise CPC\",\"value\":\"windows-ent-cpc\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"Office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"}]'))]",
 										"required": true
 									},
 									"visible": "[equals(steps('hosts').image.source, 'marketplace')]"
@@ -1267,17 +1254,21 @@
 									"condition": "[and(not(empty(steps('hosts').scope.subscription.id)), not(empty(steps('hosts').scope.location)), not(empty(steps('hosts').image.offer)), equals(steps('hosts').image.source, 'marketplace'))]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]"
+										"path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]",
+										"transforms": {
+											"personal": "[?starts_with(name, `win`) && contains(name, `ent`) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}",
+											"pooled": "[?starts_with(name, `win`) && (contains(name, `ent`) || contains(name, `avd`)) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}"
+										}
 									}
 								},
 								{
 									"name": "sku",
 									"type": "Microsoft.Common.DropDown",
 									"label": "SKU",
-									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageSku), 'win11-25h2-avd-m365', steps('basics').hostsRGProps.tags.vmImageSku)]",
+									"defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageSku), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'win11-25h2-ent', 'win11-25h2-avd-m365'), steps('basics').hostsRGProps.tags.vmImageSku)]",
 									"toolTip": "Select the desired marketplace image SKU.",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('hosts').image.skuApi, (sku) => and(startsWith(sku.name, 'win'), or(contains(sku.name, 'ent'), contains(sku.name, 'avd')))), (sku) => parse(concat('{\"label\":\"', sku.name, '\",\"value\":\"', sku.name, '\"}')))]",
+										"allowedValues": "[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('hosts').image.skuApi.transformed.personal, steps('hosts').image.skuApi.transformed.pooled)]",
 										"required": true
 									},
 									"visible": "[equals(steps('hosts').image.source, 'marketplace')]"
@@ -1995,12 +1986,12 @@
 							"type": "Microsoft.Common.CheckBox",
 							"label": "Configure FSLogix registry settings on session hosts",
 							"defaultValue": true,
-							"visible": "[equals(steps('userProfiles').profileSolution, 'FSLogix')]"
+							"visible": "[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'))]"
 						},
 						{
 							"name": "fslogixContainerType",
 							"type": "Microsoft.Common.DropDown",
-							"visible": "[steps('userProfiles').configureSessionHosts]",
+							"visible": "[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]",
 							"label": "FSLogix Container Type(s)",
 							"defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.fslContainerType, 'Profile Container')]",
 							"toolTip": "Select the container type(s) for the FSLogix profiles.",
@@ -2030,7 +2021,7 @@
 							"name": "sizeInMBs",
 							"type": "Microsoft.Common.Slider",
 							"label": "FSLogix VHD Size (MB)",
-							"defaultValue": "[coalesce(int(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs), 30720)]",
+							"defaultValue": "[if(empty(coalesce(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs, '')), 30720, int(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs))]",
 							"toolTip": "Input the max size of the users fslogix containers.",
 							"min": 10240,
 							"max": 1048576,
@@ -2038,12 +2029,12 @@
 							"constraints": {
 								"required": true
 							},
-							"visible": "[and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]"
+							"visible": "[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]"
 						},
 						{
 							"name": "storageService",
 							"type": "Microsoft.Common.DropDown",
-							"visible": "[steps('userProfiles').configureSessionHosts]",
+							"visible": "[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]",
 							"label": "Storage Service",
 							"defaultValue": "[if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureNetAppFiles'), 'Azure NetApp Files', if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureFiles'), 'Azure Files', 'Azure Files'))]",
 							"toolTip": "Select the storage service that provides the SMB file share to support the use of FSLogix.",
@@ -2055,7 +2046,7 @@
 							"name": "azureNetAppFiles",
 							"type": "Microsoft.Common.Section",
 							"label": "Azure NetApp Files",
-							"visible": "[equals(steps('userProfiles').storageService, 'AzureNetAppFiles')]",
+							"visible": "[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles'))]",
 							"elements": [
 								{
 									"name": "subscription",
@@ -2236,7 +2227,7 @@
 							"name": "azureFiles",
 							"type": "Microsoft.Common.Section",
 							"label": "Azure Files",
-							"visible": "[equals(steps('userProfiles').storageService, 'AzureFiles')]",
+							"visible": "[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'))]",
 							"elements": [
 								{
 									"name": "shardHeader",
@@ -3387,7 +3378,7 @@
 				"agentBootLoaderDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentBootLoaderUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentBootLoaderUrl), steps('hosts').customizations.agentBootLoaderUrl), '')]",
 				"agentDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentUrl), steps('hosts').customizations.agentUrl), '')]",
 				"sessionHostCustomizations": "[if(steps('hosts').customizations.addCustomScripts, steps('hosts').customizations.customScripts, parse('[]'))]",
-				"fslogixConfigureSessionHosts": "[steps('userProfiles').configureSessionHosts]",
+				"fslogixConfigureSessionHosts": "[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), false, steps('userProfiles').configureSessionHosts)]",
 				"fslogixContainerType": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').fslogixContainerType, 'ProfileContainer')]",
 				"fslogixSizeInMBs": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').sizeInMBs, 30720)]",
 				"fslogixStorageService": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').storageService, 'AzureFiles')]",
