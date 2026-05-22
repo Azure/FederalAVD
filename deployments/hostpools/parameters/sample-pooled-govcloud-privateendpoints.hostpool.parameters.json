@@ -147,7 +147,7 @@
         "deployPrivateEndpoints": {
             "value": true
         },
-        "keyVaultPrivateEndpointSubnetResourceId": {
+        "operationsPrivateEndpointSubnetResourceId": {
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-privateendpoints"
         },
         "hostPoolResourcesPrivateEndpointSubnetResourceId": {

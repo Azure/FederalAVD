@@ -537,8 +537,8 @@ param existingDataCollectionEndpointResourceId string = ''
 @description('Optional. Create private endpoints for all deployed management and storage resources where applicable.')
 param deployPrivateEndpoints bool = false
 
-@description('Conditional. The Resource Id of the subnet on which to create the Key Vault private endpoints. Required when "deployPrivateEndpoints" = true and Key Vaults are deployed inline (deploySecretsKeyVault = true or CMK with no encryptionKeyVaultResourceId).')
-param keyVaultPrivateEndpointSubnetResourceId string = ''
+@description('Conditional. The Resource Id of the subnet on which to create private endpoints for operations resources (Key Vaults, Recovery Services Vault). Required when "deployPrivateEndpoints" = true and any operations resource is deployed inline.')
+param operationsPrivateEndpointSubnetResourceId string = ''
 
 @description('Conditional. The Resource Id of the subnet on which to create the storage account and other resources private link. Required when "deployPrivateEndpoints" = true.')
 param hostPoolResourcesPrivateEndpointSubnetResourceId string = ''
@@ -1402,7 +1402,7 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
           ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
           : existingLogAnalyticsWorkspaceResourceId)
       : ''
-    privateEndpointSubnetResourceId: keyVaultPrivateEndpointSubnetResourceId
+    privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
     privateEndpoint: deployPrivateEndpoints
     permittedIPs: permittedIPs
     privateEndpointNameConv: privateEndpointNameConv
@@ -1607,7 +1607,7 @@ module recoveryServicesModule 'modules/operations/recoveryServices.bicep' = if (
           : existingLogAnalyticsWorkspaceResourceId)
       : ''
     privateEndpoint: deployPrivateEndpoints
-    privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
+    privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId

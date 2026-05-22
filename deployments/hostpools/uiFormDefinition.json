@@ -3657,9 +3657,9 @@
 								{
 									"name": "managementHeader",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(steps('management').keyVaults.deploySecretsKeyVault, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
+									"visible": "[and(or(steps('management').keyVaults.deploySecretsKeyVault, and(not(steps('management').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
 									"options": {
-										"text": "Shared Management Resources (i.e., Key Vaults, Function Apps, etc.)"
+										"text": "Shared Operations Resources (Key Vaults, Recovery Services Vault)"
 									}
 								},
 								{
@@ -3668,12 +3668,12 @@
 									"label": "Virtual Network",
 									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
 									"multiLine": true,
-									"toolTip": "Select the virtual network for the key vault and/or function app private endpoints. Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
+									"toolTip": "Select the virtual network for the operations resource private endpoints (Key Vaults, Recovery Services Vault). Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(or(steps('management').keyVaults.deploySecretsKeyVault, and(not(steps('management').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(steps('management').keyVaults.deploySecretsKeyVault, and(not(steps('management').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "managementSubnetsApi",
@@ -3685,22 +3685,22 @@
 									}
 								},
 								{
-									"name": "keyVaultsSubnet",
+									"name": "operationsSubnet",
 									"type": "Microsoft.Common.DropDown",
-									"label": "Key Vault Private Endpoint subnet",
-									"toolTip": "Select an existing subnet for the private Endpoint.",
+									"label": "Operations Resources Private Endpoint Subnet",
+									"toolTip": "Select an existing subnet for the private endpoints of operations resources (Key Vaults, Recovery Services Vault).",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.managementSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(or(steps('management').keyVaults.deploySecretsKeyVault, and(not(steps('management').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(steps('management').keyVaults.deploySecretsKeyVault, and(not(steps('management').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "hostpoolHeader",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
+									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
 									"options": {
-										"text": "Hostpool Resources (Storage or Recovery Services Vaults)"
+										"text": "Hostpool Resources (FSLogix Storage Accounts)"
 									}
 								},
 								{
@@ -3709,12 +3709,12 @@
 									"label": "Virtual Network",
 									"multiLine": true,
 									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
-									"toolTip": "Select the virtual network for the storage account and/or recovery services vault private endpoints. Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
+									"toolTip": "Select the virtual network for the storage account private endpoints. Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "hostpoolSubnetsApi",
@@ -3734,7 +3734,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.hostpoolSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "privateDNSZonesHeader",
@@ -4140,7 +4140,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Subnet",
 									"toolTip": "Select an existing subnet for the private Endpoints.",
-									"defaultValue": "[steps('zeroTrust').privateEndpoints.keyVaultsSubnet.name]",
+									"defaultValue": "[steps('zeroTrust').privateEndpoints.operationsSubnet.name]",
 									"constraints": {
 										"allowedValues": "[map(steps('zeroTrust').avdPrivateLink.feedWorkspaceSubnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
 										"required": true
@@ -4444,7 +4444,7 @@
 				"existingAVDInsightsDataCollectionRuleResourceId": "[if(and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring), steps('management').monitoring.avdInsightsDataCollectionRule, '')]",
 				"existingDataCollectionEndpointResourceId": "[if(and(steps('management').monitoring.enableMonitoring, steps('management').monitoring.useExistingMonitoring), steps('management').monitoring.dataCollectionEndpoint, '')]",
 				"deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
-				"keyVaultPrivateEndpointSubnetResourceId": "[if(and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.keyVaultsSubnet.id, '')]",
+				"operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault, and(steps('management').backup.recoveryServices, not(steps('management').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
 				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",
 				"azureBackupPrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
 				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "10002624635270100277"
+      "templateHash": "17947720631294849250"
     }
   },
   "parameters": {
@@ -857,11 +857,11 @@
         "description": "Optional. Create private endpoints for all deployed management and storage resources where applicable."
       }
     },
-    "keyVaultPrivateEndpointSubnetResourceId": {
+    "operationsPrivateEndpointSubnetResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Conditional. The Resource Id of the subnet on which to create the Key Vault private endpoints. Required when \"deployPrivateEndpoints\" = true and Key Vaults are deployed inline (deploySecretsKeyVault = true or CMK with no encryptionKeyVaultResourceId)."
+        "description": "Conditional. The Resource Id of the subnet on which to create private endpoints for operations resources (Key Vaults, Recovery Services Vault). Required when \"deployPrivateEndpoints\" = true and any operations resource is deployed inline."
       }
     },
     "hostPoolResourcesPrivateEndpointSubnetResourceId": {
@@ -3042,7 +3042,7 @@
           },
           "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(empty(parameters('existingLogAnalyticsWorkspaceResourceId')), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpointSubnetResourceId": {
-            "value": "[parameters('keyVaultPrivateEndpointSubnetResourceId')]"
+            "value": "[parameters('operationsPrivateEndpointSubnetResourceId')]"
           },
           "privateEndpoint": {
             "value": "[parameters('deployPrivateEndpoints')]"
@@ -11691,7 +11691,7 @@
             "value": "[parameters('deployPrivateEndpoints')]"
           },
           "privateEndpointSubnetResourceId": {
-            "value": "[parameters('hostPoolResourcesPrivateEndpointSubnetResourceId')]"
+            "value": "[parameters('operationsPrivateEndpointSubnetResourceId')]"
           },
           "azureBackupPrivateDnsZoneResourceId": {
             "value": "[parameters('azureBackupPrivateDnsZoneResourceId')]"
@@ -12613,7 +12613,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "2556377267295337215"
+              "templateHash": "15100316725119843789"
             }
           },
           "parameters": {
@@ -15931,7 +15931,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "15686823526751620387"
+                      "templateHash": "2303976572309885020"
                     }
                   },
                   "parameters": {
@@ -15981,9 +15981,7 @@
                     {
                       "copy": {
                         "name": "protectedItems",
-                        "count": "[length(parameters('storageAccountResourceIds'))]",
-                        "mode": "serial",
-                        "batchSize": 1
+                        "count": "[length(parameters('storageAccountResourceIds'))]"
                       },
                       "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
                       "apiVersion": "2024-04-01",

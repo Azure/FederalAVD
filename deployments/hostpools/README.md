@@ -416,10 +416,9 @@ New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\hostpool.json" `
   -TemplateParameterFile ".\parameters\secure.parameters.json" `
-  -deployPrivateEndpointStorage $true `
-  -deployPrivateEndpointKeyVault $true `
-  -deployPrivateEndpointWorkspace $true `
-  -privateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints" `
+  -deployPrivateEndpoints $true `
+  -hostPoolResourcesPrivateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints" `
+  -operationsPrivateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints" `
   -Name "avd-hostpool-secure-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
 
@@ -470,6 +469,9 @@ Ready-to-use parameter files are in `parameters\`. Copy and rename one for your 
         },
         "deployPrivateEndpoints": { "value": true },
         "hostPoolResourcesPrivateEndpointSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
+        },
+        "operationsPrivateEndpointSubnetResourceId": {
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
         },
         "azureBlobPrivateDnsZoneResourceId": {
