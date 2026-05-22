@@ -1102,15 +1102,18 @@
 									"toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role assigned to the storage account selected above.",
 									"resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
 									"constraints": {
-										"required": false,
-										"validations": [
-											{
-												"isValid": "[or(not(empty(steps('hosts').customizations.managedIdentity)), and(empty(steps('hosts').customizations.storageAccount), not(contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.')), not(contains(steps('hosts').customizations.agentUrl, '.blob.core.'))))]",
-												"message": "A managed identity is required when accessing blob storage. Either select a storage account above or provide a managed identity."
-											}
-										]
+										"required": false
 									},
 									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
+								},
+								{
+									"name": "managedIdentityRequiredError",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), empty(steps('hosts').customizations.managedIdentity), or(not(empty(steps('hosts').customizations.storageAccount)), contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.'), contains(steps('hosts').customizations.agentUrl, '.blob.core.')))]" ,
+									"options": {
+										"text": "A managed identity with 'Storage Blob Data Reader' on the storage account is required when a storage account is selected or a blob storage URL is provided.",
+										"style": "Error"
+									}
 								},
 								{
 									"name": "agentDownloadHeader",
@@ -1145,6 +1148,15 @@
 										"validationMessage": "Must be either a full URL (https://...) or a blob name ending in .msi"
 									},
 									"visible": "[steps('hosts').customizations.customizeAgentDownload]"
+								},
+								{
+									"name": "agentBlobWithoutStorageError",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(steps('hosts').customizations.customizeAgentDownload, empty(steps('hosts').customizations.storageAccount), or(and(not(empty(steps('hosts').customizations.agentBootLoaderUrl)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), and(not(empty(steps('hosts').customizations.agentUrl)), not(startsWith(steps('hosts').customizations.agentUrl, 'http')))))]" ,
+									"options": {
+										"text": "A blob name was entered but no storage account is selected. Select a storage account and container above, or provide a full URL instead.",
+										"style": "Error"
+									}
 								},
 								{
 									"name": "customScriptsHeader",
