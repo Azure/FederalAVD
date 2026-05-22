@@ -12,7 +12,7 @@ param confidentialVMOSDiskEncryptionType string
 param dataCollectionEndpointResourceId string
 param dedicatedHostGroupResourceIds array
 param dedicatedHostResourceIds array
-param preferredZones array
+param deploymentSuffix string
 param diskAccessId string = ''
 param diskEncryptionSetResourceId string
 param diskSizeGB int
@@ -46,6 +46,7 @@ param location string
 param networkInterfaceNameConv string
 param osDiskNameConv string
 param ouPath string
+param preferredZones array
 param sessionHostCustomizations array
 param sessionHostNames array
 param vmNumbers array
@@ -53,7 +54,6 @@ param securityType string
 param secureBootEnabled bool
 param subnetResourceId string
 param tags object
-param deploymentSuffix string
 param timeZone string
 @secure()
 param virtualMachineAdminPassword string
@@ -515,7 +515,7 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
   }
 ]
 
-module updateOSDiskNetworkAccess '../../../../../.common/bicepModules/custom/disableOSDiskPublicAccess/getOSDisk.bicep' = [
+module updateOSDiskNetworkAccess 'getOSDisk.bicep' = [
   for i in range(0, sessionHostCount): {
     name: '${virtualMachineNames[i]}-disable-osDisk-PublicAccess-${deploymentSuffix}'
     params: {

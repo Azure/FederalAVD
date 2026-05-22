@@ -9,43 +9,18 @@ targetScope = 'subscription'
 //             Key Vault Crypto Service Encryption User on the key, and grants the CVM
 //             Orchestrator service principal Key Vault Crypto Service Release User on the key.
 
-@description('Required. Resource group name where the DiskEncryptionSet will be created.')
 param resourceGroupHosts string
-
-@description('Required. Resource group name where the deployment VM runs.')
 param resourceGroupDeployment string
-
-@description('Required. Resource ID of the Key Vault holding the CVM encryption key.')
 param keyVaultResourceId string
-
-@description('Required. URI of the Key Vault (e.g. https://myvault.vault.azure.net).')
 param keyVaultUri string
-
-@description('Required. Name of the CVM encryption key to create in the Key Vault.')
 param keyName string
-
-@description('Required. Name of the DiskEncryptionSet to create.')
 param diskEncryptionSetName string
-
-@description('Required. Object ID of the Confidential VM Orchestrator enterprise application (bf7b6499-ff71-4aa2-97a4-f372087be7f0) in your tenant.')
 param confidentialVMOrchestratorObjectId string
-
-@description('Required. Name of the deployment VM on which the Run Command will execute.')
 param deploymentVirtualMachineName string
-
-@description('Required. Client ID of the deployment user-assigned identity used to authenticate against Key Vault.')
 param deploymentUserAssignedIdentityClientId string
-
-@description('Required. Azure region for the DiskEncryptionSet.')
 param location string
-
-@description('Optional. Tags to apply to created resources.')
 param tags object = {}
-
-@description('Required. Resource ID of the host pool — stamped as the cm-resource-parent tag on keys and the DES.')
 param hostPoolResourceId string
-
-@description('Required. Deployment name suffix for uniqueness.')
 param deploymentSuffix string
 
 // Step 1: Create the CVM key with a key release policy via the Key Vault data plane.

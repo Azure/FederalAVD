@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "12760626729767238944"
+      "templateHash": "4572999643446569476"
     }
   },
   "parameters": {
@@ -4233,70 +4233,37 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "47338090129286693"
+              "templateHash": "828062296271715130"
             }
           },
           "parameters": {
             "resourceGroupName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource group name in which to create the disk encryption set."
-              }
+              "type": "string"
             },
             "keyVaultResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the Key Vault holding the disk encryption key."
-              }
+              "type": "string"
             },
             "keyManagementType": {
-              "type": "string",
-              "allowedValues": [
-                "CustomerManaged",
-                "CustomerManagedHSM",
-                "PlatformManagedAndCustomerManaged",
-                "PlatformManagedAndCustomerManagedHSM"
-              ],
-              "metadata": {
-                "description": "Required. CMK type for disk encryption."
-              }
+              "type": "string"
             },
             "keyExpirationInDays": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Key expiration in days."
-              }
+              "type": "int"
             },
             "location": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Azure region for the DiskEncryptionSet."
-              }
+              "type": "string"
             },
             "tags": {
               "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Optional. Tags to apply to resources."
-              }
+              "defaultValue": {}
             },
             "deploymentSuffix": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Deployment name suffix for uniqueness."
-              }
+              "type": "string"
             },
             "keyName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the Key Vault key to create."
-              }
+              "type": "string"
             },
             "diskEncryptionSetName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the DiskEncryptionSet to create."
-              }
+              "type": "string"
             }
           },
           "resources": [
@@ -5633,88 +5600,49 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "4181591460126627511"
+              "templateHash": "5828199756176517359"
             }
           },
           "parameters": {
             "resourceGroupHosts": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource group name where the DiskEncryptionSet will be created."
-              }
+              "type": "string"
             },
             "resourceGroupDeployment": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource group name where the deployment VM runs."
-              }
+              "type": "string"
             },
             "keyVaultResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the Key Vault holding the CVM encryption key."
-              }
+              "type": "string"
             },
             "keyVaultUri": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. URI of the Key Vault (e.g. https://myvault.vault.azure.net)."
-              }
+              "type": "string"
             },
             "keyName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the CVM encryption key to create in the Key Vault."
-              }
+              "type": "string"
             },
             "diskEncryptionSetName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the DiskEncryptionSet to create."
-              }
+              "type": "string"
             },
             "confidentialVMOrchestratorObjectId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Object ID of the Confidential VM Orchestrator enterprise application (bf7b6499-ff71-4aa2-97a4-f372087be7f0) in your tenant."
-              }
+              "type": "string"
             },
             "deploymentVirtualMachineName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the deployment VM on which the Run Command will execute."
-              }
+              "type": "string"
             },
             "deploymentUserAssignedIdentityClientId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Client ID of the deployment user-assigned identity used to authenticate against Key Vault."
-              }
+              "type": "string"
             },
             "location": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Azure region for the DiskEncryptionSet."
-              }
+              "type": "string"
             },
             "tags": {
               "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Optional. Tags to apply to created resources."
-              }
+              "defaultValue": {}
             },
             "hostPoolResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the host pool — stamped as the cm-resource-parent tag on keys and the DES."
-              }
+              "type": "string"
             },
             "deploymentSuffix": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Deployment name suffix for uniqueness."
-              }
+              "type": "string"
             }
           },
           "variables": {
@@ -7244,80 +7172,43 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "3448656757012654043"
+              "templateHash": "12440771252940957316"
             }
           },
           "parameters": {
             "resourceGroupName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource group name in which to create the storage encryption identity and keys."
-              }
+              "type": "string"
             },
             "keyVaultResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the Key Vault holding the storage encryption keys."
-              }
+              "type": "string"
             },
             "keyManagementType": {
-              "type": "string",
-              "allowedValues": [
-                "CustomerManaged",
-                "CustomerManagedHSM"
-              ],
-              "metadata": {
-                "description": "Required. CMK type for storage encryption."
-              }
+              "type": "string"
             },
             "keyExpirationInDays": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Key expiration in days."
-              }
+              "type": "int"
             },
             "location": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Azure region for the user-assigned identity."
-              }
+              "type": "string"
             },
             "tags": {
               "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Optional. Tags to apply to resources."
-              }
+              "defaultValue": {}
             },
             "deploymentSuffix": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Deployment name suffix for uniqueness."
-              }
+              "type": "string"
             },
             "storageKeyNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Key name convention with \"##\" placeholder for the zero-padded storage index."
-              }
+              "type": "string"
             },
             "storageCount": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Number of storage accounts (and therefore keys) to create."
-              }
+              "type": "int"
             },
             "storageIndex": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Starting index for storage key naming."
-              }
+              "type": "int"
             },
             "storageIdentityName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the user-assigned identity to create for storage CMK."
-              }
+              "type": "string"
             }
           },
           "variables": {
@@ -16070,78 +15961,45 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "17148612768533281802"
+              "templateHash": "10831751278909963637"
             }
           },
           "parameters": {
             "resourceGroupHosts": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the resource group where the DiskAccess resource and its private endpoint will be deployed."
-              }
+              "type": "string"
             },
             "diskAccessName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name for the DiskAccess resource."
-              }
+              "type": "string"
             },
             "location": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Azure region for the DiskAccess resource."
-              }
+              "type": "string"
             },
             "hostPoolResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the AVD host pool (used as the cm-resource-parent tag)."
-              }
+              "type": "string"
             },
             "deploymentSuffix": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Short unique deployment suffix."
-              }
+              "type": "string"
             },
             "tags": {
               "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Required. Resource tags object."
-              }
+              "defaultValue": {}
             },
             "deployPrivateEndpoint": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. Whether to deploy a private endpoint for the DiskAccess resource."
-              }
+              "type": "bool"
             },
             "privateEndpointSubnetResourceId": {
               "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of the subnet for the DiskAccess private endpoint."
-              }
+              "defaultValue": ""
             },
             "privateEndpointNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name convention string for private endpoint resources."
-              }
+              "type": "string"
             },
             "privateEndpointNICNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name convention string for private endpoint NICs."
-              }
+              "type": "string"
             },
             "azureBlobPrivateDnsZoneResourceId": {
               "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of the Azure Blob private DNS zone for the disk access private endpoint."
-              }
+              "defaultValue": ""
             }
           },
           "resources": [
@@ -16737,7 +16595,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "17166164094148203229"
+              "templateHash": "10162798673672442261"
             }
           },
           "parameters": {
@@ -17179,437 +17037,230 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "5247094781378799131"
+                      "templateHash": "4086320713410922324"
                     }
                   },
                   "parameters": {
                     "agentBootLoaderDownloadUrl": {
                       "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. Override download URL for the AVD Agent Boot Loader installer. Leave empty to use the default Microsoft-hosted URL for the current cloud."
-                      }
+                      "defaultValue": ""
                     },
                     "agentDownloadUrl": {
                       "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. Override download URL for the AVD Agent installer. Leave empty to use the default Microsoft-hosted URL for the current cloud."
-                      }
-                    },
-                    "avdAgentDscPackage": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. File name of the AVD Agent DSC configuration package blob (e.g. \"Configuration_01-20-2023.zip\"). Used during session host registration."
-                      }
+                      "defaultValue": ""
                     },
                     "artifactsContainerUri": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. URI of the blob storage container holding scripts and artifacts for session host customizations."
-                      }
+                      "type": "string"
                     },
                     "artifactsUserAssignedIdentityResourceId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Resource ID of the user-assigned managed identity with Storage Blob Data Reader access to the artifacts container."
-                      }
+                      "type": "string"
                     },
                     "availability": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. VM availability strategy: \"None\", \"AvailabilitySets\", or \"AvailabilityZones\"."
-                      }
+                      "type": "string"
                     },
                     "availabilitySetNameConv": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Name convention string for availability sets, containing ## placeholder for set number."
-                      }
+                      "type": "string"
                     },
                     "availabilitySetsCount": {
-                      "type": "int",
-                      "metadata": {
-                        "description": "Required. Total number of availability sets to create for this host pool deployment."
-                      }
+                      "type": "int"
                     },
                     "availabilitySetsIndex": {
-                      "type": "int",
-                      "metadata": {
-                        "description": "Required. Starting index used when naming availability sets."
-                      }
+                      "type": "int"
                     },
                     "availabilityZones": {
-                      "type": "array",
-                      "metadata": {
-                        "description": "Required. List of availability zones across which session hosts are distributed. Used when availability is \"AvailabilityZones\"."
-                      }
+                      "type": "array"
+                    },
+                    "avdAgentDscPackage": {
+                      "type": "string"
                     },
                     "avdInsightsDataCollectionRulesResourceId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Resource ID of the AVD Insights data collection rule for session host diagnostics."
-                      }
+                      "type": "string"
                     },
                     "confidentialVMOSDiskEncryption": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, enables OS disk encryption with VMGuestState for confidential VMs."
-                      }
+                      "type": "bool"
                     },
                     "customImageResourceId": {
                       "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. Resource ID of an Azure Compute Gallery image version. Leave empty to use marketplace image."
-                      }
+                      "defaultValue": ""
                     },
                     "dataCollectionEndpointResourceId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Resource ID of the Azure Monitor data collection endpoint."
-                      }
+                      "type": "string"
                     },
                     "dedicatedHostGroupResourceId": {
                       "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. Resource ID of a dedicated host group for all session hosts in this deployment."
-                      }
-                    },
-                    "dedicatedHostResourceId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. Resource ID of a specific dedicated host for all session hosts in this deployment."
-                      }
+                      "defaultValue": ""
                     },
                     "dedicatedHostGroupResourceIds": {
                       "type": "array",
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Optional. Per-VM array of dedicated host group resource IDs. Takes precedence over dedicatedHostGroupResourceId when non-empty."
-                      }
+                      "defaultValue": []
+                    },
+                    "dedicatedHostResourceId": {
+                      "type": "string",
+                      "defaultValue": ""
                     },
                     "dedicatedHostResourceIds": {
                       "type": "array",
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Optional. Per-VM array of dedicated host resource IDs. Takes precedence over dedicatedHostResourceId when non-empty."
-                      }
+                      "defaultValue": []
                     },
-                    "preferredZones": {
-                      "type": "array",
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Optional. Per-VM preferred availability zones. One entry per session host (as a zone string). Empty array means no zone preference."
-                      }
+                    "deploymentSuffix": {
+                      "type": "string"
                     },
                     "diskAccessId": {
                       "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. Resource ID of the DiskAccess resource used to restrict managed disk network access."
-                      }
-                    },
-                    "domainJoinUserPassword": {
-                      "type": "securestring",
-                      "metadata": {
-                        "description": "Required. Password for the domain join service account."
-                      }
-                    },
-                    "domainJoinUserPrincipalName": {
-                      "type": "securestring",
-                      "metadata": {
-                        "description": "Required. User principal name of the domain join service account."
-                      }
+                      "defaultValue": ""
                     },
                     "diskSizeGB": {
-                      "type": "int",
-                      "metadata": {
-                        "description": "Required. OS disk size in GB. Set to 0 to inherit the default size from the source image."
-                      }
+                      "type": "int"
                     },
                     "diskSku": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Storage SKU for the OS disk."
-                      }
+                      "type": "string"
+                    },
+                    "domainJoinUserPassword": {
+                      "type": "securestring"
+                    },
+                    "domainJoinUserPrincipalName": {
+                      "type": "securestring"
                     },
                     "domainName": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Active Directory domain name for domain join. Leave empty for Entra ID join."
-                      }
+                      "type": "string"
                     },
                     "enableAcceleratedNetworking": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, enables accelerated networking on session host NICs."
-                      }
+                      "type": "bool"
                     },
                     "enableIPv6": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, adds an IPv6 IP configuration to session host NICs."
-                      }
+                      "type": "bool"
+                    },
+                    "enableMonitoring": {
+                      "type": "bool"
                     },
                     "encryptionAtHost": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, enables encryption at the VM host for all disks and cache."
-                      }
+                      "type": "bool"
                     },
                     "existingDiskEncryptionSetResourceId": {
                       "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. Resource ID of a pre-existing Disk Encryption Set."
-                      }
-                    },
-                    "fslogixFileShareNames": {
-                      "type": "array",
-                      "metadata": {
-                        "description": "Required. Array of Azure Files share names to mount for FSLogix profile containers."
-                      }
+                      "defaultValue": ""
                     },
                     "fslogixConfigureSessionHosts": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, configures FSLogix profile container settings on session hosts."
-                      }
+                      "type": "bool"
                     },
                     "fslogixContainerType": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. FSLogix container type."
-                      }
+                      "type": "string"
+                    },
+                    "fslogixFileShareNames": {
+                      "type": "array"
                     },
                     "fslogixLocalNetAppVolumeResourceIds": {
-                      "type": "array",
-                      "metadata": {
-                        "description": "Required. Resource IDs of NetApp volumes in the session host region for FSLogix."
-                      }
+                      "type": "array"
                     },
                     "fslogixLocalStorageAccountResourceIds": {
-                      "type": "array",
-                      "metadata": {
-                        "description": "Required. Resource IDs of Azure Storage accounts in the session host region for FSLogix."
-                      }
+                      "type": "array"
                     },
                     "fslogixOSSGroups": {
-                      "type": "array",
-                      "metadata": {
-                        "description": "Required. Entra ID group object IDs for FSLogix Office container separation."
-                      }
+                      "type": "array"
                     },
                     "fslogixRemoteNetAppVolumeResourceIds": {
-                      "type": "array",
-                      "metadata": {
-                        "description": "Required. Resource IDs of NetApp volumes in a remote region for FSLogix cloud cache failover."
-                      }
+                      "type": "array"
                     },
                     "fslogixRemoteStorageAccountResourceIds": {
-                      "type": "array",
-                      "metadata": {
-                        "description": "Required. Resource IDs of Azure Storage accounts in a remote region for FSLogix cloud cache failover."
-                      }
+                      "type": "array"
                     },
                     "fslogixSizeInMBs": {
-                      "type": "int",
-                      "metadata": {
-                        "description": "Required. Maximum size of the FSLogix profile VHD/VHDX in megabytes."
-                      }
+                      "type": "int"
                     },
                     "fslogixStorageService": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Storage service backing FSLogix containers."
-                      }
+                      "type": "string"
                     },
                     "hibernationEnabled": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, enables VM hibernation on session hosts."
-                      }
+                      "type": "bool"
                     },
                     "hostPoolResourceId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Resource ID of the AVD host pool that session hosts will be registered with."
-                      }
+                      "type": "string"
                     },
                     "identitySolution": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Identity join method: \"ActiveDirectoryDomainServices\", \"EntraId\", or \"EntraIdIntuneEnrollment\"."
-                      }
+                      "type": "string"
+                    },
+                    "imageOffer": {
+                      "type": "string"
+                    },
+                    "imagePublisher": {
+                      "type": "string"
                     },
                     "imageReference": {
                       "type": "object",
-                      "defaultValue": {},
-                      "metadata": {
-                        "description": "Optional. Pre-built image reference object. When provided, takes precedence over imagePublisher/imageOffer/imageSku/customImageResourceId."
-                      }
-                    },
-                    "imageOffer": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Marketplace image offer. Used when imageReference and customImageResourceId are empty."
-                      }
-                    },
-                    "imagePublisher": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Marketplace image publisher. Used when imageReference and customImageResourceId are empty."
-                      }
+                      "defaultValue": {}
                     },
                     "imageSku": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Marketplace image SKU. Used when imageReference and customImageResourceId are empty."
-                      }
+                      "type": "string"
                     },
                     "integrityMonitoring": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, deploys the Guest Attestation extension for boot integrity monitoring."
-                      }
+                      "type": "bool"
                     },
                     "intuneEnrollment": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, enrolls session hosts into Microsoft Intune during provisioning."
-                      }
+                      "type": "bool"
                     },
                     "location": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Azure region where session host VMs are deployed."
-                      }
-                    },
-                    "enableMonitoring": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, deploys Azure Monitor Agent and data collection rules on session hosts."
-                      }
+                      "type": "string"
                     },
                     "networkInterfaceNameConv": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Name convention string for session host NICs, containing SHNAME placeholder."
-                      }
+                      "type": "string"
                     },
                     "osDiskNameConv": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Name convention string for session host OS disks, containing SHNAME placeholder."
-                      }
+                      "type": "string"
                     },
                     "ouPath": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Distinguished name of the AD OU for session host computer accounts."
-                      }
+                      "type": "string"
                     },
-                    "secureBootEnabled": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, enables Secure Boot on session host VMs."
-                      }
-                    },
-                    "securityType": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. VM security profile type: \"Standard\", \"TrustedLaunch\", or \"ConfidentialVM\"."
-                      }
-                    },
-                    "sessionHostNames": {
+                    "preferredZones": {
                       "type": "array",
-                      "metadata": {
-                        "description": "Required. Resolved list of session host computer names to deploy."
-                      }
-                    },
-                    "sessionHostCustomizations": {
-                      "type": "array",
-                      "metadata": {
-                        "description": "Optional. Array of customization objects to execute on session hosts after provisioning."
-                      }
-                    },
-                    "vmNameIndexLength": {
-                      "type": "int",
-                      "defaultValue": 2,
-                      "metadata": {
-                        "description": "Required. Number of digits in the zero-padded VM index. Used to extract the numeric suffix for availability zone and set assignment."
-                      }
-                    },
-                    "subnetResourceId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Resource ID of the virtual network subnet where session host NICs are connected."
-                      }
-                    },
-                    "tags": {
-                      "type": "object",
-                      "metadata": {
-                        "description": "Required. Azure resource tags applied to all deployed resources, keyed by resource type."
-                      }
-                    },
-                    "deploymentSuffix": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Short unique suffix appended to deployment names to prevent naming collisions."
-                      }
-                    },
-                    "timeZone": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Windows time zone for session host VMs."
-                      }
-                    },
-                    "virtualMachineNameConv": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Full name convention string for VM names, containing SHNAME placeholder."
-                      }
-                    },
-                    "virtualMachineSize": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Azure VM SKU for session hosts."
-                      }
-                    },
-                    "virtualMachineAdminPassword": {
-                      "type": "securestring",
-                      "metadata": {
-                        "description": "Required. Local administrator password for all session host VMs."
-                      }
-                    },
-                    "virtualMachineAdminUserName": {
-                      "type": "securestring",
-                      "metadata": {
-                        "description": "Required. Local administrator username for all session host VMs."
-                      }
-                    },
-                    "vTpmEnabled": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, enables virtual TPM on session host VMs."
-                      }
+                      "defaultValue": []
                     },
                     "recoveryServicesVaultResourceId": {
                       "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. Resource ID of the Recovery Services Vault for VM backup registration."
-                      }
+                      "defaultValue": ""
+                    },
+                    "secureBootEnabled": {
+                      "type": "bool"
+                    },
+                    "securityType": {
+                      "type": "string"
+                    },
+                    "sessionHostCustomizations": {
+                      "type": "array"
+                    },
+                    "sessionHostNames": {
+                      "type": "array"
+                    },
+                    "subnetResourceId": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "object"
+                    },
+                    "timeZone": {
+                      "type": "string"
+                    },
+                    "virtualMachineAdminPassword": {
+                      "type": "securestring"
+                    },
+                    "virtualMachineAdminUserName": {
+                      "type": "securestring"
+                    },
+                    "virtualMachineNameConv": {
+                      "type": "string"
+                    },
+                    "virtualMachineSize": {
+                      "type": "string"
                     },
                     "vmBackupPolicyName": {
                       "type": "string",
-                      "defaultValue": "AvdPolicyVm",
-                      "metadata": {
-                        "description": "Optional. Backup policy name for session host VMs."
-                      }
+                      "defaultValue": "AvdPolicyVm"
+                    },
+                    "vmNameIndexLength": {
+                      "type": "int",
+                      "defaultValue": 2
+                    },
+                    "vTpmEnabled": {
+                      "type": "bool"
                     }
                   },
                   "variables": {
@@ -18049,7 +17700,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.43.8.12551",
-                              "templateHash": "10995790968743683607"
+                              "templateHash": "2396065565125419258"
                             }
                           },
                           "parameters": {
@@ -18095,8 +17746,8 @@
                             "dedicatedHostResourceIds": {
                               "type": "array"
                             },
-                            "preferredZones": {
-                              "type": "array"
+                            "deploymentSuffix": {
+                              "type": "string"
                             },
                             "diskAccessId": {
                               "type": "string",
@@ -18193,6 +17844,9 @@
                             "ouPath": {
                               "type": "string"
                             },
+                            "preferredZones": {
+                              "type": "array"
+                            },
                             "sessionHostCustomizations": {
                               "type": "array"
                             },
@@ -18213,9 +17867,6 @@
                             },
                             "tags": {
                               "type": "object"
-                            },
-                            "deploymentSuffix": {
-                              "type": "string"
                             },
                             "timeZone": {
                               "type": "string"
