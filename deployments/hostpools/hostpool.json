@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "17947720631294849250"
+      "templateHash": "12760626729767238944"
     }
   },
   "parameters": {
@@ -1337,8 +1337,6 @@
     "scalingPlanSchedules": "[if(parameters('deployScalingPlan'), createArray(createObject('rampUpStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampUpSchedule').startTime, ':')[1]))), 'peakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanPeakSchedule').startTime, ':')[1]))), 'rampDownStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanRampDownSchedule').startTime, ':')[1]))), 'offPeakStartTime', createObject('hour', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[0])), 'minute', if(equals(first(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]), '0'), int(last(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1])), int(split(parameters('scalingPlanOffPeakSchedule').startTime, ':')[1]))), 'name', 'weekdays_schedule', 'daysOfWeek', createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 'rampUpLoadBalancingAlgorithm', parameters('scalingPlanRampUpSchedule').loadBalancingAlgorithm, 'rampUpMinimumHostsPct', parameters('scalingPlanRampUpSchedule').minimumHostsPct, 'rampUpCapacityThresholdPct', parameters('scalingPlanRampUpSchedule').capacityThresholdPct, 'peakLoadBalancingAlgorithm', parameters('scalingPlanPeakSchedule').loadBalancingAlgorithm, 'rampDownLoadBalancingAlgorithm', parameters('scalingPlanRampDownSchedule').loadBalancingAlgorithm, 'rampDownMinimumHostsPct', parameters('scalingPlanRampDownSchedule').minimumHostsPct, 'rampDownCapacityThresholdPct', parameters('scalingPlanRampDownSchedule').capacityThresholdPct, 'rampDownForceLogoffUsers', parameters('scalingPlanForceLogoff'), 'rampDownWaitTimeMinutes', parameters('scalingPlanMinsBeforeLogoff'), 'rampDownNotificationMessage', if(parameters('scalingPlanForceLogoff'), format('You will be logged off in {0} minutes. Make sure to save your work.', parameters('scalingPlanMinsBeforeLogoff')), null()), 'rampDownStopHostsWhen', 'ZeroSessions', 'offPeakLoadBalancingAlgorithm', parameters('scalingPlanOffPeakSchedule').loadBalancingAlgorithm)), createArray())]",
     "exclusionTag": "[if(and(not(empty(parameters('scalingPlanExclusionTag'))), parameters('deployScalingPlan')), createObject('Microsoft.Compute/virtualMachines', createObject(format('{0}', parameters('scalingPlanExclusionTag')), '')), createObject())]",
     "hostTags": "[if(not(empty(variables('exclusionTag'))), union(parameters('tags'), variables('exclusionTag')), parameters('tags'))]",
-    "hasAmdGpu": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), 'as_v4'), endsWith(parameters('virtualMachineSize'), '_V710_v5')))]",
-    "hasNvidiaGpu": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), '_v3'), endsWith(parameters('virtualMachineSize'), '_A10_v5')))]",
     "maxAvSetMembers": 200,
     "beginAvSetRange": "[div(parameters('sessionHostIndex'), variables('maxAvSetMembers'))]",
     "endAvSetRange": "[div(add(parameters('sessionHostCount'), parameters('sessionHostIndex')), variables('maxAvSetMembers'))]",
@@ -1959,27 +1957,18 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "3860340320022929204"
+              "templateHash": "3116555046171262428"
             }
           },
           "parameters": {
             "resourceGroupHosts": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the resource group where session hosts are deployed."
-              }
+              "type": "string"
             },
             "appGroupSecurityGroups": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Array of Entra ID group objects with an \"id\" property. Members receive the Virtual Machine User Login role."
-              }
+              "type": "array"
             },
             "deploymentSuffix": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Short unique deployment suffix."
-              }
+              "type": "string"
             }
           },
           "resources": [
@@ -8658,7 +8647,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "6688209774431700042"
+              "templateHash": "7222867924138803513"
             }
           },
           "parameters": {
@@ -9031,7 +9020,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "12484024376617149145"
+                      "templateHash": "17437135665124235954"
                     }
                   },
                   "parameters": {
@@ -9048,10 +9037,7 @@
                     },
                     "dataCollectionEndpointId": {
                       "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional. Resource ID of the data collection endpoint. Required when the workspace uses private link."
-                      }
+                      "defaultValue": ""
                     }
                   },
                   "resources": [
@@ -16634,12 +16620,6 @@
           "encryptionAtHost": {
             "value": "[parameters('encryptionAtHost')]"
           },
-          "hasAmdGpu": {
-            "value": "[variables('hasAmdGpu')]"
-          },
-          "hasNvidiaGpu": {
-            "value": "[variables('hasNvidiaGpu')]"
-          },
           "existingDiskEncryptionSetResourceId": "[if(variables('deployDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), if(variables('deployCvmDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('CVM-Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('existingDiskEncryptionSetResourceId'))))]",
           "fslogixConfigureSessionHosts": {
             "value": "[parameters('fslogixConfigureSessionHosts')]"
@@ -16757,438 +16737,222 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "13604711298048922211"
+              "templateHash": "17166164094148203229"
             }
           },
           "parameters": {
             "resourceGroupHosts": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the resource group where session host VMs are deployed."
-              }
+              "type": "string"
             },
             "agentBootLoaderDownloadUrl": {
               "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Override download URL for the AVD Agent Boot Loader installer."
-              }
+              "defaultValue": ""
             },
             "agentDownloadUrl": {
               "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Override download URL for the AVD Agent installer."
-              }
+              "defaultValue": ""
             },
             "avdAgentDscPackage": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. File name of the AVD Agent DSC configuration package blob."
-              }
+              "type": "string"
             },
             "artifactsContainerUri": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. URI of the blob storage container holding artifacts for session host customizations."
-              }
+              "type": "string"
             },
             "artifactsUserAssignedIdentityResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the user-assigned managed identity with Storage Blob Data Reader access."
-              }
+              "type": "string"
             },
             "availability": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. VM availability strategy."
-              }
+              "type": "string"
             },
             "availabilitySetNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name convention string for availability sets."
-              }
+              "type": "string"
             },
             "availabilitySetsCount": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Total number of availability sets to create."
-              }
+              "type": "int"
             },
             "availabilitySetsIndex": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Starting index for availability set naming."
-              }
+              "type": "int"
             },
             "availabilityZones": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. List of availability zones."
-              }
+              "type": "array"
             },
             "avdInsightsDataCollectionRulesResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the AVD Insights data collection rule."
-              }
+              "type": "string"
             },
             "confidentialVMOSDiskEncryption": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enables OS disk encryption with VMGuestState for confidential VMs."
-              }
+              "type": "bool"
             },
             "customImageResourceId": {
               "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of a Compute Gallery image version."
-              }
+              "defaultValue": ""
             },
             "dataCollectionEndpointResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the Azure Monitor data collection endpoint."
-              }
+              "type": "string"
             },
             "dedicatedHostGroupResourceId": {
               "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of a dedicated host group."
-              }
+              "defaultValue": ""
             },
             "dedicatedHostResourceId": {
               "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of a specific dedicated host."
-              }
+              "defaultValue": ""
             },
             "diskAccessId": {
               "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of the DiskAccess resource."
-              }
+              "defaultValue": ""
             },
             "domainJoinUserPassword": {
-              "type": "securestring",
-              "metadata": {
-                "description": "Required. Password for the domain join service account."
-              }
+              "type": "securestring"
             },
             "domainJoinUserPrincipalName": {
-              "type": "securestring",
-              "metadata": {
-                "description": "Required. UPN of the domain join service account."
-              }
+              "type": "securestring"
             },
             "diskSizeGB": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. OS disk size in GB."
-              }
+              "type": "int"
             },
             "diskSku": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Storage SKU for the OS disk."
-              }
+              "type": "string"
             },
             "domainName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Active Directory domain name for domain join."
-              }
+              "type": "string"
             },
             "enableAcceleratedNetworking": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enables accelerated networking."
-              }
+              "type": "bool"
             },
             "enableIPv6": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, adds IPv6 IP configuration to NICs."
-              }
+              "type": "bool"
             },
             "encryptionAtHost": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enables encryption at host."
-              }
-            },
-            "hasAmdGpu": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, installs AMD GPU driver extension."
-              }
-            },
-            "hasNvidiaGpu": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, installs NVIDIA GPU driver extension."
-              }
+              "type": "bool"
             },
             "existingDiskEncryptionSetResourceId": {
               "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of a pre-existing Disk Encryption Set."
-              }
+              "defaultValue": ""
             },
             "fslogixFileShareNames": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Array of Azure Files share names for FSLogix."
-              }
+              "type": "array"
             },
             "fslogixConfigureSessionHosts": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, configures FSLogix settings on session hosts."
-              }
+              "type": "bool"
             },
             "fslogixContainerType": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. FSLogix container type."
-              }
+              "type": "string"
             },
             "fslogixLocalNetAppVolumeResourceIds": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Resource IDs of local NetApp volumes for FSLogix."
-              }
+              "type": "array"
             },
             "fslogixLocalStorageAccountResourceIds": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Resource IDs of local storage accounts for FSLogix."
-              }
+              "type": "array"
             },
             "fslogixOSSGroups": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Entra ID group object IDs for FSLogix OSS."
-              }
+              "type": "array"
             },
             "fslogixRemoteNetAppVolumeResourceIds": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Resource IDs of remote NetApp volumes for FSLogix cloud cache failover."
-              }
+              "type": "array"
             },
             "fslogixRemoteStorageAccountResourceIds": {
-              "type": "array",
-              "metadata": {
-                "description": "Required. Resource IDs of remote storage accounts for FSLogix cloud cache failover."
-              }
+              "type": "array"
             },
             "fslogixSizeInMBs": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Maximum size of FSLogix profile VHD/VHDX in MB."
-              }
+              "type": "int"
             },
             "fslogixStorageService": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Storage service backing FSLogix containers."
-              }
+              "type": "string"
             },
             "hibernationEnabled": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enables VM hibernation."
-              }
+              "type": "bool"
             },
             "hostPoolResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the AVD host pool."
-              }
+              "type": "string"
             },
             "identitySolution": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Identity join method."
-              }
+              "type": "string"
             },
             "imageOffer": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Marketplace image offer."
-              }
+              "type": "string"
             },
             "imagePublisher": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Marketplace image publisher."
-              }
+              "type": "string"
             },
             "imageSku": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Marketplace image SKU."
-              }
+              "type": "string"
             },
             "integrityMonitoring": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, deploys the Guest Attestation extension."
-              }
+              "type": "bool"
             },
             "intuneEnrollment": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enrolls session hosts into Intune."
-              }
+              "type": "bool"
             },
             "location": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Azure region for session host VMs."
-              }
+              "type": "string"
             },
             "enableMonitoring": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, deploys Azure Monitor Agent and DCRs."
-              }
+              "type": "bool"
             },
             "networkInterfaceNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name convention string for NICs, containing SHNAME placeholder."
-              }
+              "type": "string"
             },
             "osDiskNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name convention string for OS disks, containing SHNAME placeholder."
-              }
+              "type": "string"
             },
             "ouPath": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Distinguished name of the AD OU."
-              }
+              "type": "string"
             },
             "secureBootEnabled": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enables Secure Boot."
-              }
+              "type": "bool"
             },
             "securityType": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. VM security profile type."
-              }
+              "type": "string"
             },
             "sessionHostCount": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Total number of session host VMs to deploy."
-              }
+              "type": "int"
             },
             "sessionHostCustomizations": {
-              "type": "array",
-              "metadata": {
-                "description": "Optional. Array of customization objects."
-              }
+              "type": "array"
             },
             "sessionHostIndex": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Starting VM index number."
-              }
+              "type": "int"
             },
             "vmNameIndexLength": {
-              "type": "int",
-              "metadata": {
-                "description": "Required. Number of digits in the zero-padded VM index."
-              }
+              "type": "int"
             },
             "subnetResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the virtual network subnet."
-              }
+              "type": "string"
             },
             "tags": {
-              "type": "object",
-              "metadata": {
-                "description": "Required. Azure resource tags keyed by resource type."
-              }
+              "type": "object"
             },
             "deploymentSuffix": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Short unique suffix for deployment names."
-              }
+              "type": "string"
             },
             "timeZone": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Windows time zone for session host VMs."
-              }
+              "type": "string"
             },
             "virtualMachineNameConv": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Full name convention for VM names, containing SHNAME placeholder."
-              }
+              "type": "string"
             },
             "virtualMachineNamePrefix": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Short prefix for VM names."
-              }
+              "type": "string"
             },
             "virtualMachineSize": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Azure VM SKU for session hosts."
-              }
+              "type": "string"
             },
             "virtualMachineAdminPassword": {
-              "type": "securestring",
-              "metadata": {
-                "description": "Required. Local administrator password."
-              }
+              "type": "securestring"
             },
             "virtualMachineAdminUserName": {
-              "type": "securestring",
-              "metadata": {
-                "description": "Required. Local administrator username."
-              }
+              "type": "securestring"
             },
             "vTpmEnabled": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. When true, enables virtual TPM."
-              }
+              "type": "bool"
             },
             "recoveryServicesVaultResourceId": {
               "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of the Recovery Services Vault for VM backup. Populated only for Personal host pools when backup is enabled."
-              }
+              "defaultValue": ""
             },
             "vmBackupPolicyName": {
               "type": "string",
-              "defaultValue": "AvdPolicyVm",
-              "metadata": {
-                "description": "Optional. Backup policy name for session host VMs."
-              }
+              "defaultValue": "AvdPolicyVm"
             }
           },
           "variables": {
@@ -17289,12 +17053,6 @@
                   },
                   "encryptionAtHost": {
                     "value": "[parameters('encryptionAtHost')]"
-                  },
-                  "hasAmdGpu": {
-                    "value": "[parameters('hasAmdGpu')]"
-                  },
-                  "hasNvidiaGpu": {
-                    "value": "[parameters('hasNvidiaGpu')]"
                   },
                   "existingDiskEncryptionSetResourceId": {
                     "value": "[parameters('existingDiskEncryptionSetResourceId')]"
@@ -17421,7 +17179,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "2693945670846215208"
+                      "templateHash": "5247094781378799131"
                     }
                   },
                   "parameters": {
@@ -17600,18 +17358,6 @@
                       "type": "bool",
                       "metadata": {
                         "description": "Required. When true, enables encryption at the VM host for all disks and cache."
-                      }
-                    },
-                    "hasAmdGpu": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, installs the AMD GPU driver extension."
-                      }
-                    },
-                    "hasNvidiaGpu": {
-                      "type": "bool",
-                      "metadata": {
-                        "description": "Required. When true, installs the NVIDIA GPU driver extension."
                       }
                     },
                     "existingDiskEncryptionSetResourceId": {
@@ -17879,9 +17625,11 @@
                     "totalVmCount": "[length(parameters('sessionHostNames'))]",
                     "effectiveDedicatedHostGroupResourceIds": "[if(not(empty(parameters('dedicatedHostGroupResourceIds'))), parameters('dedicatedHostGroupResourceIds'), if(not(empty(parameters('dedicatedHostGroupResourceId'))), createArray(parameters('dedicatedHostGroupResourceId')), createArray()))]",
                     "effectiveDedicatedHostResourceIds": "[if(not(empty(parameters('dedicatedHostResourceIds'))), parameters('dedicatedHostResourceIds'), if(not(empty(parameters('dedicatedHostResourceId'))), createArray(parameters('dedicatedHostResourceId')), createArray()))]",
+                    "hasAmdGpu": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), 'as_v4'), endsWith(parameters('virtualMachineSize'), '_V710_v5')))]",
+                    "hasNvidiaGpu": "[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), endsWith(parameters('virtualMachineSize'), '_A10_v5'))]",
                     "baseResourcesPerVM": 11,
                     "monitoringResourcesPerVM": "[if(parameters('enableMonitoring'), 3, 0)]",
-                    "gpuResourcesPerVM": "[if(or(parameters('hasAmdGpu'), parameters('hasNvidiaGpu')), 1, 0)]",
+                    "gpuResourcesPerVM": "[if(or(variables('hasAmdGpu'), variables('hasNvidiaGpu')), 1, 0)]",
                     "integrityResourcesPerVM": "[if(parameters('integrityMonitoring'), 1, 0)]",
                     "customizationsResourcesPerVM": "[if(not(empty(parameters('sessionHostCustomizations'))), add(1, length(parameters('sessionHostCustomizations'))), 0)]",
                     "totalResourcesPerVM": "[add(add(add(add(variables('baseResourcesPerVM'), variables('monitoringResourcesPerVM')), variables('gpuResourcesPerVM')), variables('integrityResourcesPerVM')), variables('customizationsResourcesPerVM'))]",
@@ -18200,14 +17948,14 @@
                           "hibernationEnabled": {
                             "value": "[parameters('hibernationEnabled')]"
                           },
-                          "hostPoolResourceId": {
-                            "value": "[parameters('hostPoolResourceId')]"
-                          },
                           "hasAmdGpu": {
-                            "value": "[parameters('hasAmdGpu')]"
+                            "value": "[variables('hasAmdGpu')]"
                           },
                           "hasNvidiaGpu": {
-                            "value": "[parameters('hasNvidiaGpu')]"
+                            "value": "[variables('hasNvidiaGpu')]"
+                          },
+                          "hostPoolResourceId": {
+                            "value": "[parameters('hostPoolResourceId')]"
                           },
                           "identitySolution": {
                             "value": "[parameters('identitySolution')]"

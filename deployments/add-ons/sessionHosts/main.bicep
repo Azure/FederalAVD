@@ -244,16 +244,6 @@ var generatedAvSetNameConv = nameConvReversed
 
 var avSetNameConv = !empty(availabilitySetNameConv) ? availabilitySetNameConv : generatedAvSetNameConv
 
-// ── GPU detection ─────────────────────────────────────────────────────────────
-var hasAmdGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(
-  virtualMachineSize,
-  '_V710_v5'
-))
-var hasNvidiaGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, '_v3') || endsWith(
-  virtualMachineSize,
-  '_A10_v5'
-))
-
 // ── FSLogix file share names ──────────────────────────────────────────────────
 var fslogixFileShareNames = contains(fslogixContainerType, 'Office')
   ? ['profile-containers', 'office-containers']
@@ -339,8 +329,6 @@ module sessionHosts '../../hostpools/modules/hosts/modules/sessionHosts.bicep' =
     fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs
     fslogixStorageService: fslogixStorageService
-    hasAmdGpu: hasAmdGpu
-    hasNvidiaGpu: hasNvidiaGpu
     hibernationEnabled: hibernationEnabled
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution

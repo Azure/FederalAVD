@@ -56,10 +56,6 @@ param enableAcceleratedNetworking bool
 param enableIPv6 bool
 @description('Required. When true, enables encryption at the VM host for all disks and cache.')
 param encryptionAtHost bool
-@description('Required. When true, installs the AMD GPU driver extension.')
-param hasAmdGpu bool
-@description('Required. When true, installs the NVIDIA GPU driver extension.')
-param hasNvidiaGpu bool
 @description('Optional. Resource ID of a pre-existing Disk Encryption Set.')
 param existingDiskEncryptionSetResourceId string = ''
 @description('Required. Array of Azure Files share names to mount for FSLogix profile containers.')
@@ -167,6 +163,10 @@ var effectiveDedicatedHostResourceIds = !empty(dedicatedHostResourceIds)
   ? dedicatedHostResourceIds
   : !empty(dedicatedHostResourceId) ? [dedicatedHostResourceId] : []
 
+// === GPU detection ===
+var hasAmdGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(virtualMachineSize, '_V710_v5'))
+var hasNvidiaGpu = contains(virtualMachineSize, 'Standard_NV') && endsWith(virtualMachineSize, '_A10_v5')
+
 // === Batching logic ===
 // Dynamically calculate max VMs per batch based on resources per VM
 var baseResourcesPerVM = 11
@@ -260,9 +260,9 @@ module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostB
     fslogixSizeInMBs: fslogixSizeInMBs
     fslogixStorageService: fslogixStorageService
     hibernationEnabled: hibernationEnabled
-    hostPoolResourceId: hostPoolResourceId
     hasAmdGpu: hasAmdGpu
     hasNvidiaGpu: hasNvidiaGpu
+    hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
     imageReference: effectiveImageReference
     integrityMonitoring: integrityMonitoring

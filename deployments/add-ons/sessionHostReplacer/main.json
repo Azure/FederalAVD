@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "444527731218736883"
+      "templateHash": "10605361164278009757"
     }
   },
   "parameters": {
@@ -1103,7 +1103,7 @@
         "_generator": {
           "name": "bicep",
           "version": "0.43.8.12551",
-          "templateHash": "6712416168355343669"
+          "templateHash": "4410655111361655855"
         }
       },
       "parameters": {
@@ -1908,8 +1908,6 @@
         "effectiveOsDiskNameConv": "[[if(not(empty(parameters('osDiskNameConv'))), parameters('osDiskNameConv'), if(variables('nameConvReversed'), format('SHNAME-{0}', variables('resourceAbbreviations').osdisks), format('{0}-SHNAME', variables('resourceAbbreviations').osdisks)))]",
         "generatedAvSetNameConv": "[[if(variables('nameConvReversed'), replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('regionAbbreviation')), 'TOKEN-', ''), format('{0}-##', replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').availabilitySets), 'LOCATION', variables('regionAbbreviation')), 'TOKEN-', '')))]",
         "avSetNameConv": "[[if(not(empty(parameters('availabilitySetNameConv'))), parameters('availabilitySetNameConv'), variables('generatedAvSetNameConv'))]",
-        "hasAmdGpu": "[[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), 'as_v4'), endsWith(parameters('virtualMachineSize'), '_V710_v5')))]",
-        "hasNvidiaGpu": "[[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), '_v3'), endsWith(parameters('virtualMachineSize'), '_A10_v5')))]",
         "fslogixFileShareNames": "[[if(contains(parameters('fslogixContainerType'), 'Office'), createArray('profile-containers', 'office-containers'), createArray('profile-containers'))]",
         "effectiveSessionHostNames": "[[if(not(empty(parameters('sessionHostNames'))), parameters('sessionHostNames'), variables('generatedSessionHostNames'))]",
         "minVmNumber": "[[min(variables('vmNumbersForAvSet'))]",
@@ -2043,12 +2041,6 @@
               "fslogixStorageService": {
                 "value": "[[parameters('fslogixStorageService')]"
               },
-              "hasAmdGpu": {
-                "value": "[[variables('hasAmdGpu')]"
-              },
-              "hasNvidiaGpu": {
-                "value": "[[variables('hasNvidiaGpu')]"
-              },
               "hibernationEnabled": {
                 "value": "[[parameters('hibernationEnabled')]"
               },
@@ -2154,7 +2146,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.43.8.12551",
-                  "templateHash": "2693945670846215208"
+                  "templateHash": "5247094781378799131"
                 }
               },
               "parameters": {
@@ -2333,18 +2325,6 @@
                   "type": "bool",
                   "metadata": {
                     "description": "Required. When true, enables encryption at the VM host for all disks and cache."
-                  }
-                },
-                "hasAmdGpu": {
-                  "type": "bool",
-                  "metadata": {
-                    "description": "Required. When true, installs the AMD GPU driver extension."
-                  }
-                },
-                "hasNvidiaGpu": {
-                  "type": "bool",
-                  "metadata": {
-                    "description": "Required. When true, installs the NVIDIA GPU driver extension."
                   }
                 },
                 "existingDiskEncryptionSetResourceId": {
@@ -2612,9 +2592,11 @@
                 "totalVmCount": "[[length(parameters('sessionHostNames'))]",
                 "effectiveDedicatedHostGroupResourceIds": "[[if(not(empty(parameters('dedicatedHostGroupResourceIds'))), parameters('dedicatedHostGroupResourceIds'), if(not(empty(parameters('dedicatedHostGroupResourceId'))), createArray(parameters('dedicatedHostGroupResourceId')), createArray()))]",
                 "effectiveDedicatedHostResourceIds": "[[if(not(empty(parameters('dedicatedHostResourceIds'))), parameters('dedicatedHostResourceIds'), if(not(empty(parameters('dedicatedHostResourceId'))), createArray(parameters('dedicatedHostResourceId')), createArray()))]",
+                "hasAmdGpu": "[[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), or(endsWith(parameters('virtualMachineSize'), 'as_v4'), endsWith(parameters('virtualMachineSize'), '_V710_v5')))]",
+                "hasNvidiaGpu": "[[and(contains(parameters('virtualMachineSize'), 'Standard_NV'), endsWith(parameters('virtualMachineSize'), '_A10_v5'))]",
                 "baseResourcesPerVM": 11,
                 "monitoringResourcesPerVM": "[[if(parameters('enableMonitoring'), 3, 0)]",
-                "gpuResourcesPerVM": "[[if(or(parameters('hasAmdGpu'), parameters('hasNvidiaGpu')), 1, 0)]",
+                "gpuResourcesPerVM": "[[if(or(variables('hasAmdGpu'), variables('hasNvidiaGpu')), 1, 0)]",
                 "integrityResourcesPerVM": "[[if(parameters('integrityMonitoring'), 1, 0)]",
                 "customizationsResourcesPerVM": "[[if(not(empty(parameters('sessionHostCustomizations'))), add(1, length(parameters('sessionHostCustomizations'))), 0)]",
                 "totalResourcesPerVM": "[[add(add(add(add(variables('baseResourcesPerVM'), variables('monitoringResourcesPerVM')), variables('gpuResourcesPerVM')), variables('integrityResourcesPerVM')), variables('customizationsResourcesPerVM'))]",
@@ -2933,14 +2915,14 @@
                       "hibernationEnabled": {
                         "value": "[[parameters('hibernationEnabled')]"
                       },
-                      "hostPoolResourceId": {
-                        "value": "[[parameters('hostPoolResourceId')]"
-                      },
                       "hasAmdGpu": {
-                        "value": "[[parameters('hasAmdGpu')]"
+                        "value": "[[variables('hasAmdGpu')]"
                       },
                       "hasNvidiaGpu": {
-                        "value": "[[parameters('hasNvidiaGpu')]"
+                        "value": "[[variables('hasNvidiaGpu')]"
+                      },
+                      "hostPoolResourceId": {
+                        "value": "[[parameters('hostPoolResourceId')]"
                       },
                       "identitySolution": {
                         "value": "[[parameters('identitySolution')]"

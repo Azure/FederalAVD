@@ -756,15 +756,6 @@ var hostTags = !empty(exclusionTag) ? union(tags, exclusionTag) : tags
 
 //  BATCH SESSION HOSTS
 // The batching calculation is performed in the sessionHosts module to encapsulate deployment logic
-var hasAmdGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(
-  virtualMachineSize,
-  '_V710_v5'
-))
-var hasNvidiaGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, '_v3') || endsWith(
-  virtualMachineSize,
-  '_A10_v5'
-))
-
 //  BATCH AVAILABILITY SETS
 // The following variables are used to determine the number of availability sets.
 var maxAvSetMembers = 200 // This is the max number of session hosts that can be deployed in an availability set.
@@ -1774,8 +1765,6 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     enableIPv6: enableIPv6
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
-    hasAmdGpu: hasAmdGpu
-    hasNvidiaGpu: hasNvidiaGpu
     existingDiskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
