@@ -2112,7 +2112,7 @@
 									"name": "agentBootLoaderUrl",
 									"type": "Microsoft.Common.TextBox",
 									"label": "[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent Boot Loader URL', 'AVD Agent Boot Loader URL or Blob Name')]",
-									"defaultValue": "[if(empty(steps('hosts').customizations.storageAccount), 'https://go.microsoft.com/fwlink/?linkid=2311028', 'Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi')]",
+									"defaultValue": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi",
 									"toolTip": "[if(empty(steps('hosts').customizations.storageAccount), 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide a custom full URL to override the default.', 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide either a blob name (if using the storage account selected above) or a custom full URL to override the default.')]",
 									"constraints": {
 										"required": false,
@@ -2125,7 +2125,7 @@
 									"name": "agentUrl",
 									"type": "Microsoft.Common.TextBox",
 									"label": "[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent URL', 'AVD Agent URL or Blob Name')]",
-									"defaultValue": "[if(empty(steps('hosts').customizations.storageAccount), 'https://go.microsoft.com/fwlink/?linkid=2310011', 'Microsoft.RDInfra.RDAgent.Installer-x64.msi')]",
+									"defaultValue": "Microsoft.RDInfra.RDAgent.Installer-x64.msi",
 									"toolTip": "[if(empty(steps('hosts').customizations.storageAccount), 'Optional. Provide a custom full URL to override defaults (go.microsoft.com for public clouds, aka.ms perma-links for air-gapped clouds). This URL will be used as fallback if the endpoint download fails.', 'Optional. Provide a blob name (using storage account above) or full URL to override defaults. This will be used as fallback if the endpoint download fails')]",
 									"constraints": {
 										"required": false,
