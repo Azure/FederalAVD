@@ -500,7 +500,17 @@ When using Azure NetApp Files (`fslogixStorageService = 'AzureNetAppFiles Standa
 
 ## GPU Drivers & Settings
 
-When an appropriate VM size (Nv, Nvv3, Nvv4, or NCasT4_v3 series) is selected, this solution will automatically deploy the appropriate virtual machine extension to install the graphics driver and configure the recommended registry settings.
+When an appropriate VM size is selected, this solution will automatically deploy the appropriate virtual machine extension to install the graphics driver and configure the recommended registry settings.
+
+Supported GPU VM families:
+
+| Series | GPU | Driver Extension |
+|--------|-----|-----------------|
+| NVads-A10 v5 (`*_A10_v5`) | NVIDIA A10 | NvidiaGpuDriverWindows |
+| NVv4 (`*as_v4`) | AMD Radeon Instinct MI25 | AmdGpuDriverWindows |
+| NVads V710 v5 (`*_V710_v5`) | AMD Radeon Pro V710 | AmdGpuDriverWindows |
+
+> **Note:** NVv4-series is scheduled for retirement on September 30, 2026. Migrate to NVads-A10 v5 or NVads V710 v5.
 
 **Reference:** [Configure GPU Acceleration - Microsoft Docs](https://docs.microsoft.com/en-us/azure/virtual-desktop/configure-vm-gpu)
 
@@ -810,7 +820,6 @@ This feature deploys the required resources to enable the AVD Insights workbook 
 - Data Collection Endpoint
 - Data Collection Rules
   - AVD Insights
-  - VM Insights
 - Azure Monitor Agent extension
 - System Assigned Identity on all deployed Virtual Machines
 - Diagnostic Settings

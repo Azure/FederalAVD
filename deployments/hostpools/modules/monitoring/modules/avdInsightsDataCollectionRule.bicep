@@ -6,8 +6,6 @@
 param location string = resourceGroup().location
 param tags object = {}
 param logAnalyticsWorkspaceResourceId string
-
-@description('Optional. Resource ID of the data collection endpoint. Required when the workspace uses private link.')
 param dataCollectionEndpointId string = ''
 
 resource dataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {

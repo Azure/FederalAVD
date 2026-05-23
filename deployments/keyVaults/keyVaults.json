@@ -1986,7 +1986,7 @@
     "secretsKeyVaultResourceId": {
       "type": "string",
       "metadata": {
-        "description": "The resource ID of the Secrets Key Vault. Pass as \"credentialsKeyVaultResourceId\" to the host pool and Session Host Replacer deployments."
+        "description": "The resource ID of the Secrets Key Vault. Pass as \"existingCredentialsKeyVaultResourceId\" to the host pool deployment, or as \"credentialsKeyVaultResourceId\" to the Session Host Replacer and Session Hosts add-on deployments."
       },
       "value": "[if(parameters('deploySecretsKeyVault'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Operations-KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.secretsKeyVaultResourceId.value, '')]"
     },

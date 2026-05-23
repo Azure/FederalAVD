@@ -1,10 +1,10 @@
-param applicationInsightsName string
+param applicationInsightsName string = ''
 param azureBlobPrivateDnsZoneResourceId string
 param azureFunctionAppPrivateDnsZoneResourceId string
 param azureQueuePrivateDnsZoneResourceId string = ''
 param azureTablePrivateDnsZoneResourceId string = ''
 param deploymentSuffix string
-param enableApplicationInsights bool
+param enableApplicationInsights bool = false
 param enableQueueStorage bool = true
 param enableTableStorage bool = true
 param encryptionKeyName string
@@ -21,12 +21,12 @@ param hostPoolResourceId string
 ])
 param keyManagementStorageAccounts string
 param location string
-param logAnalyticsWorkspaceResourceId string
+param logAnalyticsWorkspaceResourceId string = ''
 param privateEndpoint bool
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param privateEndpointSubnetResourceId string
-param privateLinkScopeResourceId string
+param privateLinkScopeResourceId string = ''
 param storageAccountRoleDefinitionIds array = []
 param serverFarmId string
 @description('Optional. Name for the storage encryption user-assigned identity to create when CMK is selected and functionAppUserAssignedIdentityResourceId is not provided. Computed by caller using naming convention. Required when keyManagementStorageAccounts != MicrosoftManaged and functionAppUserAssignedIdentityResourceId is empty.')

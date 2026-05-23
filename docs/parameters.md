@@ -36,9 +36,9 @@ When chaining deployments, use this mapping to pass outputs from one step to the
 
 | Source | Output | Destination | Parameter |
 |--------|--------|-------------|-----------|
-| **keyVaults** | `secretsKeyVaultResourceId` | **hostpool** | `credentialsKeyVaultResourceId` |
+| **keyVaults** | `secretsKeyVaultResourceId` | **hostpool** | `existingCredentialsKeyVaultResourceId` |
 | **keyVaults** | `encryptionKeyVaultResourceId` | **imageManagement** | `encryptionKeyVaultResourceId` |
-| **keyVaults** | `encryptionKeyVaultResourceId` | **hostpool** | `encryptionKeyVaultResourceId` |
+| **keyVaults** | `encryptionKeyVaultResourceId` | **hostpool** | `existingEncryptionKeyVaultResourceId` |
 | **imageManagement** | `computeGalleryResourceId` | **imageBuild** | `computeGalleryResourceId` |
 | **imageManagement** | `artifactsBlobContainerUrl` | **imageBuild** | `artifactsContainerUri` |
 | **imageManagement** | `managedIdentityResourceId` | **imageBuild** | `userAssignedIdentityResourceId` |

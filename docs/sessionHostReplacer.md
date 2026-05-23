@@ -153,7 +153,7 @@ The following deployment parameters are recommended when using session host repl
 
 ```bicep
 // Server Farm (required for function apps)
-existingHostingPlanResourceId: '' // Leave empty for Complete deployments, provide for HostpoolOnly
+existingHostingPlanResourceId: '' // Leave empty to create a new app service plan; provide to reuse an existing one
 
 // Function App Networking (if using private endpoints)
 functionAppSubnetResourceId: '/subscriptions/.../subnets/snet-functionapps'
@@ -165,9 +165,8 @@ azureQueuePrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatel
 azureTablePrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.table.core.windows.net'
 ```
 
-### Deployment Types
-- **Complete**: Deploys app service plan, function app, and all dependencies
-- **HostpoolOnly**: Requires existing app service plan via `existingHostingPlanResourceId`
+### Deployment Notes
+- **Function App**: Leave `existingHostingPlanResourceId` empty to deploy a new app service plan inline, or provide an existing one to share a plan across multiple deployments.
 - **SessionHostsOnly**: Not supported (requires control plane resources)
 
 ## Configuration

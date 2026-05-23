@@ -539,9 +539,9 @@
               "name": "enableMonitoring",
               "type": "Microsoft.Common.CheckBox",
               "visible": true,
-              "label": "Enable Monitoring for the Function App and AVD and VM Insights",
+              "label": "Enable Monitoring for the Function App and AVD Insights",
               "defaultValue": true,
-              "toolTip": "Deploy the required resources to enable AVD and VM Insights."
+              "toolTip": "Deploy the required resources to enable AVD Insights monitoring."
             },
             {
               "name": "subscription",
@@ -737,25 +737,6 @@
                   }
                 },
                 {
-                  "name": "applicationInsightsNameOverride",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Application Insights Name",
-                  "placeholder": "appi-avdsqm-prod-eus2",
-                  "toolTip": "Required. Explicit name for the Application Insights instance. Must be unique within the resource group, 1-260 characters, alphanumeric, hyphens, underscores, parentheses, and periods. Example: appi-avdsqm-prod-eus2",
-                  "visible": "[steps('monitoring').enableMonitoring]",
-                  "constraints": {
-                    "required": true,
-                    "validations": [
-                      {
-                        "regex": "^[a-zA-Z0-9-_().]{1,260}$",
-                        "message": "Application Insights name must be 1-260 characters, containing alphanumeric characters, hyphens, underscores, parentheses, and periods."
-                      }
-                    ]
-                  }
-                }
-              ]
-            },
-            {
               "name": "tagsSection",
               "type": "Microsoft.Common.Section",
               "label": "Resource Tags",
@@ -777,6 +758,8 @@
           ]
         }
       ]
+        }
+      ]
     },
     "outputs": {
       "parameters": {
@@ -795,12 +778,9 @@
         "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureBlobPrivateDnsZone, '')]",
         "azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureFunctionAppPrivateDnsZone, '')]",
         "permittedIPs": "[if(steps('infrastructure').configureZeroTrustNetworking, filter(map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
-        "logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
-        "privateLinkScopeResourceId": "[if(steps('monitoring').enableAMPLS, steps('monitoring').privateLinkScope.id, '')]",
         "functionAppNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
         "storageAccountNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.storageAccountNameOverride, ''), '')]",
         "storageEncryptionIdentityNameOverride": "[if(and(steps('advanced').enableCustomNaming, contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
-        "applicationInsightsNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
         "tags": "[steps('advanced').tagsSection.tags]"
       },
       "kind": "Subscription",

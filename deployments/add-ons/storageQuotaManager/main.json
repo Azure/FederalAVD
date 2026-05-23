@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "9745944335689006635"
+      "templateHash": "11189827957136474944"
     }
   },
   "parameters": {
@@ -50,14 +50,6 @@
       "maxLength": 128,
       "metadata": {
         "description": "Optional. Explicit name for the storage encryption user-assigned identity. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments where a CMK identity was previously created with a specific name. Must follow Azure naming rules (3-128 chars, alphanumeric, hyphens, underscores)."
-      }
-    },
-    "applicationInsightsNameOverride": {
-      "type": "string",
-      "defaultValue": "",
-      "maxLength": 260,
-      "metadata": {
-        "description": "Optional. Explicit name for the Application Insights instance. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard naming. Must follow Azure naming rules (1-260 chars, alphanumeric, hyphens, underscores, parentheses, periods)."
       }
     },
     "appServicePlanResourceId": {
@@ -137,20 +129,6 @@
       "defaultValue": [],
       "metadata": {
         "description": "Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. Use when managing from a trusted workstation outside the Azure network boundary."
-      }
-    },
-    "logAnalyticsWorkspaceResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Log Analytics Workspace resource ID for Application Insights."
-      }
-    },
-    "privateLinkScopeResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Private Link Scope resource ID for Application Insights."
       }
     },
     "hostPoolResourceId": {
@@ -484,13 +462,12 @@
     "hpResPrfx": "[if(variables('nameConvReversed'), variables('hpBaseName'), format('RESOURCETYPE-{0}', variables('hpBaseName')))]",
     "nameConvSuffix": "[if(variables('nameConvReversed'), 'LOCATION-RESOURCETYPE', 'LOCATION')]",
     "nameConv_HP_Resources": "[format('{0}-TOKEN-{1}', variables('hpResPrfx'), variables('nameConvSuffix'))]",
-    "nameConv_Shared_Resources": "[if(variables('nameConvReversed'), format('avd-TOKEN-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-TOKEN-{0}', variables('nameConvSuffix')))]",
-    "appServicePlanName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').appServicePlans), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', '')]",
-    "uniqueStringStorage": "[take(uniqueString(parameters('storageResourceGroupId'), variables('storageResourceGroupName')), 6)]",
+    "nameConv_Shared_Resources": "[if(variables('nameConvReversed'), format('avd-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-{0}', variables('nameConvSuffix')))]",
+    "appServicePlanName": "[replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').appServicePlans), 'LOCATION', variables('functionAppRegionAbbreviation'))]",
+    "uniqueStringStorage": "[take(uniqueString(variables('storageSubscriptionId'), variables('storageResourceGroupName')), 6)]",
     "privateEndpointNameConv": "[replace(if(variables('nameConvReversed'), 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE', 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID'), 'RESOURCETYPE', variables('resourceAbbreviations').privateEndpoints)]",
     "privateEndpointNICNameConvTemp": "[if(variables('nameConvReversed'), format('{0}-RESOURCETYPE', variables('privateEndpointNameConv')), format('RESOURCETYPE-{0}', variables('privateEndpointNameConv')))]",
     "privateEndpointNICNameConv": "[replace(variables('privateEndpointNICNameConvTemp'), 'RESOURCETYPE', variables('resourceAbbreviations').networkInterfaces)]",
-    "appInsightsName": "[if(not(empty(parameters('applicationInsightsNameOverride'))), parameters('applicationInsightsNameOverride'), replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').applicationInsights), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', format('sqm-{0}-', variables('uniqueStringStorage'))))]",
     "functionAppName": "[if(not(empty(parameters('functionAppNameOverride'))), parameters('functionAppNameOverride'), replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').functionApps), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', format('sqm-{0}-', variables('uniqueStringStorage'))), 'LOCATION', variables('functionAppRegionAbbreviation')))]",
     "storageAccountName": "[if(not(empty(parameters('storageAccountNameOverride'))), toLower(parameters('storageAccountNameOverride')), toLower(replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', ''), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', format('sqm-{0}', variables('uniqueStringStorage'))), '-', '')))]",
     "encryptionKeyName": "[if(empty(parameters('hostPoolResourceId')), format('encryption-key-{0}', variables('storageAccountName')), format('{0}-encryption-key-{1}', variables('hpBaseName'), variables('storageAccountName')))]",
@@ -606,9 +583,6 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "applicationInsightsName": {
-            "value": "[variables('appInsightsName')]"
-          },
           "azureBlobPrivateDnsZoneResourceId": {
             "value": "[parameters('azureBlobPrivateDnsZoneResourceId')]"
           },
@@ -617,9 +591,6 @@
           },
           "deploymentSuffix": {
             "value": "[variables('deploymentSuffix')]"
-          },
-          "enableApplicationInsights": {
-            "value": "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]"
           },
           "enableQueueStorage": {
             "value": false
@@ -660,9 +631,6 @@
           "location": {
             "value": "[parameters('location')]"
           },
-          "logAnalyticsWorkspaceResourceId": {
-            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
-          },
           "privateEndpoint": {
             "value": "[parameters('privateEndpoint')]"
           },
@@ -674,9 +642,6 @@
           },
           "privateEndpointSubnetResourceId": {
             "value": "[parameters('privateEndpointSubnetResourceId')]"
-          },
-          "privateLinkScopeResourceId": {
-            "value": "[parameters('privateLinkScopeResourceId')]"
           },
           "serverFarmId": "[if(empty(parameters('appServicePlanResourceId')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('aspResourceGroupName')), 'Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostingPlanId.value), createObject('value', parameters('appServicePlanResourceId')))]",
           "storageAccountName": {
@@ -699,12 +664,13 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "10348732608898091481"
+              "templateHash": "1609150334520108793"
             }
           },
           "parameters": {
             "applicationInsightsName": {
-              "type": "string"
+              "type": "string",
+              "defaultValue": ""
             },
             "azureBlobPrivateDnsZoneResourceId": {
               "type": "string"
@@ -724,7 +690,8 @@
               "type": "string"
             },
             "enableApplicationInsights": {
-              "type": "bool"
+              "type": "bool",
+              "defaultValue": false
             },
             "enableQueueStorage": {
               "type": "bool",
@@ -768,7 +735,8 @@
               "type": "string"
             },
             "logAnalyticsWorkspaceResourceId": {
-              "type": "string"
+              "type": "string",
+              "defaultValue": ""
             },
             "privateEndpoint": {
               "type": "bool"
@@ -783,7 +751,8 @@
               "type": "string"
             },
             "privateLinkScopeResourceId": {
-              "type": "string"
+              "type": "string",
+              "defaultValue": ""
             },
             "storageAccountRoleDefinitionIds": {
               "type": "array",

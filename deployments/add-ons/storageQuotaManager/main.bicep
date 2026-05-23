@@ -40,9 +40,6 @@ param storageAccountNameOverride string = ''
 @maxLength(128)
 param storageEncryptionIdentityNameOverride string = ''
 
-@description('Optional. Explicit name for the Application Insights instance. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard naming. Must follow Azure naming rules (1-260 chars, alphanumeric, hyphens, underscores, parentheses, periods).')
-@maxLength(260)
-param applicationInsightsNameOverride string = ''
 
 // ================================================================================================
 // Function App Infrastructure Parameters
@@ -86,11 +83,7 @@ param keyManagementStorageAccounts string = 'MicrosoftManaged'
 @description('Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. Use when managing from a trusted workstation outside the Azure network boundary.')
 param permittedIPs array = []
 
-@description('Optional. Log Analytics Workspace resource ID for Application Insights.')
-param logAnalyticsWorkspaceResourceId string = ''
 
-@description('Optional. Private Link Scope resource ID for Application Insights.')
-param privateLinkScopeResourceId string = ''
 
 // ================================================================================================
 // Function App Execution Parameters
@@ -121,6 +114,13 @@ var locations = locationsObject[locationsEnvProperty]
 var functionAppRegionAbbreviation = locations[location].abbreviation
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
+// ============================================================================
+// Naming Convention
+// Compile-time placeholders — resolved here by Bicep string substitution:
+//   RESOURCETYPE  → resource type abbreviation (e.g., 'asp', 'func', 'uai')
+//   LOCATION      → region abbreviation (e.g., 'eus', 'va')
+//   TOKEN         → per-resource differentiator in HP-scoped names (e.g., 'sqm-abc123-')
+// ============================================================================
 // Dynamically determine naming convention.
 // When a host pool is provided, detect from its name. Otherwise detect from the storage RG name.
 var nameConvSourceName = empty(hostPoolResourceId)
@@ -155,22 +155,18 @@ var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
 var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
 var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
 
-// App Service Plan naming convention
+// Shared (non-HP-scoped) naming convention — no TOKEN since these resources have no per-resource differentiator
 var nameConv_Shared_Resources = nameConvReversed
-  ? 'avd-TOKEN-${nameConvSuffix}'
-  : 'RESOURCETYPE-avd-TOKEN-${nameConvSuffix}'
+  ? 'avd-${nameConvSuffix}'
+  : 'RESOURCETYPE-avd-${nameConvSuffix}'
 var appServicePlanName = replace(
-  replace(
-    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
-    'LOCATION',
-    functionAppRegionAbbreviation
-  ),
-  'TOKEN-',
-  ''
+  replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
+  'LOCATION',
+  functionAppRegionAbbreviation
 )
 
 // Generate unique identifiers for resource naming
-var uniqueStringStorage = take(uniqueString(storageResourceGroupId, storageResourceGroupName), 6)
+var uniqueStringStorage = take(uniqueString(storageSubscriptionId, storageResourceGroupName), 6)
 
 // Private endpoint naming conventions
 var privateEndpointNameConv = replace(
@@ -186,20 +182,6 @@ var privateEndpointNICNameConv = replace(
   'RESOURCETYPE',
   resourceAbbreviations.networkInterfaces
 )
-
-// quota management resource names
-// Use explicit override if provided, otherwise derive from host pool naming convention
-var appInsightsName = !empty(applicationInsightsNameOverride)
-  ? applicationInsightsNameOverride
-  : replace(
-      replace(
-        replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
-        'LOCATION',
-        functionAppRegionAbbreviation
-      ),
-      'TOKEN-',
-      'sqm-${uniqueStringStorage}-'
-    )
 
 // Use explicit override if provided, otherwise derive from host pool naming convention
 var functionAppName = !empty(functionAppNameOverride)
@@ -276,11 +258,9 @@ module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp
   name: 'StorageQuotaFunctionApp-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
-    applicationInsightsName: appInsightsName
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
     deploymentSuffix: deploymentSuffix
-    enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)
     enableQueueStorage: false
     enableTableStorage: false
     encryptionKeyName: encryptionKeyName
@@ -300,12 +280,10 @@ module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp
     hostPoolResourceId: hostPoolResourceId
     keyManagementStorageAccounts: keyManagementStorageAccounts
     location: location
-    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     privateEndpoint: privateEndpoint
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
-    privateLinkScopeResourceId: privateLinkScopeResourceId
     serverFarmId: empty(appServicePlanResourceId) ? hostingPlan!.outputs.hostingPlanId : appServicePlanResourceId
     storageAccountName: storageAccountName
     storageEncryptionIdentityName: storageEncryptionIdentityName

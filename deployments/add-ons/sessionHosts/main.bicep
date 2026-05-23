@@ -1,56 +1,54 @@
-@description('URI of the storage container holding custom artifacts for session host configuration.')
+// ============================================================================
+// main.bicep — Standalone session hosts deployment entry point
+// Handles credentials (Key Vault lookup), naming convention auto-detection,
+// and availability set index computation, then delegates VM deployment to
+// the shared orchestration module under hostpools/modules/hosts/modules/.
+//
+// Used as:
+//   • A Template Spec loaded by the Session Host Replacer function app
+//   • A standalone portal deployment for adding session hosts to an existing host pool
+// ============================================================================
+// targetScope = resourceGroup (default)
+
+@description('Optional. Override download URL for the AVD Agent Boot Loader installer. Leave empty to use the default Microsoft-hosted URL for the current cloud.')
+param agentBootLoaderDownloadUrl string = ''
+@description('Optional. Override download URL for the AVD Agent installer. Leave empty to use the default Microsoft-hosted URL for the current cloud.')
+param agentDownloadUrl string = ''
+@description('Optional. File name of the AVD Agent DSC configuration package blob used during session host registration.')
+param avdAgentDscPackage string = 'Configuration_1.0.03362.1223.zip'
+@description('Optional. URI of the blob storage container holding scripts and artifacts for session host customizations.')
 param artifactsContainerUri string = ''
-
-@description('Resource ID of the user-assigned managed identity with access to the artifacts container.')
+@description('Optional. Resource ID of the user-assigned managed identity with Storage Blob Data Reader access to the artifacts container.')
 param artifactsUserAssignedIdentityResourceId string = ''
-
 @allowed([
   'AvailabilitySets'
   'AvailabilityZones'
   'None'
 ])
-@description('Availability option for session hosts. Valid values: AvailabilitySets, AvailabilityZones, None.')
+@description('Optional. VM availability strategy.')
 param availability string = 'None'
-
-@description('Naming convention for availability sets when availability is set to AvailabilitySets. Use ## as placeholder for the index.')
+@description('Optional. Naming convention for availability sets with ## placeholder for index. Auto-detected from the host pool name when empty.')
 param availabilitySetNameConv string = ''
-
-@description('Array of availability zones to distribute session hosts across when availability is set to AvailabilityZones.')
+@description('Optional. Availability zones to spread session hosts across when availability is AvailabilityZones.')
 param availabilityZones array = []
-
-@description('Custom URL for AVD Agent Boot Loader MSI installer. When empty, defaults to publicly documented sources.')
-param agentBootLoaderDownloadUrl string = ''
-
-@description('Custom URL for AVD Agent MSI installer. When empty, defaults to publicly documented sources.')
-param agentDownloadUrl string = ''
-
-@description('Optional. The name of the PowerShell DSC configuration file containing the avd agent installers. This file is only downloaded and used if the agentDownloadUrl or endpoint download fails.')
-param avdAgentDscPackage string = 'Configuration_1.0.03362.1223.zip'
-
-@description('Resource ID of the data collection rule for AVD Insights monitoring.')
+@description('Optional. Resource ID of the AVD Insights data collection rule.')
 param avdInsightsDataCollectionRulesResourceId string = ''
-
-@description('Enable confidential VM OS disk encryption with VM guest state. Only applicable for confidential VMs.')
+@description('Optional. When true, enables OS disk encryption with VMGuestState for confidential VMs.')
 param confidentialVMOSDiskEncryption bool = false
-
-@description('Resource ID of the Key Vault containing credentials for domain join and VM admin accounts.')
+@description('Required. Resource ID of the Key Vault containing VirtualMachineAdminPassword, VirtualMachineAdminUserName, DomainJoinUserPassword, and DomainJoinUserPrincipalName secrets.')
 param credentialsKeyVaultResourceId string
-
-@description('Resource ID of the data collection endpoint for Azure Monitor agent.')
+@description('Optional. Resource ID of the Azure Monitor data collection endpoint.')
 param dataCollectionEndpointResourceId string = ''
-
-@description('Array of resource IDs for dedicated host groups. One per session host, or single value applied to all, or empty string for VMs without assignment.')
+@description('Optional. Per-VM array of dedicated host group resource IDs. One entry per session host, a single-entry array applied to all, or empty for no assignment.')
 param dedicatedHostGroupResourceIds array = []
-
-@description('Array of resource IDs for specific dedicated hosts. One per session host, or single value applied to all, or empty string for VMs without assignment.')
+@description('Optional. Per-VM array of dedicated host resource IDs. One entry per session host, a single-entry array applied to all, or empty for no assignment.')
 param dedicatedHostResourceIds array = []
-
-@description('Array of preferred zones for each session host. One per session host (as array like ["1"]), or empty for VMs without specific zone preference.')
+@description('Optional. Per-VM preferred availability zones (as zone strings). One entry per session host, or empty for no preference.')
 param preferredZones array = []
-
-@description('Resource ID of the disk encryption set for encrypting managed disks with customer-managed keys.')
+@description('Optional. Resource ID of the disk access resource to restrict managed disk network access.')
+param diskAccessId string = ''
+@description('Optional. Resource ID of the disk encryption set for customer-managed key encryption.')
 param diskEncryptionSetResourceId string = ''
-
 @allowed([
   0
   32
@@ -61,69 +59,57 @@ param diskEncryptionSetResourceId string = ''
   1024
   2048
 ])
-@description('Size of the OS disk in GB.')
+@description('Optional. OS disk size in GB. 0 inherits the image default.')
 param diskSizeGB int = 0
-
 @allowed([
   'Standard_LRS'
   'StandardSSD_LRS'
   'Premium_LRS'
 ])
-@description('SKU for the managed OS disk. Examples: Premium_LRS, StandardSSD_LRS, Standard_LRS.')
+@description('Optional. Storage SKU for the OS disk.')
 param diskSku string = 'Premium_LRS'
-
-@description('Fully qualified domain name (FQDN) for Active Directory domain join.')
+@description('Optional. Active Directory domain name for domain join. Leave empty for Entra ID join.')
 param domainName string = ''
-
-@description('Enable accelerated networking on network interfaces for improved network performance.')
+@description('Optional. Enable accelerated networking on session host NICs.')
 param enableAcceleratedNetworking bool = true
-
-@description('Enable IPv6 on network interfaces.')
+@description('Optional. Enable IPv6 on session host NICs.')
 param enableIPv6 bool = false
-
-@description('Enable encryption at host for additional data encryption on the VM host.')
+@description('Optional. Enable Azure Monitor on session hosts.')
+param enableMonitoring bool = false
+@description('Optional. Enable encryption at host for all disks and cache.')
 param encryptionAtHost bool = true
-
-@description('Configure FSLogix on session hosts during deployment.')
+@description('Optional. Configure FSLogix profile container settings on session hosts.')
 param fslogixConfigureSessionHosts bool = false
-
 @allowed([
   'CloudCacheProfileContainer'
   'CloudCacheProfileOfficeContainer'
   'ProfileContainer'
   'ProfileOfficeContainer'
 ])
-@description('Type of FSLogix container. Valid values: CloudCacheProfileContainer, CloudCacheProfileOfficeContainer, ProfileContainer, ProfileOfficeContainer.')
+@description('Optional. FSLogix container type.')
 param fslogixContainerType string = 'ProfileContainer'
-
-@description('Array of resource IDs for local Azure NetApp Files volumes used for FSLogix containers.')
+@description('Optional. Resource IDs of local Azure NetApp Files volumes for FSLogix.')
 param fslogixLocalNetAppVolumeResourceIds array = []
-
-@description('Array of resource IDs for local storage accounts used for FSLogix containers.')
+@description('Optional. Resource IDs of local storage accounts for FSLogix.')
 param fslogixLocalStorageAccountResourceIds array = []
-
-@description('Array of Active Directory security groups for FSLogix Office 365 container redirection.')
+@description('Optional. Entra ID group object IDs for FSLogix Office container separation.')
 param fslogixOSSGroups array = []
-
-@description('Array of resource IDs for remote Azure NetApp Files volumes used for FSLogix containers in DR scenarios.')
+@description('Optional. Resource IDs of remote Azure NetApp Files volumes for FSLogix cloud cache failover.')
 param fslogixRemoteNetAppVolumeResourceIds array = []
-
-@description('Array of resource IDs for remote storage accounts used for FSLogix containers in DR scenarios.')
+@description('Optional. Resource IDs of remote storage accounts for FSLogix cloud cache failover.')
 param fslogixRemoteStorageAccountResourceIds array = []
-
-@description('Size limit in MB for FSLogix containers. 0 = no limit.')
+@description('Optional. Maximum size of FSLogix VHD/VHDX in megabytes.')
 param fslogixSizeInMBs int = 30720
-
 @allowed([
   'AzureFiles'
   'AzureNetAppFiles'
 ])
-@description('Storage service type for FSLogix.')
+@description('Optional. Storage service backing FSLogix containers.')
 param fslogixStorageService string = 'AzureFiles'
-
-@description('Resource ID of the AVD host pool that session hosts will be registered to.')
+@description('Optional. Enable VM hibernation on session hosts.')
+param hibernationEnabled bool = false
+@description('Required. Resource ID of the AVD host pool that session hosts will be registered with.')
 param hostPoolResourceId string
-
 @allowed([
   'ActiveDirectoryDomainServices'
   'EntraDomainServices'
@@ -131,110 +117,74 @@ param hostPoolResourceId string
   'EntraKerberos-CloudOnly'
   'EntraKerberos-Hybrid'
 ])
-@description('Identity solution for session hosts. Valid values: ActiveDirectoryDomainServices, EntraDomainServices, EntraId, EntraKerberos-CloudOnly, EntraKerberos-Hybrid.')
+@description('Required. Identity join method for session hosts.')
 param identitySolution string
-
-@description('Optional. Image reference object containing either marketplace image details or compute gallery image version resource ID. When provided, takes precedence over imageOffer/imageSku/customImageResourceId. Used by the Session Host Replacer.')
+@description('Optional. Pre-built image reference object. When non-empty, takes precedence over imageOffer/imageSku/customImageResourceId.')
 param imageReference object = {}
-
-@description('Optional. Marketplace image offer (e.g. "windows-11"). Used when imageReference is empty and customImageResourceId is empty.')
+@description('Optional. Marketplace image offer. Used when imageReference and customImageResourceId are both empty.')
 param imageOffer string = ''
-
-@description('Optional. Marketplace image publisher. Used when imageReference is empty and customImageResourceId is empty.')
+@description('Optional. Marketplace image publisher.')
 param imagePublisher string = 'MicrosoftWindowsDesktop'
-
-@description('Optional. Marketplace image SKU (e.g. "win11-24h2-avd"). Used when imageReference is empty and customImageResourceId is empty.')
+@description('Optional. Marketplace image SKU.')
 param imageSku string = ''
-
-@description('Optional. Resource ID of a custom image version in an Azure Compute Gallery. When provided, overrides marketplace image params.')
+@description('Optional. Resource ID of an Azure Compute Gallery image version. Used when imageReference is empty.')
 param customImageResourceId string = ''
-
-@description('Enable Microsoft Defender for Cloud integrity monitoring on session hosts.')
+@description('Optional. Enable Guest Attestation extension for boot integrity monitoring.')
 param integrityMonitoring bool = false
-
-@description('Enroll session hosts in Microsoft Intune. Only applicable with EntraIDIntuneEnrollment identity solution.')
+@description('Optional. Enroll session hosts in Microsoft Intune.')
 param intuneEnrollment bool = false
-
-@description('Azure region where session hosts will be deployed.')
+@description('Optional. Azure region for session host VMs.')
 param location string = resourceGroup().location
-
-@description('Enable Azure Monitor VM insights on session hosts.')
-param enableMonitoring bool = false
-
-@description('Naming convention pattern for network interfaces.')
+@description('Optional. Naming convention for NICs with SHNAME placeholder. Auto-detected from host pool name when empty.')
 param networkInterfaceNameConv string = ''
-
-@description('Naming convention pattern for OS managed disks.')
+@description('Optional. Naming convention for OS disks with SHNAME placeholder. Auto-detected from host pool name when empty.')
 param osDiskNameConv string = ''
-
-@description('Organizational Unit (OU) path in Active Directory for computer objects. Leave empty for default Computers container.')
+@description('Optional. OU path in Active Directory for session host computer accounts.')
 param ouPath string = ''
-
-@description('Enable secure boot for generation 2 VMs.')
+@description('Optional. Enable Secure Boot on session host VMs.')
 param secureBootEnabled bool = true
-
 @allowed([
   'Standard'
   'TrustedLaunch'
   'ConfidentialVM'
 ])
-@description('Security type for VMs. Valid values: Standard, TrustedLaunch, ConfidentialVM.')
+@description('Optional. VM security profile type.')
 param securityType string = 'TrustedLaunch'
-
-@description('Array of custom script extension configurations for additional session host customization.')
+@description('Optional. Custom script extension configurations for post-provisioning session host customization.')
 param sessionHostCustomizations array = []
-
 @minValue(1)
 @maxValue(4)
-@description('Number of digits used in the session host name index. Determines how many characters from the end represent the VM number. Used in both naming modes.')
+@description('Optional. Number of digits in the zero-padded VM index (used for both naming modes).')
 param sessionHostNameIndexLength int = 2
-
-// ── Naming mode: explicit list ────────────────────────────────────────────────
-// Used by the Session Host Replacer function app, which pre-computes exact names.
-// When provided, takes precedence over convention mode params below.
-@description('Optional. Explicit array of session host names to deploy (e.g. ["vm-avd-01","vm-avd-02"]). When non-empty, overrides convention mode. Used by the SHR function app.')
+@description('Optional. Explicit array of session host computer names (e.g. ["avd01","avd02"]). When non-empty, takes precedence over convention mode. Used by the Session Host Replacer.')
 param sessionHostNames array = []
-
-// ── Naming mode: convention (prefix + index range) ───────────────────────────
-// Used when deploying manually via the portal UI without pre-computed names.
-// Ignored when sessionHostNames is non-empty.
-@description('Optional. Short prefix for session host names (e.g. "avd-vm-"). Required when sessionHostNames is empty.')
+@description('Optional. Short prefix for session host computer names in convention mode (e.g. "avd"). Ignored when sessionHostNames is non-empty.')
 param sessionHostNamePrefix string = ''
-
 @minValue(0)
-@description('Optional. Number of session hosts to deploy in convention mode. Required when sessionHostNames is empty.')
+@description('Optional. Number of session hosts to deploy in convention mode. Ignored when sessionHostNames is non-empty.')
 param sessionHostCount int = 0
-
 @minValue(0)
-@description('Optional. Starting index for VM name generation in convention mode (e.g. 1 → vm-avd-01). Required when sessionHostNames is empty.')
+@description('Optional. Starting index for VM name generation in convention mode. Ignored when sessionHostNames is non-empty.')
 param sessionHostIndex int = 0
-
-@description('Resource ID of the subnet where session host network interfaces will be placed.')
+@description('Required. Resource ID of the subnet where session host NICs will be placed.')
 param subnetResourceId string
-
-@description('Tags to apply to deployed resources. Organized by resource type.')
+@description('Optional. Tags applied to all deployed resources, keyed by resource type.')
 param tags object = {}
-
-@description('Time zone for session hosts. Use Windows time zone format (e.g., Eastern Standard Time, Pacific Standard Time).')
+@description('Optional. Windows time zone for session host VMs.')
 param timeZone string = 'Eastern Standard Time'
-
-@description('Naming convention pattern for virtual machines.')
+@description('Optional. Naming convention for VM names with SHNAME placeholder. Auto-detected from host pool name when empty.')
 param virtualMachineNameConv string = ''
-
-@description('Azure VM size for session hosts. Examples: Standard_D4s_v5, Standard_D8s_v5.')
+@description('Required. Azure VM size for session hosts.')
 param virtualMachineSize string
-
-@description('Enable virtual Trusted Platform Module (vTPM) for generation 2 VMs.')
+@description('Optional. Enable virtual TPM on session host VMs.')
 param vTpmEnabled bool = true
+@description('Optional. Resource ID of an existing Recovery Services Vault to register session host VMs with for backup. When provided, VMs will be enrolled in the backup policy specified by vmBackupPolicyName. Intended for personal host pools.')
+param recoveryServicesVaultResourceId string = ''
 
-@description('Resource ID of the data collection rule for VM Insights performance and dependency monitoring.')
-param vmInsightsDataCollectionRulesResourceId string = ''
+@description('Optional. Name of the backup policy within the Recovery Services Vault to apply to session host VMs. Defaults to the standard AVD VM policy name when empty.')
+param vmBackupPolicyName string = ''
 
-// Variables
-
-// ── Naming convention auto-detection ─────────────────────────────────────────
-// Detects whether the host pool uses resource-type-at-end (reversed) or at-start convention
-// by inspecting the host pool name, mirroring the same logic used in the Session Host Replacer.
+// ── Shared data ───────────────────────────────────────────────────────────────
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 var locationsObject = loadJsonContent('../../../.common/data/locations.json')
 var cloud = toLower(environment().name)
@@ -244,22 +194,20 @@ var locations = locationsObject[locationsEnvProperty]
 var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
 var regionAbbreviation = locations[varLocation].abbreviation
 
+// ── Naming convention auto-detection ─────────────────────────────────────────
+// Mirrors the same logic used in the Session Host Replacer function app.
 var hostPoolName = last(split(hostPoolResourceId, '/'))
 var nameConvReversed = startsWith(hostPoolName, '${resourceAbbreviations.hostPools}-')
-  ? false // Resource type at beginning (e.g., "hp-avd-01-eus")
-  : endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}')
-      ? true // Resource type at end (e.g., "avd-01-eus-hp")
-      : false // Default fallback
+  ? false
+  : endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}') ? true : false
 
 var arrHostPoolName = split(hostPoolName, '-')
 var hpBaseName = nameConvReversed
-  ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-') // Remove last 2 segments (location-hp)
-  : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-') // Remove first (hp) and last (location)
+  ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-')
+  : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-')
 var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
-var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
-var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
+var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'}'
 
-// Effective naming conventions — override params take precedence; auto-detected values are the fallback.
 var effectiveVirtualMachineNameConv = !empty(virtualMachineNameConv)
   ? virtualMachineNameConv
   : nameConvReversed
@@ -281,7 +229,11 @@ var effectiveOsDiskNameConv = !empty(osDiskNameConv)
 var generatedAvSetNameConv = nameConvReversed
   ? replace(
       replace(
-        replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'), 'RESOURCETYPE', resourceAbbreviations.availabilitySets),
+        replace(
+          replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'),
+          'RESOURCETYPE',
+          resourceAbbreviations.availabilitySets
+        ),
         'LOCATION',
         regionAbbreviation
       ),
@@ -292,71 +244,18 @@ var generatedAvSetNameConv = nameConvReversed
 
 var avSetNameConv = !empty(availabilitySetNameConv) ? availabilitySetNameConv : generatedAvSetNameConv
 
-// Resolve effective image reference: explicit imageReference param (SHR path) takes precedence,
-// then customImageResourceId, then marketplace fields.
-var effectiveImageReference = !empty(imageReference)
-  ? imageReference
-  : !empty(customImageResourceId)
-      ? { id: customImageResourceId }
-      : { publisher: imagePublisher, offer: imageOffer, sku: imageSku, version: 'latest' }
+// ── FSLogix file share names ──────────────────────────────────────────────────
+var fslogixFileShareNames = contains(fslogixContainerType, 'Office')
+  ? ['profile-containers', 'office-containers']
+  : ['profile-containers']
 
-var deploymentSuffix = uniqueString(deployment().name)
-
-// Agent download URL construction with environment-based fallback
-var cloudSuffix = replace(
-  replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''),
-  '/',
-  ''
-)
-var agentBootLoaderUrl = !empty(agentBootLoaderDownloadUrl)
-  ? agentBootLoaderDownloadUrl
-  : (startsWith(cloud, 'us')
-      ? 'https://aka.${cloudSuffix}/avdRDAgentBootLoader'
-      : 'https://go.microsoft.com/fwlink/?linkid=2311028')
-var agentUrl = !empty(agentDownloadUrl)
-  ? agentDownloadUrl
-  : (startsWith(cloud, 'us')
-      ? 'https://aka.${cloudSuffix}/avdRDAgent'
-      : 'https://go.microsoft.com/fwlink/?linkid=2310011')
-
-var dscStorageAccount = startsWith(environment().name, 'USN')
-  ? 'wvdexportalcontainer'
-  : 'wvdportalstorageblob'
-var dscUrl = 'https://${dscStorageAccount}.blob.${environment().suffixes.storage}/galleryartifacts/${avdAgentDscPackage}'
-
-var confidentialVMOSDiskEncryptionType = confidentialVMOSDiskEncryption ? 'DiskWithVMGuestState' : 'VMGuestStateOnly'
-
-// Resolve effective session host names from either explicit list or convention (prefix + index range).
-// Explicit list (sessionHostNames) takes precedence — used by the SHR function app.
-// Convention mode is used for manual/portal deployments.
-var generatedSessionHostNames = [for i in range(sessionHostIndex, sessionHostCount): '${sessionHostNamePrefix}${padLeft(i, sessionHostNameIndexLength, '0')}']
+// ── Effective session host names (for availability set index calculation) ─────
+var generatedSessionHostNames = [
+  for i in range(sessionHostIndex, sessionHostCount): '${sessionHostNamePrefix}${padLeft(i, sessionHostNameIndexLength, '0')}'
+]
 var effectiveSessionHostNames = !empty(sessionHostNames) ? sessionHostNames : generatedSessionHostNames
 
-// Batching logic: Dynamically calculate max VMs per batch based on resources per VM
-// Empirically measured: 915 resources / 61 VMs = 15 with monitoring, so base = 11 without monitoring
-var hasAmdGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, 'as_v4') || endsWith(
-  virtualMachineSize,
-  '_V710_v5'
-))
-var hasNvidiaGpu = contains(virtualMachineSize, 'Standard_NV') && (endsWith(virtualMachineSize, '_v3') || endsWith(
-  virtualMachineSize,
-  '_A10_v5'
-))
-var baseResourcesPerVM = 11 // NIC, VM, Domain/AAD Extension, Run Command (Initialize-SessionHost), Run Command (Customizations), updateOSDisk modules(2), diskUpdate, plus 3 unidentified
-var monitoringResourcesPerVM = enableMonitoring ? 4 : 0 // Azure Monitor Agent Extension + 3 DCR associations
-var gpuResourcesPerVM = (hasAmdGpu || hasNvidiaGpu) ? 1 : 0 // GPU driver extension (AMD or NVIDIA)
-var integrityResourcesPerVM = integrityMonitoring ? 1 : 0 // Guest Attestation extension
-var customizationsResourcesPerVM = !empty(sessionHostCustomizations) ? (1 + length(sessionHostCustomizations)) : 0 // 1 module deployment + 1 run command per customization
-var totalResourcesPerVM = baseResourcesPerVM + monitoringResourcesPerVM + gpuResourcesPerVM + integrityResourcesPerVM + customizationsResourcesPerVM
-var calculatedMaxVMs = 800 / totalResourcesPerVM // ARM template limit is 800 resources per template
-var maxVMsPerDeployment = calculatedMaxVMs < 20 ? 20 : (calculatedMaxVMs > 45 ? 45 : calculatedMaxVMs) // Safety bounds: minimum 20, maximum 45 VMs per batch
-var totalVMCount = length(effectiveSessionHostNames)
-var divisionValue = totalVMCount / maxVMsPerDeployment
-var divisionRemainderValue = totalVMCount % maxVMsPerDeployment
-var sessionHostBatchCount = divisionRemainderValue > 0 ? divisionValue + 1 : divisionValue
-
-// Availability Set logic: Max 200 VMs per availability set
-// Extract VM numbers from names to determine which availability sets are needed
+// ── Availability set index calculation ───────────────────────────────────────
 var vmNumbersForAvSet = [
   for name in effectiveSessionHostNames: int(substring(
     name,
@@ -364,7 +263,6 @@ var vmNumbersForAvSet = [
     sessionHostNameIndexLength
   ))
 ]
-
 var minVmNumber = min(vmNumbersForAvSet)
 var maxVmNumber = max(vmNumbersForAvSet)
 var maxAvSetMembers = 200
@@ -373,125 +271,94 @@ var endAvSetRange = maxVmNumber / maxAvSetMembers
 var calculatedAvailabilitySetsCount = endAvSetRange - beginAvSetRange + 1
 var calculatedAvailabilitySetsIndex = beginAvSetRange
 
-var fslogixFileShareNames = contains(fslogixContainerType, 'Office')
-  ? ['profile-containers', 'office-containers']
-  : ['profile-containers']
+// ── Deployment suffix ─────────────────────────────────────────────────────────
+var deploymentSuffix = uniqueString(deployment().name)
 
-// Existing Key Vault for secrets
+var effectiveVmBackupPolicyName = !empty(vmBackupPolicyName) ? vmBackupPolicyName : 'AvdPolicyVm'
+
+// ── Credentials from Key Vault ────────────────────────────────────────────────
 resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: last(split(credentialsKeyVaultResourceId, '/'))
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
 }
 
-resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(artifactsUserAssignedIdentityResourceId)) {
-  scope: resourceGroup(
-    split(artifactsUserAssignedIdentityResourceId, '/')[2],
-    split(artifactsUserAssignedIdentityResourceId, '/')[4]
-  )
-  name: last(split(artifactsUserAssignedIdentityResourceId, '/'))
-}
-
-module netAppVolumeFqdns 'modules/getNetAppVolumeSmbServerFqdns.bicep' = if (fslogixConfigureSessionHosts && (!empty(fslogixLocalNetAppVolumeResourceIds) || !empty(fslogixRemoteNetAppVolumeResourceIds))) {
-  name: 'shr-netAppVolumeFqdns-${deploymentSuffix}'
+// ── Session hosts ─────────────────────────────────────────────────────────────
+// Delegates to the shared RG-scoped orchestration module under hostpools/modules/hosts/modules/.
+module sessionHosts '../../hostpools/modules/hosts/modules/sessionHosts.bicep' = {
+  name: 'SessionHosts-${deploymentSuffix}'
   params: {
-    localNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
-    remoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
-    shareNames: fslogixFileShareNames
+    agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
+    agentDownloadUrl: agentDownloadUrl
+    avdAgentDscPackage: avdAgentDscPackage
+    artifactsContainerUri: artifactsContainerUri
+    artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
+    availability: availability
+    availabilitySetNameConv: avSetNameConv
+    availabilitySetsCount: calculatedAvailabilitySetsCount
+    availabilitySetsIndex: calculatedAvailabilitySetsIndex
+    availabilityZones: availabilityZones
+    avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
+    confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
+    customImageResourceId: customImageResourceId
+    dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
+    dedicatedHostGroupResourceIds: dedicatedHostGroupResourceIds
+    dedicatedHostResourceIds: dedicatedHostResourceIds
+    preferredZones: preferredZones
+    diskAccessId: diskAccessId
+    diskEncryptionSetResourceId: diskEncryptionSetResourceId
+    diskSizeGB: diskSizeGB
+    diskSku: diskSku
+    domainJoinUserPassword: contains(identitySolution, 'DomainServices')
+      ? kvCredentials.getSecret('DomainJoinUserPassword')
+      : ''
+    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices')
+      ? kvCredentials.getSecret('DomainJoinUserPrincipalName')
+      : ''
+    domainName: domainName
+    enableAcceleratedNetworking: enableAcceleratedNetworking
+    enableIPv6: enableIPv6
+    enableMonitoring: enableMonitoring
+    encryptionAtHost: encryptionAtHost
+    fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
+    fslogixContainerType: fslogixContainerType
+    fslogixFileShareNames: fslogixFileShareNames
+    fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
+    fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
+    fslogixOSSGroups: fslogixOSSGroups
+    fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
+    fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
+    fslogixSizeInMBs: fslogixSizeInMBs
+    fslogixStorageService: fslogixStorageService
+    hibernationEnabled: hibernationEnabled
+    hostPoolResourceId: hostPoolResourceId
+    identitySolution: identitySolution
+    imageReference: imageReference
+    imageOffer: imageOffer
+    imagePublisher: imagePublisher
+    imageSku: imageSku
+    integrityMonitoring: integrityMonitoring
+    intuneEnrollment: intuneEnrollment
+    location: location
+    networkInterfaceNameConv: effectiveNetworkInterfaceNameConv
+    osDiskNameConv: effectiveOsDiskNameConv
+    ouPath: ouPath
+    secureBootEnabled: secureBootEnabled
+    securityType: securityType
+    sessionHostCustomizations: sessionHostCustomizations
+    sessionHostNames: effectiveSessionHostNames
+    vmNameIndexLength: sessionHostNameIndexLength
+    virtualMachineNameConv: effectiveVirtualMachineNameConv
+    virtualMachineSize: virtualMachineSize
+    virtualMachineAdminPassword: kvCredentials.getSecret('VirtualMachineAdminPassword')
+    virtualMachineAdminUserName: kvCredentials.getSecret('VirtualMachineAdminUserName')
+    vTpmEnabled: vTpmEnabled
+    subnetResourceId: subnetResourceId
+    tags: tags
+    deploymentSuffix: deploymentSuffix
+    timeZone: timeZone
+    recoveryServicesVaultResourceId: recoveryServicesVaultResourceId
+    vmBackupPolicyName: effectiveVmBackupPolicyName
   }
 }
 
-module availabilitySets '../../../.common/bicepModules/compute/availabilitySets/deploy.bicep' = [
-  for i in range(0, calculatedAvailabilitySetsCount): if (availability == 'AvailabilitySets') {
-    name: 'shr-availabilitySet-${padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
-    params: {
-      name: replace(avSetNameConv, '##', padLeft((i + calculatedAvailabilitySetsIndex) + 1, 2, '0'))
-      platformFaultDomainCount: 2
-      platformUpdateDomainCount: 5
-      location: location
-      skuName: 'Aligned'
-      tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Compute/availabilitySets'] ?? {})
-    }
-  }
-]
-
-@batchSize(5)
-module virtualMachines 'modules/virtualMachines.bicep' = [
-  for i in range(1, sessionHostBatchCount): {
-    #disable-next-line BCP335
-    name: 'shr-vm-batch-${i}-of-${sessionHostBatchCount}_(${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}-vms)-${deploymentSuffix}'
-    params: {
-      agentBootLoaderDownloadUrl: agentBootLoaderUrl
-      agentDownloadUrl: agentUrl
-      agentFallBackDownloadUrl: dscUrl
-      artifactsContainerUri: artifactsContainerUri
-      artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
-      artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId)
-        ? ''
-        : artifactsUAI!.properties.clientId
-      availability: availability
-      availabilityZones: availabilityZones
-      availabilitySetNameConv: avSetNameConv
-      avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
-      confidentialVMOSDiskEncryptionType: confidentialVMOSDiskEncryptionType
-      dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
-      dedicatedHostGroupResourceIds: dedicatedHostGroupResourceIds
-      dedicatedHostResourceIds: dedicatedHostResourceIds
-      preferredZones: preferredZones
-      deploymentSuffix: deploymentSuffix
-      diskEncryptionSetResourceId: diskEncryptionSetResourceId
-      diskSizeGB: diskSizeGB
-      diskSku: diskSku
-      domainJoinUserPassword: !empty(domainName) ? kvCredentials.getSecret('DomainJoinUserPassword') : ''
-      domainJoinUserPrincipalName: !empty(domainName) ? kvCredentials.getSecret('DomainJoinUserPrincipalName') : ''
-      domainName: domainName
-      enableAcceleratedNetworking: enableAcceleratedNetworking
-      enableIPv6: enableIPv6
-      enableMonitoring: enableMonitoring
-      encryptionAtHost: encryptionAtHost
-      hasAmdGpu: hasAmdGpu
-      hasNvidiaGpu: hasNvidiaGpu
-      fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
-      fslogixContainerType: fslogixContainerType
-      fslogixFileShareNames: fslogixFileShareNames
-      fslogixOSSGroups: fslogixOSSGroups
-      fslogixLocalNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds)
-        ? netAppVolumeFqdns!.outputs.localNetAppVolumeSmbServerFqdns
-        : []
-      fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
-      fslogixRemoteNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds)
-        ? netAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns
-        : []
-      fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
-      fslogixSizeInMBs: fslogixSizeInMBs
-      fslogixStorageService: fslogixStorageService
-      hostPoolResourceId: hostPoolResourceId
-      identitySolution: identitySolution
-      imageReference: effectiveImageReference
-      integrityMonitoring: integrityMonitoring
-      intuneEnrollment: intuneEnrollment
-      location: location
-      networkInterfaceNameConv: effectiveNetworkInterfaceNameConv
-      osDiskNameConv: effectiveOsDiskNameConv
-      ouPath: ouPath
-      sessionHostCustomizations: sessionHostCustomizations
-      secureBootEnabled: secureBootEnabled
-      securityType: securityType
-      sessionHostNameIndexLength: sessionHostNameIndexLength
-      sessionHostNames: i == sessionHostBatchCount && divisionRemainderValue > 0
-        ? take(skip(effectiveSessionHostNames, (i - 1) * maxVMsPerDeployment), divisionRemainderValue)
-        : take(skip(effectiveSessionHostNames, (i - 1) * maxVMsPerDeployment), maxVMsPerDeployment)
-      subnetResourceId: subnetResourceId
-      tags: tags
-      timeZone: timeZone
-      virtualMachineAdminPassword: kvCredentials.getSecret('VirtualMachineAdminPassword')
-      virtualMachineAdminUserName: kvCredentials.getSecret('VirtualMachineAdminUserName')
-      virtualMachineNameConv: effectiveVirtualMachineNameConv
-      virtualMachineSize: virtualMachineSize
-      vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId
-      vTpmEnabled: vTpmEnabled
-    }
-    dependsOn: [
-      availabilitySets
-    ]
-  }
-]
+output virtualMachineNames array = sessionHosts.outputs.virtualMachineNames

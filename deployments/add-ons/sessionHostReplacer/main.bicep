@@ -66,12 +66,12 @@ param availabilitySetNameConvOverride string = ''
 param sessionHostReplacerUserAssignedIdentityResourceId string = ''
 
 @description('Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed.')
-param appServicePlanResourceId string = ''
+param existingAppServicePlanResourceId string = ''
 
 @description('Optional. The name of the resource group to deploy the new App Service Plan into. Leave empty to deploy into the same resource group as the function app. Useful when sharing a single App Service Plan across multiple add-ons in a central operations resource group.')
 param appServicePlanResourceGroupName string = ''
 
-@description('Optional. The SKU for the App Service Plan. Only applies if appServicePlanResourceId is not provided. Default is P0v3 for cost optimization.')
+@description('Optional. The SKU for the App Service Plan. Only applies if existingAppServicePlanResourceId is not provided. Default is P0v3 for cost optimization.')
 @allowed([
   'PremiumV3_P0v3'
   'PremiumV3_P1v3'
@@ -80,7 +80,7 @@ param appServicePlanResourceGroupName string = ''
 ])
 param appServicePlanSku string = 'PremiumV3_P0v3'
 
-@description('Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if appServicePlanResourceId is not provided. Default is false.')
+@description('Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if existingAppServicePlanResourceId is not provided. Default is false.')
 param zoneRedundant bool = false
 
 @description('Optional. Enable private endpoints for function app and storage. Default is false.')
@@ -364,9 +364,6 @@ param diskEncryptionSetResourceId string = ''
 @description('Optional. AVD Insights data collection rules resource ID.')
 param avdInsightsDataCollectionRulesResourceId string = ''
 
-@description('Optional. VM Insights data collection rules resource ID.')
-param vmInsightsDataCollectionRulesResourceId string = ''
-
 @description('Optional. Data collection endpoint resource ID.')
 param dataCollectionEndpointResourceId string = ''
 
@@ -461,7 +458,16 @@ var templateSpecSubscriptionId = !empty(sessionHostTemplateSpecResourceId)
   ? split(sessionHostTemplateSpecResourceId, '/')[2]
   : subscription().subscriptionId
 
-// Naming Convention Logic (derived from resourceNames.bicep)
+// ============================================================================
+// Naming Convention
+// Compile-time placeholders — resolved here by Bicep string substitution:
+//   RESOURCETYPE  → resource type abbreviation (e.g., 'asp', 'func', 'uai')
+//   LOCATION      → region abbreviation (e.g., 'eus', 'va')
+//   TOKEN         → per-resource differentiator in HP-scoped names (e.g., 'shr-abc123-')
+// Runtime placeholders — passed as strings to the Function App for substitution:
+//   SHNAME        → session host name prefix + padded index (e.g., 'avd0101')
+//   ##            → availability set numeric index (e.g., '01')
+// ============================================================================
 var cloud = toLower(environment().name)
 var locationsObject = loadJsonContent('../../../.common/data/locations.json')
 var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : cloud
@@ -500,18 +506,14 @@ var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
 // Generate unique identifiers for resource naming
 var uniqueStringHosts = take(uniqueString(virtualMachinesSubscriptionId, virtualMachinesResourceGroupName), 6)
 
-// App Service Plan naming convention
+// Shared (non-HP-scoped) naming convention — no TOKEN since these resources have no per-resource differentiator
 var nameConv_Shared_Resources = nameConvReversed
-  ? 'avd-TOKEN-${nameConvSuffix}'
-  : 'RESOURCETYPE-avd-TOKEN-${nameConvSuffix}'
+  ? 'avd-${nameConvSuffix}'
+  : 'RESOURCETYPE-avd-${nameConvSuffix}'
 var appServicePlanName = replace(
-  replace(
-    replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
-    'LOCATION',
-    functionAppRegionAbbreviation
-  ),
-  'TOKEN-',
-  ''
+  replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
+  'LOCATION',
+  functionAppRegionAbbreviation
 )
 
 // Private endpoint naming conventions
@@ -536,15 +538,9 @@ var privateEndpointNICNameConv = replace(
 // Use explicit override if provided, otherwise derive from shared naming convention
 var appInsightsName = !empty(applicationInsightsNameOverride)
   ? applicationInsightsNameOverride
-  : replace(
-      replace(
-        replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.applicationInsights),
-        'TOKEN-',
-        'sessionhostreplacer-'
-      ),
-      'LOCATION',
-      functionAppRegionAbbreviation
-    )
+  : nameConvReversed
+      ? 'avd-sessionhostreplacer-${functionAppRegionAbbreviation}-${resourceAbbreviations.applicationInsights}'
+      : '${resourceAbbreviations.applicationInsights}-avd-sessionhostreplacer-${functionAppRegionAbbreviation}'
 
 // Enterprise Workbook naming - single workbook for all host pools across all regions
 // Azure Monitor Workbooks require GUID names for deterministic deployment
@@ -600,15 +596,9 @@ var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride
     )
 var templateSpecNameFinal = !empty(templateSpecName)
   ? templateSpecName
-  : replace(
-      replace(
-        replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.templateSpecs),
-        'TOKEN',
-        'session-hosts'
-      ),
-      'LOCATION',
-      functionAppRegionAbbreviation
-    )
+  : nameConvReversed
+      ? 'avd-session-hosts-${functionAppRegionAbbreviation}-${resourceAbbreviations.templateSpecs}'
+      : '${resourceAbbreviations.templateSpecs}-avd-session-hosts-${functionAppRegionAbbreviation}'
 
 // Virtual Machine naming conventions - use overrides if provided, otherwise derive from host pool naming
 var availabilitySetNameConv = !empty(availabilitySetNameConvOverride)
@@ -680,9 +670,6 @@ var paramIntuneEnrollment = intuneEnrollment ? { intuneEnrollment: intuneEnrollm
 var paramOuPath = !empty(ouPath) ? { ouPath: ouPath } : {}
 var paramSessionHostCustomizations = !empty(sessionHostCustomizations)
   ? { sessionHostCustomizations: sessionHostCustomizations }
-  : {}
-var paramVmInsightsDataCollectionRulesResourceId = !empty(vmInsightsDataCollectionRulesResourceId)
-  ? { vmInsightsDataCollectionRulesResourceId: vmInsightsDataCollectionRulesResourceId }
   : {}
 
 // FSLogix conditional parameters
@@ -759,7 +746,6 @@ var sessionHostParameters = union(
   paramIntuneEnrollment,
   paramOuPath,
   paramSessionHostCustomizations,
-  paramVmInsightsDataCollectionRulesResourceId,
   paramFslogixConfigureSessionHosts,
   paramFslogixContainerType,
   paramFslogixLocalNetAppVolumeResourceIds,
@@ -788,7 +774,7 @@ module templateSpec '../../../.common/bicepModules/resources/templateSpecs/deplo
 }
 
 // Conditional App Service Plan deployment
-module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
+module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(existingAppServicePlanResourceId)) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
   scope: resourceGroup(aspResourceGroupName)
   params: {
@@ -804,11 +790,9 @@ module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionApp
 
 var monitoringResourceGroupId = !empty(avdInsightsDataCollectionRulesResourceId)
   ? '/subscriptions/${split(avdInsightsDataCollectionRulesResourceId, '/')[2]}/resourceGroups/${split(avdInsightsDataCollectionRulesResourceId, '/')[4]}'
-  : !empty(vmInsightsDataCollectionRulesResourceId)
-      ? '/subscriptions/${split(vmInsightsDataCollectionRulesResourceId, '/')[2]}/resourceGroups/${split(vmInsightsDataCollectionRulesResourceId, '/')[4]}'
-      : !empty(dataCollectionEndpointResourceId)
-          ? '/subscriptions/${split(dataCollectionEndpointResourceId, '/')[2]}/resourceGroups/${split(dataCollectionEndpointResourceId, '/')[4]}'
-          : ''
+  : !empty(dataCollectionEndpointResourceId)
+      ? '/subscriptions/${split(dataCollectionEndpointResourceId, '/')[2]}/resourceGroups/${split(dataCollectionEndpointResourceId, '/')[4]}'
+      : ''
 
 var hostPoolResourceGroupId = '/subscriptions/${hostPoolSubscriptionId}/resourceGroups/${hostPoolResourceGroupName}'
 
@@ -1145,7 +1129,7 @@ module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
-    serverFarmId: !empty(appServicePlanResourceId) ? appServicePlanResourceId : hostingPlan!.outputs.hostingPlanId
+    serverFarmId: !empty(existingAppServicePlanResourceId) ? existingAppServicePlanResourceId : hostingPlan!.outputs.hostingPlanId
     storageAccountName: storageAccountName
     storageAccountRoleDefinitionIds: [
       '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor (for deployment state management)

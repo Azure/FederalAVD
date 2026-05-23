@@ -101,6 +101,8 @@ var nameConv_Suffix_withoutResType = 'LOCATION'
 var nameConvSuffix = nameConvResTypeAtEnd
   ? '${nameConv_Suffix_withoutResType}-RESOURCETYPE'
   : nameConv_Suffix_withoutResType
+// 'image-management' is intentionally hardcoded — this solution always deploys a single
+// shared environment and has no identifier or index parameter like host pool deployments.
 var identifier = 'image-management'
 var nameConv_ImageManagement_ResGroup = nameConvResTypeAtEnd
   ? 'avd-${identifier}-${nameConvSuffix}'

@@ -19,118 +19,30 @@
 						},
 						{
 							"name": "infoBox1",
-							"type": "Microsoft.Common.TextBlock",
-							"visible": true,
+							"type": "Microsoft.Common.InfoBox",
 							"options": {
-								"text": "This solution is designed to deploy an Azure Virtual Desktop hostpool according to Cloud Adoption Framework (CAF) best practices. Please complete the sections of this form to get started."
+								"style": "Info",
+								"text": "This solution is designed to deploy an Azure Virtual Desktop host pool according to Cloud Adoption Framework (CAF) best practices. Please complete the sections of this form to get started."
 							}
 						},
 						{
 							"name": "prereqs",
-							"type": "Microsoft.Common.Section",
-							"label": "Solution Prerequisites",
-							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
-							"elements": [
-								{
-									"name": "textBlock1",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
-									"options": {
-										"text": "This solution has several prerequisites documented at the link below and in the Federal AVD Repo.",
-										"link": {
-											"label": "Prerequisites for Azure Virtual Desktop",
-											"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/prerequisites"
-										}
-									}
-								}
-							]
-						},
-						{
-							"name": "deploymentType",
-							"type": "Microsoft.Common.DropDown",
-							"label": "Deployment Mode",
-							"multiLine": true,
-							"defaultValue": "Complete",
-							"toolTip": "Select the deployment type",
-							"constraints": {
-								"allowedValues": [
-									{
-										"label": "Complete",
-										"value": "Complete",
-										"description": "This solution will deploy a fully functioning Azure Virtual Desktop hostpool along with associated resources depending on the options chosen. All resources and resource groups are named in accordance with Cloud Adoption Framework (CAF) naming standards."
-									},
-									{
-										"label": "Hostpool resources only",
-										"value": "HostpoolOnly",
-										"description": "The solution will deploy the resources necessary to support a hostpool including the hostpool object, desktop application group, virtual machines, and storage for FSLogix (if selected). You'll have the option to select existing management, monitoring, and control plane resources."
-									},
-									{
-										"label": "Add session hosts to an existing hostpool",
-										"value": "SessionHostsOnly",
-										"description": "The solution will only add session hosts to an existing hostpool allowing you to select existing resources when required to customize your session hosts."
-									}
-								]
-							},
-							"visible": true
-						},
-						{
-							"name": "existingHostPoolTextBlock",
-							"type": "Microsoft.Common.TextBlock",
+							"type": "Microsoft.Common.InfoBox",
 							"options": {
-								"text": "Select the hostpool that you wish to update below."
-							},
-							"visible": "[equals(steps('basics').deploymentType, 'SessionHostsOnly')]"
-						},
-						{
-							"name": "existingHostPool",
-							"type": "Microsoft.Solutions.ResourceSelector",
-							"visible": "[equals(steps('basics').deploymentType, 'SessionHostsOnly')]",
-							"label": "Hostpool",
-							"resourceType": "Microsoft.DesktopVirtualization/hostPools",
-							"constraints": {
-								"required": true
+								"style": "Info",
+								"text": "This solution has several prerequisites documented at the link below and in the Federal AVD repo.",
+								"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/prerequisites"
 							}
 						},
-						{
-							"name": "hostPoolProps",
-							"type": "Microsoft.Solutions.ArmApiControl",
-							"condition": "[not(empty(steps('basics').existingHostPool))]",
-							"request": {
-								"method": "GET",
-								"path": "[concat(steps('basics').existingHostPool.id, '?api-version=2024-04-03')]"
-							}
-						},
-						{
-							"name": "hostsRGProps",
-							"type": "Microsoft.Solutions.ArmApiControl",
-							"condition": "[and(not(empty(steps('basics').existingHostPool)), not(empty(steps('basics').hostPoolProps.tags.hostsResourceGroupId)))]",
-							"request": {
-								"method": "GET",
-								"path": "[concat(steps('basics').hostPoolProps.tags.hostsResourceGroupId, '?api-version=2021-04-01')]"
-							}
-						},
-						{
-							"name": "sessionHostsApi",
-							"type": "Microsoft.Solutions.ArmApiControl",
-							"condition": "[not(empty(steps('basics').existingHostPool))]",
-							"request": {
-								"method": "GET",
-								"path": "[concat(steps('basics').existingHostPool.id, '/sessionHosts?api-version=2024-04-03&isDescending=true')]",
-								"transforms": {
-									"lastname": "value[*].name|[0]"
-								}
-							}
-						},
+
 						{
 							"name": "naming",
 							"type": "Microsoft.Common.Section",
 							"label": "Naming Components",
-							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
 							"elements": [
 								{
 									"name": "namingIntroTextBlock",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"link": {
 											"label": "User Personas | Microsoft Learn",
@@ -161,7 +73,6 @@
 								{
 									"name": "indexTextBlock",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"link": {
 											"label": "Sharding pattern - Azure Architecture Center | Microsoft Learn",
@@ -227,9 +138,8 @@
 							"name": "solution",
 							"type": "Microsoft.Common.DropDown",
 							"multiLine": true,
-							"visible": true,
 							"label": "Identity Provider",
-							"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), 'Active Directory Domain Services (ADDS)', if(equals(steps('basics').hostsRGProps.tags.vmIdentityType, 'EntraId'), 'Entra Id (Cloud Only Identities) (Uses Storage Keys for FSLogix)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'ActiveDirectory'), 'Active Directory Domain Services (ADDS)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'CloudOnly'), 'Entra Kerberos (Cloud Only Identities) (Preview)', if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'Kerberos'), 'Entra Kerberos (Hybrid Identities)', 'Entra Domain Services')))))]",
+							"defaultValue": "Active Directory Domain Services (ADDS)",
 							"toolTip": "Choose the identity service provider for your users and session hosts.",
 							"constraints": {
 								"required": true,
@@ -250,9 +160,9 @@
 										"description": "Users are sourced from Entra ID and the session hosts will join Entra ID. FSLogix will use Storage Account Keys for authentication."
 									},
 									{
-										"label": "Entra Kerberos (Cloud Only Identities) (Preview)",
+										"label": "Entra Kerberos (Cloud Only Identities)",
 										"value": "EntraKerberos-CloudOnly",
-										"description": "Users are sourced from Entra ID and the session hosts will join Entra ID. FSLogix will use Entra Kerberos for authentication. This option is currently in preview and only available in Azure Commercial."
+										"description": "Users are sourced from Entra ID and the session hosts will join Entra ID. FSLogix will use Entra Kerberos for authentication. Supported in Azure Commercial and Azure US Government. Air-gapped cloud support is unknown."
 									},
 									{
 										"label": "Entra Kerberos (Hybrid Identities)",
@@ -265,9 +175,9 @@
 						{
 							"name": "entraIdPreviewInfoBox",
 							"type": "Microsoft.Common.InfoBox",
-							"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-CloudOnly'), and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('userProfiles').profileSolution, 'FSLogix'), equals(steps('userProfiles').deployStorage, true)))]",
+							"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-CloudOnly'), equals(steps('userProfiles').profileSolution, 'FSLogix'), equals(steps('userProfiles').deployStorage, true))]",
 							"options": {
-								"text": "During Preview, enabling authentication to FSLogix storage accounts using Entra Kerberos for Cloud Only Identities is only supported in Azure Commercial.",
+								"text": "Enabling authentication to FSLogix storage accounts using Entra Kerberos for Cloud Only Identities is supported in Azure Commercial and Azure US Government. Air-gapped cloud support is unknown.",
 								"style": "Warning",
 								"uri": "https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune"
 							}
@@ -281,7 +191,7 @@
 									"name": "domainName",
 									"type": "Microsoft.Common.TextBox",
 									"visible": "[contains(steps('identity').solution, 'DomainServices')]",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), '', coalesce(steps('basics').hostsRGProps.tags.vmDomain, ''))]",
+									"defaultValue": "",
 									"label": "Domain Name",
 									"toolTip": "Provide domain name for the selected Virtual Machine Identity solution.",
 									"placeholder": "Example: contoso.com",
@@ -294,7 +204,7 @@
 								{
 									"name": "ouPath",
 									"type": "Microsoft.Common.TextBox",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), '', coalesce(steps('basics').hostsRGProps.tags.vmOUPath , ''))]",
+									"defaultValue": "",
 									"visible": "[or(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('identity').solution, 'EntraDomainServices'))]",
 									"label": "OU Path",
 									"toolTip": "Input the distinguished name of the desired organization unit for the AVD session hosts.",
@@ -310,14 +220,13 @@
 						{
 							"name": "credentials",
 							"type": "Microsoft.Common.Section",
-							"visible": true,
 							"label": "Credentials",
 							"elements": [
 								{
 									"name": "source",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "[if(contains(steps('identity').solution, 'DomainServices'), 'Domain Join and VM Admin Credentials source', 'VM Admin Credentials source')]",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), 'Manual Entry', 'Key Vault')]",
+									"defaultValue": "Manual Entry",
 									"toolTip": "Select 'Manual Entry' to specify the secrets manually or 'Key Vault' to reference secrets from a Key Vault.",
 									"constraints": {
 										"allowedValues": [
@@ -331,8 +240,7 @@
 											}
 										],
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "domainJoinUserPrincipalName",
@@ -432,14 +340,6 @@
 					"label": "Control Plane",
 					"elements": [
 						{
-							"name": "controlPlaneTextBlock0",
-							"type": "Microsoft.Common.TextBlock",
-							"visible": "[equals(steps('basics').deploymentType, 'SessionHostsOnly')]",
-							"options": {
-								"text": "This page is intentionally blank when only completing a Session Host Deployment."
-							}
-						},
-						{
 							"name": "scope",
 							"type": "Microsoft.Common.Section",
 							"label": "Subscription and Location Details",
@@ -451,8 +351,7 @@
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
 										"required": true
-									},
-									"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]"
+									}
 								},
 								{
 									"type": "Microsoft.Common.LocationSelector",
@@ -464,8 +363,7 @@
 									],
 									"scope": {
 										"subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
-									},
-									"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]"
+									}
 								},
 								{
 									"name": "desktopVirtualizationProviderApi",
@@ -486,8 +384,7 @@
 										"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/prerequisites?tabs=portal"
 									}
 								}
-							],
-							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]"
+							]
 						},
 						{
 							"name": "virtualNetworksApi",
@@ -511,7 +408,6 @@
 							"name": "workspace",
 							"type": "Microsoft.Common.Section",
 							"label": "Workspace",
-							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
 							"elements": [
 								{
 									"name": "textBlock1",
@@ -519,14 +415,14 @@
 									"options": {
 										"text": "There is an existing AVD workspace in the control plane region you selected. This solution allows you to update the application group references of an existing AVD Workspace or create a new Workspace. Select the appropriate option below."
 									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]"
+									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))))]" 
 								},
 								{
 									"name": "createOption",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Workspace Creation Option",
 									"defaultValue": "Update an existing Workspace",
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]",
+									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))))]" ,
 									"constraints": {
 										"allowedValues": [
 											{
@@ -556,7 +452,7 @@
 									"options": {
 										"text": "Select an existing AVD Workspace below to which the Desktop Application Group will be registered."
 									},
-									"visible": "[and(or(equals(steps('basics').deploymentType, 'HostpoolOnly'), equals(steps('controlPlane').workspace.createOption, 'update') ), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]"
+									"visible": "[and(equals(steps('controlPlane').workspace.createOption, 'update'), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]"
 								},
 								{
 									"name": "existingWorkspace",
@@ -568,23 +464,13 @@
 										"required": true,
 										"allowedValues": "[map(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)), (vdws) => parse(concat('{\"label\":\"', vdws.name, '\",\"description\":\"Friendly Name: ', vdws.properties.friendlyName, ', Resource Group: ', first(skip(split(vdws.id, '/'), 4)), '\",\"value\":\"', vdws.id, '\"}')))]"
 									},
-									"visible": "[and(or(equals(steps('basics').deploymentType, 'HostpoolOnly'), equals(steps('controlPlane').workspace.createOption, 'update')), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]"
-								},
-								{
-									"name": "errorBox1",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(equals(steps('basics').deploymentType, 'HostpoolOnly'), empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))))]",
-									"options": {
-										"style": "Error",
-										"text": "There are no available workspaces in this region and subscription. Check your selections or choose a 'Complete' deployment on the 'Basics' page."
-									}
+									"visible": "[and(equals(steps('controlPlane').workspace.createOption, 'update'), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))))]"
 								}
 							]
 						},
 						{
 							"name": "naming",
 							"type": "Microsoft.Common.Section",
-							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
 							"label": "Naming",
 							"elements": [
 								{
@@ -597,7 +483,7 @@
 										"regex": "^.{1,64}$",
 										"validationMessage": "The value must be between 1 and 64 characters in length."
 									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), not(equals(steps('controlPlane').workspace.createOption, 'update')))]"
+									"visible": "[or(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))), not(equals(steps('controlPlane').workspace.createOption, 'update')))]"
 								},
 								{
 									"name": "desktopFriendlyName",
@@ -616,7 +502,6 @@
 						{
 							"name": "hostPool",
 							"type": "Microsoft.Common.Section",
-							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
 							"label": "Host Pool",
 							"elements": [
 								{
@@ -676,7 +561,6 @@
 								{
 									"name": "rdpProperties",
 									"type": "Microsoft.Common.TextBox",
-									"visible": true,
 									"label": "Custom RDP properties",
 									"toolTip": "Specify the configuration for the RDP properties on the AVD host pool.",
 									"constraints": {
@@ -736,7 +620,6 @@
 							"name": "assignments",
 							"type": "Microsoft.Common.Section",
 							"label": "Assignments",
-							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
 							"elements": [
 								{
 									"name": "groupPickerBlade",
@@ -782,7 +665,6 @@
 									"keyPath": "displayName",
 									"descriptionKeyPath": "id",
 									"value": "[steps('controlPlane').assignments.groupPickerBlade.transformed.groups]",
-									"visible": true,
 									"barColor": "[if(empty(steps('controlPlane').assignments.groupPickerBlade), '#FF0000', '#7fba00')]",
 									"constraints": {
 										"required": true
@@ -814,8 +696,7 @@
 											}
 										],
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "exclusionTag",
@@ -1178,7 +1059,7 @@
 									"visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
 								}
 							],
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('controlPlane').hostPool.type, 'Pooled'))]"
+							"visible": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]"
 						}
 					]
 				},
@@ -1195,32 +1076,11 @@
 									"name": "subscription",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Subscription",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').scope.subscription.displayName, if(empty(steps('basics').hostPoolProps.tags.hostsResourceGroupId), steps('controlPlane').scope.subscription.displayName, first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, first(skip(split(steps('basics').hostPoolProps.tags.hostsResourceGroupId, '/'), 2))))).displayName))]",
+									"defaultValue": "[steps('controlPlane').scope.subscription.displayName]",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
 										"required": true
 									}
-								},
-								{
-									"name": "resourceGroupsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('hosts').scope.subscription.id)))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('hosts').scope.subscription.id, '/resourcegroups?api-version=2021-04-01')]"
-									}
-								},
-								{
-									"name": "resourceGroup",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Virtual Machine Resource Group",
-									"defaultValue": "[if(empty(steps('basics').hostPoolProps.tags.hostsResourceGroupId), '', last(split(steps('basics').hostPoolProps.tags.hostsResourceGroupId, '/')))]",
-									"multiLine": true,
-									"constraints": {
-										"allowedValues": "[map(filter(filter(steps('hosts').scope.resourceGroupsApi.value, (rg) => and(contains(rg.name, 'hosts'), not(empty(rg.tags)))), (rg) => not(empty(rg.tags.cm-resource-parent))), (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"hostPool: ', last(split(rg.tags.cm-resource-parent, '/')), '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
-										"required": true
-									},
-									"visible": "[equals(steps('basics').deploymentType, 'SessionHostsOnly')]"
 								},
 								{
 									"name": "locationsApi",
@@ -1239,7 +1099,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Region",
 									"toolTip": "Select the region where you want to deploy the virtual machines.",
-									"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), first(map(filter(steps('hosts').scope.locationsApi.value, (loc) => equals(loc.name, steps('hosts').scope.resourceGroup.location)), (loc) => loc.displayName)), steps('controlPlane').scope.location.displayName)]",
+									"defaultValue": "[steps('controlPlane').scope.location.displayName]",
 									"constraints": {
 										"allowedValues": "[steps('hosts').scope.locationsApi.transformed.list]"
 									}
@@ -1330,8 +1190,7 @@
 											}
 										],
 										"required": true
-									},
-									"visible": true
+									}
 								}
 							]
 						},
@@ -1369,7 +1228,7 @@
 									"name": "virtualMachineNamePrefix",
 									"type": "Microsoft.Common.TextBox",
 									"label": "Virtual Machine Name Prefix",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmNamePrefix)), toLower(concat('avd', steps('basics').naming.identifier, if(empty(steps('basics').naming.index), '', concat('-', if(equals(length(steps('basics').naming.index), 1), concat('0', steps('basics').naming.index), steps('basics').naming.index))))), steps('basics').hostsRGProps.tags.vmNamePrefix)]",
+									"defaultValue": "[toLower(concat('avd', steps('basics').naming.identifier, if(empty(steps('basics').naming.index), '', concat('-', if(equals(length(steps('basics').naming.index), 1), concat('0', steps('basics').naming.index), steps('basics').naming.index)))))]",
 									"toolTip": "Provide a Virtual Machine name prefix consisting of alphanumeric and dashes up to 12 characters long. A three character numeric suffix will be appended to the name padded with zeros (0).",
 									"constraints": {
 										"required": true,
@@ -1383,45 +1242,40 @@
 												"message": "The length of the virtual machine name prefix and the index padding cannot exceed 15 characters."
 											}
 										]
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "index",
 									"type": "Microsoft.Common.Slider",
 									"label": "Starting number (index)",
-									"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), if(empty(steps('basics').hostsRGProps.tags.vmIndexPadding), 1, add(int(substring(steps('basics').sessionHostsApi.transformed.lastname, sub(length(steps('basics').sessionHostsApi.transformed.lastname), int(steps('basics').hostsRGProps.tags.vmIndexPadding)), int(steps('basics').hostsRGProps.tags.vmIndexPadding))), 1)), 1)]",
+									"defaultValue": 1,
 									"toolTip": "Select the start number of the virtual machine suffix.",
 									"min": 1,
 									"max": 998,
 									"showStepMarkers": true,
 									"constraints": {
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "indexPadding",
 									"type": "Microsoft.Common.Slider",
 									"label": "Index Padding (number of digits)",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIndexPadding)), 2, int(steps('basics').hostsRGProps.tags.vmIndexPadding))]",
+									"defaultValue": 2,
 									"toolTip": "Select the number of digits used by the index. This value determines the max length of the prefix and also the max number of hosts",
 									"min": 1,
 									"max": 3,
 									"showStepMarkers": true,
 									"constraints": {
 										"required": true
-									},
-									"visible": true
+									}
 								}
-							],
-							"visible": true
+							]
 						},
 						{
 							"name": "network",
 							"type": "Microsoft.Common.Section",
 							"label": "Network",
-							"visible": true,
 							"elements": [
 								{
 									"name": "virtualNetworksApi",
@@ -1436,7 +1290,7 @@
 									"name": "virtualNetwork",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Virtual Network",
-									"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), coalesce(first(skip(split(steps('basics').hostsRGProps.tags.vmSubnetId, '/'), 8)), ''), '')]",
+									"defaultValue": "",
 									"multiLine": true,
 									"toolTip": "Select the virtual network to which the session hosts will be attached. The list of virtual networks is filtered to those in the same region and subscription selected in the 'Subscription and Region Details' section above.",
 									"constraints": {
@@ -1456,9 +1310,8 @@
 								{
 									"name": "subnet",
 									"type": "Microsoft.Common.DropDown",
-									"visible": true,
 									"label": "Subnet",
-									"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), coalesce(last(split(steps('basics').hostsRGProps.tags.vmSubnetId, '/')), ''), '')]",
+									"defaultValue": "",
 									"toolTip": "Select an existing subnet for the AVD session hosts.",
 									"constraints": {
 										"required": true,
@@ -1469,7 +1322,7 @@
 									"name": "enableIPv6",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable IPv6",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIPv6)), false, bool(steps('basics').hostsRGProps.tags.vmIPv6))]",
+									"defaultValue": false,
 									"toolTip": "Enables IPv6 support on the network interface. This is an edge case scenario and is not recommended for most deployments."
 								}
 							]
@@ -1477,7 +1330,6 @@
 						{
 							"name": "image",
 							"type": "Microsoft.Common.Section",
-							"visible": true,
 							"label": "Image",
 							"elements": [
 								{
@@ -1485,7 +1337,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Image Source",
 									"filter": true,
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmImageType)), 'Marketplace', if(equals(steps('basics').hostsRGProps.tags.vmImageType, 'CustomImage'), 'Compute Gallery', 'Marketplace'))]",
+									"defaultValue": "Marketplace",
 									"toolTip": "Select the type of image to deploy on the session hosts.",
 									"constraints": {
 										"required": true,
@@ -1505,23 +1357,10 @@
 									"name": "offer",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Offer",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmImageOffer)), 'Office-365', steps('basics').hostsRGProps.tags.vmImageOffer)]",
+									"defaultValue": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), 'Windows-11', 'Office-365')]",
 									"toolTip": "Select the desired marketplace image offer.",
 									"constraints": {
-										"allowedValues": [
-											{
-												"label": "Office-365",
-												"value": "Office-365"
-											},
-											{
-												"label": "Windows-10",
-												"value": "Windows-10"
-											},
-											{
-												"label": "Windows-11",
-												"value": "Windows-11"
-											}
-										],
+										"allowedValues": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), parse('[{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"},{\"label\":\"Windows Enterprise CPC\",\"value\":\"windows-ent-cpc\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"Office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"}]'))]",
 										"required": true
 									},
 									"visible": "[equals(steps('hosts').image.source, 'marketplace')]"
@@ -1532,17 +1371,21 @@
 									"condition": "[and(not(empty(steps('hosts').scope.subscription.id)), not(empty(steps('hosts').scope.location)), not(empty(steps('hosts').image.offer)), equals(steps('hosts').image.source, 'marketplace'))]",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]"
+										"path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]",
+										"transforms": {
+											"personal": "[?starts_with(name, `win`) && contains(name, `ent`) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}",
+											"pooled": "[?starts_with(name, `win`) && (contains(name, `ent`) || contains(name, `avd`)) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}"
+										}
 									}
 								},
 								{
 									"name": "sku",
 									"type": "Microsoft.Common.DropDown",
 									"label": "SKU",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmImageSku)), 'win11-25h2-avd-m365', steps('basics').hostsRGProps.tags.vmImageSku)]",
+									"defaultValue": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), 'win11-25h2-ent', 'win11-25h2-avd-m365')]",
 									"toolTip": "Select the desired marketplace image SKU.",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('hosts').image.skuApi, (sku) => and(startsWith(sku.name, 'win'), or(contains(sku.name, 'ent'), contains(sku.name, 'avd')))), (sku) => parse(concat('{\"label\":\"', sku.name, '\",\"value\":\"', sku.name, '\"}')))]",
+										"allowedValues": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('hosts').image.skuApi.transformed.personal, steps('hosts').image.skuApi.transformed.pooled)]",
 										"required": true
 									},
 									"visible": "[equals(steps('hosts').image.source, 'marketplace')]"
@@ -1570,7 +1413,7 @@
 								{
 									"name": "computeGallery",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmCustomImageId)), '', first(skip(split(steps('basics').hostsRGProps.tags.vmCustomImageId, '/'), 8)))]",
+									"defaultValue": "",
 									"label": "Compute Gallery",
 									"multiLine": true,
 									"constraints": {
@@ -1594,7 +1437,7 @@
 								{
 									"name": "imageDefinition",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmCustomImageId)), '', last(split(steps('basics').hostsRGProps.tags.vmCustomImageId, '/')))]",
+									"defaultValue": "",
 									"label": "Image Definition",
 									"constraints": {
 										"allowedValues": "[steps('hosts').image.imageDefinitionsApi.transformed.list]",
@@ -1628,13 +1471,12 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Security Type",
 									"placeholder": "",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), 'TrustedLaunch', coalesce(steps('basics').hostsRGProps.tags.vmSecurityType, 'TrustedLaunch'))]",
+									"defaultValue": "TrustedLaunch",
 									"toolTip": "Select the appropriate Security Type configuration for the Virtual Machine. Note that 'ConfidentialVMs' are not available in all regions and the option may not appear.",
 									"constraints": {
 										"allowedValues": "[if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), or(equals(steps('hosts').image.source, 'marketplace'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunchAndConfidentialVmSupported'))), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVM')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"}]'), if(and(not(empty(steps('hosts').resourceSkusApi.transformed.confidentialVMSizes)), equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported')), parse('[{\"label\":\"ConfidentialVM\",\"value\":\"ConfidentialVM\"},{\"label\":\"Standard\",\"value\":\"Standard\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch')), parse('[{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'TrustedLaunch'), contains(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'Supported'))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"},{\"label\":\"TrustedLaunch\",\"value\":\"TrustedLaunch\"}]'), if(and(equals(steps('hosts').image.source, 'gallery'), or(equals(steps('hosts').image.imageDefinitionApi.transformed.SecurityType, 'ConfidentialVmSupported'), empty(steps('hosts').image.imageDefinitionApi.transformed.SecurityType))), parse('[{\"label\":\"Standard\",\"value\":\"Standard\"}]'), parse('[]')))))))]",
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "confidentialVMInfo",
@@ -1651,7 +1493,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Secure Boot",
 									"toolTip": "Secure boot helps protect your VMs against boot kits, rootkits, and kernel-level malware.",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmSecureBoot)), true, bool(steps('basics').hostsRGProps.tags.vmSecureBoot))]",
+									"defaultValue": true,
 									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
 								},
 								{
@@ -1659,7 +1501,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable vTPM",
 									"toolTip": "Virtual Trusted Platform Module (vTPM) is TPM2.0 compliant and validates your VM boot integrity apart from securely storing keys and secrets.",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmVirtualTPM)), true, bool(steps('basics').hostsRGProps.tags.vmVirtualTPM))]",
+									"defaultValue": true,
 									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
 								},
 								{
@@ -1667,7 +1509,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Integrity Monitoring",
 									"toolTip": "Integrity monitoring enables cryptographic attestation and verification of VM boot integrity along with monitoring alerts if the VM didn't boot because attestation failed with the defined baseline.",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIntegrityMonitoring)), true, bool(steps('basics').hostsRGProps.tags.vmIntegrityMonitoring))]",
+									"defaultValue": true,
 									"visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
 								}
 							]
@@ -1680,7 +1522,6 @@
 								{
 									"name": "diskEncryptionTextBlock",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "There are several types of encryption available for your managed disks including Azure Disk Storage Server-Side Encryption (SSE), Encryption at Host (EAH), and Confidential disk encryption (when the Confidential VM security type is selected)."
 									}
@@ -1688,7 +1529,6 @@
 								{
 									"name": "sseTextBlock",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Azure Disk Storage Server-Side Encryption is always enabled and automatically encrypts your data stored on Azure managed disks (OS and data disks) when persisting on the storage clusters."
 									}
@@ -1696,7 +1536,6 @@
 								{
 									"name": "encryptionAtHostTextBlock",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Encryption at host enhances Azure Disk Storage Server-Side Encryption to ensure that all temp disks and disk caches are encrypted at rest and flow encrypted to the Storage clusters.",
 										"link": {
@@ -1710,7 +1549,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Encryption At Host",
 									"toolTip": "Check to enable Encryption At Host",
-									"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), bool(steps('basics').hostsRGProps.tags.vmEncryptionAtHost), true)]",
+									"defaultValue": true,
 									"visible": "[not(equals(steps('hosts').security.securityType, 'ConfidentialVM'))]"
 								},
 								{
@@ -1741,12 +1580,11 @@
 									"label": "Confidential OS Disk Encryption",
 									"toolTip": "Check to enable Confidential VM disk encryption",
 									"defaultValue": true,
-									"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('hosts').security.securityType, 'ConfidentialVM'))]"
+									"visible": "[equals(steps('hosts').security.securityType, 'ConfidentialVM')]"
 								},
 								{
 									"name": "keyManagementTextBlock1",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
 									"options": {
 										"text": "You can rely on platform-managed keys for the encryption of your managed disk, or you can manage encryption using your own keys. If you choose to manage encryption with your own keys, you can specify a customer-managed key to use for encrypting and decrypting all data in managed disks.",
 										"link": {
@@ -1756,48 +1594,8 @@
 									}
 								},
 								{
-									"name": "keyManagementTextBlock2",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[equals(steps('basics').deploymentType, 'SessionHostsOnly')]",
-									"options": {
-										"text": "You can rely on platform-managed keys for the encryption of your managed disk, or you can manage encryption using your own keys. If you choose to manage encryption with your own keys, you must select the existing disk encryption set."
-									}
-								},
-								{
-									"name": "selectDiskEncryptionSet",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Customer-Managed Keys on OS Disk",
-									"defaultValue": "[not(empty(steps('basics').hostsRGProps.tags.vmDiskEncryptionSetName))]",
-									"toolTip": "Enables a zero trust configuration on the session host disks.",
-									"visible": "[equals(steps('basics').deploymentType, 'SessionHostsOnly')]"
-								},
-								{
-									"name": "diskEncryptionSetsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(not(empty(steps('hosts').scope.resourceGroup)), steps('hosts').diskEncryption.selectDiskEncryptionSet)]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02')]",
-										"transforms": {
-											"list": "value|[*].{label:name, value:id}"
-										}
-									}
-								},
-								{
-									"name": "existingDiskEncryptionSet",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[steps('basics').hostsRGProps.tags.vmDiskEncryptionSetName]",
-									"label": "Disk Encryption Set",
-									"constraints": {
-										"allowedValues": "[steps('hosts').diskEncryption.diskEncryptionSetsApi.transformed.list]",
-										"required": true
-									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('hosts').diskEncryption.selectDiskEncryptionSet)]"
-								},
-								{
 									"name": "keyManagementInfobox1",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
 									"options": {
 										"text": "In some environments it is required to utilize Customer Managed Keys and protect those keys in a premium key vault with the keys stored in a FIPS 140 validated Hardware Security Module. This is most common in IL5 type environments. Selecting a Customer Managed Key Hardware Security Module (HSM) option will ensure that all VM disks are protected with this configuration. Click this box for more information.",
 										"uri": "https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#storage-isolation",
@@ -1812,13 +1610,12 @@
 									"toolTip": "Platform-managed keys are key encryption keys that are generated, stored, and managed entirely by Azure. Choose Platform Managed for the best balance of security and ease of use. Customer-managed keys are key encryption keys that are generated, stored, and managed by you, the customer, in your Azure Key Vault. Choose Customer Managed if you need to meet specific compliance requirements. Platform-Managed and Customer-Managed Keys provide double encryption with an infrastructure encryption layer using platform-managed keys and a disk encryption layer using customer-managed keys.",
 									"constraints": {
 										"allowedValues": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"}]'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys\",\"value\":\"CustomerManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"},{\"label\":\"Platform-Managed and Customer-Managed Keys\",\"value\":\"PlatformManagedAndCustomerManaged\"},{\"label\":\"Platform-Managed and Customer-Managed Keys protected by HSM\",\"value\":\"PlatformManagedAndCustomerManagedHSM\"}]'))]"
-									},
-									"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]"
+									}
 								},
 								{
 									"name": "confOSDiskEncryptionWarning",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged') )]",
+									"visible": "[and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'))]",
 									"options": {
 										"style": "Warning",
 										"text": "You must have completed the prerequistes to support Confidential VM Disk Encryption.",
@@ -1877,7 +1674,7 @@
 										"required": true
 									},
 									"link": "[if(empty(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade), 'Select Service Principal', first(map(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
-									"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManagedHSM'), empty(first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.value)))]"
+									"visible": "[and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManagedHSM'), empty(first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.value)))]"
 								}
 							]
 						},
@@ -1889,7 +1686,6 @@
 								{
 									"name": "dedicatedHostsTextBlock1",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Azure Dedicated Host is a service that provides physical servers able to host one or more virtual machines assigned to one Azure subscription. Dedicated hosts are the same physical servers used in our data centers, provided instead as a directly accessible hardware resource.",
 										"link": {
@@ -1901,7 +1697,6 @@
 								{
 									"name": "dedicatedHostsInfobox1",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": true,
 									"options": {
 										"text": "In some environments it is required to have a dedicated Azure Host to isolate Compute. This is most common in IL5 type environments. Selecting this option will ensure the VMs are deployed to pre-existing Dedicated Host(s). Click this box for more information.",
 										"uri": "https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#compute-isolation",
@@ -1970,8 +1765,7 @@
 										"required": false
 									}
 								}
-							],
-							"visible": true
+							]
 						},
 						{
 							"name": "specs",
@@ -1989,15 +1783,14 @@
 									"showStepMarkers": true,
 									"constraints": {
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "diskSku",
 									"type": "Microsoft.Common.DropDown",
 									"label": "OS Disk SKU",
 									"filter": true,
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), 'Premium_LRS', coalesce(steps('basics').hostsRGProps.tags.vmOSDiskType, 'Premium_LRS'))]",
+									"defaultValue": "Premium_LRS",
 									"toolTip": "Select the disk SKU for the operating system disk.",
 									"constraints": {
 										"required": true,
@@ -2022,7 +1815,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "OS Disk Size (GB)",
 									"placeholder": "",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), '128', coalesce(steps('basics').hostsRGProps.tags.vmDiskSizeGB, '128'))]",
+									"defaultValue": "128",
 									"toolTip": "",
 									"constraints": {
 										"allowedValues": [
@@ -2048,8 +1841,7 @@
 											}
 										],
 										"required": true
-									},
-									"visible": true
+									}
 								},
 								{
 									"name": "imageHibernationInfo",
@@ -2065,7 +1857,7 @@
 									"name": "hibernationEnabled",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Hibernation",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), false, if(empty(steps('basics').hostsRGProps.tags.vmHibernate), false, bool(steps('basics').hostsRGProps.tags.vmHibernate)))]",
+									"defaultValue": false,
 									"toolTip": "Hibernation allows you to pause VMs that aren't being used and save on compute costs. The VM size must support hibernation.",
 									"visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported))))]"
 								},
@@ -2076,7 +1868,7 @@
 									"multiLine": true,
 									"filter": true,
 									"toolTip": "Select the size of the virtual machines. Multi-session hosts should have 4 - 24 vCPUs. Single session host should have 2 or more vCPUs.",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(steps('hosts').specs.hibernationEnabled, 'Standard_D4ads_v5', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v7'), 'Standard_D16s_v7', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v6'), 'Standard_D16s_v6', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v5'), 'Standard_D16s_v5', 'Standard_D16s_v3')))), coalesce(steps('basics').hostsRGProps.tags.vmSize, if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v7'), 'Standard_D16s_v7', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v6'), 'Standard_D16s_v6', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v5'), 'Standard_D16s_v5', 'Standard_D16s_v3')))))]",
+									"defaultValue": "[if(steps('hosts').specs.hibernationEnabled, 'Standard_D4ads_v5', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v7'), 'Standard_D16s_v7', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v6'), 'Standard_D16s_v6', if(contains(steps('hosts').resourceSkusApi.transformed.genericVMSizesNames, 'Standard_D16s_v5'), 'Standard_D16s_v5', 'Standard_D16s_v3'))))]",
 									"constraints": {
 										"allowedValues": "[steps('hosts').resourceSkusApi.transformed.genericVMSizes]",
 										"required": true
@@ -2111,10 +1903,10 @@
 									"name": "enableAcceleratedNetworking",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable accelerated networking",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking)), true, bool(steps('basics').hostsRGProps.tags.vmAcceleratedNetworking))]",
+									"defaultValue": true,
 									"toolTip": "Enables low latency and high throughput on the network interface.",
 									"visible": "[and(not(equals(steps('hosts').security.securityType, 'ConfidentialVM')), bool(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.capabilities)), (sku) => equals(sku.name, 'AcceleratedNetworkingEnabled')), (sku) => sku.value)), false)), or(equals(steps('hosts').image.source, 'marketplace'), bool(coalesce(steps('hosts').image.imageDefinitionApi.transformed.IsAcceleratedNetworkSupported, false))))]"
-								}								
+								}
 							]
 						},
 						{
@@ -2125,7 +1917,7 @@
 								{
 									"name": "availability",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(empty(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (sku) => sku.zones))), 'No infrastructure redundancy required', 'Availability Zones'), coalesce(steps('basics').hostsRGProps.tags.vmAvailability, 'No infrastructure redundancy required'))]",
+									"defaultValue": "[if(empty(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (sku) => sku.zones))), 'No infrastructure redundancy required', 'Availability Zones')]",
 									"label": "Availability Options",
 									"toolTip": "Select the redundancy / resiliency for the virtual machines.",
 									"constraints": {
@@ -2171,7 +1963,7 @@
 									"name": "intune",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Intune Enrollment",
-									"defaultValue": "[if(or(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), empty(steps('basics').hostsRGProps.tags.vmIntuneEnrollment)), false, bool(steps('basics').hostsRGProps.tags.vmIntuneEnrollment))]",
+									"defaultValue": false,
 									"toolTip": "If Intune is configured in your Azure AD tenant, you can choose to have the VM automatically enrolled during the deployment by selecting this checkbox."
 								}
 							],
@@ -2185,7 +1977,6 @@
 								{
 									"name": "customizationsIntro",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Optionally customize your session host deployment by selecting one or both of the options below. You can customize the AVD Agent and AVD Agent Boot Loader download Urls and/or add custom scripts or software to install during deployment."
 									}
@@ -2214,10 +2005,11 @@
 								},
 								{
 									"name": "storageIntro",
-									"type": "Microsoft.Common.TextBlock",
+									"type": "Microsoft.Common.InfoBox",
 									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
 									"options": {
-										"text": "Optionally select a storage account and blob container hosting your artifacts (agent installers, scripts, or software), and a User Assigned Managed Identity with 'Storage Blob Data Reader' role assignment. If specify these items, then you can provide full URLs or just blob names in the text fields below. Otherwise, you must provide full URLs in the fields below."
+										"style": "Info",
+										"text": "Optionally select a storage account, blob container, and User Assigned Managed Identity with 'Storage Blob Data Reader' role assignment to host your artifacts (agent installers, scripts, or software). If you specify these items, you can provide blob names in the fields below instead of full URLs. Otherwise, full URLs are required."
 									}
 								},
 								{
@@ -2287,6 +2079,15 @@
 									"visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
 								},
 								{
+									"name": "managedIdentityRequiredError",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), not(contains(string(steps('hosts').customizations.managedIdentity), '/subscriptions/')), or(not(empty(steps('hosts').customizations.storageAccount)), contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.'), contains(steps('hosts').customizations.agentUrl, '.blob.core.')))]" ,
+									"options": {
+										"text": "A managed identity with 'Storage Blob Data Reader' on the storage account is required when a storage account is selected or a blob storage URL is provided.",
+										"style": "Error"
+									}
+								},
+								{
 									"name": "agentDownloadHeader",
 									"type": "Microsoft.Common.TextBlock",
 									"visible": "[steps('hosts').customizations.customizeAgentDownload]",
@@ -2298,7 +2099,7 @@
 									"name": "agentBootLoaderUrl",
 									"type": "Microsoft.Common.TextBox",
 									"label": "[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent Boot Loader URL', 'AVD Agent Boot Loader URL or Blob Name')]",
-									"defaultValue": "[if(empty(steps('hosts').customizations.storageAccount), 'https://go.microsoft.com/fwlink/?linkid=2311028', 'Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi')]",
+									"defaultValue": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi",
 									"toolTip": "[if(empty(steps('hosts').customizations.storageAccount), 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide a custom full URL to override the default.', 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide either a blob name (if using the storage account selected above) or a custom full URL to override the default.')]",
 									"constraints": {
 										"required": false,
@@ -2311,7 +2112,7 @@
 									"name": "agentUrl",
 									"type": "Microsoft.Common.TextBox",
 									"label": "[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent URL', 'AVD Agent URL or Blob Name')]",
-									"defaultValue": "[if(empty(steps('hosts').customizations.storageAccount), 'https://go.microsoft.com/fwlink/?linkid=2310011', 'Microsoft.RDInfra.RDAgent.Installer-x64.msi')]",
+									"defaultValue": "Microsoft.RDInfra.RDAgent.Installer-x64.msi",
 									"toolTip": "[if(empty(steps('hosts').customizations.storageAccount), 'Optional. Provide a custom full URL to override defaults (go.microsoft.com for public clouds, aka.ms perma-links for air-gapped clouds). This URL will be used as fallback if the endpoint download fails.', 'Optional. Provide a blob name (using storage account above) or full URL to override defaults. This will be used as fallback if the endpoint download fails')]",
 									"constraints": {
 										"required": false,
@@ -2319,6 +2120,15 @@
 										"validationMessage": "Must be either a full URL (https://...) or a blob name ending in .msi"
 									},
 									"visible": "[steps('hosts').customizations.customizeAgentDownload]"
+								},
+								{
+									"name": "agentBlobWithoutStorageError",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(steps('hosts').customizations.customizeAgentDownload, empty(steps('hosts').customizations.storageAccount), or(and(not(empty(steps('hosts').customizations.agentBootLoaderUrl)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), and(not(empty(steps('hosts').customizations.agentUrl)), not(startsWith(steps('hosts').customizations.agentUrl, 'http')))))]" ,
+									"options": {
+										"text": "A blob name was entered but no storage account is selected. Select a storage account and container above, or provide a full URL instead.",
+										"style": "Error"
+									}
 								},
 								{
 									"name": "customScriptsHeader",
@@ -2396,8 +2206,7 @@
 										]
 									}
 								}
-							],
-							"visible": true
+							]
 						}
 					]
 				},
@@ -2408,7 +2217,7 @@
 						{
 							"name": "personalHostPoolInfoBox",
 							"type": "Microsoft.Common.InfoBox",
-							"visible": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), equals(steps('controlPlane').hostPool.type, 'Personal'))]",
+							"visible": "[equals(steps('controlPlane').hostPool.type, 'Personal')]",
 							"options": {
 								"style": "Info",
 								"text": "Deploying FSLogix profile containers for Personal host pools is not supported by this solution. Personal host pools use local profiles stored directly on each session host VM. No FSLogix storage resources will be deployed."
@@ -2417,12 +2226,12 @@
 						{
 							"name": "profileSolution",
 							"type": "Microsoft.Common.DropDown",
-							"defaultValue": "[if(if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), equals(steps('controlPlane').hostPool.type, 'Personal')), 'Local Profiles Only', 'FSLogix')]",
-							"visible": true,
+							"defaultValue": "FSLogix",
 							"label": "Profile Solution",
 							"toolTip": "Select the user profile solution for your end users.",
+							"visible": "[not(equals(steps('controlPlane').hostPool.type, 'Personal'))]",
 							"constraints": {
-								"allowedValues": "[if(if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), equals(steps('controlPlane').hostPool.type, 'Personal')), parse('[{\"label\":\"Local Profiles Only\",\"value\":\"LocalProfilesOnly\"}]'), parse('[{\"label\":\"FSLogix\",\"value\":\"FSLogix\"},{\"label\":\"Other\",\"value\":\"Other\"}]'))]"
+								"allowedValues": "[parse('[{\"label\":\"FSLogix\",\"value\":\"FSLogix\"},{\"label\":\"Other\",\"value\":\"Other\"}]')]"
 							}
 						},
 						{
@@ -2437,12 +2246,12 @@
 							"type": "Microsoft.Common.CheckBox",
 							"label": "Deploy FSLogix Storage Resources",
 							"defaultValue": true,
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('userProfiles').profileSolution, 'FSLogix'))]"
+							"visible": "[equals(steps('userProfiles').profileSolution, 'FSLogix')]"
 						},
 						{
 							"name": "entraKerberosInfoBox",
 							"type": "Microsoft.Common.InfoBox",
-							"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('userProfiles').profileSolution, 'FSLogix'), equals(steps('userProfiles').deployStorage, true)))]",
+							"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), equals(steps('userProfiles').profileSolution, 'FSLogix'), equals(steps('userProfiles').deployStorage, true))]",
 							"options": {
 								"text": "Enabling authentication to FSLogix storage accounts using Entra Kerberos requires the following post-deployment tasks: 1. Grant admin consent to the new service principal, 2. If desired, assign least privilege NTFS permissions to the file share, 3. If using private endpoints, update the new storage account application's manifest to support private endpoint URIs, 4. Disable multifactor authentication on the storage account. Automation Option: You can select a User Assigned Identity with the following Microsoft Graph application permissions (not delegated) to automate all tasks except disabling multifactor authentication: 1. Application.ReadWrite.All, 2. DelegatedPermissionGrant.ReadWrite.All. Disabling multifactor authentication must be completed manually. Click anywhere on this infobox for the Github documentation with detailed instructions and PowerShell scripts.",
 								"style": "Info",
@@ -2452,7 +2261,7 @@
 						{
 							"name": "entraIdPreviewInfoBox",
 							"type": "Microsoft.Common.InfoBox",
-							"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-CloudOnly'), and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('userProfiles').profileSolution, 'FSLogix'), equals(steps('userProfiles').deployStorage, true)))]",
+							"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-CloudOnly'), equals(steps('userProfiles').profileSolution, 'FSLogix'), equals(steps('userProfiles').deployStorage, true))]",
 							"options": {
 								"text": "Reminder: during preview, enabling authentication to FSLogix storage accounts using Entra Kerberos for Cloud Only Identities is only supported in Azure Commercial. Enabling this authentication method requires the following post-deployment tasks: 1. Grant admin consent to the new service principal, 2. If desired, assign least privilege NTFS permissions to the file share, 3. If using private endpoints, update the new storage account application's manifest to support private endpoint URIs, 4. Update the tag in the new storage account application's manifest to support Entra ID group SIDs, and 5. Disable multifactor authentication on the storage account. Automation Option: You can select a User Assigned Identity with the following Microsoft Graph application permissions (not delegated) to automate all tasks except disabling multifactor authentication: 1. Application.ReadWrite.All and 2. DelegatedPermissionGrant.ReadWrite.All. Granting Permissions: Click anywhere on this infobox for the Github documentation with detailed instructions and PowerShell scripts. Important: Disabling multifactor authentication must be completed manually.",
 								"style": "Info",
@@ -2482,7 +2291,7 @@
 							"type": "Microsoft.Common.DropDown",
 							"visible": "[or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true))]",
 							"label": "FSLogix Container Type(s)",
-							"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), 'Profile Container', coalesce(steps('basics').hostsRGProps.tags.fslContainerType, 'Profile Container'))]",
+							"defaultValue": "Profile Container",
 							"toolTip": "Select the container type(s) for the FSLogix profiles.",
 							"constraints": {
 								"required": true,
@@ -2510,7 +2319,7 @@
 							"name": "sizeInMBs",
 							"type": "Microsoft.Common.Slider",
 							"label": "FSLogix VHD Size (MB)",
-							"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), coalesce(int(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs), 30720), 30720)]",
+							"defaultValue": 30720,
 							"toolTip": "Input the max size of the users fslogix containers.",
 							"min": 10240,
 							"max": 1048576,
@@ -2539,7 +2348,7 @@
 							"type": "Microsoft.Common.DropDown",
 							"visible": "[or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true))]",
 							"label": "Storage Service",
-							"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), 'Azure Files', if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureNetAppFiles'), 'Azure NetApp Files', if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureFiles'), 'Azure Files', 'Azure Files')))]",
+							"defaultValue": "Azure Files",
 							"toolTip": "Select the storage service that provides the SMB file share to support the use of FSLogix.",
 							"constraints": {
 								"allowedValues": "[if(not(equals(steps('identity').solution, 'ActiveDirectoryDomainServices')), parse('[{\"label\":\"Azure Files\",\"value\":\"AzureFiles\"}]'), parse('[{\"label\":\"Azure Files\",\"value\":\"AzureFiles\"},{\"label\":\"Azure NetApp Files\",\"value\":\"AzureNetAppFiles\"}]'))]"
@@ -2556,7 +2365,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "NetApp Files Subscription",
 									"placeholder": "",
-									"defaultValue": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), first(filter(steps('basics').subscriptionsApi.value, (sub) => equals(sub.subscriptionId, split(first(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[2]))).displayName, steps('hosts').scope.subscription.displayName)]",
+									"defaultValue": "[steps('hosts').scope.subscription.displayName]",
 									"toolTip": "",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
@@ -2771,7 +2580,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Existing Local NetApp Account",
 									"toolTip": "Select the existing local NetApp account to use for the FSLogix profile storage.",
-									"defaultValue": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('userProfiles').azureNetAppFiles.netAppAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[8], '')]",
+									"defaultValue": "",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => equals(account.location, steps('hosts').scope.location.name)), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Resource Group: ', first(skip(split(account.id, '/'), 4)), '\", \"value\":\"', account.id, '\"}')))]",
 										"required": true
@@ -2793,7 +2602,7 @@
 									"label": "Local Capacity Pool",
 									"multiLine": false,
 									"toolTip": "Select an existing capacity pool from the selected NetApp Account.",
-									"defaultValue": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('userProfiles').azureNetAppFiles.localCapacityPoolsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds)), '/')[10], '')]",
+									"defaultValue": "",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.localCapacityPoolsApi.value, (pool) => parse(concat('{\"label\":\"', last(split(pool.name, '/')), '\",\"value\":\"', pool.id, '\"}')))]",
 										"required": true
@@ -2815,7 +2624,7 @@
 									"label": "Local Volume(s)",
 									"multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
 									"toolTip": "Select the existing volume from the selected NetApp capacity pool.",
-									"defaultValue": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('userProfiles').azureNetAppFiles.localVolumesApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
+									"defaultValue": "[if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), '')]",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.localVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
 										"required": true
@@ -2844,7 +2653,7 @@
 									"label": "Remote NetApp Account",
 									"toolTip": "Select the existing local NetApp account to use for the FSLogix profile storage.",
 									"multiLine": true,
-									"defaultValue": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('userProfiles').azureNetAppFiles.netAppAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds)), '/')[8], '')]",
+									"defaultValue": "",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('userProfiles').azureNetAppFiles.netAppAccountsApi.value, (account) => not(equals(account.location, steps('hosts').scope.location.name))), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Location: ', account.location, ', Resource Group: ', first(skip(split(account.id, '/'), 4)), '\", \"value\":\"', account.id, '\"}')))]",
 										"required": false
@@ -2865,7 +2674,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Remote Capacity Pool",
 									"toolTip": "Select an existing capacity pool from the selected NetApp Account.",
-									"defaultValue": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('userProfiles').azureNetAppFiles.remoteCapacityPoolsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), split(first(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds)), '/')[10], '')]",
+									"defaultValue": "",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.remoteCapacityPoolsApi.value, (pool) => parse(concat('{\"label\":\"', last(split(pool.name, '/')), '\",\"value\":\"', pool.id, '\"}')))]",
 										"required": false
@@ -2886,7 +2695,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Remote Volume(s)",
 									"multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
-									"defaultValue": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumesApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
+									"defaultValue": "[if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), '')]",
 									"toolTip": "Select the office-containers and profile-containers volumes from the selected NetApp capacity pool.",
 									"constraints": {
 										"allowedValues": "[map(steps('userProfiles').azureNetAppFiles.remoteVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
@@ -3001,7 +2810,7 @@
 									"name": "shardingOption",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Sharding Options",
-									"defaultValue": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), if(equals(steps('basics').hostsRGProps.tags.fslSharding, 'ShardPerms'), 'Sharding via Permissions', if(equals(steps('basics').hostsRGProps.tags.fslSharding, 'ShardOSS'), 'Sharding via Object Specific Settings', 'No Sharding')), 'No Sharding')]",
+									"defaultValue": "No Sharding",
 									"constraints": {
 										"allowedValues": "[if(contains(steps('identity').solution, 'EntraKerberos'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
 									},
@@ -3102,7 +2911,7 @@
 								{
 									"name": "storageCount",
 									"type": "Microsoft.Common.Slider",
-									"label": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), 'Number of Existing Storage Accounts Required (Read Only)', 'Number of Storage Accounts to Deploy (Read Only)')]",
+									"label": "Number of Storage Accounts to Deploy (Read Only)",
 									"defaultValue": 1,
 									"min": "[if(or(equals(steps('identity').solution, 'EntraId'), and(contains(steps('identity').solution, 'EntraKerberos'), steps('userProfiles').deployStorage, empty(steps('userProfiles').managedIdentity)), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
 									"max": "[if(or(equals(steps('identity').solution, 'EntraId'), and(contains(steps('identity').solution, 'EntraKerberos'), steps('userProfiles').deployStorage, empty(steps('userProfiles').managedIdentity)), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
@@ -3291,7 +3100,7 @@
 									"multiLine": true,
 									"multiselect": true,
 									"toolTip": "",
-									"defaultValue": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
+									"defaultValue": "[parse('[]')]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.location, steps('hosts').scope.location.name)), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
 										"required": true
@@ -3350,7 +3159,7 @@
 									"multiLine": true,
 									"multiselect": true,
 									"toolTip": "",
-									"defaultValue": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
+									"defaultValue": "[parse('[]')]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.location, steps('userProfiles').azureFiles.remoteLocation)), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\", \"value\":\"', sa.id, '\"}')))]",
 										"required": false
@@ -3372,7 +3181,7 @@
 							"name": "shareManagement",
 							"type": "Microsoft.Common.Section",
 							"label": "Share Management",
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('userProfiles').deployStorage)]",
+							"visible": "[and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage)]",
 							"elements": [
 								{
 									"name": "shareManagementTextBox2",
@@ -3384,8 +3193,7 @@
 								{
 									"name": "configureAdminAccess",
 									"type": "Microsoft.Common.CheckBox",
-									"label": "Add Admin Access to File Share",
-									"visible": true
+									"label": "Add Admin Access to File Share"
 								},
 								{
 									"name": "groupPickerBlade",
@@ -3443,14 +3251,14 @@
 					]
 				},
 				{
-					"name": "management",
-					"label": "Management and Monitoring",
+					"name": "operationsAndMonitoring",
+					"label": "Operations and Monitoring",
 					"elements": [
 						{
 							"name": "servicePrincipals",
 							"type": "Microsoft.Common.Section",
 							"label": "Azure Virtual Desktop Service Principal RBAC Assignment",
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan))]",
+							"visible": "[or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)]",
 							"elements": [
 								{
 									"name": "avdServicePrincipalInfoBox",
@@ -3485,7 +3293,7 @@
 								{
 									"name": "avdServicePrincipalPickerBlade",
 									"type": "Microsoft.Solutions.BladeInvokeControl",
-									"openBladeStatus": "[steps('management').servicePrincipals.avdServicePrincipalSelector.changing]",
+									"openBladeStatus": "[steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalSelector.changing]",
 									"bladeReference": {
 										"name": "ObjectPickerBlade",
 										"extension": "Microsoft_AAD_IAM",
@@ -3517,13 +3325,13 @@
 									"type": "Microsoft.Common.Selector",
 									"label": "Select the 'Azure Virtual Desktop' Microsoft Application",
 									"keyPath": "displayName",
-									"value": "[steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection]",
-									"barColor": "[if(empty(steps('management').servicePrincipals.avdServicePrincipalPickerBlade), '#FF0000', '#7fba00')]",
+									"value": "[steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection]",
+									"barColor": "[if(empty(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalPickerBlade), '#FF0000', '#7fba00')]",
 									"constraints": {
 										"required": true
 									},
-									"link": "[if(empty(steps('management').servicePrincipals.avdServicePrincipalPickerBlade), 'Select the Azure Virtual Desktop Application', first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
-									"visible": "[and(steps('management').servicePrincipals.enableAVDSPRBAC, empty(first(steps('management').servicePrincipals.avdServicePrincipalApi.value)), or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan))]"
+									"link": "[if(empty(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalPickerBlade), 'Select the Azure Virtual Desktop Application', first(map(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
+									"visible": "[and(steps('operationsAndMonitoring').servicePrincipals.enableAVDSPRBAC, empty(first(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalApi.value)), or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan))]"
 								}
 							]
 						},
@@ -3531,16 +3339,15 @@
 							"name": "deploymentVm",
 							"type": "Microsoft.Common.Section",
 							"label": "Deployment Virtual Machine",
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName))))]",
+							"visible": "[or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))]",
 							"elements": [
 								{
 									"name": "deploymentVmInfoBox",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
 										"style": "Info",
-										"text": "[concat('Based on your configuration choices, a deployment virtual machine is required to perform steps that cannot be completed via ARM templates. This virtual machine will be automatically deleted from Azure once the deployment is complete.', if(contains(steps('identity').solution, 'DomainServices'), 'Since you selected a Active Directory Domain Services or Entra Kerberos Domain Service as your identity solution and deployed FSLogix profile storage, the deployment virtual machine will also be joined to the domain and the same OU as the session hosts. You should remove the computer account for this VM once the deployment completes.', if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), 'Since you selected Entra Kerberos with Hybrid Identities as your identity solution, deployed FSLogix profile storage, and chose to either configure least privilege NTFS permissions or shard the storage, the deployment virtual machine will also be joined to the domain in the OU specified. The computer object for this virtual maachine should be deleted from the domain when the deployment is complete.','')))]"
-									},
-									"visible": true
+										"text": "[concat('Based on your configuration choices, a deployment virtual machine is required to perform steps that cannot be completed via ARM templates. This virtual machine will be automatically deleted from Azure once the deployment is complete.', if(contains(steps('identity').solution, 'DomainServices'), ' Since you selected a Active Directory Domain Services or Entra Kerberos Domain Service as your identity solution and deployed FSLogix profile storage, the deployment virtual machine will also be joined to the domain and the same OU as the session hosts. You should remove the computer account for this VM once the deployment completes.', if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), ' Since you selected Entra Kerberos with Hybrid Identities as your identity solution, deployed FSLogix profile storage, and chose to either configure least privilege NTFS permissions or shard the storage, the deployment virtual machine will also be joined to the domain in the OU specified. The computer object for this virtual maachine should be deleted from the domain when the deployment is complete.','')))]"
+									}
 								},
 								{
 									"name": "size",
@@ -3552,8 +3359,7 @@
 									"constraints": {
 										"allowedValues": "[steps('hosts').resourceSkusApi.transformed.deploymentVMSizes]",
 										"required": true
-									},
-									"visible": true
+									}
 								}
 							]
 						},
@@ -3561,12 +3367,12 @@
 							"name": "backup",
 							"type": "Microsoft.Common.Section",
 							"label": "Backup and Recovery",
-							"visible": "[or(if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), equals(steps('controlPlane').hostPool.type, 'Personal')), and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('controlPlane').hostPool.type, 'Pooled'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles')))]",
+							"visible": "[or(equals(steps('controlPlane').hostPool.type, 'Personal'), and(equals(steps('controlPlane').hostPool.type, 'Pooled'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles')))]",
 							"elements": [
 								{
 									"name": "recoveryServicesVaultApi",
 									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(or(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').deploymentType, 'HostpoolOnly')), not(empty(steps('hosts').scope.subscription.subscriptionId)), steps('management').backup.recoveryServices)]",
+									"condition": "[and(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault, not(empty(steps('hosts').scope.subscription.subscriptionId)), steps('operationsAndMonitoring').backup.recoveryServices)]",
 									"request": {
 										"method": "GET",
 										"path": "[concat('/subscriptions/', steps('hosts').scope.subscription.subscriptionId, '/providers/Microsoft.RecoveryServices/vaults?api-version=2024-10-01')]",
@@ -3579,8 +3385,16 @@
 									"name": "recoveryServices",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Recovery Services",
-									"defaultValue": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), true, if(empty(steps('management').backup.recoveryServicesVaultApi), false, true))]",
-									"toolTip": "Enable Azure Backup for this host pool. Personal host pools: backs up virtual machine OS disks. Pooled host pools: backs up FSLogix Azure Files file shares. Complete deployment creates a new vault; HostpoolOnly and SessionHostsOnly (Personal) require an existing vault."
+									"defaultValue": true,
+									"toolTip": "Enable Azure Backup for this host pool. Personal host pools: backs up virtual machine OS disks. Pooled host pools: backs up FSLogix Azure Files file shares."
+								},
+								{
+									"name": "useExistingRecoveryServicesVault",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Use Existing Recovery Services Vault",
+									"defaultValue": false,
+									"toolTip": "Check to select an existing Recovery Services Vault instead of creating a new one.",
+									"visible": "[steps('operationsAndMonitoring').backup.recoveryServices]"
 								},
 								{
 									"name": "recoveryServicesVaultStorageRedundancy",
@@ -3592,50 +3406,18 @@
 										"required": true,
 										"allowedValues": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"},{\"label\":\"Zone Redundant\",\"value\":\"ZoneRedundant\"},{\"label\":\"Geo Redundant\",\"value\":\"GeoRedundant\"}]'), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"},{\"label\":\"Zone Redundant\",\"value\":\"ZoneRedundant\"}]'))]"
 									},
-									"visible": "[and(steps('management').backup.recoveryServices, equals(steps('basics').deploymentType, 'Complete'))]"
+									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))]"
 								},
 								{
 									"name": "recoveryServicesVault",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Recovery Services Vault",
-									"defaultValue": "[first(steps('management').backup.recoveryServicesVaultApi.transformed.list).label]",
+									"defaultValue": "[first(steps('operationsAndMonitoring').backup.recoveryServicesVaultApi.transformed.list).label]",
 									"constraints": {
-										"allowedValues": "[steps('management').backup.recoveryServicesVaultApi.transformed.list]",
+										"allowedValues": "[steps('operationsAndMonitoring').backup.recoveryServicesVaultApi.transformed.list]",
 										"required": true
 									},
-									"visible": "[and(steps('management').backup.recoveryServices, if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), equals(steps('basics').deploymentType, 'HostpoolOnly')))]"
-								},
-								{
-									"name": "diskAccessesApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), and(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), not(empty(steps('hosts').scope.resourceGroup.id))), false)]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Compute/diskAccesses?api-version=2024-03-02')]",
-										"transforms": {
-											"list": "value|[*].{label:name, value:id}"
-										}
-									}
-								},
-								{
-									"name": "associateDiskAccessResource",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Associate VM(s) with Disk Access Resource",
-									"defaultValue": "[not(empty(steps('management').backup.diskAccessesApi))]",
-									"toolTip": "Disk Access Resources are used to allow Azure Backup to access the managed disk over the private network in order to perform the backup.",
-									"visible": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), and(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), not(empty(steps('management').backup.diskAccessesApi))), false)]"
-								},
-								{
-									"name": "diskAccess",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Disk Access",
-									"defaultValue": "[first(steps('management').backup.diskAccessesApi.transformed.list).label]",
-									"toolTip": "Select the existing Disk Access Resource",
-									"constraints": {
-										"allowedValues": "[steps('management').backup.diskAccessesApi.transformed.list]",
-										"required": true
-									},
-									"visible": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), and(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.associateDiskAccessResource), false)]"
+									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)]"
 								}
 							]
 						},
@@ -3643,14 +3425,14 @@
 							"name": "keyVaults",
 							"type": "Microsoft.Common.Section",
 							"label": "Key Vaults",
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual')), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]",
+							"visible": "[or(equals(steps('identity').credentials.source, 'manual'), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))]",
 							"elements": [
 								{
 									"name": "deploySecretsKeyVault",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Deploy VM Secrets Key Vault",
 									"toolTip": "Select to deploy a key vault and create secrets for VM Admin user and password and if applicable, the domain join username and password.",
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'))]"
+									"visible": "[equals(steps('identity').credentials.source, 'manual')]"
 								},
 								{
 									"name": "enableSoftDelete",
@@ -3658,7 +3440,7 @@
 									"label": "Enable Soft Delete on Secrets Key Vault",
 									"defaultValue": true,
 									"toolTip": "Select to enable soft delete on the secrets key vault",
-									"visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault)]"
+									"visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault)]"
 								},
 								{
 									"name": "enablePurgeProtection",
@@ -3666,7 +3448,7 @@
 									"label": "Enable Purge Protection on Secrets Key Vault",
 									"defaultValue": true,
 									"toolTip": "Select to enable purge protection on the secrets key vault",
-									"visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault, steps('management').keyVaults.enableSoftDelete)]"
+									"visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, steps('operationsAndMonitoring').keyVaults.enableSoftDelete)]"
 								},
 								{
 									"name": "keyVaultRetentionInDays",
@@ -3677,7 +3459,7 @@
 									"toolTip": "The number of days Key Vaults are kept in the recycle bin. Soft delete is designed to prevent accidental deletion of your key vault and keys, secrets, and certificates stored inside key vault. When you delete a key vault or a key vault object, it remains recoverable for a user configurable retention period or a default of 90 days.",
 									"min": 7,
 									"max": 90,
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault))]"
+									"visible": "[or(and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault)]"
 								},
 								{
 									"name": "useExistingEncryptionKv",
@@ -3685,7 +3467,7 @@
 									"label": "Use Existing Encryption Key Vault",
 									"defaultValue": false,
 									"toolTip": "Check to select an existing Encryption Key Vault (e.g., from the Security deployment) instead of creating one inline in the management resource group.",
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
+									"visible": "[or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))]"
 								},
 								{
 									"name": "existingEncryptionKeyVault",
@@ -3694,13 +3476,13 @@
 									"resourceType": "Microsoft.KeyVault/vaults",
 									"toolTip": "Select an existing Key Vault to use for Customer Managed Keys. Only key vaults in the session host location are shown.",
 									"constraints": {
-										"required": "[or(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').keyVaults.useExistingEncryptionKv)]"
+										"required": "[steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv]"
 									},
 									"scope": {
 										"subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]",
 										"location": "[steps('hosts').scope.location.name]"
 									},
-									"visible": "[or(and(equals(steps('basics').deploymentType, 'HostpoolOnly'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('management').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))))]"
+									"visible": "[and(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
 								},
 								{
 									"name": "keyExpirationInDays",
@@ -3719,104 +3501,97 @@
 							"name": "monitoring",
 							"type": "Microsoft.Common.Section",
 							"label": "Monitoring",
-							"visible": true,
 							"elements": [
 								{
 									"name": "enableMonitoring",
 									"type": "Microsoft.Common.CheckBox",
-									"visible": true,
-									"label": "Enable Monitoring for AVD and VM Insights",
+									"label": "Enable AVD Insights Monitoring",
 									"defaultValue": true,
-									"toolTip": "Deploy the required resources to enable AVD and VM Insights."
+									"toolTip": "Deploy the required resources to enable AVD Insights monitoring for session hosts."
+								},
+								{
+									"name": "useExistingMonitoring",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Use Existing Monitoring Resources",
+									"defaultValue": false,
+									"toolTip": "Select existing Log Analytics Workspace, Data Collection Rules, and Data Collection Endpoint instead of creating new ones. The DCRs and DCE must already be associated with the selected workspace.",
+									"visible": "[steps('operationsAndMonitoring').monitoring.enableMonitoring]"
 								},
 								{
 									"name": "subscription",
 									"type": "Microsoft.Common.DropDown",
 									"label": "AVD Monitoring Subscription",
 									"defaultValue": "[steps('hosts').scope.subscription.displayName]",
-									"toolTip": "[if(equals(steps('basics').deploymentType, 'Complete'), 'Select the subscription where AVD monitoring resources will be deployed.', 'Select the subscription where existing AVD monitoring resources are located.')]",
+									"toolTip": "[if(steps('operationsAndMonitoring').monitoring.useExistingMonitoring, 'Select the subscription where existing AVD monitoring resources are located.', 'Select the subscription where AVD monitoring resources will be deployed.')]",
 									"constraints": {
 										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[steps('management').monitoring.enableMonitoring]"
+									"visible": "[steps('operationsAndMonitoring').monitoring.enableMonitoring]"
 								},
 								{
 									"name": "logAnalyticsWorkspacesApi",
-									"condition": "[and(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').monitoring.enableMonitoring, not(empty(steps('management').monitoring.subscription)))]",
+									"condition": "[and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring, not(empty(steps('operationsAndMonitoring').monitoring.subscription.id)))]",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('management').monitoring.subscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
+										"path": "[concat(steps('operationsAndMonitoring').monitoring.subscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
 									}
 								},
 								{
 									"name": "logAnalyticsWorkspace",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('management').monitoring.logAnalyticsWorkspacesApi.value, (la) => and(contains(la.name, '-avd-'), equals(la.location, steps('controlPlane').scope.location.name))), (la) => la.name))]",
-									"visible": "[and(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').monitoring.enableMonitoring)]",
+									"defaultValue": "[first(map(filter(steps('operationsAndMonitoring').monitoring.logAnalyticsWorkspacesApi.value, (la) => and(contains(la.name, '-avd-'), equals(la.location, steps('hosts').scope.location.name))), (la) => la.name))]",
+									"visible": "[and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring)]",
 									"label": "Existing Log Analytics Workspace",
 									"multiLine": true,
-									"toolTip": "Select the existing Log Analytics Workspace to which AVD control plane and resource monitoring data will be sent.",
+									"toolTip": "Select the existing Log Analytics Workspace to which AVD Insights data will be sent.",
 									"constraints": {
-										"allowedValues": "[map(steps('management').monitoring.logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ', Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('operationsAndMonitoring').monitoring.logAnalyticsWorkspacesApi.value, (la) => equals(la.location, steps('hosts').scope.location.name)), (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ', Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]",
 										"required": true
 									}
 								},
 								{
 									"name": "dataCollectionRulesApi",
-									"condition": "[and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring, not(empty(steps('management').monitoring.subscription)))]",
+									"condition": "[and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring, not(empty(steps('operationsAndMonitoring').monitoring.subscription.id)))]",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('management').monitoring.subscription.id, '/providers/Microsoft.Insights/dataCollectionRules?api-version=2023-03-11')]"
+										"path": "[concat(steps('operationsAndMonitoring').monitoring.subscription.id, '/providers/Microsoft.Insights/dataCollectionRules?api-version=2023-03-11')]"
 									}
 								},
 								{
 									"name": "avdInsightsDataCollectionRule",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('management').monitoring.dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('microsoft-avdi-', steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
-									"visible": "[and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring)]",
+									"defaultValue": "[first(map(filter(steps('operationsAndMonitoring').monitoring.dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'avdi'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
+									"visible": "[and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring)]",
 									"label": "AVD Insights Data Collection Rule",
 									"multiLine": true,
-									"toolTip": "Select the existing AVD Insights Data Collection Rule.",
+									"toolTip": "Select the existing AVD Insights Data Collection Rule associated with the selected workspace.",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('management').monitoring.dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'avdi'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
-										"required": false
-									}
-								},
-								{
-									"name": "vmInsightsDataCollectionRule",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('management').monitoring.dataCollectionRulesApi.value, (dcr) => equals(dcr.name, concat('MSVMI-', steps('hosts').scope.location.name))), (dcr) => dcr.name))]",
-									"visible": "[and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring)]",
-									"label": "VM Insights Data Collection Rule",
-									"multiLine": true,
-									"toolTip": "Select the existing Virtual Machines Insights Data Collection Rule.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('management').monitoring.dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'MSVMI'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
-										"required": false
+										"allowedValues": "[map(filter(steps('operationsAndMonitoring').monitoring.dataCollectionRulesApi.value, (dcr) => and(contains(dcr.name, 'avdi'), equals(dcr.location, steps('hosts').scope.location.name))), (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
+										"required": true
 									}
 								},
 								{
 									"name": "dataCollectionEndpointsApi",
-									"condition": "[and(not(empty(steps('management').monitoring.subscription.id)), not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring)]",
+									"condition": "[and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring, not(empty(steps('operationsAndMonitoring').monitoring.subscription.id)))]",
 									"type": "Microsoft.Solutions.ArmApiControl",
 									"request": {
 										"method": "GET",
-										"path": "[concat(steps('management').monitoring.subscription.id, '/providers/Microsoft.Insights/dataCollectionEndpoints?api-version=2023-03-11')]"
+										"path": "[concat(steps('operationsAndMonitoring').monitoring.subscription.id, '/providers/Microsoft.Insights/dataCollectionEndpoints?api-version=2023-03-11')]"
 									}
 								},
 								{
 									"name": "dataCollectionEndpoint",
 									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('management').monitoring.dataCollectionEndpointsApi.value, (dce) => and(contains(dce.name, 'avd'), equals(dce.location, steps('hosts').scope.location.name))), (dce) => dce.name))]",
-									"visible": "[and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring)]",
+									"defaultValue": "[first(map(filter(steps('operationsAndMonitoring').monitoring.dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('hosts').scope.location.name)), (dce) => dce.name))]",
+									"visible": "[and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring)]",
 									"label": "Data Collection Endpoint",
 									"multiLine": true,
-									"toolTip": "Select the existing Data Collection Endpoint.",
+									"toolTip": "Select the existing Data Collection Endpoint associated with the selected workspace.",
 									"constraints": {
-										"allowedValues": "[map(filter(steps('management').monitoring.dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('hosts').scope.location.name)), (dce) => parse(concat('{\"label\":\"', dce.name, '\",\"description\":\"Resource Group: ', first(skip(split(dce.id, '/'), 4)), ', Location: ', dce.location, '\",\"value\":\"', dce.id, '\"}')))]",
+										"allowedValues": "[map(filter(steps('operationsAndMonitoring').monitoring.dataCollectionEndpointsApi.value, (dce) => equals(dce.location, steps('hosts').scope.location.name)), (dce) => parse(concat('{\"label\":\"', dce.name, '\",\"description\":\"Resource Group: ', first(skip(split(dce.id, '/'), 4)), ', Location: ', dce.location, '\",\"value\":\"', dce.id, '\"}')))]",
 										"required": false
 									}
 								}
@@ -3829,14 +3604,6 @@
 					"label": "Zero Trust Configuration",
 					"elements": [
 						{
-							"name": "zeroTrusttextBlock0",
-							"type": "Microsoft.Common.TextBlock",
-							"visible": "[equals(steps('basics').deploymentType, 'SessionHostsOnly')]",
-							"options": {
-								"text": "This page is intentionally blank when only completing a Session Host Deployment."
-							}
-						},
-						{
 							"name": "zeroTrusttextBlock1",
 							"type": "Microsoft.Common.TextBlock",
 							"options": {
@@ -3845,14 +3612,13 @@
 									"label": "Microsoft Learn | Zero Trust Security",
 									"uri": "https://learn.microsoft.com/en-us/azure/security/fundamentals/zero-trust"
 								}
-							},
-							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]"
+							}
 						},
 						{
 							"name": "privateEndpoints",
 							"type": "Microsoft.Common.Section",
 							"label": "Private Endpoints",
-							"visible": "[and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), and(equals(steps('basics').deploymentType, 'Complete'), or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))))]",
+							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)))]",
 							"elements": [
 								{
 									"name": "privateEndpointTextBlock1",
@@ -3894,9 +3660,9 @@
 								{
 									"name": "managementHeader",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(steps('management').keyVaults.deploySecretsKeyVault, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
+									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
 									"options": {
-										"text": "Shared Management Resources (i.e., Key Vaults, Function Apps, etc.)"
+										"text": "Shared Operations Resources (Key Vaults, Recovery Services Vault)"
 									}
 								},
 								{
@@ -3905,12 +3671,12 @@
 									"label": "Virtual Network",
 									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
 									"multiLine": true,
-									"toolTip": "Select the virtual network for the key vault and/or function app private endpoints. Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
+									"toolTip": "Select the virtual network for the operations resource private endpoints (Key Vaults, Recovery Services Vault). Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault)), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "managementSubnetsApi",
@@ -3922,22 +3688,22 @@
 									}
 								},
 								{
-									"name": "keyVaultsSubnet",
+									"name": "operationsSubnet",
 									"type": "Microsoft.Common.DropDown",
-									"label": "Key Vault Private Endpoint subnet",
-									"toolTip": "Select an existing subnet for the private Endpoint.",
+									"label": "Private Endpoints Subnet",
+									"toolTip": "Select an existing subnet for the private endpoints of operations resources (Key Vaults, Recovery Services Vault).",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.managementSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "hostpoolHeader",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
+									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
 									"options": {
-										"text": "Hostpool Resources (Storage or Recovery Services Vaults)"
+										"text": "Hostpool Resources (FSLogix Storage Accounts)"
 									}
 								},
 								{
@@ -3946,12 +3712,12 @@
 									"label": "Virtual Network",
 									"multiLine": true,
 									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
-									"toolTip": "Select the virtual network for the storage account and/or recovery services vault private endpoints. Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
+									"toolTip": "Select the virtual network for the storage account private endpoints. Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "hostpoolSubnetsApi",
@@ -3971,7 +3737,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.hostpoolSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "privateDNSZonesHeader",
@@ -4027,7 +3793,7 @@
 									"name": "azureBackupPrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
 									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => zone.name))]",
-									"visible": "[and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
 									"label": "Azure Backup",
 									"multiLine": true,
 									"toolTip": "Select the existing Geo Specific Private DNS Zone for Azure Backup Storage.",
@@ -4040,7 +3806,7 @@
 									"name": "azureBlobPrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
 									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
-									"visible": "[and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
 									"label": "Azure Blob Storage",
 									"multiLine": true,
 									"toolTip": "Select the existing Private DNS Zone for Azure Blob Storage.",
@@ -4073,13 +3839,13 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": true
 									},
-									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, and(equals(steps('basics').deploymentType, 'Complete'), or(steps('management').keyVaults.deploySecretsKeyVault, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))))]"
+									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
 								},
 								{
 									"name": "azureQueuePrivateDnsZone",
 									"type": "Microsoft.Common.DropDown",
 									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
-									"visible": "[and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
 									"label": "Azure Queue Storage",
 									"multiLine": true,
 									"toolTip": "Select the existing Private DNS Zone for Azure Queue Storage.",
@@ -4094,7 +3860,7 @@
 							"name": "permittedIPsSection",
 							"type": "Microsoft.Common.Section",
 							"label": "Permitted IP Addresses",
-							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
+							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)))]",
 							"elements": [
 								{
 									"name": "permittedIPsInfo",
@@ -4148,12 +3914,10 @@
 							"name": "azureMonitor",
 							"type": "Microsoft.Common.Section",
 							"label": "Azure Monitor",
-							"visible": "[equals(steps('basics').deploymentType, 'Complete')]",
 							"elements": [
 								{
 									"name": "privateLinkTextBlock1",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
 										"text": "Azure Monitor is a constellation of different interconnected services that work together to monitor your workloads. An Azure Monitor private link connects a private endpoint to a set of Azure Monitor resources to define the boundaries of your monitoring network. That set is called an Azure Monitor Private Link Scope (AMPLS).",
 										"link": {
@@ -4183,14 +3947,12 @@
 							"name": "policy",
 							"type": "Microsoft.Common.Section",
 							"label": "Policies",
-							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
 							"elements": [
 								{
 									"name": "diskAccessTextBlock1",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": true,
 									"options": {
-										"text": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), 'Check the following box to define and and assign a policy that disables public network access and automatically assigns a disk access resource to the virtual machine OS disks for private access.', 'Select the following check box to define and assign a policy that disables all network access to your managed disks.')]",
+										"text": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), 'Check the following box to define and and assign a policy that disables public network access and automatically assigns a disk access resource to the virtual machine OS disks for private access.', 'Select the following check box to define and assign a policy that disables all network access to your managed disks.')]",
 										"link": {
 											"label": "Microsoft Learn | Restrict Managed Disks from Being Imported or Exported",
 											"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-restrict-import-export-overview"
@@ -4208,7 +3970,6 @@
 							"name": "avdPrivateLink",
 							"type": "Microsoft.Common.Section",
 							"label": "AVD Private Link",
-							"visible": "[not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))]",
 							"elements": [
 								{
 									"name": "textBlock1",
@@ -4252,10 +4013,10 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "AVD Private Link Configuration",
 									"multiLine": true,
-									"defaultValue": "[if(or(equals(steps('basics').deploymentType, 'HostpoolOnly'), equals(steps('controlPlane').workspace.createOption, 'update')), 'Only remote session connections use private routes', 'Feed download and remote session connections use private routes')]",
+									"defaultValue": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), 'Only remote session connections use private routes', 'Feed download and remote session connections use private routes')]",
 									"toolTip": "Chooose the AVD Private Link Configuration.",
 									"constraints": {
-										"allowedValues": "[if(or(equals(steps('basics').deploymentType, 'HostpoolOnly'), equals(steps('controlPlane').workspace.createOption, 'update')), parse('[{\"label\":\"Only remote session connections use private routes\",\"description\":\"Only remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), if(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed'))), parse('[{\"label\":\"All parts of the connection use private routes\",\"description\":\"Initial feed discovery, feed download, and remote session connections use private routes.\",\"value\":\"All\"},{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), parse('[{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]')))]",
+										"allowedValues": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), parse('[{\"label\":\"Only remote session connections use private routes\",\"description\":\"Only remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), if(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed'))), parse('[{\"label\":\"All parts of the connection use private routes\",\"description\":\"Initial feed discovery, feed download, and remote session connections use private routes.\",\"value\":\"All\"},{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), parse('[{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]')))]",
 										"required": true
 									},
 									"visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]"
@@ -4383,7 +4144,7 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Subnet",
 									"toolTip": "Select an existing subnet for the private Endpoints.",
-									"defaultValue": "[steps('zeroTrust').privateEndpoints.keyVaultsSubnet.name]",
+									"defaultValue": "[steps('zeroTrust').privateEndpoints.operationsSubnet.name]",
 									"constraints": {
 										"allowedValues": "[map(steps('zeroTrust').avdPrivateLink.feedWorkspaceSubnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
 										"required": true
@@ -4581,10 +4342,9 @@
 		},
 		"outputs": {
 			"parameters": {
-				"deploymentType": "[steps('basics').deploymentType]",
-				"identifier": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('basics').naming.identifier, '')]",
-				"index": "[if(or(equals(steps('basics').deploymentType, 'SessionHostsOnly'), empty(steps('basics').naming.index)), -1, steps('basics').naming.index)]",
-				"nameConvResTypeAtEnd": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('basics').naming.nameConvResTypeAtEnd, false)]",
+				"identifier": "[steps('basics').naming.identifier]",
+				"index": "[if(empty(steps('basics').naming.index), -1, steps('basics').naming.index)]",
+				"nameConvResTypeAtEnd": "[steps('basics').naming.nameConvResTypeAtEnd]",
 				"identitySolution": "[steps('identity').solution]",
 				"domainName": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.domainName, if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), steps('userProfiles').azureFiles.domainName, ''))]",
 				"vmOUPath": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.ouPath, if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), steps('userProfiles').azureFiles.vmOUPath, ''))]",
@@ -4592,20 +4352,20 @@
 				"domainJoinUserPrincipalName": "[if(and(contains(steps('identity').solution, 'DomainServices'), equals(steps('identity').credentials.source, 'manual')), steps('identity').credentials.domainJoinUserPrincipalName, if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms')), not(equals(steps('userProfiles').azureFiles.credentialSource, 'keyVault'))), steps('userProfiles').azureFiles.domainJoinUserPrincipalName, ''))]",
 				"virtualMachineAdminPassword": "[if(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.localAdminPassword, '')]",
 				"virtualMachineAdminUserName": "[if(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.localAdminUsername, '')]",
-				"credentialsKeyVaultResourceId": "[if(equals(steps('identity').credentials.source, 'keyVault'), steps('identity').credentials.keyVault.id, '')]",
-				"existingHostPoolResourceId": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('basics').existingHostPool.id, '')]",
-				"controlPlaneSubscriptionId": "[if(equals(steps('basics').deploymentType, 'Complete'), steps('controlPlane').scope.subscription.subscriptionId, '')]",
-				"controlPlaneLocation": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), '', steps('controlPlane').scope.location.name)]",
-				"existingFeedWorkspaceResourceId": "[if(or(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('controlPlane').workspace.createOption, 'update')), equals(steps('basics').deploymentType, 'HostpoolOnly')), steps('controlPlane').workspace.existingWorkspace, '')]",
-				"workspaceFriendlyName": "[if(and(equals(steps('basics').deploymentType, 'Complete'), not(equals(steps('controlPlane').workspace.createOption, 'update'))), steps('controlPlane').naming.workspaceFriendlyName, '')]",
-				"desktopFriendlyName": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), '', steps('controlPlane').naming.desktopFriendlyName)]",
-				"hostPoolType": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), if(equals(steps('controlPlane').hostPool.type, 'Pooled'), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.loadBalancerAlgorithm), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.assignmentType)), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Pooled'), concat('Pooled ', steps('basics').hostPoolProps.properties.loadBalancerType), concat('Personal ', steps('basics').hostPoolProps.properties.personalDesktopAssignmentType)))]",
-				"hostPoolMaxSessionLimit": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), equals(steps('controlPlane').hostPool.type, 'Pooled')), steps('controlPlane').hostPool.maxSessions, 1)]",
-				"hostPoolValidationEnvironment": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').hostPool.validation, false)]",
-				"hostPoolRDPProperties": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').hostPool.rdpProperties, '')]",
-				"startVMOnConnect": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').hostPool.startVMOnConnect, false)]",
-				"appGroupSecurityGroups": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').assignments.groupPickerBlade.transformed.groups, parse('[]'))]",
-				"deployScalingPlan": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('controlPlane').scalingPlan.deployScalingPlan, false)]",
+				"existingCredentialsKeyVaultResourceId": "[if(equals(steps('identity').credentials.source, 'keyVault'), steps('identity').credentials.keyVault.id, '')]",
+				"existingHostPoolResourceId": "",
+				"controlPlaneSubscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]",
+				"controlPlaneLocation": "[steps('controlPlane').scope.location.name]",
+				"existingFeedWorkspaceResourceId": "[if(and(not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))), equals(steps('controlPlane').workspace.createOption, 'update')), steps('controlPlane').workspace.existingWorkspace, '')]",
+				"workspaceFriendlyName": "[if(not(and(not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))), equals(steps('controlPlane').workspace.createOption, 'update'))), steps('controlPlane').naming.workspaceFriendlyName, '')]",
+				"desktopFriendlyName": "[steps('controlPlane').naming.desktopFriendlyName]",
+				"hostPoolType": "[if(equals(steps('controlPlane').hostPool.type, 'Pooled'), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.loadBalancerAlgorithm), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.assignmentType))]",
+				"hostPoolMaxSessionLimit": "[if(equals(steps('controlPlane').hostPool.type, 'Pooled'), steps('controlPlane').hostPool.maxSessions, 1)]",
+				"hostPoolValidationEnvironment": "[steps('controlPlane').hostPool.validation]",
+				"hostPoolRDPProperties": "[steps('controlPlane').hostPool.rdpProperties]",
+				"startVMOnConnect": "[steps('controlPlane').hostPool.startVMOnConnect]",
+				"appGroupSecurityGroups": "[steps('controlPlane').assignments.groupPickerBlade.transformed.groups]",
+				"deployScalingPlan": "[steps('controlPlane').scalingPlan.deployScalingPlan]",
 				"scalingPlanExclusionTag": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.exclusionTag, '')]",
 				"scalingPlanRampUpSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayRampUpSchedule), parse('{}'))]",
 				"scalingPlanPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayPeakSchedule), parse('{}'))]",
@@ -4613,7 +4373,6 @@
 				"scalingPlanOffPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayOffPeakSchedule), parse('{}'))]",
 				"scalingPlanForceLogoff": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff, false)]",
 				"scalingPlanMinsBeforeLogoff": "[if(and(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff), steps('controlPlane').scalingPlan.minsToLogoff, 0)]",
-				"existingHostsResourceGroupName": "[if(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('hosts').scope.resourceGroup.name, '')]",
 				"virtualMachinesTimeZone": "[steps('hosts').scope.timeZone]",
 				"virtualMachineNamePrefix": "[steps('hosts').naming.virtualMachineNamePrefix]",
 				"sessionHostIndex": "[steps('hosts').naming.index]",
@@ -4630,10 +4389,10 @@
 				"vTpmEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
 				"integrityMonitoring": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.integrityMonitoring)]",
 				"encryptionAtHost": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), false, steps('hosts').diskEncryption.encryptionAtHost)]",
-				"existingDiskEncryptionSetResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), steps('hosts').diskEncryption.selectDiskEncryptionSet), steps('hosts').diskEncryption.existingDiskEncryptionSet, '')]",
-				"keyManagementDisks": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('hosts').diskEncryption.keyManagement, 'PlatformManaged')]",
-				"confidentialVMOSDiskEncryption": "[if(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, false)]",
-				"confidentialVMOrchestratorObjectId": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManagedHSM')), if(empty(first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.value)), first(map(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.transformed.objectId)), '')]",
+				"existingDiskEncryptionSetResourceId": "",
+				"keyManagementDisks": "[steps('hosts').diskEncryption.keyManagement]",
+				"confidentialVMOSDiskEncryption": "[steps('hosts').diskEncryption.confidentialVMOSDiskEncryption]",
+				"confidentialVMOrchestratorObjectId": "[if(and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManagedHSM')), if(empty(first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.value)), first(map(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.transformed.objectId)), '')]",
 				"dedicatedHostGroupResourceId": "[if(steps('hosts').dedicatedHosts.deployToDedicatedHosts, steps('hosts').dedicatedHosts.dedicatedHostGroup, '')]",
 				"dedicatedHostResourceId": "[if(steps('hosts').dedicatedHosts.deployToDedicatedHosts, steps('hosts').dedicatedHosts.dedicatedHost, '')]",
 				"availability": "[if(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), steps('hosts').availability.availability, 'none')]",
@@ -4653,8 +4412,8 @@
 				"sessionHostCustomizations": "[if(steps('hosts').customizations.addCustomScripts, steps('hosts').customizations.customScripts, parse('[]'))]",
 				"fslogixContainerType": "[if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').fslogixContainerType, 'ProfileContainer')]",
 				"fslogixSizeInMBs": "[if(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts), steps('userProfiles').sizeInMBs, 30720)]",
-				"deployFSLogixStorage": "[if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, false)]",
-				"fslogixConfigureSessionHosts": "[if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, false)]",
+				"deployFSLogixStorage": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), false, if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, false))]",
+				"fslogixConfigureSessionHosts": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), false, if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, false))]",
 				"fslogixOUPath": "[if(and(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').ouPath, '')]",
 				"fslogixStorageService": "[if(equals(steps('userProfiles').deployStorage, true), if(equals(steps('userProfiles').storageService, 'AzureFiles'), concat('AzureFiles ', steps('userProfiles').azureFiles.storageSku), concat('AzureNetAppFiles ', steps('userProfiles').azureNetAppFiles.storageSku)), if(steps('userProfiles').configureSessionHosts, if(equals(steps('userProfiles').storageService, 'AzureFiles'), 'AzureFiles Standard', 'AzureNetAppFiles Standard'), 'AzureFiles Standard'))]",
 				"netAppVolumesSubnetResourceId": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), steps('userProfiles').azureNetAppFiles.subnet.id, '')]",
@@ -4670,32 +4429,30 @@
 				"fslogixExistingRemoteStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
 				"fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('identity').solution, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true)), steps('userProfiles').managedIdentity.id, '')]",
 				"fslogixAdminGroups": "[if(steps('userProfiles').shareManagement.configureAdminAccess, steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups, parse('[]'))]",
-				"avdObjectId": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), steps('management').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('management').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('management').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('management').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
-				"deploymentVmSize": "[if(and(not(equals(steps('basics').deploymentType, 'SessionHostsOnly')), or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))), steps('management').deploymentVm.size, 'Standard_B2s')]",
-				"recoveryServices": "[steps('management').backup.recoveryServices]",
-				"recoveryServicesVaultStorageRedundancy": "[if(and(steps('management').backup.recoveryServices, not(equals(steps('basics').deploymentType, 'SessionHostsOnly'))), steps('management').backup.recoveryServicesVaultStorageRedundancy, 'LocallyRedundant')]",
-				"existingRecoveryServicesVaultResourceId": "[if(and(steps('management').backup.recoveryServices, or(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('basics').deploymentType, 'HostpoolOnly'))), steps('management').backup.recoveryServicesVault, '')]",
-				"existingDiskAccessResourceId": "[if(and(equals(steps('basics').deploymentType, 'SessionHostsOnly'), equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('management').backup.recoveryServices, steps('management').backup.associateDiskAccessResource), steps('management').backup.diskAccess, '')]",
-				"deploySecretsKeyVault": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual')), steps('management').keyVaults.deploySecretsKeyVault, false)]",
-				"secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault), steps('management').keyVaults.enableSoftDelete, false)]",
-				"secretsKeyVaultEnablePurgeProtection": "[if(and(equals(steps('basics').deploymentType, 'Complete'), equals(steps('identity').credentials.source, 'manual'), steps('management').keyVaults.deploySecretsKeyVault, steps('management').keyVaults.enableSoftDelete), steps('management').keyVaults.enablePurgeProtection, false)]",
-				"keyVaultRetentionInDays": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(steps('management').keyVaults.deploySecretsKeyVault, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.keyVaultRetentionInDays, 7)]",
-				"encryptionKeyVaultResourceId": "[if(or(and(equals(steps('basics').deploymentType, 'HostpoolOnly'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('management').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))), steps('management').keyVaults.existingEncryptionKeyVault.id, '')]",
-				"keyExpirationInDays": "[if(and(equals(steps('basics').deploymentType, 'Complete'), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('management').keyVaults.keyExpirationInDays, 180)]",
-				"enableMonitoring": "[steps('management').monitoring.enableMonitoring]",
-				"monitoringSubscriptionId": "[if(steps('management').monitoring.enableMonitoring, steps('management').monitoring.subscription.subscriptionId, '')]",
-				"existingLogAnalyticsWorkspaceResourceId": "[if(and(equals(steps('basics').deploymentType, 'HostpoolOnly'), steps('management').monitoring.enableMonitoring), steps('management').monitoring.logAnalyticsWorkspace, '')]",
-				"existingAVDInsightsDataCollectionRuleResourceId": "[if(and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring), steps('management').monitoring.avdInsightsDataCollectionRule, '')]",
-				"existingVMInsightsDataCollectionRuleResourceId": "[if(and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring), steps('management').monitoring.vmInsightsDataCollectionRule, '')]",
-				"existingDataCollectionEndpointResourceId": "[if(and(not(equals(steps('basics').deploymentType, 'Complete')), steps('management').monitoring.enableMonitoring), steps('management').monitoring.dataCollectionEndpoint, '')]",
+				"avdObjectId": "[if(and(steps('operationsAndMonitoring').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
+				"deploymentVmSize": "[if(or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName))), steps('operationsAndMonitoring').deploymentVm.size, 'Standard_B2s')]",
+				"recoveryServices": "[steps('operationsAndMonitoring').backup.recoveryServices]",
+				"recoveryServicesVaultStorageRedundancy": "[if(steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.recoveryServicesVaultStorageRedundancy, 'LocallyRedundant')]",
+				"existingRecoveryServicesVaultResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('operationsAndMonitoring').backup.recoveryServicesVault, '')]",
+				"deploySecretsKeyVault": "[if(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, false)]",
+				"secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault), steps('operationsAndMonitoring').keyVaults.enableSoftDelete, false)]",
+				"secretsKeyVaultEnablePurgeProtection": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, steps('operationsAndMonitoring').keyVaults.enableSoftDelete), steps('operationsAndMonitoring').keyVaults.enablePurgeProtection, false)]",
+				"keyVaultRetentionInDays": "[if(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv))), steps('operationsAndMonitoring').keyVaults.keyVaultRetentionInDays, 7)]",
+				"existingEncryptionKeyVaultResourceId": "[if(and(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('operationsAndMonitoring').keyVaults.existingEncryptionKeyVault.id, '')]",
+				"keyExpirationInDays": "[if(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), steps('operationsAndMonitoring').keyVaults.keyExpirationInDays, 180)]",
+				"enableMonitoring": "[steps('operationsAndMonitoring').monitoring.enableMonitoring]",
+				"monitoringSubscriptionId": "[if(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.subscription.subscriptionId, '')]",
+				"existingLogAnalyticsWorkspaceResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.logAnalyticsWorkspace, '')]",
+				"existingAVDInsightsDataCollectionRuleResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.avdInsightsDataCollectionRule, '')]",
+				"existingDataCollectionEndpointResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.dataCollectionEndpoint, '')]",
 				"deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
-				"keyVaultPrivateEndpointSubnetResourceId": "[if(and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('management').keyVaults.deploySecretsKeyVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.keyVaultsSubnet.id, '')]",
-				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",
-				"azureBackupPrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
-				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
-				"azureFilesPrivateDnsZoneResourceId": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilesPrivateDnsZone, '')]",
-				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, or(steps('management').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
-				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('management').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
+				"operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
+				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",
+				"azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
+				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
+				"azureFilesPrivateDnsZoneResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilesPrivateDnsZone, '')]",
+				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
+				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
 				"azureMonitorPrivateLinkScopeResourceId": "[if(steps('zeroTrust').azureMonitor.privateLink, steps('zeroTrust').azureMonitor.azureMonitorPrivateLinkScope.id, '')]",
 				"deployDiskAccessPolicy": "[steps('zeroTrust').policy.deployDiskAccessPolicy]",
 				"avdPrivateLinkPrivateRoutes": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'None')]",
@@ -4703,11 +4460,11 @@
 				"workspaceFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool'))), steps('zeroTrust').avdPrivateLink.feedWorkspaceSubnet.id, '')]",
 				"avdPrivateDnsZoneResourceId": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.wvdPrivateLinkDnsZone, '')]",
 				"hostPoolPublicNetworkAccess": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.hostpoolPublicNetworkAccess, 'Enabled')]",
-				"workspacePublicNetworkAccess": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool'))), steps('zeroTrust').avdPrivateLink.feedWorkspacePublicNetworkAccess, 'Enabled')]",
+				"workspaceFeedPublicNetworkAccess": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool'))), steps('zeroTrust').avdPrivateLink.feedWorkspacePublicNetworkAccess, 'Enabled')]",
 				"existingGlobalFeedResourceId": "[first(map(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed')), (ws) => ws.id))]",
 				"globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
 				"globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
-				"permittedIPs": "[filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
+				"permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
 				"tags": "[steps('tags').tags]"
 			},
 			"kind": "Subscription",

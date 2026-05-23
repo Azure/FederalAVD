@@ -484,7 +484,7 @@
 							"defaultValue": "Windows-11",
 							"toolTip": "Select the desired marketplace image offer.",
 							"constraints": {
-								"allowedValues": "[if(equals(steps('imageSource').publisher, 'MicrosoftWindowsServer'), parse('[{\"label\":\"WindowsServer\",\"value\":\"WindowsServer\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"windows-11\"}]'))]",
+								"allowedValues": "[if(equals(steps('imageSource').publisher, 'MicrosoftWindowsServer'), parse('[{\"label\":\"WindowsServer\",\"value\":\"WindowsServer\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"windows-11\"},{\"label\":\"Windows Enterprise CPC\",\"value\":\"windows-ent-cpc\"}]'))]",
 								"required": true
 							},
 							"visible": "[equals(steps('imageSource').source, 'marketplace')]"
@@ -495,17 +495,21 @@
 							"condition": "[not(empty(steps('imageSource').offer))]",
 							"request": {
 								"method": "GET",
-								"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('basics').scope.location.name, '/publishers/', steps('imageSource').publisher, '/artifacttypes/vmimage/offers/', steps('imageSource').offer, '/skus?api-version=2023-07-01')]"
+								"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('basics').scope.location.name, '/publishers/', steps('imageSource').publisher, '/artifacttypes/vmimage/offers/', steps('imageSource').offer, '/skus?api-version=2023-07-01')]",
+								"transforms": {
+									"desktop": "[?starts_with(name, `win`) && (contains(name, `ent`) || contains(name, `avd`)) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}",
+									"server": "[*].{label: name, value: name}"
+								}
 							}
 						},
 						{
 							"name": "sku",
 							"type": "Microsoft.Common.DropDown",
 							"label": "SKU",
-							"defaultValue": "win11-24h2-avd",
+							"defaultValue": "win11-25h2-avd",
 							"toolTip": "Select the desired marketplace image SKU.",
 							"constraints": {
-								"allowedValues": "[if(equals(steps('imageSource').publisher, 'MicrosoftWindowsServer'), map(steps('imageSource').skusApi, (sku) => parse(concat('{\"label\":\"', sku.name, '\",\"value\":\"', sku.name, '\"}'))), map(filter(steps('imageSource').skusApi, (sku) => and(contains(sku.name, 'win'), or(contains(sku.name, '-avd'), contains(sku.name, '-ent')))), (sku) => parse(concat('{\"label\":\"', sku.name, '\",\"value\":\"', sku.name, '\"}'))))]",
+								"allowedValues": "[if(equals(steps('imageSource').publisher, 'MicrosoftWindowsServer'), steps('imageSource').skusApi.transformed.server, steps('imageSource').skusApi.transformed.desktop)]",
 								"required": true
 							},
 							"visible": "[equals(steps('imageSource').source, 'marketplace')]"
@@ -600,6 +604,7 @@
 							"name": "office",
 							"type": "Microsoft.Common.Section",
 							"label": "Microsoft 365 Apps",
+							"visible": "[not(contains(steps('imageSource').sku, 'm365'))]",
 							"elements": [
 								{
 									"name": "office365AppsToInstall",
@@ -672,7 +677,7 @@
 										],
 										"required": false
 									},
-									"visible": "[not(equals(steps('imageSource').offer, 'office-365'))]"
+									"visible": "[not(contains(steps('imageSource').sku, 'm365'))]"
 								},
 								{
 									"name": "installOneDrive",
@@ -680,15 +685,14 @@
 									"label": "Install OneDrive (Per Machine)",
 									"defaultValue": true,
 									"toolTip": "Select to install OneDrive in per-machine mode for VDI",
-									"visible": "[not(equals(steps('imageSource').offer, 'office-365'))]"
+									"visible": "[contains(steps('imageSource').sku, 'avd')]"
 								},
 								{
 									"name": "installTeams",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Install Teams for VDI",
 									"defaultValue": true,
-									"toolTip": "Select to install the New Teams client for VDI.",
-									"visible": "[not(equals(steps('imageSource').offer, 'office-365'))]"
+									"toolTip": "Select to install the New Teams client for VDI."
 								},
 								{
 									"name": "teamsCloudType",
@@ -728,7 +732,7 @@
 										],
 										"required": false
 									},
-									"visible": "[and(not(equals(steps('imageSource').offer, 'office-365')), steps('imageCustomizations').office.installTeams)]"
+									"visible": "[steps('imageCustomizations').office.installTeams]"
 								},
 								{
 									"name": "warningBoxAirGapped",
@@ -2235,9 +2239,9 @@
 				"customizations": "[if(steps('imageCustomizations').customSoftware.addCustomSoftware, steps('imageCustomizations').customSoftware.customizations, parse('[]'))]",
 				"vdiCustomizations": "[if(steps('imageCustomizations').customSoftware.addVDICustomSoftware, steps('imageCustomizations').customSoftware.vdiCustomizations, parse ('[]'))]",
 				"installFsLogix": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud')))), steps('imageCustomizations').fslogix.installFsLogix, false)]",
-				"office365AppsToInstall": "[if(equals(steps('imageSource').offer, 'office-365'), parse('[]'), steps('imageCustomizations').office.office365AppsToInstall)]",
-				"installOneDrive": "[if(equals(steps('imageSource').offer, 'office-365'), false, steps('imageCustomizations').office.installOneDrive)]",
-				"installTeams": "[if(equals(steps('imageSource').offer, 'office-365'), false, steps('imageCustomizations').office.installTeams)]",
+				"office365AppsToInstall": "[if(contains(steps('imageSource').sku, 'm365'), parse('[]'), steps('imageCustomizations').office.office365AppsToInstall)]",
+				"installOneDrive": "[if(contains(steps('imageSource').sku, 'm365'), false, steps('imageCustomizations').office.installOneDrive)]",
+				"installTeams": "[if(contains(steps('imageSource').sku, 'm365'), false, steps('imageCustomizations').office.installTeams)]",
 				"teamsCloudType": "[if(steps('imageCustomizations').office.installTeams, steps('imageCustomizations').office.teamsCloudType, 'Commercial')]",
 				"appsToRemove": "[steps('imageCustomizations').customizations.appsToRemove]",
 				"applyWindowsDesktopOptimizations": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud')))), steps('imageCustomizations').customizations.applyWindowsDesktopOptimizations, false)]",
