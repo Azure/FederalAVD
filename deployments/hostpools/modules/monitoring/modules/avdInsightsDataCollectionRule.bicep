@@ -18,9 +18,10 @@ resource dataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' 
     dataSources: {
       performanceCounters: [
         {
-          name: 'perfCounterDataSource10'
-          streams: ['Microsoft-Perf']
-          samplingFrequencyInSeconds: 10
+          streams: [
+            'Microsoft-Perf'
+          ]
+          samplingFrequencyInSeconds: 30
           counterSpecifiers: [
             '\\LogicalDisk(C:)\\Avg. Disk Queue Length'
             '\\LogicalDisk(C:)\\Current Disk Queue Length'
@@ -35,25 +36,26 @@ resource dataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' 
             '\\Processor Information(_Total)\\% Processor Time'
             '\\User Input Delay per Process(*)\\Max Input Delay'
             '\\User Input Delay per Session(*)\\Max Input Delay'
-            '\\RemoteFX Network(*)\\Current TCP RTT'
-            '\\RemoteFX Network(*)\\Current UDP Bandwidth'
           ]
+          name: 'perfCounterDataSource30'
         }
         {
-          name: 'perfCounterDataSource30'
-          streams: ['Microsoft-Perf']
-          samplingFrequencyInSeconds: 30
-          counterSpecifiers: [
-            '\\Terminal Services(*)\\Active Sessions'
-            '\\Terminal Services(*)\\Inactive Sessions'
-            '\\Terminal Services(*)\\Total Sessions'
+          streams: [
+            'Microsoft-Perf'
           ]
+          samplingFrequencyInSeconds: 60
+          counterSpecifiers: [
+            '\\LogicalDisk(C:)\\% Free Space'
+            '\\LogicalDisk(C:)\\Avg. Disk sec/Transfer'
+          ]
+          name: 'perfCounterDataSource60'
         }
       ]
       windowsEventLogs: [
         {
-          name: 'eventLogsDataSource'
-          streams: ['Microsoft-Event']
+          streams: [
+            'Microsoft-Event'
+          ]
           xPathQueries: [
             'Microsoft-Windows-TerminalServices-RemoteConnectionManager/Admin!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]'
             'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]'
@@ -62,21 +64,27 @@ resource dataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' 
             'Application!*[System[(Level=2 or Level=3)]]'
             'Microsoft-FSLogix-Apps/Admin!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]'
           ]
+          name: 'eventLogsDataSource'
         }
       ]
     }
     destinations: {
       logAnalytics: [
         {
-          name: 'la-workspace'
           workspaceResourceId: logAnalyticsWorkspaceResourceId
+          name: 'la-workspace'
         }
       ]
     }
     dataFlows: [
       {
-        streams: ['Microsoft-Perf', 'Microsoft-Event']
-        destinations: ['la-workspace']
+        streams: [
+          'Microsoft-Perf'
+          'Microsoft-Event'
+        ]
+        destinations: [
+          'la-workspace'
+        ]
       }
     ]
   }

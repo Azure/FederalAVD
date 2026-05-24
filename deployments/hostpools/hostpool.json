@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "11517583734434159644"
+      "templateHash": "2889892914591000304"
     }
   },
   "parameters": {
@@ -8538,7 +8538,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "7222867924138803513"
+              "templateHash": "14616860781939872958"
             }
           },
           "parameters": {
@@ -8911,7 +8911,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "17437135665124235954"
+                      "templateHash": "13173043211803200556"
                     }
                   },
                   "parameters": {
@@ -8944,11 +8944,10 @@
                         "dataSources": {
                           "performanceCounters": [
                             {
-                              "name": "perfCounterDataSource10",
                               "streams": [
                                 "Microsoft-Perf"
                               ],
-                              "samplingFrequencyInSeconds": 10,
+                              "samplingFrequencyInSeconds": 30,
                               "counterSpecifiers": [
                                 "\\LogicalDisk(C:)\\Avg. Disk Queue Length",
                                 "\\LogicalDisk(C:)\\Current Disk Queue Length",
@@ -8962,27 +8961,24 @@
                                 "\\PhysicalDisk(*)\\Avg. Disk sec/Write",
                                 "\\Processor Information(_Total)\\% Processor Time",
                                 "\\User Input Delay per Process(*)\\Max Input Delay",
-                                "\\User Input Delay per Session(*)\\Max Input Delay",
-                                "\\RemoteFX Network(*)\\Current TCP RTT",
-                                "\\RemoteFX Network(*)\\Current UDP Bandwidth"
-                              ]
+                                "\\User Input Delay per Session(*)\\Max Input Delay"
+                              ],
+                              "name": "perfCounterDataSource30"
                             },
                             {
-                              "name": "perfCounterDataSource30",
                               "streams": [
                                 "Microsoft-Perf"
                               ],
-                              "samplingFrequencyInSeconds": 30,
+                              "samplingFrequencyInSeconds": 60,
                               "counterSpecifiers": [
-                                "\\Terminal Services(*)\\Active Sessions",
-                                "\\Terminal Services(*)\\Inactive Sessions",
-                                "\\Terminal Services(*)\\Total Sessions"
-                              ]
+                                "\\LogicalDisk(C:)\\% Free Space",
+                                "\\LogicalDisk(C:)\\Avg. Disk sec/Transfer"
+                              ],
+                              "name": "perfCounterDataSource60"
                             }
                           ],
                           "windowsEventLogs": [
                             {
-                              "name": "eventLogsDataSource",
                               "streams": [
                                 "Microsoft-Event"
                               ],
@@ -8993,15 +8989,16 @@
                                 "Microsoft-FSLogix-Apps/Operational!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]",
                                 "Application!*[System[(Level=2 or Level=3)]]",
                                 "Microsoft-FSLogix-Apps/Admin!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]"
-                              ]
+                              ],
+                              "name": "eventLogsDataSource"
                             }
                           ]
                         },
                         "destinations": {
                           "logAnalytics": [
                             {
-                              "name": "la-workspace",
-                              "workspaceResourceId": "[parameters('logAnalyticsWorkspaceResourceId')]"
+                              "workspaceResourceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
+                              "name": "la-workspace"
                             }
                           ]
                         },
