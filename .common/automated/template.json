@@ -1,0 +1,1603 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "userAssignedIdentityAutoAssignRoles": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "Whether to automatically assign required roles to the user assigned identity."
+            }
+        },
+        "nestedTemplatesLocation": {
+            "type": "String",
+            "metadata": {
+                "description": "The base URI where artifacts required by this template are located."
+            }
+        },
+        "artifactsLocation": {
+            "type": "String",
+            "metadata": {
+                "description": "The base URI where artifacts required by this template are located."
+            }
+        },
+        "hostpoolName": {
+            "type": "String",
+            "metadata": {
+                "description": "The name of the Hostpool to be created."
+            }
+        },
+        "hostpoolToken": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "The token of the host pool where the session hosts will be added."
+            }
+        },
+        "hostpoolFriendlyName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The friendly name of the Hostpool to be created."
+            }
+        },
+        "hostpoolDescription": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The description of the Hostpool to be created."
+            }
+        },
+        "hostpoolDiagnosticSettingsStorageAccount": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The storage uri to put the diagnostic logs"
+            }
+        },
+        "hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The description of the Hostpool to be created."
+            }
+        },
+        "hostpoolDiagnosticSettingsEventHubName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The event hub name to send logs to"
+            }
+        },
+        "hostpoolDiagnosticSettingsEventHubAuthorizationId": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The event hub policy to use"
+            }
+        },
+        "hostpoolDiagnosticSettingsLogCategories": {
+            "defaultValue": [
+                "Checkpoint",
+                "Error",
+                "Management",
+                "Connection",
+                "HostRegistration",
+                "AgentHealthStatus",
+                "NetworkData",
+                "SessionHostManagement"
+            ],
+            "type": "Array",
+            "metadata": {
+                "description": "Categories of logs to be created for hostpools"
+            }
+        },
+        "appGroupDiagnosticSettingsLogCategories": {
+            "defaultValue": [
+                "Checkpoint",
+                "Error",
+                "Management"
+            ],
+            "type": "Array",
+            "metadata": {
+                "description": "Categories of logs to be created for app groups"
+            }
+        },
+        "workspaceDiagnosticSettingsLogCategories": {
+            "defaultValue": [
+                "Checkpoint",
+                "Error",
+                "Management",
+                "Feed"
+            ],
+            "type": "Array",
+            "metadata": {
+                "description": "Categories of logs to be created for workspaces"
+            }
+        },
+        "location": {
+            "type": "String",
+            "metadata": {
+                "description": "The location where the resources will be deployed."
+            }
+        },
+        "workSpaceName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The name of the workspace to be attach to new Applicaiton Group."
+            }
+        },
+        "workspaceLocation": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The location of the workspace."
+            }
+        },
+        "workspaceResourceGroup": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The workspace resource group Name."
+            }
+        },
+        "isNewWorkspace": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "True if the workspace is new. False if there is no workspace added or adding to an existing workspace."
+            }
+        },
+        "allApplicationGroupReferences": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The existing app groups references of the workspace selected."
+            }
+        },
+        "addToWorkspace": {
+            "type": "Bool",
+            "metadata": {
+                "description": "Whether to add applicationGroup to workspace."
+            }
+        },
+        "administratorAccountUsernameVaultResourceId": {
+            "defaultValue": "",
+            "type": "SecureString",
+            "metadata": {
+                "description": "The username vault resource id that corresponds to the existing domain username. IMPORTANT: make sure that vault resource id and secret uri are pointing to the same vault."
+            }
+        },
+        "administratorAccountUsernameSecretUri": {
+            "defaultValue": "",
+            "type": "SecureString",
+            "metadata": {
+                "description": "The username secret uri without version that corresponds to the existing domain username. IMPORTANT: make sure that vault resource id and secret uri are pointing to the same vault."
+            }
+        },
+        "administratorAccountPasswordVaultResourceId": {
+            "defaultValue": "",
+            "type": "SecureString",
+            "metadata": {
+                "description": "The password vault resource id that corresponds to the existing domain username. IMPORTANT: make sure that vault resource id and secret uri are pointing to the same vault."
+            }
+        },
+        "administratorAccountPasswordSecretUri": {
+            "defaultValue": "",
+            "type": "SecureString",
+            "metadata": {
+                "description": "The password secret uri without version that corresponds to the existing domain username. IMPORTANT: make sure that vault resource id and secret uri are pointing to the same vault."
+            }
+        },
+        "vmAdministratorAccountUsernameVaultResourceId": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "The username vault resource id associated with the virtual machine administrator account.IMPORTANT: make sure that latest version of secret uri and password are the same."
+            }
+        },
+        "vmAdministratorAccountUsernameSecretUri": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "The username secret uri without version that corresponds to the existing domain username. IMPORTANT: make sure that vault resource id and secret uri are pointing to the same vault"
+            }
+        },
+        "vmAdministratorAccountPasswordVaultResourceId": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "The password vault resource id associated with the virtual machine administrator account.IMPORTANT: make sure that latest version of secret uri and password are the same."
+            }
+        },
+        "vmAdministratorAccountPasswordSecretUri": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "The password secret uri without version that corresponds to the existing domain username. IMPORTANT: make sure that vault resource id and secret uri are pointing to the same vault"
+            }
+        },
+        "availabilityZones": {
+            "defaultValue": [],
+            "type": "Array",
+            "metadata": {
+                "description": "The availability zones to equally distribute VMs amongst"
+            }
+        },
+        "vmResourceGroup": {
+            "type": "String",
+            "metadata": {
+                "description": "The resource group of the session host VMs."
+            }
+        },
+        "vmLocation": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The location of the session host VMs."
+            }
+        },
+        "vmExtendedLocation": {
+            "defaultValue": {},
+            "type": "Object",
+            "metadata": {
+                "description": "The EdgeZone extended location of the session host VMs."
+            }
+        },
+        "vmSize": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The size of the session host VMs."
+            }
+        },
+        "vmKind": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The virtual machine type, normal vm is default empty, Hybrid vm will have value like HCI/Vmware/SCVMM..."
+            }
+        },
+        "vmDiskSizeGB": {
+            "defaultValue": 0,
+            "type": "Int",
+            "metadata": {
+                "description": "The size of the session host VMs in GB. If the value of this parameter is 0, the disk will be created with the default size set in the image."
+            }
+        },
+        "vmHibernate": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "Whether the VMs created will be hibernate enabled"
+            }
+        },
+        "vmNumberOfInstances": {
+            "defaultValue": 0,
+            "type": "Int",
+            "metadata": {
+                "description": "Number of session hosts that will be created and added to the hostpool."
+            }
+        },
+        "vmNamePrefix": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "This prefix will be used in combination with the VM number to create the VM name. If using 'rdsh' as the prefix, VMs would be named 'rdsh-0', 'rdsh-1', etc. You should use a unique prefix to reduce name collisions in Active Directory."
+            }
+        },
+        "vmImageType": {
+            "defaultValue": "Gallery",
+            "allowedValues": [
+                "CustomImage",
+                "Gallery"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Select the image source for the session host vms. VMs from a Gallery image will be created with Managed Disks."
+            }
+        },
+        "vmGalleryImageOffer": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "(Required when vmImageType = Gallery) Gallery image Offer."
+            }
+        },
+        "vmGalleryImagePublisher": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "(Required when vmImageType = Gallery) Gallery image Publisher."
+            }
+        },
+        "vmGalleryImageHasPlan": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "Whether the VM has plan or not"
+            }
+        },
+        "vmGalleryImageSKU": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "(Required when vmImageType = Gallery) Gallery image SKU."
+            }
+        },
+        "vmGalleryImageVersion": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "(Required when vmImageType = Gallery) Gallery image version."
+            }
+        },
+        "vmCustomImageSourceId": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "(Required when vmImageType = CustomImage) Resource ID of the image"
+            }
+        },
+        "vmDiskType": {
+            "defaultValue": "StandardSSD_LRS",
+            "allowedValues": [
+                "Premium_LRS",
+                "StandardSSD_LRS",
+                "Standard_LRS"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "The VM disk type for the VM: HDD or SSD."
+            }
+        },
+        "enableEOSDPublicAPIVersion": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "Whether to enable public API version for EOSD support"
+            }
+        },
+        "eosdEnabled": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "Whether to enable EOSD."
+            }
+        },
+        "eosdType": {
+            "defaultValue": "",
+            "allowedValues": [
+                "",
+                "CacheDisk",
+                "TempDisk"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "The EOSD type for the VM: CacheDisk or TempDisk."
+            }
+        },
+        "existingVnetName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The name of the virtual network the VMs will be connected to."
+            }
+        },
+        "existingSubnetName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The subnet the VMs will be placed in."
+            }
+        },
+        "virtualNetworkResourceGroupName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The resource group containing the existing virtual network."
+            }
+        },
+        "createNetworkSecurityGroup": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "Whether to create a new network security group or use an existing one"
+            }
+        },
+        "networkSecurityGroupId": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The resource id of an existing network security group"
+            }
+        },
+        "networkSecurityGroupRules": {
+            "defaultValue": [],
+            "type": "Array",
+            "metadata": {
+                "description": "The rules to be given to the new network security group"
+            }
+        },
+        "hostpoolType": {
+            "allowedValues": [
+                "Personal",
+                "Pooled"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Set this parameter to Personal if you would like to enable Persistent Desktop experience. Defaults to false."
+            }
+        },
+        "loadBalancerBackendPoolId": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "LoadBalancer backend pool id"
+            }
+        },
+        "personalDesktopAssignmentType": {
+            "defaultValue": "",
+            "allowedValues": [
+                "Automatic",
+                "Direct",
+                ""
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Set the type of assignment for a Personal hostpool type"
+            }
+        },
+        "maxSessionLimit": {
+            "defaultValue": 99999,
+            "type": "Int",
+            "metadata": {
+                "description": "Maximum number of sessions."
+            }
+        },
+        "loadBalancerType": {
+            "defaultValue": "BreadthFirst",
+            "allowedValues": [
+                "BreadthFirst",
+                "DepthFirst",
+                "Persistent"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Type of load balancer algorithm."
+            }
+        },
+        "customRdpProperty": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Hostpool rdp properties"
+            }
+        },
+        "vmTemplate": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The necessary information for adding more VMs to this Hostpool"
+            }
+        },
+        "virtualMachineTags": {
+            "defaultValue": {},
+            "type": "Object",
+            "metadata": {
+                "description": "The tags to be assigned to the virtual machines"
+            }
+        },
+        "apiVersion": {
+            "defaultValue": "2019-12-10-preview",
+            "type": "String",
+            "metadata": {
+                "description": "AVD api version"
+            }
+        },
+        "deploymentId": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "GUID for the deployment"
+            }
+        },
+        "validationEnvironment": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "Whether to use validation enviroment."
+            }
+        },
+        "preferredAppGroupType": {
+            "defaultValue": "Desktop",
+            "type": "String",
+            "metadata": {
+                "description": "Preferred App Group type to display"
+            }
+        },
+        "ouPath": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "OUPath for the domain join"
+            }
+        },
+        "domain": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Domain to join"
+            }
+        },
+        "aadJoin": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "IMPORTANT: You can use this parameter for the test purpose only as AAD Join is public preview. True if AAD Join, false if AD join"
+            }
+        },
+        "intune": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "IMPORTANT: Please don't use this parameter as intune enrollment is not supported yet. True if intune enrollment is selected.  False otherwise"
+            }
+        },
+        "bootDiagnostics": {
+            "defaultValue": {
+                "enabled": false
+            },
+            "type": "Object",
+            "metadata": {
+                "description": "Boot diagnostics object taken as body of Diagnostics Profile in VM creation"
+            }
+        },
+        "userAssignedIdentity": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The name of user assigned identity that will assigned to the VMs. This is an optional parameter."
+            }
+        },
+        "customConfigurationScriptUrl": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "PowerShell script URL to be run after the Virtual Machines are created."
+            }
+        },
+        "systemData": {
+            "defaultValue": {},
+            "type": "Object",
+            "metadata": {
+                "description": "System data is used for internal purposes, such as support preview features."
+            }
+        },
+        "securityType": {
+            "defaultValue": "Standard",
+            "allowedValues": [
+                "Standard",
+                "TrustedLaunch",
+                "ConfidentialVM"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Specifies the SecurityType of the virtual machine. It is set as TrustedLaunch to enable UefiSettings. Default: UefiSettings will not be enabled unless this property is set as TrustedLaunch."
+            }
+        },
+        "secureBoot": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "Specifies whether secure boot should be enabled on the virtual machine."
+            }
+        },
+        "vTPM": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "Specifies whether vTPM (Virtual Trusted Platform Module) should be enabled on the virtual machine."
+            }
+        },
+        "publicNetworkAccess": {
+            "defaultValue": "Enabled",
+            "allowedValues": [
+                "Disabled",
+                "Enabled",
+                "EnabledForSessionHostsOnly",
+                "EnabledForClientsOnly"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Specifies which network routes are permitted for end users connecting to resources for this host pool and session hosts."
+            }
+        },
+        "defaultTimestamp": {
+            "defaultValue": "[utcNow('yyyy-MM-ddTHH:mm')]",
+            "type": "String",
+            "metadata": {
+                "description": "Timestamp used on Session Host Management creation"
+            }
+        },
+        "defaultTimeZone": {
+            "defaultValue": "UTC",
+            "type": "String",
+            "metadata": {
+                "description": "Default timezone used in Session Host Management creation"
+            }
+        },
+        "identityType": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Value is SystemAssigned, UserAssigned, or None"
+            }
+        },
+        "userAssignedIdentityResourceId": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "(Required when identityType = UserAssigned) Resource ID of user assigned identity that will assigned to the host pool."
+            }
+        },
+        "enableSessionHostProvisioning": {
+            "defaultValue": false,
+            "type": "Bool",
+            "metadata": {
+                "description": "enable session host provisioning feature or not"
+            }
+        }
+    },
+    "variables": {
+        "emptyArray": [],
+        "desktopVirtualizationVirtualMachineContributor": "a959dbd1-f747-45e3-8ba6-dd80f235f97c",
+        "virtualMachineContributor": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c",
+        "keyVaultSecretsUser": "4633458b-17de-408a-b874-0445c86b69e6",
+        "eosdApiVersion": "[if(parameters('enableEOSDPublicAPIVersion'), '2025-04-01-preview', '2024-07-15-privatepreview')]",
+        "autoAssignRoles": "[or(equals(parameters('identityType'), 'SystemAssigned'), and(equals(parameters('identityType'), 'UserAssigned'), not(empty(parameters('userAssignedIdentityResourceId'))), parameters('userAssignedIdentityAutoAssignRoles')))]",
+        "createVMs": "[greater(parameters('vmNumberOfInstances'),0)]",
+        "rdshPrefix": "[concat(parameters('vmNamePrefix'),'-')]",
+        "vnet-id": "[resourceId(parameters('virtualNetworkResourceGroupName'),'Microsoft.Network/virtualNetworks',parameters('existingVnetName'))]",
+        "subnet-id": "[resourceId(parameters('virtualNetworkResourceGroupName'),'Microsoft.Network/virtualNetworks/subnets',parameters('existingVnetName'), parameters('existingSubnetName'))]",
+        "nsg-id": "[if(parameters('createNetworkSecurityGroup'), resourceId('Microsoft.Network/networkSecurityGroups', variables('newNetworkSecurityGroupName')), if(empty(parameters('networkSecurityGroupId')), null(), parameters('networkSecurityGroupId')))]",
+        "hostpoolName": "[replace(parameters('hostpoolName'),'\"','')]",
+        "vmTemplateName": "[concat('managedDisks-', toLower(replace(parameters('vmImageType'),' ', '')), 'vm')]",
+        "vmTemplateUri": "[concat(parameters('nestedTemplatesLocation'), variables('vmTemplateName'),'.json')]",
+        "rdshVmNamesOutput": {
+            "copy": [
+                {
+                    "name": "rdshVmNamesCopy",
+                    "count": "[if(variables('createVMs'), parameters('vmNumberOfInstances'), 1)]",
+                    "input": {
+                        "name": "[concat(variables('rdshPrefix'),copyIndex('rdshVmNamesCopy'))]"
+                    }
+                }
+            ]
+        },
+        "appGroupName": "[concat(variables('hostpoolName'),'-DAG')]",
+        "appGroupResourceId": "[createArray(resourceId('Microsoft.DesktopVirtualization/applicationgroups/', variables('appGroupName')))]",
+        "workspaceResourceGroup": "[if(empty(parameters('workspaceResourceGroup')), resourceGroup().name, parameters('workspaceResourceGroup'))]",
+        "vmCustomImageResourceGroup": "[if(empty(parameters('vmCustomImageSourceId')), resourceGroup().name, split(parameters('vmCustomImageSourceId'), '/')[4])]",
+        "nsgResourceGroup": "[if(empty(variables('nsg-id')), resourceGroup().name, split(variables('nsg-id'), '/')[4])]",
+        "applicationGroupReferencesArr": "[if(equals('',parameters('allApplicationGroupReferences')), variables('appGroupResourceId'), concat(split(parameters('allApplicationGroupReferences'),','), variables('appGroupResourceId')))]",
+        "hostpoolProps": {
+            "friendlyName": "[parameters('hostpoolFriendlyName')]",
+            "description": "[parameters('hostpoolDescription')]",
+            "hostpoolType": "[parameters('hostpoolType')]",
+            "personalDesktopAssignmentType": "[parameters('personalDesktopAssignmentType')]",
+            "maxSessionLimit": "[parameters('maxSessionLimit')]",
+            "loadBalancerType": "[parameters('loadBalancerType')]",
+            "validationEnvironment": "[parameters('validationEnvironment')]",
+            "preferredAppGroupType": "[parameters('preferredAppGroupType')]",
+            "ring": null,
+            "vmTemplate": "[parameters('vmTemplate')]",
+            "customRdpProperty": "[if(empty(parameters('customRdpProperty')), null(), parameters('customRdpProperty'))]",
+            "managementType": "Automated",
+            "publicNetworkAccess": "[parameters('publicNetworkAccess')]"
+        },
+        "workspacePublicNetworkAccess": "[if(equals(parameters('publicNetworkAccess'), 'EnabledForClientsOnly'), 'Enabled', parameters('publicNetworkAccess'))]",
+        "newNetworkSecurityGroupName": "[concat(variables('rdshPrefix'), 'nsg-', parameters('deploymentId'))]",
+        "sessionHostConfigurationImageMarketplaceInfoProps": {
+            "publisher": "[parameters('vmGalleryImagePublisher')]",
+            "offer": "[parameters('vmGalleryImageOffer')]",
+            "sku": "[parameters('vmGalleryImageSKU')]",
+            "exactVersion": "[parameters('vmGalleryImageVersion')]"
+        },
+        "sessionHostConfigurationImageCustomInfoProps": {
+            "resourceId": "[parameters('vmCustomImageSourceId')]"
+        },
+        "sessionHostConfigurationDomainAzureActiveDirectoryInfoProps": {
+            "mdmProviderGuid": "[if(parameters('intune'), '0000000a-0000-0000-c000-000000000000', null())]"
+        },
+        "vmAdministratorAccountUsernameSecretName": "[split(parameters('vmAdministratorAccountUsernameSecretUri'), '/secrets/')[1]]",
+        "vmAdministratorAccountPasswordSecretName": "[split(parameters('vmAdministratorAccountPasswordSecretUri'), '/secrets/')[1]]",
+        "adDomainJoinUsernameSecretName": "[if(not(parameters('aadJoin')), split(parameters('administratorAccountUsernameSecretUri'), '/secrets/')[1], variables('vmAdministratorAccountUsernameSecretName'))]",
+        "adDomainJoinPasswordSecretName": "[if(not(parameters('aadJoin')), split(parameters('administratorAccountPasswordSecretUri'), '/secrets/')[1], variables('vmAdministratorAccountPasswordSecretName'))]",
+        "adDomainJoinUsernameVaultResourceId": "[if(not(parameters('aadJoin')), parameters('administratorAccountUsernameVaultResourceId'), parameters('vmAdministratorAccountUsernameVaultResourceId'))]",
+        "adDomainJoinPasswordVaultResourceId": "[if(not(parameters('aadJoin')), parameters('administratorAccountPasswordVaultResourceId'), parameters('vmAdministratorAccountPasswordVaultResourceId'))]",
+        "sendLogsToStorageAccount": "[not(empty(parameters('hostpoolDiagnosticSettingsStorageAccount')))]",
+        "sendLogsToLogAnalytics": "[not(empty(parameters('hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId')))]",
+        "sendLogsToEventHub": "[not(empty(parameters('hostpoolDiagnosticSettingsEventHubName')))]",
+        "storageAccountIdProperty": "[if(variables('sendLogsToStorageAccount'), parameters('hostpoolDiagnosticSettingsStorageAccount'), null())]",
+        "copy": [
+            {
+                "name": "hostpoolDiagnosticSettingsLogProperties",
+                "count": "[length(parameters('hostpoolDiagnosticSettingsLogCategories'))]",
+                "input": {
+                    "category": "[parameters('hostpoolDiagnosticSettingsLogCategories')[copyIndex('hostpoolDiagnosticSettingsLogProperties')]]",
+                    "enabled": true,
+                    "retentionPolicy": {
+                        "enabled": false,
+                        "days": 0
+                    }
+                }
+            },
+            {
+                "name": "appGroupDiagnosticSettingsLogProperties",
+                "count": "[length(parameters('appGroupDiagnosticSettingsLogCategories'))]",
+                "input": {
+                    "category": "[parameters('appGroupDiagnosticSettingsLogCategories')[copyIndex('appGroupDiagnosticSettingsLogProperties')]]",
+                    "enabled": true,
+                    "retentionPolicy": {
+                        "enabled": false,
+                        "days": 0
+                    }
+                }
+            },
+            {
+                "name": "workspaceDiagnosticSettingsLogProperties",
+                "count": "[length(parameters('workspaceDiagnosticSettingsLogCategories'))]",
+                "input": {
+                    "category": "[parameters('workspaceDiagnosticSettingsLogCategories')[copyIndex('workspaceDiagnosticSettingsLogProperties')]]",
+                    "enabled": true,
+                    "retentionPolicy": {
+                        "enabled": false,
+                        "days": 0
+                    }
+                }
+            }
+        ]
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-10-01",
+            "name": "[concat('KeyVaultSecretRetrieval-', parameters('deploymentId'))]",
+            "properties": {
+                "mode": "Incremental",
+                "expressionEvaluationOptions": {
+                    "scope": "inner"
+                },
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "administratorAccountUsernameValue": {
+                            "type": "secureString"
+                        },
+                        "administratorAccountUsernameSecretUri": {
+                            "type": "secureString"
+                        },
+                        "administratorAccountPasswordSecretUri": {
+                            "type": "secureString"
+                        },
+                        "domain": {
+                            "type": "string"
+                        },
+                        "ouPath": {
+                            "type": "string"
+                        }
+                    },
+                    "variables": {
+                        "domain": "[if(equals(parameters('domain'), ''), last(split(parameters('administratorAccountUsernameValue'), '@')), parameters('domain'))]",
+                        "sessionHostConfigurationDomainActiveDirectoryInfoProps": {
+                            "domainName": "[variables('domain')]",
+                            "ouPath": "[parameters('ouPath')]",
+                            "domainCredentials": {
+                                "usernameKeyVaultSecretUri": "[parameters('administratorAccountUsernameSecretUri')]",
+                                "passwordKeyVaultSecretUri": "[parameters('administratorAccountPasswordSecretUri')]"
+                            }
+                        }
+                    },
+                    "resources": [],
+                    "outputs": {
+                        "domain": {
+                            "type": "string",
+                            "value": "[variables('domain')]"
+                        },
+                        "sessionHostConfigurationDomainActiveDirectoryInfoProps": {
+                            "type": "object",
+                            "value": "[variables('sessionHostConfigurationDomainActiveDirectoryInfoProps')]"
+                        }
+                    }
+                },
+                "parameters": {
+                    "administratorAccountUsernameValue": {
+                        "reference": {
+                            "keyVault": {
+                                "id": "[variables('adDomainJoinUsernameVaultResourceId')]"
+                            },
+                            "secretName": "[variables('adDomainJoinUsernameSecretName')]"
+                        }
+                    },
+                    "administratorAccountUsernameSecretUri": {
+                        "value": "[parameters('administratorAccountUsernameSecretUri')]"
+                    },
+                    "administratorAccountPasswordSecretUri": {
+                        "value": "[parameters('administratorAccountPasswordSecretUri')]"
+                    },
+                    "domain": {
+                        "value": "[parameters('domain')]"
+                    },
+                    "ouPath": {
+                        "value": "[parameters('ouPath')]"
+                    }
+                }
+            },
+            "condition": "[not(parameters('aadJoin'))]"
+        },
+        {
+            "type": "Microsoft.DesktopVirtualization/hostpools",
+            "apiVersion": "[parameters('apiVersion')]",
+            "name": "[parameters('hostpoolName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[concat('KeyVaultSecretRetrieval-', parameters('deploymentId'))]"
+            ],
+            "identity": "[if(empty(parameters('identityType')), json('null'), json(concat('{\"type\": \"', parameters('identityType'), '\"', if(equals(parameters('identityType'), 'UserAssigned'), concat(', \"userAssignedIdentities\": {\"', parameters('userAssignedIdentityResourceId'), '\": {}}'), ''), '}')))]",
+            "properties": "[variables('hostpoolProps')]",
+            "resources": [
+                {
+                    "type": "Microsoft.Resources/deployments",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat('AssignRole-HostPool-', parameters('deploymentId'))]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+                    ],
+                    "properties": {
+                        "mode": "Incremental",
+                        "template": {
+                            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                            "contentVersion": "1.0.0.0",
+                            "resources": [
+                                {
+                                    "type": "Microsoft.Authorization/roleAssignments",
+                                    "scope": "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]",
+                                    "apiVersion": "2022-04-01",
+                                    "name": "[guid(concat(if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, parameters('deploymentId')), variables('desktopVirtualizationVirtualMachineContributor'), parameters('hostpoolName')))]",
+                                    "properties": {
+                                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('desktopVirtualizationVirtualMachineContributor'))]",
+                                        "principalId": "[if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, if(equals(parameters('identityType'), 'SystemAssigned'), reference(concat('Microsoft.DesktopVirtualization/hostpools/', variables('hostpoolName')), '2024-11-01-preview', 'Full').identity.principalId, ''))]",
+                                        "principalType": "ServicePrincipal"
+                                    },
+                                    "condition": "[and(not(empty(parameters('identityType'))), not(equals(parameters('identityType'), 'None')), not(empty(parameters('hostpoolName'))))]"
+                                }
+                            ]
+                        }
+                    },
+                    "metadata": {
+                        "description": "Assigns the Desktop Virtualization Virtual Machine Contributor role to the managed identity of the host pool for the host pool."
+                    },
+                    "condition": "[variables('autoAssignRoles')]"
+                },
+                {
+                    "type": "Microsoft.Resources/deployments",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat('AssignRole-SessionHost-', parameters('deploymentId'))]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+                    ],
+                    "properties": {
+                        "mode": "Incremental",
+                        "template": {
+                            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                            "contentVersion": "1.0.0.0",
+                            "resources": [
+                                {
+                                    "type": "Microsoft.Authorization/roleAssignments",
+                                    "apiVersion": "2022-04-01",
+                                    "name": "[guid(concat(if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, parameters('deploymentId')), variables('desktopVirtualizationVirtualMachineContributor'), parameters('vmResourceGroup')))]",
+                                    "properties": {
+                                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('desktopVirtualizationVirtualMachineContributor'))]",
+                                        "principalId": "[if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, if(equals(parameters('identityType'), 'SystemAssigned'), reference(concat('Microsoft.DesktopVirtualization/hostpools/', variables('hostpoolName')), '2024-11-01-preview', 'Full').identity.principalId, ''))]",
+                                        "principalType": "ServicePrincipal"
+                                    },
+                                    "condition": "[and(not(empty(parameters('identityType'))), not(equals(parameters('identityType'), 'None')), not(empty(parameters('vmResourceGroup'))))]"
+                                }
+                            ]
+                        }
+                    },
+                    "metadata": {
+                        "description": "Assigns the Desktop Virtualization Virtual Machine Contributor role to the managed identity of the host pool for the session host VMs."
+                    },
+                    "resourceGroup": "[parameters('vmResourceGroup')]",
+                    "condition": "[variables('autoAssignRoles')]"
+                },
+                {
+                    "type": "Microsoft.Resources/deployments",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat('AssignRole-CustomImage-', parameters('deploymentId'))]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+                    ],
+                    "properties": {
+                        "mode": "Incremental",
+                        "template": {
+                            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                            "contentVersion": "1.0.0.0",
+                            "resources": [
+                                {
+                                    "type": "Microsoft.Authorization/roleAssignments",
+                                    "apiVersion": "2022-04-01",
+                                    "name": "[guid(concat(if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, parameters('deploymentId')), variables('desktopVirtualizationVirtualMachineContributor'), variables('vmCustomImageResourceGroup')))]",
+                                    "properties": {
+                                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('desktopVirtualizationVirtualMachineContributor'))]",
+                                        "principalId": "[if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, if(equals(parameters('identityType'), 'SystemAssigned'), reference(concat('Microsoft.DesktopVirtualization/hostpools/', variables('hostpoolName')), '2024-11-01-preview', 'Full').identity.principalId, ''))]",
+                                        "principalType": "ServicePrincipal"
+                                    },
+                                    "condition": "[and(not(empty(parameters('identityType'))), not(equals(parameters('identityType'), 'None')), not(empty(parameters('vmCustomImageSourceId'))), not(empty(variables('vmCustomImageResourceGroup'))))]"
+                                }
+                            ]
+                        }
+                    },
+                    "metadata": {
+                        "description": "Assigns the Desktop Virtualization Virtual Machine Contributor role to the managed identity of the host pool for the custom image resource group."
+                    },
+                    "resourceGroup": "[variables('vmCustomImageResourceGroup')]",
+                    "condition": "[variables('autoAssignRoles')]"
+                },
+                {
+                    "type": "Microsoft.Resources/deployments",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat('AssignRole-VNet-', parameters('deploymentId'))]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+                    ],
+                    "properties": {
+                        "mode": "Incremental",
+                        "template": {
+                            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                            "contentVersion": "1.0.0.0",
+                            "resources": [
+                                {
+                                    "type": "Microsoft.Authorization/roleAssignments",
+                                    "scope": "[variables('vnet-id')]",
+                                    "apiVersion": "2022-04-01",
+                                    "name": "[guid(concat(if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, parameters('deploymentId')), variables('desktopVirtualizationVirtualMachineContributor'), variables('vnet-id')))]",
+                                    "properties": {
+                                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('desktopVirtualizationVirtualMachineContributor'))]",
+                                        "principalId": "[if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, if(equals(parameters('identityType'), 'SystemAssigned'), reference(concat('Microsoft.DesktopVirtualization/hostpools/', variables('hostpoolName')), '2024-11-01-preview', 'Full').identity.principalId, ''))]",
+                                        "principalType": "ServicePrincipal"
+                                    },
+                                    "condition": "[and(not(empty(parameters('identityType'))), not(equals(parameters('identityType'), 'None')), not(empty(parameters('virtualNetworkResourceGroupName'))), not(empty(variables('vnet-id'))))]"
+                                },
+                                {
+                                    "type": "Microsoft.Authorization/roleAssignments",
+                                    "scope": "[variables('subnet-id')]",
+                                    "apiVersion": "2022-04-01",
+                                    "name": "[guid(concat(if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, parameters('deploymentId')), variables('desktopVirtualizationVirtualMachineContributor'), variables('subnet-id')))]",
+                                    "properties": {
+                                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('desktopVirtualizationVirtualMachineContributor'))]",
+                                        "principalId": "[if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, if(equals(parameters('identityType'), 'SystemAssigned'), reference(concat('Microsoft.DesktopVirtualization/hostpools/', variables('hostpoolName')), '2024-11-01-preview', 'Full').identity.principalId, ''))]",
+                                        "principalType": "ServicePrincipal"
+                                    },
+                                    "condition": "[and(not(empty(parameters('identityType'))), not(equals(parameters('identityType'), 'None')), not(empty(parameters('virtualNetworkResourceGroupName'))), not(empty(variables('subnet-id'))))]"
+                                }
+                            ]
+                        }
+                    },
+                    "metadata": {
+                        "description": "Assigns the Desktop Virtualization Virtual Machine Contributor role to the managed identity of the host pool for the VNet in SHC."
+                    },
+                    "resourceGroup": "[parameters('virtualNetworkResourceGroupName')]",
+                    "condition": "[variables('autoAssignRoles')]"
+                },
+                {
+                    "type": "Microsoft.Resources/deployments",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat('AssignRole-Nsg-', parameters('deploymentId'))]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+                    ],
+                    "properties": {
+                        "mode": "Incremental",
+                        "template": {
+                            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                            "contentVersion": "1.0.0.0",
+                            "resources": [
+                                {
+                                    "type": "Microsoft.Authorization/roleAssignments",
+                                    "scope": "[variables('nsg-id')]",
+                                    "apiVersion": "2022-04-01",
+                                    "name": "[guid(concat(if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, parameters('deploymentId')), variables('desktopVirtualizationVirtualMachineContributor'), if(equals(variables('nsg-id'), null()), '', variables('nsg-id'))))]",
+                                    "properties": {
+                                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('desktopVirtualizationVirtualMachineContributor'))]",
+                                        "principalId": "[if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, if(equals(parameters('identityType'), 'SystemAssigned'), reference(concat('Microsoft.DesktopVirtualization/hostpools/', variables('hostpoolName')), '2024-11-01-preview', 'Full').identity.principalId, ''))]",
+                                        "principalType": "ServicePrincipal"
+                                    },
+                                    "condition": "[and(not(empty(parameters('identityType'))), not(equals(parameters('identityType'), 'None')), not(empty(variables('nsgResourceGroup'))), not(empty(variables('nsg-id'))))]"
+                                },
+                                {
+                                    "type": "Microsoft.Authorization/roleAssignments",
+                                    "scope": "[variables('nsg-id')]",
+                                    "apiVersion": "2022-04-01",
+                                    "name": "[guid(concat(if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, parameters('deploymentId')), variables('virtualMachineContributor'), if(equals(variables('nsg-id'), null()), '', variables('nsg-id'))))]",
+                                    "properties": {
+                                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('virtualMachineContributor'))]",
+                                        "principalId": "[if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, if(equals(parameters('identityType'), 'SystemAssigned'), reference(concat('Microsoft.DesktopVirtualization/hostpools/', variables('hostpoolName')), '2024-11-01-preview', 'Full').identity.principalId, ''))]",
+                                        "principalType": "ServicePrincipal"
+                                    },
+                                    "condition": "[and(not(empty(parameters('identityType'))), not(equals(parameters('identityType'), 'None')), not(empty(variables('nsgResourceGroup'))), not(empty(variables('nsg-id'))))]"
+                                }
+                            ]
+                        }
+                    },
+                    "metadata": {
+                        "description": "Assigns the Desktop Virtualization Virtual Machine Contributor role to the managed identity of the host pool for the NSG in SHC."
+                    },
+                    "resourceGroup": "[variables('nsgResourceGroup')]",
+                    "condition": "[variables('autoAssignRoles')]"
+                },
+                {
+                    "type": "Microsoft.Resources/deployments",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat('AssignRole-AdminUserKV-', parameters('deploymentId'))]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+                    ],
+                    "properties": {
+                        "mode": "Incremental",
+                        "template": {
+                            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                            "contentVersion": "1.0.0.0",
+                            "resources": [
+                                {
+                                    "type": "Microsoft.Authorization/roleAssignments",
+                                    "scope": "[parameters('administratorAccountUsernameVaultResourceId')]",
+                                    "apiVersion": "2022-04-01",
+                                    "name": "[guid(concat(if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, parameters('deploymentId')), variables('keyVaultSecretsUser'), parameters('administratorAccountUsernameVaultResourceId')))]",
+                                    "properties": {
+                                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUser'))]",
+                                        "principalId": "[if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, if(equals(parameters('identityType'), 'SystemAssigned'), reference(concat('Microsoft.DesktopVirtualization/hostpools/', variables('hostpoolName')), '2024-11-01-preview', 'Full').identity.principalId, ''))]",
+                                        "principalType": "ServicePrincipal"
+                                    },
+                                    "condition": "[and(not(empty(parameters('identityType'))), not(equals(parameters('identityType'), 'None')), not(empty(parameters('administratorAccountUsernameVaultResourceId'))))]"
+                                }
+                            ]
+                        }
+                    },
+                    "metadata": {
+                        "description": "Assigns the Key Vault Secrets User role to the managed identity for the admin account key vault in SHC."
+                    },
+                    "resourceGroup": "[if(empty(parameters('administratorAccountUsernameVaultResourceId')), resourceGroup().name, split(parameters('administratorAccountUsernameVaultResourceId'), '/')[4])]",
+                    "condition": "[variables('autoAssignRoles')]"
+                },
+                {
+                    "type": "Microsoft.Resources/deployments",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat('AssignRole-AdminPassKV-', parameters('deploymentId'))]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+                    ],
+                    "properties": {
+                        "mode": "Incremental",
+                        "template": {
+                            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                            "contentVersion": "1.0.0.0",
+                            "resources": [
+                                {
+                                    "type": "Microsoft.Authorization/roleAssignments",
+                                    "scope": "[parameters('administratorAccountPasswordVaultResourceId')]",
+                                    "apiVersion": "2022-04-01",
+                                    "name": "[guid(concat(if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, parameters('deploymentId')), variables('keyVaultSecretsUser'), parameters('administratorAccountPasswordVaultResourceId')))]",
+                                    "properties": {
+                                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUser'))]",
+                                        "principalId": "[if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, if(equals(parameters('identityType'), 'SystemAssigned'), reference(concat('Microsoft.DesktopVirtualization/hostpools/', variables('hostpoolName')), '2024-11-01-preview', 'Full').identity.principalId, ''))]",
+                                        "principalType": "ServicePrincipal"
+                                    },
+                                    "condition": "[and(not(empty(parameters('identityType'))), not(equals(parameters('identityType'), 'None')), not(empty(parameters('administratorAccountPasswordVaultResourceId'))))]"
+                                }
+                            ]
+                        }
+                    },
+                    "metadata": {
+                        "description": "Assigns the Key Vault Secrets User role to the managed identity for the admin account key vault in SHC."
+                    },
+                    "resourceGroup": "[if(empty(parameters('administratorAccountPasswordVaultResourceId')), resourceGroup().name, split(parameters('administratorAccountPasswordVaultResourceId'), '/')[4])]",
+                    "condition": "[variables('autoAssignRoles')]"
+                },
+                {
+                    "type": "Microsoft.Resources/deployments",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat('AssignRole-VMAdminUserKV-', parameters('deploymentId'))]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+                    ],
+                    "properties": {
+                        "mode": "Incremental",
+                        "template": {
+                            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                            "contentVersion": "1.0.0.0",
+                            "resources": [
+                                {
+                                    "type": "Microsoft.Authorization/roleAssignments",
+                                    "scope": "[parameters('vmAdministratorAccountUsernameVaultResourceId')]",
+                                    "apiVersion": "2022-04-01",
+                                    "name": "[guid(concat(if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, parameters('deploymentId')), variables('keyVaultSecretsUser'), parameters('vmAdministratorAccountUsernameVaultResourceId')))]",
+                                    "properties": {
+                                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUser'))]",
+                                        "principalId": "[if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, if(equals(parameters('identityType'), 'SystemAssigned'), reference(concat('Microsoft.DesktopVirtualization/hostpools/', variables('hostpoolName')), '2024-11-01-preview', 'Full').identity.principalId, ''))]",
+                                        "principalType": "ServicePrincipal"
+                                    },
+                                    "condition": "[and(not(empty(parameters('identityType'))), not(equals(parameters('identityType'), 'None')), not(empty(parameters('vmAdministratorAccountUsernameVaultResourceId'))))]"
+                                }
+                            ]
+                        }
+                    },
+                    "metadata": {
+                        "description": "Assigns the Key Vault Secrets User role to the managed identity for the VM admin account key vault in SHC."
+                    },
+                    "resourceGroup": "[if(empty(parameters('vmAdministratorAccountUsernameVaultResourceId')), resourceGroup().name, split(parameters('vmAdministratorAccountUsernameVaultResourceId'), '/')[4])]",
+                    "condition": "[variables('autoAssignRoles')]"
+                },
+                {
+                    "type": "Microsoft.Resources/deployments",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat('AssignRole-VMAdminPassKV-', parameters('deploymentId'))]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+                    ],
+                    "properties": {
+                        "mode": "Incremental",
+                        "template": {
+                            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                            "contentVersion": "1.0.0.0",
+                            "resources": [
+                                {
+                                    "type": "Microsoft.Authorization/roleAssignments",
+                                    "scope": "[parameters('vmAdministratorAccountPasswordVaultResourceId')]",
+                                    "apiVersion": "2022-04-01",
+                                    "name": "[guid(concat(if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, parameters('deploymentId')), variables('keyVaultSecretsUser'), parameters('vmAdministratorAccountPasswordVaultResourceId')))]",
+                                    "properties": {
+                                        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUser'))]",
+                                        "principalId": "[if(equals(parameters('identityType'), 'UserAssigned'), reference(parameters('userAssignedIdentityResourceId'), '2024-11-30').principalId, if(equals(parameters('identityType'), 'SystemAssigned'), reference(concat('Microsoft.DesktopVirtualization/hostpools/', variables('hostpoolName')), '2024-11-01-preview', 'Full').identity.principalId, ''))]",
+                                        "principalType": "ServicePrincipal"
+                                    },
+                                    "condition": "[and(not(empty(parameters('identityType'))), not(equals(parameters('identityType'), 'None')), not(empty(parameters('vmAdministratorAccountPasswordVaultResourceId'))))]"
+                                }
+                            ]
+                        }
+                    },
+                    "metadata": {
+                        "description": "Assigns the Key Vault Secrets User role to the managed identity for the VM admin account key vault in SHC."
+                    },
+                    "resourceGroup": "[if(empty(parameters('vmAdministratorAccountPasswordVaultResourceId')), resourceGroup().name, split(parameters('vmAdministratorAccountPasswordVaultResourceId'), '/')[4])]",
+                    "condition": "[variables('autoAssignRoles')]"
+                },
+                {
+                    "type": "sessionHostConfigurations",
+                    "apiVersion": "[variables('eosdApiVersion')]",
+                    "name": "default",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-HostPool-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-SessionHost-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-CustomImage-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-VNet-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-Nsg-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-AdminUserKV-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-AdminPassKV-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-VMAdminUserKV-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-VMAdminPassKV-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]"
+                    ],
+                    "properties": {
+                        "vmResourceGroup": "[parameters('vmResourceGroup')]",
+                        "vmSizeId": "[parameters('vmSize')]",
+                        "diskInfo": {
+                            "diffDiskSettings": {
+                                "option": "Local",
+                                "placement": "[parameters('eosdType')]"
+                            }
+                        },
+                        "customConfigurationScriptUrl": "[if(empty(parameters('customConfigurationScriptUrl')), null(), parameters('customConfigurationScriptUrl'))]",
+                        "imageInfo": {
+                            "type": "[if(equals(parameters('vmImageType'), 'Gallery'), 'Marketplace', 'Custom')]",
+                            "marketPlaceInfo": "[if(equals(parameters('vmImageType'), 'Gallery'), variables('sessionHostConfigurationImageMarketplaceInfoProps'), null())]",
+                            "customInfo": "[if(equals(parameters('vmImageType'), 'CustomImage'), variables('sessionHostConfigurationImageCustomInfoProps'), null())]"
+                        },
+                        "domainInfo": {
+                            "joinType": "[if(parameters('aadJoin'), 'AzureActiveDirectory', 'ActiveDirectory')]",
+                            "activeDirectoryInfo": "[if(not(parameters('aadJoin')), reference(concat('KeyVaultSecretRetrieval-', parameters('deploymentId'))).outputs.sessionHostConfigurationDomainActiveDirectoryInfoProps.value, null())]",
+                            "azureActiveDirectoryInfo": "[if(parameters('aadJoin'), variables('sessionHostConfigurationDomainAzureActiveDirectoryInfoProps'), null())]"
+                        },
+                        "vmTags": "[if(empty(parameters('virtualMachineTags')), null(), parameters('virtualMachineTags'))]",
+                        "vmLocation": "[parameters('vmLocation')]",
+                        "vmNamePrefix": "[parameters('vmNamePrefix')]",
+                        "availabilityZones": "[if(empty(parameters('availabilityZones')), null(), parameters('availabilityZones'))]",
+                        "networkInfo": {
+                            "subnetId": "[variables('subnet-id')]",
+                            "securityGroupId": "[variables('nsg-id')]"
+                        },
+                        "securityInfo": {
+                            "type": "[parameters('securityType')]",
+                            "secureBootEnabled": "[parameters('secureBoot')]",
+                            "vTpmEnabled": "[parameters('vTPM')]"
+                        },
+                        "vmAdminCredentials": {
+                            "usernameKeyVaultSecretUri": "[parameters('vmAdministratorAccountUsernameSecretUri')]",
+                            "passwordKeyVaultSecretUri": "[parameters('vmAdministratorAccountPasswordSecretUri')]"
+                        },
+                        "bootDiagnosticsInfo": "[parameters('bootDiagnostics')]"
+                    },
+                    "condition": "[parameters('eosdEnabled')]"
+                },
+                {
+                    "type": "sessionHostConfigurations",
+                    "apiVersion": "[parameters('apiVersion')]",
+                    "name": "default",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-HostPool-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-SessionHost-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-CustomImage-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-VNet-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-Nsg-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-AdminUserKV-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-AdminPassKV-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-VMAdminUserKV-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]",
+                        "[if(variables('autoAssignRoles'), concat('AssignRole-VMAdminPassKV-', parameters('deploymentId')), resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName')))]"
+                    ],
+                    "properties": {
+                        "vmResourceGroup": "[parameters('vmResourceGroup')]",
+                        "vmSizeId": "[parameters('vmSize')]",
+                        "diskInfo": {
+                            "type": "[parameters('vmDiskType')]"
+                        },
+                        "customConfigurationScriptUrl": "[if(empty(parameters('customConfigurationScriptUrl')), null(), parameters('customConfigurationScriptUrl'))]",
+                        "imageInfo": {
+                            "type": "[if(equals(parameters('vmImageType'), 'Gallery'), 'Marketplace', 'Custom')]",
+                            "marketPlaceInfo": "[if(equals(parameters('vmImageType'), 'Gallery'), variables('sessionHostConfigurationImageMarketplaceInfoProps'), null())]",
+                            "customInfo": "[if(equals(parameters('vmImageType'), 'CustomImage'), variables('sessionHostConfigurationImageCustomInfoProps'), null())]"
+                        },
+                        "domainInfo": {
+                            "joinType": "[if(parameters('aadJoin'), 'AzureActiveDirectory', 'ActiveDirectory')]",
+                            "activeDirectoryInfo": "[if(not(parameters('aadJoin')), reference(concat('KeyVaultSecretRetrieval-', parameters('deploymentId'))).outputs.sessionHostConfigurationDomainActiveDirectoryInfoProps.value, null())]",
+                            "azureActiveDirectoryInfo": "[if(parameters('aadJoin'), variables('sessionHostConfigurationDomainAzureActiveDirectoryInfoProps'), null())]"
+                        },
+                        "vmTags": "[if(empty(parameters('virtualMachineTags')), null(), parameters('virtualMachineTags'))]",
+                        "vmLocation": "[parameters('vmLocation')]",
+                        "vmNamePrefix": "[parameters('vmNamePrefix')]",
+                        "availabilityZones": "[if(empty(parameters('availabilityZones')), null(), parameters('availabilityZones'))]",
+                        "networkInfo": {
+                            "subnetId": "[variables('subnet-id')]",
+                            "securityGroupId": "[variables('nsg-id')]"
+                        },
+                        "securityInfo": {
+                            "type": "[parameters('securityType')]",
+                            "secureBootEnabled": "[parameters('secureBoot')]",
+                            "vTpmEnabled": "[parameters('vTPM')]"
+                        },
+                        "vmAdminCredentials": {
+                            "usernameKeyVaultSecretUri": "[parameters('vmAdministratorAccountUsernameSecretUri')]",
+                            "passwordKeyVaultSecretUri": "[parameters('vmAdministratorAccountPasswordSecretUri')]"
+                        },
+                        "bootDiagnosticsInfo": "[parameters('bootDiagnostics')]"
+                    },
+                    "condition": "[not(parameters('eosdEnabled'))]"
+                },
+                {
+                    "type": "sessionHostManagements",
+                    "apiVersion": "[parameters('apiVersion')]",
+                    "name": "default",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+                    ],
+                    "properties": {
+                        "scheduledDateTime": "[parameters('defaultTimestamp')]",
+                        "provisioning": null,
+                        "scheduledDateTimeZone": "[parameters('defaultTimeZone')]",
+                        "update": {
+                            "deleteOriginalVm": false,
+                            "maxVmsRemoved": 1,
+                            "logOffDelayMinutes": 2,
+                            "logOffMessage": "You will be signed out"
+                        }
+                    },
+                    "condition": "[not(parameters('enableSessionHostProvisioning'))]"
+                },
+                {
+                    "type": "sessionHostManagements",
+                    "apiVersion": "[parameters('apiVersion')]",
+                    "name": "default",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]",
+                        "[resourceId('Microsoft.DesktopVirtualization/hostpools/sessionHostConfigurations', parameters('hostpoolName'), 'default')]"
+                    ],
+                    "properties": {
+                        "failedSessionHostCleanupPolicy": "KeepAll",
+                        "provisioning": {
+                            "instanceCount": "[parameters('vmNumberOfInstances')]",
+                            "canaryPolicy": "Auto",
+                            "setDrainMode": false
+                        },
+                        "scheduledDateTime": "[parameters('defaultTimestamp')]",
+                        "scheduledDateTimeZone": "[parameters('defaultTimeZone')]",
+                        "update": {
+                            "deleteOriginalVm": true,
+                            "maxVmsRemoved": 1,
+                            "logOffDelayMinutes": 2,
+                            "logOffMessage": "You will be signed out"
+                        }
+                    },
+                    "condition": "[parameters('enableSessionHostProvisioning')]"
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.DesktopVirtualization/applicationgroups",
+            "apiVersion": "[parameters('apiVersion')]",
+            "name": "[variables('appGroupName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+            ],
+            "properties": {
+                "hostpoolarmpath": "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]",
+                "friendlyName": "Default Desktop",
+                "description": "Desktop Application Group created through the Hostpool Wizard",
+                "applicationGroupType": "Desktop"
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "name": "[concat('Workspace-linkedTemplate-', parameters('deploymentId'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/applicationgroups/', variables('appGroupName'))]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": [
+                        {
+                            "apiVersion": "[parameters('apiVersion')]",
+                            "name": "[parameters('workSpaceName')]",
+                            "type": "Microsoft.DesktopVirtualization/workspaces",
+                            "location": "[parameters('workspaceLocation')]",
+                            "properties": {
+                                "applicationGroupReferences": "[variables('applicationGroupReferencesArr')]",
+                                "publicNetworkAccess": "[if(parameters('isNewWorkspace'), variables('workspacePublicNetworkAccess'), null())]"
+                            }
+                        }
+                    ]
+                }
+            },
+            "resourceGroup": "[variables('workspaceResourceGroup')]",
+            "condition": "[parameters('addToWorkspace')]"
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "name": "[concat('vmCreation-linkedTemplate-', parameters('deploymentId'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/applicationgroups', variables('appGroupName'))]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('vmTemplateUri')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "artifactsLocation": {
+                        "value": "[parameters('artifactsLocation')]"
+                    },
+                    "availabilityZones": {
+                        "value": "[parameters('availabilityZones')]"
+                    },
+                    "vmGalleryImageOffer": {
+                        "value": "[parameters('vmGalleryImageOffer')]"
+                    },
+                    "vmGalleryImagePublisher": {
+                        "value": "[parameters('vmGalleryImagePublisher')]"
+                    },
+                    "vmGalleryImageHasPlan": {
+                        "value": "[parameters('vmGalleryImageHasPlan')]"
+                    },
+                    "vmGalleryImageSKU": {
+                        "value": "[parameters('vmGalleryImageSKU')]"
+                    },
+                    "vmGalleryImageVersion": {
+                        "value": "[parameters('vmGalleryImageVersion')]"
+                    },
+                    "rdshPrefix": {
+                        "value": "[variables('rdshPrefix')]"
+                    },
+                    "rdshNumberOfInstances": {
+                        "value": "[parameters('vmNumberOfInstances')]"
+                    },
+                    "rdshVMDiskType": {
+                        "value": "[if(parameters('eosdEnabled'), replace(parameters('eosdType'),'TempDisk','ResourceDisk'), parameters('vmDiskType'))]"
+                    },
+                    "rdshVmSize": {
+                        "value": "[parameters('vmSize')]"
+                    },
+                    "rdshVmDiskSizeGB": {
+                        "value": "[parameters('vmDiskSizeGB')]"
+                    },
+                    "rdshHibernate": {
+                        "value": "[parameters('vmHibernate')]"
+                    },
+                    "enableAcceleratedNetworking": {
+                        "value": false
+                    },
+                    "vmAdministratorAccountUsername": {
+                        "reference": {
+                            "keyVault": {
+                                "id": "[parameters('vmAdministratorAccountUsernameVaultResourceId')]"
+                            },
+                            "secretName": "[variables('vmAdministratorAccountUsernameSecretName')]"
+                        }
+                    },
+                    "vmAdministratorAccountPassword": {
+                        "reference": {
+                            "keyVault": {
+                                "id": "[parameters('vmAdministratorAccountPasswordVaultResourceId')]"
+                            },
+                            "secretName": "[variables('vmAdministratorAccountPasswordSecretName')]"
+                        }
+                    },
+                    "administratorAccountUsername": {
+                        "reference": {
+                            "keyVault": {
+                                "id": "[variables('adDomainJoinUsernameVaultResourceId')]"
+                            },
+                            "secretName": "[variables('adDomainJoinUsernameSecretName')]"
+                        }
+                    },
+                    "administratorAccountPassword": {
+                        "reference": {
+                            "keyVault": {
+                                "id": "[variables('adDomainJoinPasswordVaultResourceId')]"
+                            },
+                            "secretName": "[variables('adDomainJoinPasswordSecretName')]"
+                        }
+                    },
+                    "subnet-id": {
+                        "value": "[variables('subnet-id')]"
+                    },
+                    "loadBalancerBackendPoolId": {
+                        "value": "[parameters('loadBalancerBackendPoolId')]"
+                    },
+                    "rdshImageSourceId": {
+                        "value": "[parameters('vmCustomImageSourceId')]"
+                    },
+                    "location": {
+                        "value": "[parameters('vmLocation')]"
+                    },
+                    "extendedLocation": {
+                        "value": "[parameters('vmExtendedLocation')]"
+                    },
+                    "createNetworkSecurityGroup": {
+                        "value": "[parameters('createNetworkSecurityGroup')]"
+                    },
+                    "networkSecurityGroupId": {
+                        "value": "[parameters('networkSecurityGroupId')]"
+                    },
+                    "newNetworkSecurityGroupName": {
+                        "value": "[variables('newNetworkSecurityGroupName')]"
+                    },
+                    "networkSecurityGroupRules": {
+                        "value": "[parameters('networkSecurityGroupRules')]"
+                    },
+                    "virtualMachineTags": {
+                        "value": "[parameters('virtualMachineTags')]"
+                    },
+                    "hostpoolToken": {
+                        "value": "[parameters('hostpoolToken')]"
+                    },
+                    "hostpoolName": {
+                        "value": "[parameters('hostpoolName')]"
+                    },
+                    "domain": {
+                        "value": "[if(parameters('aadJoin'), parameters('domain'), reference(concat('KeyVaultSecretRetrieval-', parameters('deploymentId'))).outputs.domain.value)]"
+                    },
+                    "ouPath": {
+                        "value": "[parameters('ouPath')]"
+                    },
+                    "aadJoin": {
+                        "value": "[parameters('aadJoin')]"
+                    },
+                    "intune": {
+                        "value": "[parameters('intune')]"
+                    },
+                    "bootDiagnostics": {
+                        "value": "[parameters('bootDiagnostics')]"
+                    },
+                    "_guidValue": {
+                        "value": "[parameters('deploymentId')]"
+                    },
+                    "userAssignedIdentity": {
+                        "value": "[parameters('userAssignedIdentity')]"
+                    },
+                    "customConfigurationScriptUrl": {
+                        "value": "[parameters('customConfigurationScriptUrl')]"
+                    },
+                    "SessionHostConfigurationVersion": {
+                        "value": "[reference(resourceId('Microsoft.DesktopVirtualization/hostpools/sessionHostConfigurations', parameters('hostpoolName'), 'default')).version]"
+                    },
+                    "systemData": {
+                        "value": "[parameters('systemData')]"
+                    },
+                    "securityType": {
+                        "value": "[parameters('securityType')]"
+                    },
+                    "secureBoot": {
+                        "value": "[parameters('secureBoot')]"
+                    },
+                    "vTPM": {
+                        "value": "[parameters('vTPM')]"
+                    }
+                }
+            },
+            "resourceGroup": "[parameters('vmResourceGroup')]",
+            "condition": "[and(variables('createVMs'), not(parameters('enableSessionHostProvisioning')))]"
+        },
+        {
+            "type": "Microsoft.DesktopVirtualization/hostpools/providers/diagnosticSettings",
+            "apiVersion": "2017-05-01-preview",
+            "name": "[concat(parameters('hostpoolName'), '/Microsoft.Insights/', 'diagnosticSetting')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+            ],
+            "properties": {
+                "storageAccountId": "[if(variables('sendLogsToStorageAccount'), variables('storageAccountIdProperty'), null())]",
+                "eventHubAuthorizationRuleId": "[if(variables('sendLogsToEventHub'), parameters('hostpoolDiagnosticSettingsEventHubAuthorizationId'), null())]",
+                "eventHubName": "[if(variables('sendLogsToEventHub'), parameters('hostpoolDiagnosticSettingsEventHubName'), null())]",
+                "workspaceId": "[if(variables('sendLogsToLogAnalytics'), parameters('hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId'), null())]",
+                "logs": "[variables('hostpoolDiagnosticSettingsLogProperties')]"
+            },
+            "condition": "[or(variables('sendLogsToEventHub'),variables('sendLogsToLogAnalytics'), variables('sendLogsToStorageAccount'))]"
+        },
+        {
+            "type": "Microsoft.DesktopVirtualization/applicationgroups/providers/diagnosticSettings",
+            "apiVersion": "2017-05-01-preview",
+            "name": "[concat(variables('appGroupName'), '/Microsoft.Insights/', 'diagnosticSetting')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/applicationgroups/', variables('appGroupName'))]"
+            ],
+            "properties": {
+                "storageAccountId": "[if(variables('sendLogsToStorageAccount'), variables('storageAccountIdProperty'), null())]",
+                "eventHubAuthorizationRuleId": "[if(variables('sendLogsToEventHub'), parameters('hostpoolDiagnosticSettingsEventHubAuthorizationId'), null())]",
+                "eventHubName": "[if(variables('sendLogsToEventHub'), parameters('hostpoolDiagnosticSettingsEventHubName'), null())]",
+                "workspaceId": "[if(variables('sendLogsToLogAnalytics'), parameters('hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId'), null())]",
+                "logs": "[variables('appGroupDiagnosticSettingsLogProperties')]"
+            },
+            "condition": "[or(variables('sendLogsToEventHub'),variables('sendLogsToLogAnalytics'), variables('sendLogsToStorageAccount'))]"
+        },
+        {
+            "type": "Microsoft.DesktopVirtualization/workspaces/providers/diagnosticSettings",
+            "apiVersion": "2017-05-01-preview",
+            "name": "[concat(if(parameters('isNewWorkspace'), parameters('workSpaceName'), 'placeholder'), '/Microsoft.Insights/', 'diagnosticSetting')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[concat('Workspace-linkedTemplate-', parameters('deploymentId'))]"
+            ],
+            "properties": {
+                "storageAccountId": "[if(variables('sendLogsToStorageAccount'), variables('storageAccountIdProperty'), null())]",
+                "eventHubAuthorizationRuleId": "[if(variables('sendLogsToEventHub'), parameters('hostpoolDiagnosticSettingsEventHubAuthorizationId'), null())]",
+                "eventHubName": "[if(variables('sendLogsToEventHub'), parameters('hostpoolDiagnosticSettingsEventHubName'), null())]",
+                "workspaceId": "[if(variables('sendLogsToLogAnalytics'), parameters('hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId'), null())]",
+                "logs": "[variables('workspaceDiagnosticSettingsLogProperties')]"
+            },
+            "condition": "[and(parameters('isNewWorkspace'),or(variables('sendLogsToEventHub'),variables('sendLogsToLogAnalytics'), variables('sendLogsToStorageAccount')))]"
+        }
+    ],
+    "outputs": {
+        "rdshVmNamesObject": {
+            "type": "Object",
+            "value": "[variables('rdshVmNamesOutput')]"
+        }
+    }
+}
