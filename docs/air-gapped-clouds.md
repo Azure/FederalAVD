@@ -1,6 +1,6 @@
-↩ **Back to:** [Quick Start](quickStart.md)
+↩ **Back to:** [Quick Start](quick-start.md)
 
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # Air-Gapped Cloud Considerations
 
@@ -54,7 +54,7 @@ The `Update-ImageArtifacts.ps1` script automatically selects the correct downloa
 
 The secret and top secret files are already in the repository. Each entry either has a working air-gapped cloud URL (the script downloads it automatically) or an **empty `DownloadUrl`** (you must place the file manually before running the script).
 
-To add software not in the base file, pass an additional JSON file via `-AdditionalDownloadsFilePath`. See [Update-ImageArtifacts Script Guide](updateImageArtifacts.md) for the file format.
+To add software not in the base file, pass an additional JSON file via `-AdditionalDownloadsFilePath`. See [Update-ImageArtifacts Script Guide](update-image-artifacts.md) for the file format.
 
 ---
 
@@ -111,7 +111,7 @@ cd C:\repos\FederalAVD\deployments
     -SkipDownloadingNewSources
 ```
 
-> The `artifactsStorageAccountResourceId` is an output of the imageManagement deployment. See [Quick Start — Step 2](quickStart.md#step-2-deploy-image-management-resources).
+> The `artifactsStorageAccountResourceId` is an output of the imageManagement deployment. See [Quick Start — Step 2](quick-start.md#step-2-deploy-image-management-resources).
 
 ---
 
@@ -119,4 +119,4 @@ cd C:\repos\FederalAVD\deployments
 
 In air-gapped environments, set `downloadLatestMicrosoftContent = false` (default). The build VM will not have internet access to download software — all content must come from the artifacts storage account pre-populated above.
 
-📖 **Full script reference:** [Update-ImageArtifacts.ps1 Script Guide](updateImageArtifacts.md)
+📖 **Full script reference:** [Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md)

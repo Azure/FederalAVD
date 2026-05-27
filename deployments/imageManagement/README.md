@@ -2,9 +2,9 @@
 
 > **📖 User Guides:**
 >
-> - [Artifacts & Image Management Guide](../../docs/artifactsGuide.md) - Getting started with artifacts
-> - [Image Build Guide](../../docs/imageBuild.md) - Building custom images
-> - [Update-ImageArtifacts Script](../../docs/updateImageArtifacts.md) - Uploading artifacts to storage
+> - [Artifacts & Image Management Guide](../../docs/artifacts-guide.md) - Getting started with artifacts
+> - [Image Build Guide](../../docs/image-build.md) - Building custom images
+> - [Update-ImageArtifacts Script](../../docs/update-image-artifacts.md) - Uploading artifacts to storage
 
 ## Overview
 
@@ -362,7 +362,7 @@ cd deployments
     -StorageAccountResourceId "<artifactsStorageAccountResourceId from deployment output>"
 ```
 
-> See [Update-ImageArtifacts Script](../../docs/updateImageArtifacts.md) for all options and air-gapped usage
+> See [Update-ImageArtifacts Script](../../docs/update-image-artifacts.md) for all options and air-gapped usage
 
 ### 2. Note Output Values
 
@@ -384,7 +384,7 @@ New-AzSubscriptionDeployment `
   -Name "avd-image-build-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
 
-> See [Image Build Guide](../../docs/imageBuild.md) for details
+> See [Image Build Guide](../../docs/image-build.md) for details
 
 ## Examples
 
@@ -561,9 +561,9 @@ All defaults: gallery + artifacts storage account, public endpoint. Suitable for
 
 ## Additional Resources
 
-- 📖 [Artifacts & Image Management Guide](../../docs/artifactsGuide.md) - Comprehensive artifact guide
-- 📖 [Image Build Guide](../../docs/imageBuild.md) - Building custom images
-- 📖 [Update-ImageArtifacts Script](../../docs/updateImageArtifacts.md) - Script documentation
+- 📖 [Artifacts & Image Management Guide](../../docs/artifacts-guide.md) - Comprehensive artifact guide
+- 📖 [Image Build Guide](../../docs/image-build.md) - Building custom images
+- 📖 [Update-ImageArtifacts Script](../../docs/update-image-artifacts.md) - Script documentation
 - 📖 [Deploy-ImageManagement Script](Deploy-ImageManagement.ps1) - Deployment script
 - 🔧 [Azure Compute Gallery Documentation](https://learn.microsoft.com/azure/virtual-machines/azure-compute-gallery)
 - 🔧 [Azure Storage Security](https://learn.microsoft.com/azure/storage/common/storage-security-guide)

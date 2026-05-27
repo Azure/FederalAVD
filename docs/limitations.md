@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # Solution Limitations
 
@@ -73,7 +73,7 @@ When configuring **Entra Kerberos** as the identity solution, the following limi
 
 ## Related Documentation
 
-- [Quick Start Guide - Security Groups](quickStart.md#security-group)
-- [Quick Start Guide - Domain Services](quickStart.md#domain-services)
+- [Quick Start Guide - Security Groups](quick-start.md#security-group)
+- [Quick Start Guide - Domain Services](quick-start.md#domain-services)
 - [Azure Virtual Desktop Identity Options](https://learn.microsoft.com/en-us/azure/virtual-desktop/authentication)
 - [FSLogix Profile Management](https://learn.microsoft.com/en-us/fslogix/overview)

@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical References:**
 > - [Image Management Template Documentation](../deployments/imageManagement/README.md) - Artifacts storage infrastructure
@@ -1226,7 +1226,7 @@ Get-ChildItem .\temp\extracted\ -Recurse
 
 **Image Build:**
 
-If you enabled `collectCustomizationLogs` during deployment, all logs are automatically saved to blob storage in the `image-customization-logs` container. See the [Image Build Guide - Getting Detailed Logs](imageBuild.md#getting-detailed-logs) for details on accessing these logs.
+If you enabled `collectCustomizationLogs` during deployment, all logs are automatically saved to blob storage in the `image-customization-logs` container. See the [Image Build Guide - Getting Detailed Logs](image-build.md#getting-detailed-logs) for details on accessing these logs.
 
 Alternatively, you can check logs directly on the build VM during or after the build:
 
@@ -1265,9 +1265,9 @@ Get-Content "C:\WindowsAzure\Logs\Plugins\Microsoft.CPlat.Core.RunCommandWindows
 If you encounter issues not covered here:
 
 1. **Check existing documentation:**
-   - [Update-ImageArtifacts Script Guide](updateImageArtifacts.md)
+   - [Update-ImageArtifacts Script Guide](update-image-artifacts.md)
    - [Troubleshooting Guide](troubleshooting.md)
-   - [Quick Start Guide](quickStart.md)
+   - [Quick Start Guide](quick-start.md)
 
 2. **Review example artifacts:**
    - `.common/artifacts/VSCode/` - Simple installer example
@@ -1286,10 +1286,10 @@ If you encounter issues not covered here:
 
 ## Related Documentation
 
-- [Update-ImageArtifacts Script Guide](updateImageArtifacts.md) - Detailed script documentation
-- [Quick Start Guide](quickStart.md) - Complete deployment walkthrough
+- [Update-ImageArtifacts Script Guide](update-image-artifacts.md) - Detailed script documentation
+- [Quick Start Guide](quick-start.md) - Complete deployment walkthrough
 - [Parameters Reference](parameters.md) - All deployment parameters
-- [Air-Gapped Cloud Guide](airGappedClouds.md) - Special considerations for air-gapped environments
+- [Air-Gapped Cloud Guide](air-gapped-clouds.md) - Special considerations for air-gapped environments
 
 ---
 

@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # End-to-End Automation Guide
 
@@ -301,9 +301,9 @@ deployments/
 
 ## Related Resources
 
-- [Quick Start Guide](quickStart.md) — Step-by-step walkthrough with portal options
+- [Quick Start Guide](quick-start.md) — Step-by-step walkthrough with portal options
 - [imageManagement README](../deployments/imageManagement/README.md) — Infrastructure parameters
-- [Update-ImageArtifacts Script](updateImageArtifacts.md) — Artifact upload options
-- [Image Build Guide](imageBuild.md) — Image build parameters and monitoring
-- [Host Pool Deployment Guide](hostpoolDeployment.md) — Full host pool parameter reference
-- [Air-Gapped Cloud Guide](airGappedClouds.md) — Secret/Top Secret cloud considerations
+- [Update-ImageArtifacts Script](update-image-artifacts.md) — Artifact upload options
+- [Image Build Guide](image-build.md) — Image build parameters and monitoring
+- [Host Pool Deployment Guide](hostpool-deployment.md) — Full host pool parameter reference
+- [Air-Gapped Cloud Guide](air-gapped-clouds.md) — Secret/Top Secret cloud considerations

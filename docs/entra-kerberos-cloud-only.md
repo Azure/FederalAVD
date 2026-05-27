@@ -1,33 +1,30 @@
-↩ **Back to:** [Host Pool Deployment](hostpoolDeployment.md)
+↩ **Back to:** [Host Pool Deployment](hostpool-deployment.md)
 
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
-# Entra Kerberos for Azure Files (Hybrid)
+# Entra Kerberos for Azure Files (Cloud-Only Identities)
 
 ## Overview
 
-This solution supports **Entra Kerberos** for Azure Files, allowing you to use Azure Active Directory (Entra ID) Kerberos to authenticate hybrid user identities for Azure Files access. This eliminates the need for line-of-sight to on-premises Domain Controllers for the storage account itself.
+This solution supports using **Entra Kerberos** for authentication to Azure Files for cloud-only identities. This allows you to use FSLogix with Azure Files without requiring an on-premises Active Directory or Entra Domain Services.
 
-The session hosts are joined to Entra ID, and user identities are synchronized from the on-premises domain to Entra ID.
+The session hosts are Entra ID joined, and users are cloud-only identities in Entra ID.
 
 For the official Microsoft documentation see [Enable Microsoft Entra Kerberos Authentication for hybrid and cloud-only identities on Azure Files](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune).
 
-> [!IMPORTANT]
-> If you wish to configure least privilege NTFS permissions or shard storage, the session host subnet (to which the deployment VM is attached) must have line-of-sight to a Domain Controller. Additionally, domain join credentials must be provided in order to configure the required NTFS permissions using the user assigned managed identity.
-
 ## Prerequisites
 
-1. **Identity Solution**: `identitySolution` must be set to `'EntraKerberos-Hybrid'`.
+1. **Identity Solution**: `identitySolution` must be set to `'EntraKerberos-CloudOnly'`.
 2. **Session Hosts**: Must be Entra ID joined.
 3. **Client Devices**: Windows 10/11 Enterprise/Pro multi-session or Windows Server 2022.
 
 ### User Assigned Managed Identity (Optional)
 
-Providing a **User Assigned Managed Identity** is **optional** but recommended. It allows the solution to fully automate the configuration of the Storage Account for Entra Kerberos, specifically the App Registration updates required for Private Link and API permissions, and to configure least privilege NTFS permissions.
+Providing a **User Assigned Managed Identity** is **optional** but recommended. It allows the solution to fully automate the configuration of the Storage Account for Entra Kerberos, specifically the App Registration updates required for Private Link, tag for including Entra groups in security identifiers, and API permissions.
 
 The solution uses a User Assigned Managed Identity to perform the following actions against Microsoft Graph:
 
-1. **Update App Registration**: Adds the required `identifierUris` for Private Link (e.g., `api://<storageAccountName>.file.core.windows.net`).
+1. **Update App Registration**: Adds the required tag `kdc_enable_cloud_group_sids` and `identifierUris` for Private Link (e.g., `api://<storageAccountName>.file.core.windows.net`).
 2. **Configure API Permissions**: Adds `User.Read`, `openid`, and `profile` permissions to the App Registration.
 3. **Grant Admin Consent**: Grants admin consent for the added permissions so that the storage account can accept Kerberos tickets.
 
@@ -78,7 +75,7 @@ Write-Host "Identity Created: $($identity.Name)"
 
 # 2. Assign Graph Permissions
 # Connect to Microsoft Graph
-Connect-MgGraph -Scopes "AppRoleAssignment.ReadWrite.All", "Application.Read.All" -Environment $graphEnvironment
+Connect-MgGraph -Environment $graphEnvironment -Scopes "AppRoleAssignment.ReadWrite.All", "Application.Read.All"
 
 $sp = Get-MgServicePrincipal -Filter "AppId eq '$($identity.ClientId)'"
 $graphSPN = Get-MgServicePrincipal -Filter "AppId eq '00000003-0000-0000-c000-000000000000'"
@@ -108,28 +105,29 @@ foreach ($permName in $permissions) {
 
 ## What the Solution Does
 
-The solution always performs the following actions when **Entra Kerberos (Hybrid)** is selected:
+The solution always performs the following actions when **Entra Kerberos (Cloud-Only)** is selected:
 
 1. **Storage Account Creation**: Creates the Azure Storage Account.
 2. **Identity Configuration**: Enables Entra Kerberos authentication on the storage account.
 3. **Session Host Configuration**: Automatically configures the session hosts to retrieve the Kerberos token from the cloud.
+4. **RBAC Assignments**: Assigns the default share access to `Storage File Data SMB Share Contributor` for all users.
 
 ### With User Assigned Managed Identity (Recommended)
 
 If you provide the Resource ID of the Managed Identity with the required permissions:
 
-1. **Domain Name and Guid**: Added to the identity configuration for Entra Kerberos.
-2. **App Registration Automation**: The solution automatically updates the App Registration associated with the Storage Account:
+1. **App Registration Automation**: The solution automatically updates the App Registration associated with the Storage Account:
     * Adds Private Link URIs (e.g., `api://<storageAccountName>.privatelink.file.core.windows.net`) to `identifierUris`.
     * Adds `User.Read`, `openid`, and `profile` to `requiredResourceAccess`.
     * Grants Admin Consent for these permissions.
-3. **Least Privilege NTFS Permissions**: Configures NTFS permissions on the file shares by assigning only the specified FSLogix group(s), restricting access to authorized users only.
+    * **Cloud Group Support**: Updates the application tags to include `kdc_enable_cloud_group_sids`, enabling support for Entra groups (mandatory for cloud-only identities).
+2. **Least Privilege NTFS Permissions**: Configures NTFS permissions on the file shares by assigning only the specified FSLogix group(s), restricting access to authorized users only.
 
 ### Without User Assigned Managed Identity
 
 If you do **not** provide the Managed Identity:
 
-1. **Default Permissions**: The storage account is configured with default permissions that allow **Authenticated Users** to create their user profile folders.
+1. **Default Permissions**: The storage account NTFS permissions are configured with default permissions that allow **Authenticated Users** to create their user profile folders.
 2. **Manual Configuration Required**: You must manually perform the following steps after deployment:
     * **Grant Admin Consent**[^1]:
         1. Navigate to **App registrations** in the Azure Portal.
@@ -140,24 +138,26 @@ If you do **not** provide the Managed Identity:
         2. Select **Manifest**.
         3. Locate the `identifierUris` array and add the private link URIs (e.g., `api://<storageAccountName>.privatelink.file.core.windows.net`).
         4. Save the changes.
-    * **Configure NTFS Permissions**[^3]:
-        1. In order to set the NTFS permissions using file explorer, set the domain guid and domain name in the entra kerberos configuration in the portal.[^4]
+    * **Enable Cloud Groups**[^3]:
+        1. In the **Manifest**, locate the `tags` array.
+        2. Add `"kdc_enable_cloud_group_sids"` to the array.
+        3. Save the changes.
+    * **Configure NTFS Permissions**[^4]:
         1. Since the automated identity was not used, you must manually configure NTFS permissions if the default authenticated users access is insufficient.
 
 > [!Note]
-> You could leverage the PowerShell Script located at '.common\scripts\Update-StorageAccountApplications.ps1' within a pipeline to automatically perform the first two tasks in this list.
+> You could leverage the PowerShell Script located at '.common\scripts\Update-StorageAccountApplications.ps1' within a pipeline to automatically perform the first three tasks in this list.
 
 ## Post Deployment Manual Steps
 
 Regardless of whether you use the Managed Identity or not, the following step is required:
 
-* **MFA Exclusion**[^5]: The storage account application(s) must be excluded from Conditional Access policies requiring MFA.
+* **MFA Exclusion**: The storage account application(s) must be excluded from Conditional Access policies requiring MFA.
     1. Navigate to **Entra ID > Security > Conditional Access**.
     2. Identify policies that enforce MFA for all cloud apps or specific apps.
     3. Exclude the storage account application (Service Principal) created by the deployment. The storage account app should have the same name as the storage account in the conditional access exclusion list. When searching for the storage account app in the conditional access exclusion list, search for: [Storage Account] <your-storage-account-name>.file.<environmentSuffix>. Remember to replace <your-storage-account-name> with the proper value.
 
 [^1]: [Grant Admin Consent to the New Service Principal](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cregkey#grant-admin-consent-to-the-new-service-principal)
 [^2]: [Update the identifier Uris](https://learn.microsoft.com/en-us/troubleshoot/azure/azure-storage/files/security/files-troubleshoot-smb-authentication?toc=%2Fazure%2Fstorage%2Ffiles%2Ftoc.json&tabs=azure-portal#error-1326---the-username-or-password-is-incorrect-when-using-private-link)
-[^3]: [Configure Entra Kerberos support on the storage account](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune#enable-microsoft-entra-kerberos-authentication)
+[^3]: [Enable Cloud Group Support](https://learn.microsoft.com/en-us/entra/identity/authentication/kerberos#group-sid-limit-in-entra-kerberos)
 [^4]: [Configure File Level Permissions](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-configure-file-level-permissions)
-[^5]: [Exclude the Storage Account Application from MFA](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune#disable-multifactor-authentication-on-the-storage-account)

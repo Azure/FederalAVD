@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical Reference:** [Host Pool Template Documentation](../deployments/hostpools/README.md) - Complete parameter catalog and advanced scenarios
 
@@ -49,11 +49,11 @@ A complete host pool deployment includes:
 
 ### Required Prerequisites
 
-Before deploying a host pool, ensure you have completed these prerequisites from the [Quick Start Guide](quickStart.md#prerequisites):
+Before deploying a host pool, ensure you have completed these prerequisites from the [Quick Start Guide](quick-start.md#prerequisites):
 
 ✅ **Azure Subscription** - Owner or Contributor + User Access Administrator role  
 ✅ **Virtual Network** - Subnet for session hosts with appropriate connectivity  
-✅ **Network Connectivity** - Firewall/NSG rules allowing access to [required AVD endpoints](https://learn.microsoft.com/azure/virtual-desktop/required-fqdn-endpoint?tabs=azure) ([air-gapped clouds](airGappedClouds.md))  
+✅ **Network Connectivity** - Firewall/NSG rules allowing access to [required AVD endpoints](https://learn.microsoft.com/azure/virtual-desktop/required-fqdn-endpoint?tabs=azure) ([air-gapped clouds](air-gapped-clouds.md))  
 ✅ **Identity Solution** - Microsoft Entra ID or Active Directory Domain Services  
 ✅ **Security Group** - Group containing AVD users  
 ✅ **Desktop Virtualization Provider** - Enabled in subscription
@@ -62,7 +62,7 @@ Before deploying a host pool, ensure you have completed these prerequisites from
 
 For production deployments or any deployment using Customer Managed Keys (CMK), deploy the Key Vaults first:
 
-**🔒 [Key Vaults Deployment Guide](quickStart.md#step-1-deploy-key-vaults-cmk-with-custom-images)**
+**🔒 [Key Vaults Deployment Guide](quick-start.md#step-1-deploy-key-vaults-cmk-with-custom-images)**
 
 The key vault deployment creates `rg-avd-operations-{loc}` with:
 
@@ -99,7 +99,7 @@ The key vault deployment creates `rg-avd-operations-{loc}` with:
 
 If you plan to use custom images or run post-deployment customizations, deploy Image Management resources first:
 
-**📦 [Image Management Prerequisites](artifactsGuide.md)**
+**📦 [Image Management Prerequisites](artifacts-guide.md)**
 
 **Required for:**
 
@@ -116,7 +116,7 @@ If you plan to use custom images or run post-deployment customizations, deploy I
 
 If building custom images with pre-installed software:
 
-**🎨 [Image Build Guide](imageBuild.md)**
+**🎨 [Image Build Guide](image-build.md)**
 
 ---
 
@@ -298,7 +298,7 @@ Run post-deployment scripts on session hosts using the `sessionHostCustomization
 }
 ```
 
-**⚠️ Requires Image Management resources** - See [Artifacts Guide](artifactsGuide.md)
+**⚠️ Requires Image Management resources** - See [Artifacts Guide](artifacts-guide.md)
 
 #### Storage Configuration
 
@@ -654,7 +654,7 @@ Get-AzWvdUserSession -ResourceGroupName $resourceGroup -HostPoolName $hostPoolNa
 
 Automate the replacement of session hosts when new images become available:
 
-**🔄 [Session Host Replacer](../deployments/add-ons/SessionHostReplacer/readme.md)**
+**🔄 [Session Host Replacer](../deployments/add-ons/sessionHostReplacer/README.md)**
 
 **Features:**
 
@@ -667,12 +667,12 @@ Automate the replacement of session hosts when new images become available:
 
 Automatically monitor and increase Azure Files Premium quotas:
 
-**📊 [Storage Quota Manager](../deployments/add-ons/StorageQuotaManager/readme.md)**
+**📊 [Storage Quota Manager](../deployments/add-ons/storageQuotaManager/README.md)**
 
 ### Other Add-Ons
 
-- **[Update Storage Keys](../deployments/add-ons/UpdateStorageAccountKeyOnSessionHosts/readme.md)** - Rotate storage keys for Entra ID deployments
-- **[Run Commands on VMs](../deployments/add-ons/RunCommandsOnVms/readme.md)** - Execute scripts across session hosts
+- **[Update Storage Keys](../deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md)** - Rotate storage keys for Entra ID deployments
+- **[Run Commands on VMs](../deployments/add-ons/runCommandsOnVms/README.md)** - Execute scripts across session hosts
 
 ---
 
@@ -710,9 +710,9 @@ Automatically monitor and increase Azure Files Premium quotas:
 
 ## Next Steps
 
-- **[Image Build Guide](imageBuild.md)** - Build custom images for faster deployments
-- **[Artifacts Guide](artifactsGuide.md)** - Create custom software packages
-- **[Session Host Replacer](../deployments/add-ons/SessionHostReplacer/readme.md)** - Automate host updates
+- **[Image Build Guide](image-build.md)** - Build custom images for faster deployments
+- **[Artifacts Guide](artifacts-guide.md)** - Create custom software packages
+- **[Session Host Replacer](../deployments/add-ons/sessionHostReplacer/README.md)** - Automate host updates
 - **[Features](features.md)** - Explore advanced features
 - **[Troubleshooting](troubleshooting.md)** - Resolve common issues
 
@@ -720,7 +720,7 @@ Automatically monitor and increase Azure Files Premium quotas:
 
 ## Related Documentation
 
-- 📖 [Quick Start Guide](quickStart.md)
+- 📖 [Quick Start Guide](quick-start.md)
 - 🏗️ [Design](design.md)
 - ⚙️ [Parameters Reference](parameters.md)
 - ✨ [Features](features.md)
@@ -972,7 +972,7 @@ For air-gapped environments or when you need to override default URLs, configure
 - `agentBootLoaderDownloadUrl` - Custom URL or blob name for AVD Agent Boot Loader MSI
 - `agentDownloadUrl` - Custom URL or blob name for AVD Agent MSI (used as fallback after endpoint attempt)
 
-📖 **For Air-Gapped Clouds:** See [Air-Gapped Cloud Considerations](airGappedClouds.md) for complete setup instructions, including agent download URLs and storage account configuration.
+📖 **For Air-Gapped Clouds:** See [Air-Gapped Cloud Considerations](air-gapped-clouds.md) for complete setup instructions, including agent download URLs and storage account configuration.
 
 📖 **Parameter Details:** See [Parameters](parameters.md) for complete parameter documentation.
 
@@ -1162,8 +1162,8 @@ Get-AzProviderFeature -ProviderNamespace Microsoft.NetApp -FeatureName ANFShared
 
 For Entra Kerberos authentication to Azure Files, see the dedicated guides:
 
-- **[Entra Kerberos for Azure Files (Hybrid Identity)](entraKerberosHybrid.md)** - With on-premises AD sync
-- **[Entra Kerberos for Azure Files (Cloud-Only)](entraKerberosCloudOnly.md)** - Pure cloud identities
+- **[Entra Kerberos for Azure Files (Hybrid Identity)](entra-kerberos-hybrid.md)** - With on-premises AD sync
+- **[Entra Kerberos for Azure Files (Cloud-Only)](entra-kerberos-cloud-only.md)** - Pure cloud identities
 
 Both require creating a User Assigned Managed Identity with Microsoft Graph permissions to automate storage account configuration.
 

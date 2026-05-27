@@ -1,6 +1,6 @@
-↩ **Back to:** [Quick Start](quickStart.md)
+↩ **Back to:** [Quick Start](quick-start.md)
 
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # Update-ImageArtifacts.ps1 Script Guide
 
@@ -8,7 +8,7 @@
 
 `Update-ImageArtifacts.ps1` is a PowerShell script that downloads the latest software sources, packages them as zip files, and uploads them to the image management artifacts storage account. Run it whenever you want to refresh what is available to image build deployments — for example, after adding a new software package or after a new version is released.
 
-> **Infrastructure vs. Artifacts:** This script does **not** deploy any Azure resources. Deploy the imageManagement template first (see [imageManagement README](../deployments/imageManagement/README.md) or [Quick Start Step 2](quickStart.md#step-2-deploy-image-management-resources)), then use this script to populate the storage account. Alternatively, use `Deploy-ImageManagement.ps1 -UpdateArtifacts` to do both in one step.
+> **Infrastructure vs. Artifacts:** This script does **not** deploy any Azure resources. Deploy the imageManagement template first (see [imageManagement README](../deployments/imageManagement/README.md) or [Quick Start Step 2](quick-start.md#step-2-deploy-image-management-resources)), then use this script to populate the storage account. Alternatively, use `Deploy-ImageManagement.ps1 -UpdateArtifacts` to do both in one step.
 
 ## What This Script Does
 
@@ -22,7 +22,7 @@ Three sequential phases:
 
 ### Required Permissions
 
-- **Storage Blob Data Contributor** on the image management artifacts storage account — required because the storage account disables shared key access (Zero Trust). `Contributor` or `Owner` on the subscription or resource group does **not** grant blob data access. See [full explanation](hostpoolDeployment.md#security-prerequisites-optional).
+- **Storage Blob Data Contributor** on the image management artifacts storage account — required because the storage account disables shared key access (Zero Trust). `Contributor` or `Owner` on the subscription or resource group does **not** grant blob data access. See [full explanation](hostpool-deployment.md#security-prerequisites-optional).
 
 ### Required Tools
 
@@ -187,7 +187,7 @@ The script packages the `.common/artifacts/` directory:
 
 Each subdirectory is compressed into a zip file and uploaded to the `artifacts` blob container.
 
-**For full details on creating custom artifact packages:** [Artifacts and Image Management Guide](artifactsGuide.md)
+**For full details on creating custom artifact packages:** [Artifacts and Image Management Guide](artifacts-guide.md)
 
 ## Output
 
@@ -216,9 +216,9 @@ Pass this URL as `artifactsContainerUri` in image build deployments.
 
 ## Related Resources
 
-- [Quick Start Guide](quickStart.md) — End-to-end deployment walkthrough
+- [Quick Start Guide](quick-start.md) — End-to-end deployment walkthrough
 - [imageManagement README](../deployments/imageManagement/README.md) — Infrastructure deployment reference
-- [Artifacts Guide](artifactsGuide.md) — Creating and managing custom artifact packages
-- [Air-Gapped Cloud Guide](airGappedClouds.md) — Secret/Top Secret cloud considerations
+- [Artifacts Guide](artifacts-guide.md) — Creating and managing custom artifact packages
+- [Air-Gapped Cloud Guide](air-gapped-clouds.md) — Secret/Top Secret cloud considerations
 - [Troubleshooting](troubleshooting.md) — Common issues and solutions
 
