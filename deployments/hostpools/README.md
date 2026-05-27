@@ -1,6 +1,6 @@
 # AVD Host Pool Deployment Template
 
-> **📖 User Guide:** For deployment instructions and step-by-step guidance, see the [Host Pool Deployment Guide](../../docs/hostpoolDeployment.md)
+> **📖 User Guide:** For deployment instructions and step-by-step guidance, see the [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
 
 ## Overview
 
@@ -374,7 +374,7 @@ Subscription
 ### 📖 Complete Parameter Reference
 
 For a complete list of all 150+ parameters with detailed descriptions, see:
-- [Host Pool Deployment Guide](../../docs/hostpoolDeployment.md)
+- [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
 - [Parameters Reference Index](../../docs/parameters.md)
 
 ## Usage Examples
@@ -624,7 +624,7 @@ New-AzSubscriptionDeployment `
 
 ## Additional Resources
 
-- 📖 [Host Pool Deployment Guide](../../docs/hostpoolDeployment.md) - Complete user guide
+- 📖 [Host Pool Deployment Guide](../../docs/hostpool-deployment.md) - Complete user guide
 - 📖 [Parameters Reference](../../docs/parameters.md) - All parameters explained
 - 📖 [Features Guide](../../docs/features.md) - Feature documentation
 - 📖 [Troubleshooting Guide](../../docs/troubleshooting.md) - Common issues and solutions

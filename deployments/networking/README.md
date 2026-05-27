@@ -1,6 +1,6 @@
 # AVD Networking Infrastructure Template
 
-> **📖 User Guide:** For deployment instructions and scenarios, see the [Quick Start Guide - Networking](../../docs/quickStart.md#step-0-deploy-networking-infrastructure-greenfield)
+> **📖 User Guide:** For deployment instructions and scenarios, see the [Quick Start Guide - Networking](../../docs/quick-start.md#step-0-deploy-networking-infrastructure-greenfield)
 
 ## Overview
 
@@ -482,8 +482,8 @@ az deployment sub create \
 
 ## Additional Resources
 
-- 📖 [Quick Start Guide - Networking](../../docs/quickStart.md#step-0-deploy-networking-infrastructure-greenfield)
-- 📖 [Host Pool Deployment Guide](../../docs/hostpoolDeployment.md)
+- 📖 [Quick Start Guide - Networking](../../docs/quick-start.md#step-0-deploy-networking-infrastructure-greenfield)
+- 📖 [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
 - 🔧 [Azure Virtual Network Documentation](https://learn.microsoft.com/azure/virtual-network/)
 - 🔧 [Azure Private Link Documentation](https://learn.microsoft.com/azure/private-link/)
 - 🔧 [Azure NAT Gateway Documentation](https://learn.microsoft.com/azure/nat-gateway/)

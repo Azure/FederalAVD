@@ -1,6 +1,6 @@
 # AVD Custom Image Build Template
 
-> **📖 User Guide:** For deployment instructions and getting started, see the [Image Build Guide](../../docs/imageBuild.md)
+> **📖 User Guide:** For deployment instructions and getting started, see the [Image Build Guide](../../docs/image-build.md)
 
 ## Overview
 
@@ -142,7 +142,7 @@ Use the included PowerShell script to automate prerequisite deployment:
   -PrivateEndpointSubnetResourceId '/subscriptions/.../subnets/endpoints'
 ```
 
-See [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) for details.
+See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) for details.
 
 ## Parameters
 
@@ -1433,7 +1433,7 @@ This sets the `endOfLifeDate` property, visible in Azure Portal and queryable vi
 
 ### Related Templates
 
-- [Update-ImageArtifacts Script Guide](../../docs/updateImageArtifacts.md) - Upload artifacts to storage
+- [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) - Upload artifacts to storage
 - [Invoke-ImageBuilds.ps1](../Invoke-ImageBuilds.ps1) - Batch build multiple images
 - [New-TemplateSpecs.ps1](../../tools/New-TemplateSpecs.ps1) - Create template specs
 

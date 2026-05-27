@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # Business Continuity & Disaster Recovery
 
@@ -324,7 +324,7 @@ When `deployScalingPlan = true` and Session Host Replacer is configured with `Sh
 
 The **Ringed Rollout** setting (0-30 day delay) further limits blast radius by staging new image adoption across the fleet progressively, allowing validation in a subset of hosts before fleet-wide rollout.
 
-See [Session Host Replacer documentation](sessionHostReplacer.md) for configuration details.
+See [Session Host Replacer documentation](session-host-replacer.md) for configuration details.
 
 ---
 
@@ -398,7 +398,7 @@ graph TB
 
 ### Secondary Gallery Deployment Is Not Automated
 
-The imageManagement template does not deploy a remote gallery — it must be deployed explicitly in each DR region. The automation pipeline in [automationGuide.md](automationGuide.md) shows a single-region flow. For multi-region deployments, run the imageManagement deployment step once per target region before running imageBuild with `remoteComputeGalleryResourceId`.
+The imageManagement template does not deploy a remote gallery — it must be deployed explicitly in each DR region. The automation pipeline in [automation-guide.md](automation-guide.md) shows a single-region flow. For multi-region deployments, run the imageManagement deployment step once per target region before running imageBuild with `remoteComputeGalleryResourceId`.
 
 ### Azure NetApp Files Cross-Region Replication
 

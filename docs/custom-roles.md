@@ -1,6 +1,6 @@
 # Custom RBAC Roles for FederalAVD Operators
 
-The [quickStart](quickStart.md#required-deployer-roles-by-deployment) guide lists the minimum built-in roles for each deployment. For organizations that need tighter constraints — for example, preventing operators from creating arbitrary resources outside the AVD-specific scope — this guide provides ready-to-use custom role definitions scoped to exactly the permissions each deployment path requires.
+The [quickStart](quick-start.md#required-deployer-roles-by-deployment) guide lists the minimum built-in roles for each deployment. For organizations that need tighter constraints — for example, preventing operators from creating arbitrary resources outside the AVD-specific scope — this guide provides ready-to-use custom role definitions scoped to exactly the permissions each deployment path requires.
 
 > **Note:** Custom roles in Azure must be created at subscription or management group scope before they can be assigned. The JSON definitions below set `assignableScopes` to `"/"` as a placeholder; replace with your subscription or management group resource ID before deploying.
 

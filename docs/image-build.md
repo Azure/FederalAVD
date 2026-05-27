@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical Reference:** [Image Build Template Documentation](../deployments/imageBuild/README.md) - Complete parameter reference and CI/CD examples
 
@@ -56,13 +56,13 @@ The Azure identity running this deployment (user, service principal, or managed 
 | **New RG** (`imageBuildResourceGroupId` empty) | Owner **or** Contributor + User Access Administrator at **subscription** scope | Deployment creates a temporary resource group and assigns **Contributor** to the orchestration VM's system-assigned identity on that RG |
 | **Existing RG** (`imageBuildResourceGroupId` set) | `Microsoft.Resources/deployments/write` at **subscription** scope + **Contributor** on the image build resource group + **Contributor** on the compute gallery resource group | `imageBuild.bicep` uses `targetScope = 'subscription'` — subscription deployment write is unavoidable. No resource group creation or role assignments; deploys VMs into the pre-existing build RG; creates the image version (and image definition if not pre-existing) in the compute gallery RG. |
 
-> **Least-privilege recommendation:** Use the existing RG path (pre-stage with imageManagement). Your image build principal only needs `Microsoft.Resources/deployments/write` at subscription scope (unavoidable due to `targetScope = 'subscription'`) plus Contributor on the build and gallery resource groups — no subscription-level role assignment rights required. See [Custom RBAC Roles](customRoles.md#3-imagebuild-operator--existing-rg-path) for a ready-to-use role definition.
+> **Least-privilege recommendation:** Use the existing RG path (pre-stage with imageManagement). Your image build principal only needs `Microsoft.Resources/deployments/write` at subscription scope (unavoidable due to `targetScope = 'subscription'`) plus Contributor on the build and gallery resource groups — no subscription-level role assignment rights required. See [Custom RBAC Roles](custom-roles.md#3-imagebuild-operator--existing-rg-path) for a ready-to-use role definition.
 
 ### Required - Image Management Resources
 
 Custom image building **requires** the Image Management resources to be deployed first. These resources provide the storage and infrastructure needed for artifacts and image distribution.
 
-**📦 [Deploy Image Management Resources](artifactsGuide.md#deploying-image-management-resources)**
+**📦 [Deploy Image Management Resources](artifacts-guide.md#deploying-image-management-resources)**
 
 The Image Management deployment creates and pre-configures everything imageBuild needs when using an **existing resource group** (the recommended production path):
 
@@ -91,7 +91,7 @@ imageManagement grants all three automatically. If you skip imageManagement and 
 
 Custom images are built by executing **artifacts** during the image build process. Artifacts are packages containing PowerShell scripts and installers stored in Azure Blob Storage.
 
-**📚 [Understanding Artifacts](artifactsGuide.md)**
+**📚 [Understanding Artifacts](artifacts-guide.md)**
 
 **Example artifacts included:**
 
@@ -102,7 +102,7 @@ Custom images are built by executing **artifacts** during the image build proces
 - OneDrive installation
 - Custom software packages
 
-**📝 [Creating Custom Artifacts](artifactsGuide.md#creating-custom-artifact-packages)**
+**📝 [Creating Custom Artifacts](artifacts-guide.md#creating-custom-artifact-packages)**
 
 ### Required - Parameter Files
 
@@ -544,22 +544,22 @@ Once the image build completes and replicates to your target region, reference i
 
 The Session Host Replacer add-on automatically detects new image versions and replaces session hosts with zero downtime.
 
-**[Session Host Replacer Documentation](../deployments/add-ons/sessionHostReplacer/readme.md)**
+**[Session Host Replacer Documentation](../deployments/add-ons/sessionHostReplacer/README.md)**
 
 ---
 
 ## Next Steps
 
-- **[Deploy Host Pool](hostpoolDeployment.md)** - Deploy AVD host pool using your custom image
-- **[Create Custom Artifacts](artifactsGuide.md#creating-custom-artifact-packages)** - Build your own software packages
-- **[Session Host Replacer](../deployments/add-ons/SessionHostReplacer/readme.md)** - Automate host replacements on image updates
+- **[Deploy Host Pool](hostpool-deployment.md)** - Deploy AVD host pool using your custom image
+- **[Create Custom Artifacts](artifacts-guide.md#creating-custom-artifact-packages)** - Build your own software packages
+- **[Session Host Replacer](../deployments/add-ons/sessionHostReplacer/README.md)** - Automate host replacements on image updates
 
 ---
 
 ## Related Documentation
 
-- 📦 [Artifacts & Image Management Guide](artifactsGuide.md)
-- 🔧 [Update-ImageArtifacts Script](updateImageArtifacts.md)
-- 🏢 [Host Pool Deployment Guide](hostpoolDeployment.md)
-- 📖 [Quick Start Guide](quickStart.md)
+- 📦 [Artifacts & Image Management Guide](artifacts-guide.md)
+- 🔧 [Update-ImageArtifacts Script](update-image-artifacts.md)
+- 🏢 [Host Pool Deployment Guide](hostpool-deployment.md)
+- 📖 [Quick Start Guide](quick-start.md)
 - ⚙️ [Parameters Reference](parameters.md)

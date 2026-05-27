@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # Troubleshooting
 
@@ -63,7 +63,7 @@ Corrupt Bizep Install
 
 ### Solution
 
-Reinstall Bicep by following the steps at [Bicep Installation](quickStart.md#bicep-installation)
+Reinstall Bicep by following the steps at [Bicep Installation](quick-start.md#bicep-installation)
 
 ## AVD Agent Install and Configuration Failed
 

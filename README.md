@@ -15,11 +15,11 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 
 | Component | Description | Documentation |
 | --------- | ----------- | ------------- |
-| 🌐 **Networking** | Virtual network, subnets, NSGs, NAT gateway, hub peering, route tables, private DNS zones | [Quick Start - Networking](docs/quickStart.md#step-0-deploy-networking-infrastructure-greenfield) |
-| 🔒 **Security Prereqs** | Secrets Key Vault (credentials) and Encryption Key Vault (CMK keys). Required before image management when using CMK with custom images. Otherwise, Key Vaults are deployed inline during host pool deployment and are idempotent — subsequent host pool deployments referencing the same resource group will reuse them. | [Quick Start - Key Vaults](docs/quickStart.md#step-1-deploy-key-vaults-cmk-with-custom-images) |
-| 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpoolDeployment.md) |
-| 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifactsGuide.md) |
-| 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/imageBuild.md) |
+| 🌐 **Networking** | Virtual network, subnets, NSGs, NAT gateway, hub peering, route tables, private DNS zones | [Quick Start - Networking](docs/quick-start.md#step-0-deploy-networking-infrastructure-greenfield) |
+| 🔒 **Security Prereqs** | Secrets Key Vault (credentials) and Encryption Key Vault (CMK keys). Required before image management when using CMK with custom images. Otherwise, Key Vaults are deployed inline during host pool deployment and are idempotent — subsequent host pool deployments referencing the same resource group will reuse them. | [Quick Start - Key Vaults](docs/quick-start.md#step-1-deploy-key-vaults-cmk-with-custom-images) |
+| 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpool-deployment.md) |
+| 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifacts-guide.md) |
+| 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/image-build.md) |
 | 🔧 **Add-Ons** | Lifecycle automation and operational tools | [Add-Ons](#-add-ons) |
 
 ### Cloud Environment Support
@@ -30,7 +30,7 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 
 ## 🚀 Quick Start
 
-Ready to deploy? The **[Quick Start Guide](docs/quickStart.md)** walks you through the complete deployment process with decision trees, prerequisites, and step-by-step instructions.
+Ready to deploy? The **[Quick Start Guide](docs/quick-start.md)** walks you through the complete deployment process with decision trees, prerequisites, and step-by-step instructions.
 
 ### Deployment Path Overview
 
@@ -71,7 +71,7 @@ graph TD
 - **Only UI option for air-gapped clouds** (Secret/Top Secret)
 - Not available for image management infrastructure deployment
 
-**👉 [Get Started Now](docs/quickStart.md)** - Complete prerequisites, deployment options, and step-by-step instructions
+**👉 [Get Started Now](docs/quick-start.md)** - Complete prerequisites, deployment options, and step-by-step instructions
 
 ---
 
@@ -92,8 +92,8 @@ Central storage and management for software artifacts. **Required** for custom i
 
 **Learn More:**
 
-- [Artifacts & Image Management Guide](docs/artifactsGuide.md)
-- [Update-ImageArtifacts Script](docs/updateImageArtifacts.md)
+- [Artifacts & Image Management Guide](docs/artifacts-guide.md)
+- [Update-ImageArtifacts Script](docs/update-image-artifacts.md)
 
 #### Custom Image Building
 
@@ -109,7 +109,7 @@ Automated custom image build pipeline with artifact-based customizations.
 
 **Learn More:**
 
-- [Image Build Guide](docs/imageBuild.md)
+- [Image Build Guide](docs/image-build.md)
 
 #### Host Pool Deployment
 
@@ -128,7 +128,7 @@ Complete AVD environment deployment with enterprise features.
 
 **Learn More:**
 
-- [Host Pool Deployment Guide](docs/hostpoolDeployment.md)
+- [Host Pool Deployment Guide](docs/hostpool-deployment.md)
 - [Features](docs/features.md)
 - [Design](docs/design.md)
 
@@ -187,25 +187,25 @@ Support for multiple identity configurations to meet organizational requirements
 
 ### Getting Started
 
-- 📖 [Quick Start Guide](docs/quickStart.md) - Step-by-step deployment instructions with tier guidance (PoC → multi-team → automated)
-- 🤖 [End-to-End Automation Guide](docs/automationGuide.md) - Chaining steps together and passing outputs
+- 📖 [Quick Start Guide](docs/quick-start.md) - Step-by-step deployment instructions with tier guidance (PoC → multi-team → automated)
+- 🤖 [End-to-End Automation Guide](docs/automation-guide.md) - Chaining steps together and passing outputs
 - 🏗️ [Design](docs/design.md) - Architecture and resource organization
 - ⚙️ [Parameters Reference](docs/parameters.md) - Per-solution parameter documentation index
 
 ### Deployment Guides
 
-- 🏢 [Host Pool Deployment](docs/hostpoolDeployment.md) - Deploy AVD host pools
-- 🎨 [Image Build Guide](docs/imageBuild.md) - Build custom images
-- 📦 [Artifacts & Image Management](docs/artifactsGuide.md) - Software artifact system
-- 🔧 [Update-ImageArtifacts Script](docs/updateImageArtifacts.md) - Script usage guide
+- 🏢 [Host Pool Deployment](docs/hostpool-deployment.md) - Deploy AVD host pools
+- 🎨 [Image Build Guide](docs/image-build.md) - Build custom images
+- 📦 [Artifacts & Image Management](docs/artifacts-guide.md) - Software artifact system
+- 🔧 [Update-ImageArtifacts Script](docs/update-image-artifacts.md) - Script usage guide
 
 ### Advanced Topics
 
 - ✨ [Features](docs/features.md) - Detailed feature descriptions
 - 🚫 [Limitations](docs/limitations.md) - Known limitations and workarounds
 - 🔧 [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
-- 🔐 [Entra Kerberos Setup](docs/entraKerberosCloudOnly.md) - Kerberos configuration
-- 🌐 [Air-Gapped Clouds](docs/airGappedClouds.md) - Secret/Top Secret deployment
+- 🔐 [Entra Kerberos Setup](docs/entra-kerberos-cloud-only.md) - Kerberos configuration
+- 🌐 [Air-Gapped Clouds](docs/air-gapped-clouds.md) - Secret/Top Secret deployment
 
 ### Add-Ons
 

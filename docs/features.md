@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quickStart.md) | [**Host Pool Deployment**](hostpoolDeployment.md) | [**Image Build**](imageBuild.md) | [**Artifacts**](artifactsGuide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # Features
 
@@ -223,7 +223,7 @@ This hybrid approach allows session hosts to be Entra joined while still support
 > [!IMPORTANT]
 > For Entra Kerberos with Hybrid Identities, this solution can automate the required App Registration updates (Private Link URIs), domain name and domain guid configuration, and admin consent, if you provide a User Assigned Managed Identity with the correct permissions.
 >
-> See [Entra Kerberos for Azure Files with Hybrid Identities](entraKerberosHybrid.md) for details on the required permissions and manual steps if you choose not to use the automation.
+> See [Entra Kerberos for Azure Files with Hybrid Identities](entra-kerberos-hybrid.md) for details on the required permissions and manual steps if you choose not to use the automation.
 
 **Parameter Configuration:**
 
@@ -262,7 +262,7 @@ This is a pure cloud identity solution using only Entra Id identities with no on
 > For Entra Kerberos with Cloud Only Identities, this solution can automate the required App Registration updates (Private Link URIs, group support tag, and admin consent), if you provide a User Assigned Managed Identity with the correct permissions.
 >
 >
-> See [Entra Kerberos Cloud Only Support for Azure Files](entraKerberosCloudOnly.md) for details on the required permissions and manual steps if you choose not to use the automation.
+> See [Entra Kerberos Cloud Only Support for Azure Files](entra-kerberos-cloud-only.md) for details on the required permissions and manual steps if you choose not to use the automation.
 
 **Limitations:**
 
@@ -359,7 +359,7 @@ Sharding distributes user profiles across multiple storage accounts to overcome 
 
 - `fslogixUserGroups` parameter must define security groups that map users to specific storage accounts
 - For domain-based identity solutions: Groups must exist in Active Directory or Entra Domain Services
-- For Entra Kerberos solutions: Additional configuration via User Assigned Managed Identity (see [Entra Kerberos documentation](entraKerberosHybrid.md))
+- For Entra Kerberos solutions: Additional configuration via User Assigned Managed Identity (see [Entra Kerberos documentation](entra-kerberos-hybrid.md))
 
 ### Security Group Configuration
 
@@ -490,7 +490,7 @@ When using Azure NetApp Files (`fslogixStorageService = 'AzureNetAppFiles Standa
 
 **Management Resources (Azure Files Premium only):**
 
-- Function App for automatic quota increase management (see [Storage Quota Manager Add-On](../deployments/add-ons/storageQuotaManager/readme.md))
+- Function App for automatic quota increase management (see [Storage Quota Manager Add-On](../deployments/add-ons/storageQuotaManager/README.md))
 - App Service Plan, Application Insights, and metadata storage account
 
 **Backup Resources (optional):**
@@ -542,7 +542,7 @@ Automatically monitors and increases Azure Files Premium file share quotas for F
 - Growing user populations requiring proactive storage capacity management
 - Compliance scenarios requiring automated capacity management
 
-**Documentation:** [Storage Quota Manager Add-On](../deployments/add-ons/storageQuotaManager/readme.md)
+**Documentation:** [Storage Quota Manager Add-On](../deployments/add-ons/storageQuotaManager/README.md)
 
 ### Session Host Replacer
 
@@ -565,7 +565,7 @@ Automatically replaces session hosts when new images are available with zero-dow
 - Large-scale AVD deployments requiring automated lifecycle management
 - Organizations with frequent OS and application patching requirements
 
-**Documentation:** [Session Host Replacer Add-On](../deployments/add-ons/sessionHostReplacer/readme.md)
+**Documentation:** [Session Host Replacer Add-On](../deployments/add-ons/sessionHostReplacer/README.md)
 
 ### Run Commands on VMs
 
@@ -585,7 +585,7 @@ Execute one or multiple scripts on selected virtual machines from a resource gro
 - Software deployment or updates outside of normal imaging process
 - One-time maintenance tasks across multiple VMs
 
-**Documentation:** [Run Commands on VMs Add-On](../deployments/add-ons/runCommandsOnVms/readme.md)
+**Documentation:** [Run Commands on VMs Add-On](../deployments/add-ons/runCommandsOnVms/README.md)
 
 ### Update Storage Account Key on Session Hosts
 
@@ -606,7 +606,7 @@ Update FSLogix storage account keys on session hosts to support Entra ID-only id
 - Automated key distribution after manual or automated key rotation
 - Security incident response requiring immediate key rotation
 
-**Documentation:** [Update Storage Account Key on Session Hosts Add-On](../deployments/add-ons/updateStorageAccountKeyOnSessionHosts/readme.md)
+**Documentation:** [Update Storage Account Key on Session Hosts Add-On](../deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md)
 
 ## Resiliency
 
