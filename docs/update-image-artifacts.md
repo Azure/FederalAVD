@@ -35,8 +35,8 @@ Three sequential phases:
 Base downloads parameter files are in `.common/data/` and are selected automatically based on the connected Azure environment — no action needed:
 
   - `.common/data/public.downloads.parameters.json` (commercial / government)
-  - `.common/data/secret.downloads.parameters.json` (IL6)
-  - `.common/data/topsecret.downloads.parameters.json` (IL7)
+  - `.common/data/secret.downloads.parameters.json` (Azure Secret)
+  - `.common/data/topsecret.downloads.parameters.json` (Azure Top Secret)
 
 To download **optional** software (e.g., PowerShell 7, VS Code, LGPO, Git), place a customer-owned downloads file at `customer/parameters/imageManagement/downloads.json`. A ready-to-use sample for public cloud environments is provided in the repo at:
   - `deployments/imageManagement/parameters/public.downloads.optional.parameters.json`
