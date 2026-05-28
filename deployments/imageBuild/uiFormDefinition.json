@@ -1284,7 +1284,7 @@
 											},
 											{
 												"id": "blobNameOrUri",
-												"header": "Blob Name (or URI)')",
+												"header": "Blob Name (or URI)",
 												"width": "10fr",
 												"element": {
 													"type": "Microsoft.Common.TextBox",

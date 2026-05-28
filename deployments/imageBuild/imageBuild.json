@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "14348819342524059236"
+      "templateHash": "16459147716712457091"
     }
   },
   "parameters": {
@@ -208,7 +208,7 @@
       "type": "array",
       "defaultValue": [],
       "metadata": {
-        "description": "An array of image customization objects that are executed first before any restarts or updates.\nEach object contains the following properties:\n-name: Required. The name of the script or application that is running minus extension\n-blobNameOrUri: Required. The blob name when used with the artifactsContainerUri or the full URI of the file to download.\n-arguments: Optional. Arguments required by the installer or script being ran.\n\nJSON example:\n[\n  {\n    \"name\": \"FSLogix\",\n    \"blobNameOrUri\": \"https://aka.ms/fslogix_download\"\n  },\n  {\n    \"name\": \"VSCode\",\n    \"blobNameOrUri\": \"VSCode.zip\",\n    \"arguments\": \"/verysilent /mergetasks=!runcode\"\n  }\n]\n"
+        "description": "An array of image customization objects that are executed first before any restarts or updates.\nEach object contains the following properties:\n-name: Required. The name of the script or application that is running minus extension\n-blobNameOrUri: Required. The blob name when used with the artifactsContainerUri or the full URI of the file to download.\n-arguments: Optional. Arguments required by the installer or script being ran.\n-restart: Optional. Boolean. When true, the image VM restarts after this customization completes.\n\nJSON example:\n[\n  {\n    \"name\": \"FSLogix\",\n    \"blobNameOrUri\": \"https://aka.ms/fslogix_download\"\n  },\n  {\n    \"name\": \"VSCode\",\n    \"blobNameOrUri\": \"VSCode.zip\",\n    \"arguments\": \"/verysilent /mergetasks=!runcode\",\n    \"restart\": true\n  }\n]\n"
       }
     },
     "vdiCustomizations": {
@@ -1058,6 +1058,7 @@
     "locations": "[if(startsWith(variables('cloud'), 'us'), variables('locationsData').other, variables('locationsData')[environment().name])]",
     "resourceAbbreviations": "[variables('$fxv#1')]",
     "downloads": "[if(startsWith(variables('cloud'), 'usn'), variables('$fxv#2'), if(startsWith(variables('cloud'), 'uss'), variables('$fxv#3'), variables('$fxv#4')))]",
+    "artifactsContainerUriNormalized": "[if(endsWith(parameters('artifactsContainerUri'), '/'), take(parameters('artifactsContainerUri'), max(sub(length(parameters('artifactsContainerUri')), 1), 0)), parameters('artifactsContainerUri'))]",
     "depPrefix": "[if(not(empty(parameters('deploymentPrefix'))), format('{0}-', parameters('deploymentPrefix')), '')]",
     "imageBuildResourceGroupName": "[if(empty(parameters('imageBuildResourceGroupId')), if(empty(parameters('customBuildResourceGroupName')), if(parameters('nameConvResTypeAtEnd'), format('{0}avd-image-builds-{1}-{2}-{3}', variables('depPrefix'), variables('locations')[variables('varLocation')].abbreviation, variables('deploymentSuffix'), variables('resourceAbbreviations').resourceGroups), format('{0}-{1}avd-image-builds-{2}-{3}', variables('resourceAbbreviations').resourceGroups, variables('depPrefix'), variables('locations')[variables('varLocation')].abbreviation, variables('deploymentSuffix'))), format('{0}-{1}', parameters('customBuildResourceGroupName'), variables('deploymentSuffix'))), last(split(parameters('imageBuildResourceGroupId'), '/')))]",
     "adminPw": "[format('1qaz@WSX{0}', uniqueString(subscription().id, variables('imageBuildResourceGroupName')))]",
@@ -2707,7 +2708,7 @@
             "value": "[parameters('wsusServer')]"
           },
           "artifactsContainerUri": {
-            "value": "[parameters('artifactsContainerUri')]"
+            "value": "[variables('artifactsContainerUriNormalized')]"
           },
           "downloads": {
             "value": "[variables('downloads')]"
@@ -2726,7 +2727,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "5482627245017716589"
+              "templateHash": "11880386018297566874"
             }
           },
           "parameters": {
@@ -2815,7 +2816,7 @@
                 "count": "[length(parameters('customizations'))]",
                 "input": {
                   "name": "[replace(parameters('customizations')[copyIndex('customizers')].name, ' ', '-')]",
-                  "uri": "[if(contains(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, '://'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri))]",
+                  "uri": "[if(or(startsWith(toLower(parameters('customizations')[copyIndex('customizers')].blobNameOrUri), 'https://'), startsWith(toLower(parameters('customizations')[copyIndex('customizers')].blobNameOrUri), 'http://')), parameters('customizations')[copyIndex('customizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri))]",
                   "arguments": "[coalesce(tryGet(parameters('customizations')[copyIndex('customizers')], 'arguments'), '')]",
                   "restart": "[coalesce(tryGet(parameters('customizations')[copyIndex('customizers')], 'restart'), false())]"
                 }
@@ -2825,7 +2826,7 @@
                 "count": "[length(parameters('vdiCustomizations'))]",
                 "input": {
                   "name": "[replace(parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].name, ' ', '-')]",
-                  "uri": "[if(contains(parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].blobNameOrUri, '://'), parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].blobNameOrUri))]",
+                  "uri": "[if(or(startsWith(toLower(parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].blobNameOrUri), 'https://'), startsWith(toLower(parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].blobNameOrUri), 'http://')), parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].blobNameOrUri))]",
                   "arguments": "[coalesce(tryGet(parameters('vdiCustomizations')[copyIndex('vdiCustomizers')], 'arguments'), '')]"
                 }
               }

@@ -38,7 +38,7 @@ var customizationScript = loadTextContent('../../../.common/scripts/Invoke-Custo
 var customizers = [
   for customization in customizations: {
     name: replace(customization.name, ' ', '-')
-    uri: contains(customization.blobNameOrUri, '://')
+    uri: startsWith(toLower(customization.blobNameOrUri), 'https://') || startsWith(toLower(customization.blobNameOrUri), 'http://')
       ? customization.blobNameOrUri
       : '${artifactsContainerUri}/${customization.blobNameOrUri}'
     arguments: customization.?arguments ?? ''
@@ -49,7 +49,7 @@ var customizers = [
 var vdiCustomizers = [
   for customization in vdiCustomizations: {
     name: replace(customization.name, ' ', '-')
-    uri: contains(customization.blobNameOrUri, '://')
+    uri: startsWith(toLower(customization.blobNameOrUri), 'https://') || startsWith(toLower(customization.blobNameOrUri), 'http://')
       ? customization.blobNameOrUri
       : '${artifactsContainerUri}/${customization.blobNameOrUri}'
     arguments: customization.?arguments ?? ''

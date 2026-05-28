@@ -18406,7 +18406,7 @@
                                         "count": "[length(parameters('customizations'))]",
                                         "input": {
                                           "name": "[replace(parameters('customizations')[copyIndex('customizers')].name, ' ', '-')]",
-                                          "uri": "[if(or(startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'https://'), startsWith(parameters('customizations')[copyIndex('customizers')].blobNameorUri, 'http://')), parameters('customizations')[copyIndex('customizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri))]",
+                                          "uri": "[if(or(startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'https://'), startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'http://')), parameters('customizations')[copyIndex('customizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri))]",
                                           "arguments": "[coalesce(tryGet(parameters('customizations')[copyIndex('customizers')], 'arguments'), '')]"
                                         }
                                       }

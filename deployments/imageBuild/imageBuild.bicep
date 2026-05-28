@@ -121,6 +121,7 @@ Each object contains the following properties:
 -name: Required. The name of the script or application that is running minus extension
 -blobNameOrUri: Required. The blob name when used with the artifactsContainerUri or the full URI of the file to download.
 -arguments: Optional. Arguments required by the installer or script being ran.
+-restart: Optional. Boolean. When true, the image VM restarts after this customization completes.
 
 JSON example:
 [
@@ -131,7 +132,8 @@ JSON example:
   {
     "name": "VSCode",
     "blobNameOrUri": "VSCode.zip",
-    "arguments": "/verysilent /mergetasks=!runcode"
+    "arguments": "/verysilent /mergetasks=!runcode",
+    "restart": true
   }
 ]
 ''')
@@ -336,6 +338,9 @@ var downloads = startsWith(cloud, 'usn')
   : startsWith(cloud, 'uss')
       ? loadJsonContent('../../.common/data/secret.downloads.parameters.json')
       : loadJsonContent('../../.common/data/public.downloads.parameters.json')
+var artifactsContainerUriNormalized = endsWith(artifactsContainerUri, '/')
+  ? take(artifactsContainerUri, max(length(artifactsContainerUri) - 1, 0))
+  : artifactsContainerUri
 
 var computeLocation = vnet.location
 var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''
@@ -717,7 +722,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     updateUwpApps: updateUwpApps
     updateService: updateService
     wsusServer: wsusServer
-    artifactsContainerUri: artifactsContainerUri
+    artifactsContainerUri: artifactsContainerUriNormalized
     downloads: downloads
     downloadLatestMicrosoftContent: downloadLatestMicrosoftContent
     vdiCustomizations: uniqueVdiCustomizers
