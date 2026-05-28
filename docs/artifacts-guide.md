@@ -164,10 +164,16 @@ graph TD
 
 ### Repository Location
 
-All artifacts are stored in the repository at:
+Repo-provided artifacts live at:
 
 ```text
 .common/artifacts/
+```
+
+Customer-provided artifacts and overrides belong at:
+
+```text
+customer/artifacts/
 ```
 
 ### Directory Layout
@@ -197,20 +203,22 @@ All artifacts are stored in the repository at:
 │   ├── install-lgpo.ps1                     # Main script (required)
 │   └── LGPO.exe                             # Tool executable (optional)
 │
+customer/artifacts/
 └── [Your-Custom-Artifact]/                  # Your custom package
-    ├── Install-[AppName].ps1                # Main script (required)
-    ├── [installer-file]                     # Application installer (optional)
-    └── [config-files]                       # Supporting files (optional)
+   ├── Install-[AppName].ps1                # Main script (required)
+   ├── [installer-file]                     # Application installer (optional)
+   └── [config-files]                       # Supporting files (optional)
 ```
 
 **Note:** The orchestration script `Invoke-Customization.ps1` is located at `.common/scripts/Invoke-Customization.ps1` (not in the artifacts directory). It is embedded into ARM/Bicep deployments using the `loadTextContent()` function.
 
 ### Packaging Rules (Update-ImageArtifacts.ps1)
 
-When `Update-ImageArtifacts.ps1` processes the `.common/artifacts/` directory for upload to blob storage:
+When `Update-ImageArtifacts.ps1` prepares content for upload to blob storage, it stages `.common/artifacts/` first and then overlays `customer/artifacts/` on top:
 
 | Source | Processing | Result |
 |--------|------------|--------|
+| **Customer overlays** | Copied over repo content when names match | Customer files/folders win over `.common/artifacts/` |
 | **Subfolders** | Compressed to ZIP | Each subfolder becomes a separate .zip file (e.g., `Chrome/` → `Chrome.zip`) |
 | **Root files** | Copied as-is | Files in the root are uploaded individually without modification |
 
@@ -218,11 +226,13 @@ When `Update-ImageArtifacts.ps1` processes the `.common/artifacts/` directory fo
 
 ```
 .common/artifacts/
+├── FSLogix/             → Uploaded as FSLogix.zip
+│   └── Install-FSLogix.ps1
+
+customer/artifacts/
 ├── Chrome/              → Uploaded as Chrome.zip
 │   ├── Install-Chrome.ps1
 │   └── installer.msi
-├── FSLogix/             → Uploaded as FSLogix.zip
-│   └── Install-FSLogix.ps1
 └── teamsbootstrapper.exe → Uploaded as teamsbootstrapper.exe
 ```
 
@@ -267,11 +277,11 @@ Downloaded on = 12/15/2024 10:31:12 AM
 
 #### Step 1: Create the Artifact Folder
 
-Create a new folder in `.common/artifacts/` with a descriptive name:
+Create a new folder in `customer/artifacts/` with a descriptive name:
 
 ```powershell
 # Example: Creating an artifact for Google Chrome
-New-Item -Path ".\.common\artifacts\Chrome" -ItemType Directory
+New-Item -Path ".\customer\artifacts\Chrome" -ItemType Directory
 ```
 
 **Naming Conventions:**
@@ -432,10 +442,10 @@ Before uploading, test your script locally:
 
 ```powershell
 # Test with no parameters
-.\.common\artifacts\Chrome\Install-Chrome.ps1
+.\customer\artifacts\Chrome\Install-Chrome.ps1
 
 # Test with named parameters
-.\.common\artifacts\Chrome\Install-Chrome.ps1 -InstallMode Full -SkipShortcuts
+.\customer\artifacts\Chrome\Install-Chrome.ps1 -InstallMode Full -SkipShortcuts
 ```
 
 #### Step 5: Upload with Update-ImageArtifacts.ps1
@@ -899,7 +909,7 @@ Edit your image build parameters file:
 New-AzDeployment `
     -Location "East US 2" `
     -TemplateFile ".\deployments\imageBuild\imageBuild.json" `
-    -TemplateParameterFile ".\deployments\imageBuild\parameters\production.imageBuild.parameters.json"
+   -TemplateParameterFile ".\customer\parameters\imageBuild\production.imageBuild.parameters.json"
 ```
 
 ### Session Host Integration
@@ -955,7 +965,7 @@ Edit your host pool parameters file:
 New-AzDeployment `
     -Location "East US 2" `
     -TemplateFile ".\deployments\hostpools\hostpool.json" `
-    -TemplateParameterFile ".\deployments\hostpools\parameters\production.hostpool.parameters.json"
+   -TemplateParameterFile ".\customer\parameters\hostpools\production.hostpool.parameters.json"
 ```
 
 ## Best Practices
@@ -1100,7 +1110,7 @@ New-AzDeployment `
 
    ```powershell
    # Check artifact folder contents before zipping
-   Get-ChildItem .\.common\artifacts\MyApp\ -Recurse
+   Get-ChildItem .\customer\artifacts\MyApp\ -Recurse
    ```
 
 #### Issue: Parameters Not Being Received

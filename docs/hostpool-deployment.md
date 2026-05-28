@@ -169,7 +169,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 New-AzSubscriptionDeployment `
     -Location "usgovvirginia" `
     -TemplateFile ".\hostpools\hostpool.json" `
-    -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
+  -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
     -Name $deploymentName
 ```
 
@@ -188,7 +188,7 @@ DEPLOYMENT_NAME="${PARAM_FILE%.json}"
 az deployment sub create \
     --location usgovvirginia \
     --template-file ./hostpools/hostpool.json \
-    --parameters @./hostpools/parameters/$PARAM_FILE \
+  --parameters @./customer/parameters/hostpools/$PARAM_FILE \
     --name $DEPLOYMENT_NAME
 ```
 
@@ -207,10 +207,10 @@ az deployment sub create \
 
 ### Parameter Files
 
-Host pool configurations are defined in parameter files located in `deployments/hostpools/parameters/`:
+Use the sample files in `deployments/hostpools/parameters/` as starting points, then store your environment-specific copies in `customer/parameters/hostpools/`:
 
 ```
-deployments/hostpools/parameters/
+customer/parameters/hostpools/
 ├── demo.hostpool.parameters.json
 ├── prod.hostpool.parameters.json
 └── test.hostpool.parameters.json
@@ -381,11 +381,11 @@ Copy and customize a parameter file:
 ```powershell
 # Copy example parameter file
 Copy-Item `
-    -Path ".\hostpools\parameters\demo.hostpool.parameters.json" `
-    -Destination ".\hostpools\parameters\mycompany.hostpool.parameters.json"
+  -Path ".\deployments\hostpools\parameters\demo.hostpool.parameters.json" `
+  -Destination ".\customer\parameters\hostpools\mycompany.hostpool.parameters.json"
 
 # Edit with your values
-code ".\hostpools\parameters\mycompany.hostpool.parameters.json"
+code ".\customer\parameters\hostpools\mycompany.hostpool.parameters.json"
 ```
 
 #### 2. Update Secrets in Key Vault
@@ -426,7 +426,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 New-AzSubscriptionDeployment `
     -Location "East US 2" `
     -TemplateFile ".\hostpools\hostpool.json" `
-    -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
+  -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
     -Name $deploymentName
 ```
 
@@ -553,7 +553,7 @@ To add more session hosts to an existing pool:
    New-AzSubscriptionDeployment `
        -Location "East US 2" `
        -TemplateFile ".\hostpools\hostpool.json" `
-       -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
+       -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
        -Name $deploymentName
    ```
 
@@ -871,7 +871,7 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
    New-AzDeployment `
        -Location "eastus2" `
        -TemplateFile ".\deployments\hostpools\hostpool.json" `
-       -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
+       -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
        -Name $deploymentName
    
    # Option 3: Combine identifier with date (if uniqueness needed)

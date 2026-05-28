@@ -151,9 +151,9 @@ This step has **no Azure deployment outputs** — it only writes blobs to storag
 
 ### Notes
 
-- For air-gapped environments, use `-SkipDownloadingNewSources` and pre-stage files in `.common/artifacts/` manually before running.
+- For air-gapped environments, use `-SkipDownloadingNewSources` and pre-stage customer-managed files in `customer/artifacts/` before running.
 - Use `-DeleteExistingBlobs` for a clean upload when removing old packages.
-- Use `-AdditionalDownloadsFilePath` to merge a custom downloads JSON file on top of the auto-selected base file.
+- To merge customer-owned optional downloads, place `downloads.json` in `customer/parameters/imageManagement/`; the script discovers it automatically.
 
 ---
 
@@ -214,7 +214,7 @@ Example PowerShell invocation:
   New-AzDeployment `
       -Location <region> `
       -TemplateFile ".\deployments\hostpools\hostpool.json" `
-      -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
+  -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
       -Name $deploymentName
 ```
 
@@ -281,20 +281,21 @@ $galleryId = $imgMgmt.Outputs.computeGalleryResourceId.Value
 Keep one parameter file per component per environment. Update only the fields that change between runs (typically `customImageResourceId` after a new build):
 
 ```
-deployments/
-  keyVaults/parameters/
-    prod.keyVaults.parameters.json
+customer/
+  parameters/
+    keyVaults/
+      prod.keyVaults.parameters.json
 
-  imageManagement/parameters/
-    prod.imageManagement.parameters.json
+    imageManagement/
+      prod.imageManagement.parameters.json
 
-  imageBuild/parameters/
-    prod.imageBuild.parameters.json       ← update computeGalleryResourceId, artifactsContainerUri, etc. once
-    win11-m365.imageBuild.parameters.json ← per image definition variant
+    imageBuild/
+      prod.imageBuild.parameters.json       ← update computeGalleryResourceId, artifactsContainerUri, etc. once
+      win11-m365.imageBuild.parameters.json ← per image definition variant
 
-  hostpools/parameters/
-    prod-finance.hostpool.parameters.json ← update customImageResourceId after each build
-    prod-general.hostpool.parameters.json
+    hostpools/
+      prod-finance.hostpool.parameters.json ← update customImageResourceId after each build
+      prod-general.hostpool.parameters.json
 ```
 
 ---

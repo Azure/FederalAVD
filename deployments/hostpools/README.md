@@ -385,7 +385,7 @@ For a complete list of all 150+ parameters with detailed descriptions, see:
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\hostpool.json" `
-  -TemplateParameterFile ".\parameters\finance.parameters.json" `
+  -TemplateParameterFile "..\..\customer\parameters\hostpools\finance.parameters.json" `
   -identifier "finance" `
   -identitySolution "EntraDomainServices" `
   -domainName "contoso.com" `
@@ -415,7 +415,7 @@ New-AzSubscriptionDeployment `
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\hostpool.json" `
-  -TemplateParameterFile ".\parameters\secure.parameters.json" `
+  -TemplateParameterFile "..\..\customer\parameters\hostpools\secure.parameters.json" `
   -deployPrivateEndpoints $true `
   -hostPoolResourcesPrivateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints" `
   -operationsPrivateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints" `
@@ -424,7 +424,7 @@ New-AzSubscriptionDeployment `
 
 ## Examples — Parameter Files
 
-Ready-to-use parameter files are in `parameters\`. Copy and rename one for your environment. The following annotated examples show the key patterns.
+Ready-to-use sample parameter files are in `parameters\`. Copy and rename one into `customer\parameters\hostpools\` for your environment. The following annotated examples show the key patterns.
 
 ### Minimal Pooled Desktop (Entra ID, Marketplace Image)
 
@@ -527,7 +527,7 @@ Ready-to-use parameter files are in `parameters\`. Copy and rename one for your 
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\hostpool.json" `
-  -TemplateParameterFile ".\parameters\graphics.parameters.json" `
+  -TemplateParameterFile "..\..\customer\parameters\hostpools\graphics.parameters.json" `
   -customImageResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/win11-graphics/versions/latest" `
   -virtualMachineSize "Standard_NV12ads_A10_v5" `
   -installNvidiaGpuDriver $true `
@@ -540,7 +540,7 @@ New-AzSubscriptionDeployment `
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\hostpool.json" `
-  -TemplateParameterFile ".\parameters\enterprise.parameters.json" `
+  -TemplateParameterFile "..\..\customer\parameters\hostpools\enterprise.parameters.json" `
   -storageService "AzureNetAppFiles" `
   -netAppFilesAccountName "anf-avd-storage" `
   -netAppFilesCapacityPoolName "pool-premium" `

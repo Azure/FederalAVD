@@ -249,7 +249,7 @@ Commercial and Government clouds only:
 
 ### Deploy-ImageManagement.ps1 (Recommended)
 
-Use the provided `Deploy-ImageManagement.ps1` script in the `deployments\` folder. It expects a parameter file prefix that maps to `imageManagement\parameters\<Prefix>.imageManagement.parameters.json`.
+Use the provided `Deploy-ImageManagement.ps1` script in the `deployments\` folder. It prefers customer-owned parameter files in `customer\parameters\imageManagement\<Prefix>.imageManagement.parameters.json` and falls back to the repo examples in `imageManagement\parameters\<Prefix>.imageManagement.parameters.json`.
 
 ```powershell
 cd deployments
@@ -275,7 +275,7 @@ The script prints all deployment outputs. Use `-UpdateArtifacts` to automaticall
 New-AzDeployment `
   -Location 'usgovvirginia' `
   -TemplateFile '.\imageManagement\imageManagement.json' `
-  -TemplateParameterFile '.\imageManagement\parameters\basic.imageManagement.parameters.json' `
+    -TemplateParameterFile '..\customer\parameters\imageManagement\basic.imageManagement.parameters.json' `
   -Name "ImageManagement-$(Get-Date -Format 'yyyyMMddHHmmss')"
 ```
 
@@ -285,7 +285,7 @@ New-AzDeployment `
 az deployment sub create \
   --location usgovvirginia \
   --template-file ./imageManagement/imageManagement.json \
-  --parameters @./imageManagement/parameters/basic.imageManagement.parameters.json \
+    --parameters @../customer/parameters/imageManagement/basic.imageManagement.parameters.json \
   --name "ImageManagement-$(date +%Y%m%d%H%M%S)"
 ```
 

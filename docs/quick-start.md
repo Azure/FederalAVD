@@ -218,7 +218,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 New-AzDeployment `
     -Location "usgovvirginia" `
     -TemplateFile ".\deployments\hostpools\hostpool.json" `
-    -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
+    -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
     -Name $deploymentName
 ```
 
@@ -283,7 +283,7 @@ New-AzDeployment `
     -Location "usgovvirginia" `
     -Name "avd-networking-deployment" `
     -TemplateFile ".\deployments\networking\networking.json" `
-    -TemplateParameterFile ".\deployments\networking\parameters\<your-params>.json" `
+    -TemplateParameterFile ".\customer\parameters\networking\<your-params>.json" `
     -Verbose
 ```
 
@@ -441,7 +441,7 @@ cd deployments
 .\Deploy-ImageManagement.ps1 -Location "usgovvirginia" -ParameterFilePrefix basic -UpdateArtifacts
 ```
 
-Example parameter files are in `deployments\imageManagement\parameters\` (`basic`, `privateEndpoint`, `serviceEndpoint`, `production`). Copy and rename one for your environment.
+Example parameter files are in `deployments\imageManagement\parameters\` (`basic`, `privateEndpoint`, `serviceEndpoint`, `production`). Copy and rename one into `customer\parameters\imageManagement\` for your environment.
 
 If you did **not** use `-UpdateArtifacts`, note the `artifactsStorageAccountResourceId` output — you'll need it in Part B.
 
@@ -465,7 +465,7 @@ cd deployments
     -StorageAccountResourceId "<artifactsStorageAccountResourceId from Part A output>"
 ```
 
-**✈️ Air-gapped environments:** Use `-SkipDownloadingNewSources` and manually place installers in `.common/artifacts/` subdirectories before running.
+**✈️ Air-gapped environments:** Use `-SkipDownloadingNewSources` and manually place installers in `customer/artifacts/` before running.
 
 **📚 Detailed Guides:**
 
@@ -551,7 +551,7 @@ New-AzDeployment `
     -Location 'eastus2' `
     -Name $deploymentName `
     -TemplateFile '.\deployments\hostpools\hostpool.json' `
-    -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
+    -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
     -Verbose
 ```
 

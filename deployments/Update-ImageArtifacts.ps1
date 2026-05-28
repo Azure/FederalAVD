@@ -1,11 +1,15 @@
 <#
 .SYNOPSIS
-Downloads the latest software sources, packages them as zip files, and uploads them to the
-image management artifacts storage account blob container.
+Downloads the latest software sources, stages repository and customer artifacts, packages them as
+zip files, and uploads them to the image management artifacts storage account blob container.
 
 .DESCRIPTION
 Run this script whenever you want to refresh the artifacts in the image management storage account —
 for example, after adding new software packages or after new versions are released.
+
+The script stages artifacts from both the repository-owned '.common\artifacts' folder and the
+customer-owned 'customer\artifacts' folder. Customer artifacts are overlaid on top of repository
+artifacts, allowing customers to extend or replace packages without modifying repo-provided content.
 
 This script does NOT deploy any Azure infrastructure. Deploy the imageManagement Bicep template
 first (see deployments/imageManagement/README.md), then use this script to populate the storage
@@ -38,13 +42,9 @@ When specified, skips downloading new software versions from the internet.
 Use this in air-gapped environments or when the artifacts directory already contains
 the correct content and you just want to re-upload.
 
-.PARAMETER AdditionalDownloadsFilePath
-Full path to an additional downloads JSON file to merge with the base environment downloads file.
-Entries in this file are merged on top of the base file — existing keys are overwritten, new keys are added.
-The base file (public / secret / topsecret) is always selected automatically based on the current Azure environment.
-
-Example:
-  .\Update-ImageArtifacts.ps1 -StorageAccountName 'sa123' -ResourceGroupName 'rg-avd' -AdditionalDownloadsFilePath 'C:\configs\extra.downloads.json'
+.NOTES
+If `customer\parameters\imageManagement\downloads.json` exists, it is merged on top of the
+auto-selected base environment downloads file. Existing keys are overwritten and new keys are added.
 
 .PARAMETER TempDir
 Temporary directory used during artifact packaging. Defaults to $Env:Temp.
@@ -72,11 +72,10 @@ Use a path on a high-performance drive when processing large artifact sets.
     -DeleteExistingBlobs
 
 .EXAMPLE
-# Merge additional downloads on top of the auto-detected base file
+# Merge additional downloads automatically when customer\parameters\imageManagement\downloads.json exists
 .\Update-ImageArtifacts.ps1 `
     -StorageAccountName "saimgassetsuse2abc123" `
-    -ResourceGroupName "rg-avd-image-management-use2" `
-    -AdditionalDownloadsFilePath "C:\configs\extra.downloads.json"
+    -ResourceGroupName "rg-avd-image-management-use2"
 #>
 
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'ByResourceId')]
@@ -95,9 +94,6 @@ param(
 
     [Parameter(Mandatory = $false)]
     [switch]$SkipDownloadingNewSources,
-
-    [Parameter(Mandatory = $false)]
-    [string]$AdditionalDownloadsFilePath,
 
     [Parameter(Mandatory = $false)]
     [string]$TempDir = "$Env:Temp"
@@ -128,12 +124,17 @@ Else {
 
 $ArtifactsContainerName = 'artifacts'
 $TempArtifactsDir = Join-Path -Path $TempDir -ChildPath 'Artifacts'
-$ArtifactsDir = (Get-Item -Path (Join-Path -Path $PSScriptRoot -ChildPath '..\.common\artifacts')).FullName
+$RepoArtifactsDir = (Get-Item -Path (Join-Path -Path $PSScriptRoot -ChildPath '..\.common\artifacts')).FullName
+$CustomerArtifactsDir = Join-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath '..') -ChildPath 'customer\artifacts'
+$CustomerImageManagementParametersDir = Join-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath '..') -ChildPath 'customer\parameters\imageManagement'
+$ArtifactsDir = Join-Path -Path $TempArtifactsDir -ChildPath 'stagedArtifacts'
+$ResolvedAdditionalDownloadsFilePath = Join-Path -Path $CustomerImageManagementParametersDir -ChildPath 'downloads.json'
 
 If (Test-Path -Path $TempArtifactsDir) {
     Remove-Item -Path $TempArtifactsDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 New-Item -Path $TempArtifactsDir -ItemType Directory -Force | Out-Null
+New-Item -Path $ArtifactsDir -ItemType Directory -Force | Out-Null
 
 # Resolve storage account name and resource group from whichever parameter set was used
 If ($PSCmdlet.ParameterSetName -eq 'ByResourceId') {
@@ -154,6 +155,8 @@ $ArtifactsContainerUrl = $BlobEndpoint + $ArtifactsContainerName + '/'
 Write-Output "Storage account : $StorageAccountName"
 Write-Output "Resource group  : $StorageAccountResourceGroup"
 Write-Output "Container URL   : $ArtifactsContainerUrl"
+Write-Output "Repo artifacts  : $RepoArtifactsDir"
+Write-Output "Customer assets : $CustomerArtifactsDir"
 #endregion Variables
 
 Write-Output ("[{0} entered]" -f $MyInvocation.MyCommand)
@@ -428,6 +431,37 @@ function Compress-SubFolderContents {
     }
 }
 
+function Copy-ArtifactsContent {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, HelpMessage = 'Source folder whose contents should be merged into the destination.')]
+        [string] $SourceFolderPath,
+        [Parameter(Mandatory, HelpMessage = 'Destination folder that receives the source contents.')]
+        [string] $DestinationFolderPath
+    )
+
+    if (-not (Test-Path -Path $SourceFolderPath)) {
+        return
+    }
+
+    if (-not (Test-Path -Path $DestinationFolderPath)) {
+        New-Item -Path $DestinationFolderPath -ItemType Directory -Force | Out-Null
+    }
+
+    foreach ($item in Get-ChildItem -Path $SourceFolderPath -Force) {
+        $destinationPath = Join-Path -Path $DestinationFolderPath -ChildPath $item.Name
+        if ($item.PSIsContainer) {
+            if (-not (Test-Path -Path $destinationPath)) {
+                New-Item -Path $destinationPath -ItemType Directory -Force | Out-Null
+            }
+            Copy-ArtifactsContent -SourceFolderPath $item.FullName -DestinationFolderPath $destinationPath
+        }
+        else {
+            Copy-Item -Path $item.FullName -Destination $destinationPath -Force
+        }
+    }
+}
+
 function Add-ContentToBlobContainer {
     [CmdletBinding(SupportsShouldProcess = $True)]
     param(
@@ -532,6 +566,23 @@ function Get-EvergreenAppUri {
 
 #endregion Functions
 
+#region Prepare Artifacts
+
+Write-Output ""
+Write-Output "=== Prepare Artifacts ==="
+Write-Output "Staging repository artifacts..."
+Copy-ArtifactsContent -SourceFolderPath $RepoArtifactsDir -DestinationFolderPath $ArtifactsDir
+
+if (Test-Path -Path $CustomerArtifactsDir) {
+    Write-Output "Overlaying customer artifacts..."
+    Copy-ArtifactsContent -SourceFolderPath $CustomerArtifactsDir -DestinationFolderPath $ArtifactsDir
+}
+else {
+    Write-Output "Customer artifacts directory not found. Continuing with repository artifacts only."
+}
+
+#endregion Prepare Artifacts
+
 #region Download New Sources
 
 $downloadFilePath = (Join-Path -Path "$PSScriptRoot\.." -ChildPath ".common\data\$downloadsParametersPrefix.downloads.parameters.json")
@@ -552,13 +603,10 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         Write-Error "Configuration JSON content could not be converted to a PowerShell object" -ErrorAction 'Stop'
     }
 
-    # Merge additional downloads file if provided
-    if (-not [string]::IsNullOrEmpty($AdditionalDownloadsFilePath)) {
-        if (-not (Test-Path -Path $AdditionalDownloadsFilePath)) {
-            Write-Error "AdditionalDownloadsFilePath '$AdditionalDownloadsFilePath' was not found." -ErrorAction 'Stop'
-        }
-        Write-Output "Merging additional downloads from '$AdditionalDownloadsFilePath'."
-        $additionalJson = Get-Content -Path $AdditionalDownloadsFilePath -Raw -ErrorAction 'Stop'
+    # Merge customer-owned downloads file if present
+    if (Test-Path -Path $ResolvedAdditionalDownloadsFilePath) {
+        Write-Output "Merging additional downloads from '$ResolvedAdditionalDownloadsFilePath'."
+        $additionalJson = Get-Content -Path $ResolvedAdditionalDownloadsFilePath -Raw -ErrorAction 'Stop'
         $additionalJson = $additionalJson -replace 'ENVSUFFIX', $EnvSuffix
         try {
             $AdditionalDownloads = $additionalJson | ConvertFrom-Json -ErrorAction 'Stop'

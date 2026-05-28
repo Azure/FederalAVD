@@ -106,7 +106,7 @@ Custom images are built by executing **artifacts** during the image build proces
 
 ### Required - Parameter Files
 
-Image build configurations are defined in parameter files located in `deployments/imageBuild/parameters/`:
+Use the sample files in `deployments/imageBuild/parameters/` as starting points, then store your environment-specific copies in `customer/parameters/imageBuild/`:
 
 **One parameter file is required per image build:**
 
@@ -115,7 +115,7 @@ Image build configurations are defined in parameter files located in `deployment
 **Example structure:**
 
 ```
-deployments/imageBuild/parameters/
+customer/parameters/imageBuild/
 ├── demo.imageBuild.parameters.json
 ├── dev.imageBuild.parameters.json
 └── prod.imageBuild.parameters.json
@@ -309,7 +309,7 @@ Deploy using Azure CLI or PowerShell directly:
 New-AzSubscriptionDeployment `
     -Location "usgovvirginia" `
     -TemplateFile "imageBuild\imageBuild.json" `
-    -TemplateParameterFile "imageBuild\parameters\demo.imageBuild.parameters.json" `
+  -TemplateParameterFile "..\customer\parameters\imageBuild\demo.imageBuild.parameters.json" `
     -Name "avd-image-build-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
 
@@ -321,7 +321,7 @@ Executed from Deployments folder.
 az deployment sub create \
     --location usgovvirginia \
     --template-file imageBuild/imageBuild.json \
-    --parameters @imageBuild/parameters/demo.imageBuild.parameters.json \
+  --parameters @../customer/parameters/imageBuild/demo.imageBuild.parameters.json \
     --name "avd-image-build-$(date +%Y%m%d%H%M)"
 ```
 

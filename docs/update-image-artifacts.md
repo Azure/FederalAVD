@@ -6,7 +6,7 @@
 
 ## Overview
 
-`Update-ImageArtifacts.ps1` is a PowerShell script that downloads the latest software sources, packages them as zip files, and uploads them to the image management artifacts storage account. Run it whenever you want to refresh what is available to image build deployments — for example, after adding a new software package or after a new version is released.
+`Update-ImageArtifacts.ps1` is a PowerShell script that downloads the latest software sources, stages artifacts from both `.common/artifacts/` and `customer/artifacts/`, packages them as zip files, and uploads them to the image management artifacts storage account. Run it whenever you want to refresh what is available to image build deployments — for example, after adding a new software package or after a new version is released.
 
 > **Infrastructure vs. Artifacts:** This script does **not** deploy any Azure resources. Deploy the imageManagement template first (see [imageManagement README](../deployments/imageManagement/README.md) or [Quick Start Step 2](quick-start.md#step-2-deploy-image-management-resources)), then use this script to populate the storage account. Alternatively, use `Deploy-ImageManagement.ps1 -UpdateArtifacts` to do both in one step.
 
@@ -15,7 +15,7 @@
 Three sequential phases:
 
 1. **Download** — Fetches the latest versions of software from the internet using the downloads parameter file (skipped with `-SkipDownloadingNewSources` or when no downloads file exists)
-2. **Package** — Compresses each subdirectory in `.common/artifacts/` into a zip file
+2. **Package** — Compresses each subdirectory in the merged artifacts view built from `.common/artifacts/` and `customer/artifacts/`
 3. **Upload** — Uploads all packaged artifacts to the `artifacts` blob container in the storage account
 
 ## Prerequisites
@@ -33,12 +33,17 @@ Three sequential phases:
 ### Required Files
 
 Base downloads parameter files are in `.common/data/` and are selected automatically based on the connected Azure environment — no action needed:
+
   - `.common/data/public.downloads.parameters.json` (commercial / government)
   - `.common/data/secret.downloads.parameters.json` (IL6)
   - `.common/data/topsecret.downloads.parameters.json` (IL7)
 
-To download **optional** software (e.g., PowerShell 7, VS Code, LGPO, Git), supply an additional JSON file via `-AdditionalDownloadsFilePath`. A ready-to-use example for public cloud environments is provided at:
+To download **optional** software (e.g., PowerShell 7, VS Code, LGPO, Git), place a customer-owned downloads file at `customer/parameters/imageManagement/downloads.json`. A ready-to-use sample for public cloud environments is provided in the repo at:
   - `deployments/imageManagement/parameters/public.downloads.optional.parameters.json`
+
+Copy that sample to your customer-owned parameters location and rename it to the auto-discovered file name:
+
+  - `customer/parameters/imageManagement/downloads.json`
 
 ## Parameters
 
@@ -63,7 +68,6 @@ The storage account can be identified by **either** its full resource ID **or** 
 |-----------|------|---------|-------------|
 | **DeleteExistingBlobs** | Switch | `$false` | Delete all existing blobs in the container before uploading. Use for a clean refresh rather than incremental update. |
 | **SkipDownloadingNewSources** | Switch | `$false` | Skip downloading new software. Use in air-gapped environments or when the artifacts directory is already current. |
-| **AdditionalDownloadsFilePath** | String | *(none)* | Full path to an additional downloads JSON file to merge with the base environment file. Entries in this file are merged on top — existing keys are overwritten, new keys are added. |
 | **TempDir** | String | `$Env:Temp` | Temporary directory for packaging. Use a path on a high-performance drive for large artifact sets. |
 
 ## Usage Examples
@@ -114,16 +118,15 @@ Delete all existing blobs first, then upload fresh:
 
 ### Include Optional Software
 
-Merge additional downloads (e.g., PowerShell 7, VS Code, LGPO) on top of the auto-detected base file:
+Merge additional downloads (e.g., PowerShell 7, VS Code, LGPO) on top of the auto-detected base file by placing `downloads.json` under `customer/parameters/imageManagement/`:
 
 ```powershell
 .\Update-ImageArtifacts.ps1 `
     -StorageAccountName "saimgassetsusgvabc123" `
-    -ResourceGroupName "rg-avd-image-management-usgv" `
-    -AdditionalDownloadsFilePath "C:\repos\FederalAVD\deployments\imageManagement\parameters\public.downloads.optional.parameters.json"
+    -ResourceGroupName "rg-avd-image-management-usgv"
 ```
 
-You can supply any JSON file in the same format — only entries present in the file are merged.
+If `customer/parameters/imageManagement/downloads.json` exists, the script merges it automatically.
 
 ## Environment Detection
 
@@ -136,11 +139,13 @@ The script automatically selects the base downloads file from `.common/data/` ba
 | Azure Secret (IL6) | `.common/data/secret.downloads.parameters.json` |
 | Azure Top Secret (IL7) | `.common/data/topsecret.downloads.parameters.json` |
 
-The base files contain the software entries that are required by the image build template (FSLogix, M365, OneDrive, Teams, WebView2, etc.). Use `-AdditionalDownloadsFilePath` to include optional software on top.
+The base files contain the software entries that are required by the image build template (FSLogix, M365, OneDrive, Teams, WebView2, etc.). To include optional or customer-specific software on top, create `customer/parameters/imageManagement/downloads.json`.
 
 ## Software Download Configuration
 
-Downloads are defined in JSON files under `deployments/imageManagement/parameters/`:
+Repo-provided download definitions live under `deployments/imageManagement/parameters/`. Customer-specific overlays should live under `customer/parameters/imageManagement/downloads.json`.
+
+Example JSON:
 
 ```json
 {
@@ -169,10 +174,10 @@ Downloads are defined in JSON files under `deployments/imageManagement/parameter
 
 ## Artifacts Directory Structure
 
-The script packages the `.common/artifacts/` directory:
+The script stages a merged artifacts view from the repository and customer folders, then packages the merged result:
 
 ```text
-.common/artifacts/
+stagedArtifacts/
 ├── uploadedFileVersionInfo.txt  (auto-generated version log)
 ├── FSLogix/
 │   ├── Install_FSLogix.ps1
@@ -180,10 +185,12 @@ The script packages the `.common/artifacts/` directory:
 ├── Microsoft365Apps/
 │   ├── Install_M365Apps.ps1
 │   └── officedeploymenttool.exe
-└── CustomScript/
-    ├── Install_CustomScript.ps1
-    └── installer.msi
+└── Chrome/
+    ├── Install-Chrome.ps1
+    └── GoogleChromeEnterpriseBundle64.msi
 ```
+
+`customer/artifacts/` overlays `.common/artifacts/` when file or folder names match. This lets customers add new packages or replace repo-provided package contents without editing `.common/`.
 
 Each subdirectory is compressed into a zip file and uploaded to the `artifacts` blob container.
 
@@ -208,11 +215,11 @@ Pass this URL as `artifactsContainerUri` in image build deployments.
 **Download failures**
 - Check internet connectivity from the machine running the script
 - Verify URLs in the downloads parameter file are still valid
-- Use `-SkipDownloadingNewSources` and manually place files in `.common/artifacts/` for air-gapped scenarios
+- Use `-SkipDownloadingNewSources` and manually place customer-managed files in `customer/artifacts/` for air-gapped scenarios
 
 **Parameter file not found**
 - The base downloads files are in `.common/data/` and are included with the repository — they should always be present
-- Verify the `-AdditionalDownloadsFilePath` value (if provided) points to an existing file with a valid full path
+- If you expect optional downloads to be merged, verify `customer/parameters/imageManagement/downloads.json` exists and contains valid JSON
 
 ## Related Resources
 
