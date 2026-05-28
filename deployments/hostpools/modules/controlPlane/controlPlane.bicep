@@ -24,6 +24,10 @@ param hostPoolRDPProperties string
 param hostPoolType string
 param hostPoolValidationEnvironment bool
 param hostPoolVmTemplate object
+@allowed(['None', 'SystemAssigned', 'UserAssigned'])
+param hostPoolManagedIdentityType string = 'None'
+param hostPoolUserAssignedIdentityResourceId string = ''
+param automatedHostPoolSettings object = {}
 param controlPlaneRegion string
 param globalFeedRegion string
 param virtualMachinesRegion string
@@ -43,6 +47,8 @@ param workspaceFeedPrivateEndpointSubnetResourceId string
 param workspaceFriendlyName string
 param workspaceName string
 param workspacePublicNetworkAccess string
+param automatedSessionHostManagementTimestamp string = utcNow('yyyy-MM-ddTHH:mm')
+param automatedSessionHostManagementTimeZone string = 'UTC'
 
 // ─── Private endpoint name construction ───────────────────────────────────────
 var globalFeedVnetName = !empty(globalFeedPrivateEndpointSubnetResourceId)
@@ -122,6 +128,39 @@ var feedExistingRefs = !empty(feedWorkspaceExistingProps)
   ? map(feedWorkspaceExistingProps.applicationGroupReferences, resId => toLower(resId))
   : []
 
+// ─── Automated host pool mode ────────────────────────────────────────────────
+var automatedHostPoolEnabled = bool(automatedHostPoolSettings.?enabled ?? false)
+var pooledAutomatedHostPoolEnabled = automatedHostPoolEnabled && effectiveHostPoolType == 'Pooled'
+var automatedSessionHostProvisioningEnabled = bool(automatedHostPoolSettings.?enableSessionHostProvisioning ?? false)
+var sessionHostConfigurationProperties = automatedHostPoolSettings.?sessionHostConfigurationProperties ?? {}
+var sessionHostManagementNoProvisioningProperties = automatedHostPoolSettings.?sessionHostManagementNoProvisioningProperties ?? {
+  scheduledDateTime: automatedSessionHostManagementTimestamp
+  scheduledDateTimeZone: automatedSessionHostManagementTimeZone
+  provisioning: null
+  update: {
+    deleteOriginalVm: false
+    maxVmsRemoved: 1
+    logOffDelayMinutes: 2
+    logOffMessage: 'You will be signed out'
+  }
+}
+var sessionHostManagementProvisioningProperties = automatedHostPoolSettings.?sessionHostManagementProvisioningProperties ?? {
+  failedSessionHostCleanupPolicy: 'KeepAll'
+  provisioning: {
+    instanceCount: 1
+    canaryPolicy: 'Auto'
+    setDrainMode: false
+  }
+  scheduledDateTime: automatedSessionHostManagementTimestamp
+  scheduledDateTimeZone: automatedSessionHostManagementTimeZone
+  update: {
+    deleteOriginalVm: true
+    maxVmsRemoved: 1
+    logOffDelayMinutes: 2
+    logOffMessage: 'You will be signed out'
+  }
+}
+
 // ─── Host Pool ─────────────────────────────────────────────────────────────────
 module hostPool '../../../../.common/bicepModules/desktopVirtualization/hostPools/deploy.bicep' = {
   name: 'HostPool-${deploymentSuffix}'
@@ -139,6 +178,9 @@ module hostPool '../../../../.common/bicepModules/desktopVirtualization/hostPool
     startVMOnConnect: startVMOnConnect
     vmTemplate: string(hostPoolVmTemplate)
     personalDesktopAssignmentType: effectivePersonalAssignmentType
+    managementMode: pooledAutomatedHostPoolEnabled ? 'Automated' : 'Manual'
+    identityType: hostPoolManagedIdentityType
+    userAssignedIdentityResourceId: hostPoolManagedIdentityType == 'UserAssigned' ? hostPoolUserAssignedIdentityResourceId : ''
     diagnosticSettings: enableMonitoring
       ? {
           name: 'WVDInsights'
@@ -146,6 +188,39 @@ module hostPool '../../../../.common/bicepModules/desktopVirtualization/hostPool
         }
       : null
   }
+}
+
+module sessionHostConfiguration '../../../../.common/bicepModules/desktopVirtualization/hostPools/sessionHostConfigurations/deploy.bicep' = if (pooledAutomatedHostPoolEnabled) {
+  name: 'SessionHostConfiguration-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupControlPlane)
+  params: {
+    hostPoolName: hostPoolName
+    properties: sessionHostConfigurationProperties
+  }
+  dependsOn: [hostPool]
+}
+
+module sessionHostManagementNoProvisioning '../../../../.common/bicepModules/desktopVirtualization/hostPools/sessionHostManagements/deploy.bicep' = if (pooledAutomatedHostPoolEnabled && !automatedSessionHostProvisioningEnabled) {
+  name: 'SessionHostManagement-NoProvisioning-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupControlPlane)
+  params: {
+    hostPoolName: hostPoolName
+    properties: sessionHostManagementNoProvisioningProperties
+  }
+  dependsOn: [hostPool]
+}
+
+module sessionHostManagementWithProvisioning '../../../../.common/bicepModules/desktopVirtualization/hostPools/sessionHostManagements/deploy.bicep' = if (pooledAutomatedHostPoolEnabled && automatedSessionHostProvisioningEnabled) {
+  name: 'SessionHostManagement-WithProvisioning-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupControlPlane)
+  params: {
+    hostPoolName: hostPoolName
+    properties: sessionHostManagementProvisioningProperties
+  }
+  dependsOn: [
+    hostPool
+    sessionHostConfiguration
+  ]
 }
 
 module hostPool_pe '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (avdPrivateLinkPrivateRoutes != 'None' && !empty(hostPoolPrivateEndpointSubnetResourceId)) {
@@ -344,6 +419,7 @@ module globalWorkspace_pe '../../../../.common/bicepModules/network/privateEndpo
 }
 
 output hostPoolResourceId string = hostPool.outputs.resourceId
+output hostPoolPrincipalId string = hostPool.outputs.principalId
 output workspaceResourceId string = empty(existingFeedWorkspaceResourceId)
   ? feedWorkspace.outputs.resourceId
   : existingFeedWorkspaceResourceId

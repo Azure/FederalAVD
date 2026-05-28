@@ -8,7 +8,7 @@ var apiVersion = startsWith(environment().name, 'USN') ? '2017-08-01' : '2018-02
 
 var customizers = [for customization in customizations: {
   name: replace(customization.name, ' ', '-')
-  uri: startsWith(customization.blobNameOrUri, 'https://') || startsWith(customization.blobNameorUri, 'http://') ? customization.blobNameOrUri : '${artifactsContainerUri}/${customization.blobNameOrUri}' 
+  uri: startsWith(customization.blobNameOrUri, 'https://') || startsWith(customization.blobNameOrUri, 'http://') ? customization.blobNameOrUri : '${artifactsContainerUri}/${customization.blobNameOrUri}' 
   arguments: customization.?arguments ?? ''
 }]
 

@@ -1,4 +1,5 @@
 targetScope = 'subscription'
+import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
 // Shared module: deploys AVD Secrets Key Vault and/or Encryption Key Vault into an existing resource group.
 // Called by both the standalone Security deployment and the hostpool inline fallback.
 // The caller is responsible for creating the resource group before calling this module.
@@ -31,6 +32,9 @@ param encryptionKeyVaultName string
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module.')
 param permittedIPs array = []
+
+@description('Optional. Role assignments to apply to the inline-created secrets key vault.')
+param secretsKeyVaultRoleAssignments roleAssignmentType[] = []
 
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
@@ -111,6 +115,18 @@ module secrets '../../keyVault/vaults/secrets/deploy.bicep' = [
     dependsOn: [secretsKeyVault]
   }
 ]
+
+module secretsKeyVaultRoleAssignmentsModule '../../keyVault/vaults/roleAssignment.bicep' = if (deploySecretsKv && !empty(secretsKeyVaultRoleAssignments)) {
+  name: 'Secrets-KeyVault-RBAC-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    keyVaultName: secretsKeyVaultName
+    assignments: secretsKeyVaultRoleAssignments
+  }
+  dependsOn: [
+    secretsKeyVault
+  ]
+}
 
 // ─── Encryption Key Vault ──────────────────────────────────────────────────────
 

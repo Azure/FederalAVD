@@ -38,27 +38,73 @@ param diagnosticSettings diagnosticSettingsType?
 @allowed(['Desktop', 'RemoteApp'])
 param preferredAppGroupType string = 'Desktop'
 
-resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' = {
+@description('Optional. Host pool management mode. Use Automated when deploying session host configuration/management resources.')
+@allowed(['Manual', 'Automated'])
+param managementMode string = 'Manual'
+
+@description('Optional. Managed identity type for the host pool.')
+@allowed(['None', 'SystemAssigned', 'UserAssigned'])
+param identityType string = 'None'
+
+@description('Conditional. Resource ID of a user-assigned managed identity for the host pool when identityType is UserAssigned.')
+param userAssignedIdentityResourceId string = ''
+
+var usePooledAutomatedApi = hostPoolType == 'Pooled' && managementMode == 'Automated'
+
+var hostPoolProperties = union({
+  hostPoolType: hostPoolType
+  loadBalancerType: loadBalancerType
+  maxSessionLimit: maxSessionLimit
+  validationEnvironment: validationEnvironment
+  customRdpProperty: !empty(customRdpProperty) ? customRdpProperty : null
+  publicNetworkAccess: publicNetworkAccess
+  startVMOnConnect: startVMOnConnect
+  vmTemplate: !empty(vmTemplate) ? vmTemplate : null
+  personalDesktopAssignmentType: !empty(personalDesktopAssignmentType) ? personalDesktopAssignmentType : null
+  registrationInfo: {
+    expirationTime: dateTimeAdd(utcValue, 'PT${registrationTokenExpirationHours}H')
+    registrationTokenOperation: 'Update'
+  }
+  preferredAppGroupType: preferredAppGroupType
+}, usePooledAutomatedApi ? {
+  managementType: 'Automated'
+} : {})
+
+resource hostPool_manual 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' = if (!usePooledAutomatedApi) {
   name: name
   location: location
   tags: tags
-  properties: {
-    hostPoolType: hostPoolType
-    loadBalancerType: loadBalancerType
-    maxSessionLimit: maxSessionLimit
-    validationEnvironment: validationEnvironment
-    customRdpProperty: !empty(customRdpProperty) ? customRdpProperty : null
-    publicNetworkAccess: publicNetworkAccess
-    startVMOnConnect: startVMOnConnect
-    vmTemplate: !empty(vmTemplate) ? vmTemplate : null
-    personalDesktopAssignmentType: !empty(personalDesktopAssignmentType) ? personalDesktopAssignmentType : null
-    registrationInfo: {
-      expirationTime: dateTimeAdd(utcValue, 'PT${registrationTokenExpirationHours}H')
-      registrationTokenOperation: 'Update'
-    }
-    preferredAppGroupType: preferredAppGroupType
-  }
+  identity: identityType == 'None'
+    ? null
+    : any({
+        type: identityType
+        userAssignedIdentities: identityType == 'UserAssigned'
+          ? {
+              '${userAssignedIdentityResourceId}': {}
+            }
+          : null
+      })
+  properties: hostPoolProperties
 }
+
+resource hostPool_automated 'Microsoft.DesktopVirtualization/hostPools@2025-11-01-preview' = if (usePooledAutomatedApi) {
+  name: name
+  location: location
+  tags: tags
+  identity: identityType == 'None'
+    ? null
+    : any({
+        type: identityType
+        userAssignedIdentities: identityType == 'UserAssigned'
+          ? {
+              '${userAssignedIdentityResourceId}': {}
+            }
+          : null
+      })
+  properties: hostPoolProperties
+}
+
+var deployDiagnosticSettings = diagnosticSettings != null && (!empty(diagnosticSettings.?workspaceId ?? '') || !empty(diagnosticSettings.?storageAccountId ?? '') || !empty(diagnosticSettings.?eventHubAuthorizationRuleId ?? ''))
 
 var diagTargetNames = filter([
   !empty(diagnosticSettings.?workspaceId ?? '') ? last(split(diagnosticSettings.?workspaceId!, '/')) : ''
@@ -76,8 +122,8 @@ var diagnosticSettingName = !empty(diagnosticSettings.?name ?? '')
           ? 'diag-${diagTargetNames[0]}'
           : 'diagnostics'
 
-resource diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (diagnosticSettings != null && (!empty(diagnosticSettings.?workspaceId ?? '') || !empty(diagnosticSettings.?storageAccountId ?? '') || !empty(diagnosticSettings.?eventHubAuthorizationRuleId ?? ''))) {
-  scope: hostPool
+resource diagnosticSetting_2023_09_05 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (deployDiagnosticSettings && !usePooledAutomatedApi) {
+  scope: hostPool_manual
   name: diagnosticSettingName
   properties: {
     workspaceId: diagnosticSettings.?workspaceId
@@ -90,5 +136,22 @@ resource diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-pre
   }
 }
 
-output resourceId string = hostPool.id
-output name string = hostPool.name
+resource diagnosticSetting_2025_11_01_preview 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (deployDiagnosticSettings && usePooledAutomatedApi) {
+  scope: hostPool_automated
+  name: diagnosticSettingName
+  properties: {
+    workspaceId: diagnosticSettings.?workspaceId
+    storageAccountId: diagnosticSettings.?storageAccountId
+    eventHubAuthorizationRuleId: diagnosticSettings.?eventHubAuthorizationRuleId
+    eventHubName: diagnosticSettings.?eventHubName
+    logs: diagnosticSettings.?logCategories ?? [
+      { categoryGroup: 'allLogs', enabled: true }
+    ]
+  }
+}
+
+output resourceId string = resourceId('Microsoft.DesktopVirtualization/hostPools', name)
+output name string = name
+output principalId string = identityType == 'None'
+  ? ''
+  : string(reference(resourceId('Microsoft.DesktopVirtualization/hostPools', name), usePooledAutomatedApi ? '2025-11-01-preview' : '2023-09-05', 'Full').identity.principalId)

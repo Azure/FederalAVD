@@ -25,15 +25,6 @@ resource initiativeDefinition 'Microsoft.Authorization/policySetDefinitions@2024
           portalReview: true
         }
       }
-      VMInsightsDCRId: {
-        type: 'string'
-        metadata: {
-          displayName: 'VM Insights Data Collection Rule'
-          description: 'The Resource Id of the VM Insights Data Collection Rule that will be associated with the Virtual Machines.'
-          strongType: 'Microsoft.Insights/dataCollectionRules'
-          portalReview: true
-        }
-      }
       DCEId: {
         type: 'string'
         metadata: {
@@ -72,22 +63,7 @@ resource initiativeDefinition 'Microsoft.Authorization/policySetDefinitions@2024
             value: false
           }
         }
-      }
-      {
-        policyDefinitionId: tenantResourceId('Microsoft.Authorization/policyDefinitions', '244efd75-0d92-453c-b9a3-7d73ca36ed52')
-        policyDefinitionReferenceId: 'VMInsightsDataCollectionRule'
-        parameters: {
-          dcrResourceId: {
-            value: '[parameters(\'VMInsightsDCRId\')]'
-          }
-          resourceType: {
-            value: 'Microsoft.Insights/dataCollectionRules'
-          }
-          scopeToSupportedImages: {
-            value: false
-          }
-        }
-      }
+      }      
       {
         policyDefinitionId: tenantResourceId('Microsoft.Authorization/policyDefinitions', '244efd75-0d92-453c-b9a3-7d73ca36ed52')
         policyDefinitionReferenceId: 'DataCollectionEndpoint'

@@ -75,6 +75,34 @@ param controlPlaneSubscriptionId string = ''
 @description('Optional. The resource Id of an existing AVD host pool. Reserved for future use.')
 param existingHostPoolResourceId string = ''
 
+@description('''Optional. Automated host pool settings.
+- enabled: Switches host pool to Automated management mode and deploys sessionHostConfigurations/sessionHostManagements.
+- enableSessionHostProvisioning: Enables provisioning workflow in sessionHostManagement.
+- sessionHostConfigurationProperties: Properties payload for Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations.
+- sessionHostManagementNoProvisioningProperties/sessionHostManagementProvisioningProperties: Properties payloads for Microsoft.DesktopVirtualization/hostPools/sessionHostManagements.
+Defaults keep existing manual behavior for sovereign and air-gapped compatibility.
+''')
+param automatedHostPoolSettings object = {
+  enabled: false
+  enableSessionHostProvisioning: false
+  sessionHostConfigurationName: 'default'
+  sessionHostManagementName: 'default'
+  sessionHostConfigurationProperties: {}
+  sessionHostManagementNoProvisioningProperties: {}
+  sessionHostManagementProvisioningProperties: {}
+}
+
+@allowed([
+  'None'
+  'SystemAssigned'
+  'UserAssigned'
+])
+@description('Optional. Managed identity type assigned to the host pool for automated host pool operations.')
+param hostPoolManagedIdentityType string = 'None'
+
+@description('Optional. Existing user-assigned managed identity resource ID for the host pool when hostPoolManagedIdentityType is UserAssigned. If omitted, one is created automatically.')
+param existingHostPoolUserAssignedIdentityResourceId string = ''
+
 @description('Optional. The resource Id of an existing AVD workspace to which the desktop application group will be registered.')
 param existingFeedWorkspaceResourceId string = ''
 
@@ -658,7 +686,9 @@ var cmkIsRequested = contains(keyManagementStorageAccounts, 'CustomerManaged') |
   'CustomerManaged'
 ) || confidentialVMOSDiskEncryption
 var deployInlineEncryptionKv = empty(existingEncryptionKeyVaultResourceId) && cmkIsRequested
-var deployKeyVaults = deploySecretsKeyVault || deployInlineEncryptionKv
+var manualCredentialSecretsProvided = !empty(domainJoinUserPassword) || !empty(domainJoinUserPrincipalName) || !empty(virtualMachineAdminPassword) || !empty(virtualMachineAdminUserName)
+var effectiveDeploySecretsKeyVault = deploySecretsKeyVault || (empty(existingCredentialsKeyVaultResourceId) && manualCredentialSecretsProvided)
+var deployKeyVaults = effectiveDeploySecretsKeyVault || deployInlineEncryptionKv
 
 // Top-level CMK: run keys + DES/UAI + role assignments early so RBAC propagation
 // completes during the monitoring/controlPlane phases — well before VMs or storage deploy.
@@ -686,6 +716,15 @@ var hostPoolVmTemplate = {
   minimumMemoryGB: memoryGB == 0 ? null : memoryGB
   dynamicMemoryConfig: false
 }
+
+var effectiveAutomatedHostPoolSettings = union(automatedHostPoolSettings, {
+  enabled: false
+  enableSessionHostProvisioning: false
+})
+var automatedHostPoolEnabled = bool(effectiveAutomatedHostPoolSettings.?enabled ?? false)
+var pooledAutomatedHostPoolEnabled = automatedHostPoolEnabled && startsWith(hostPoolType, 'Pooled')
+var effectiveHostPoolManagedIdentityType = pooledAutomatedHostPoolEnabled ? hostPoolManagedIdentityType : 'None'
+var deployHostPoolUserAssignedIdentity = effectiveHostPoolManagedIdentityType == 'UserAssigned' && empty(existingHostPoolUserAssignedIdentityResourceId)
 
 // Conditional Host Resource Group Tags
 
@@ -1383,7 +1422,7 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     deployEncryptionKeyVault: deployInlineEncryptionKv
-    deploySecretsKeyVault: deploySecretsKeyVault
+    deploySecretsKeyVault: effectiveDeploySecretsKeyVault
     keyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
     keyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
     secretsKeyVaultName: keyVaultNameSecrets
@@ -1399,6 +1438,15 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
     resourceGroupName: resourceGroupOperations
+    secretsKeyVaultRoleAssignments: effectiveHostPoolManagedIdentityType != 'None'
+      ? [
+          {
+            principalId: controlPlane.outputs.hostPoolPrincipalId
+            roleDefinitionId: '4633458b-17de-408a-b874-0445c86b69e6'
+            principalType: 'ServicePrincipal'
+          }
+        ]
+      : []
     tags: tags
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
@@ -1514,6 +1562,22 @@ module monitoring 'modules/monitoring/monitoring.bicep' = if (enableMonitoring &
   ]
 }
 
+module hostPoolUserAssignedIdentity '../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (deployHostPoolUserAssignedIdentity) {
+  name: 'HostPool-UAI-${deploymentSuffix}'
+  scope: resourceGroup(split(virtualMachineSubnetResourceId, '/')[2], split(virtualMachineSubnetResourceId, '/')[4])
+  params: {
+    location: virtualMachinesRegion
+    name: replace(userAssignedIdentityNameConv, 'TOKEN', 'hostpool')
+    tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
+  }
+}
+
+var effectiveHostPoolUserAssignedIdentityResourceId = effectiveHostPoolManagedIdentityType == 'UserAssigned'
+  ? (empty(existingHostPoolUserAssignedIdentityResourceId)
+      ? (deployHostPoolUserAssignedIdentity ? hostPoolUserAssignedIdentity!.outputs.resourceId : '')
+      : existingHostPoolUserAssignedIdentityResourceId)
+  : ''
+
 // AVD Control Plane Resources: workspace, host pool, and desktop application group
 module controlPlane 'modules/controlPlane/controlPlane.bicep' = {
   name: 'ControlPlane-${deploymentSuffix}'
@@ -1547,6 +1611,9 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = {
     hostPoolType: hostPoolType
     hostPoolValidationEnvironment: hostPoolValidationEnvironment
     hostPoolVmTemplate: hostPoolVmTemplate
+    hostPoolManagedIdentityType: effectiveHostPoolManagedIdentityType
+    hostPoolUserAssignedIdentityResourceId: effectiveHostPoolUserAssignedIdentityResourceId
+    automatedHostPoolSettings: effectiveAutomatedHostPoolSettings
     virtualMachinesRegion: virtualMachinesRegion
     logAnalyticsWorkspaceResourceId: enableMonitoring
       ? (empty(existingLogAnalyticsWorkspaceResourceId)
@@ -1572,6 +1639,72 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = {
   dependsOn: [
     controlPlaneResourceGroup
   ]
+}
+
+var hostPoolManagedIdentityEnabled = effectiveHostPoolManagedIdentityType != 'None'
+var hostPoolManagedIdentityPrincipalId = hostPoolManagedIdentityEnabled ? controlPlane.outputs.hostPoolPrincipalId : ''
+var desktopVirtualizationVirtualMachineContributorRoleId = 'a959dbd1-f747-45e3-8ba6-dd80f235f97c'
+var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
+
+var automatedCustomImageResourceId = string(automatedHostPoolSettings.?sessionHostConfigurationProperties.?imageInfo.?customInfo.?resourceId ?? '')
+var automatedCustomImageResourceSubscription = !empty(automatedCustomImageResourceId) ? split(automatedCustomImageResourceId, '/')[2] : ''
+var automatedCustomImageResourceGroupName = !empty(automatedCustomImageResourceId) ? split(automatedCustomImageResourceId, '/')[4] : ''
+
+var sessionHostVnetSubscription = split(virtualMachineSubnetResourceId, '/')[2]
+var sessionHostVnetResourceGroupName = split(virtualMachineSubnetResourceId, '/')[4]
+
+var sessionHostNsgResourceId = string(automatedHostPoolSettings.?sessionHostConfigurationProperties.?networkInfo.?securityGroupId ?? '')
+var sessionHostNsgSubscription = !empty(sessionHostNsgResourceId) ? split(sessionHostNsgResourceId, '/')[2] : ''
+var sessionHostNsgResourceGroupName = !empty(sessionHostNsgResourceId) ? split(sessionHostNsgResourceId, '/')[4] : ''
+var sessionHostNsgResourceGroupDiffersFromVnet = sessionHostNsgSubscription != sessionHostVnetSubscription || sessionHostNsgResourceGroupName != sessionHostVnetResourceGroupName
+
+var existingCredentialsKeyVaultSubscription = !empty(existingCredentialsKeyVaultResourceId) ? split(existingCredentialsKeyVaultResourceId, '/')[2] : ''
+var existingCredentialsKeyVaultResourceGroupName = !empty(existingCredentialsKeyVaultResourceId) ? split(existingCredentialsKeyVaultResourceId, '/')[4] : ''
+var existingCredentialsKeyVaultName = !empty(existingCredentialsKeyVaultResourceId) ? last(split(existingCredentialsKeyVaultResourceId, '/')) : ''
+
+module hostPoolIdentityRoleAssignment_VnetResourceGroup '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (hostPoolManagedIdentityEnabled) {
+  name: 'RA-HostPoolIdentity-VnetRG-${deploymentSuffix}'
+  scope: resourceGroup(sessionHostVnetSubscription, sessionHostVnetResourceGroupName)
+  params: {
+    principalId: hostPoolManagedIdentityPrincipalId
+    roleDefinitionId: desktopVirtualizationVirtualMachineContributorRoleId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module hostPoolIdentityRoleAssignment_NsgResourceGroup '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (hostPoolManagedIdentityEnabled && !empty(sessionHostNsgResourceId) && sessionHostNsgResourceGroupDiffersFromVnet) {
+  name: 'RA-HostPoolIdentity-NsgRG-${deploymentSuffix}'
+  scope: resourceGroup(sessionHostNsgSubscription, sessionHostNsgResourceGroupName)
+  params: {
+    principalId: hostPoolManagedIdentityPrincipalId
+    roleDefinitionId: desktopVirtualizationVirtualMachineContributorRoleId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module hostPoolIdentityRoleAssignment_ImageResourceGroup '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (hostPoolManagedIdentityEnabled && !empty(automatedCustomImageResourceId)) {
+  name: 'RA-HostPoolIdentity-ImageRG-${deploymentSuffix}'
+  scope: resourceGroup(automatedCustomImageResourceSubscription, automatedCustomImageResourceGroupName)
+  params: {
+    principalId: hostPoolManagedIdentityPrincipalId
+    roleDefinitionId: desktopVirtualizationVirtualMachineContributorRoleId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module hostPoolIdentityRoleAssignment_CredentialsKeyVault '../../.common/bicepModules/keyVault/vaults/roleAssignment.bicep' = if (hostPoolManagedIdentityEnabled && !empty(existingCredentialsKeyVaultResourceId)) {
+  name: 'RA-HostPoolIdentity-CredentialsKV-Existing-${deploymentSuffix}'
+  scope: resourceGroup(existingCredentialsKeyVaultSubscription, existingCredentialsKeyVaultResourceGroupName)
+  params: {
+    keyVaultName: existingCredentialsKeyVaultName
+    assignments: [
+      {
+        principalId: hostPoolManagedIdentityPrincipalId
+        roleDefinitionId: keyVaultSecretsUserRoleId
+        principalType: 'ServicePrincipal'
+      }
+    ]
+  }
 }
 
 // Recovery Services — vault + policies + PE
@@ -1717,7 +1850,7 @@ module diskAccessPolicy 'modules/hosts/modules/diskNetworkAccessPolicy.bicep' = 
   }
 }
 
-module sessionHosts 'modules/hosts/hosts.bicep' = {
+module sessionHosts 'modules/hosts/hosts.bicep' = if (!pooledAutomatedHostPoolEnabled) {
   name: 'Session-Hosts-${deploymentSuffix}'
   params: {
     resourceGroupHosts: resourceGroupHosts
@@ -1840,7 +1973,7 @@ module cleanUp 'modules/cleanUp/cleanUp.bicep' = if (createDeploymentVm) {
     userAssignedIdentityClientId: createDeploymentVm
       ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
       : ''
-    virtualMachineNames: sessionHosts.outputs.virtualMachineNames
+    virtualMachineNames: pooledAutomatedHostPoolEnabled ? [] : sessionHosts.outputs.virtualMachineNames
   }
   dependsOn: [
     deploymentResourceGroup
@@ -1856,4 +1989,4 @@ output fslogixLocalStorageAccountResourceIds array = deployFSLogixStorage
   ? fslogix!.outputs.storageAccountResourceIds
   : fslogixExistingLocalStorageAccountResourceIds
 output hostResouceGroupId string = hostsResourceGroup!.outputs.resourceId
-output virtualMachineNames array = sessionHosts.outputs.virtualMachineNames
+output virtualMachineNames array = pooledAutomatedHostPoolEnabled ? [] : sessionHosts.outputs.virtualMachineNames
