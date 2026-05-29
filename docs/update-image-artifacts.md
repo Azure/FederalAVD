@@ -1,5 +1,3 @@
-↩ **Back to:** [Quick Start](quick-start.md)
-
 [**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
 
 # Update-ImageArtifacts.ps1 Script Guide
@@ -9,6 +7,14 @@
 `Update-ImageArtifacts.ps1` is a PowerShell script that downloads the latest software sources, stages artifacts from both `.common/artifacts/` and `customer/artifacts/`, packages them as zip files, and uploads them to the image management artifacts storage account. Run it whenever you want to refresh what is available to image build deployments — for example, after adding a new software package or after a new version is released.
 
 > **Infrastructure vs. Artifacts:** This script does **not** deploy any Azure resources. Deploy the imageManagement template first (see [imageManagement README](../deployments/imageManagement/README.md) or [Quick Start Step 2](quick-start.md#step-2-deploy-image-management-resources)), then use this script to populate the storage account. Alternatively, use `Deploy-ImageManagement.ps1 -UpdateArtifacts` to do both in one step.
+
+## Notes
+
+- For air-gapped environments, use `-SkipDownloadingNewSources` and pre-stage customer-managed files in `customer/artifacts/` before running.
+- Use `-DeleteExistingBlobs` for a clean upload when removing old packages.
+- The script accepts `-CustomerRootPath` so customer content can live outside a freshly extracted repo zip.
+- Use `-CustomerArtifactsMode None` or `-CustomerDownloadsMode None` to skip customer overlays when you only want repo content.
+- To merge customer-owned optional downloads, place `downloads.json` in `<CustomerRootPath>\parameters\imageManagement\`; the script discovers it automatically.
 
 ## What This Script Does
 

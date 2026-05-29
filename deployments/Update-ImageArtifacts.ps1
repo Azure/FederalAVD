@@ -42,6 +42,19 @@ When specified, skips downloading new software versions from the internet.
 Use this in air-gapped environments or when the artifacts directory already contains
 the correct content and you just want to re-upload.
 
+.PARAMETER CustomerRootPath
+Optional. Root folder that contains customer-owned content. Defaults to the repo-local
+`customer` folder next to the `deployments` folder. Use this to keep customer content outside
+the extracted repo when updating from a fresh zip.
+
+.PARAMETER CustomerArtifactsMode
+Controls whether customer artifacts are included when packaging artifacts.
+Use `Overlay` to merge customer artifacts over repo artifacts, or `None` to skip customer artifacts.
+
+.PARAMETER CustomerDownloadsMode
+Controls whether customer downloads.json content is merged into the base downloads file.
+Use `Merge` to apply customer overrides, or `None` to use only the repo-selected base file.
+
 .NOTES
 If `customer\parameters\imageManagement\downloads.json` exists, it is merged on top of the
 auto-selected base environment downloads file. Existing keys are overwritten and new keys are added.
@@ -96,6 +109,17 @@ param(
     [switch]$SkipDownloadingNewSources,
 
     [Parameter(Mandatory = $false)]
+    [string]$CustomerRootPath = '',
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('Overlay', 'None')]
+    [string]$CustomerArtifactsMode = 'Overlay',
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('Merge', 'None')]
+    [string]$CustomerDownloadsMode = 'Merge',
+
+    [Parameter(Mandatory = $false)]
     [string]$TempDir = "$Env:Temp"
 )
 
@@ -125,8 +149,13 @@ Else {
 $ArtifactsContainerName = 'artifacts'
 $TempArtifactsDir = Join-Path -Path $TempDir -ChildPath 'Artifacts'
 $RepoArtifactsDir = (Get-Item -Path (Join-Path -Path $PSScriptRoot -ChildPath '..\.common\artifacts')).FullName
-$CustomerArtifactsDir = Join-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath '..') -ChildPath 'customer\artifacts'
-$CustomerImageManagementParametersDir = Join-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath '..') -ChildPath 'customer\parameters\imageManagement'
+$ResolvedCustomerRootPath = if ([string]::IsNullOrWhiteSpace($CustomerRootPath)) {
+    Join-Path -Path $PSScriptRoot -ChildPath '..\customer'
+} else {
+    $CustomerRootPath
+}
+$CustomerArtifactsDir = Join-Path -Path $ResolvedCustomerRootPath -ChildPath 'artifacts'
+$CustomerImageManagementParametersDir = Join-Path -Path $ResolvedCustomerRootPath -ChildPath 'parameters\imageManagement'
 $ArtifactsDir = Join-Path -Path $TempArtifactsDir -ChildPath 'stagedArtifacts'
 $ResolvedAdditionalDownloadsFilePath = Join-Path -Path $CustomerImageManagementParametersDir -ChildPath 'downloads.json'
 
@@ -157,6 +186,9 @@ Write-Output "Resource group  : $StorageAccountResourceGroup"
 Write-Output "Container URL   : $ArtifactsContainerUrl"
 Write-Output "Repo artifacts  : $RepoArtifactsDir"
 Write-Output "Customer assets : $CustomerArtifactsDir"
+Write-Output "Customer root   : $ResolvedCustomerRootPath"
+Write-Output "Cust art mode   : $CustomerArtifactsMode"
+Write-Output "Cust dl mode    : $CustomerDownloadsMode"
 #endregion Variables
 
 Write-Output ("[{0} entered]" -f $MyInvocation.MyCommand)
@@ -573,9 +605,12 @@ Write-Output "=== Prepare Artifacts ==="
 Write-Output "Staging repository artifacts..."
 Copy-ArtifactsContent -SourceFolderPath $RepoArtifactsDir -DestinationFolderPath $ArtifactsDir
 
-if (Test-Path -Path $CustomerArtifactsDir) {
+if ($CustomerArtifactsMode -ne 'None' -and (Test-Path -Path $CustomerArtifactsDir)) {
     Write-Output "Overlaying customer artifacts..."
     Copy-ArtifactsContent -SourceFolderPath $CustomerArtifactsDir -DestinationFolderPath $ArtifactsDir
+}
+elseif ($CustomerArtifactsMode -eq 'None') {
+    Write-Output "Customer artifacts disabled by mode. Continuing with repository artifacts only."
 }
 else {
     Write-Output "Customer artifacts directory not found. Continuing with repository artifacts only."
@@ -604,7 +639,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
     }
 
     # Merge customer-owned downloads file if present
-    if (Test-Path -Path $ResolvedAdditionalDownloadsFilePath) {
+    if ($CustomerDownloadsMode -ne 'None' -and (Test-Path -Path $ResolvedAdditionalDownloadsFilePath)) {
         Write-Output "Merging additional downloads from '$ResolvedAdditionalDownloadsFilePath'."
         $additionalJson = Get-Content -Path $ResolvedAdditionalDownloadsFilePath -Raw -ErrorAction 'Stop'
         $additionalJson = $additionalJson -replace 'ENVSUFFIX', $EnvSuffix
@@ -617,6 +652,9 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         foreach ($key in $AdditionalDownloads.PSObject.Properties.Name) {
             $Downloads | Add-Member -NotePropertyName $key -NotePropertyValue $AdditionalDownloads.$key -Force
         }
+    }
+    elseif ($CustomerDownloadsMode -eq 'None') {
+        Write-Output "Customer downloads disabled by mode. Using the repository-selected base downloads file only."
     }
 
     # Check if any download requires Evergreen and install if needed

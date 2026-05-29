@@ -115,6 +115,8 @@ Script invocation:
   # Add -UpdateArtifacts to also run Step 3 automatically
 ```
 
+If your customer parameter files live outside the extracted repo zip, pass `-CustomerRootPath <path>` so the script reads from your external customer folder.
+
 ### Key outputs
 
 | Output | Used by |
@@ -133,6 +135,7 @@ Script invocation:
 - Add `-UpdateArtifacts` to the script call to roll Steps 2 and 3 into a single invocation for first-time setup.
 - If `deployArtifactsStorageAccount = false` in the parameter file, the artifacts-related outputs will be empty strings — skip Step 3 and omit `artifactsContainerUri` / `userAssignedIdentityResourceId` in Step 4.
 - The `managedIdentityResourceId` output (→ `userAssignedIdentityResourceId`) is only **required** when using the existing resource group path (`imageBuildResourceGroupId` is set), zero-trust artifacts storage, or log collection. Leave it empty to use the **temporary RG path** (see Step 4 notes).
+- If your customer parameter files live outside the extracted repo zip, pass `-CustomerRootPath <path>` to `Deploy-ImageManagement.ps1` and `Invoke-ImageBuilds.ps1` so they resolve the external customer folder.
 
 ---
 
@@ -154,6 +157,7 @@ This step has **no Azure deployment outputs** — it only writes blobs to storag
 - For air-gapped environments, use `-SkipDownloadingNewSources` and pre-stage customer-managed files in `customer/artifacts/` before running.
 - Use `-DeleteExistingBlobs` for a clean upload when removing old packages.
 - To merge customer-owned optional downloads, place `downloads.json` in `customer/parameters/imageManagement/`; the script discovers it automatically.
+- To keep customer content outside a freshly extracted repo zip, pass `-CustomerRootPath <path>` to `Update-ImageArtifacts.ps1`.
 
 ---
 

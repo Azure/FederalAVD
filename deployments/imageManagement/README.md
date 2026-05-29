@@ -251,11 +251,16 @@ Commercial and Government clouds only:
 
 Use the provided `Deploy-ImageManagement.ps1` script in the `deployments\` folder. It prefers customer-owned parameter files in `customer\parameters\imageManagement\<Prefix>.imageManagement.parameters.json` and falls back to the repo examples in `imageManagement\parameters\<Prefix>.imageManagement.parameters.json`.
 
+If you keep customer overrides outside the extracted repo zip, pass `-CustomerRootPath <path>` so the script reads parameters from your external customer folder.
+
 ```powershell
 cd deployments
 
 # Basic deployment
 .\Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix basic
+
+# Use an external customer folder
+.\Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix basic -CustomerRootPath D:\FederalAVD\customer
 
 # Private endpoint deployment
 .\Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix privateEndpoint

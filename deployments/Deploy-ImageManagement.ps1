@@ -32,6 +32,11 @@
     using the artifactsStorageAccountResourceId from the deployment outputs. Skipped if no
     artifacts storage account was deployed.
 
+.PARAMETER CustomerRootPath
+    Optional root folder that contains customer-owned parameter files. Defaults to the repo-local
+    customer folder next to the deployments folder. Useful when customers keep their overrides
+    outside a freshly extracted repo zip.
+
 .EXAMPLE
     .\.Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix basic
 
@@ -54,13 +59,21 @@ param (
     [string]$ParameterFilePrefix,
 
     [Parameter(Mandatory = $false)]
-    [switch]$UpdateArtifacts
+    [switch]$UpdateArtifacts,
+
+    [Parameter(Mandatory = $false)]
+    [string]$CustomerRootPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
 $TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageManagement.json'
-$CustomerParameterFile = Join-Path -Path $PSScriptRoot -ChildPath "..\customer\parameters\imageManagement\$ParameterFilePrefix.imageManagement.parameters.json"
+$ResolvedCustomerRootPath = if ([string]::IsNullOrWhiteSpace($CustomerRootPath)) {
+    Join-Path -Path $PSScriptRoot -ChildPath '..\customer'
+} else {
+    $CustomerRootPath
+}
+$CustomerParameterFile = Join-Path -Path $ResolvedCustomerRootPath -ChildPath "parameters\imageManagement\$ParameterFilePrefix.imageManagement.parameters.json"
 $RepoParameterFile = Join-Path -Path $PSScriptRoot -ChildPath "imageManagement\parameters\$ParameterFilePrefix.imageManagement.parameters.json"
 $ParameterFile = if (Test-Path -Path $CustomerParameterFile) { $CustomerParameterFile } else { $RepoParameterFile }
 $DeploymentName = "ImageManagement-$ParameterFilePrefix-$(Get-Date -Format 'yyyyMMddHHmmss')"

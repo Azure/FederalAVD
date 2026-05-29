@@ -41,6 +41,10 @@ customer overrides in `customer/artifacts/`. `deployments/Update-ImageArtifacts.
 locations together, with `customer/artifacts/` overlaying matching files or folders from
 `.common/artifacts/`.
 
+If you keep customer content outside the extracted repo zip, pass `-CustomerRootPath` to
+`Update-ImageArtifacts.ps1`, `Deploy-ImageManagement.ps1`, or `Invoke-ImageBuilds.ps1` so they
+read from your external customer folder instead of the repo-local `customer/` tree.
+
 ## Updating the Repo
 
 Use robocopy to pull the latest code from the source share while preserving this folder:

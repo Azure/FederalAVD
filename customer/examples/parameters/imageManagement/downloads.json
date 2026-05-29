@@ -1,0 +1,141 @@
+{
+    "AdobeAcrobatReaderDC": {
+        "Description": "Adobe Acrobat Reader DC Installer",
+        "WingetId": "XPDP273C0XHQH2",
+        "DestinationFileName": "AcrobatRdrDCx64.exe",
+        "DestinationFolders": [
+            "Adobe-Acrobat-Reader-DC"
+        ]
+    },
+    "AmazonWorkSpacesClient": {
+        "Description": "Amazon WorkSpaces Client Installer",
+        "WingetId": "Amazon.WorkSpacesClient",
+        "DestinationFileName": "Amazon-WorkSpacesClient.exe",
+        "DestinationFolders": [
+            "Amazon-Workspaces-Client"
+        ]
+    },
+    "AzCli": {
+        "Description": "Optional: Azure CLI Installer",
+        "DownloadUrl": "https://aka.ms/installazurecliwindowsx64",
+        "DestinationFileName": "azclix64.msi",
+        "DestinationFolders": [
+            "Microsoft-AzCLI"
+        ]
+    },
+    "DoDInstallRoot": {
+        "Description": "DoD InstallRoot Application",
+        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/InstallRoot_5.6x64.msi",
+        "DestinationFileName": "InstallRoot.msi",
+        "DestinationFolders": [
+            "DoD-InstallRoot"
+        ]
+    },
+    "DoDSTIGGPOPackage": {
+        "Description": "DoD STIG GPO Package - Keep it updated! Used for applying STIGs via LGPO.",
+        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip",
+        "DestinationFileName": "STIGs.zip",
+        "DestinationFolders": [
+            "DoD-STIGs"
+        ]
+    },
+    "EdgeEnterpriseAdministrativeTemplates": {
+        "Description": "Microsoft Edge Enterprise Administrative Templates. Used for Edge policy configuration via LGPO.",
+        "APIUrl": "https://edgeupdates.microsoft.com/api/products?view=enterprise",
+        "DestinationFileName": "EdgeEnterprisePolicyTemplates.cab",
+        "DestinationFolders": [
+            "Configure-EdgePolicy"
+        ]
+    },
+    "FSLogix": {
+        "Description": "FSLogix",
+        "DownloadUrl": "https://aka.ms/fslogix_download",
+        "DestinationFileName": "FSLogix.zip",
+        "DestinationFolders": [
+            "",
+            "Microsoft-FSLogix"
+        ]
+    },
+    "GitForWindows": {
+        "Description":"Optional: Git for Windows Installer",
+        "GitHubRepo": "git-for-windows/git",
+        "GitHubFileNamePattern": "*64-bit.exe",
+        "DestinationFileName": "Git-64-bit.exe",
+        "DestinationFolders": [
+            "Git-for-Windows"
+        ]
+    },
+    "GoogleChromeEnterprise": {
+        "Description": "Google Chrome Enterprise Installer",
+        "DownloadUrl": "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi",
+        "DestinationFileName": "GoogleChromeEnterprise.msi",
+        "DestinationFolders": [
+            "Google-Chrome-Enterprise"
+        ]
+    },
+    "LGPO": {
+        "Description": "Local Group Policy Object (LGPO) Tool. Used for configuring local group policies.",
+        "DownloadUrl": "https://download.microsoft.com/download/8/5/c/85c25433-a1b0-4ffa-9429-7e023e7da8d8/LGPO.zip",
+        "DestinationFileName": "lgpo.zip",
+        "DestinationFolders": [
+            "Configure-DesktopBackground",
+            "Configure-EdgePolicy",
+            "Configure-Office365Policy",
+            "Configure-OneDriveKFMPolicy",
+            "Configure-RemoteDesktopPolicy",
+            "Configure-WindowsUpdatePolicy",
+            "LGPO",
+            "DoD-STIGs"
+        ]
+    },
+    "NotepadPlusPlus": {
+        "Description": "Notepad++ Installer",
+        "GitHubRepo": "notepad-plus-plus/notepad-plus-plus",
+        "GitHubFileNamePattern": "*x64.exe",
+        "DestinationFileName": "NotepadPlusPlus.exe",
+        "DestinationFolders": [
+            "Notepad-PlusPlus"
+        ]
+    },
+    "Office365AdministrativeTemplates": {
+        "Description": "Office 365 Administrative Templates. Used for Office 365 policy configuration via LGPO.",
+        "DownloadUrl": "https://download.microsoft.com/download/2/e/e/2eeec938-c014-419d-bb4b-d184871450f1/admintemplates_x64_5486-1000_en-us.exe",
+        "DestinationFileName": "AdminTemplates_x64.exe",
+        "DestinationFolders": [
+            "Configure-Office365Policy"
+        ]
+    },
+    "PowerBIDesktop": {
+        "Description": "Power BI Desktop",
+        "WingetId": "Microsoft.PowerBI",
+        "DestinationFileName": "PowerBIDesktop64.exe",
+        "DestinationFolders": [
+            "Microsoft-Power-BI-Desktop"
+        ]
+    },
+    "PowerShell7": {
+        "Description": "PowerShell 7",
+        "GitHubRepo": "PowerShell/PowerShell",
+        "GitHubFileNamePattern": "*win-x64.msi",
+        "DestinationFileName": "PowerShell7.msi",
+        "DestinationFolders": [
+            "Microsoft-PowerShell-7"
+        ]
+    },
+    "PuTTY": {
+        "Description": "PuTTY Installer",
+        "WingetId": "XPFNZKSKLBP7RJ",
+        "DestinationFileName": "PuTTY.msi",
+        "DestinationFolders": [
+            "PuTTY"
+        ]
+    },
+    "VSCode": {
+        "Description": "Visual Studio Code",
+        "DownloadUrl": "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64",
+        "DestinationFileName": "VSCodesetup.exe",
+        "DestinationFolders": [
+            "Microsoft-VSCode"
+        ]
+    }
+}
