@@ -182,34 +182,18 @@ customer/artifacts/
 
 ```text
 .common/artifacts/
-│
-├── uploadedFileVersionInfo.txt              # Auto-generated version info
-│
-├── FSLogix.zip                              # Pre-packaged artifact (optional)
-├── WDOT.zip                                 # Pre-packaged artifact (optional)
-│
-├── Install-FSLogix/                         # Artifact Package Example
-│   ├── Install-FSLogix.ps1                  # Main script (required)
-│   └── [supporting files]                   # Installers, configs (optional)
-│
-├── VSCode/                                  # Artifact Package Example
-│   ├── Install_VSCode.ps1                   # Main script (required)
-│   ├── VSCodeSetup.exe                      # Installer (optional)
-│   └── readme.md                            # Documentation (optional)
-│
-├── Configure-Office365Policy/               # Configuration-only example
-│   ├── Configure-Office365.ps1              # Main script (required)
-│   └── office365.admx                       # Policy templates (optional)
-│
-├── LGPO/                                    # Tool-based artifact
-│   ├── install-lgpo.ps1                     # Main script (required)
-│   └── LGPO.exe                             # Tool executable (optional)
+│                                            # Reserved for future repo-provided artifact packages.
+│                                            # Currently empty — all artifact content comes from
+│                                            # customer/artifacts/ (or customer/examples/artifacts/
+│                                            # copied in as a starting point).
 │
 customer/artifacts/
-└── [Your-Custom-Artifact]/                  # Your custom package
-   ├── Install-[AppName].ps1                # Main script (required)
-   ├── [installer-file]                     # Application installer (optional)
-   └── [config-files]                       # Supporting files (optional)
+├── [Your-Custom-Artifact]/                  # Your custom package
+│   ├── Install-[AppName].ps1                # Main script (required)
+│   ├── [installer-file]                     # Application installer (optional)
+│   └── [config-files]                       # Supporting files (optional)
+│
+└── uploadedFileVersionInfo.txt              # Auto-generated version log (added by the script)
 ```
 
 **Note:** The orchestration script `Invoke-Customization.ps1` is located at `.common/scripts/Invoke-Customization.ps1` (not in the artifacts directory). It is embedded into ARM/Bicep deployments using the `loadTextContent()` function.
@@ -227,16 +211,17 @@ When `Update-ImageArtifacts.ps1` prepares content for upload to blob storage, it
 **Example:**
 
 ```
-.common/artifacts/
-├── FSLogix/             → Uploaded as FSLogix.zip
-│   └── Install-FSLogix.ps1
-
 customer/artifacts/
-├── Chrome/              → Uploaded as Chrome.zip
+├── Google-Chrome-Enterprise/    → Uploaded as Google-Chrome-Enterprise.zip
 │   ├── Install-Chrome.ps1
-│   └── installer.msi
-└── teamsbootstrapper.exe → Uploaded as teamsbootstrapper.exe
+│   └── GoogleChromeEnterprise.msi
+├── LGPO/                        → Uploaded as LGPO.zip
+│   ├── Install-LGPO.ps1
+│   └── LGPO.exe
+└── teamsbootstrapper.exe        → Uploaded as-is (root file)
 ```
+
+If the repo ever ships base artifact scripts via `.common/artifacts/`, they are staged first and `customer/artifacts/` overlays on top — customer files always win when names match.
 
 ### Execution Rules (Invoke-Customization.ps1)
 
@@ -1282,9 +1267,9 @@ If you encounter issues not covered here:
    - [Quick Start Guide](quick-start.md)
 
 2. **Review example artifacts:**
-   - `.common/artifacts/VSCode/` - Simple installer example
-   - `.common/artifacts/Configure-Office365Policy/` - Configuration example
-   - `.common/artifacts/Install-FSLogix/` - Download and install example
+   - `customer/examples/artifacts/Microsoft-VSCode/` - Simple installer example
+   - `customer/examples/artifacts/Configure-Office365Policy/` - Configuration example
+   - `customer/examples/artifacts/Microsoft-FSLogix/` - Download and install example
 
 3. **Search GitHub issues:**
    - [FederalAVD Issues](https://github.com/Azure/FederalAVD/issues)

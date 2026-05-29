@@ -488,7 +488,7 @@ function Copy-ArtifactsContent {
             }
             Copy-ArtifactsContent -SourceFolderPath $item.FullName -DestinationFolderPath $destinationPath
         }
-        else {
+        elseif ($item.Name -ine '.gitkeep') {
             Copy-Item -Path $item.FullName -Destination $destinationPath -Force
         }
     }
@@ -786,7 +786,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                 Catch {
                     Write-Error "Error downloading '$SoftwareName' via winget: $_."
                 }
-                $DestFolders = $Download.DestinationFolders
+                $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
                 foreach ($DestFolder in $DestFolders) {
                     $DestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolder
                     If (-not (Test-Path -Path $DestinationDir)) {
@@ -835,7 +835,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             Catch {
                 Write-Error "Error downloading software from '$DownloadUrl': $_."
             }
-            $DestFolders = $Download.DestinationFolders
+            $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
             foreach ($DestFolder in $DestFolders) {
                 $DestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolder
                 If (-not (Test-Path -Path $DestinationDir)) {

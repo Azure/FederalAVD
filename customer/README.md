@@ -36,10 +36,9 @@ into the matching child folder under `customer/parameters/` before customizing t
 - `deployments/keyVaults/parameters/`
 - `deployments/networking/parameters/`
 
-Repo-provided artifact packages stay in `.common/artifacts/`. Put customer-specific packages or
-customer overrides in `customer/artifacts/`. `deployments/Update-ImageArtifacts.ps1` stages both
-locations together, with `customer/artifacts/` overlaying matching files or folders from
-`.common/artifacts/`.
+Put your artifact packages in `customer/artifacts/`. `deployments/Update-ImageArtifacts.ps1`
+stages `.common/artifacts/` first (currently empty, reserved for future repo-provided packages)
+then overlays `customer/artifacts/` on top — your files always win when names match.
 
 ## Examples
 

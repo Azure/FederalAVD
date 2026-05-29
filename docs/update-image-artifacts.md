@@ -4,7 +4,7 @@
 
 ## Overview
 
-`Update-ImageArtifacts.ps1` is a PowerShell script that downloads the latest software sources, stages artifacts from both `.common/artifacts/` and `customer/artifacts/`, packages them as zip files, and uploads them to the image management artifacts storage account. Run it whenever you want to refresh what is available to image build deployments — for example, after adding a new software package or after a new version is released.
+`Update-ImageArtifacts.ps1` is a PowerShell script that downloads the latest software sources, stages artifacts from `customer/artifacts/` (overlaid on any repo-provided artifacts in `.common/artifacts/`), packages them as zip files, and uploads them to the image management artifacts storage account. Run it whenever you want to refresh what is available to image build deployments — for example, after adding a new software package or after a new version is released.
 
 > **Infrastructure vs. Artifacts:** This script does **not** deploy any Azure resources. Deploy the imageManagement template first (see [imageManagement README](../deployments/imageManagement/README.md) or [Quick Start Step 2](quick-start.md#step-2-deploy-image-management-resources)), then use this script to populate the storage account. Alternatively, use `Deploy-ImageManagement.ps1 -UpdateArtifacts` to do both in one step.
 
@@ -21,7 +21,7 @@
 Three sequential phases:
 
 1. **Download** — Fetches the latest versions of software from the internet using the downloads parameter file (skipped with `-SkipDownloadingNewSources` or when no downloads file exists)
-2. **Package** — Compresses each subdirectory in the merged artifacts view built from `.common/artifacts/` and `customer/artifacts/`
+2. **Package** — Compresses each subdirectory in the staged artifacts view (repo base in `.common/artifacts/` overlaid by `customer/artifacts/`)
 3. **Upload** — Uploads all packaged artifacts to the `artifacts` blob container in the storage account
 
 ## Prerequisites
@@ -163,7 +163,7 @@ Each top-level key is a unique entry name. The following fields are shared acros
 |-------|----------|-------------|
 | `Description` | No | Human-readable description of what is being downloaded |
 | `DestinationFileName` | Yes | File name to save the downloaded file as |
-| `DestinationFolders` | Yes | Array of artifact folder names to copy the downloaded file into. Use `""` to also place the file in the blob container root. |
+| `DestinationFolders` | No | Array of artifact folder names to copy the downloaded file into. Defaults to the blob container root when omitted. Use `""` explicitly to place the file in the root alongside zipped packages. |
 
 ### Supported Download Methods
 
@@ -297,23 +297,21 @@ Use `""` (empty string) as one of the folder names to also place the file direct
 
 ## Artifacts Directory Structure
 
-The script stages a merged artifacts view from the repository and customer folders, then packages the merged result:
+The script stages a merged view — `.common/artifacts/` first, then `customer/artifacts/` on top — then packages the result. Currently `.common/artifacts/` is empty, so all content comes from `customer/artifacts/`:
 
 ```text
 stagedArtifacts/
-├── uploadedFileVersionInfo.txt  (auto-generated version log)
-├── FSLogix/
-│   ├── Install_FSLogix.ps1
-│   └── FSLogixAppsSetup.exe
-├── Microsoft365Apps/
-│   ├── Install_M365Apps.ps1
-│   └── officedeploymenttool.exe
-└── Chrome/
-    ├── Install-Chrome.ps1
-    └── GoogleChromeEnterpriseBundle64.msi
+├── uploadedFileVersionInfo.txt        (auto-generated version log)
+├── Google-Chrome-Enterprise/          → compressed to Google-Chrome-Enterprise.zip
+│   ├── Install-Chrome.ps1
+│   └── GoogleChromeEnterprise.msi
+├── LGPO/                              → compressed to LGPO.zip
+│   ├── Install-LGPO.ps1
+│   └── LGPO.exe
+└── teamsbootstrapper.exe              → uploaded as-is (root file)
 ```
 
-`customer/artifacts/` overlays `.common/artifacts/` when file or folder names match. This lets customers add new packages or replace repo-provided package contents without editing `.common/`.
+If `.common/artifacts/` contains packages in the future, `customer/artifacts/` overlays on top — customer files always win when names match.
 
 Each subdirectory is compressed into a zip file and uploaded to the `artifacts` blob container.
 

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "16459147716712457091"
+      "templateHash": "13795896011708190992"
     }
   },
   "parameters": {
@@ -777,274 +777,172 @@
     },
     "$fxv#2": {
       "AVDAgent": {
-        "Description": "Required: Azure Virtual Desktop Agent Installer",
+        "Description": "Azure Virtual Desktop Agent Installer",
         "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgent",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
       },
       "AVDAgentBootloader": {
-        "Description": "Required: Azure Virtual Desktop Agent Bootloader Installer",
+        "Description": "Azure Virtual Desktop Agent Bootloader Installer",
         "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgentBootloader",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
       },
       "Office365DeploymentTool": {
-        "Description": "Required: Office 365 Deployment Tool",
+        "Description": "Office 365 Deployment Tool",
         "DownloadUrl": "https://officexo.azurefd.ENVSUFFIX/prsstelecontainer/wsus/setup.exe",
-        "DestinationFileName": "Office365DeploymentTool.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "Office365DeploymentTool.exe"
       },
       "OneDrive": {
-        "Description": "Required: OneDrive Sync Client",
+        "Description": "OneDrive Sync Client",
         "DownloadUrl": "https://update.azure.odsync.ENVSUFFIX/onedrivecontainer/Win/Installer64/OneDriveSetup.exe",
-        "DestinationFileName": "OneDriveSetup.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "OneDriveSetup.exe"
       },
       "TeamsBootstrapper": {
-        "Description": "Required: Microsoft Teams Bootstrapper",
+        "Description": "Microsoft Teams Bootstrapper",
         "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-teamsprovision/lkg/teamsbootstrapper.exe",
-        "DestinationFileName": "teamsbootstrapper.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "teamsbootstrapper.exe"
       },
       "Teams64BitMSIX": {
-        "Description": "Required: Microsoft Teams 64-bit MSIX",
+        "Description": "Microsoft Teams 64-bit MSIX",
         "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-windows-x64/enterprise/webview2/lkg/MSTeams-x64.msix",
-        "DestinationFileName": "MSTeams-x64.msix",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "MSTeams-x64.msix"
       },
       "WebView2Runtime": {
-        "Description": "Optional: Microsoft Edge WebView2 Runtime. Used by Teams MSIX client. Should be brought over to repo for airgap scenarios.",
-        "DestinationFileName": "WebView2.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "Description": "Microsoft Edge WebView2 Runtime. Used by Teams MSIX client. Should be brought over to repo for airgap scenarios.",
+        "DestinationFileName": "WebView2.exe"
       },
       "RemoteDesktopWebRTCRedirectorService": {
-        "Description": "Optional: Remote Desktop WebRTC Redirector Service. Used for AVD WebRTC redirection feature. Should be brought over to repo for airgap scenarios.",
+        "Description": "Remote Desktop WebRTC Redirector Service. Used for AVD WebRTC redirection feature. Should be brought over to repo for airgap scenarios.",
         "DownloadUrl": "",
-        "DestinationFileName": "MsRdcWebRTCSvc.msi",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "MsRdcWebRTCSvc.msi"
       },
       "VisualStudioRedistributables": {
-        "Description": "Optional: Visual Studio C++ Redistributables. Should be brought over to repo for airgap scenarios.",
+        "Description": "Visual Studio C++ Redistributables. Should be brought over to repo for airgap scenarios.",
         "DownloadUrl": "",
-        "DestinationFileName": "vc_redist.x64.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "vc_redist.x64.exe"
       },
       "FSLogix": {
-        "Description": "Required: FSLogix Installer. Should be brought over to repo for airgap scenarios.",
+        "Description": "FSLogix Installer. Should be brought over to repo for airgap scenarios.",
         "DownloadUrl": "",
-        "DestinationFileName": "FSLogix.zip",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "FSLogix.zip"
       },
       "WindowsDesktopOptimizationTool": {
-        "Description": "Optional: Virtual Desktop Optimization Tool (VDOT) used by the image build solution when selected.",
+        "Description": "Virtual Desktop Optimization Tool (VDOT) used by the image build solution when selected.",
         "DownloadUrl": "",
-        "DestinationFileName": "WDOT.zip",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "WDOT.zip"
       }
     },
     "$fxv#3": {
       "AVDAgent": {
-        "Description": "Required: Azure Virtual Desktop Agent Installer",
+        "Description": "Azure Virtual Desktop Agent Installer",
         "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgent",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
       },
       "AVDAgentBootloader": {
-        "Description": "Required: Azure Virtual Desktop Agent Bootloader Installer",
+        "Description": "Azure Virtual Desktop Agent Bootloader Installer",
         "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgentBootloader",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
       },
       "Office365DeploymentTool": {
-        "Description": "Required: Office 365 Deployment Tool",
+        "Description": "Office 365 Deployment Tool",
         "DownloadUrl": "https://officexo.azurefd.ENVSUFFIX/prsstelecontainer/wsus/setup.exe",
-        "DestinationFileName": "Office365DeploymentTool.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "Office365DeploymentTool.exe"
       },
       "OneDrive": {
-        "Description": "Required: OneDrive Sync Client",
+        "Description": "OneDrive Sync Client",
         "DownloadUrl": "https://update.azure.odsync.ENVSUFFIX/onedrivecontainer/Win/Installer64/OneDriveSetup.exe",
-        "DestinationFileName": "OneDriveSetup.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "OneDriveSetup.exe"
       },
       "TeamsBootstrapper": {
-        "Description": "Required: Microsoft Teams Bootstrapper",
+        "Description": "Microsoft Teams Bootstrapper",
         "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-teamsprovision/lkg/teamsbootstrapper.exe",
-        "DestinationFileName": "teamsbootstrapper.exe",
-        "DestinationFolders": [
-          "Microsoft-Teams"
-        ]
+        "DestinationFileName": "teamsbootstrapper.exe"
       },
       "Teams64BitMSIX": {
-        "Description": "Required: Microsoft Teams 64-bit MSIX",
+        "Description": "Microsoft Teams 64-bit MSIX",
         "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-windows-x64/enterprise/webview2/lkg/MSTeams-x64.msix",
-        "DestinationFileName": "MSTeams-x64.msix",
-        "DestinationFolders": [
-          "Microsoft-Teams"
-        ]
+        "DestinationFileName": "MSTeams-x64.msix"
       },
       "WebView2Runtime": {
-        "Description": "Optional: Microsoft Edge WebView2 Runtime. Used by Teams MSIX client. Should be brought over to repo for airgap scenarios.",
+        "Description": "Microsoft Edge WebView2 Runtime. Used by Teams MSIX client. Should be brought over to repo for airgap scenarios.",
         "DownloadUrl": "",
-        "DestinationFileName": "WebView2.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "WebView2.exe"
       },
       "RemoteDesktopWebRTCRedirectorService": {
-        "Description": "Optional: Remote Desktop WebRTC Redirector Service. Used for AVD WebRTC redirection feature. Should be brought over to repo for airgap scenarios.",
+        "Description": "Remote Desktop WebRTC Redirector Service. Used for AVD WebRTC redirection feature. Should be brought over to repo for airgap scenarios.",
         "DownloadUrl": "",
-        "DestinationFileName": "MsRdcWebRTCSvc.msi",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "MsRdcWebRTCSvc.msi"
       },
       "VisualStudioRedistributables": {
-        "Description": "Optional: Visual Studio C++ Redistributables. Should be brought over to repo for airgap scenarios.",
+        "Description": "Visual Studio C++ Redistributables. Should be brought over to repo for airgap scenarios.",
         "DownloadUrl": "",
-        "DestinationFileName": "vc_redist.x64.exe",
-        "DestinationFolders": [
-          "",
-          "VisualC++Redistributables"
-        ]
+        "DestinationFileName": "vc_redist.x64.exe"
       },
       "FSLogix": {
-        "Description": "Required: FSLogix Installer. Should be brought over to repo for airgap scenarios.",
+        "Description": "FSLogix Installer. Should be brought over to repo for airgap scenarios.",
         "DownloadUrl": "",
-        "DestinationFileName": "FSLogix.zip",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "FSLogix.zip"
       },
       "WindowsDesktopOptimizationTool": {
-        "Description": "Optional: Virtual Desktop Optimization Tool (VDOT) used by the image build solution when selected.",
+        "Description": "Virtual Desktop Optimization Tool (VDOT) used by the image build solution when selected.",
         "DownloadUrl": "",
-        "DestinationFileName": "WDOT.zip",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "WDOT.zip"
       }
     },
     "$fxv#4": {
       "AVDAgent": {
         "Description": "Required: Azure Virtual Desktop Agent Installer",
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2310011",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
       },
       "AVDAgentBootloader": {
         "Description": "Required: Azure Virtual Desktop Agent Bootloader Installer",
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2311028",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
       },
       "FSLogix": {
         "Description": "Required: FSLogix",
         "DownloadUrl": "https://aka.ms/fslogix_download",
-        "DestinationFileName": "FSLogix.zip",
-        "DestinationFolders": [
-          "",
-          "Install-FSLogix"
-        ]
+        "DestinationFileName": "FSLogix.zip"
       },
       "Office365DeploymentTool": {
         "Description": "Required: Office 365 Deployment Tool",
         "DownloadUrl": "https://officecdn.microsoft.com/pr/wsus/setup.exe",
-        "DestinationFileName": "Office365DeploymentTool.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "Office365DeploymentTool.exe"
       },
       "OneDrive": {
         "Description": "Required: OneDrive Sync Client",
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=844652",
-        "DestinationFileName": "OneDriveSetup.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "OneDriveSetup.exe"
       },
       "TeamsBootstrapper": {
         "Description": "Required: Microsoft Teams Bootstrapper",
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2243204&clcid=0x409",
-        "DestinationFileName": "teamsbootstrapper.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "teamsbootstrapper.exe"
       },
       "Teams64BitMSIX": {
         "Description": "Required: Microsoft Teams 64-bit MSIX",
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2196106",
-        "DestinationFileName": "MSTeams-x64.msix",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "MSTeams-x64.msix"
       },
       "WebView2Runtime": {
         "Description": "Required: Microsoft Edge WebView2 Runtime",
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2124703",
-        "DestinationFileName": "WebView2.exe",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "WebView2.exe"
       },
       "RemoteDesktopWebRTCRedirectorService": {
         "Description": "Required: Microsoft Remote Desktop WebRTC Redirector Service",
         "DownloadUrl": "https://aka.ms/msrdcwebrtcsvc/msi",
-        "DestinationFileName": "MsRdcWebRTCSvc.msi",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "MsRdcWebRTCSvc.msi"
       },
       "VisualStudioRedistributables": {
         "Description": "Required: Visual Studio C++ Redistributables",
         "DownloadUrl": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
-        "DestinationFileName": "vc_redist.x64.exe",
-        "DestinationFolders": [
-          "",
-          "VisualCPlusPlusRedistributables"
-        ]
+        "DestinationFileName": "vc_redist.x64.exe"
       },
       "WindowsDesktopOptimizationTool": {
         "Description": "Optional: Windows Desktop Optimization Tool (WDOT) used by the image build solution when selected.",
         "DownloadUrl": "https://codeload.github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool/zip/refs/heads/main",
-        "DestinationFileName": "WDOT.zip",
-        "DestinationFolders": [
-          ""
-        ]
+        "DestinationFileName": "WDOT.zip"
       }
     },
     "$fxv#5": "$ErrorActionPreference = 'Stop'\r\n\r\ntry {\r\n    $driveLetter = $env:SystemDrive.Substring(0, 1)\r\n\r\n    $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop\r\n    $currentSizeGB    = [math]::Round($currentPartition.Size / 1GB, 2)\r\n    Write-Output \"Current partition size: $currentSizeGB GB (drive: $driveLetter)\"\r\n\r\n    $size    = Get-PartitionSupportedSize -DriveLetter $driveLetter -ErrorAction Stop\r\n    $maxSizeGB = [math]::Round($size.SizeMax / 1GB, 2)\r\n    $minSizeGB = [math]::Round($size.SizeMin / 1GB, 2)\r\n    Write-Output \"Partition supported size range: Min=$minSizeGB GB, Max=$maxSizeGB GB\"\r\n\r\n    if ($null -eq $size -or $size.SizeMax -eq 0) {\r\n        Write-Warning \"Get-PartitionSupportedSize returned null or zero SizeMax. Skipping resize.\"\r\n        exit 0\r\n    }\r\n\r\n    if ($currentPartition.Size -ge $size.SizeMax) {\r\n        Write-Output \"Partition ($currentSizeGB GB) is already at or above maximum supported size ($maxSizeGB GB). No resize needed.\"\r\n        exit 0\r\n    }\r\n\r\n    Resize-Partition -DriveLetter $driveLetter -Size $size.SizeMax -ErrorAction Stop\r\n    Write-Output \"OS partition resized successfully from $currentSizeGB GB to $maxSizeGB GB.\"\r\n}\r\ncatch {\r\n    if ($_.Exception.Message -like '*already the requested size*') {\r\n        Write-Output \"Partition is already at maximum size. No resize needed.\"\r\n    }\r\n    else {\r\n        Write-Error \"Failed to resize OS partition: $($_.Exception.Message)\"\r\n        exit 1\r\n    }\r\n}\r\n",
