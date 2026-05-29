@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.43.8.12551",
-      "templateHash": "10616616602296585356"
+      "version": "0.39.26.7824",
+      "templateHash": "4962624541024083983"
     }
   },
   "parameters": {
@@ -3898,7 +3898,16 @@
                   "name": "infoBox1",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
-                    "text": "Deploy new session hosts into an existing Azure Virtual Desktop host pool. Select the target host pool and configure the number, size, and settings for the new virtual machines. The host pool must have a valid registration token before deployment."
+                    "text": "Deploy new session hosts into an existing Azure Virtual Desktop host pool. Select the target host pool and configure the number, size, and settings for the new virtual machines."
+                  }
+                },
+                {
+                  "name": "registrationTokenInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "The selected host pool must have a valid registration token before deploying session hosts. Without one, the AVD agent cannot register the VMs and they will not appear in the host pool. To generate a new token, open the host pool in the Azure portal → Overview → Registration key → Generate new key.",
+                    "uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/add-session-hosts-host-pool?tabs=portal%2Cgui&pivots=host-pool-standard"
                   }
                 },
                 {
@@ -3945,16 +3954,6 @@
                   "request": {
                     "method": "GET",
                     "path": "[[concat(steps('basics').hostPool.id, '?api-version=2024-04-03')]"
-                  }
-                },
-                {
-                  "name": "registrationTokenWarning",
-                  "type": "Microsoft.Common.InfoBox",
-                  "visible": "[[not(empty(steps('basics').hostPool))]",
-                  "options": {
-                    "style": "Warning",
-                    "text": "The selected host pool must have a valid registration token before deploying session hosts. Without one, the AVD agent cannot register the VMs and they will not appear in the host pool. To generate a new token, open the host pool in the Azure portal → Overview → Registration key → Generate new key.",
-                    "uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/add-session-hosts-host-pool?tabs=portal%2Cgui&pivots=host-pool-standard"
                   }
                 },
                 {
@@ -4400,23 +4399,10 @@
                       "name": "offer",
                       "type": "Microsoft.Common.DropDown",
                       "label": "Offer",
-                      "defaultValue": "[[if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), 'Office-365', steps('basics').hostsRGProps.tags.vmImageOffer)]",
+                      "defaultValue": "[[if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'Windows-11', 'Office-365'), steps('basics').hostsRGProps.tags.vmImageOffer)]",
                       "toolTip": "Select the desired marketplace image offer.",
                       "constraints": {
-                        "allowedValues": [
-                          {
-                            "label": "Office-365",
-                            "value": "Office-365"
-                          },
-                          {
-                            "label": "Windows-10",
-                            "value": "Windows-10"
-                          },
-                          {
-                            "label": "Windows-11",
-                            "value": "Windows-11"
-                          }
-                        ],
+                        "allowedValues": "[[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), parse('[{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"},{\"label\":\"Windows Enterprise CPC\",\"value\":\"windows-ent-cpc\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"Office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"}]'))]",
                         "required": true
                       },
                       "visible": "[[equals(steps('hosts').image.source, 'marketplace')]"
@@ -4427,17 +4413,21 @@
                       "condition": "[[and(not(empty(steps('hosts').scope.subscription.id)), not(empty(steps('hosts').scope.location)), not(empty(steps('hosts').image.offer)), equals(steps('hosts').image.source, 'marketplace'))]",
                       "request": {
                         "method": "GET",
-                        "path": "[[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]"
+                        "path": "[[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]",
+                        "transforms": {
+                          "personal": "[?starts_with(name, `win`) && contains(name, `ent`) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}",
+                          "pooled": "[?starts_with(name, `win`) && (contains(name, `ent`) || contains(name, `avd`)) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}"
+                        }
                       }
                     },
                     {
                       "name": "sku",
                       "type": "Microsoft.Common.DropDown",
                       "label": "SKU",
-                      "defaultValue": "[[if(empty(steps('basics').hostsRGProps.tags.vmImageSku), 'win11-25h2-avd-m365', steps('basics').hostsRGProps.tags.vmImageSku)]",
+                      "defaultValue": "[[if(empty(steps('basics').hostsRGProps.tags.vmImageSku), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'win11-25h2-ent', 'win11-25h2-avd-m365'), steps('basics').hostsRGProps.tags.vmImageSku)]",
                       "toolTip": "Select the desired marketplace image SKU.",
                       "constraints": {
-                        "allowedValues": "[[map(filter(steps('hosts').image.skuApi, (sku) => and(startsWith(sku.name, 'win'), or(contains(sku.name, 'ent'), contains(sku.name, 'avd')))), (sku) => parse(concat('{\"label\":\"', sku.name, '\",\"value\":\"', sku.name, '\"}')))]",
+                        "allowedValues": "[[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('hosts').image.skuApi.transformed.personal, steps('hosts').image.skuApi.transformed.pooled)]",
                         "required": true
                       },
                       "visible": "[[equals(steps('hosts').image.source, 'marketplace')]"
@@ -4919,10 +4909,11 @@
                     },
                     {
                       "name": "storageIntro",
-                      "type": "Microsoft.Common.TextBlock",
+                      "type": "Microsoft.Common.InfoBox",
                       "visible": "[[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
                       "options": {
-                        "text": "Optionally select a storage account and blob container hosting your artifacts (agent installers, scripts, or software), and a User Assigned Managed Identity with 'Storage Blob Data Reader' role assignment. If you provide full URLs in the fields below, these selections are not required."
+                        "style": "Info",
+                        "text": "Optionally select a storage account, blob container, and User Assigned Managed Identity with 'Storage Blob Data Reader' role assignment to host your artifacts (agent installers, scripts, or software). If you specify these items, you can provide blob names in the fields below instead of full URLs. Otherwise, full URLs are required."
                       }
                     },
                     {
@@ -4987,15 +4978,18 @@
                       "toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role assigned to the storage account selected above.",
                       "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
                       "constraints": {
-                        "required": false,
-                        "validations": [
-                          {
-                            "isValid": "[[or(not(empty(steps('hosts').customizations.managedIdentity)), and(empty(steps('hosts').customizations.storageAccount), not(contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.')), not(contains(steps('hosts').customizations.agentUrl, '.blob.core.'))))]",
-                            "message": "A managed identity is required when accessing blob storage. Either select a storage account above or provide a managed identity."
-                          }
-                        ]
+                        "required": false
                       },
                       "visible": "[[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
+                    },
+                    {
+                      "name": "managedIdentityRequiredError",
+                      "type": "Microsoft.Common.InfoBox",
+                      "visible": "[[and(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), not(contains(string(steps('hosts').customizations.managedIdentity), '/subscriptions/')), or(not(empty(steps('hosts').customizations.storageAccount)), contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.'), contains(steps('hosts').customizations.agentUrl, '.blob.core.')))]",
+                      "options": {
+                        "text": "A managed identity with 'Storage Blob Data Reader' on the storage account is required when a storage account is selected or a blob storage URL is provided.",
+                        "style": "Error"
+                      }
                     },
                     {
                       "name": "agentDownloadHeader",
@@ -5009,7 +5003,7 @@
                       "name": "agentBootLoaderUrl",
                       "type": "Microsoft.Common.TextBox",
                       "label": "[[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent Boot Loader URL', 'AVD Agent Boot Loader URL or Blob Name')]",
-                      "defaultValue": "[[if(empty(steps('hosts').customizations.storageAccount), '', 'Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi')]",
+                      "defaultValue": "Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi",
                       "toolTip": "[[if(empty(steps('hosts').customizations.storageAccount), 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide a custom full URL to override the default.', 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide either a blob name (if using the storage account selected above) or a custom full URL to override the default.')]",
                       "constraints": {
                         "required": false,
@@ -5022,7 +5016,7 @@
                       "name": "agentUrl",
                       "type": "Microsoft.Common.TextBox",
                       "label": "[[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent URL', 'AVD Agent URL or Blob Name')]",
-                      "defaultValue": "[[if(empty(steps('hosts').customizations.storageAccount), '', 'Microsoft.RDInfra.RDAgent.Installer-x64.msi')]",
+                      "defaultValue": "Microsoft.RDInfra.RDAgent.Installer-x64.msi",
                       "toolTip": "[[if(empty(steps('hosts').customizations.storageAccount), 'Optional. Provide a custom full URL to override defaults (go.microsoft.com for public clouds, aka.ms perma-links for air-gapped clouds). This URL will be used as fallback if the endpoint download fails.', 'Optional. Provide a blob name (using storage account above) or full URL to override defaults. This will be used as fallback if the endpoint download fails.')]",
                       "constraints": {
                         "required": false,
@@ -5030,6 +5024,15 @@
                         "validationMessage": "Must be either a full URL (https://...) or a blob name ending in .msi"
                       },
                       "visible": "[[steps('hosts').customizations.customizeAgentDownload]"
+                    },
+                    {
+                      "name": "agentBlobWithoutStorageError",
+                      "type": "Microsoft.Common.InfoBox",
+                      "visible": "[[and(steps('hosts').customizations.customizeAgentDownload, empty(steps('hosts').customizations.storageAccount), or(and(not(empty(steps('hosts').customizations.agentBootLoaderUrl)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), and(not(empty(steps('hosts').customizations.agentUrl)), not(startsWith(steps('hosts').customizations.agentUrl, 'http')))))]",
+                      "options": {
+                        "text": "A blob name was entered but no storage account is selected. Select a storage account and container above, or provide a full URL instead.",
+                        "style": "Error"
+                      }
                     },
                     {
                       "name": "customScriptsHeader",
@@ -5125,10 +5128,20 @@
               "label": "User Profiles",
               "elements": [
                 {
+                  "name": "personalHostPoolInfoBox",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[[equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')]",
+                  "options": {
+                    "style": "Info",
+                    "text": "FSLogix profile management is not applicable to Personal host pools. Session hosts in Personal host pools retain their local user profiles."
+                  }
+                },
+                {
                   "name": "profileSolution",
                   "type": "Microsoft.Common.DropDown",
                   "defaultValue": "FSLogix",
                   "label": "Profile Solution",
+                  "visible": "[[not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'))]",
                   "toolTip": "Select the user profile solution for your end users.",
                   "constraints": {
                     "allowedValues": [
@@ -5148,12 +5161,12 @@
                   "type": "Microsoft.Common.CheckBox",
                   "label": "Configure FSLogix registry settings on session hosts",
                   "defaultValue": true,
-                  "visible": "[[equals(steps('userProfiles').profileSolution, 'FSLogix')]"
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'))]"
                 },
                 {
                   "name": "fslogixContainerType",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[[steps('userProfiles').configureSessionHosts]",
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]",
                   "label": "FSLogix Container Type(s)",
                   "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.fslContainerType, 'Profile Container')]",
                   "toolTip": "Select the container type(s) for the FSLogix profiles.",
@@ -5183,7 +5196,7 @@
                   "name": "sizeInMBs",
                   "type": "Microsoft.Common.Slider",
                   "label": "FSLogix VHD Size (MB)",
-                  "defaultValue": "[[coalesce(int(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs), 30720)]",
+                  "defaultValue": "[[if(empty(coalesce(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs, '')), 30720, int(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs))]",
                   "toolTip": "Input the max size of the users fslogix containers.",
                   "min": 10240,
                   "max": 1048576,
@@ -5191,12 +5204,12 @@
                   "constraints": {
                     "required": true
                   },
-                  "visible": "[[and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]"
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]"
                 },
                 {
                   "name": "storageService",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[[steps('userProfiles').configureSessionHosts]",
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]",
                   "label": "Storage Service",
                   "defaultValue": "[[if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureNetAppFiles'), 'Azure NetApp Files', if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureFiles'), 'Azure Files', 'Azure Files'))]",
                   "toolTip": "Select the storage service that provides the SMB file share to support the use of FSLogix.",
@@ -5208,7 +5221,7 @@
                   "name": "azureNetAppFiles",
                   "type": "Microsoft.Common.Section",
                   "label": "Azure NetApp Files",
-                  "visible": "[[equals(steps('userProfiles').storageService, 'AzureNetAppFiles')]",
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles'))]",
                   "elements": [
                     {
                       "name": "subscription",
@@ -5389,7 +5402,7 @@
                   "name": "azureFiles",
                   "type": "Microsoft.Common.Section",
                   "label": "Azure Files",
-                  "visible": "[[equals(steps('userProfiles').storageService, 'AzureFiles')]",
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'))]",
                   "elements": [
                     {
                       "name": "shardHeader",
@@ -5638,7 +5651,7 @@
             },
             {
               "name": "monitoring",
-              "label": "Monitoring and Management",
+              "label": "Monitoring and Operations",
               "elements": [
                 {
                   "name": "enableSessionHostMonitoring",
@@ -5906,7 +5919,7 @@
             "agentBootLoaderDownloadUrl": "[[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentBootLoaderUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentBootLoaderUrl), steps('hosts').customizations.agentBootLoaderUrl), '')]",
             "agentDownloadUrl": "[[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentUrl), steps('hosts').customizations.agentUrl), '')]",
             "sessionHostCustomizations": "[[if(steps('hosts').customizations.addCustomScripts, steps('hosts').customizations.customScripts, parse('[]'))]",
-            "fslogixConfigureSessionHosts": "[[steps('userProfiles').configureSessionHosts]",
+            "fslogixConfigureSessionHosts": "[[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), false, steps('userProfiles').configureSessionHosts)]",
             "fslogixContainerType": "[[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').fslogixContainerType, 'ProfileContainer')]",
             "fslogixSizeInMBs": "[[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').sizeInMBs, 30720)]",
             "fslogixStorageService": "[[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').storageService, 'AzureFiles')]",
@@ -6050,8 +6063,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "11818824656167031491"
+              "version": "0.39.26.7824",
+              "templateHash": "10540414874423970871"
             }
           },
           "parameters": {
@@ -6185,8 +6198,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "13135189757702660001"
+              "version": "0.39.26.7824",
+              "templateHash": "5611607689301204181"
             }
           },
           "parameters": {
@@ -6275,8 +6288,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "17528306623679640166"
+              "version": "0.39.26.7824",
+              "templateHash": "10861582231171382063"
             }
           },
           "definitions": {
@@ -6366,7 +6379,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+              "scope": "[format('Microsoft.KeyVault/vaults/{0}', parameters('keyVaultName'))]",
               "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -6419,8 +6432,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "4607040991912780958"
+              "version": "0.39.26.7824",
+              "templateHash": "15647520222733292506"
             }
           },
           "parameters": {
@@ -6515,8 +6528,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "4607040991912780958"
+              "version": "0.39.26.7824",
+              "templateHash": "15647520222733292506"
             }
           },
           "parameters": {
@@ -6615,8 +6628,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "11766629778045529073"
+              "version": "0.39.26.7824",
+              "templateHash": "6703123689452334995"
             }
           },
           "parameters": {
@@ -6713,8 +6726,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "12139496427225971606"
+              "version": "0.39.26.7824",
+              "templateHash": "5403796250629971852"
             }
           },
           "definitions": {
@@ -6801,7 +6814,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.Resources/templateSpecs', parameters('templateSpecName'))]",
+              "scope": "[format('Microsoft.Resources/templateSpecs/{0}', parameters('templateSpecName'))]",
               "name": "[guid(resourceId('Microsoft.Resources/templateSpecs', parameters('templateSpecName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -6858,8 +6871,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "9308507197777775204"
+              "version": "0.39.26.7824",
+              "templateHash": "18348983487760297408"
             }
           },
           "definitions": {
@@ -6949,7 +6962,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.Compute/galleries', parameters('galleryName'))]",
+              "scope": "[format('Microsoft.Compute/galleries/{0}', parameters('galleryName'))]",
               "name": "[guid(resourceId('Microsoft.Compute/galleries', parameters('galleryName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -7005,8 +7018,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "17989996530327066224"
+              "version": "0.39.26.7824",
+              "templateHash": "1025380025253398934"
             }
           },
           "definitions": {
@@ -7093,7 +7106,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]",
+              "scope": "[format('Microsoft.ManagedIdentity/userAssignedIdentities/{0}', parameters('identityName'))]",
               "name": "[guid(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -7223,8 +7236,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "1609150334520108793"
+              "version": "0.39.26.7824",
+              "templateHash": "6305532924595442322"
             }
           },
           "parameters": {
@@ -7650,8 +7663,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "18067987585444669153"
+                      "version": "0.39.26.7824",
+                      "templateHash": "12025591670321114935"
                     }
                   },
                   "definitions": {
@@ -7854,8 +7867,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "3058719336033375780"
+                              "version": "0.39.26.7824",
+                              "templateHash": "2124421625946796921"
                             }
                           },
                           "parameters": {
@@ -7993,8 +8006,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "3176829335966308983"
+                              "version": "0.39.26.7824",
+                              "templateHash": "13041727118718956438"
                             }
                           },
                           "parameters": {
@@ -8079,8 +8092,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "15091676289629671152"
+                              "version": "0.39.26.7824",
+                              "templateHash": "7374398187158342276"
                             }
                           },
                           "definitions": {
@@ -8176,7 +8189,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -8250,8 +8263,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "3058719336033375780"
+                              "version": "0.39.26.7824",
+                              "templateHash": "2124421625946796921"
                             }
                           },
                           "parameters": {
@@ -8403,8 +8416,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "1494202011118404825"
+                              "version": "0.39.26.7824",
+                              "templateHash": "9232813763512653612"
                             }
                           },
                           "parameters": {
@@ -8549,8 +8562,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "15091676289629671152"
+                              "version": "0.39.26.7824",
+                              "templateHash": "7374398187158342276"
                             }
                           },
                           "definitions": {
@@ -8646,7 +8659,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -8711,8 +8724,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "15091676289629671152"
+                              "version": "0.39.26.7824",
+                              "templateHash": "7374398187158342276"
                             }
                           },
                           "definitions": {
@@ -8808,7 +8821,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -8896,8 +8909,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "15107852728170180576"
+                      "version": "0.39.26.7824",
+                      "templateHash": "17290229534485454366"
                     }
                   },
                   "parameters": {
@@ -8937,8 +8950,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "10817860410374762026"
+                              "version": "0.39.26.7824",
+                              "templateHash": "5758136482480486201"
                             }
                           },
                           "parameters": {
@@ -9003,8 +9016,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "16589231915538834957"
+                      "version": "0.39.26.7824",
+                      "templateHash": "2027363032243475202"
                     }
                   },
                   "definitions": {
@@ -9091,7 +9104,7 @@
                       },
                       "type": "Microsoft.Authorization/roleAssignments",
                       "apiVersion": "2022-04-01",
-                      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+                      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', parameters('storageAccountName'))]",
                       "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                       "properties": {
                         "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -9182,8 +9195,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "2999777255157491875"
+              "version": "0.39.26.7824",
+              "templateHash": "5366415417088853"
             }
           },
           "parameters": {
@@ -9258,8 +9271,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "1737062625304249257"
+              "version": "0.39.26.7824",
+              "templateHash": "16841581105544725267"
             }
           },
           "parameters": {

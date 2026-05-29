@@ -2,7 +2,6 @@ targetScope = 'subscription'
 
 param activeDirectoryConnection bool
 param identitySolution string
-param availability string
 param azureFilePrivateDnsZoneResourceId string
 param deploymentSuffix string
 param deploymentUserAssignedIdentityClientId string
@@ -40,6 +39,7 @@ param storageAccountNamePrefix string
 param storageCount int
 param storageIndex int
 param storageSku string
+param fslogixStorageRedundancy string
 param storageSolution string
 param tags object
 
@@ -91,7 +91,6 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   scope: resourceGroup(resourceGroupStorage)
   params: {
     appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
-    availability: availability
     azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     deploymentVirtualMachineName: deploymentVirtualMachineName
@@ -126,6 +125,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     storageCount: storageCount
     storageIndex: storageIndex
     storageSku: storageSku
+    storageRedundancy: fslogixStorageRedundancy
     tags: tags
     deploymentSuffix: deploymentSuffix
     permittedIPs: permittedIPs

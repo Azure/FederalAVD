@@ -70,6 +70,30 @@ param pooledHostPool bool
 param vmPolicyName string = 'AvdPolicyVm'
 param fileSharePolicyName string = 'filesharepolicy'
 
+@description('Optional. Shared key management mode for PaaS resources. When set to CustomerManaged or CustomerManagedHSM and createVault is true, vault CMK is configured.')
+@allowed([
+  'MicrosoftManaged'
+  'CustomerManaged'
+  'CustomerManagedHSM'
+])
+param keyManagementType string = 'MicrosoftManaged'
+
+@description('Optional. Resource ID of the encryption key vault used for vault CMK configuration.')
+param encryptionKeyVaultResourceId string = ''
+
+@description('Optional. URI of the encryption key vault used for vault CMK configuration.')
+param encryptionKeyVaultUri string = ''
+
+@description('Optional. Name of the customer-managed key used for vault encryption.')
+param encryptionKeyName string = ''
+
+@description('Optional. Name of the user-assigned identity used by the vault to access the CMK.')
+param encryptionUserAssignedIdentityName string = ''
+
+@description('Optional. Key expiration in days for newly created CMK keys.')
+@minValue(7)
+param keyExpirationInDays int = 180
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 var backupPrivateDnsZoneResourceIds = filter([
@@ -84,6 +108,25 @@ var backupPrivateDnsZoneResourceIds = filter([
 var effectiveVaultSub = createVault ? subscription().subscriptionId : split(existingRecoveryServicesVaultResourceId, '/')[2]
 var effectiveVaultRG = createVault ? resourceGroupOperations : split(existingRecoveryServicesVaultResourceId, '/')[4]
 var effectiveVaultName = createVault ? vaultName : last(split(existingRecoveryServicesVaultResourceId, '/'))!
+var useVaultCmk = createVault && keyManagementType != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId) && !empty(encryptionKeyVaultUri) && !empty(encryptionKeyName)
+var recoveryServicesCmkIdentityName = !empty(encryptionUserAssignedIdentityName) ? encryptionUserAssignedIdentityName : take('${vaultName}-cmk-uai', 128)
+
+module recoveryServicesCmk '../../../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (useVaultCmk) {
+  name: 'RecoveryServices-CMK-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupOperations)
+  params: {
+    keyVaultResourceId: encryptionKeyVaultResourceId
+    keyManagementType: keyManagementType == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyExpirationInDays: keyExpirationInDays
+    location: location
+    tags: tags
+    deploymentSuffix: deploymentSuffix
+    storageKeyNames: [
+      encryptionKeyName
+    ]
+    storageIdentityName: recoveryServicesCmkIdentityName
+  }
+}
 
 // ─── Recovery Services Vault ──────────────────────────────────────────────────
 module recoveryServicesVault '../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (createVault) {
@@ -96,6 +139,8 @@ module recoveryServicesVault '../../../../.common/bicepModules/recoveryServices/
     publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     storageType: storageRedundancy
     tags: tags[?'Microsoft.RecoveryServices/vaults'] ?? {}
+    cmkKeyUri: useVaultCmk ? '${encryptionKeyVaultUri}keys/${encryptionKeyName}' : ''
+    cmkUserAssignedIdentityResourceId: useVaultCmk ? recoveryServicesCmk!.outputs.storageIdentityResourceId : ''
   }
 }
 

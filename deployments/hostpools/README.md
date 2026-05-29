@@ -99,6 +99,7 @@ Subscription
 
 - **Private Endpoints** - Storage, Key Vault, Workspace, Automation Account
 - **Customer-Managed Keys** - Disk encryption, storage encryption
+- **Recovery Services CMK (shared)** - When CMK is enabled for Recovery Services vault creation, a shared Operations-scoped key and UAI are used (not hostpool-scoped): key name `recovery-services-encryption-key-{uniqueStringOperations}` and UAI name from the shared naming convention with token `recovery-services-encryption`
 - **Managed Identities** - No stored credentials for Azure service access
 - **Key Vault Integration** - Secrets management for credentials
 - **Disk Encryption Sets** - Centralized key management for VM disks
@@ -259,42 +260,50 @@ Subscription
 - **Description:** Availability zones for VMs
 - **Example:** `["1", "2", "3"]`
 
-#### `subnetResourceId`
+#### `virtualMachineSubnetResourceId`
 - **Type:** String
 - **Required:** Yes
 - **Description:** Subnet resource ID for session hosts
 
 ### Storage
 
-#### `storageService`
+#### `fslogixStorageService`
 - **Type:** String
-- **Allowed:** `AzureFiles`, `AzureNetAppFiles`, `None`
-- **Default:** `AzureFiles`
-- **Description:** Storage solution for FSLogix profiles
+- **Allowed:** `AzureFiles Standard`, `AzureFiles Premium`, `AzureNetAppFiles Standard`, `AzureNetAppFiles Premium`
+- **Default:** `AzureFiles Standard`
+- **Description:** Storage solution and performance tier for FSLogix profiles.
 
-#### `storageAccountSku`
+#### `fslogixStorageRedundancy`
 - **Type:** String (Azure Files only)
-- **Allowed:** `Standard_LRS`, `Standard_ZRS`, `Premium_LRS`, `Premium_ZRS`
-- **Default:** `Standard_LRS`
-- **Description:** Storage account SKU
+- **Allowed:** `LocallyRedundant`, `ZoneRedundant`
+- **Default:** `LocallyRedundant`
+- **Description:** Redundancy for newly created Azure Files storage accounts used by FSLogix. This is configured independently from session host availability zone settings.
 
-#### `fileShareQuotaInGB`
+#### `keyManagementPaaS`
+- **Type:** String
+- **Allowed:** `MicrosoftManaged`, `CustomerManaged`, `CustomerManagedHSM`
+- **Default:** `MicrosoftManaged`
+- **Description:** Shared key management mode for supported PaaS resources deployed by this solution (for example Azure Files and Recovery Services Vault).
+
+#### `fslogixShareSizeInGB`
 - **Type:** Integer
 - **Default:** `100`
 - **Description:** Azure Files share quota in GB
 
-#### `netAppFilesAccountName`
-- **Type:** String (Azure NetApp Files only)
-- **Description:** Existing ANF account name
-
-#### `netAppFilesCapacityPoolName`
-- **Type:** String (Azure NetApp Files only)
-- **Description:** Existing ANF capacity pool name
-
-#### `netAppFilesVolumeQuotaGB`
+#### `fslogixStorageIndex`
 - **Type:** Integer
-- **Default:** `1024`
-- **Description:** ANF volume quota in GB
+- **Default:** `1`
+- **Description:** Starting index for created FSLogix storage accounts.
+
+#### `fslogixOUPath`
+- **Type:** String
+- **Optional**
+- **Description:** OU path used when joining FSLogix storage resources to AD DS.
+
+#### `netAppVolumesSubnetResourceId`
+- **Type:** String (Azure NetApp Files only)
+- **Optional**
+- **Description:** Subnet resource ID delegated to `Microsoft.NetApp/volumes`.
 
 ### Monitoring
 
@@ -349,12 +358,17 @@ Subscription
 
 ### Security & Encryption
 
-#### `diskEncryption`
+#### `encryptionAtHost`
 - **Type:** Boolean
-- **Default:** `false`
-- **Description:** Enable disk encryption with platform-managed keys
+- **Default:** `true`
+- **Description:** Enable encryption at host for session host VMs.
 
-#### `diskEncryptionSetResourceId`
+#### `keyManagementDisks`
+- **Type:** String
+- **Default:** `PlatformManaged`
+- **Description:** Session host disk key-management mode.
+
+#### `existingDiskEncryptionSetResourceId`
 - **Type:** String
 - **Optional**
 - **Description:** Disk Encryption Set for customer-managed keys
@@ -362,10 +376,10 @@ Subscription
 #### `securityType`
 - **Type:** String
 - **Allowed:** `Standard`, `TrustedLaunch`, `ConfidentialVM`
-- **Default:** `Standard`
+- **Default:** `TrustedLaunch`
 - **Description:** VM security configuration
 
-#### `encryptionKeyVaultResourceId`
+#### `existingEncryptionKeyVaultResourceId`
 - **Type:** String
 - **Optional**
 - **Description:** Resource ID of an existing Encryption Key Vault containing customer-managed keys. Typically provided from the Key Vaults (Foundation) deployment. Leave empty to have a Key Vault created automatically when CMK is enabled.
@@ -510,7 +524,7 @@ Ready-to-use sample parameter files are in `parameters\`. Copy and rename one in
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/galleries/gal_avd_use2/images/win11-24h2-avd-m365/versions/latest"
         },
         "keyManagementDisks": { "value": "CustomerManaged" },
-        "keyManagementStorageAccounts": { "value": "CustomerManaged" },
+        "keyManagementPaaS": { "value": "CustomerManaged" },
         "encryptionKeyVaultResourceId": {
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-operations-use2/providers/Microsoft.KeyVault/vaults/kv-avd-enc-use2-abc"
         },

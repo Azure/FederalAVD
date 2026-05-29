@@ -10,7 +10,7 @@
     "AVDAgentBootloader": {
         "Description": "Required: Azure Virtual Desktop Agent Bootloader Installer",
         "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2311028",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi",
         "DestinationFolders": [
             ""
         ]

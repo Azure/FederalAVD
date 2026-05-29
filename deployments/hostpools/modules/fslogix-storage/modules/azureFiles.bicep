@@ -1,5 +1,4 @@
 param appUpdateUserAssignedIdentityResourceId string
-param availability string
 param recoveryServicesVaultResourceId string = ''
 param azureFilePrivateDnsZoneResourceId string
 param deploymentUserAssignedIdentityClientId string
@@ -34,6 +33,7 @@ param storageAccountNamePrefix string
 param storageCount int
 param storageIndex int
 param storageSku string
+param storageRedundancy string
 param tags object
 param deploymentSuffix string
 
@@ -59,7 +59,7 @@ var smbSettingsValues = {
   channelEncryption: 'AES-128-CCM;AES-128-GCM;AES-256-GCM;'
   multichannel: storageSku != 'Standard' ? { enabled: true } : null
 }
-var storageRedundancy = availability == 'availabilityZones' ? '_ZRS' : '_LRS'
+var storageRedundancySuffix = storageRedundancy == 'ZoneRedundant' ? '_ZRS' : '_LRS'
 
 var graphEndpoint = environment().name == 'AzureUSGovernment'
   ? 'https://graph.microsoft.us'
@@ -83,7 +83,7 @@ module storageAccounts '../../../../../.common/bicepModules/storage/storageAccou
       name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
       location: location
       kind: storageSku == 'Standard' ? 'StorageV2' : 'FileStorage'
-      skuName: '${storageSku}${storageRedundancy}'
+      skuName: '${storageSku}${storageRedundancySuffix}'
       tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
       allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
       allowSharedKeyAccess: identitySolution == 'EntraId' ? true : false
@@ -99,11 +99,10 @@ module storageAccounts '../../../../../.common/bicepModules/storage/storageAccou
               : identitySolution == 'EntraDomainServices' ? 'AADDS' : 'None'
           }
         : {}
-      encryptionKeyVaultUri: keyManagementStorageAccounts != 'MicrosoftManaged' ? encryptionKeyVaultUri : ''
-      encryptionKeyName: keyManagementStorageAccounts != 'MicrosoftManaged'
-        ? replace(fslogixEncryptionKeyNameConv, '##', padLeft(i + storageIndex, 2, '0'))
+      cmkKeyUri: keyManagementStorageAccounts != 'MicrosoftManaged'
+        ? '${encryptionKeyVaultUri}keys/${replace(fslogixEncryptionKeyNameConv, '##', padLeft(i + storageIndex, 2, '0'))}'
         : ''
-      encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'MicrosoftManaged'
+      cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'MicrosoftManaged'
         ? encryptionUserAssignedIdentityResourceId
         : ''
       diagnosticSettings: !empty(logAnalyticsWorkspaceId) ? { workspaceId: logAnalyticsWorkspaceId } : null

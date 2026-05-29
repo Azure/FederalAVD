@@ -18,18 +18,46 @@ param softDeleteFeatureState string = 'Enabled'
 @description('Enhanced security state for the vault.')
 param enhancedSecurityState string = 'Enabled'
 
+@description('Optional. Customer-managed key URI for vault encryption. Leave empty to use Microsoft-managed encryption.')
+param cmkKeyUri string = ''
+
+@description('Optional. User-assigned identity resource ID used by the vault to access the CMK.')
+param cmkUserAssignedIdentityResourceId string = ''
+
 param diagnosticSettings diagnosticSettingsType?
+
+var cmkConfigurationValidated = (empty(cmkKeyUri) || contains(cmkKeyUri, '/keys/')) && (empty(cmkKeyUri) == empty(cmkUserAssignedIdentityResourceId))
+  ? true
+  : bool('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.')
 
 resource recoveryServicesVault 'Microsoft.RecoveryServices/vaults@2023-04-01' = {
   name: name
   location: location
   tags: tags
+  identity: !empty(cmkKeyUri)
+    ? {
+        type: 'UserAssigned'
+        userAssignedIdentities: {
+          '${cmkUserAssignedIdentityResourceId}': {}
+        }
+      }
+    : null
   sku: {
     name: 'RS0'
     tier: 'Standard'
   }
   properties: {
-    publicNetworkAccess: publicNetworkAccess
+    publicNetworkAccess: cmkConfigurationValidated ? publicNetworkAccess : publicNetworkAccess
+    encryption: !empty(cmkKeyUri)
+      ? {
+          keyVaultProperties: {
+            keyUri: cmkKeyUri
+          }
+          kekIdentity: {
+            userAssignedIdentity: cmkUserAssignedIdentityResourceId
+          }
+        }
+      : null
   }
 }
 
@@ -83,3 +111,4 @@ resource diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-pre
 
 output resourceId string = recoveryServicesVault.id
 output name string = recoveryServicesVault.name
+output principalId string = !empty(recoveryServicesVault.identity.?principalId ?? '') ? recoveryServicesVault.identity!.principalId! : ''

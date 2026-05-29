@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.43.8.12551",
-      "templateHash": "11189827957136474944"
+      "version": "0.39.26.7824",
+      "templateHash": "15471612533047056635"
     }
   },
   "parameters": {
@@ -514,8 +514,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "13135189757702660001"
+              "version": "0.39.26.7824",
+              "templateHash": "5611607689301204181"
             }
           },
           "parameters": {
@@ -663,8 +663,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "1609150334520108793"
+              "version": "0.39.26.7824",
+              "templateHash": "6305532924595442322"
             }
           },
           "parameters": {
@@ -1090,8 +1090,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "18067987585444669153"
+                      "version": "0.39.26.7824",
+                      "templateHash": "12025591670321114935"
                     }
                   },
                   "definitions": {
@@ -1294,8 +1294,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "3058719336033375780"
+                              "version": "0.39.26.7824",
+                              "templateHash": "2124421625946796921"
                             }
                           },
                           "parameters": {
@@ -1433,8 +1433,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "3176829335966308983"
+                              "version": "0.39.26.7824",
+                              "templateHash": "13041727118718956438"
                             }
                           },
                           "parameters": {
@@ -1519,8 +1519,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "15091676289629671152"
+                              "version": "0.39.26.7824",
+                              "templateHash": "7374398187158342276"
                             }
                           },
                           "definitions": {
@@ -1616,7 +1616,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -1690,8 +1690,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "3058719336033375780"
+                              "version": "0.39.26.7824",
+                              "templateHash": "2124421625946796921"
                             }
                           },
                           "parameters": {
@@ -1843,8 +1843,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "1494202011118404825"
+                              "version": "0.39.26.7824",
+                              "templateHash": "9232813763512653612"
                             }
                           },
                           "parameters": {
@@ -1989,8 +1989,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "15091676289629671152"
+                              "version": "0.39.26.7824",
+                              "templateHash": "7374398187158342276"
                             }
                           },
                           "definitions": {
@@ -2086,7 +2086,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -2151,8 +2151,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "15091676289629671152"
+                              "version": "0.39.26.7824",
+                              "templateHash": "7374398187158342276"
                             }
                           },
                           "definitions": {
@@ -2248,7 +2248,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -2336,8 +2336,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "15107852728170180576"
+                      "version": "0.39.26.7824",
+                      "templateHash": "17290229534485454366"
                     }
                   },
                   "parameters": {
@@ -2377,8 +2377,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "10817860410374762026"
+                              "version": "0.39.26.7824",
+                              "templateHash": "5758136482480486201"
                             }
                           },
                           "parameters": {
@@ -2443,8 +2443,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "16589231915538834957"
+                      "version": "0.39.26.7824",
+                      "templateHash": "2027363032243475202"
                     }
                   },
                   "definitions": {
@@ -2531,7 +2531,7 @@
                       },
                       "type": "Microsoft.Authorization/roleAssignments",
                       "apiVersion": "2022-04-01",
-                      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+                      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', parameters('storageAccountName'))]",
                       "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                       "properties": {
                         "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -2606,8 +2606,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "11766629778045529073"
+              "version": "0.39.26.7824",
+              "templateHash": "6703123689452334995"
             }
           },
           "parameters": {
@@ -2708,8 +2708,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "2999777255157491875"
+              "version": "0.39.26.7824",
+              "templateHash": "5366415417088853"
             }
           },
           "parameters": {

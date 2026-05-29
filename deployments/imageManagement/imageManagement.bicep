@@ -354,11 +354,10 @@ module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/
     privateEndpoint: storageNetworkAccess == 'PrivateEndpoint'
     networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
-    encryptionKeyVaultUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
-      ? encryptionKeyVault!.properties.vaultUri
+    cmkKeyUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
+      ? '${encryptionKeyVault!.properties.vaultUri}keys/${storageEncryptionKeyName}'
       : ''
-    encryptionKeyName: keyManagementStorageAccounts != 'PlatformManaged' ? storageEncryptionKeyName : ''
-    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
+    cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
       ? storageCmk!.outputs.storageIdentityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
@@ -441,11 +440,10 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
     privateEndpoint: storageNetworkAccess == 'PrivateEndpoint'
     networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
-    encryptionKeyVaultUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
-      ? encryptionKeyVault!.properties.vaultUri
+    cmkKeyUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
+      ? '${encryptionKeyVault!.properties.vaultUri}keys/${storageEncryptionKeyName}'
       : ''
-    encryptionKeyName: keyManagementStorageAccounts != 'PlatformManaged' ? storageEncryptionKeyName : ''
-    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
+    cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
       ? storageCmk!.outputs.storageIdentityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}

@@ -34,7 +34,6 @@
 								"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/prerequisites"
 							}
 						},
-
 						{
 							"name": "naming",
 							"type": "Microsoft.Common.Section",
@@ -415,14 +414,14 @@
 									"options": {
 										"text": "There is an existing AVD workspace in the control plane region you selected. This solution allows you to update the application group references of an existing AVD Workspace or create a new Workspace. Select the appropriate option below."
 									},
-									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))))]" 
+									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))))]"
 								},
 								{
 									"name": "createOption",
 									"type": "Microsoft.Common.OptionsGroup",
 									"label": "Workspace Creation Option",
 									"defaultValue": "Update an existing Workspace",
-									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))))]" ,
+									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name))))]",
 									"constraints": {
 										"allowedValues": [
 											{
@@ -1581,100 +1580,6 @@
 									"toolTip": "Check to enable Confidential VM disk encryption",
 									"defaultValue": true,
 									"visible": "[equals(steps('hosts').security.securityType, 'ConfidentialVM')]"
-								},
-								{
-									"name": "keyManagementTextBlock1",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "You can rely on platform-managed keys for the encryption of your managed disk, or you can manage encryption using your own keys. If you choose to manage encryption with your own keys, you can specify a customer-managed key to use for encrypting and decrypting all data in managed disks.",
-										"link": {
-											"label": "Learn more",
-											"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/disk-encryption#about-encryption-key-management"
-										}
-									}
-								},
-								{
-									"name": "keyManagementInfobox1",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"text": "In some environments it is required to utilize Customer Managed Keys and protect those keys in a premium key vault with the keys stored in a FIPS 140 validated Hardware Security Module. This is most common in IL5 type environments. Selecting a Customer Managed Key Hardware Security Module (HSM) option will ensure that all VM disks are protected with this configuration. Click this box for more information.",
-										"uri": "https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#storage-isolation",
-										"style": "Info"
-									}
-								},
-								{
-									"name": "keyManagement",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Key Management",
-									"defaultValue": "Platform-Managed Keys",
-									"toolTip": "Platform-managed keys are key encryption keys that are generated, stored, and managed entirely by Azure. Choose Platform Managed for the best balance of security and ease of use. Customer-managed keys are key encryption keys that are generated, stored, and managed by you, the customer, in your Azure Key Vault. Choose Customer Managed if you need to meet specific compliance requirements. Platform-Managed and Customer-Managed Keys provide double encryption with an infrastructure encryption layer using platform-managed keys and a disk encryption layer using customer-managed keys.",
-									"constraints": {
-										"allowedValues": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"}]'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys\",\"value\":\"CustomerManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"},{\"label\":\"Platform-Managed and Customer-Managed Keys\",\"value\":\"PlatformManagedAndCustomerManaged\"},{\"label\":\"Platform-Managed and Customer-Managed Keys protected by HSM\",\"value\":\"PlatformManagedAndCustomerManagedHSM\"}]'))]"
-									}
-								},
-								{
-									"name": "confOSDiskEncryptionWarning",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'))]",
-									"options": {
-										"style": "Warning",
-										"text": "You must have completed the prerequistes to support Confidential VM Disk Encryption.",
-										"uri": "https://learn.microsoft.com/en-us/azure/confidential-computing/quick-create-confidential-vm-portal#prerequisites"
-									}
-								},
-								{
-									"name": "confDiskEncryptionPrincipalApi",
-									"type": "Microsoft.Solutions.GraphApiControl",
-									"request": {
-										"method": "GET",
-										"path": "/v1.0/servicePrincipals?$filter=startsWith(displayName, 'Confidential VM Orchestrator')&$select=displayName,id",
-										"transforms": {
-											"objectId": "[value[?displayName=='Confidential VM Orchestrator'] | [0].id]"
-										}
-									}
-								},
-								{
-									"name": "confDiskEncryptionServicePrincipalPickerBlade",
-									"type": "Microsoft.Solutions.BladeInvokeControl",
-									"openBladeStatus": "[steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalSelector.changing]",
-									"bladeReference": {
-										"name": "ObjectPickerBlade",
-										"extension": "Microsoft_AAD_IAM",
-										"parameters": {
-											"queries": 4,
-											"bladeSubtitle": "Confidential VM Orchestrator Service Principal",
-											"additionalQueriesOnSearch": 0,
-											"advancedQueryOptions": {},
-											"selectionMaximum": 1,
-											"selectionMinimum": 1,
-											"bladeTitle": "Select the Service Principal",
-											"informationHeader": {
-												"informationText": "Select the 'Confidential VM Orchestrator' Service Principal."
-											},
-											"searchBoxLabel": "Enter 'Confidential VM Orchestrator' into the search box",
-											"searchBoxPlaceHolderText": "",
-											"searchGridNoRowsMessage": "No Service Principals found",
-											"selectButtonText": "Select Service Principal",
-											"selectedGridLabel": "Selected Service Principal",
-											"selectedGridNoRowsMessage": "You must select the 'Confidential VM Orchestrator' Service Principal."
-										}
-									},
-									"transforms": {
-										"selection": "selectedObjects|[*].{displayName:displayName,id:id}"
-									}
-								},
-								{
-									"name": "confDiskEncryptionServicePrincipalSelector",
-									"type": "Microsoft.Common.Selector",
-									"label": "Select the Confidential VM Orchestrator Service Principal",
-									"keyPath": "displayName",
-									"value": "[steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection]",
-									"barColor": "[if(empty(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade), '#FF0000', '#7fba00')]",
-									"constraints": {
-										"required": true
-									},
-									"link": "[if(empty(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade), 'Select Service Principal', first(map(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
-									"visible": "[and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManagedHSM'), empty(first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.value)))]"
 								}
 							]
 						},
@@ -2081,7 +1986,7 @@
 								{
 									"name": "managedIdentityRequiredError",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), not(contains(string(steps('hosts').customizations.managedIdentity), '/subscriptions/')), or(not(empty(steps('hosts').customizations.storageAccount)), contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.'), contains(steps('hosts').customizations.agentUrl, '.blob.core.')))]" ,
+									"visible": "[and(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), not(contains(string(steps('hosts').customizations.managedIdentity), '/subscriptions/')), or(not(empty(steps('hosts').customizations.storageAccount)), contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.'), contains(steps('hosts').customizations.agentUrl, '.blob.core.')))]",
 									"options": {
 										"text": "A managed identity with 'Storage Blob Data Reader' on the storage account is required when a storage account is selected or a blob storage URL is provided.",
 										"style": "Error"
@@ -2124,7 +2029,7 @@
 								{
 									"name": "agentBlobWithoutStorageError",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('hosts').customizations.customizeAgentDownload, empty(steps('hosts').customizations.storageAccount), or(and(not(empty(steps('hosts').customizations.agentBootLoaderUrl)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), and(not(empty(steps('hosts').customizations.agentUrl)), not(startsWith(steps('hosts').customizations.agentUrl, 'http')))))]" ,
+									"visible": "[and(steps('hosts').customizations.customizeAgentDownload, empty(steps('hosts').customizations.storageAccount), or(and(not(empty(steps('hosts').customizations.agentBootLoaderUrl)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), and(not(empty(steps('hosts').customizations.agentUrl)), not(startsWith(steps('hosts').customizations.agentUrl, 'http')))))]",
 									"options": {
 										"text": "A blob name was entered but no storage account is selected. Select a storage account and container above, or provide a full URL instead.",
 										"style": "Error"
@@ -2731,6 +2636,27 @@
 									}
 								},
 								{
+									"name": "storageRedundancy",
+									"type": "Microsoft.Common.DropDown",
+									"visible": "[equals(steps('userProfiles').deployStorage, true)]",
+									"label": "Azure Files Redundancy",
+									"defaultValue": "Locally Redundant",
+									"toolTip": "Select Azure Files storage redundancy independently from session host availability settings.",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Locally Redundant",
+												"value": "LocallyRedundant"
+											},
+											{
+												"label": "Zone Redundant",
+												"value": "ZoneRedundant"
+											}
+										],
+										"required": true
+									}
+								},
+								{
 									"name": "storageIndex",
 									"type": "Microsoft.Common.Slider",
 									"label": "Storage Index",
@@ -2993,61 +2919,6 @@
 										"hideConfirmation": false
 									},
 									"visible": "[and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms')), not(equals(steps('userProfiles').azureFiles.credentialSource, 'keyVault')))]"
-								},
-								{
-									"name": "keyManagementHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[equals(steps('userProfiles').deployStorage, true)]",
-									"options": {
-										"text": "Encryption Key Management"
-									}
-								},
-								{
-									"name": "keyManagementTextBox1",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[equals(steps('userProfiles').deployStorage, true)]",
-									"options": {
-										"link": {
-											"label": "Microsoft Learn | Azure Storage - Customer Managed Keys",
-											"uri": "https://learn.microsoft.com/en-us/azure/storage/common/customer-managed-keys-overview"
-										},
-										"text": "Azure Storage uses service-side encryption (SSE) to automatically encrypt your data when it is persisted to the cloud. Data in storage accounts is encrypted with Microsoft-managed keys by default. You can continue to rely on Microsoft-managed keys for the encryption of your data, or you can manage encryption with your own keys. You can specify a customer-managed key to use for encrypting and decrypting data in Blob Storage and in Azure Files. Customer-managed keys must be stored in Azure Key Vault or Azure Key Vault Managed Hardware Security Model (HSM)."
-									}
-								},
-								{
-									"name": "keyManagementInfobox1",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[equals(steps('userProfiles').deployStorage, true)]",
-									"options": {
-										"text": "In some environments it is required to utilize Customer Managed Keys and protect those keys in a premium key vault with the keys stored in a FIPS 140 validated Hardware Security Module. This is most common in IL5 type environments. Selecting a Customer Managed Key Hardware Security Module (HSM) option will ensure that all storage accounts protected with this configuration. Click this box for more information.",
-										"uri": "https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#storage-isolation",
-										"style": "Info"
-									}
-								},
-								{
-									"name": "keyManagement",
-									"type": "Microsoft.Common.DropDown",
-									"visible": "[equals(steps('userProfiles').deployStorage, true)]",
-									"label": "Storage Encryption Key Management",
-									"defaultValue": "[if(contains(steps('hosts').diskEncryption.keyManagement, 'Customer'), if(contains(steps('hosts').diskEncryption.keyManagement, 'HSM'), 'Customer-Managed Keys protected by HSM', 'Customer-Managed Keys'), 'Microsoft-Managed Keys')]",
-									"toolTip": "Select the type of Key Management to use for the FSLogix storage account(s) encryption keys.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Microsoft-Managed Keys",
-												"value": "MicrosoftManaged"
-											},
-											{
-												"label": "Customer-Managed Keys",
-												"value": "CustomerManaged"
-											},
-											{
-												"label": "Customer-Managed Keys protected by HSM",
-												"value": "CustomerManagedHSM"
-											}
-										]
-									}
 								},
 								{
 									"name": "configureSessionHostsHeader",
@@ -3339,7 +3210,7 @@
 							"name": "deploymentVm",
 							"type": "Microsoft.Common.Section",
 							"label": "Deployment Virtual Machine",
-							"visible": "[or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))]",
+							"visible": "[or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))]",
 							"elements": [
 								{
 									"name": "deploymentVmInfoBox",
@@ -3425,7 +3296,7 @@
 							"name": "keyVaults",
 							"type": "Microsoft.Common.Section",
 							"label": "Key Vaults",
-							"visible": "[or(equals(steps('identity').credentials.source, 'manual'), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))]",
+							"visible": "[or(equals(steps('identity').credentials.source, 'manual'), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged'))]",
 							"elements": [
 								{
 									"name": "deploySecretsKeyVault",
@@ -3459,7 +3330,7 @@
 									"toolTip": "The number of days Key Vaults are kept in the recycle bin. Soft delete is designed to prevent accidental deletion of your key vault and keys, secrets, and certificates stored inside key vault. When you delete a key vault or a key vault object, it remains recoverable for a user configurable retention period or a default of 90 days.",
 									"min": 7,
 									"max": 90,
-									"visible": "[or(and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault)]"
+									"visible": "[or(and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault)]"
 								},
 								{
 									"name": "useExistingEncryptionKv",
@@ -3467,7 +3338,7 @@
 									"label": "Use Existing Encryption Key Vault",
 									"defaultValue": false,
 									"toolTip": "Check to select an existing Encryption Key Vault (e.g., from the Security deployment) instead of creating one inline in the management resource group.",
-									"visible": "[or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))]"
+									"visible": "[or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged'))]"
 								},
 								{
 									"name": "existingEncryptionKeyVault",
@@ -3482,7 +3353,7 @@
 										"subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]",
 										"location": "[steps('hosts').scope.location.name]"
 									},
-									"visible": "[and(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
+									"visible": "[and(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv, or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged')))]"
 								},
 								{
 									"name": "keyExpirationInDays",
@@ -3493,7 +3364,7 @@
 									"toolTip": "The number of days before a new key version is automatically generated in the Azure Key Vault.",
 									"min": 30,
 									"max": 180,
-									"visible": "[or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))]"
+									"visible": "[or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged'))]"
 								}
 							]
 						},
@@ -3615,10 +3486,137 @@
 							}
 						},
 						{
+							"name": "keyManagement",
+							"type": "Microsoft.Common.Section",
+							"label": "Encryption Key Management",
+							"elements": [
+								{
+									"name": "keyManagementInfobox1",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"text": "In some environments it is required to use customer-managed keys and protect them in a premium Key Vault with keys stored in a FIPS 140 validated Hardware Security Module (HSM). This is most common in IL5 environments. Selecting a customer-managed key option with HSM protection applies this approach to supported operating system disk and PaaS encryption scenarios in this deployment. Click this box for more information.",
+										"uri": "https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#storage-isolation",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "keyManagementStorageTextBlock1",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').backup.recoveryServices)]",
+									"options": {
+										"text": "Storage resources use encryption at rest by default with Microsoft-managed keys. You can select customer-managed keys when your environment requires you to control key lifecycle and protection standards.",
+										"link": {
+											"label": "Microsoft Learn | Azure Storage customer-managed keys",
+											"uri": "https://learn.microsoft.com/en-us/azure/storage/common/customer-managed-keys-overview"
+										}
+									}
+								},
+								{
+									"name": "keyManagementSessionHostsTextBlock1",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Session host OS disks can use platform-managed keys or customer-managed keys. Use customer-managed keys when compliance requires your organization to manage encryption keys in Key Vault.",
+										"link": {
+											"label": "Microsoft Learn | Managed disk key management",
+											"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/disk-encryption#about-encryption-key-management"
+										}
+									}
+								},
+								{
+									"name": "keyManagementDisks",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Session Host Disk Encryption Key Management",
+									"defaultValue": "Platform-Managed Keys",
+									"toolTip": "Platform-managed keys are key encryption keys that are generated, stored, and managed entirely by Azure. Choose Platform Managed for the best balance of security and ease of use. Customer-managed keys are key encryption keys that are generated, stored, and managed by you, the customer, in your Azure Key Vault. Choose Customer Managed if you need to meet specific compliance requirements. Platform-Managed and Customer-Managed Keys provide double encryption with an infrastructure encryption layer using platform-managed keys and a disk encryption layer using customer-managed keys.",
+									"constraints": {
+										"allowedValues": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"}]'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys\",\"value\":\"CustomerManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"},{\"label\":\"Platform-Managed and Customer-Managed Keys\",\"value\":\"PlatformManagedAndCustomerManaged\"},{\"label\":\"Platform-Managed and Customer-Managed Keys protected by HSM\",\"value\":\"PlatformManagedAndCustomerManagedHSM\"}]'))]"
+									}
+								},
+								{
+									"name": "confOSDiskEncryptionWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'))]",
+									"options": {
+										"style": "Warning",
+										"text": "You must have completed the prerequistes to support Confidential VM Disk Encryption.",
+										"uri": "https://learn.microsoft.com/en-us/azure/confidential-computing/quick-create-confidential-vm-portal#prerequisites"
+									}
+								},
+								{
+									"name": "confDiskEncryptionServicePrincipalPickerBlade",
+									"type": "Microsoft.Solutions.BladeInvokeControl",
+									"openBladeStatus": "[steps('zeroTrust').keyManagement.confDiskEncryptionServicePrincipalSelector.changing]",
+									"bladeReference": {
+										"name": "ObjectPickerBlade",
+										"extension": "Microsoft_AAD_IAM",
+										"parameters": {
+											"queries": 4,
+											"bladeSubtitle": "Confidential VM Orchestrator Service Principal",
+											"additionalQueriesOnSearch": 0,
+											"advancedQueryOptions": {},
+											"selectionMaximum": 1,
+											"selectionMinimum": 1,
+											"bladeTitle": "Select the Service Principal",
+											"informationHeader": {
+												"informationText": "Select the 'Confidential VM Orchestrator' Service Principal."
+											},
+											"searchBoxLabel": "Enter 'Confidential VM Orchestrator' into the search box",
+											"searchBoxPlaceHolderText": "",
+											"searchGridNoRowsMessage": "No Service Principals found",
+											"selectButtonText": "Select Service Principal",
+											"selectedGridLabel": "Selected Service Principal",
+											"selectedGridNoRowsMessage": "You must select the 'Confidential VM Orchestrator' Service Principal."
+										}
+									},
+									"transforms": {
+										"selection": "selectedObjects|[*].{displayName:displayName,id:id}"
+									}
+								},
+								{
+									"name": "confDiskEncryptionServicePrincipalSelector",
+									"type": "Microsoft.Common.Selector",
+									"label": "Select the Confidential VM Orchestrator Service Principal",
+									"keyPath": "displayName",
+									"value": "[steps('zeroTrust').keyManagement.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection]",
+									"barColor": "[if(empty(steps('zeroTrust').keyManagement.confDiskEncryptionServicePrincipalPickerBlade), '#FF0000', '#7fba00')]",
+									"constraints": {
+										"required": true
+									},
+									"link": "[if(empty(steps('zeroTrust').keyManagement.confDiskEncryptionServicePrincipalPickerBlade), 'Select Service Principal', first(map(steps('zeroTrust').keyManagement.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
+									"visible": "[and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'))]"
+								},
+								{
+									"name": "keyManagementPaaS",
+									"type": "Microsoft.Common.DropDown",
+									"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').backup.recoveryServices)]",
+									"label": "PaaS Encryption Key Management",
+									"defaultValue": "[if(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'Customer'), if(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'HSM'), 'Customer-Managed Keys protected by HSM', 'Customer-Managed Keys'), 'Microsoft-Managed Keys')]",
+									"toolTip": "Select the key management option for supported PaaS resources in this deployment.",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "Microsoft-Managed Keys",
+												"value": "MicrosoftManaged"
+											},
+											{
+												"label": "Customer-Managed Keys",
+												"value": "CustomerManaged"
+											},
+											{
+												"label": "Customer-Managed Keys protected by HSM",
+												"value": "CustomerManagedHSM"
+											}
+										]
+									}
+								}
+							]
+						},
+						{
 							"name": "privateEndpoints",
 							"type": "Microsoft.Common.Section",
 							"label": "Private Endpoints",
-							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)))]",
+							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)))]",
 							"elements": [
 								{
 									"name": "privateEndpointTextBlock1",
@@ -3660,7 +3658,7 @@
 								{
 									"name": "managementHeader",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
+									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
 									"options": {
 										"text": "Shared Operations Resources (Key Vaults, Recovery Services Vault)"
 									}
@@ -3676,7 +3674,7 @@
 										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "managementSubnetsApi",
@@ -3696,7 +3694,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.managementSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "hostpoolHeader",
@@ -3839,7 +3837,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": true
 									},
-									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')))]"
+									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged')))]"
 								},
 								{
 									"name": "azureQueuePrivateDnsZone",
@@ -3860,7 +3858,7 @@
 							"name": "permittedIPsSection",
 							"type": "Microsoft.Common.Section",
 							"label": "Permitted IP Addresses",
-							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)))]",
+							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)))]",
 							"elements": [
 								{
 									"name": "permittedIPsInfo",
@@ -4390,9 +4388,9 @@
 				"integrityMonitoring": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.integrityMonitoring)]",
 				"encryptionAtHost": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), false, steps('hosts').diskEncryption.encryptionAtHost)]",
 				"existingDiskEncryptionSetResourceId": "",
-				"keyManagementDisks": "[steps('hosts').diskEncryption.keyManagement]",
+				"keyManagementDisks": "[steps('zeroTrust').keyManagement.keyManagementDisks]",
 				"confidentialVMOSDiskEncryption": "[steps('hosts').diskEncryption.confidentialVMOSDiskEncryption]",
-				"confidentialVMOrchestratorObjectId": "[if(and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('hosts').diskEncryption.keyManagement, 'CustomerManagedHSM')), if(empty(first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.value)), first(map(steps('hosts').diskEncryption.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(steps('hosts').diskEncryption.confDiskEncryptionPrincipalApi.transformed.objectId)), '')]",
+				"confidentialVMOrchestratorObjectId": "[if(and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManagedHSM')), first(map(steps('zeroTrust').keyManagement.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), '')]",
 				"dedicatedHostGroupResourceId": "[if(steps('hosts').dedicatedHosts.deployToDedicatedHosts, steps('hosts').dedicatedHosts.dedicatedHostGroup, '')]",
 				"dedicatedHostResourceId": "[if(steps('hosts').dedicatedHosts.deployToDedicatedHosts, steps('hosts').dedicatedHosts.dedicatedHost, '')]",
 				"availability": "[if(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), steps('hosts').availability.availability, 'none')]",
@@ -4416,6 +4414,7 @@
 				"fslogixConfigureSessionHosts": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), false, if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, false))]",
 				"fslogixOUPath": "[if(and(equals(steps('identity').solution, 'ActiveDirectoryDomainServices'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').ouPath, '')]",
 				"fslogixStorageService": "[if(equals(steps('userProfiles').deployStorage, true), if(equals(steps('userProfiles').storageService, 'AzureFiles'), concat('AzureFiles ', steps('userProfiles').azureFiles.storageSku), concat('AzureNetAppFiles ', steps('userProfiles').azureNetAppFiles.storageSku)), if(steps('userProfiles').configureSessionHosts, if(equals(steps('userProfiles').storageService, 'AzureFiles'), 'AzureFiles Standard', 'AzureNetAppFiles Standard'), 'AzureFiles Standard'))]",
+				"fslogixStorageRedundancy": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').azureFiles.storageRedundancy, 'LocallyRedundant')]",
 				"netAppVolumesSubnetResourceId": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), steps('userProfiles').azureNetAppFiles.subnet.id, '')]",
 				"existingSharedActiveDirectoryConnection": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), steps('userProfiles').azureNetAppFiles.existingSharedActiveDirectoryConnection, false)]",
 				"fslogixExistingLocalNetAppVolumeResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)), equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), steps('userProfiles').azureNetAppFiles.localVolumes, parse('[]'))]",
@@ -4424,34 +4423,34 @@
 				"fslogixUserGroups": "[if(and(equals(steps('userProfiles').storageService, 'AzureNetAppFiles'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').azureNetAppFiles.leastPrivNTFS, true)), steps('userProfiles').azureNetAppFiles.userGroupPickerBlade.transformed.groups, if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), not(equals(steps('identity').solution, 'EntraId')), or(equals(steps('userProfiles').configureSessionHosts, true), equals(steps('userProfiles').deployStorage, true)), if(contains(steps('identity').solution, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None')))), steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups, parse('[]')))]",
 				"fslogixShareSizeInGB": "[if(equals(steps('userProfiles').deployStorage, true), if(equals(steps('userProfiles').storageService, 'AzureFiles'), steps('userProfiles').azureFiles.storageShareSize, steps('userProfiles').azureNetAppFiles.storageShareSize), 100)]",
 				"fslogixStorageIndex": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.storageIndex, 0)]",
-				"keyManagementStorageAccounts": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.keyManagement, 'MicrosoftManaged')]",
+				"keyManagementPaaS": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').backup.recoveryServices), steps('zeroTrust').keyManagement.keyManagementPaaS, 'MicrosoftManaged')]",
 				"fslogixExistingLocalStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingLocalStorageAccounts, parse('[]'))]",
 				"fslogixExistingRemoteStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
 				"fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('identity').solution, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true)), steps('userProfiles').managedIdentity.id, '')]",
 				"fslogixAdminGroups": "[if(steps('userProfiles').shareManagement.configureAdminAccess, steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups, parse('[]'))]",
 				"avdObjectId": "[if(and(steps('operationsAndMonitoring').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
-				"deploymentVmSize": "[if(or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName))), steps('operationsAndMonitoring').deploymentVm.size, 'Standard_B2s')]",
+				"deploymentVmSize": "[if(or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName))), steps('operationsAndMonitoring').deploymentVm.size, 'Standard_B2s')]",
 				"recoveryServices": "[steps('operationsAndMonitoring').backup.recoveryServices]",
 				"recoveryServicesVaultStorageRedundancy": "[if(steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.recoveryServicesVaultStorageRedundancy, 'LocallyRedundant')]",
 				"existingRecoveryServicesVaultResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('operationsAndMonitoring').backup.recoveryServicesVault, '')]",
 				"deploySecretsKeyVault": "[if(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, false)]",
 				"secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault), steps('operationsAndMonitoring').keyVaults.enableSoftDelete, false)]",
 				"secretsKeyVaultEnablePurgeProtection": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, steps('operationsAndMonitoring').keyVaults.enableSoftDelete), steps('operationsAndMonitoring').keyVaults.enablePurgeProtection, false)]",
-				"keyVaultRetentionInDays": "[if(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv))), steps('operationsAndMonitoring').keyVaults.keyVaultRetentionInDays, 7)]",
-				"existingEncryptionKeyVaultResourceId": "[if(and(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv, or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('operationsAndMonitoring').keyVaults.existingEncryptionKeyVault.id, '')]",
-				"keyExpirationInDays": "[if(or(contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), steps('operationsAndMonitoring').keyVaults.keyExpirationInDays, 180)]",
+				"keyVaultRetentionInDays": "[if(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv))), steps('operationsAndMonitoring').keyVaults.keyVaultRetentionInDays, 7)]",
+				"existingEncryptionKeyVaultResourceId": "[if(and(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv, or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged'))), steps('operationsAndMonitoring').keyVaults.existingEncryptionKeyVault.id, '')]",
+				"keyExpirationInDays": "[if(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged')), steps('operationsAndMonitoring').keyVaults.keyExpirationInDays, 180)]",
 				"enableMonitoring": "[steps('operationsAndMonitoring').monitoring.enableMonitoring]",
 				"monitoringSubscriptionId": "[if(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.subscription.subscriptionId, '')]",
 				"existingLogAnalyticsWorkspaceResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.logAnalyticsWorkspace, '')]",
 				"existingAVDInsightsDataCollectionRuleResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.avdInsightsDataCollectionRule, '')]",
 				"existingDataCollectionEndpointResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.dataCollectionEndpoint, '')]",
 				"deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
-				"operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
+				"operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
 				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",
 				"azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
 				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
 				"azureFilesPrivateDnsZoneResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilesPrivateDnsZone, '')]",
-				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
+				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
 				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
 				"azureMonitorPrivateLinkScopeResourceId": "[if(steps('zeroTrust').azureMonitor.privateLink, steps('zeroTrust').azureMonitor.azureMonitorPrivateLinkScope.id, '')]",
 				"deployDiskAccessPolicy": "[steps('zeroTrust').policy.deployDiskAccessPolicy]",
@@ -4464,7 +4463,7 @@
 				"existingGlobalFeedResourceId": "[first(map(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed')), (ws) => ws.id))]",
 				"globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
 				"globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
-				"permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('hosts').diskEncryption.keyManagement, 'CustomerManaged'), contains(steps('userProfiles').azureFiles.keyManagement, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
+				"permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementPaaS, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
 				"tags": "[steps('tags').tags]"
 			},
 			"kind": "Subscription",

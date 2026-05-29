@@ -430,6 +430,13 @@ param fslogixAppUpdateUserAssignedIdentityResourceId string = ''
 @description('Optional. The storage service to use for storing FSLogix containers. The service & SKU should provide sufficient IOPS for all of your users. https://docs.microsoft.com/en-us/azure/architecture/example-scenario/wvd/windows-virtual-desktop-fslogix#performance-requirements')
 param fslogixStorageService string = 'AzureFiles Standard'
 
+@allowed([
+  'LocallyRedundant'
+  'ZoneRedundant'
+])
+@description('Optional. Storage redundancy for newly created Azure Files accounts used by FSLogix. Independent from session host availability settings.')
+param fslogixStorageRedundancy string = 'LocallyRedundant'
+
 @description('Optional. The OU Path where the FSLogix Storage Accounts or NetApp Accounts will be joined in the ADDS.')
 param fslogixOUPath string = ''
 
@@ -482,8 +489,8 @@ param fslogixStorageIndex int = 1
   'CustomerManaged'
   'CustomerManagedHSM'
 ])
-@description('Optional. The type of key management used for the Azure Files storage account encryption.')
-param keyManagementStorageAccounts string = 'MicrosoftManaged'
+@description('Optional. Shared key management mode for PaaS resources deployed by this solution (for example Azure Files and Recovery Services Vault).')
+param keyManagementPaaS string = 'MicrosoftManaged'
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all PaaS components (storage accounts, Key Vaults). Use when managing the deployment from a trusted workstation outside the Azure network boundary.')
 param permittedIPs array = []
@@ -648,12 +655,13 @@ var virtualMachinesRegion = vmVirtualNetwork.location
 var effectiveControlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
 
 var createDeploymentVm = deployFSLogixStorage || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)
+var effectiveKeyManagementPaaS = keyManagementPaaS
 
 // deployKeyVaults controls inline KV creation within this deployment.
 //   (a) deploySecretsKeyVault = true: user explicitly requested a secrets KV deployed inline
 //   (b) CMK is needed but no external encryptionKeyVaultResourceId was provided (e.g., portal all-in-one)
 // When using the Foundation deployment, encryptionKeyVaultResourceId will be non-empty so deployInlineEncryptionKv stays false.
-var cmkIsRequested = contains(keyManagementStorageAccounts, 'CustomerManaged') || contains(
+var cmkIsRequested = contains(effectiveKeyManagementPaaS, 'CustomerManaged') || contains(
   keyManagementDisks,
   'CustomerManaged'
 ) || confidentialVMOSDiskEncryption
@@ -663,7 +671,8 @@ var deployKeyVaults = deploySecretsKeyVault || deployInlineEncryptionKv
 // Top-level CMK: run keys + DES/UAI + role assignments early so RBAC propagation
 // completes during the monitoring/controlPlane phases — well before VMs or storage deploy.
 var deployDiskCmk = contains(keyManagementDisks, 'CustomerManaged') && !confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
-var deployStorageCmk = deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && keyManagementStorageAccounts != 'MicrosoftManaged' && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
+var deployStorageCmk = deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && effectiveKeyManagementPaaS != 'MicrosoftManaged' && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
+var deployRecoveryServicesCmk = recoveryServices && empty(existingRecoveryServicesVaultResourceId) && effectiveKeyManagementPaaS != 'MicrosoftManaged' && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
 // CVM CMK: CVM keys must be created via Key Vault data plane (Run Command) because ARM key PUT
 // does not support key release policies. The DES is then created by the shared CMK module with skipKeyCreation=true.
 var deployCvmDiskCmk = confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
@@ -806,14 +815,12 @@ var locsEnvProp = startsWith(cloud, 'us') ? 'other' : environment().name
 var locs = allLocs[locsEnvProp]
 var abbr = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 
-#disable-next-line BCP329
 var locationVms = startsWith(cloud, 'us')
-  ? substring(virtualMachinesRegion, 5, length(virtualMachinesRegion) - 5)
+  ? substring(virtualMachinesRegion, 5, max(length(virtualMachinesRegion) - 5, 0))
   : virtualMachinesRegion
 var vmsLocAbbr = locs[locationVms].abbreviation
-#disable-next-line BCP329
 var locationCP = startsWith(cloud, 'us')
-  ? substring(effectiveControlPlaneRegion, 5, length(effectiveControlPlaneRegion) - 5)
+  ? substring(effectiveControlPlaneRegion, 5, max(length(effectiveControlPlaneRegion) - 5, 0))
   : effectiveControlPlaneRegion
 var cpLocAbbr = locs[locationCP].abbreviation
 
@@ -986,6 +993,12 @@ var recoveryServicesVaultNameFSLogix = replace(
   'TOKEN',
   'fslogix'
 )
+// Recovery Services CMK assets are shared operations resources, not hostpool-scoped.
+var userAssignedIdentitySharedNameConv = replace(
+  replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.userAssignedIdentities),
+  'LOCATION',
+  vmsLocAbbr
+)
 var userAssignedIdentityNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.userAssignedIdentities),
   'LOCATION',
@@ -1065,6 +1078,8 @@ var fslogixStorageAccountNamePrefix = empty(fslogixStorageCustomPrefix)
 var encryptionKeyNameFSLogix = '${hpBaseName}-encryption-key-${fslogixStorageAccountNamePrefix}##'
 var encryptionKeyNameVMs = '${hpBaseName}-encryption-key-vms'
 var encryptionKeyNameConfidentialVMs = '${hpBaseName}-encryption-key-confidential-vms'
+// Shared key reused by Recovery Services vault variants in the Operations resource group.
+var encryptionKeyNameRecoveryServices = 'recovery-services-encryption-key-${uniqueStringOperations}'
 var fslogixShareNamesLookup = {
   CloudCacheProfileContainer: [
     'profile-containers'
@@ -1343,7 +1358,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     hostPoolName: hostPoolName
     identitySolution: identitySolution
     keyManagementDisks: keyManagementDisks
-    keyManagementStorageAccounts: keyManagementStorageAccounts
+    keyManagementStorageAccounts: effectiveKeyManagementPaaS
     location: virtualMachinesRegion
     ouPath: vmOUPath
     resourceGroupControlPlane: resourceGroupControlPlane
@@ -1481,7 +1496,7 @@ module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
   params: {
     resourceGroupName: resourceGroupStorage
     keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
-    keyManagementType: contains(keyManagementStorageAccounts, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyManagementType: contains(effectiveKeyManagementPaaS, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
     keyExpirationInDays: keyExpirationInDays
     location: virtualMachinesRegion
     tags: tags
@@ -1609,6 +1624,12 @@ module recoveryServicesModule 'modules/operations/recoveryServices.bicep' = if (
     pooledHostPool: split(hostPoolType, ' ')[0] == 'Pooled'
     vmPolicyName: recoveryServicesVmPolicyName
     fileSharePolicyName: recoveryServicesFileSharePolicyName
+    keyManagementType: effectiveKeyManagementPaaS
+    encryptionKeyVaultResourceId: deployRecoveryServicesCmk ? effectiveEncryptionKeyVaultResourceId : ''
+    encryptionKeyVaultUri: deployRecoveryServicesCmk ? effectiveEncryptionKeyVaultUri : ''
+    encryptionKeyName: deployRecoveryServicesCmk ? encryptionKeyNameRecoveryServices : ''
+    encryptionUserAssignedIdentityName: replace(userAssignedIdentitySharedNameConv, 'TOKEN', 'recovery-services-encryption')
+    keyExpirationInDays: keyExpirationInDays
   }
   dependsOn: [
     operationsResourceGroup
@@ -1627,7 +1648,6 @@ module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorag
   params: {
     activeDirectoryConnection: existingSharedActiveDirectoryConnection
     appUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
-    availability: availability
     azureFilePrivateDnsZoneResourceId: azureFilesPrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: createDeploymentVm
       ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
@@ -1655,7 +1675,7 @@ module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorag
     hostPoolResourceId: controlPlane!.outputs.hostPoolResourceId
     identitySolution: identitySolution
     kerberosEncryptionType: fslogixStorageKerberosEncryptionType
-    keyManagementStorageAccounts: keyManagementStorageAccounts
+    keyManagementStorageAccounts: effectiveKeyManagementPaaS
     location: virtualMachinesRegion
     logAnalyticsWorkspaceResourceId: enableMonitoring
       ? (empty(existingLogAnalyticsWorkspaceResourceId)
@@ -1678,6 +1698,7 @@ module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorag
     storageCount: fslogixStorageCount
     storageIndex: fslogixStorageIndex
     storageSku: fslogixStorageService == 'None' ? 'None' : split(fslogixStorageService, ' ')[1]
+    fslogixStorageRedundancy: fslogixStorageRedundancy
     storageSolution: split(fslogixStorageService, ' ')[0]
     permittedIPs: permittedIPs
     tags: tags
