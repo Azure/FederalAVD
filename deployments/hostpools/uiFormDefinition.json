@@ -2099,7 +2099,7 @@
 									"name": "agentBootLoaderUrl",
 									"type": "Microsoft.Common.TextBox",
 									"label": "[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent Boot Loader URL', 'AVD Agent Boot Loader URL or Blob Name')]",
-									"defaultValue": "Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi",
+									"defaultValue": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi",
 									"toolTip": "[if(empty(steps('hosts').customizations.storageAccount), 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide a custom full URL to override the default.', 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide either a blob name (if using the storage account selected above) or a custom full URL to override the default.')]",
 									"constraints": {
 										"required": false,
