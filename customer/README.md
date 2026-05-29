@@ -41,6 +41,60 @@ customer overrides in `customer/artifacts/`. `deployments/Update-ImageArtifacts.
 locations together, with `customer/artifacts/` overlaying matching files or folders from
 `.common/artifacts/`.
 
+## Examples
+
+Ready-to-use example artifact packages and an optional downloads file are provided under
+`customer/examples/`. These are not used automatically — copy what you need into the matching
+`customer/` subfolders and remove or modify entries you don't want.
+
+```text
+customer/examples/
+  artifacts/                                ← copy folders into customer/artifacts/
+    Adobe-Acrobat-Reader-DC/
+    Amazon-Workspaces-Client/
+    Configure-DesktopBackground/
+    Configure-EdgePolicy/
+    Configure-Office365Policy/
+    Configure-OneDriveKFMPolicy/
+    Configure-RemoteDesktopPolicy/
+    Configure-WindowsUpdatePolicy/
+    DoD-InstallRoot/
+    DoD-STIGs/
+    Git-for-Windows/
+    Google-Chrome-Enterprise/
+    LGPO/
+    Microsoft-AzCLI/
+    Microsoft-FSLogix/
+    Microsoft-Power-BI-Desktop/
+    Microsoft-PowerShell-7/
+    Microsoft-VSCode/
+    Notepad-PlusPlus/
+    PuTTY/
+  parameters/
+    imageManagement/
+      downloads.json                        ← copy to customer/parameters/imageManagement/downloads.json
+```
+
+**Copying examples to your customer folder:**
+
+```powershell
+# Copy a specific artifact package
+Copy-Item -Recurse -Path "customer\examples\artifacts\Google-Chrome-Enterprise" `
+          -Destination "customer\artifacts\"
+
+# Copy all example artifact packages at once
+Copy-Item -Recurse -Path "customer\examples\artifacts\*" -Destination "customer\artifacts\"
+
+# Copy the optional downloads file
+Copy-Item -Path "customer\examples\parameters\imageManagement\downloads.json" `
+          -Destination "customer\parameters\imageManagement\" -Force
+```
+
+Each artifact folder in `customer/examples/artifacts/` pairs with an entry in
+`customer/examples/parameters/imageManagement/downloads.json` — the `DestinationFolders` field
+in each download entry names the artifact folder the downloaded installer is placed into before
+the script zips and uploads it.
+
 If you keep customer content outside the extracted repo zip, pass `-CustomerRootPath` to
 `Update-ImageArtifacts.ps1`, `Deploy-ImageManagement.ps1`, or `Invoke-ImageBuilds.ps1` so they
 read from your external customer folder instead of the repo-local `customer/` tree.

@@ -176,6 +176,8 @@ Customer-provided artifacts and overrides belong at:
 customer/artifacts/
 ```
 
+> **Ready-to-use examples:** `customer/examples/artifacts/` contains example packages for common software (Chrome, FSLogix, LGPO, STIG tooling, VS Code, and more). Copy the folders you want directly into `customer/artifacts/` and pair them with the matching entries in `customer/examples/parameters/imageManagement/downloads.json`. See [`customer/README.md`](../customer/README.md) for copy commands.
+
 ### Directory Layout
 
 ```text

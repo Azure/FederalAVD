@@ -44,12 +44,18 @@ Base downloads parameter files are in `.common/data/` and are selected automatic
   - `.common/data/secret.downloads.parameters.json` (Azure Secret)
   - `.common/data/topsecret.downloads.parameters.json` (Azure Top Secret)
 
-To download **optional** software (e.g., PowerShell 7, VS Code, LGPO, Git), place a customer-owned downloads file at `customer/parameters/imageManagement/downloads.json`. A ready-to-use sample for public cloud environments is provided in the repo at:
-  - `deployments/imageManagement/parameters/public.downloads.optional.parameters.json`
+To download **optional** software (e.g., PowerShell 7, VS Code, LGPO, Git), place a customer-owned downloads file at `customer/parameters/imageManagement/downloads.json`. A ready-to-use example that covers a broad set of common packages is provided at:
+  - `customer/examples/parameters/imageManagement/downloads.json`
 
-Copy that sample to your customer-owned parameters location and rename it to the auto-discovered file name:
+Copy it to the auto-discovered location:
 
-  - `customer/parameters/imageManagement/downloads.json`
+```powershell
+Copy-Item -Path "customer\examples\parameters\imageManagement\downloads.json" `
+          -Destination "customer\parameters\imageManagement\" -Force
+```
+
+A minimal reference file with only the repo-required entries is also available at:
+  - `deployments/imageManagement/parameters/optional.downloads.parameters.json`
 
 ## Parameters
 
@@ -149,34 +155,145 @@ The base files contain the software entries that are required by the image build
 
 ## Software Download Configuration
 
-Repo-provided download definitions live under `deployments/imageManagement/parameters/`. Customer-specific overlays should live under `customer/parameters/imageManagement/downloads.json`.
+Customer-specific download definitions live at `customer/parameters/imageManagement/downloads.json` and are automatically merged on top of the environment-selected base file at runtime.
 
-Example JSON:
+Each top-level key is a unique entry name. The following fields are shared across all methods:
 
-```json
-{
-  "Microsoft365Apps": {
-    "WebSiteUrl": "https://www.microsoft.com/en-us/download/confirmation.aspx?id=49117",
-    "SearchString": "officedeploymenttool_",
-    "DestinationFileName": "officedeploymenttool.exe",
-    "DestinationFolders": ["Microsoft365Apps"]
-  },
-  "MicrosoftEdge": {
-    "APIUrl": "https://edgeupdates.microsoft.com/api/products",
-    "DestinationFileName": "MicrosoftEdgePolicyTemplates.cab",
-    "DestinationFolders": ["MicrosoftEdgePolicyTemplates"]
-  }
-}
-```
+| Field | Required | Description |
+|-------|----------|-------------|
+| `Description` | No | Human-readable description of what is being downloaded |
+| `DestinationFileName` | Yes | File name to save the downloaded file as |
+| `DestinationFolders` | Yes | Array of artifact folder names to copy the downloaded file into. Use `""` to also place the file in the blob container root. |
 
 ### Supported Download Methods
 
-1. **Direct URL** — Static download URL
-2. **Web Scraping** — Searches a web page for a download link using a search string
-3. **API** — Retrieves latest version from an API endpoint (e.g., Microsoft Edge)
-4. **GitHub Releases** — Fetches the latest release asset from a GitHub repository
-5. **Winget** — Downloads via the Windows Package Manager
-6. **Evergreen** — Uses the Evergreen PowerShell module for dynamic version resolution
+#### 1. Direct URL
+
+Downloads a file from a static URL.
+
+```json
+"GoogleChromeEnterprise": {
+    "Description": "Google Chrome Enterprise Installer",
+    "DownloadUrl": "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi",
+    "DestinationFileName": "GoogleChromeEnterprise.msi",
+    "DestinationFolders": [ "Google-Chrome-Enterprise" ]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `DownloadUrl` | Direct download URL |
+
+#### 2. Web Scraping
+
+Searches a web page for a download link that matches a string pattern.
+
+```json
+"Microsoft365Apps": {
+    "Description": "Microsoft 365 Apps Deployment Tool",
+    "WebSiteUrl": "https://www.microsoft.com/en-us/download/confirmation.aspx?id=49117",
+    "SearchString": "officedeploymenttool_",
+    "DestinationFileName": "officedeploymenttool.exe",
+    "DestinationFolders": [ "Microsoft365Apps" ]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `WebSiteUrl` | Page URL to scrape for a download link |
+| `SearchString` | Substring used to identify the correct link on that page |
+
+#### 3. API
+
+Retrieves the latest version from a JSON API endpoint.
+
+```json
+"EdgeEnterpriseAdministrativeTemplates": {
+    "Description": "Microsoft Edge Enterprise Administrative Templates",
+    "APIUrl": "https://edgeupdates.microsoft.com/api/products?view=enterprise",
+    "DestinationFileName": "EdgeEnterprisePolicyTemplates.cab",
+    "DestinationFolders": [ "Configure-EdgePolicy" ]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `APIUrl` | JSON API endpoint that returns version/download metadata |
+
+#### 4. GitHub Releases
+
+Fetches the latest release asset from a GitHub repository.
+
+```json
+"PowerShell7": {
+    "Description": "PowerShell 7",
+    "GitHubRepo": "PowerShell/PowerShell",
+    "GitHubFileNamePattern": "*win-x64.msi",
+    "DestinationFileName": "PowerShell7.msi",
+    "DestinationFolders": [ "Microsoft-PowerShell-7" ]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `GitHubRepo` | `owner/repo` path on GitHub |
+| `GitHubFileNamePattern` | Wildcard pattern to match the desired release asset filename |
+
+#### 5. Winget
+
+Downloads the installer for a Winget package by its package identifier or product code.
+
+```json
+"AdobeAcrobatReaderDC": {
+    "Description": "Adobe Acrobat Reader DC",
+    "WingetId": "XPDP273C0XHQH2",
+    "DestinationFileName": "AcrobatRdrDCx64.exe",
+    "DestinationFolders": [ "Adobe-Acrobat-Reader-DC" ]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `WingetId` | Winget package identifier or Microsoft Store product code |
+
+#### 6. Evergreen
+
+Uses the [Evergreen](https://stealthpuppy.com/evergreen/) PowerShell module to resolve the latest download URL dynamically. Evergreen must be installed on the machine running the script.
+
+```json
+"MicrosoftFSLogixApps": {
+    "Description": "FSLogix Apps",
+    "EvergreenApp": "MicrosoftFSLogixApps",
+    "EvergreenFilter": { "Architecture": "x64", "Channel": "Production", "Type": "zip" },
+    "DestinationFileName": "FSLogix.zip",
+    "DestinationFolders": [ "Microsoft-FSLogix" ]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `EvergreenApp` | Evergreen application name (from `Get-EvergreenApp`) |
+| `EvergreenFilter` | Key/value pairs used to filter the Evergreen results to a single asset |
+
+### Placing a File Into Multiple Artifact Folders
+
+Set `DestinationFolders` to an array with multiple names to copy the same downloaded file into several artifact folders. This is common for tools like LGPO that are needed by multiple artifact packages:
+
+```json
+"LGPO": {
+    "Description": "LGPO Tool",
+    "DownloadUrl": "https://download.microsoft.com/download/8/5/c/85c25433-a1b0-4ffa-9429-7e023e7da8d8/LGPO.zip",
+    "DestinationFileName": "lgpo.zip",
+    "DestinationFolders": [
+        "Configure-DesktopBackground",
+        "Configure-EdgePolicy",
+        "Configure-Office365Policy",
+        "LGPO"
+    ]
+}
+```
+
+Use `""` (empty string) as one of the folder names to also place the file directly in the blob container root alongside the zipped packages.
 
 ## Artifacts Directory Structure
 
