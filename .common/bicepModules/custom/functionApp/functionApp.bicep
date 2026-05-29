@@ -1,39 +1,97 @@
+@description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
 param applicationInsightsName string = ''
+
+@description('Required. Resource ID of the private DNS zone for blob endpoints (typically privatelink.blob.core.windows.net).')
 param azureBlobPrivateDnsZoneResourceId string
+
+@description('Required. Resource ID of the private DNS zone for Function App private endpoints (typically privatelink.azurewebsites.net).')
 param azureFunctionAppPrivateDnsZoneResourceId string
+
+@description('Optional. Resource ID of the private DNS zone for queue endpoints (typically privatelink.queue.core.windows.net).')
 param azureQueuePrivateDnsZoneResourceId string = ''
+
+@description('Optional. Resource ID of the private DNS zone for table endpoints (typically privatelink.table.core.windows.net).')
 param azureTablePrivateDnsZoneResourceId string = ''
+
+@description('Required. Unique suffix used for deterministic deployment naming and idempotency.')
 param deploymentSuffix string
+
+@description('Optional. Enables creation and wiring of Application Insights for the Function App.')
 param enableApplicationInsights bool = false
+
+@description('Optional. Enables queue endpoint configuration for AzureWebJobsStorage and queue private endpoint DNS integration.')
 param enableQueueStorage bool = true
+
+@description('Optional. Enables table endpoint configuration for AzureWebJobsStorage and table private endpoint DNS integration.')
 param enableTableStorage bool = true
+
+@description('Required when CMK is used. Name of the Key Vault key referenced by storage account encryption settings.')
 param encryptionKeyName string
+
+@description('Optional. Resource ID of the Key Vault containing the CMK used for storage account encryption.')
 param encryptionKeyVaultResourceId string
+
+@description('Optional. Resource ID of a delegated subnet for Function App regional VNet integration.')
 param functionAppDelegatedSubnetResourceId string
+
+@description('Required. Name of the Function App.')
 param functionAppName string
+
+@description('Optional. Additional app settings merged into the default Function App configuration.')
 param functionAppAppSettings array
+
+@description('Optional. Existing user-assigned identity resource ID for the Function App. When omitted, system-assigned identity is used.')
 param functionAppUserAssignedIdentityResourceId string = ''
+
+@description('Required. Parent host pool resource ID used for traceability tags.')
 param hostPoolResourceId string
 @allowed([
   'MicrosoftManaged'
   'CustomerManaged'
   'CustomerManagedHSM'
 ])
+@description('Required. Storage encryption key management mode for the Function App storage account.')
+
 param keyManagementStorageAccounts string
+
+@description('Required. Azure region for resources in this module.')
 param location string
+
+@description('Optional. Log Analytics workspace resource ID used for Application Insights workspace-based mode.')
 param logAnalyticsWorkspaceResourceId string = ''
+
+@description('Required. Enables or disables deployment of private endpoints for storage and Function App.')
 param privateEndpoint bool
+
+@description('Required. Naming convention template for private endpoint resources (supports RESOURCE/SUBRESOURCE/VNETID placeholders).')
 param privateEndpointNameConv string
+
+@description('Required. Naming convention template for private endpoint NIC resources (supports RESOURCE/SUBRESOURCE/VNETID placeholders).')
 param privateEndpointNICNameConv string
+
+
+@description('Required when privateEndpoint is true. Subnet resource ID used by private endpoints.')
 param privateEndpointSubnetResourceId string
+
+@description('Optional. Azure Monitor Private Link Scope resource ID used to associate Application Insights over Private Link.')
 param privateLinkScopeResourceId string = ''
+
+@description('Optional. Additional role definition IDs assigned to the Function App identity on the storage account.')
 param storageAccountRoleDefinitionIds array = []
+
+@description('Required. App Service plan (server farm) resource ID for the Function App.')
 param serverFarmId string
+
 @description('Optional. Name for the storage encryption user-assigned identity to create when CMK is selected and functionAppUserAssignedIdentityResourceId is not provided. Computed by caller using naming convention. Required when keyManagementStorageAccounts != MicrosoftManaged and functionAppUserAssignedIdentityResourceId is empty.')
 param storageEncryptionIdentityName string = ''
+
+@description('Required. Name of the storage account used by the Function App runtime.')
 param storageAccountName string
+
 @description('Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. When provided alongside a private endpoint, the firewall remains open to these IPs while still requiring PE for all other traffic.')
 param permittedIPs array = []
+
+@description('Required. Tag object with resource-type keys used to stamp deployed resources.')
 param tags object
 
 var cloudSuffix = replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')
@@ -111,8 +169,8 @@ module cmk '../customerManagedKeys/customerManagedKeys.bicep' = if (createStorag
     tags: tags
     parentResourceId: hostPoolResourceId
     deploymentSuffix: deploymentSuffix
-    storageKeyNames: [encryptionKeyName]
-    storageIdentityName: storageEncryptionIdentityName
+    paasKeyNames: [encryptionKeyName]
+    paasIdentityName: storageEncryptionIdentityName
   }
 }
 
@@ -525,6 +583,11 @@ module roleAssignment_storageAccount '../../storage/storageAccounts/roleAssignme
   }
 }
 
+@description('Name of the deployed Function App.')
 output functionAppName string = functionApp.name
+
+@description('Principal ID of the identity used by the Function App (UAI when provided, otherwise SAI).')
 output functionAppPrincipalId string = functionAppPrincipalId
+
+@description('Resource ID of Application Insights when enabled; otherwise empty string.')
 output applicationInsightsResourceId string = enableApplicationInsights ? applicationInsights.id : ''

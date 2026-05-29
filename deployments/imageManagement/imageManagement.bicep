@@ -277,8 +277,8 @@ module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/custome
     location: location
     tags: tags
     deploymentSuffix: timeStamp
-    storageKeyNames: cmkKeyNames
-    storageIdentityName: storageEncryptionIdentityName
+    paasKeyNames: cmkKeyNames
+    paasIdentityName: storageEncryptionIdentityName
   }
   dependsOn: [resourceGroup]
 }
@@ -358,7 +358,7 @@ module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/
       ? '${encryptionKeyVault!.properties.vaultUri}keys/${storageEncryptionKeyName}'
       : ''
     cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
-      ? storageCmk!.outputs.storageIdentityResourceId
+      ? storageCmk!.outputs.paasIdentityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
   }
@@ -444,7 +444,7 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
       ? '${encryptionKeyVault!.properties.vaultUri}keys/${storageEncryptionKeyName}'
       : ''
     cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
-      ? storageCmk!.outputs.storageIdentityResourceId
+      ? storageCmk!.outputs.paasIdentityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
   }

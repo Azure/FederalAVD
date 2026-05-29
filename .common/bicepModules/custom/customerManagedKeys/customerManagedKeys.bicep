@@ -3,8 +3,8 @@
 // ============================================================================
 // Single module that handles ALL CMK scenarios in the FederalAVD repo:
 //
-//   Storage mode  — creates one key + one UAI + role assignment per storage
-//                   account config. The UAI resource ID and principal ID are
+//   PaaS mode     — creates one key + one UAI + role assignment per PaaS
+//                   encryption config. The UAI resource ID and principal ID are
 //                   returned so callers can embed CMK directly in the storage
 //                   account PUT (avoiding a two-step SAI pattern that fails
 //                   under Azure Policy deny-effect rules).
@@ -49,18 +49,18 @@ param parentResourceId string = ''
 @description('Optional. Suffix appended to deployment names for uniqueness.')
 param deploymentSuffix string = uniqueString(resourceGroup().id, deployment().name)
 
-// ─── Storage mode parameters ─────────────────────────────────────────────────
+// ─── PaaS mode parameters ────────────────────────────────────────────────────
 
 @description('''
-Optional. Names of Key Vault keys to create for storage account CMK encryption.
-One key is created per entry. All keys are assigned to the single storageIdentityName UAI.
+Optional. Names of Key Vault keys to create for PaaS CMK encryption.
+One key is created per entry. All keys are assigned to the single paasIdentityName UAI.
 For a single storage account, pass a one-element array.
 For FSLogix with multiple accounts, pass all key names (one per account).
 ''')
-param storageKeyNames string[] = []
+param paasKeyNames string[] = []
 
-@description('Optional. Name of the user-assigned identity to create for storage CMK. Required when storageKeyNames is not empty.')
-param storageIdentityName string = ''
+@description('Optional. Name of the user-assigned identity to create for PaaS CMK. Required when paasKeyNames is not empty.')
+param paasIdentityName string = ''
 
 // ─── Disk mode parameters ────────────────────────────────────────────────────
 
@@ -88,10 +88,18 @@ param diskEncryptionConfigs diskEncryptionConfigType[] = []
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type diskEncryptionConfigType = {
+  @description('Name of the Key Vault key to create or reference for this disk encryption configuration.')
   keyName: string
+  
+  @description('Name of the Disk Encryption Set resource to create.')
   diskEncryptionSetName: string
+  
+  @description('When true, configures Confidential VM disk encryption behavior and release-user assignment.')
   confidentialVMOSDiskEncryption: bool?
+  
+  @description('Object ID of the Confidential VM Orchestrator service principal. Required when confidentialVMOSDiskEncryption is true.')
   confidentialVMOrchestratorObjectId: string?
+  
   @description('When true, skips ARM key creation — key was pre-created via Run Command or external process.')
   skipKeyCreation: bool?
 }
@@ -133,11 +141,11 @@ var roleKeyVaultCryptoReleaseUser = '08bbd89e-9f13-488c-ac41-acfcb10c90ab'
 // Re-deploying with this policy on an existing key will fail. See documentation.
 var cvmKeyReleasePolicy = base64('{"version":"1.0.0","anyOf":[{"authority":"https://sharedeus.eus.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedwus.wus.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedneu.neu.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedweu.weu.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedsasia.sasia.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedeasia.easia.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedjpe.jpe.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedswn.swn.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://shareditn.itn.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedeus2.eus2.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedeus2e.eus2e.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedscus.scus.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedcuse.cuse.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedcus.cus.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedeau.eau.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedsau.sau.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedcin.cin.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://shareduaen.uaen.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://shareddewc.dewc.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]},{"authority":"https://sharedwus3.wus3.attest.azure.net/","allOf":[{"claim":"x-ms-compliance-status","equals":"azure-compliant-cvm"},{"anyOf":[{"claim":"x-ms-attestation-type","equals":"tdxvm"},{"claim":"x-ms-attestation-type","equals":"sevsnpvm"}]}]}]}')
 
-// ─── Storage: Keys ───────────────────────────────────────────────────────────
+// ─── PaaS: Keys ──────────────────────────────────────────────────────────────
 
-module storageKeys '../../keyVault/vaults/keys/deploy.bicep' = [
-  for (keyName, i) in storageKeyNames: {
-    name: 'CMK-StorageKey-${i}-${deploymentSuffix}'
+module paasKeys '../../keyVault/vaults/keys/deploy.bicep' = [
+  for (keyName, i) in paasKeyNames: {
+    name: 'CMK-PaaSKey-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
     params: {
       keyVaultName: keyVaultName
@@ -152,37 +160,37 @@ module storageKeys '../../keyVault/vaults/keys/deploy.bicep' = [
   }
 ]
 
-// ─── Storage: User-Assigned Identity (single, shared by all storage keys) ────
+// ─── PaaS: User-Assigned Identity (single, shared by all keys) ──────────────
 
-module storageIdentity '../../managedIdentity/userAssignedIdentities/deploy.bicep' = if (!empty(storageKeyNames)) {
-  name: 'CMK-StorageUAI-${deploymentSuffix}'
+module paasIdentity '../../managedIdentity/userAssignedIdentities/deploy.bicep' = if (!empty(paasKeyNames)) {
+  name: 'CMK-PaaSUAI-${deploymentSuffix}'
   params: {
-    name: storageIdentityName
+    name: paasIdentityName
     location: location
     tags: union(parentTag, tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {})
   }
 }
 
-// ─── Storage: Role Assignments (Key Vault Crypto Service Encryption User) ────
+// ─── PaaS: Role Assignments (Key Vault Crypto Service Encryption User) ──────
 // One role assignment per key, all scoped to the same shared UAI.
 
-module storageKeyRoleAssignments '../../keyVault/vaults/keys/roleAssignment.bicep' = [
-  for (keyName, i) in storageKeyNames: {
-    name: 'CMK-StorageKeyRA-${i}-${deploymentSuffix}'
+module paasKeyRoleAssignments '../../keyVault/vaults/keys/roleAssignment.bicep' = [
+  for (keyName, i) in paasKeyNames: {
+    name: 'CMK-PaaSKeyRA-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
     params: {
       keyVaultName: keyVaultName
       keyName: keyName
       assignments: [
         {
-          principalId: storageIdentity!.outputs.principalId
+          principalId: paasIdentity!.outputs.principalId
           principalType: 'ServicePrincipal'
           roleDefinitionId: roleKeyVaultCryptoEncryptionUser
         }
       ]
     }
     dependsOn: [
-      storageKeys[i]
+      paasKeys[i]
     ]
   }
 ]
@@ -285,11 +293,11 @@ module diskKeyReleaseUserRoleAssignments '../../keyVault/vaults/keys/roleAssignm
 
 // ─── Outputs ─────────────────────────────────────────────────────────────────
 
-@description('Resource ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty.')
-output storageIdentityResourceId string = !empty(storageKeyNames) ? storageIdentity!.outputs.resourceId : ''
+@description('Resource ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested.')
+output paasIdentityResourceId string = !empty(paasKeyNames) ? paasIdentity!.outputs.resourceId : ''
 
-@description('Principal ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty.')
-output storageIdentityPrincipalId string = !empty(storageKeyNames) ? storageIdentity!.outputs.principalId : ''
+@description('Principal ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested.')
+output paasIdentityPrincipalId string = !empty(paasKeyNames) ? paasIdentity!.outputs.principalId : ''
 
 @description('Disk CMK results — one entry per diskEncryptionConfigs element.')
 output diskResults diskResultType[] = [
@@ -301,5 +309,6 @@ output diskResults diskResultType[] = [
 // ─── Output types ─────────────────────────────────────────────────────────────
 
 type diskResultType = {
+  @description('Resource ID of the Disk Encryption Set created for the corresponding diskEncryptionConfigs entry.')
   diskEncryptionSetResourceId: string
 }

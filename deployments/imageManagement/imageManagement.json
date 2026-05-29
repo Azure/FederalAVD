@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "11656088007527536669"
+      "templateHash": "4508904351124961285"
     }
   },
   "parameters": {
@@ -1106,10 +1106,10 @@
           "deploymentSuffix": {
             "value": "[parameters('timeStamp')]"
           },
-          "storageKeyNames": {
+          "paasKeyNames": {
             "value": "[variables('cmkKeyNames')]"
           },
-          "storageIdentityName": {
+          "paasIdentityName": {
             "value": "[variables('storageEncryptionIdentityName')]"
           }
         },
@@ -1121,7 +1121,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "12025591670321114935"
+              "templateHash": "3858629016670406510"
             }
           },
           "definitions": {
@@ -1215,21 +1215,21 @@
                 "description": "Optional. Suffix appended to deployment names for uniqueness."
               }
             },
-            "storageKeyNames": {
+            "paasKeyNames": {
               "type": "array",
               "items": {
                 "type": "string"
               },
               "defaultValue": [],
               "metadata": {
-                "description": "Optional. Names of Key Vault keys to create for storage account CMK encryption.\nOne key is created per entry. All keys are assigned to the single storageIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
+                "description": "Optional. Names of Key Vault keys to create for PaaS CMK encryption.\nOne key is created per entry. All keys are assigned to the single paasIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
               }
             },
-            "storageIdentityName": {
+            "paasIdentityName": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Name of the user-assigned identity to create for storage CMK. Required when storageKeyNames is not empty."
+                "description": "Optional. Name of the user-assigned identity to create for PaaS CMK. Required when paasKeyNames is not empty."
               }
             },
             "diskEncryptionConfigs": {
@@ -1277,14 +1277,14 @@
             "cvmKeyReleasePolicy": "[base64('{\"version\":\"1.0.0\",\"anyOf\":[{\"authority\":\"https://sharedeus.eus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus.wus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedneu.neu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedweu.weu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsasia.sasia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeasia.easia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedjpe.jpe.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedswn.swn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareditn.itn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2.eus2.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2e.eus2e.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedscus.scus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcuse.cuse.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcus.cus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeau.eau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsau.sau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcin.cin.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareduaen.uaen.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareddewc.dewc.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus3.wus3.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]}]}')]"
           },
           "resources": {
-            "storageKeys": {
+            "paasKeys": {
               "copy": {
-                "name": "storageKeys",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeys",
+                "count": "[length(parameters('paasKeyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -1297,7 +1297,7 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "name": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('paasKeyNames')[copyIndex()]]"
                   },
                   "kty": {
                     "value": "[variables('kty')]"
@@ -1436,11 +1436,11 @@
                 }
               }
             },
-            "storageIdentity": {
-              "condition": "[not(empty(parameters('storageKeyNames')))]",
+            "paasIdentity": {
+              "condition": "[not(empty(parameters('paasKeyNames')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageUAI-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -1448,7 +1448,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[parameters('storageIdentityName')]"
+                    "value": "[parameters('paasIdentityName')]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -1510,14 +1510,14 @@
                 }
               }
             },
-            "storageKeyRoleAssignments": {
+            "paasKeyRoleAssignments": {
               "copy": {
-                "name": "storageKeyRoleAssignments",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeyRoleAssignments",
+                "count": "[length(parameters('paasKeyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -1530,12 +1530,12 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "keyName": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('paasKeyNames')[copyIndex()]]"
                   },
                   "assignments": {
                     "value": [
                       {
-                        "principalId": "[reference('storageIdentity').outputs.principalId.value]",
+                        "principalId": "[reference('paasIdentity').outputs.principalId.value]",
                         "principalType": "ServicePrincipal",
                         "roleDefinitionId": "[variables('roleKeyVaultCryptoEncryptionUser')]"
                       }
@@ -1668,8 +1668,8 @@
                 }
               },
               "dependsOn": [
-                "storageIdentity",
-                "[format('storageKeys[{0}]', copyIndex())]"
+                "paasIdentity",
+                "[format('paasKeys[{0}]', copyIndex())]"
               ]
             },
             "diskKeys": {
@@ -2302,19 +2302,19 @@
             }
           },
           "outputs": {
-            "storageIdentityResourceId": {
+            "paasIdentityResourceId": {
               "type": "string",
               "metadata": {
-                "description": "Resource ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Resource ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.resourceId.value, '')]"
+              "value": "[if(not(empty(parameters('paasKeyNames'))), reference('paasIdentity').outputs.resourceId.value, '')]"
             },
-            "storageIdentityPrincipalId": {
+            "paasIdentityPrincipalId": {
               "type": "string",
               "metadata": {
-                "description": "Principal ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Principal ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.principalId.value, '')]"
+              "value": "[if(not(empty(parameters('paasKeyNames'))), reference('paasIdentity').outputs.principalId.value, '')]"
             },
             "diskResults": {
               "type": "array",
@@ -2384,7 +2384,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "12025591670321114935"
+              "templateHash": "3858629016670406510"
             }
           },
           "definitions": {
@@ -2478,21 +2478,21 @@
                 "description": "Optional. Suffix appended to deployment names for uniqueness."
               }
             },
-            "storageKeyNames": {
+            "paasKeyNames": {
               "type": "array",
               "items": {
                 "type": "string"
               },
               "defaultValue": [],
               "metadata": {
-                "description": "Optional. Names of Key Vault keys to create for storage account CMK encryption.\nOne key is created per entry. All keys are assigned to the single storageIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
+                "description": "Optional. Names of Key Vault keys to create for PaaS CMK encryption.\nOne key is created per entry. All keys are assigned to the single paasIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
               }
             },
-            "storageIdentityName": {
+            "paasIdentityName": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Name of the user-assigned identity to create for storage CMK. Required when storageKeyNames is not empty."
+                "description": "Optional. Name of the user-assigned identity to create for PaaS CMK. Required when paasKeyNames is not empty."
               }
             },
             "diskEncryptionConfigs": {
@@ -2540,14 +2540,14 @@
             "cvmKeyReleasePolicy": "[base64('{\"version\":\"1.0.0\",\"anyOf\":[{\"authority\":\"https://sharedeus.eus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus.wus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedneu.neu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedweu.weu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsasia.sasia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeasia.easia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedjpe.jpe.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedswn.swn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareditn.itn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2.eus2.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2e.eus2e.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedscus.scus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcuse.cuse.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcus.cus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeau.eau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsau.sau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcin.cin.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareduaen.uaen.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareddewc.dewc.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus3.wus3.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]}]}')]"
           },
           "resources": {
-            "storageKeys": {
+            "paasKeys": {
               "copy": {
-                "name": "storageKeys",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeys",
+                "count": "[length(parameters('paasKeyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -2560,7 +2560,7 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "name": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('paasKeyNames')[copyIndex()]]"
                   },
                   "kty": {
                     "value": "[variables('kty')]"
@@ -2699,11 +2699,11 @@
                 }
               }
             },
-            "storageIdentity": {
-              "condition": "[not(empty(parameters('storageKeyNames')))]",
+            "paasIdentity": {
+              "condition": "[not(empty(parameters('paasKeyNames')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageUAI-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -2711,7 +2711,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[parameters('storageIdentityName')]"
+                    "value": "[parameters('paasIdentityName')]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -2773,14 +2773,14 @@
                 }
               }
             },
-            "storageKeyRoleAssignments": {
+            "paasKeyRoleAssignments": {
               "copy": {
-                "name": "storageKeyRoleAssignments",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeyRoleAssignments",
+                "count": "[length(parameters('paasKeyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -2793,12 +2793,12 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "keyName": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('paasKeyNames')[copyIndex()]]"
                   },
                   "assignments": {
                     "value": [
                       {
-                        "principalId": "[reference('storageIdentity').outputs.principalId.value]",
+                        "principalId": "[reference('paasIdentity').outputs.principalId.value]",
                         "principalType": "ServicePrincipal",
                         "roleDefinitionId": "[variables('roleKeyVaultCryptoEncryptionUser')]"
                       }
@@ -2931,8 +2931,8 @@
                 }
               },
               "dependsOn": [
-                "storageIdentity",
-                "[format('storageKeys[{0}]', copyIndex())]"
+                "paasIdentity",
+                "[format('paasKeys[{0}]', copyIndex())]"
               ]
             },
             "diskKeys": {
@@ -3565,19 +3565,19 @@
             }
           },
           "outputs": {
-            "storageIdentityResourceId": {
+            "paasIdentityResourceId": {
               "type": "string",
               "metadata": {
-                "description": "Resource ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Resource ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.resourceId.value, '')]"
+              "value": "[if(not(empty(parameters('paasKeyNames'))), reference('paasIdentity').outputs.resourceId.value, '')]"
             },
-            "storageIdentityPrincipalId": {
+            "paasIdentityPrincipalId": {
               "type": "string",
               "metadata": {
-                "description": "Principal ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Principal ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.principalId.value, '')]"
+              "value": "[if(not(empty(parameters('paasKeyNames'))), reference('paasIdentity').outputs.principalId.value, '')]"
             },
             "diskResults": {
               "type": "array",
@@ -3647,7 +3647,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "12025591670321114935"
+              "templateHash": "3858629016670406510"
             }
           },
           "definitions": {
@@ -3741,21 +3741,21 @@
                 "description": "Optional. Suffix appended to deployment names for uniqueness."
               }
             },
-            "storageKeyNames": {
+            "paasKeyNames": {
               "type": "array",
               "items": {
                 "type": "string"
               },
               "defaultValue": [],
               "metadata": {
-                "description": "Optional. Names of Key Vault keys to create for storage account CMK encryption.\nOne key is created per entry. All keys are assigned to the single storageIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
+                "description": "Optional. Names of Key Vault keys to create for PaaS CMK encryption.\nOne key is created per entry. All keys are assigned to the single paasIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
               }
             },
-            "storageIdentityName": {
+            "paasIdentityName": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Name of the user-assigned identity to create for storage CMK. Required when storageKeyNames is not empty."
+                "description": "Optional. Name of the user-assigned identity to create for PaaS CMK. Required when paasKeyNames is not empty."
               }
             },
             "diskEncryptionConfigs": {
@@ -3803,14 +3803,14 @@
             "cvmKeyReleasePolicy": "[base64('{\"version\":\"1.0.0\",\"anyOf\":[{\"authority\":\"https://sharedeus.eus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus.wus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedneu.neu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedweu.weu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsasia.sasia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeasia.easia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedjpe.jpe.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedswn.swn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareditn.itn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2.eus2.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2e.eus2e.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedscus.scus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcuse.cuse.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcus.cus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeau.eau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsau.sau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcin.cin.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareduaen.uaen.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareddewc.dewc.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus3.wus3.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]}]}')]"
           },
           "resources": {
-            "storageKeys": {
+            "paasKeys": {
               "copy": {
-                "name": "storageKeys",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeys",
+                "count": "[length(parameters('paasKeyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -3823,7 +3823,7 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "name": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('paasKeyNames')[copyIndex()]]"
                   },
                   "kty": {
                     "value": "[variables('kty')]"
@@ -3962,11 +3962,11 @@
                 }
               }
             },
-            "storageIdentity": {
-              "condition": "[not(empty(parameters('storageKeyNames')))]",
+            "paasIdentity": {
+              "condition": "[not(empty(parameters('paasKeyNames')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageUAI-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -3974,7 +3974,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[parameters('storageIdentityName')]"
+                    "value": "[parameters('paasIdentityName')]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -4036,14 +4036,14 @@
                 }
               }
             },
-            "storageKeyRoleAssignments": {
+            "paasKeyRoleAssignments": {
               "copy": {
-                "name": "storageKeyRoleAssignments",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeyRoleAssignments",
+                "count": "[length(parameters('paasKeyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -4056,12 +4056,12 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "keyName": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('paasKeyNames')[copyIndex()]]"
                   },
                   "assignments": {
                     "value": [
                       {
-                        "principalId": "[reference('storageIdentity').outputs.principalId.value]",
+                        "principalId": "[reference('paasIdentity').outputs.principalId.value]",
                         "principalType": "ServicePrincipal",
                         "roleDefinitionId": "[variables('roleKeyVaultCryptoEncryptionUser')]"
                       }
@@ -4194,8 +4194,8 @@
                 }
               },
               "dependsOn": [
-                "storageIdentity",
-                "[format('storageKeys[{0}]', copyIndex())]"
+                "paasIdentity",
+                "[format('paasKeys[{0}]', copyIndex())]"
               ]
             },
             "diskKeys": {
@@ -4828,19 +4828,19 @@
             }
           },
           "outputs": {
-            "storageIdentityResourceId": {
+            "paasIdentityResourceId": {
               "type": "string",
               "metadata": {
-                "description": "Resource ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Resource ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.resourceId.value, '')]"
+              "value": "[if(not(empty(parameters('paasKeyNames'))), reference('paasIdentity').outputs.resourceId.value, '')]"
             },
-            "storageIdentityPrincipalId": {
+            "paasIdentityPrincipalId": {
               "type": "string",
               "metadata": {
-                "description": "Principal ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Principal ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.principalId.value, '')]"
+              "value": "[if(not(empty(parameters('paasKeyNames'))), reference('paasIdentity').outputs.principalId.value, '')]"
             },
             "diskResults": {
               "type": "array",
@@ -4913,7 +4913,7 @@
             "value": "[variables('sasExpirationPeriod')]"
           },
           "cmkKeyUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', format('{0}keys/{1}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('encryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri, variables('storageEncryptionKeyName'))), createObject('value', ''))]",
-          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.storageIdentityResourceId.value), createObject('value', ''))]",
+          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.paasIdentityResourceId.value), createObject('value', ''))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
           }
@@ -5975,7 +5975,7 @@
             "value": "[variables('sasExpirationPeriod')]"
           },
           "cmkKeyUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', format('{0}keys/{1}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('encryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri, variables('storageEncryptionKeyName'))), createObject('value', ''))]",
-          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.storageIdentityResourceId.value), createObject('value', ''))]",
+          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.paasIdentityResourceId.value), createObject('value', ''))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
           }

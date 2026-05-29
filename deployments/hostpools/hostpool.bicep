@@ -1491,7 +1491,7 @@ var effectiveDiskEncryptionSetResourceId = deployDiskCmk
 
 // Storage CMK: UAI + keys + role assignments for FSLogix AzureFiles storage accounts.
 // Runs in parallel with monitoring/controlPlane so role assignments propagate before azureFiles deploys.
-module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
+module storageCmk 'modules/cmk/paasCmk.bicep' = if (deployStorageCmk) {
   name: 'Storage-CMK-${deploymentSuffix}'
   params: {
     resourceGroupName: resourceGroupStorage
@@ -1501,13 +1501,35 @@ module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
     location: virtualMachinesRegion
     tags: tags
     deploymentSuffix: deploymentSuffix
-    storageKeyNameConv: encryptionKeyNameFSLogix
-    storageCount: fslogixStorageCount
-    storageIndex: fslogixStorageIndex
-    storageIdentityName: replace(userAssignedIdentityNameConv, 'TOKEN', 'storage-encryption')
+    paasKeyNames: [
+      for i in range(0, fslogixStorageCount): replace(encryptionKeyNameFSLogix, '##', padLeft(i + fslogixStorageIndex, 2, '0'))
+    ]
+    paasIdentityName: replace(userAssignedIdentityNameConv, 'TOKEN', 'storage-encryption')
   }
   dependsOn: [
     storageResourceGroup
+  ]
+}
+
+// Recovery Services CMK: UAI + key + role assignments for RSV encryption.
+// Runs before recoveryServicesModule so RBAC has time to propagate before vault CMK binding.
+module recoveryServicesCmk 'modules/cmk/paasCmk.bicep' = if (deployRecoveryServicesCmk) {
+  name: 'RecoveryServices-CMK-${deploymentSuffix}'
+  params: {
+    resourceGroupName: resourceGroupOperations
+    keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
+    keyManagementType: contains(effectiveKeyManagementPaaS, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyExpirationInDays: keyExpirationInDays
+    location: virtualMachinesRegion
+    tags: tags
+    deploymentSuffix: deploymentSuffix
+    paasKeyNames: [
+      encryptionKeyNameRecoveryServices
+    ]
+    paasIdentityName: replace(userAssignedIdentitySharedNameConv, 'TOKEN', 'recovery-services-encryption')
+  }
+  dependsOn: [
+    operationsResourceGroup
   ]
 }
 
@@ -1628,8 +1650,9 @@ module recoveryServicesModule 'modules/operations/recoveryServices.bicep' = if (
     encryptionKeyVaultResourceId: deployRecoveryServicesCmk ? effectiveEncryptionKeyVaultResourceId : ''
     encryptionKeyVaultUri: deployRecoveryServicesCmk ? effectiveEncryptionKeyVaultUri : ''
     encryptionKeyName: deployRecoveryServicesCmk ? encryptionKeyNameRecoveryServices : ''
-    encryptionUserAssignedIdentityName: replace(userAssignedIdentitySharedNameConv, 'TOKEN', 'recovery-services-encryption')
-    keyExpirationInDays: keyExpirationInDays
+    encryptionUserAssignedIdentityResourceId: deployRecoveryServicesCmk
+      ? recoveryServicesCmk!.outputs.paasIdentityResourceId
+      : ''
   }
   dependsOn: [
     operationsResourceGroup
@@ -1703,7 +1726,7 @@ module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorag
     permittedIPs: permittedIPs
     tags: tags
     deploymentSuffix: deploymentSuffix
-    encryptionUserAssignedIdentityResourceId: deployStorageCmk ? storageCmk!.outputs.storageIdentityResourceId : ''
+    encryptionUserAssignedIdentityResourceId: deployStorageCmk ? storageCmk!.outputs.paasIdentityResourceId : ''
     recoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
   }
   dependsOn: [

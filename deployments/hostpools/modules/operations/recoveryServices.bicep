@@ -88,11 +88,7 @@ param encryptionKeyVaultUri string = ''
 param encryptionKeyName string = ''
 
 @description('Optional. Name of the user-assigned identity used by the vault to access the CMK.')
-param encryptionUserAssignedIdentityName string = ''
-
-@description('Optional. Key expiration in days for newly created CMK keys.')
-@minValue(7)
-param keyExpirationInDays int = 180
+param encryptionUserAssignedIdentityResourceId string = ''
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -108,25 +104,7 @@ var backupPrivateDnsZoneResourceIds = filter([
 var effectiveVaultSub = createVault ? subscription().subscriptionId : split(existingRecoveryServicesVaultResourceId, '/')[2]
 var effectiveVaultRG = createVault ? resourceGroupOperations : split(existingRecoveryServicesVaultResourceId, '/')[4]
 var effectiveVaultName = createVault ? vaultName : last(split(existingRecoveryServicesVaultResourceId, '/'))!
-var useVaultCmk = createVault && keyManagementType != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId) && !empty(encryptionKeyVaultUri) && !empty(encryptionKeyName)
-var recoveryServicesCmkIdentityName = !empty(encryptionUserAssignedIdentityName) ? encryptionUserAssignedIdentityName : take('${vaultName}-cmk-uai', 128)
-
-module recoveryServicesCmk '../../../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (useVaultCmk) {
-  name: 'RecoveryServices-CMK-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupOperations)
-  params: {
-    keyVaultResourceId: encryptionKeyVaultResourceId
-    keyManagementType: keyManagementType == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
-    keyExpirationInDays: keyExpirationInDays
-    location: location
-    tags: tags
-    deploymentSuffix: deploymentSuffix
-    storageKeyNames: [
-      encryptionKeyName
-    ]
-    storageIdentityName: recoveryServicesCmkIdentityName
-  }
-}
+var useVaultCmk = createVault && keyManagementType != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId) && !empty(encryptionKeyVaultUri) && !empty(encryptionKeyName) && !empty(encryptionUserAssignedIdentityResourceId)
 
 // ─── Recovery Services Vault ──────────────────────────────────────────────────
 module recoveryServicesVault '../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (createVault) {
@@ -140,7 +118,7 @@ module recoveryServicesVault '../../../../.common/bicepModules/recoveryServices/
     storageType: storageRedundancy
     tags: tags[?'Microsoft.RecoveryServices/vaults'] ?? {}
     cmkKeyUri: useVaultCmk ? '${encryptionKeyVaultUri}keys/${encryptionKeyName}' : ''
-    cmkUserAssignedIdentityResourceId: useVaultCmk ? recoveryServicesCmk!.outputs.storageIdentityResourceId : ''
+    cmkUserAssignedIdentityResourceId: useVaultCmk ? encryptionUserAssignedIdentityResourceId : ''
   }
 }
 
