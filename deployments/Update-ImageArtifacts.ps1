@@ -792,9 +792,9 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     If (-not (Test-Path -Path $DestinationDir)) {
                         New-Item -Path $DestinationDir -ItemType Directory -Force | Out-Null
                     }
-                    $copySize = [math]::Round((Get-Item $DestFileFullName).Length / 1MB, 1)
+                    $copySize = [math]::Round(((Get-ChildItem -Path $TempSoftwareDownloadDir -Recurse -File | Measure-Object -Property Length -Sum).Sum) / 1MB, 1)
                     Write-Output "[$SoftwareName] Copying to artifacts directory ($copySize MB)..."
-                    Copy-Item -Path $DestFileFullName -Destination $DestinationDir -Force
+                    Copy-Item -Path "$TempSoftwareDownloadDir\*" -Destination $DestinationDir -Recurse -Force
                 }
             }
         }
