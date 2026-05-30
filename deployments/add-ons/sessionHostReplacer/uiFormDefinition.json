@@ -1,4 +1,4 @@
-{
+﻿{
 	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
 	"view": {
 		"kind": "Form",
@@ -2584,13 +2584,13 @@
 							"name": "keyManagementStorageAccounts",
 							"type": "Microsoft.Common.OptionsGroup",
 							"label": "Storage Account Key Management",
-							"defaultValue": "Microsoft-Managed Keys",
+							"defaultValue": "Platform-Managed Keys",
 							"toolTip": "Choose between platform-managed or customer-managed keys for storage encryption.",
 							"constraints": {
 								"allowedValues": [
 									{
-										"label": "Microsoft-Managed Keys",
-										"value": "MicrosoftManaged"
+										"label": "Platform-Managed Keys",
+										"value": "PlatformManaged"
 									},
 									{
 										"label": "Customer-Managed Keys",

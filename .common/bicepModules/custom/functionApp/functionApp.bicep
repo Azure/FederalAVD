@@ -1,4 +1,4 @@
-@description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
+﻿@description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
 param applicationInsightsName string = ''
 
 @description('Required. Resource ID of the private DNS zone for blob endpoints (typically privatelink.blob.core.windows.net).')
@@ -46,7 +46,7 @@ param functionAppUserAssignedIdentityResourceId string = ''
 @description('Required. Parent host pool resource ID used for traceability tags.')
 param hostPoolResourceId string
 @allowed([
-  'MicrosoftManaged'
+  'PlatformManaged'
   'CustomerManaged'
   'CustomerManagedHSM'
 ])
@@ -82,7 +82,7 @@ param storageAccountRoleDefinitionIds array = []
 @description('Required. App Service plan (server farm) resource ID for the Function App.')
 param serverFarmId string
 
-@description('Optional. Name for the storage encryption user-assigned identity to create when CMK is selected and functionAppUserAssignedIdentityResourceId is not provided. Computed by caller using naming convention. Required when keyManagementStorageAccounts != MicrosoftManaged and functionAppUserAssignedIdentityResourceId is empty.')
+@description('Optional. Name for the storage encryption user-assigned identity to create when CMK is selected and functionAppUserAssignedIdentityResourceId is not provided. Computed by caller using naming convention. Required when keyManagementStorageAccounts != PlatformManaged and functionAppUserAssignedIdentityResourceId is empty.')
 param storageEncryptionIdentityName string = ''
 
 @description('Required. Name of the storage account used by the Function App runtime.')
@@ -153,7 +153,7 @@ resource functionAppUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-1
   )
 }
 
-var useCmk = keyManagementStorageAccounts != 'MicrosoftManaged'
+var useCmk = keyManagementStorageAccounts != 'PlatformManaged'
 // Create a dedicated storage encryption UAI when CMK is selected but no existing UAI is supplied.
 // When an existing functionAppUserAssignedIdentityResourceId is provided, reuse it for CMK instead.
 var createStorageEncryptionUai = useCmk && empty(functionAppUserAssignedIdentityResourceId)

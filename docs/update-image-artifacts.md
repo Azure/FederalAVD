@@ -256,24 +256,36 @@ Downloads the installer for a Winget package by its package identifier or produc
 |-------|-------------|
 | `WingetId` | Winget package identifier or Microsoft Store product code |
 
-#### 6. Evergreen
+#### Finding a WingetId
 
-Uses the [Evergreen](https://stealthpuppy.com/evergreen/) PowerShell module to resolve the latest download URL dynamically. Evergreen must be installed on the machine running the script.
+Two ID formats are used depending on the software source:
 
-```json
-"MicrosoftFSLogixApps": {
-    "Description": "FSLogix Apps",
-    "EvergreenApp": "MicrosoftFSLogixApps",
-    "EvergreenFilter": { "Architecture": "x64", "Channel": "Production", "Type": "zip" },
-    "DestinationFileName": "FSLogix.zip",
-    "DestinationFolders": [ "Microsoft-FSLogix" ]
-}
+**Standard package IDs** — dotted `Publisher.Package` format for most packages. Find them with:
+
+```powershell
+winget search "<name>"
 ```
 
-| Field | Description |
-|-------|-------------|
-| `EvergreenApp` | Evergreen application name (from `Get-EvergreenApp`) |
-| `EvergreenFilter` | Key/value pairs used to filter the Evergreen results to a single asset |
+Example output:
+
+```
+PS> winget search "git for windows"
+Name  Id       Version  Source
+-------------------------------
+Git   Git.Git  2.47.1   winget
+```
+
+Use the value in the `Id` column as `WingetId`.
+
+**Microsoft Store product codes** — alphanumeric codes (e.g., `XPDP273C0XHQH2`) for Store-sourced apps. Find them with:
+
+```powershell
+winget search "<name>" --source msstore
+```
+
+Use `winget show <id>` to confirm the package details before adding to your config.
+
+> **Air-gapped environments:** `WingetId` entries require outbound internet access to winget's CDN or the Microsoft Store. They are not usable in air-gapped clouds. See [Air-Gapped Cloud Guide](air-gapped-clouds.md) for alternatives.
 
 ### Placing a File Into Multiple Artifact Folders
 

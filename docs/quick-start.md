@@ -17,6 +17,8 @@ Get your Azure Virtual Desktop environment deployed quickly with this step-by-st
 
 > **Just need a working AVD environment to test?** Jump directly to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool). A VNet with one subnet is the only hard prerequisite. CMK, FSLogix, monitoring, and private endpoints are all optional and can be added later.
 
+> **🔒 Deploying for NIST SP 800-53 / FedRAMP High or DoD IL5 compliance?** The deployment tiers above describe *operational* complexity — compliance hardening is a separate set of parameter choices that can be applied at any tier. See the [Compliance Configuration Reference](parameters.md#compliance-configuration-reference) for the exact parameters to change from their defaults. The Zero Trust tab in the host pool deployment UI also warns when defaults are not compliance-configured.
+
 ---
 
 ## Choose Your Deployment Path

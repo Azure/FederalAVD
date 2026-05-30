@@ -1,4 +1,4 @@
-targetScope = 'subscription'
+﻿targetScope = 'subscription'
 
 param activeDirectoryConnection bool
 param identitySolution string
@@ -101,7 +101,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     fileShares: fslogixFileShares
     fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
     encryptionKeyVaultUri: encryptionKeyVaultUri
-    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'MicrosoftManaged'
+    encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'PlatformManaged'
       ? ''
       : encryptionUserAssignedIdentityResourceId
     hostPoolResourceId: hostPoolResourceId

@@ -56,6 +56,12 @@ The secret and top secret files are already in the repository. Each entry either
 
 To add software not in the base file, place `downloads.json` in `customer/parameters/imageManagement/`. The script discovers and merges it automatically. See [Update-ImageArtifacts Script Guide](update-image-artifacts.md) for the file format.
 
+> **⚠️ WingetId entries are not supported in air-gapped environments.** Winget downloads require outbound internet access to the winget CDN or Microsoft Store, which is unavailable in air-gapped clouds. The base `secret` and `topsecret` downloads files do not use winget, so a standard run is unaffected. However, if you add a `customer/parameters/imageManagement/downloads.json` that contains `WingetId` entries, those specific entries will fail.
+>
+> **Alternatives for optional software in air-gapped environments:**
+> - Replace `WingetId` with `DownloadUrl` pointing to an internally hosted copy (e.g., an internal web server, SharePoint site, or Azure Blob storage accessible from your management system).
+> - Pre-stage the installer directly in `customer/artifacts/<FolderName>/` and omit the entry from `downloads.json` — the script will package and upload it without attempting a download.
+
 ---
 
 ### Items That Must Be Placed Manually

@@ -1,4 +1,4 @@
-param appUpdateUserAssignedIdentityResourceId string
+﻿param appUpdateUserAssignedIdentityResourceId string
 param recoveryServicesVaultResourceId string = ''
 param azureFilePrivateDnsZoneResourceId string
 param deploymentUserAssignedIdentityClientId string
@@ -99,10 +99,10 @@ module storageAccounts '../../../../../.common/bicepModules/storage/storageAccou
               : identitySolution == 'EntraDomainServices' ? 'AADDS' : 'None'
           }
         : {}
-      cmkKeyUri: keyManagementStorageAccounts != 'MicrosoftManaged'
+      cmkKeyUri: keyManagementStorageAccounts != 'PlatformManaged'
         ? '${encryptionKeyVaultUri}keys/${replace(fslogixEncryptionKeyNameConv, '##', padLeft(i + storageIndex, 2, '0'))}'
         : ''
-      cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'MicrosoftManaged'
+      cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
         ? encryptionUserAssignedIdentityResourceId
         : ''
       diagnosticSettings: !empty(logAnalyticsWorkspaceId) ? { workspaceId: logAnalyticsWorkspaceId } : null

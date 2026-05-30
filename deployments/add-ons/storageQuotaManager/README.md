@@ -1,4 +1,4 @@
-# FSLogix Storage Quota Manager Add-On
+﻿# FSLogix Storage Quota Manager Add-On
 
 ## Overview
 
@@ -125,7 +125,7 @@ New-AzSubscriptionDeployment `
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `keyManagementStorageAccounts` | string | 'MicrosoftManaged' | Encryption key management. Options: `MicrosoftManaged`, `CustomerManaged`, `CustomerManagedHSM` |
+| `keyManagementStorageAccounts` | string | 'PlatformManaged' | Encryption key management. Options: `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM` |
 | `encryptionKeyVaultResourceId` | string | '' | Key Vault resource ID for customer-managed keys. **Required if** using `CustomerManaged` or `CustomerManagedHSM`. |
 
 #### Execution Configuration

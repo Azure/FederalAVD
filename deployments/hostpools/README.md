@@ -1,4 +1,4 @@
-# AVD Host Pool Deployment Template
+﻿# AVD Host Pool Deployment Template
 
 > **📖 User Guide:** For deployment instructions and step-by-step guidance, see the [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
 
@@ -281,8 +281,8 @@ Subscription
 
 #### `keyManagementPaaS`
 - **Type:** String
-- **Allowed:** `MicrosoftManaged`, `CustomerManaged`, `CustomerManagedHSM`
-- **Default:** `MicrosoftManaged`
+- **Allowed:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
+- **Default:** `PlatformManaged`
 - **Description:** Shared key management mode for supported PaaS resources deployed by this solution (for example Azure Files and Recovery Services Vault).
 
 #### `fslogixShareSizeInGB`

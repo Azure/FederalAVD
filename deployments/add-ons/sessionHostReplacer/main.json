@@ -1,4 +1,4 @@
-{
+﻿{
   "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
@@ -181,9 +181,9 @@
     },
     "keyManagementStorageAccounts": {
       "type": "string",
-      "defaultValue": "MicrosoftManaged",
+      "defaultValue": "PlatformManaged",
       "allowedValues": [
-        "MicrosoftManaged",
+        "PlatformManaged",
         "CustomerManaged",
         "CustomerManagedHSM"
       ],
@@ -7299,7 +7299,7 @@
             "keyManagementStorageAccounts": {
               "type": "string",
               "allowedValues": [
-                "MicrosoftManaged",
+                "PlatformManaged",
                 "CustomerManaged",
                 "CustomerManagedHSM"
               ]
@@ -7338,7 +7338,7 @@
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Name for the storage encryption user-assigned identity to create when CMK is selected and functionAppUserAssignedIdentityResourceId is not provided. Computed by caller using naming convention. Required when keyManagementStorageAccounts != MicrosoftManaged and functionAppUserAssignedIdentityResourceId is empty."
+                "description": "Optional. Name for the storage encryption user-assigned identity to create when CMK is selected and functionAppUserAssignedIdentityResourceId is not provided. Computed by caller using naming convention. Required when keyManagementStorageAccounts != PlatformManaged and functionAppUserAssignedIdentityResourceId is empty."
               }
             },
             "storageAccountName": {
@@ -7398,7 +7398,7 @@
             "resolvedIpSecurityRestrictions": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), union(variables('permittedIPRestrictions'), variables('azureCloudRestriction')), null())]",
             "storageSubResources": "[union(createArray('blob'), if(parameters('enableQueueStorage'), createArray('queue'), createArray()), if(parameters('enableTableStorage'), createArray('table'), createArray()))]",
             "azureStoragePrivateDnsZoneResourceIds": "[union(createArray(parameters('azureBlobPrivateDnsZoneResourceId')), if(and(parameters('enableQueueStorage'), not(empty(parameters('azureQueuePrivateDnsZoneResourceId')))), createArray(parameters('azureQueuePrivateDnsZoneResourceId')), createArray()), if(and(parameters('enableTableStorage'), not(empty(parameters('azureTablePrivateDnsZoneResourceId')))), createArray(parameters('azureTablePrivateDnsZoneResourceId')), createArray()))]",
-            "useCmk": "[not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))]",
+            "useCmk": "[not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'))]",
             "createStorageEncryptionUai": "[and(variables('useCmk'), empty(parameters('functionAppUserAssignedIdentityResourceId')))]",
             "storageEncryptionUaiResourceId": "[if(variables('createStorageEncryptionUai'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('storageEncryptionIdentityName')), '')]",
             "cmkUaiResourceId": "[if(variables('useCmk'), if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), parameters('functionAppUserAssignedIdentityResourceId'), variables('storageEncryptionUaiResourceId')), '')]",

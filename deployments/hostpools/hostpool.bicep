@@ -1,4 +1,4 @@
-targetScope = 'subscription'
+﻿targetScope = 'subscription'
 
 // Deploys an Azure Virtual Desktop host pool including the AVD control plane (host pool, workspace, application groups),
 // session host VMs, FSLogix storage, monitoring, private networking, and optional Customer Managed Key encryption.
@@ -485,12 +485,12 @@ param fslogixStorageKerberosEncryptionType string = 'AES256'
 param fslogixStorageIndex int = 1
 
 @allowed([
-  'MicrosoftManaged'
+  'PlatformManaged'
   'CustomerManaged'
   'CustomerManagedHSM'
 ])
 @description('Optional. Shared key management mode for PaaS resources deployed by this solution (for example Azure Files and Recovery Services Vault).')
-param keyManagementPaaS string = 'MicrosoftManaged'
+param keyManagementPaaS string = 'PlatformManaged'
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all PaaS components (storage accounts, Key Vaults). Use when managing the deployment from a trusted workstation outside the Azure network boundary.')
 param permittedIPs array = []
@@ -671,8 +671,8 @@ var deployKeyVaults = deploySecretsKeyVault || deployInlineEncryptionKv
 // Top-level CMK: run keys + DES/UAI + role assignments early so RBAC propagation
 // completes during the monitoring/controlPlane phases — well before VMs or storage deploy.
 var deployDiskCmk = contains(keyManagementDisks, 'CustomerManaged') && !confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
-var deployStorageCmk = deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && effectiveKeyManagementPaaS != 'MicrosoftManaged' && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
-var deployRecoveryServicesCmk = recoveryServices && empty(existingRecoveryServicesVaultResourceId) && effectiveKeyManagementPaaS != 'MicrosoftManaged' && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
+var deployStorageCmk = deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && effectiveKeyManagementPaaS != 'PlatformManaged' && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
+var deployRecoveryServicesCmk = recoveryServices && empty(existingRecoveryServicesVaultResourceId) && effectiveKeyManagementPaaS != 'PlatformManaged' && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
 // CVM CMK: CVM keys must be created via Key Vault data plane (Run Command) because ARM key PUT
 // does not support key release policies. The DES is then created by the shared CMK module with skipKeyCreation=true.
 var deployCvmDiskCmk = confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))

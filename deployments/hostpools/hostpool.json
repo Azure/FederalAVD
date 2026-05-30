@@ -1,4 +1,4 @@
-{
+﻿{
   "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
@@ -746,9 +746,9 @@
     },
     "keyManagementPaaS": {
       "type": "string",
-      "defaultValue": "MicrosoftManaged",
+      "defaultValue": "PlatformManaged",
       "allowedValues": [
-        "MicrosoftManaged",
+        "PlatformManaged",
         "CustomerManaged",
         "CustomerManagedHSM"
       ],
@@ -1329,8 +1329,8 @@
     "deployInlineEncryptionKv": "[and(empty(parameters('existingEncryptionKeyVaultResourceId')), variables('cmkIsRequested'))]",
     "deployKeyVaults": "[or(parameters('deploySecretsKeyVault'), variables('deployInlineEncryptionKv'))]",
     "deployDiskCmk": "[and(and(contains(parameters('keyManagementDisks'), 'CustomerManaged'), not(parameters('confidentialVMOSDiskEncryption'))), or(variables('deployInlineEncryptionKv'), not(empty(parameters('existingEncryptionKeyVaultResourceId')))))]",
-    "deployStorageCmk": "[and(and(and(parameters('deployFSLogixStorage'), equals(split(parameters('fslogixStorageService'), ' ')[0], 'AzureFiles')), not(equals(variables('effectiveKeyManagementPaaS'), 'MicrosoftManaged'))), or(variables('deployInlineEncryptionKv'), not(empty(parameters('existingEncryptionKeyVaultResourceId')))))]",
-    "deployRecoveryServicesCmk": "[and(and(and(parameters('recoveryServices'), empty(parameters('existingRecoveryServicesVaultResourceId'))), not(equals(variables('effectiveKeyManagementPaaS'), 'MicrosoftManaged'))), or(variables('deployInlineEncryptionKv'), not(empty(parameters('existingEncryptionKeyVaultResourceId')))))]",
+    "deployStorageCmk": "[and(and(and(parameters('deployFSLogixStorage'), equals(split(parameters('fslogixStorageService'), ' ')[0], 'AzureFiles')), not(equals(variables('effectiveKeyManagementPaaS'), 'PlatformManaged'))), or(variables('deployInlineEncryptionKv'), not(empty(parameters('existingEncryptionKeyVaultResourceId')))))]",
+    "deployRecoveryServicesCmk": "[and(and(and(parameters('recoveryServices'), empty(parameters('existingRecoveryServicesVaultResourceId'))), not(equals(variables('effectiveKeyManagementPaaS'), 'PlatformManaged'))), or(variables('deployInlineEncryptionKv'), not(empty(parameters('existingEncryptionKeyVaultResourceId')))))]",
     "deployCvmDiskCmk": "[and(parameters('confidentialVMOSDiskEncryption'), or(variables('deployInlineEncryptionKv'), not(empty(parameters('existingEncryptionKeyVaultResourceId')))))]",
     "deployDiskAccessResource": "[and(and(contains(parameters('hostPoolType'), 'Personal'), parameters('recoveryServices')), parameters('deployPrivateEndpoints'))]",
     "hostPoolVmTemplate": {
@@ -13161,9 +13161,9 @@
             },
             "keyManagementType": {
               "type": "string",
-              "defaultValue": "MicrosoftManaged",
+              "defaultValue": "PlatformManaged",
               "allowedValues": [
-                "MicrosoftManaged",
+                "PlatformManaged",
                 "CustomerManaged",
                 "CustomerManagedHSM"
               ],
@@ -13205,7 +13205,7 @@
             "effectiveVaultSub": "[if(parameters('createVault'), subscription().subscriptionId, split(parameters('existingRecoveryServicesVaultResourceId'), '/')[2])]",
             "effectiveVaultRG": "[if(parameters('createVault'), parameters('resourceGroupOperations'), split(parameters('existingRecoveryServicesVaultResourceId'), '/')[4])]",
             "effectiveVaultName": "[if(parameters('createVault'), parameters('vaultName'), last(split(parameters('existingRecoveryServicesVaultResourceId'), '/')))]",
-            "useVaultCmk": "[and(and(and(and(and(parameters('createVault'), not(equals(parameters('keyManagementType'), 'MicrosoftManaged'))), not(empty(parameters('encryptionKeyVaultResourceId')))), not(empty(parameters('encryptionKeyVaultUri')))), not(empty(parameters('encryptionKeyName')))), not(empty(parameters('encryptionUserAssignedIdentityResourceId'))))]"
+            "useVaultCmk": "[and(and(and(and(and(parameters('createVault'), not(equals(parameters('keyManagementType'), 'PlatformManaged'))), not(empty(parameters('encryptionKeyVaultResourceId')))), not(empty(parameters('encryptionKeyVaultUri')))), not(empty(parameters('encryptionKeyName')))), not(empty(parameters('encryptionUserAssignedIdentityResourceId'))))]"
           },
           "resources": [
             {
@@ -14852,7 +14852,7 @@
                   "encryptionKeyVaultUri": {
                     "value": "[parameters('encryptionKeyVaultUri')]"
                   },
-                  "encryptionUserAssignedIdentityResourceId": "[if(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'), createObject('value', ''), createObject('value', parameters('encryptionUserAssignedIdentityResourceId')))]",
+                  "encryptionUserAssignedIdentityResourceId": "[if(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'), createObject('value', ''), createObject('value', parameters('encryptionUserAssignedIdentityResourceId')))]",
                   "hostPoolResourceId": {
                     "value": "[parameters('hostPoolResourceId')]"
                   },
@@ -15118,8 +15118,8 @@
                             "value": "[parameters('privateEndpoint')]"
                           },
                           "azureFilesIdentityBasedAuthentication": "[if(not(equals(parameters('identitySolution'), 'EntraId')), createObject('value', createObject('defaultSharePermission', variables('defaultSharePermission'), 'directoryServiceOptions', if(contains(parameters('identitySolution'), 'EntraKerberos'), 'AADKERB', if(equals(parameters('identitySolution'), 'EntraDomainServices'), 'AADDS', 'None')))), createObject('value', createObject()))]",
-                          "cmkKeyUri": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged')), createObject('value', format('{0}keys/{1}', parameters('encryptionKeyVaultUri'), replace(parameters('fslogixEncryptionKeyNameConv'), '##', padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))), createObject('value', ''))]",
-                          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged')), createObject('value', parameters('encryptionUserAssignedIdentityResourceId')), createObject('value', ''))]",
+                          "cmkKeyUri": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', format('{0}keys/{1}', parameters('encryptionKeyVaultUri'), replace(parameters('fslogixEncryptionKeyNameConv'), '##', padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))), createObject('value', ''))]",
+                          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', parameters('encryptionUserAssignedIdentityResourceId')), createObject('value', ''))]",
                           "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceId'))), createObject('value', null()))]"
                         },
                         "template": {

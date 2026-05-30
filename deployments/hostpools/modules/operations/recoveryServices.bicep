@@ -1,4 +1,4 @@
-targetScope = 'subscription'
+﻿targetScope = 'subscription'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Recovery Services — shared vault in the Operations resource group.
@@ -72,11 +72,11 @@ param fileSharePolicyName string = 'filesharepolicy'
 
 @description('Optional. Shared key management mode for PaaS resources. When set to CustomerManaged or CustomerManagedHSM and createVault is true, vault CMK is configured.')
 @allowed([
-  'MicrosoftManaged'
+  'PlatformManaged'
   'CustomerManaged'
   'CustomerManagedHSM'
 ])
-param keyManagementType string = 'MicrosoftManaged'
+param keyManagementType string = 'PlatformManaged'
 
 @description('Optional. Resource ID of the encryption key vault used for vault CMK configuration.')
 param encryptionKeyVaultResourceId string = ''
@@ -104,7 +104,7 @@ var backupPrivateDnsZoneResourceIds = filter([
 var effectiveVaultSub = createVault ? subscription().subscriptionId : split(existingRecoveryServicesVaultResourceId, '/')[2]
 var effectiveVaultRG = createVault ? resourceGroupOperations : split(existingRecoveryServicesVaultResourceId, '/')[4]
 var effectiveVaultName = createVault ? vaultName : last(split(existingRecoveryServicesVaultResourceId, '/'))!
-var useVaultCmk = createVault && keyManagementType != 'MicrosoftManaged' && !empty(encryptionKeyVaultResourceId) && !empty(encryptionKeyVaultUri) && !empty(encryptionKeyName) && !empty(encryptionUserAssignedIdentityResourceId)
+var useVaultCmk = createVault && keyManagementType != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId) && !empty(encryptionKeyVaultUri) && !empty(encryptionKeyName) && !empty(encryptionUserAssignedIdentityResourceId)
 
 // ─── Recovery Services Vault ──────────────────────────────────────────────────
 module recoveryServicesVault '../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (createVault) {

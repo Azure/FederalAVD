@@ -1,4 +1,4 @@
-{
+﻿{
 	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
 	"view": {
 		"kind": "Form",
@@ -3486,6 +3486,15 @@
 							}
 						},
 						{
+							"name": "complianceDefaultsWarning",
+							"type": "Microsoft.Common.InfoBox",
+							"options": {
+								"style": "Warning",
+								"text": "The defaults on this tab (Platform-Managed Keys, Locally Redundant Storage) are functional minimums — they are NOT compliance-configured starting points. NIST SP 800-53 / FedRAMP High deployments require Customer-Managed Keys and Zone Redundant Storage. DoD IL5 additionally requires Customer-Managed Keys protected by HSM and Dedicated Hosts. Review and update the settings below before deploying to a compliance-sensitive environment. Click this box for the full compliance parameter reference.",
+								"uri": "https://github.com/Azure/FederalAVD/blob/main/docs/parameters.md#compliance-configuration-reference"
+							}
+						},
+						{
 							"name": "keyManagement",
 							"type": "Microsoft.Common.Section",
 							"label": "Encryption Key Management",
@@ -3597,7 +3606,7 @@
 										"allowedValues": [
 											{
 												"label": "Microsoft-Managed Keys",
-												"value": "MicrosoftManaged"
+												"value": "PlatformManaged"
 											},
 											{
 												"label": "Customer-Managed Keys",
@@ -4423,7 +4432,7 @@
 				"fslogixUserGroups": "[if(and(equals(steps('userProfiles').storageService, 'AzureNetAppFiles'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').azureNetAppFiles.leastPrivNTFS, true)), steps('userProfiles').azureNetAppFiles.userGroupPickerBlade.transformed.groups, if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), not(equals(steps('identity').solution, 'EntraId')), or(equals(steps('userProfiles').configureSessionHosts, true), equals(steps('userProfiles').deployStorage, true)), if(contains(steps('identity').solution, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None')))), steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups, parse('[]')))]",
 				"fslogixShareSizeInGB": "[if(equals(steps('userProfiles').deployStorage, true), if(equals(steps('userProfiles').storageService, 'AzureFiles'), steps('userProfiles').azureFiles.storageShareSize, steps('userProfiles').azureNetAppFiles.storageShareSize), 100)]",
 				"fslogixStorageIndex": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.storageIndex, 0)]",
-				"keyManagementPaaS": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').backup.recoveryServices), steps('zeroTrust').keyManagement.keyManagementPaaS, 'MicrosoftManaged')]",
+				"keyManagementPaaS": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').backup.recoveryServices), steps('zeroTrust').keyManagement.keyManagementPaaS, 'PlatformManaged')]",
 				"fslogixExistingLocalStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingLocalStorageAccounts, parse('[]'))]",
 				"fslogixExistingRemoteStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
 				"fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('identity').solution, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true)), steps('userProfiles').managedIdentity.id, '')]",

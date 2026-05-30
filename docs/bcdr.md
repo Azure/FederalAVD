@@ -17,6 +17,7 @@ FederalAVD includes purpose-built support for multi-region disaster recovery and
   - [Table of Contents](#table-of-contents)
   - [Intra-Region High Availability — Availability Zones](#intra-region-high-availability--availability-zones)
   - [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments)
+    - [Start With OneDrive Known Folder Move](#start-with-onedrive-known-folder-move)
     - [Recommended: Per-Region Profiles (No Cross-Region Replication)](#recommended-per-region-profiles-no-cross-region-replication)
     - [When Cloud Cache Is the Right Answer](#when-cloud-cache-is-the-right-answer)
   - [Profile High Availability — FSLogix Cloud Cache](#profile-high-availability--fslogix-cloud-cache)
@@ -71,6 +72,22 @@ param availabilityZones array = []  // empty = spread across all zones
 
 > **FSLogix is always recommended for pooled host pools.** Without FSLogix, users on pooled hosts accumulate roaming profile baggage in the local temp profile, leading to bloat, inconsistent state, and policy enforcement gaps. The question for DR is not whether to use FSLogix, but whether to replicate profiles across regions. Personal host pool VMs carry their profile state on the OS disk and typically do not require FSLogix.
 
+### Start With OneDrive Known Folder Move
+
+Before designing a cross-region FSLogix strategy, evaluate whether **OneDrive Known Folder Move (KFM)** is deployed or can be deployed as part of the AVD configuration. KFM silently redirects Desktop, Documents, and Pictures to OneDrive, making those folders cloud-native and continuously synchronized independent of the FSLogix profile container.
+
+With KFM in place:
+
+- **The files users care most about survive any regional failover automatically** — documents, desktop items, and saved work are already in OneDrive and available from any host pool in any region.
+- **The FSLogix profile container's cross-region importance shrinks significantly** — it holds application state, browser cache, Outlook OST files, and registry hive. Users starting with a fresh profile on failover face a much smaller practical gap.
+- **For most organizations, KFM + per-region FSLogix profiles meets recovery objectives** without the cost and performance trade-offs of Cloud Cache or additional geo-redundant profile storage.
+
+> **Recommendation:** Deploy OneDrive KFM via Intune or Group Policy before evaluating Cloud Cache or any cross-region profile replication approach. It is the lowest-complexity, highest-impact profile resilience investment available for cloud-joined or hybrid AVD deployments.
+
+**Reference:** [Redirect and move Windows known folders to OneDrive](https://learn.microsoft.com/en-us/onedrive/redirect-known-folders)
+
+---
+
 ### Recommended: Per-Region Profiles (No Cross-Region Replication)
 
 The default recommendation for cross-region DR is **independent per-region FSLogix storage with no cross-region synchronization**. Each region's host pool writes profiles to its own local storage. On a regional failover, users connecting to the secondary region get a fresh profile or the last state that was written to the secondary region's own storage.
@@ -82,6 +99,8 @@ This is preferred for most deployments because:
 - **Lower cost** — No secondary storage account is needed for profile data; only the compute and networking infrastructure in the secondary region.
 
 Deploy the secondary host pool with its own FSLogix storage. Accept that users who fail over will start from an empty or per-region profile. Use OneDrive Known Folder Move (KFM) to roam Desktop/Documents/Pictures natively, reducing the practical impact of per-region profiles.
+
+> **FSLogix storage redundancy:** Independent of cross-region DR strategy, match FSLogix storage account redundancy to compute resilience. When session hosts are deployed across availability zones, set `fslogixStorageRedundancy = 'ZoneRedundant'` (the default is `LocallyRedundant`). **Azure Files Premium does not support Geo-Redundant Storage (GRS) — ZRS is the highest redundancy tier available for production-grade FSLogix storage.** LRS is appropriate only for single-zone or availability set deployments. Environments aligning to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-9 (Information System Backup) should use ZRS in zone-enabled regions as the expected baseline for primary profile storage.
 
 ### When Cloud Cache Is the Right Answer
 
@@ -301,11 +320,11 @@ param recoveryServicesVaultStorageRedundancy string = 'LocallyRedundant'
 ```
 
 For personal host pools:
-- `GeoRedundant` enables [Azure Backup Cross-Region Restore (CRR)](https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#cross-region-restore), allowing VM recovery in the paired Azure region if the primary region is unavailable.
-- `ZoneRedundant` protects against zone failure but not regional outage.
-- `LocallyRedundant` is the default and is appropriate when the personal host pool itself is zone-redundant.
+- `GeoRedundant` enables [Azure Backup Cross-Region Restore (CRR)](https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#cross-region-restore), allowing VM recovery in the paired Azure region if the primary region is unavailable. In environments aligned to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-6 (Alternate Storage Site), GRS is the recommended choice — backup data is physically replicated to a geographically separate site, directly satisfying the requirement that backup storage reside at an alternate facility.
+- `ZoneRedundant` protects backup data against a zone-level failure within the region. Satisfies NIST CP-9 zone-resilience expectations when cross-region restore is not required.
+- `LocallyRedundant` is the default and is appropriate when cross-region recovery of backup data is not a requirement and the host pool is already zone-redundant.
 
-> **Pooled host pools:** When `recoveryServices = true` for a pooled host pool, the **FSLogix Azure Files file share** is backed up (not the VMs). FSLogix share snapshots are stored in the storage account itself, so vault storage redundancy has limited impact on profile data recovery. For cross-region profile resilience on pooled host pools, see [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments) — the default recommendation is per-region FSLogix storage with no cross-region sync rather than backup or Cloud Cache.
+> **Pooled host pools:** When `recoveryServices = true` for a pooled host pool, the **FSLogix Azure Files file share** is backed up (not the VMs). FSLogix share snapshots are stored in the storage account itself — not in the vault — so vault storage redundancy has minimal impact on backup data durability. For pooled deployments, `LocallyRedundant` or `ZoneRedundant` vault storage is sufficient in most cases; GRS is not available for pooled deployments (the UI correctly restricts the option). For cross-region profile resilience on pooled host pools, see [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments) — the default recommendation is per-region FSLogix storage with no cross-region sync rather than backup or Cloud Cache.
 
 ---
 

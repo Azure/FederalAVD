@@ -528,74 +528,6 @@ function Add-ContentToBlobContainer {
     }
 }
 
-Function Install-Evergreen {
-    $adminCheck = [Security.Principal.WindowsPrincipal]([Security.Principal.WindowsIdentity]::GetCurrent())
-    $Admin = $adminCheck.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (Get-PSRepository | Where-Object { $_.Name -eq "PSGallery" -and $_.InstallationPolicy -ne "Trusted" }) {
-        if ($Admin) {
-            Set-PSRepository -Name "PSGallery" -InstallationPolicy "Trusted"
-            Install-PackageProvider -Name "NuGet" -MinimumVersion 2.8.5.208 -Force
-        } else {
-            Install-PackageProvider -Name "NuGet" -MinimumVersion 2.8.5.208 -Force -Scope CurrentUser
-        }
-    }
-    # Check for module in the appropriate scope
-    if ($Admin) {
-        $Installed = Get-Module -Name "Evergreen" -ListAvailable | `
-            Sort-Object -Property @{ Expression = { [System.Version]$_.Version }; Descending = $true } | `
-            Select-Object -First 1
-        $Published = Find-Module -Name "Evergreen"
-        if ($Null -eq $Installed -or [System.Version]$Published.Version -gt [System.Version]$Installed.Version) {
-            Install-Module -Name "Evergreen" -Force -AllowClobber
-        }
-    } else {
-        # For non-admin, check CurrentUser scope and suppress warnings
-        $CurrentUserPath = [Environment]::GetFolderPath('MyDocuments') + '\PowerShell\Modules\Evergreen'
-        if (-not (Test-Path $CurrentUserPath)) {
-            $CurrentUserPath = [Environment]::GetFolderPath('MyDocuments') + '\WindowsPowerShell\Modules\Evergreen'
-        }
-        $Installed = Get-Module -Name "Evergreen" -ListAvailable | Where-Object { $_.Path -like "*$($env:USERNAME)*" } | `
-            Sort-Object -Property @{ Expression = { [System.Version]$_.Version }; Descending = $true } | `
-            Select-Object -First 1
-        
-        # Only check for updates if no user-scope version exists or suppress update notifications
-        if ($Null -eq $Installed) {
-            Install-Module -Name "Evergreen" -Scope CurrentUser -Force -AllowClobber -WarningAction SilentlyContinue
-        }
-    }
-    Import-Module -Name "Evergreen" -Force
-}
-
-function Get-EvergreenAppUri {
-    param (
-        [psobject]$Evergreen
-    )
-    $filters = @()
-    if ($Evergreen.Architecture) {
-        $Architecture = $Evergreen.Architecture
-        $filters += '$_.Architecture -eq ''' + $Architecture + ''''
-    }
-    if ($Evergreen.InstallerType) {
-        $InstallerType = $Evergreen.InstallerType
-        $filters += '$_.InstallerType -eq ''' + $InstallerType + ''''
-    }
-    if ($Evergreen.Language) {
-        $Language = $Evergreen.Language
-        $filters += '$_.Language -eq ''' + $Language + ''''
-    }
-    if ($Evergreen.Type) {
-        $Type = $Evergreen.Type
-        $filters += '$_.Type -eq ''' + $Type + ''''
-    } 
-    if ($filters.Count -gt 0) {
-        $WhereObject = ($filters -join ' -and ').replace('  ', ' ')
-        $ScriptBlock = [scriptblock]::Create("Get-EvergreenApp -name $($Evergreen.name) | Where-Object {$($WhereObject)}")
-        Return (Invoke-Command -ScriptBlock $ScriptBlock).Uri
-    } Else {
-        Return (Get-EvergreenApp -Name $($Evergreen.name)).Uri
-    }
-}
-
 #endregion Functions
 
 #region Prepare Artifacts
@@ -655,19 +587,6 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
     }
     elseif ($CustomerDownloadsMode -eq 'None') {
         Write-Output "Customer downloads disabled by mode. Using the repository-selected base downloads file only."
-    }
-
-    # Check if any download requires Evergreen and install if needed
-    $RequiresEvergreen = $false
-    foreach ($key in $Downloads.PSObject.Properties.Name) {
-        if ($null -ne $Downloads.$key.Evergreen) {
-            $RequiresEvergreen = $true
-            break
-        }
-    }
-    If ($RequiresEvergreen -and ($Environment -eq 'AzureCloud' -or $Environment -eq 'AzureUSGovernment')) {
-        Write-Output "Evergreen functionality detected in downloads configuration. Installing Evergreen module..."
-        Install-Evergreen
     }
 
     # Check if any download requires winget
@@ -735,13 +654,6 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             $DownloadUrl = ((Invoke-RestMethod -Method GET -Uri $ReleasesUri).assets | Where-Object name -like $FileNamePattern).browser_download_url
             Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
         }
-        ElseIf ($null -ne $Download.Evergreen) {
-            Write-Output "[$SoftwareName] Retrieving URL via Evergreen..."
-            Write-Output "[$SoftwareName] Evergreen config: $($Download.Evergreen)"
-            $DownloadUrl = Get-EvergreenAppUri -Evergreen $Download.Evergreen
-            Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
-        }
-
         If ($UseWinget) {
             If (-not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
                 Write-Warning "[$SoftwareName] Skipping: winget is not available on this system."
