@@ -309,6 +309,8 @@ Use `""` (empty string) as one of the folder names to also place the file direct
 
 ## Artifacts Directory Structure
 
+> **Getting started quickly:** `customer/examples/artifacts/` contains ready-to-use packages for common software (Chrome, FSLogix, LGPO, VS Code, STIGs, and more). Copy any folder directly into `customer/artifacts/` and run the script. See [`customer/README.md`](../customer/README.md) for the full list and copy commands.
+
 The script stages a merged view — `.common/artifacts/` first, then `customer/artifacts/` on top — then packages the result. Currently `.common/artifacts/` is empty, so all content comes from `customer/artifacts/`.
 
 > **Where to place pre-staged files:**
@@ -366,4 +368,3 @@ Pass this URL as `artifactsContainerUri` in image build deployments.
 - [Artifacts Guide](artifacts-guide.md) — Creating and managing custom artifact packages
 - [Air-Gapped Cloud Guide](air-gapped-clouds.md) — Secret/Top Secret cloud considerations
 - [Troubleshooting](troubleshooting.md) — Common issues and solutions
-
