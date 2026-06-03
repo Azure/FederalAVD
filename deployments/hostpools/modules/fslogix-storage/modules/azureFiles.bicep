@@ -1,5 +1,5 @@
 ﻿param appUpdateUserAssignedIdentityResourceId string
-param recoveryServicesVaultResourceId string = ''
+
 param azureFilePrivateDnsZoneResourceId string
 param deploymentUserAssignedIdentityClientId string
 param deploymentVirtualMachineName string
@@ -39,6 +39,11 @@ param deploymentSuffix string
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks for the FSLogix storage account firewall.')
 param permittedIPs array = []
+
+@description('Optional. Number of days to retain deleted file shares (1–365).')
+@minValue(1)
+@maxValue(365)
+param softDeleteRetentionDays int = 14
 
 var adminRoleDefinitionId = '69566ab7-960f-475b-8e7c-b3118f30c6bd' // Storage File Data Privileged Contributor
 
@@ -90,7 +95,7 @@ module storageAccounts '../../../../../.common/bicepModules/storage/storageAccou
       largeFileSharesState: storageSku == 'Standard' ? 'Enabled' : ''
       sasExpirationPeriod: '180.00:00:00'
       permittedIPs: permittedIPs
-      privateEndpoint: privateEndpoint
+      publicNetworkAccess: (privateEndpoint && empty(permittedIPs)) ? 'Disabled' : 'Enabled'
       azureFilesIdentityBasedAuthentication: identitySolution != 'EntraId'
         ? {
             defaultSharePermission: defaultSharePermission
@@ -117,7 +122,8 @@ module fileServices '../../../../../.common/bicepModules/storage/storageAccounts
     params: {
       storageAccountName: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
       smbSettings: smbSettingsValues
-      shareDeleteRetentionPolicyEnabled: empty(recoveryServicesVaultResourceId)
+      shareDeleteRetentionPolicyEnabled: true
+      shareDeleteRetentionPolicyDays: softDeleteRetentionDays
       diagnosticSettings: !empty(logAnalyticsWorkspaceId)
         ? {
             workspaceId: logAnalyticsWorkspaceId

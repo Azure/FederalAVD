@@ -1,11 +1,11 @@
-﻿{
+{
   "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "9126942044254308426"
+      "templateHash": "6158453884294838116"
     }
   },
   "parameters": {
@@ -3518,7 +3518,7 @@
                                     "count": "[[length(parameters('customizations'))]",
                                     "input": {
                                       "name": "[[replace(parameters('customizations')[copyIndex('customizers')].name, ' ', '-')]",
-                                      "uri": "[[if(or(startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'https://'), startsWith(parameters('customizations')[copyIndex('customizers')].blobNameorUri, 'http://')), parameters('customizations')[copyIndex('customizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri))]",
+                                      "uri": "[[if(or(startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'https://'), startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'http://')), parameters('customizations')[copyIndex('customizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri))]",
                                       "arguments": "[[coalesce(tryGet(parameters('customizations')[copyIndex('customizers')], 'arguments'), '')]"
                                     }
                                   }
@@ -7237,64 +7237,112 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "15906066042656080134"
+              "templateHash": "12502195827596088426"
             }
           },
           "parameters": {
             "applicationInsightsName": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Name of the Application Insights resource to create when enableApplicationInsights is true."
+              }
             },
             "azureBlobPrivateDnsZoneResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the private DNS zone for blob endpoints (typically privatelink.blob.core.windows.net)."
+              }
             },
             "azureFunctionAppPrivateDnsZoneResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the private DNS zone for Function App private endpoints (typically privatelink.azurewebsites.net)."
+              }
             },
             "azureQueuePrivateDnsZoneResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the private DNS zone for queue endpoints (typically privatelink.queue.core.windows.net)."
+              }
             },
             "azureTablePrivateDnsZoneResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the private DNS zone for table endpoints (typically privatelink.table.core.windows.net)."
+              }
             },
             "deploymentSuffix": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Unique suffix used for deterministic deployment naming and idempotency."
+              }
             },
             "enableApplicationInsights": {
               "type": "bool",
-              "defaultValue": false
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Enables creation and wiring of Application Insights for the Function App."
+              }
             },
             "enableQueueStorage": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enables queue endpoint configuration for AzureWebJobsStorage and queue private endpoint DNS integration."
+              }
             },
             "enableTableStorage": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enables table endpoint configuration for AzureWebJobsStorage and table private endpoint DNS integration."
+              }
             },
             "encryptionKeyName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required when CMK is used. Name of the Key Vault key referenced by storage account encryption settings."
+              }
             },
             "encryptionKeyVaultResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Resource ID of the Key Vault containing the CMK used for storage account encryption."
+              }
             },
             "functionAppDelegatedSubnetResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Resource ID of a delegated subnet for Function App regional VNet integration."
+              }
             },
             "functionAppName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the Function App."
+              }
             },
             "functionAppAppSettings": {
-              "type": "array"
+              "type": "array",
+              "metadata": {
+                "description": "Optional. Additional app settings merged into the default Function App configuration."
+              }
             },
             "functionAppUserAssignedIdentityResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Existing user-assigned identity resource ID for the Function App. When omitted, system-assigned identity is used."
+              }
             },
             "hostPoolResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Parent host pool resource ID used for traceability tags."
+              }
             },
             "keyManagementStorageAccounts": {
               "type": "string",
@@ -7302,37 +7350,67 @@
                 "PlatformManaged",
                 "CustomerManaged",
                 "CustomerManagedHSM"
-              ]
+              ],
+              "metadata": {
+                "description": "Required. Storage encryption key management mode for the Function App storage account."
+              }
             },
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for resources in this module."
+              }
             },
             "logAnalyticsWorkspaceResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Log Analytics workspace resource ID used for Application Insights workspace-based mode."
+              }
             },
             "privateEndpoint": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Enables or disables deployment of private endpoints for storage and Function App."
+              }
             },
             "privateEndpointNameConv": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Naming convention template for private endpoint resources (supports RESOURCE/SUBRESOURCE/VNETID placeholders)."
+              }
             },
             "privateEndpointNICNameConv": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Naming convention template for private endpoint NIC resources (supports RESOURCE/SUBRESOURCE/VNETID placeholders)."
+              }
             },
             "privateEndpointSubnetResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required when privateEndpoint is true. Subnet resource ID used by private endpoints."
+              }
             },
             "privateLinkScopeResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Azure Monitor Private Link Scope resource ID used to associate Application Insights over Private Link."
+              }
             },
             "storageAccountRoleDefinitionIds": {
               "type": "array",
-              "defaultValue": []
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Additional role definition IDs assigned to the Function App identity on the storage account."
+              }
             },
             "serverFarmId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. App Service plan (server farm) resource ID for the Function App."
+              }
             },
             "storageEncryptionIdentityName": {
               "type": "string",
@@ -7342,7 +7420,10 @@
               }
             },
             "storageAccountName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the storage account used by the Function App runtime."
+              }
             },
             "permittedIPs": {
               "type": "array",
@@ -7352,7 +7433,10 @@
               }
             },
             "tags": {
-              "type": "object"
+              "type": "object",
+              "metadata": {
+                "description": "Required. Tag object with resource-type keys used to stamp deployed resources."
+              }
             }
           },
           "variables": {
@@ -7647,12 +7731,12 @@
                   "deploymentSuffix": {
                     "value": "[parameters('deploymentSuffix')]"
                   },
-                  "paasKeyNames": {
+                  "keyNames": {
                     "value": [
                       "[parameters('encryptionKeyName')]"
                     ]
                   },
-                  "paasIdentityName": {
+                  "identityName": {
                     "value": "[parameters('storageEncryptionIdentityName')]"
                   }
                 },
@@ -7664,7 +7748,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "4253793042312680088"
+                      "templateHash": "7123932894855210232"
                     }
                   },
                   "definitions": {
@@ -7672,18 +7756,30 @@
                       "type": "object",
                       "properties": {
                         "keyName": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Name of the Key Vault key to create or reference for this disk encryption configuration."
+                          }
                         },
                         "diskEncryptionSetName": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Name of the Disk Encryption Set resource to create."
+                          }
                         },
                         "confidentialVMOSDiskEncryption": {
                           "type": "bool",
-                          "nullable": true
+                          "nullable": true,
+                          "metadata": {
+                            "description": "When true, configures Confidential VM disk encryption behavior and release-user assignment."
+                          }
                         },
                         "confidentialVMOrchestratorObjectId": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Object ID of the Confidential VM Orchestrator service principal. Required when confidentialVMOSDiskEncryption is true."
+                          }
                         },
                         "skipKeyCreation": {
                           "type": "bool",
@@ -7698,7 +7794,10 @@
                       "type": "object",
                       "properties": {
                         "diskEncryptionSetResourceId": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Resource ID of the Disk Encryption Set created for the corresponding diskEncryptionConfigs entry."
+                          }
                         }
                       }
                     }
@@ -7758,21 +7857,21 @@
                         "description": "Optional. Suffix appended to deployment names for uniqueness."
                       }
                     },
-                    "paasKeyNames": {
+                    "keyNames": {
                       "type": "array",
                       "items": {
                         "type": "string"
                       },
                       "defaultValue": [],
                       "metadata": {
-                        "description": "Optional. Names of Key Vault keys to create for PaaS CMK encryption.\nOne key is created per entry. All keys are assigned to the single paasIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
+                        "description": "Optional. Names of Key Vault keys to create for CMK encryption.\nOne key is created per entry. All keys are assigned to the single identityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
                       }
                     },
-                    "paasIdentityName": {
+                    "identityName": {
                       "type": "string",
                       "defaultValue": "",
                       "metadata": {
-                        "description": "Optional. Name of the user-assigned identity to create for PaaS CMK. Required when paasKeyNames is not empty."
+                        "description": "Optional. Name of the user-assigned identity to create for CMK. Required when keyNames is not empty."
                       }
                     },
                     "diskEncryptionConfigs": {
@@ -7823,7 +7922,7 @@
                     "paasKeys": {
                       "copy": {
                         "name": "paasKeys",
-                        "count": "[length(parameters('paasKeyNames'))]"
+                        "count": "[length(parameters('keyNames'))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
@@ -7840,7 +7939,7 @@
                             "value": "[variables('keyVaultName')]"
                           },
                           "name": {
-                            "value": "[parameters('paasKeyNames')[copyIndex()]]"
+                            "value": "[parameters('keyNames')[copyIndex()]]"
                           },
                           "kty": {
                             "value": "[variables('kty')]"
@@ -7980,7 +8079,7 @@
                       }
                     },
                     "paasIdentity": {
-                      "condition": "[not(empty(parameters('paasKeyNames')))]",
+                      "condition": "[not(empty(parameters('keyNames')))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
                       "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
@@ -7991,7 +8090,7 @@
                         "mode": "Incremental",
                         "parameters": {
                           "name": {
-                            "value": "[parameters('paasIdentityName')]"
+                            "value": "[parameters('identityName')]"
                           },
                           "location": {
                             "value": "[parameters('location')]"
@@ -8056,7 +8155,7 @@
                     "paasKeyRoleAssignments": {
                       "copy": {
                         "name": "paasKeyRoleAssignments",
-                        "count": "[length(parameters('paasKeyNames'))]"
+                        "count": "[length(parameters('keyNames'))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
@@ -8073,7 +8172,7 @@
                             "value": "[variables('keyVaultName')]"
                           },
                           "keyName": {
-                            "value": "[parameters('paasKeyNames')[copyIndex()]]"
+                            "value": "[parameters('keyNames')[copyIndex()]]"
                           },
                           "assignments": {
                             "value": [
@@ -8845,19 +8944,19 @@
                     }
                   },
                   "outputs": {
-                    "paasIdentityResourceId": {
+                    "identityResourceId": {
                       "type": "string",
                       "metadata": {
-                        "description": "Resource ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested."
+                        "description": "Resource ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested."
                       },
-                      "value": "[if(not(empty(parameters('paasKeyNames'))), reference('paasIdentity').outputs.resourceId.value, '')]"
+                      "value": "[if(not(empty(parameters('keyNames'))), reference('paasIdentity').outputs.resourceId.value, '')]"
                     },
-                    "paasIdentityPrincipalId": {
+                    "identityPrincipalId": {
                       "type": "string",
                       "metadata": {
-                        "description": "Principal ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested."
+                        "description": "Principal ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested."
                       },
-                      "value": "[if(not(empty(parameters('paasKeyNames'))), reference('paasIdentity').outputs.principalId.value, '')]"
+                      "value": "[if(not(empty(parameters('keyNames'))), reference('paasIdentity').outputs.principalId.value, '')]"
                     },
                     "diskResults": {
                       "type": "array",
@@ -8910,18 +9009,27 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "15107852728170180576"
+                      "templateHash": "2251730712385734116"
                     }
                   },
                   "parameters": {
                     "privateLinkScopeResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the Azure Monitor Private Link Scope (AMPLS) to update."
+                      }
                     },
                     "scopedResourceIds": {
-                      "type": "array"
+                      "type": "array",
+                      "metadata": {
+                        "description": "Required. Array of resource IDs to associate as scoped resources on the AMPLS."
+                      }
                     },
                     "deploymentSuffix": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Unique suffix used for deterministic deployment naming and idempotency."
+                      }
                     }
                   },
                   "resources": [
@@ -9134,14 +9242,23 @@
           "outputs": {
             "functionAppName": {
               "type": "string",
+              "metadata": {
+                "description": "Name of the deployed Function App."
+              },
               "value": "[parameters('functionAppName')]"
             },
             "functionAppPrincipalId": {
               "type": "string",
+              "metadata": {
+                "description": "Principal ID of the identity used by the Function App (UAI when provided, otherwise SAI)."
+              },
               "value": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').principalId, reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2024-11-01', 'full').identity.principalId)]"
             },
             "applicationInsightsResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of Application Insights when enabled; otherwise empty string."
+              },
               "value": "[if(parameters('enableApplicationInsights'), resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '')]"
             }
           }

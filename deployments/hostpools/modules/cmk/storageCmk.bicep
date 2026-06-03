@@ -7,11 +7,11 @@ param keyExpirationInDays int
 param location string
 param tags object = {}
 param deploymentSuffix string
-param paasKeyNames array
-param paasIdentityName string
+param storageKeyNames array
+param identityName string = ''
 
 module cmk '../../../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = {
-  name: 'PaaS-CMK-${deploymentSuffix}'
+  name: 'Storage-CMK-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     keyVaultResourceId: keyVaultResourceId
@@ -20,10 +20,10 @@ module cmk '../../../../.common/bicepModules/custom/customerManagedKeys/customer
     location: location
     tags: tags
     deploymentSuffix: deploymentSuffix
-    paasKeyNames: paasKeyNames
-    paasIdentityName: paasIdentityName
+    keyNames: storageKeyNames
+    identityName: identityName
   }
 }
 
-@description('Resource ID of the shared PaaS encryption user-assigned identity.')
-output paasIdentityResourceId string = cmk.outputs.paasIdentityResourceId
+@description('Resource ID of the storage encryption user-assigned identity.')
+output storageEncryptionIdentityResourceId string = cmk.outputs.identityResourceId

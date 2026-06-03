@@ -20,9 +20,10 @@ param enabledForTemplateDeployment bool = false
 param enabledForDiskEncryption bool = false
 
 @description('Optional. Whether this vault is accessed via a private endpoint. When true and no permittedIPs are provided, public network access is disabled.')
-param privateEndpoint bool = false
+@allowed(['Enabled', 'Disabled'])
+param publicNetworkAccess string = 'Enabled'
 
-@description('Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall.')
+@description('Optional. Array of permitted IP addresses or CIDR blocks. When provided, a deny-by-default firewall is applied.')
 param permittedIPs array = []
 
 param diagnosticSettings diagnosticSettingsType?
@@ -31,10 +32,8 @@ param diagnosticSettings diagnosticSettingsType?
 var requiresAzureServicesBypass = enabledForDeployment || enabledForTemplateDeployment || enabledForDiskEncryption
 
 var kvIpRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
-var hasFirewallRestrictions = privateEndpoint || !empty(kvIpRules)
-// Disable public access only when private endpoint is the sole access path with no trusted IP exceptions.
-var resolvedPublicNetworkAccess = (privateEndpoint && empty(kvIpRules)) ? 'Disabled' : 'Enabled'
-var resolvedNetworkAcls = hasFirewallRestrictions
+// Firewall is applied only when explicit IP allowances are provided. PE topology is the caller's concern.
+var resolvedNetworkAcls = !empty(kvIpRules)
   ? {
       bypass: requiresAzureServicesBypass ? 'AzureServices' : 'None'
       defaultAction: 'Deny'
@@ -64,7 +63,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enabledForDeployment: enabledForDeployment
     enabledForTemplateDeployment: enabledForTemplateDeployment
     enabledForDiskEncryption: enabledForDiskEncryption
-    publicNetworkAccess: resolvedPublicNetworkAccess
+    publicNetworkAccess: publicNetworkAccess
     networkAcls: resolvedNetworkAcls
   }
 }

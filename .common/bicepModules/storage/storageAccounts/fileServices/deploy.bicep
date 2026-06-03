@@ -8,6 +8,11 @@ param smbSettings smbSettingsType?
 
 param shareDeleteRetentionPolicyEnabled bool = false
 
+@description('Optional. Number of days to retain deleted file shares (1–365). Only effective when shareDeleteRetentionPolicyEnabled is true.')
+@minValue(1)
+@maxValue(365)
+param shareDeleteRetentionPolicyDays int = 14
+
 param diagnosticSettings diagnosticSettingsType?
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
@@ -25,6 +30,7 @@ resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01'
       : null
     shareDeleteRetentionPolicy: {
       enabled: shareDeleteRetentionPolicyEnabled
+      days: shareDeleteRetentionPolicyDays
     }
   }
 }

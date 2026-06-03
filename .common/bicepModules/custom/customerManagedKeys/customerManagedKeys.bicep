@@ -52,15 +52,15 @@ param deploymentSuffix string = uniqueString(resourceGroup().id, deployment().na
 // ─── PaaS mode parameters ────────────────────────────────────────────────────
 
 @description('''
-Optional. Names of Key Vault keys to create for PaaS CMK encryption.
-One key is created per entry. All keys are assigned to the single paasIdentityName UAI.
+Optional. Names of Key Vault keys to create for CMK encryption.
+One key is created per entry. All keys are assigned to the single identityName UAI.
 For a single storage account, pass a one-element array.
 For FSLogix with multiple accounts, pass all key names (one per account).
 ''')
-param paasKeyNames string[] = []
+param keyNames string[] = []
 
-@description('Optional. Name of the user-assigned identity to create for PaaS CMK. Required when paasKeyNames is not empty.')
-param paasIdentityName string = ''
+@description('Optional. Name of the user-assigned identity to create for CMK. Required when keyNames is not empty.')
+param identityName string = ''
 
 // ─── Disk mode parameters ────────────────────────────────────────────────────
 
@@ -144,7 +144,7 @@ var cvmKeyReleasePolicy = base64('{"version":"1.0.0","anyOf":[{"authority":"http
 // ─── PaaS: Keys ──────────────────────────────────────────────────────────────
 
 module paasKeys '../../keyVault/vaults/keys/deploy.bicep' = [
-  for (keyName, i) in paasKeyNames: {
+  for (keyName, i) in keyNames: {
     name: 'CMK-PaaSKey-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
     params: {
@@ -161,11 +161,12 @@ module paasKeys '../../keyVault/vaults/keys/deploy.bicep' = [
 ]
 
 // ─── PaaS: User-Assigned Identity (single, shared by all keys) ──────────────
+// Skipped when createPaasIdentity=false (SAI CMK path — the resource handles its own RBAC).
 
-module paasIdentity '../../managedIdentity/userAssignedIdentities/deploy.bicep' = if (!empty(paasKeyNames)) {
+module paasIdentity '../../managedIdentity/userAssignedIdentities/deploy.bicep' = if (!empty(keyNames)) {
   name: 'CMK-PaaSUAI-${deploymentSuffix}'
   params: {
-    name: paasIdentityName
+    name: identityName
     location: location
     tags: union(parentTag, tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {})
   }
@@ -173,9 +174,10 @@ module paasIdentity '../../managedIdentity/userAssignedIdentities/deploy.bicep' 
 
 // ─── PaaS: Role Assignments (Key Vault Crypto Service Encryption User) ──────
 // One role assignment per key, all scoped to the same shared UAI.
+// Skipped when createPaasIdentity=false — loop source is an empty array so no iterations run.
 
 module paasKeyRoleAssignments '../../keyVault/vaults/keys/roleAssignment.bicep' = [
-  for (keyName, i) in paasKeyNames: {
+  for (keyName, i) in keyNames: {
     name: 'CMK-PaaSKeyRA-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
     params: {
@@ -293,11 +295,11 @@ module diskKeyReleaseUserRoleAssignments '../../keyVault/vaults/keys/roleAssignm
 
 // ─── Outputs ─────────────────────────────────────────────────────────────────
 
-@description('Resource ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested.')
-output paasIdentityResourceId string = !empty(paasKeyNames) ? paasIdentity!.outputs.resourceId : ''
+@description('Resource ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested.')
+output identityResourceId string = !empty(keyNames) ? paasIdentity!.outputs.resourceId : ''
 
-@description('Principal ID of the shared PaaS encryption user-assigned identity. Empty when no PaaS CMK keys are requested.')
-output paasIdentityPrincipalId string = !empty(paasKeyNames) ? paasIdentity!.outputs.principalId : ''
+@description('Principal ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested.')
+output identityPrincipalId string = !empty(keyNames) ? paasIdentity!.outputs.principalId : ''
 
 @description('Disk CMK results — one entry per diskEncryptionConfigs element.')
 output diskResults diskResultType[] = [

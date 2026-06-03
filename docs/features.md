@@ -851,7 +851,8 @@ CMK is applied across the solution through four parameters, each independently c
 | Parameter | Template | Protects |
 |---|---|---|
 | `keyManagementDisks` | `hostpool.bicep` | Session host VM managed disks (OS + data) via Disk Encryption Set |
-| `keyManagementPaaS` | `hostpool.bicep` | FSLogix Azure Files storage accounts **and** Recovery Services Vault |
+| `keyManagementStorage` | `hostpool.bicep` | FSLogix Azure Files storage accounts |
+| `keyManagementRecoveryServicesVault` | `hostpool.bicep` | Recovery Services Vault (personal host pool VM backup) |
 | `keyManagementStorageAccounts` | `imageManagement.bicep` | Artifacts and build logs storage accounts |
 | `keyManagementGalleryImageVersions` | `imageManagement.bicep` | Compute Gallery image versions via Disk Encryption Set |
 
@@ -874,8 +875,11 @@ For IL5 environments, CMK with HSM protection is required. See [IL5 Isolation](#
 - Azure Key Vault Premium (when CMK is selected inline)
   - Key Encryption Keys (one per protected scope — VM disks, FSLogix storage accounts, Recovery Services Vault, or gallery image versions)
   - Automatic key rotation policy (configurable via `keyExpirationInDays`, default 180 days)
-- User-Assigned Managed Identity (for PaaS CMK — storage accounts and Recovery Services Vault)
+- User-Assigned Managed Identity (for PaaS CMK — FSLogix storage accounts)
+- System-Assigned Managed Identity (for Recovery Services Vault CMK — SAI is always used; Azure also requires it when the vault has a private endpoint)
 - Disk Encryption Set (for disk and gallery image version CMK)
+
+> **Recovery Services Vault CMK with private endpoints:** Azure Backup has no `AzureServices` trusted service bypass for Key Vault. When `deployPrivateEndpoints = true` and the encryption Key Vault has public access disabled, RSV CMK is automatically skipped to prevent a deployment failure — the vault uses platform-managed keys instead. To preserve RSV CMK in a fully private environment, set `encryptionKeyVaultForcePublicAccess = true`. This re-enables public network access on the encryption Key Vault and clears any IP-based firewall rules so Azure Backup can reach it. Accept this trade-off intentionally. See [Personal Host Pool VM Backup](bcdr.md#personal-host-pool-vm-backup) in the BCDR guide for more detail.
 
 ## SMB Multichannel
 

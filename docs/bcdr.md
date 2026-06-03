@@ -41,7 +41,7 @@ FederalAVD includes purpose-built support for multi-region disaster recovery and
     - [Secondary Gallery Deployment Is Not Automated](#secondary-gallery-deployment-is-not-automated)
     - [Azure NetApp Files Cross-Region Replication](#azure-netapp-files-cross-region-replication)
     - [EntraId Identity Solution Does Not Support Cloud Cache Multi-Account](#entraid-identity-solution-does-not-support-cloud-cache-multi-account)
-    - [Backup Policy Schedules Are Not Parameterized](#backup-policy-schedules-are-not-parameterized)
+    - [Backup Schedule Is Not Parameterized](#backup-schedule-is-not-parameterized)
     - [FSLogix Office Container Cross-Region](#fslogix-office-container-cross-region)
     - [No Automated Failover Routing](#no-automated-failover-routing)
 
@@ -309,14 +309,18 @@ Do not pre-deploy session hosts. In a failover event, trigger a Session Host Rep
 **What it protects against:** Accidental deletion, data corruption, or OS-level failure on personal (dedicated) session host VMs. With geo-redundant vaults, also enables cross-region restore for personal VMs.
 
 **RTO:** Hours — manual restore process.  
-**RPO:** Determined by backup schedule (Azure Backup policy defaults).
+**RPO:** Determined by backup schedule and `backupRetentionDays` (daily backup, default 30-day retention).
 
-Personal host pool VMs are backed up to an Azure Recovery Services Vault when `recoveryServices = true`. The vault is deployed to `rg-avd-operations-{loc}` and is shared across all host pools in the region.
+Personal host pool VMs are backed up to an Azure Recovery Services Vault when `recoveryServices = true`. The vault is deployed to the **host pool’s own hosts resource group** (`rg-avd-hosts-{identifier}-{index}-{loc}`) — one vault per host pool, not shared. This keeps backup scope and lifecycle tightly bound to each host pool.
 
 ```bicep
 param recoveryServices bool = false
 @allowed(['LocallyRedundant', 'ZoneRedundant', 'GeoRedundant'])
 param recoveryServicesVaultStorageRedundancy string = 'LocallyRedundant'
+@minValue(1)
+@maxValue(365)
+param backupRetentionDays int = 30                        // daily retention window
+param existingVmBackupVaultResourceId string = '' // omit to create a new vault
 ```
 
 For personal host pools:
@@ -324,7 +328,11 @@ For personal host pools:
 - `ZoneRedundant` protects backup data against a zone-level failure within the region. Satisfies NIST CP-9 zone-resilience expectations when cross-region restore is not required.
 - `LocallyRedundant` is the default and is appropriate when cross-region recovery of backup data is not a requirement and the host pool is already zone-redundant.
 
-> **Pooled host pools:** When `recoveryServices = true` for a pooled host pool, the **FSLogix Azure Files file share** is backed up (not the VMs). FSLogix share snapshots are stored in the storage account itself — not in the vault — so vault storage redundancy has minimal impact on backup data durability. For pooled deployments, `LocallyRedundant` or `ZoneRedundant` vault storage is sufficient in most cases; GRS is not available for pooled deployments (the UI correctly restricts the option). For cross-region profile resilience on pooled host pools, see [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments) — the default recommendation is per-region FSLogix storage with no cross-region sync rather than backup or Cloud Cache.
+Customer-managed key (CMK) encryption is supported for the vault via `keyManagementRecoveryServicesVault`. The vault always uses its system-assigned identity for CMK access — this avoids an extra user-assigned identity resource and is also required by Azure when the vault has a private endpoint.
+
+> **CMK with private Key Vaults:** Azure Backup has no `AzureServices` trusted service bypass for Key Vault, so it cannot reach a Key Vault that has public access disabled. When `deployPrivateEndpoints = true` and the encryption Key Vault is private-only, RSV CMK is automatically disabled — the vault falls back to platform-managed keys rather than failing the deployment. To keep RSV CMK active in a private environment, set `encryptionKeyVaultForcePublicAccess = true`. This re-enables public network access on the encryption Key Vault and clears any IP-based firewall restrictions so Azure Backup's regional IP addresses can reach it. Note: this also clears IP-based restrictions on the Key Vault, as Azure Backup's regional IPs are not fixed. The Key Vault's private endpoint remains intact as the primary access path for all other consumers — public access is a narrow exception required solely by the Azure Backup service.
+
+> **Pooled host pools:** When `recoveryServices = true` for a pooled host pool, the **FSLogix Azure Files file shares** are backed up using Azure Backup snapshot policy. The vault for Azure Files backup is deployed to the **shared operations resource group** (`rg-avd-operations-{loc}`) and is reused across pooled host pools in the same region — pass `existingFilesBackupVaultResourceId` on subsequent pooled deployments to reuse an existing vault rather than creating a second one. FSLogix share snapshots are stored in the storage account itself and are not transmitted to the vault — the vault holds only scheduling metadata. Vault storage redundancy is therefore hardcoded to `LocallyRedundant` for the Azure Files vault, and CMK is not required. The `backupRetentionDays` parameter controls the snapshot retention period (VM backup and Azure Files backup are mutually exclusive per host pool type, so the parameter is shared). Soft-delete retention for FSLogix file shares is controlled separately by `fslogixSoftDeleteRetentionDays` (default: 14 days). For cross-region profile resilience on pooled host pools, see [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments).
 
 ---
 
@@ -427,9 +435,9 @@ The imageManagement template does not deploy a remote gallery — it must be dep
 
 When `identitySolution = 'EntraId'` (storage key authentication), FSLogix is configured to write to only the first storage account. Cloud Cache multi-account cross-region writes are not supported with this identity solution. Use `EntraKerberos-CloudOnly`, `EntraKerberos-Hybrid`, `EntraDS`, or `ADDS` for full Cloud Cache support.
 
-### Backup Policy Schedules Are Not Parameterized
+### Backup Schedule Is Not Parameterized
 
-`recoveryServices = true` creates Azure Backup policies using default schedules. The backup frequency and retention period are not exposed as template parameters. If specific RPO targets are required, configure custom backup policies on the Recovery Services Vault after deployment.
+`recoveryServices = true` creates Azure Backup policies with a daily backup schedule running at 23:00 UTC. The backup frequency is not configurable via template parameters. **Retention is parameterized** — use `backupRetentionDays` (default: 30, range: 1–365) to control how many daily recovery points are kept for VM backup, or how many daily snapshots are retained for Azure Files backup. If you require custom backup windows or intraday snapshots, configure an additional custom backup policy on the Recovery Services Vault after deployment.
 
 ### FSLogix Office Container Cross-Region
 

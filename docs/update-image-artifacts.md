@@ -55,7 +55,7 @@ Copy-Item -Path "customer\examples\parameters\imageManagement\downloads.json" `
 ```
 
 A minimal reference file with only the repo-required entries is also available at:
-  - `deployments/imageManagement/parameters/optional.downloads.parameters.json`
+  - `deployments/imageManagement/parameters/sample-optional.downloads.parameters.json`
 
 ## Parameters
 

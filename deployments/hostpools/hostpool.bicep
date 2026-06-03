@@ -437,6 +437,11 @@ param fslogixStorageService string = 'AzureFiles Standard'
 @description('Optional. Storage redundancy for newly created Azure Files accounts used by FSLogix. Independent from session host availability settings.')
 param fslogixStorageRedundancy string = 'LocallyRedundant'
 
+@description('Optional. Number of days to retain deleted FSLogix file shares (1–365). Applies to share-level soft delete — protects against accidental share deletion.')
+@minValue(1)
+@maxValue(365)
+param fslogixSoftDeleteRetentionDays int = 14
+
 @description('Optional. The OU Path where the FSLogix Storage Accounts or NetApp Accounts will be joined in the ADDS.')
 param fslogixOUPath string = ''
 
@@ -489,21 +494,40 @@ param fslogixStorageIndex int = 1
   'CustomerManaged'
   'CustomerManagedHSM'
 ])
-@description('Optional. Shared key management mode for PaaS resources deployed by this solution (for example Azure Files and Recovery Services Vault).')
-param keyManagementPaaS string = 'PlatformManaged'
+@description('Optional. Key management mode for Azure Files (FSLogix) storage account encryption.')
+param keyManagementStorage string = 'PlatformManaged'
+
+@allowed([
+  'PlatformManaged'
+  'CustomerManaged'
+  'CustomerManagedHSM'
+])
+@description('Optional. Key management mode for Recovery Services Vault encryption. When CustomerManaged is combined with deployPrivateEndpoints=true, the encryption Key Vault must have full public network access enabled (Azure Backup does not use the AzureServices trusted service bypass). Set encryptionKeyVaultForcePublicAccess=true to explicitly allow this — otherwise RSV CMK is automatically disabled.')
+param keyManagementRecoveryServicesVault string = 'PlatformManaged'
+
+@description('Optional. When true, the inline encryption Key Vault is deployed with public network access enabled and all IP-based firewall restrictions cleared. Required when keyManagementRecoveryServicesVault is CustomerManaged and deployPrivateEndpoints is true, because Azure Backup does not use the AzureServices trusted service bypass and its regional IPs are not fixed. Default false silently disables RSV CMK in that combination.')
+param encryptionKeyVaultForcePublicAccess bool = false
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all PaaS components (storage accounts, Key Vaults). Use when managing the deployment from a trusted workstation outside the Azure network boundary.')
 param permittedIPs array = []
 
-@description('Optional. Enable backups to an Azure Recovery Services vault.  For a pooled host pool this will enable backups on the Azure file share.  For a personal host pool this will enable backups on the AVD sessions hosts.')
+@description('Optional. Enable VM backups via a Recovery Services Vault. Only applies to Personal host pools. For pooled host pools, Azure Files storage protection uses soft delete and snapshots configured directly on the storage accounts.')
 param recoveryServices bool = false
 
 @description('Optional. Storage redundancy for the Recovery Services vault. Controls how backup recovery points are stored — independently of the storage account redundancy.')
 @allowed(['LocallyRedundant', 'ZoneRedundant', 'GeoRedundant'])
 param recoveryServicesVaultStorageRedundancy string = 'LocallyRedundant'
 
-@description('Optional. The resource Id of an existing Recovery Services Vault used for backup. When provided with recoveryServices = true, uses this vault instead of creating a new one.')
-param existingRecoveryServicesVaultResourceId string = ''
+@description('Optional. Number of daily recovery points or snapshots to retain (1–365). Used for VM backup on Personal host pools and Azure Files snapshot backup on pooled host pools — never both in the same deployment.')
+@minValue(1)
+@maxValue(365)
+param backupRetentionDays int = 30
+
+@description('Optional. Resource ID of an existing VM backup Recovery Services Vault. When provided with recoveryServices = true, uses this vault instead of creating a new one.')
+param existingVmBackupVaultResourceId string = ''
+
+@description('Optional. Resource ID of an existing Azure Files backup Recovery Services Vault (pooled host pools). When provided with recoveryServices = true and Azure Files storage, uses this vault instead of creating a new one.')
+param existingFilesBackupVaultResourceId string = ''
 
 @description('Optional. The resource ID of an existing Encryption Key Vault containing customer-managed keys. When provided, the deployment uses this vault for CMK instead of creating one inline.')
 param existingEncryptionKeyVaultResourceId string = ''
@@ -655,13 +679,12 @@ var virtualMachinesRegion = vmVirtualNetwork.location
 var effectiveControlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
 
 var createDeploymentVm = deployFSLogixStorage || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)
-var effectiveKeyManagementPaaS = keyManagementPaaS
 
 // deployKeyVaults controls inline KV creation within this deployment.
 //   (a) deploySecretsKeyVault = true: user explicitly requested a secrets KV deployed inline
 //   (b) CMK is needed but no external encryptionKeyVaultResourceId was provided (e.g., portal all-in-one)
 // When using the Foundation deployment, encryptionKeyVaultResourceId will be non-empty so deployInlineEncryptionKv stays false.
-var cmkIsRequested = contains(effectiveKeyManagementPaaS, 'CustomerManaged') || contains(
+var cmkIsRequested = contains(keyManagementStorage, 'CustomerManaged') || contains(keyManagementRecoveryServicesVault, 'CustomerManaged') || contains(
   keyManagementDisks,
   'CustomerManaged'
 ) || confidentialVMOSDiskEncryption
@@ -671,8 +694,8 @@ var deployKeyVaults = deploySecretsKeyVault || deployInlineEncryptionKv
 // Top-level CMK: run keys + DES/UAI + role assignments early so RBAC propagation
 // completes during the monitoring/controlPlane phases — well before VMs or storage deploy.
 var deployDiskCmk = contains(keyManagementDisks, 'CustomerManaged') && !confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
-var deployStorageCmk = deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && effectiveKeyManagementPaaS != 'PlatformManaged' && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
-var deployRecoveryServicesCmk = recoveryServices && empty(existingRecoveryServicesVaultResourceId) && effectiveKeyManagementPaaS != 'PlatformManaged' && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
+var deployStorageCmk = deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && keyManagementStorage != 'PlatformManaged' && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
+var deployRecoveryServicesAzureFiles = recoveryServices && !contains(hostPoolType, 'Personal') && deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
 // CVM CMK: CVM keys must be created via Key Vault data plane (Run Command) because ARM key PUT
 // does not support key release policies. The DES is then created by the shared CMK module with skipKeyCreation=true.
 var deployCvmDiskCmk = confidentialVMOSDiskEncryption && (deployInlineEncryptionKv || !empty(existingEncryptionKeyVaultResourceId))
@@ -991,13 +1014,7 @@ var recoveryServicesVaultNameVMs = replace(
 var recoveryServicesVaultNameFSLogix = replace(
   replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.recoveryServicesVaults), 'LOCATION', vmsLocAbbr),
   'TOKEN',
-  'fslogix'
-)
-// Recovery Services CMK assets are shared operations resources, not hostpool-scoped.
-var userAssignedIdentitySharedNameConv = replace(
-  replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.userAssignedIdentities),
-  'LOCATION',
-  vmsLocAbbr
+  'files'
 )
 var userAssignedIdentityNameConv = replace(
   replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.userAssignedIdentities),
@@ -1284,7 +1301,7 @@ module hostsResourceGroup '../../.common/bicepModules/resources/resourceGroups/d
   }
 }
 
-module operationsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults || (recoveryServices && empty(existingRecoveryServicesVaultResourceId))) {
+module operationsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults || deployRecoveryServicesAzureFiles) {
   name: 'Resource-Group-Operations-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
@@ -1358,7 +1375,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     hostPoolName: hostPoolName
     identitySolution: identitySolution
     keyManagementDisks: keyManagementDisks
-    keyManagementStorageAccounts: effectiveKeyManagementPaaS
+    keyManagementStorageAccounts: keyManagementStorage
     location: virtualMachinesRegion
     ouPath: vmOUPath
     resourceGroupControlPlane: resourceGroupControlPlane
@@ -1410,6 +1427,7 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
       : ''
     privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
     privateEndpoint: deployPrivateEndpoints
+    encryptionKeyVaultForcePublicAccess: encryptionKeyVaultForcePublicAccess
     permittedIPs: permittedIPs
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
@@ -1491,45 +1509,23 @@ var effectiveDiskEncryptionSetResourceId = deployDiskCmk
 
 // Storage CMK: UAI + keys + role assignments for FSLogix AzureFiles storage accounts.
 // Runs in parallel with monitoring/controlPlane so role assignments propagate before azureFiles deploys.
-module storageCmk 'modules/cmk/paasCmk.bicep' = if (deployStorageCmk) {
+module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
   name: 'Storage-CMK-${deploymentSuffix}'
   params: {
     resourceGroupName: resourceGroupStorage
     keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
-    keyManagementType: contains(effectiveKeyManagementPaaS, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
+    keyManagementType: contains(keyManagementStorage, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
     keyExpirationInDays: keyExpirationInDays
     location: virtualMachinesRegion
     tags: tags
     deploymentSuffix: deploymentSuffix
-    paasKeyNames: [
+    storageKeyNames: [
       for i in range(0, fslogixStorageCount): replace(encryptionKeyNameFSLogix, '##', padLeft(i + fslogixStorageIndex, 2, '0'))
     ]
-    paasIdentityName: replace(userAssignedIdentityNameConv, 'TOKEN', 'storage-encryption')
+    identityName: replace(userAssignedIdentityNameConv, 'TOKEN', 'storage-encryption')
   }
   dependsOn: [
     storageResourceGroup
-  ]
-}
-
-// Recovery Services CMK: UAI + key + role assignments for RSV encryption.
-// Runs before recoveryServicesModule so RBAC has time to propagate before vault CMK binding.
-module recoveryServicesCmk 'modules/cmk/paasCmk.bicep' = if (deployRecoveryServicesCmk) {
-  name: 'RecoveryServices-CMK-${deploymentSuffix}'
-  params: {
-    resourceGroupName: resourceGroupOperations
-    keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
-    keyManagementType: contains(effectiveKeyManagementPaaS, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
-    keyExpirationInDays: keyExpirationInDays
-    location: virtualMachinesRegion
-    tags: tags
-    deploymentSuffix: deploymentSuffix
-    paasKeyNames: [
-      encryptionKeyNameRecoveryServices
-    ]
-    paasIdentityName: replace(userAssignedIdentitySharedNameConv, 'TOKEN', 'recovery-services-encryption')
-  }
-  dependsOn: [
-    operationsResourceGroup
   ]
 }
 
@@ -1611,23 +1607,21 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = {
   ]
 }
 
-// Recovery Services — vault + policies + PE
-// Deployed BEFORE fslogix and sessionHosts so the vault is ready for both phases to register items.
-// When existingRecoveryServicesVaultResourceId is empty a new vault is created; otherwise the existing one is used.
-var deployRecoveryServices = recoveryServices
+// VM Recovery Services: vault deployment is handled inside modules/hosts/hosts.bicep.
+var deployRecoveryServices = recoveryServices && contains(hostPoolType, 'Personal')
 
-var recoveryServicesVmPolicyName = 'AvdPolicyVm'
 var recoveryServicesFileSharePolicyName = 'filesharepolicy'
 
-module recoveryServicesModule 'modules/operations/recoveryServices.bicep' = if (deployRecoveryServices) {
-  name: 'RecoveryServices-${deploymentSuffix}'
+// Azure Files Recovery Services Vault — shared vault in the Operations RG for pooled host pool FSLogix snapshot backup.
+// No CMK required: vault holds only metadata; snapshot data stays in the storage account.
+module recoveryServicesAzureFilesModule 'modules/operations/recoveryServices.bicep' = if (deployRecoveryServicesAzureFiles) {
+  name: 'RecoveryServices-AzureFiles-${deploymentSuffix}'
   params: {
-    createVault: empty(existingRecoveryServicesVaultResourceId)
-    existingRecoveryServicesVaultResourceId: existingRecoveryServicesVaultResourceId
-    vaultName: contains(hostPoolType, 'Personal') ? recoveryServicesVaultNameVMs : recoveryServicesVaultNameFSLogix
+    createVault: empty(existingFilesBackupVaultResourceId)
+    existingRecoveryServicesVaultResourceId: existingFilesBackupVaultResourceId
+    vaultName: recoveryServicesVaultNameFSLogix
     resourceGroupOperations: resourceGroupOperations
     location: virtualMachinesRegion
-    storageRedundancy: recoveryServicesVaultStorageRedundancy
     deploymentSuffix: deploymentSuffix
     logAnalyticsWorkspaceResourceId: enableMonitoring
       ? (empty(existingLogAnalyticsWorkspaceResourceId)
@@ -1643,26 +1637,18 @@ module recoveryServicesModule 'modules/operations/recoveryServices.bicep' = if (
     privateEndpointNICNameConv: privateEndpointNICNameConv
     tags: tags
     timeZone: virtualMachinesTimeZone
-    pooledHostPool: split(hostPoolType, ' ')[0] == 'Pooled'
-    vmPolicyName: recoveryServicesVmPolicyName
     fileSharePolicyName: recoveryServicesFileSharePolicyName
-    keyManagementType: effectiveKeyManagementPaaS
-    encryptionKeyVaultResourceId: deployRecoveryServicesCmk ? effectiveEncryptionKeyVaultResourceId : ''
-    encryptionKeyVaultUri: deployRecoveryServicesCmk ? effectiveEncryptionKeyVaultUri : ''
-    encryptionKeyName: deployRecoveryServicesCmk ? encryptionKeyNameRecoveryServices : ''
-    encryptionUserAssignedIdentityResourceId: deployRecoveryServicesCmk
-      ? recoveryServicesCmk!.outputs.paasIdentityResourceId
-      : ''
+    backupRetentionDays: backupRetentionDays
   }
   dependsOn: [
     operationsResourceGroup
   ]
 }
 
-var effectiveRecoveryServicesVaultResourceId = recoveryServices
-  ? (empty(existingRecoveryServicesVaultResourceId)
-      ? recoveryServicesModule!.outputs.recoveryServicesVaultResourceId
-      : existingRecoveryServicesVaultResourceId)
+var effectiveFilesBackupVaultResourceId = deployRecoveryServicesAzureFiles
+  ? (empty(existingFilesBackupVaultResourceId)
+      ? recoveryServicesAzureFilesModule!.outputs.recoveryServicesVaultResourceId
+      : existingFilesBackupVaultResourceId)
   : ''
 
 // FSLogix Storage
@@ -1698,7 +1684,7 @@ module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorag
     hostPoolResourceId: controlPlane!.outputs.hostPoolResourceId
     identitySolution: identitySolution
     kerberosEncryptionType: fslogixStorageKerberosEncryptionType
-    keyManagementStorageAccounts: effectiveKeyManagementPaaS
+    keyManagementStorageAccounts: keyManagementStorage
     location: virtualMachinesRegion
     logAnalyticsWorkspaceResourceId: enableMonitoring
       ? (empty(existingLogAnalyticsWorkspaceResourceId)
@@ -1726,8 +1712,10 @@ module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorag
     permittedIPs: permittedIPs
     tags: tags
     deploymentSuffix: deploymentSuffix
-    encryptionUserAssignedIdentityResourceId: deployStorageCmk ? storageCmk!.outputs.paasIdentityResourceId : ''
-    recoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
+    encryptionUserAssignedIdentityResourceId: deployStorageCmk ? storageCmk!.outputs.storageEncryptionIdentityResourceId : ''
+    fslogixSoftDeleteRetentionDays: fslogixSoftDeleteRetentionDays
+    recoveryServicesVaultResourceId: deployRecoveryServicesAzureFiles ? effectiveFilesBackupVaultResourceId : ''
+    fileSharePolicyName: recoveryServicesFileSharePolicyName
   }
   dependsOn: [
     storageResourceGroup
@@ -1858,11 +1846,31 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     virtualMachineNamePrefix: virtualMachineNamePrefix
     virtualMachineSize: virtualMachineSize
     vTpmEnabled: vTpmEnabled
-    // VM backup registration — vault resource ID is only populated for Personal pools when backup is enabled
-    recoveryServicesVaultResourceId: contains(hostPoolType, 'Personal') && deployRecoveryServices
-      ? effectiveRecoveryServicesVaultResourceId
+    // VM backup — vault is deployed inside hosts.bicep when deployRecoveryServices is true.
+    deployRecoveryServices: deployRecoveryServices
+    createVault: empty(existingVmBackupVaultResourceId)
+    existingVmBackupVaultResourceId: existingVmBackupVaultResourceId
+    vaultName: recoveryServicesVaultNameVMs
+    vaultStorageRedundancy: recoveryServicesVaultStorageRedundancy
+    backupRetentionDays: backupRetentionDays
+    keyManagementType: keyManagementRecoveryServicesVault
+    keyExpirationInDays: keyExpirationInDays
+    encryptionKeyVaultResourceId: effectiveEncryptionKeyVaultResourceId
+    encryptionKeyVaultUri: effectiveEncryptionKeyVaultUri
+    encryptionKeyName: encryptionKeyNameRecoveryServices
+    keyVaultPrivateOnly: deployPrivateEndpoints && !encryptionKeyVaultForcePublicAccess
+    deployPrivateEndpoints: deployPrivateEndpoints
+    vaultPrivateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
+    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
+    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
+    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
+    privateEndpointNameConv: privateEndpointNameConv
+    privateEndpointNICNameConv: privateEndpointNICNameConv
+    logAnalyticsWorkspaceResourceId: enableMonitoring
+      ? (empty(existingLogAnalyticsWorkspaceResourceId)
+          ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
+          : existingLogAnalyticsWorkspaceResourceId)
       : ''
-    vmBackupPolicyName: recoveryServicesVmPolicyName
   }
   dependsOn: [
     hostsResourceGroup

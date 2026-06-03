@@ -60,7 +60,8 @@ All compliance-relevant settings are optional parameters — the solution defaul
 | Control | Template | Parameter | Default | Compliant Value |
 |---------|----------|-----------|---------|----------------|
 | **SC-28** Protection of Information at Rest — VM disks | `hostpool.bicep` | `keyManagementDisks` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
-| **SC-28** Protection of Information at Rest — FSLogix storage + RSV | `hostpool.bicep` | `keyManagementPaaS` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
+| **SC-28** Protection of Information at Rest — FSLogix storage | `hostpool.bicep` | `keyManagementStorage` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
+| **SC-28** Protection of Information at Rest — Recovery Services Vault | `hostpool.bicep` | `keyManagementRecoveryServicesVault` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
 | **SC-28** Protection of Information at Rest — artifacts/build-log storage | `imageManagement.bicep` | `keyManagementStorageAccounts` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
 | **SC-28** Protection of Information at Rest — gallery image versions | `imageManagement.bicep` | `keyManagementGalleryImageVersions` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
 | **SC-28(1)** Encryption At Host *(supplemental)* | `hostpool.bicep` | `encryptionAtHost` | `true` | `true` ✅ *(already default — encrypts temp disk and host cache; not the primary IL5 disk encryption mechanism — see note below)* |
@@ -96,7 +97,8 @@ Set the following parameters in addition to the NIST 800-53 values above:
 | Compute isolation (dedicated physical hosts) | `hostpool.bicep` | `deployToDedicatedHosts` | `true` |
 | Dedicated host group | `hostpool.bicep` | `dedicatedHostGroupResourceId` | Resource ID of pre-provisioned dedicated host group |
 | HSM key protection — VM disks | `hostpool.bicep` | `keyManagementDisks` | `CustomerManagedHSM` |
-| HSM key protection — FSLogix storage + RSV | `hostpool.bicep` | `keyManagementPaaS` | `CustomerManagedHSM` |
+| HSM key protection — FSLogix storage | `hostpool.bicep` | `keyManagementStorage` | `CustomerManagedHSM` |
+| HSM key protection — Recovery Services Vault | `hostpool.bicep` | `keyManagementRecoveryServicesVault` | `CustomerManagedHSM` |
 | HSM key protection — artifacts/build-log storage | `imageManagement.bicep` | `keyManagementStorageAccounts` | `CustomerManagedHSM` |
 | HSM key protection — gallery image versions | `imageManagement.bicep` | `keyManagementGalleryImageVersions` | `CustomerManagedHSM` |
 

@@ -70,10 +70,92 @@ param virtualMachineAdminPassword string
 @secure()
 param virtualMachineAdminUserName string
 param vTpmEnabled bool
-param recoveryServicesVaultResourceId string = ''
-param vmBackupPolicyName string = 'AvdPolicyVm'
+// ─── VM Backup (Recovery Services Vault) ─────────────────────────────────────
+@description('Optional. Whether to deploy or use a Recovery Services Vault for VM backup.')
+param deployRecoveryServices bool = false
+@description('Optional. Whether to create a new vault. False when providing existingVmBackupVaultResourceId.')
+param createVault bool = true
+@description('Optional. Resource ID of an existing VM backup Recovery Services Vault.')
+param existingVmBackupVaultResourceId string = ''
+@description('Optional. Name for the Recovery Services Vault (used only when createVault is true).')
+param vaultName string = ''
+@description('Optional. Storage replication type for a new vault.')
+param vaultStorageRedundancy string = 'LocallyRedundant'
+@description('Optional. Number of daily VM recovery points to retain (1–365).')
+@minValue(1)
+@maxValue(365)
+param backupRetentionDays int = 30
+@description('Optional. CMK mode for the vault.')
+@allowed(['PlatformManaged', 'CustomerManaged', 'CustomerManagedHSM'])
+param keyManagementType string = 'PlatformManaged'
+@description('Optional. Resource ID of the CMK encryption Key Vault.')
+param encryptionKeyVaultResourceId string = ''
+@description('Optional. URI of the CMK encryption Key Vault.')
+param encryptionKeyVaultUri string = ''
+@description('Optional. Name of the CMK encryption key.')
+param encryptionKeyName string = ''
+@description('Optional. Key expiration period in days for the vault CMK encryption key. Also controls auto-rotation.')
+@minValue(7)
+param keyExpirationInDays int = 180
+@description('Optional. Set to true when the CMK Key Vault is private-only; auto-disables CMK in that scenario.')
+param keyVaultPrivateOnly bool = false
+@description('Optional. Whether to deploy a private endpoint for the vault.')
+param deployPrivateEndpoints bool = false
+@description('Optional. Resource ID of the subnet for the vault private endpoint.')
+param vaultPrivateEndpointSubnetResourceId string = ''
+@description('Optional. Resource ID of the Azure Backup private DNS zone.')
+param azureBackupPrivateDnsZoneResourceId string = ''
+@description('Optional. Resource ID of the Azure Blob private DNS zone (needed for backup PE).')
+param azureBlobPrivateDnsZoneResourceId string = ''
+@description('Optional. Resource ID of the Azure Queue private DNS zone (needed for backup PE).')
+param azureQueuePrivateDnsZoneResourceId string = ''
+@description('Optional. Name convention for private endpoints.')
+param privateEndpointNameConv string = ''
+@description('Optional. Name convention for private endpoint NICs.')
+param privateEndpointNICNameConv string = ''
+@description('Optional. Resource ID of the Log Analytics workspace for vault diagnostics.')
+param logAnalyticsWorkspaceResourceId string = ''
 
 var generatedSessionHostNames = [for i in range(0, sessionHostCount): '${virtualMachineNamePrefix}${padLeft(i + sessionHostIndex, vmNameIndexLength, '0')}']
+
+var vmBackupPolicyName = 'AvdPolicyVm'
+
+module recoveryServicesModule 'modules/recoveryServices.bicep' = if (deployRecoveryServices) {
+  name: 'RecoveryServices-${deploymentSuffix}'
+  params: {
+    createVault: createVault
+    existingRecoveryServicesVaultResourceId: existingVmBackupVaultResourceId
+    vaultName: vaultName
+    resourceGroupHosts: resourceGroupHosts
+    location: location
+    storageRedundancy: vaultStorageRedundancy
+    deploymentSuffix: deploymentSuffix
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
+    privateEndpoint: deployPrivateEndpoints
+    privateEndpointSubnetResourceId: vaultPrivateEndpointSubnetResourceId
+    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
+    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
+    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
+    privateEndpointNameConv: privateEndpointNameConv
+    privateEndpointNICNameConv: privateEndpointNICNameConv
+    tags: tags
+    timeZone: timeZone
+    vmPolicyName: vmBackupPolicyName
+    backupRetentionDays: backupRetentionDays
+    keyManagementType: keyManagementType
+    encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
+    encryptionKeyVaultUri: encryptionKeyVaultUri
+    encryptionKeyName: encryptionKeyName
+    keyVaultPrivateOnly: keyVaultPrivateOnly
+    keyExpirationInDays: keyExpirationInDays
+  }
+}
+
+var effectiveRecoveryServicesVaultResourceId = deployRecoveryServices
+  ? (empty(existingVmBackupVaultResourceId)
+      ? recoveryServicesModule!.outputs.recoveryServicesVaultResourceId
+      : existingVmBackupVaultResourceId)
+  : ''
 
 module sessionHosts 'modules/sessionHosts.bicep' = {
   name: 'Session-Hosts-${deploymentSuffix}'
@@ -142,7 +224,7 @@ module sessionHosts 'modules/sessionHosts.bicep' = {
     virtualMachineNameConv: virtualMachineNameConv
     virtualMachineSize: virtualMachineSize
     vTpmEnabled: vTpmEnabled
-    recoveryServicesVaultResourceId: recoveryServicesVaultResourceId
+    recoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
     vmBackupPolicyName: vmBackupPolicyName
   }
 }

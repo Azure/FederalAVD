@@ -234,7 +234,7 @@ Example PowerShell invocation:
 ### Notes
 
 - If `customImageResourceId` is empty, the host pool uses the marketplace image defined by `imagePublisher` / `imageOffer` / `imageSku`.
-- The host pool deployment always creates all resources. Use `existingLogAnalyticsWorkspaceResourceId`, `existingAVDInsightsDataCollectionRuleResourceId`, and `existingDataCollectionEndpointResourceId` in the parameter file to reuse shared monitoring infrastructure instead of creating new resources. Use `existingRecoveryServicesVaultResourceId` to reuse an existing backup vault, and `existingEncryptionKeyVaultResourceId` to reference a pre-deployed encryption Key Vault.
+- The host pool deployment always creates all resources. Use `existingLogAnalyticsWorkspaceResourceId`, `existingAVDInsightsDataCollectionRuleResourceId`, and `existingDataCollectionEndpointResourceId` in the parameter file to reuse shared monitoring infrastructure instead of creating new resources. Use `existingVmBackupVaultResourceId` (personal host pools) or `existingFilesBackupVaultResourceId` (pooled host pools) to reuse existing backup vaults, and `existingEncryptionKeyVaultResourceId` to reference a pre-deployed encryption Key Vault.
 - For repeatable redeployments (e.g., after a new image build), keep your parameter file stable and just update `customImageResourceId` to the new image version.
 
 ---

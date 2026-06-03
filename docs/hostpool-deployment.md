@@ -228,7 +228,7 @@ The host pool deployment always creates all resources — resource groups, AVD c
 | Monitoring (Log Analytics, DCR, DCE) | **Use Existing Monitoring Resources** checkbox | `existingLogAnalyticsWorkspaceResourceId` + DCR + DCE IDs |
 | Credentials Key Vault | **Credentials source → Key Vault** | `existingCredentialsKeyVaultResourceId` |
 | Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox | `existingEncryptionKeyVaultResourceId` |
-| Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingRecoveryServicesVaultResourceId` |
+| Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingVmBackupVaultResourceId` |
 
 To deploy all host pool infrastructure without creating session host VMs, set `sessionHostCount: 0`. This lets you validate storage, networking, and control plane configuration before committing to VM costs. Add hosts later using the **Session Hosts** add-on (`SessionHostsOnly` mode).
 
@@ -507,10 +507,10 @@ Backup behavior depends on host pool type and the `recoveryServices` parameter:
 | Host Pool Type | `recoveryServices` | `useExistingRSV` | Additional requirements | Vault | Backed Up |
 |---|---|---|---|---|---|
 | **Personal** | `true` | `false` | — | Created inline | VM OS disks |
-| **Personal** | `true` | `true` | `existingRecoveryServicesVaultResourceId` required | Existing | VM OS disks |
+| **Personal** | `true` | `true` | `existingVmBackupVaultResourceId` required | Existing | VM OS disks |
 | **Personal** | `false` | — | — | Not created | Nothing |
 | **Pooled** | `true` | `false` | `deployFSLogixStorage=true` + Azure Files | Created inline | FSLogix file shares |
-| **Pooled** | `true` | `true` | `deployFSLogixStorage=true` + Azure Files + `existingRecoveryServicesVaultResourceId` | Existing | FSLogix file shares |
+| **Pooled** | `true` | `true` | `deployFSLogixStorage=true` + Azure Files + `existingFilesBackupVaultResourceId` | Existing | FSLogix file shares |
 | **Pooled** | `false` | — | — | Not created | Nothing |
 
 > **Pooled VMs are never backed up.** Users are stateless in pooled pools; profile data lives in FSLogix storage which is what gets backed up instead.

@@ -277,8 +277,8 @@ module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/custome
     location: location
     tags: tags
     deploymentSuffix: timeStamp
-    paasKeyNames: cmkKeyNames
-    paasIdentityName: storageEncryptionIdentityName
+    keyNames: cmkKeyNames
+    identityName: storageEncryptionIdentityName
   }
   dependsOn: [resourceGroup]
 }
@@ -351,14 +351,14 @@ module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/
     requireInfrastructureEncryption: true
     permittedIPs: storagePermittedIPs
     serviceEndpointSubnetIds: storageServiceEndpointSubnetResourceIds
-    privateEndpoint: storageNetworkAccess == 'PrivateEndpoint'
+    publicNetworkAccess: (storageNetworkAccess == 'PrivateEndpoint' && empty(storagePermittedIPs) && empty(storageServiceEndpointSubnetResourceIds)) ? 'Disabled' : 'Enabled'
     networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
     cmkKeyUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
       ? '${encryptionKeyVault!.properties.vaultUri}keys/${storageEncryptionKeyName}'
       : ''
     cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
-      ? storageCmk!.outputs.paasIdentityResourceId
+      ? storageCmk!.outputs.identityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
   }
@@ -437,14 +437,14 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
     requireInfrastructureEncryption: true
     permittedIPs: storagePermittedIPs
     serviceEndpointSubnetIds: storageServiceEndpointSubnetResourceIds
-    privateEndpoint: storageNetworkAccess == 'PrivateEndpoint'
+    publicNetworkAccess: (storageNetworkAccess == 'PrivateEndpoint' && empty(storagePermittedIPs) && empty(storageServiceEndpointSubnetResourceIds)) ? 'Disabled' : 'Enabled'
     networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
     cmkKeyUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
       ? '${encryptionKeyVault!.properties.vaultUri}keys/${storageEncryptionKeyName}'
       : ''
     cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
-      ? storageCmk!.outputs.paasIdentityResourceId
+      ? storageCmk!.outputs.identityResourceId
       : ''
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
   }

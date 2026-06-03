@@ -28,8 +28,9 @@ param dnsEndpointType string = 'Standard'
 
 param largeFileSharesState string = ''
 
-@description('Optional. Whether this storage account is accessed via a private endpoint. When true and no permittedIPs or serviceEndpointSubnetIds are provided, public network access is disabled entirely.')
-param privateEndpoint bool = false
+@description('Optional. Public network access setting for this storage account. Caller is responsible for resolving the correct value based on private endpoint topology, permitted IPs, and service endpoints.')
+@allowed(['Enabled', 'Disabled'])
+param publicNetworkAccess string = 'Enabled'
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall allowing only these addresses.')
 param permittedIPs array = []
@@ -60,9 +61,8 @@ param diagnosticSettings diagnosticSettingsType?
 
 var ipRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
 var virtualNetworkRules = [for subnetId in serviceEndpointSubnetIds: { id: subnetId, action: 'Allow' }]
-var hasFirewallRestrictions = privateEndpoint || !empty(permittedIPs) || !empty(serviceEndpointSubnetIds)
-// Disable public access only when private endpoint is the sole access path (no trusted IPs or service endpoints need public access).
-var resolvedPublicNetworkAccess = (privateEndpoint && empty(permittedIPs) && empty(serviceEndpointSubnetIds)) ? 'Disabled' : 'Enabled'
+// Firewall is applied when explicit IP allowances or service endpoints are present. PE topology is the caller's concern.
+var hasFirewallRestrictions = !empty(permittedIPs) || !empty(serviceEndpointSubnetIds)
 
 var supportsBlobService = kind == 'BlockBlobStorage' || kind == 'BlobStorage' || kind == 'StorageV2' || kind == 'Storage'
 var supportsFileService = kind == 'FileStorage' || kind == 'StorageV2' || kind == 'Storage'
@@ -108,7 +108,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
       virtualNetworkRules: virtualNetworkRules
       ipRules: ipRules
     }
-    publicNetworkAccess: resolvedPublicNetworkAccess
+    publicNetworkAccess: publicNetworkAccess
     allowedCopyScope: !empty(allowedCopyScope) ? allowedCopyScope : null
     sasPolicy: !empty(sasExpirationPeriod)
       ? {

@@ -28,15 +28,24 @@ resource protectionContainers 'Microsoft.RecoveryServices/vaults/backupFabrics/p
   }
 ]
 
+// Flatten (storageAccount × fileShare) into a single array so every share on every
+// storage account gets its own protected item, regardless of share count.
+var combos = flatten(map(range(0, length(storageAccountResourceIds)), saIdx => map(fileShares, shareName => {
+  saId: storageAccountResourceIds[saIdx]
+  rgName: split(storageAccountResourceIds[saIdx], '/')[4]
+  saName: last(split(storageAccountResourceIds[saIdx], '/'))!
+  shareName: shareName
+})))
+
 // ─── Protected Items ───────────────────────────────────────────────────────────
 resource protectedItems 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems@2024-04-01' = [
-  for (saId, i) in storageAccountResourceIds: {
-    name: '${vaultName}/Azure/storagecontainer;Storage;${split(saId, '/')[4]};${last(split(saId, '/'))}/AzureFileShare;${fileShares[0]}'
+  for combo in combos: {
+    name: '${vaultName}/Azure/storagecontainer;Storage;${combo.rgName};${combo.saName}/AzureFileShare;${combo.shareName}'
     location: location
     properties: {
       protectedItemType: 'AzureFileShareProtectedItem'
       policyId: '${resourceGroup().id}/providers/Microsoft.RecoveryServices/vaults/${vaultName}/backupPolicies/${fileSharePolicyName}'
-      sourceResourceId: saId
+      sourceResourceId: combo.saId
     }
     tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems'] ?? {})
     dependsOn: [protectionContainers]

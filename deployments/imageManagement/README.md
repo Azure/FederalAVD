@@ -229,10 +229,10 @@ Example parameter files are provided in the `parameters\` directory. Copy and re
 
 | File | Description |
 | :--- | :---------- |
-| `basic.imageManagement.parameters.json` | Artifacts storage only, public endpoint |
-| `privateEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, private endpoints, fully private |
-| `serviceEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, service endpoint subnet access |
-| `production.imageManagement.parameters.json` | Full production: CMK, remote gallery, IP restrictions, tags |
+| `sample-basic.imageManagement.parameters.json` | Artifacts storage only, public endpoint |
+| `sample-privateEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, private endpoints, fully private |
+| `sample-serviceEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, service endpoint subnet access |
+| `sample-production.imageManagement.parameters.json` | Full production: CMK, remote gallery, IP restrictions, tags |
 
 Naming convention for custom files: `<prefix>.imageManagement.parameters.json`
 

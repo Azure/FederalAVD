@@ -169,8 +169,8 @@ module cmk '../customerManagedKeys/customerManagedKeys.bicep' = if (createStorag
     tags: tags
     parentResourceId: hostPoolResourceId
     deploymentSuffix: deploymentSuffix
-    paasKeyNames: [encryptionKeyName]
-    paasIdentityName: storageEncryptionIdentityName
+    keyNames: [encryptionKeyName]
+    identityName: storageEncryptionIdentityName
   }
 }
 
