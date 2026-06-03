@@ -39,12 +39,19 @@ Subscription
 │   ├── Network Interface Cards
 │   ├── OS Disks
 │   ├── Availability Set (optional)
-│   └── Disk Encryption Set (optional)
+│   ├── Disk Encryption Set (optional, Customer Managed Keys)
+│   ├── Disk Access (optional, Personal host pool with private endpoints)
+│   ├── Private Endpoint (Disk Access, optional)
+│   ├── Recovery Services Vault (optional, Personal host pool VM backup)
+│   ├── VM Backup Policy (optional, Personal host pool VM backup)
+│   └── Private Endpoint (Recovery Services Vault, optional)
 ├── Operations Resource Group
-│   ├── Key Vaults
-│   ├── Recovery Services Vault (optional, when backup enabled)
-│   ├── Backup Policies (file share policy for pooled, VM policy for personal)
-│   └── Private Endpoints (Key Vaults, Recovery Services Vault)
+│   ├── Key Vaults (secrets, encryption)
+│   ├── Private Endpoints (Key Vaults, optional)
+│   ├── Recovery Services Vault (optional, Pooled host pool Azure Files backup)
+│   ├── File Share Backup Policy (optional, Pooled host pool Azure Files backup)
+│   ├── Backup Protection Items (Storage Accounts / File Shares, optional)
+│   └── Private Endpoint (Recovery Services Vault, optional)
 ├── Storage Resource Group
 │   ├── Azure NetApp Files Account (optional)
 │   ├── Capacity Pool (optional)
@@ -99,7 +106,7 @@ Subscription
 
 - **Private Endpoints** - Storage, Key Vault, Workspace, Automation Account
 - **Customer-Managed Keys** - Disk encryption, storage encryption
-- **Recovery Services CMK (shared)** - When CMK is enabled for Recovery Services vault creation, a shared Operations-scoped key and UAI are used (not hostpool-scoped): key name `recovery-services-encryption-key-{uniqueStringOperations}` and UAI name from the shared naming convention with token `recovery-services-encryption`
+- **Recovery Services CMK** - When CMK is enabled for Recovery Services vault creation the vault uses its own **System-Assigned Identity (SAI)**. The encryption key is host-pool-scoped (name: `{hpBaseName}-encryption-key-rsv`) — each personal host pool's vault has its own dedicated key, consistent with VM disk and storage key treatment. No user-assigned identity is created for RSV.
 - **Managed Identities** - No stored credentials for Azure service access
 - **Key Vault Integration** - Secrets management for credentials
 - **Disk Encryption Sets** - Centralized key management for VM disks
@@ -279,11 +286,22 @@ Subscription
 - **Default:** `LocallyRedundant`
 - **Description:** Redundancy for newly created Azure Files storage accounts used by FSLogix. This is configured independently from session host availability zone settings.
 
-#### `keyManagementPaaS`
+#### `keyManagementStorage`
 - **Type:** String
 - **Allowed:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
 - **Default:** `PlatformManaged`
-- **Description:** Shared key management mode for supported PaaS resources deployed by this solution (for example Azure Files and Recovery Services Vault).
+- **Description:** Key management mode for Azure Files (FSLogix) storage account encryption.
+
+#### `keyManagementRecoveryServicesVault`
+- **Type:** String
+- **Allowed:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
+- **Default:** `PlatformManaged`
+- **Description:** Key management mode for Recovery Services Vault encryption. When `CustomerManaged` is combined with `deployPrivateEndpoints=true`, see `encryptionKeyVaultForcePublicAccess` below — Azure Backup has no AzureServices trusted service bypass for Key Vault.
+
+#### `encryptionKeyVaultForcePublicAccess`
+- **Type:** Boolean
+- **Default:** `false`
+- **Description:** When `true`, the inline encryption Key Vault is deployed with public network access enabled and all IP-based firewall rules cleared. Required when `keyManagementRecoveryServicesVault` is `CustomerManaged` and `deployPrivateEndpoints` is `true`. When `false` (default), RSV CMK is silently disabled in that combination rather than deploying an unrestricted public Key Vault.
 
 #### `fslogixShareSizeInGB`
 - **Type:** Integer
@@ -353,7 +371,10 @@ Subscription
 #### `permittedIPs`
 - **Type:** Array
 - **Optional**
-- **Description:** IP addresses or CIDR blocks permitted through the firewall of all PaaS resources (storage accounts, Key Vaults). Use when managing deployments from a trusted workstation outside the Azure network boundary.
+- **Description:** IP addresses or CIDR blocks permitted on the firewall of all PaaS resources (storage accounts, Key Vaults). Behavior depends on `deployPrivateEndpoints`:
+  - **Private endpoints ON, no IPs:** public access **disabled** — all traffic must use the private endpoint.
+  - **Private endpoints ON, IPs specified:** public access **enabled but restricted** to those ranges — the private endpoint handles internal traffic and the IP allowlist covers management access from known external addresses.
+  - **Private endpoints OFF:** public access enabled; if IPs are specified only those ranges are permitted, otherwise the resource is open to all traffic.
 - **Example:** `["203.0.113.10", "198.51.100.0/24"]`
 
 ### Security & Encryption
@@ -524,7 +545,7 @@ Ready-to-use sample parameter files are in `parameters\`. Copy and rename one in
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/galleries/gal_avd_use2/images/win11-24h2-avd-m365/versions/latest"
         },
         "keyManagementDisks": { "value": "CustomerManaged" },
-        "keyManagementPaaS": { "value": "CustomerManaged" },
+        "keyManagementStorage": { "value": "CustomerManaged" },
         "encryptionKeyVaultResourceId": {
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-operations-use2/providers/Microsoft.KeyVault/vaults/kv-avd-enc-use2-abc"
         },

@@ -1007,9 +1007,9 @@ var privateEndpointNICNameConvTemp = nameConvReversed
   : 'RESOURCETYPE-${privateEndpointNameConv}'
 var privateEndpointNICNameConv = replace(privateEndpointNICNameConvTemp, 'RESOURCETYPE', abbr.networkInterfaces)
 var recoveryServicesVaultNameVMs = replace(
-  replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.recoveryServicesVaults), 'LOCATION', vmsLocAbbr),
-  'TOKEN',
-  'vms'
+  replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.recoveryServicesVaults), 'LOCATION', vmsLocAbbr),
+  'TOKEN-',
+  ''
 )
 var recoveryServicesVaultNameFSLogix = replace(
   replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.recoveryServicesVaults), 'LOCATION', vmsLocAbbr),
@@ -1095,8 +1095,9 @@ var fslogixStorageAccountNamePrefix = empty(fslogixStorageCustomPrefix)
 var encryptionKeyNameFSLogix = '${hpBaseName}-encryption-key-${fslogixStorageAccountNamePrefix}##'
 var encryptionKeyNameVMs = '${hpBaseName}-encryption-key-vms'
 var encryptionKeyNameConfidentialVMs = '${hpBaseName}-encryption-key-confidential-vms'
-// Shared key reused by Recovery Services vault variants in the Operations resource group.
-var encryptionKeyNameRecoveryServices = 'recovery-services-encryption-key-${uniqueStringOperations}'
+// Host-pool-scoped key: each personal host pool's RSV uses its own key, matching
+// the treatment of VM disk and storage keys.
+var encryptionKeyNameRecoveryServices = '${hpBaseName}-encryption-key-rsv'
 var fslogixShareNamesLookup = {
   CloudCacheProfileContainer: [
     'profile-containers'

@@ -161,7 +161,8 @@ module paasKeys '../../keyVault/vaults/keys/deploy.bicep' = [
 ]
 
 // ─── PaaS: User-Assigned Identity (single, shared by all keys) ──────────────
-// Skipped when createPaasIdentity=false (SAI CMK path — the resource handles its own RBAC).
+// Deployed whenever keyNames is non-empty. Callers on the SAI path (e.g. RSV)
+// do not invoke this module at all — they manage their own identity and RBAC.
 
 module paasIdentity '../../managedIdentity/userAssignedIdentities/deploy.bicep' = if (!empty(keyNames)) {
   name: 'CMK-PaaSUAI-${deploymentSuffix}'
@@ -174,7 +175,6 @@ module paasIdentity '../../managedIdentity/userAssignedIdentities/deploy.bicep' 
 
 // ─── PaaS: Role Assignments (Key Vault Crypto Service Encryption User) ──────
 // One role assignment per key, all scoped to the same shared UAI.
-// Skipped when createPaasIdentity=false — loop source is an empty array so no iterations run.
 
 module paasKeyRoleAssignments '../../keyVault/vaults/keys/roleAssignment.bicep' = [
   for (keyName, i) in keyNames: {

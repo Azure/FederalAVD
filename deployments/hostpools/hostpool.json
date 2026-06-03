@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "13098843951633496662"
+      "templateHash": "932110771794003074"
     }
   },
   "parameters": {
@@ -1422,6 +1422,7 @@
     "networkInterfaceNameConv": "[if(variables('nameConvReversed'), format('SHNAME-{0}', variables('abbr').networkInterfaces), format('{0}-SHNAME', variables('abbr').networkInterfaces))]",
     "encryptionKeyNameVMs": "[format('{0}-encryption-key-vms', variables('hpBaseName'))]",
     "encryptionKeyNameConfidentialVMs": "[format('{0}-encryption-key-confidential-vms', variables('hpBaseName'))]",
+    "encryptionKeyNameRecoveryServices": "[format('{0}-encryption-key-rsv', variables('hpBaseName'))]",
     "fslogixShareNamesLookup": {
       "CloudCacheProfileContainer": [
         "profile-containers"
@@ -16658,7 +16659,7 @@
             "value": "[parameters('existingVmBackupVaultResourceId')]"
           },
           "vaultName": {
-            "value": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('abbr').recoveryServicesVaults), 'LOCATION', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, max(sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5), 0)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation), 'TOKEN', 'vms')]"
+            "value": "[replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('abbr').recoveryServicesVaults), 'LOCATION', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, max(sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5), 0)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation), 'TOKEN-', '')]"
           },
           "vaultStorageRedundancy": {
             "value": "[parameters('recoveryServicesVaultStorageRedundancy')]"
@@ -16675,7 +16676,7 @@
           "encryptionKeyVaultResourceId": "[if(not(empty(parameters('existingEncryptionKeyVaultResourceId'))), createObject('value', parameters('existingEncryptionKeyVaultResourceId')), if(variables('deployInlineEncryptionKv'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultResourceId.value), createObject('value', '')))]",
           "encryptionKeyVaultUri": "[if(not(empty(parameters('existingEncryptionKeyVaultResourceId'))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingEncryptionKeyVaultResourceId'), '/')[2], split(parameters('existingEncryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('existingEncryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri), if(variables('deployInlineEncryptionKv'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultUri.value), createObject('value', '')))]",
           "encryptionKeyName": {
-            "value": "[format('recovery-services-encryption-key-{0}', take(uniqueString(subscription().subscriptionId, replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'operations'), 'LOCATION', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, max(sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5), 0)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation), 'RESOURCETYPE', variables('abbr').resourceGroups)), 6))]"
+            "value": "[variables('encryptionKeyNameRecoveryServices')]"
           },
           "keyVaultPrivateOnly": {
             "value": "[and(parameters('deployPrivateEndpoints'), not(parameters('encryptionKeyVaultForcePublicAccess')))]"
