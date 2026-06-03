@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Parameters Reference
 
@@ -51,7 +51,9 @@ When chaining deployments, use this mapping to pass outputs from one step to the
 
 ## Compliance Configuration Reference
 
-All compliance-relevant settings are optional parameters — the solution defaults to functional minimums for maximum compatibility. Select the values below to meet the indicated compliance requirements. These parameters are independent of deployment tier and can be applied at any complexity level.
+> **For the full ISSO/AO-facing compliance reference** — including control-by-control mappings to NIST SP 800-53 Rev 5 / FedRAMP High, DoD SRG IL4, and IL5, plus always-on controls and a shared-responsibility summary — see **[Compliance Control Mapping](compliance.md)**.
+
+The tables below are a quick developer reference for which parameters to set. All compliance-relevant settings are optional — the solution defaults to functional minimums for maximum compatibility.
 
 ### NIST SP 800-53 Rev 5 / FedRAMP High
 
