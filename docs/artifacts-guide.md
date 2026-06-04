@@ -6,17 +6,6 @@
 
 # Artifacts and Image Management Guide
 
-## Table of Contents
-
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Artifacts Directory Structure](#artifacts-directory-structure)
-- [Creating Custom Artifact Packages](#creating-custom-artifact-packages)
-- [Master Scripts](#master-scripts)
-- [Integration with Deployments](#integration-with-deployments)
-- [Best Practices](#best-practices)
-- [Troubleshooting](#troubleshooting)
-
 ## Overview
 
 The artifacts system in this AVD solution provides a flexible, Zero Trust-compliant method for deploying software and configurations to both custom images and session hosts. Artifacts are packages containing PowerShell scripts, installers, and supporting files that are:

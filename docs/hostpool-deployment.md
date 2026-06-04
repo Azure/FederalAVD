@@ -23,26 +23,6 @@ A complete host pool deployment includes:
 
 ---
 
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Deployment Methods](#deployment-methods)
-  - [Method 1: Template Specs (Recommended)](#method-1-template-specs-recommended)
-  - [Method 2: Deploy Button](#method-2-deploy-button)
-  - [Method 3: PowerShell/CLI](#method-3-powershellcli)
-- [Parameter Configuration](#parameter-configuration)
-  - [Basic Parameters](#basic-parameters)
-  - [Identity & Networking](#identity--networking)
-  - [Storage Configuration](#storage-configuration)
-  - [Advanced Options](#advanced-options)
-- [Post-Deployment Tasks](#post-deployment-tasks)
-- [Scaling Configuration](#scaling-configuration)
-- [Monitoring & Alerts](#monitoring--alerts)
-- [Add-Ons](#add-ons)
-- [Troubleshooting](#troubleshooting)
-- [Best Practices](#best-practices)
-- [Next Steps](#next-steps)
-
 ---
 
 ## Prerequisites

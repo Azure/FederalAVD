@@ -10,43 +10,6 @@ FederalAVD includes purpose-built support for multi-region disaster recovery and
 
 ---
 
-## Table of Contents
-
-- [Business Continuity \& Disaster Recovery](#business-continuity--disaster-recovery)
-  - [Overview](#overview)
-  - [Table of Contents](#table-of-contents)
-  - [Intra-Region High Availability — Availability Zones](#intra-region-high-availability--availability-zones)
-  - [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments)
-    - [Start With OneDrive Known Folder Move](#start-with-onedrive-known-folder-move)
-    - [Recommended: Per-Region Profiles (No Cross-Region Replication)](#recommended-per-region-profiles-no-cross-region-replication)
-    - [When Cloud Cache Is the Right Answer](#when-cloud-cache-is-the-right-answer)
-  - [Profile High Availability — FSLogix Cloud Cache](#profile-high-availability--fslogix-cloud-cache)
-    - [How It Works in This Solution](#how-it-works-in-this-solution)
-    - [Prerequisites for Cross-Region Cloud Cache](#prerequisites-for-cross-region-cloud-cache)
-    - [Example Parameter Configuration](#example-parameter-configuration)
-  - [Image Gallery Cross-Region Replication](#image-gallery-cross-region-replication)
-    - [Architecture](#architecture)
-    - [Deployment Sequence](#deployment-sequence)
-    - [Customer-Managed Key Considerations](#customer-managed-key-considerations)
-  - [Cross-Region Host Pool Deployment](#cross-region-host-pool-deployment)
-    - [Naming Consistency — The Key to Cross-Region Deployments](#naming-consistency--the-key-to-cross-region-deployments)
-    - [Workspace Strategy](#workspace-strategy)
-    - [Standby Mode Options](#standby-mode-options)
-    - [Deployment Checklist for Secondary Region](#deployment-checklist-for-secondary-region)
-  - [Personal Host Pool VM Backup](#personal-host-pool-vm-backup)
-  - [Session Host Replacer — Image Rollback](#session-host-replacer--image-rollback)
-  - [End-to-End Multi-Region Architecture](#end-to-end-multi-region-architecture)
-  - [RTO/RPO Reference](#rtorpo-reference)
-  - [Known Gaps and Limitations](#known-gaps-and-limitations)
-    - [Secondary Gallery Deployment Is Not Automated](#secondary-gallery-deployment-is-not-automated)
-    - [Azure NetApp Files Cross-Region Replication](#azure-netapp-files-cross-region-replication)
-    - [EntraId Identity Solution Does Not Support Cloud Cache Multi-Account](#entraid-identity-solution-does-not-support-cloud-cache-multi-account)
-    - [Backup Schedule Is Not Parameterized](#backup-schedule-is-not-parameterized)
-    - [FSLogix Office Container Cross-Region](#fslogix-office-container-cross-region)
-    - [No Automated Failover Routing](#no-automated-failover-routing)
-
----
-
 ## Intra-Region High Availability — Availability Zones
 
 **What it protects against:** Single datacenter (zone) failure within a region.

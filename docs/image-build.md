@@ -28,21 +28,6 @@ The Federal AVD solution includes an automated custom image building capability.
 
 ---
 
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Understanding the Build Process](#understanding-the-build-process)
-- [Deployment Methods](#deployment-methods)
-  - [Method 1: Deploy Button (Recommended)](#method-1-deploy-button-recommended)
-  - [Method 2: PowerShell Helper Script](#method-2-using-the-powershell-helper-script)
-  - [Method 3: Azure CLI](#method-3-azure-cli)
-- [Parameter Configuration](#parameter-configuration)
-- [Build Process Monitoring](#build-process-monitoring)
-- [Using the Custom Image](#using-the-custom-image)
-- [Troubleshooting](#troubleshooting)
-- [Best Practices](#best-practices)
-- [Next Steps](#next-steps)
-
 ---
 
 ## Prerequisites
