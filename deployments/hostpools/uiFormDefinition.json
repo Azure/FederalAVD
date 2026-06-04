@@ -3495,374 +3495,7 @@
 									"uri": "https://learn.microsoft.com/en-us/azure/security/fundamentals/zero-trust"
 								}
 							}
-						},
-						{
-							"name": "complianceDefaultsWarning",
-							"type": "Microsoft.Common.InfoBox",
-							"options": {
-								"style": "Warning",
-								"text": "The defaults on this tab (Locally Redundant Storage, Platform-Managed Keys) are functional minimums — they are NOT compliance-configured starting points. NIST SP 800-53 / FedRAMP High deployments require Customer-Managed Keys and Zone Redundant Storage. DoD IL5 additionally requires Customer-Managed Keys protected by HSM and Dedicated Hosts. Review and update the settings below before deploying to a compliance-sensitive environment. Click this box for the full compliance parameter reference.",
-								"uri": "https://github.com/Azure/FederalAVD/blob/main/docs/parameters.md#compliance-configuration-reference"
-							}
-						},
-						{
-							"name": "privateEndpointTextBlock1",
-							"type": "Microsoft.Common.TextBlock",
-							"options": {
-								"text": "Private Endpoints are one key technology we can use to implement Zero Trust Architecture Guidance. Private endpoints should be utilized for all Platform as a Service (PaaS) resources (i.e., Blob Storage, File Storage, and Key Vaults utilized by this solution. Private Endpoints have their own set of prereqs including Private DNS Zones.",
-								"link": {
-									"label": "Microsoft Learn | Private Endpoint Overview",
-									"uri": "https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview"
-								}
-							}
-						},
-						{
-							"name": "deployPrivateEndpoints",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Deploy Private Endpoints",
-							"defaultValue": true
-						},
-						{
-							"name": "privateEndpoints",
-							"type": "Microsoft.Common.Section",
-							"label": "Private Endpoints",
-							"visible": "[and(steps('zeroTrust').deployPrivateEndpoints, or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))))]",
-							"elements": [
-								{
-									"name": "privateEndpointTextBlock2",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('zeroTrust').deployPrivateEndpoints]",
-									"options": {
-										"link": {
-											"label": "Microsoft Learn | Private Link Deployment in a Hub and Spoke Network",
-											"uri": "https://learn.microsoft.com/en-us/azure/architecture/networking/guide/private-link-hub-spoke-network"
-										},
-										"text": "When deploying private endpoints, you must select the subnet and Private DNS Zones required for DNS resolution. The available virtual networks are dynamically filtered according to the regions specified for the resource types in earlier configuration screens. The drop-down menus will present only the virtual networks, subnets, and Private DNS Zones that match your prior selections, ensuring that you can choose the appropriate resources for your Zero Trust implementation."
-									}
-								},
-								{
-									"name": "subnetsHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('zeroTrust').deployPrivateEndpoints]",
-									"options": {
-										"text": "Subnets"
-									}
-								},
-								{
-									"name": "managementHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').deployPrivateEndpoints)]",
-									"options": {
-										"text": "Shared Operations Resources (Key Vaults, Recovery Services Vault)"
-									}
-								},
-								{
-									"name": "managementVirtualNetwork",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Virtual Network",
-									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
-									"multiLine": true,
-									"toolTip": "Select the virtual network for the operations resource private endpoints (Key Vaults, Recovery Services Vault). Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
-										"required": true
-									},
-									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').deployPrivateEndpoints)]"
-								},
-								{
-									"name": "managementSubnetsApi",
-									"condition": "[not(empty(steps('zeroTrust').privateEndpoints.managementVirtualNetwork))]",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('zeroTrust').privateEndpoints.managementVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-									}
-								},
-								{
-									"name": "operationsSubnet",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Private Endpoints Subnet",
-									"toolTip": "Select an existing subnet for the private endpoints of operations resources (Key Vaults, Recovery Services Vault).",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.managementSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
-										"required": true
-									},
-									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').deployPrivateEndpoints)]"
-								},
-								{
-									"name": "hostpoolHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').deployPrivateEndpoints)]",
-									"options": {
-										"text": "Hostpool Resources (FSLogix Storage Accounts)"
-									}
-								},
-								{
-									"name": "hostpoolVirtualNetwork",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Virtual Network",
-									"multiLine": true,
-									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
-									"toolTip": "Select the virtual network for the storage account private endpoints. Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
-										"required": true
-									},
-									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').deployPrivateEndpoints)]"
-								},
-								{
-									"name": "hostpoolSubnetsApi",
-									"condition": "[not(empty(steps('zeroTrust').privateEndpoints.hostpoolVirtualNetwork))]",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('zeroTrust').privateEndpoints.hostpoolVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-									}
-								},
-								{
-									"name": "hostpoolSubnet",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Private Endpoints Subnet",
-									"toolTip": "Select an existing subnet for the private Endpoints.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.hostpoolSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
-										"required": true
-									},
-									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').deployPrivateEndpoints)]"
-								},
-								{
-									"name": "personalRsvHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints)]",
-									"options": {
-										"text": "Hostpool Resources (Recovery Services Vault)"
-									}
-								},
-								{
-									"name": "personalRsvVirtualNetwork",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Virtual Network",
-									"multiLine": true,
-									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
-									"toolTip": "Select the virtual network for the Recovery Services Vault private endpoint. Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
-										"required": true
-									},
-									"visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints)]"
-								},
-								{
-									"name": "personalRsvSubnetsApi",
-									"condition": "[not(empty(steps('zeroTrust').privateEndpoints.personalRsvVirtualNetwork))]",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('zeroTrust').privateEndpoints.personalRsvVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-									}
-								},
-								{
-									"name": "personalRsvSubnet",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Private Endpoints Subnet",
-									"toolTip": "Select an existing subnet for the Recovery Services Vault private endpoints.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.personalRsvSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
-										"required": true
-									},
-									"visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints)]"
-								},
-								{
-									"name": "privateDNSZonesHeader",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('zeroTrust').deployPrivateEndpoints]",
-									"options": {
-										"text": "Private DNS Zones"
-									}
-								},
-								{
-									"name": "privateDNSZoneIntegrationTextBlock",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('zeroTrust').deployPrivateEndpoints]",
-									"options": {
-										"text": "To connect privately with your private endpoint, you need a DNS record. We recommend that you integrate your private endpoint with a private DNS zone. If you select the checkbox below, you'll be asked to select the appropriate Private DNS Zone for each resource type deployed by this solution and the deployment will automatically create the Private DNS integration when creating the private endpoints. Alternatively, you can assign policies to private endpoints to automatically register the endpoints with the appropriate private DNS zones. Uncheck the box below if that is the method you are using.",
-										"link": {
-											"label": "Learn more",
-											"uri": "https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview#dns-configuration"
-										}
-									}
-								},
-								{
-									"name": "enablePrivateDNSIntegration",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Private DNS Zone Integration",
-									"toolTip": "To connect privately with your private endpoint, you need a DNS record. Check this box to select the appropriate private DNS zones so that the deployment automatically integrates each private endpoint with Azure private DNS.",
-									"defaultValue": true,
-									"visible": "[steps('zeroTrust').deployPrivateEndpoints]"
-								},
-								{
-									"name": "privateDNSZonesSubscription",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Private DNS Zone Subscription",
-									"placeholder": "",
-									"defaultValue": "[steps('hosts').scope.subscription.displayName]",
-									"toolTip": "Select the subscription that contains your Private DNS Zones.",
-									"constraints": {
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-										"required": true
-									},
-									"visible": "[and(steps('zeroTrust').deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]"
-								},
-								{
-									"name": "privateDNSZonesApi",
-									"condition": "[and(steps('zeroTrust').deployPrivateEndpoints, not(empty(steps('zeroTrust').privateEndpoints.privateDNSZonesSubscription)))]",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('zeroTrust').privateEndpoints.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
-									}
-								},
-								{
-									"name": "azureBackupPrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => zone.name))]",
-									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
-									"label": "Azure Backup",
-									"multiLine": true,
-									"toolTip": "Select the existing Geo Specific Private DNS Zone for Azure Backup Storage.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": false
-									}
-								},
-								{
-									"name": "azureBlobPrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
-									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
-									"label": "Azure Blob Storage",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Blob Storage.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": true
-									}
-								},
-								{
-									"name": "azureFilesPrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => zone.name))]",
-									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
-									"label": "Azure Files",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Files.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": true
-									}
-								},
-								{
-									"name": "azureKeyVaultPrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Azure Key Vault",
-									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => zone.name))]",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Key Vaults.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": true
-									},
-									"visible": "[and(steps('zeroTrust').deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')))]"
-								},
-								{
-									"name": "azureQueuePrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
-									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
-									"label": "Azure Queue Storage",
-									"multiLine": true,
-									"toolTip": "Select the existing Private DNS Zone for Azure Queue Storage.",
-									"constraints": {
-										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-										"required": false
-									}
-								}
-							]
-						},
-						{
-							"name": "permittedIPsSection",
-							"type": "Microsoft.Common.Section",
-							"label": "Permitted IP Addresses",
-							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)))]",
-							"elements": [
-								{
-									"name": "permittedIPsInfo",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Permitted IP Addresses / CIDR Ranges (optional)",
-										"style": "Heading"
-									}
-								},
-								{
-									"name": "permittedIPsDescription",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "These IP ranges control public network access on PaaS resources (storage accounts, Key Vaults) deployed by this solution. The behavior depends on whether private endpoints are also deployed."
-									}
-								},
-								{
-									"name": "permittedIPsScenario1",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "• Private endpoints ON, no IPs entered: public access DISABLED. All traffic must use the private endpoint. Use this for fully private deployments."
-									}
-								},
-								{
-									"name": "permittedIPsScenario2",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "• Private endpoints ON, IPs entered: public access ENABLED but restricted to the specified ranges. The private endpoint handles internal traffic; the IP allowlist covers management access from known external addresses (e.g., a deployment workstation or on-premises CIDR)."
-									}
-								},
-								{
-									"name": "permittedIPsScenario3",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "• Private endpoints OFF: public access ENABLED. If IPs are entered, only those ranges are permitted. If empty, the resource is open to all public traffic."
-									}
-								},
-								{
-									"name": "permittedIPs",
-									"type": "Microsoft.Common.EditableGrid",
-									"ariaLabel": "Permitted IP Addresses or CIDR Ranges",
-									"label": "Permitted IP Addresses / CIDR Ranges",
-									"constraints": {
-										"width": "Full",
-										"rows": {
-											"count": {
-												"min": 0,
-												"max": 50
-											}
-										},
-										"columns": [
-											{
-												"id": "ipAddress",
-												"header": "IP Address or CIDR Range",
-												"width": "1fr",
-												"element": {
-													"type": "Microsoft.Common.TextBox",
-													"placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
-													"constraints": {
-														"required": false,
-														"regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
-														"validationMessage": "Enter a valid IPv4 address or CIDR range."
-													}
-												}
-											}
-										]
-									}
-								}
-							]
-						},
+						},						
 						{
 							"name": "keyManagement",
 							"type": "Microsoft.Common.Section",
@@ -3872,11 +3505,11 @@
 									"name": "keyManagementInfobox1",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
-										"text": "In some environments it is required to use customer-managed keys and protect them in a premium Key Vault with keys stored in a FIPS 140 validated Hardware Security Module (HSM). This is most common in IL5 environments. Selecting a customer-managed key option with HSM protection applies this approach to supported operating system disk and PaaS encryption scenarios in this deployment. Click this box for more information.",
+										"text": "In most government environments it is required to use customer-managed keys (NIST 800.53 rev 5, SC-28). In addition to this requirement, DoD environments require the customer-managed keys be protected in a premium Key Vault with keys stored in a FIPS 140 validated Hardware Security Module (HSM). Selecting a customer-managed key option with HSM protection applies this approach to supported operating system disk and PaaS encryption scenarios in this deployment. Click this box for more information.",
 										"uri": "https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#storage-isolation",
 										"style": "Info"
 									}
-								},								
+								},
 								{
 									"name": "keyManagementSessionHostsTextBlock1",
 									"type": "Microsoft.Common.TextBlock",
@@ -3892,7 +3525,7 @@
 									"name": "keyManagementDisks",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Session Host Disk Encryption Key Management",
-									"defaultValue": "Platform-Managed Keys",
+									"defaultValue": "Customer-Managed Keys protected by HSM",
 									"toolTip": "Platform-managed keys are key encryption keys that are generated, stored, and managed entirely by Azure. Choose Platform Managed for the best balance of security and ease of use. Customer-managed keys are key encryption keys that are generated, stored, and managed by you, the customer, in your Azure Key Vault. Choose Customer Managed if you need to meet specific compliance requirements. Platform-Managed and Customer-Managed Keys provide double encryption with an infrastructure encryption layer using platform-managed keys and a disk encryption layer using customer-managed keys.",
 									"constraints": {
 										"allowedValues": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"}]'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys\",\"value\":\"CustomerManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"},{\"label\":\"Platform-Managed and Customer-Managed Keys\",\"value\":\"PlatformManagedAndCustomerManaged\"},{\"label\":\"Platform-Managed and Customer-Managed Keys protected by HSM\",\"value\":\"PlatformManagedAndCustomerManagedHSM\"}]'))]"
@@ -4012,79 +3645,340 @@
 											}
 										]
 									}
+								}
+							]
+						},
+						{
+							"name": "privateEndpoints",
+							"type": "Microsoft.Common.Section",
+							"label": "PaaS Private Endpoints",
+							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)))]",
+							"elements": [
+								{
+									"name": "privateEndpointTextBlock1",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Private Endpoints are one key technology we can use to implement Zero Trust Architecture Guidance. Private endpoints should be utilized for all Platform as a Service (PaaS) resources (i.e., Blob Storage, File Storage, and Key Vaults utilized by this solution. Private Endpoints have their own set of prereqs including Private DNS Zones.",
+										"link": {
+											"label": "Microsoft Learn | Private Endpoint Overview",
+											"uri": "https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview"
+										}
+									}
+								},
+								{
+									"name": "deployPrivateEndpoints",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Deploy Private Endpoints",
+									"defaultValue": true
+								},
+								{
+									"name": "privateEndpointTextBlock2",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
+									"options": {
+										"link": {
+											"label": "Microsoft Learn | Private Link Deployment in a Hub and Spoke Network",
+											"uri": "https://learn.microsoft.com/en-us/azure/architecture/networking/guide/private-link-hub-spoke-network"
+										},
+										"text": "When deploying private endpoints, you must select the subnet and Private DNS Zones required for DNS resolution. The available virtual networks are dynamically filtered according to the regions specified for the resource types in earlier configuration screens. The drop-down menus will present only the virtual networks, subnets, and Private DNS Zones that match your prior selections, ensuring that you can choose the appropriate resources for your Zero Trust implementation."
+									}
+								},
+								{
+									"name": "subnetsHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
+									"options": {
+										"text": "Subnets"
+									}
+								},
+								{
+									"name": "operationsHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
+									"options": {
+										"text": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal'))), 'Shared Operations Resources (Key Vaults and Recovery Services Vault)', 'Shared Operations Resources (Key Vaults)')]"
+									}
+								},
+								{
+									"name": "operationsVirtualNetwork",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Virtual Network",
+									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
+									"multiLine": true,
+									"toolTip": "Select the virtual network for the operations resource private endpoints (Key Vaults, Recovery Services Vault). Important: The virtual networks are limited to those in the same region and subscription that you selected in the 'Subscription and Region Details' section of the 'Session Hosts' pane.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
+										"required": true
+									},
+									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+								},
+								{
+									"name": "operationsSubnetsApi",
+									"condition": "[not(empty(steps('zeroTrust').privateEndpoints.operationsVirtualNetwork))]",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('zeroTrust').privateEndpoints.operationsVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+									}
+								},
+								{
+									"name": "operationsSubnet",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Private Endpoints Subnet",
+									"toolTip": "Select an existing subnet for the private endpoints of operations resources (Key Vaults, Recovery Services Vault).",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.operationsSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
+										"required": true
+									},
+									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+								},
+								{
+									"name": "hostpoolHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
+									"options": {
+										"text": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), 'Hostpool Resources (Recovery Services Vault)', 'Hostpool Resources (FSLogix Storage Accounts)')]"
+									}
+								},
+								{
+									"name": "hostpoolVirtualNetwork",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Virtual Network",
+									"multiLine": true,
+									"defaultValue": "[steps('hosts').network.virtualNetwork.name]",
+									"toolTip": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), 'Select the virtual network for the Recovery Services Vault private endpoint. Important: The virtual networks are limited to those in the same region and subscription that you selected in the Subscription and Region Details section of the Session Hosts pane.', 'Select the virtual network for the FSLogix storage account private endpoints. Important: The virtual networks are limited to those in the same region and subscription that you selected in the Subscription and Region Details section of the Session Hosts pane.')]",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
+										"required": true
+									},
+									"visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+								},
+								{
+									"name": "hostpoolSubnetsApi",
+									"condition": "[not(empty(steps('zeroTrust').privateEndpoints.hostpoolVirtualNetwork))]",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('zeroTrust').privateEndpoints.hostpoolVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+									}
+								},
+								{
+									"name": "hostpoolSubnet",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Private Endpoints Subnet",
+									"toolTip": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), 'Select an existing subnet for the Recovery Services Vault private endpoints.', 'Select an existing subnet for the FSLogix storage account private endpoints.')]",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.hostpoolSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
+										"required": true
+									},
+									"visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "encryptionKeyVaultForcePublicAccessWarning",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints, contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]",
+									"visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]",
 									"options": {
 										"style": "Warning",
-										"text": "Azure Backup does not use the AzureServices trusted service bypass for Key Vault access and cannot reach a private-only Key Vault. To enable Customer Managed Key encryption on the Recovery Services Vault while using private endpoints, check the box below to allow public network access on the encryption Key Vault. Note: this also clears any IP-based firewall restrictions on the encryption Key Vault, as Azure Backup's regional IPs are not fixed. If the box is left unchecked, CMK will be automatically disabled for the vault."
+										"text": "Azure Backup does not use the AzureServices trusted service bypass for Key Vault access and cannot reach a private-only Key Vault. To enable Customer-Managed Key encryption on the Recovery Services Vault while using private endpoints, check the box below to allow public network access on the encryption Key Vault. Note: this also clears any IP-based firewall restrictions on the encryption Key Vault, as Azure Backup's regional IPs are not fixed. If the box is left unchecked, CMK will be automatically disabled for the vault."
 									}
 								},
 								{
 									"name": "encryptionKeyVaultForcePublicAccess",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Allow public network access on encryption Key Vault (required for RSV CMK with private endpoints)",
-									"toolTip": "When checked, the encryption Key Vault is deployed with public network access enabled, allowing Azure Backup to use Customer Managed Keys. Required when deployPrivateEndpoints is true and keyManagementRecoveryServicesVault is CustomerManaged, because Azure Backup does not use the AzureServices trusted service bypass.",
+									"toolTip": "When checked, the encryption Key Vault is deployed with public network access enabled, allowing Azure Backup to use Customer Managed Keys. Required when 'deploy Private Endpoints' is true and 'Key Management Recovery Services Vault' is not 'Platform-Managed', because Azure Backup does not use the AzureServices trusted service bypass.",
 									"defaultValue": false,
-									"visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints, contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]"
-								}
-							]
-						},
-						{
-							"name": "azureMonitor",
-							"type": "Microsoft.Common.Section",
-							"label": "Azure Monitor",
-							"elements": [
+									"visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]"
+								},
 								{
-									"name": "privateLinkTextBlock1",
+									"name": "privateDNSZonesHeader",
 									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
 									"options": {
-										"text": "Azure Monitor is a constellation of different interconnected services that work together to monitor your workloads. An Azure Monitor private link connects a private endpoint to a set of Azure Monitor resources to define the boundaries of your monitoring network. That set is called an Azure Monitor Private Link Scope (AMPLS).",
+										"text": "Private DNS Zones"
+									}
+								},
+								{
+									"name": "privateDNSZoneIntegrationTextBlock",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
+									"options": {
+										"text": "To connect privately with your private endpoint, you need a DNS record. We recommend that you integrate your private endpoint with a private DNS zone. If you select the checkbox below, you'll be asked to select the appropriate Private DNS Zone for each resource type deployed by this solution and the deployment will automatically create the Private DNS integration when creating the private endpoints. Alternatively, you can assign policies to private endpoints to automatically register the endpoints with the appropriate private DNS zones. Uncheck the box below if that is the method you are using.",
 										"link": {
-											"label": "Use Azure Private Link to connect networks to Azure Monitor - Azure Monitor | Microsoft Learn",
-											"uri": "https://learn.microsoft.com/en-us/azure/azure-monitor/logs/private-link-security"
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview#dns-configuration"
 										}
 									}
 								},
 								{
-									"name": "privateLink",
+									"name": "enablePrivateDNSIntegration",
 									"type": "Microsoft.Common.CheckBox",
-									"label": "Attach AVD monitoring resources to an existing Azure Monitor Private Link Scope"
+									"label": "Enable Private DNS Zone Integration",
+									"toolTip": "To connect privately with your private endpoint, you need a DNS record. Check this box to select the appropriate private DNS zones so that the deployment automatically integrates each private endpoint with Azure private DNS.",
+									"defaultValue": true,
+									"visible": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]"
 								},
 								{
-									"name": "azureMonitorPrivateLinkScope",
-									"type": "Microsoft.Solutions.ResourceSelector",
-									"label": "Azure Monitor Private Link Scope",
-									"resourceType": "Microsoft.Insights/privateLinkScopes",
+									"name": "privateDNSZonesSubscription",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Private DNS Zone Subscription",
+									"placeholder": "",
+									"defaultValue": "[steps('hosts').scope.subscription.displayName]",
+									"toolTip": "Select the subscription that contains your Private DNS Zones.",
 									"constraints": {
+										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[steps('zeroTrust').azureMonitor.privateLink]"
-								}
-							]
-						},
-						{
-							"name": "policy",
-							"type": "Microsoft.Common.Section",
-							"label": "Policies",
-							"elements": [
+									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]"
+								},
 								{
-									"name": "diskAccessTextBlock1",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, steps('zeroTrust').deployPrivateEndpoints), 'Check the following box to define and and assign a policy that disables public network access and automatically assigns a disk access resource to the virtual machine OS disks for private access.', 'Select the following check box to define and assign a policy that disables all network access to your managed disks.')]",
-										"link": {
-											"label": "Microsoft Learn | Restrict Managed Disks from Being Imported or Exported",
-											"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-restrict-import-export-overview"
-										}
+									"name": "privateDNSZonesApi",
+									"condition": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, not(empty(steps('zeroTrust').privateEndpoints.privateDNSZonesSubscription)))]",
+									"type": "Microsoft.Solutions.ArmApiControl",
+									"request": {
+										"method": "GET",
+										"path": "[concat(steps('zeroTrust').privateEndpoints.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
 									}
 								},
 								{
-									"name": "deployDiskAccessPolicy",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Deploy Disk Access Policy"
+									"name": "azureBackupPrivateDnsZone",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => zone.name))]",
+									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"label": "Azure Backup",
+									"multiLine": true,
+									"toolTip": "Select the existing Geo Specific Private DNS Zone for Azure Backup Storage.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+										"required": false
+									}
+								},
+								{
+									"name": "azureBlobPrivateDnsZone",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
+									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"label": "Azure Blob Storage",
+									"multiLine": true,
+									"toolTip": "Select the existing Private DNS Zone for Azure Blob Storage.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "azureFilesPrivateDnsZone",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => zone.name))]",
+									"visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"label": "Azure Files",
+									"multiLine": true,
+									"toolTip": "Select the existing Private DNS Zone for Azure Files.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+										"required": true
+									}
+								},
+								{
+									"name": "azureKeyVaultPrivateDnsZone",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Azure Key Vault",
+									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => zone.name))]",
+									"multiLine": true,
+									"toolTip": "Select the existing Private DNS Zone for Azure Key Vaults.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+										"required": true
+									},
+									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')))]"
+								},
+								{
+									"name": "azureQueuePrivateDnsZone",
+									"type": "Microsoft.Common.DropDown",
+									"defaultValue": "[first(map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
+									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration)]",
+									"label": "Azure Queue Storage",
+									"multiLine": true,
+									"toolTip": "Select the existing Private DNS Zone for Azure Queue Storage.",
+									"constraints": {
+										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+										"required": false
+									}
+								}								
+							]
+						},
+						{
+							"name": "permittedIPsSection",
+							"type": "Microsoft.Common.Section",
+							"label": "Permitted IP Addresses",
+							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)))]",
+							"elements": [
+								{
+									"name": "permittedIPsInfo",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Permitted IP Addresses / CIDR Ranges (optional)",
+										"style": "Heading"
+									}
+								},
+								{
+									"name": "permittedIPsDescription",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "These IP ranges control public network access on PaaS resources (storage accounts, Key Vaults) deployed by this solution. The behavior depends on whether private endpoints are also deployed."
+									}
+								},
+								{
+									"name": "permittedIPsScenario1",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "• Private endpoints ON, no IPs entered: public access DISABLED. All traffic must use the private endpoint. Use this for fully private deployments."
+									}
+								},
+								{
+									"name": "permittedIPsScenario2",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "• Private endpoints ON, IPs entered: public access ENABLED but restricted to the specified ranges. The private endpoint handles internal traffic; the IP allowlist covers management access from known external addresses (e.g., a deployment workstation or on-premises CIDR)."
+									}
+								},
+								{
+									"name": "permittedIPsScenario3",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "• Private endpoints OFF: public access ENABLED. If IPs are entered, only those ranges are permitted. If empty, the resource is open to all public traffic."
+									}
+								},
+								{
+									"name": "permittedIPs",
+									"type": "Microsoft.Common.EditableGrid",
+									"ariaLabel": "Permitted IP Addresses or CIDR Ranges",
+									"label": "Permitted IP Addresses / CIDR Ranges",
+									"constraints": {
+										"width": "Full",
+										"rows": {
+											"count": {
+												"min": 0,
+												"max": 50
+											}
+										},
+										"columns": [
+											{
+												"id": "ipAddress",
+												"header": "IP Address or CIDR Range",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
+													"constraints": {
+														"required": false,
+														"regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
+														"validationMessage": "Enter a valid IPv4 address or CIDR range."
+													}
+												}
+											}
+										]
+									}
 								}
 							]
 						},
@@ -4245,7 +4139,7 @@
 									"label": "Virtual Network",
 									"multiLine": true,
 									"toolTip": "Select the virtual network where the AVD Private Link Workspace feed download private endpoints will be created. Note that only virtual networks located in the same region as the control plane are shown.",
-									"defaultValue": "[steps('zeroTrust').privateEndpoints.managementVirtualNetwork.name]",
+									"defaultValue": "[steps('zeroTrust').privateEndpoints.operationsVirtualNetwork.name]",
 									"constraints": {
 										"allowedValues": "[map(filter(steps('controlPlane').virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('controlPlane').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
@@ -4425,6 +4319,62 @@
 									}
 								}
 							]
+						},
+						{
+							"name": "azureMonitor",
+							"type": "Microsoft.Common.Section",
+							"label": "Azure Monitor",
+							"elements": [
+								{
+									"name": "privateLinkTextBlock1",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Azure Monitor is a constellation of different interconnected services that work together to monitor your workloads. An Azure Monitor private link connects a private endpoint to a set of Azure Monitor resources to define the boundaries of your monitoring network. That set is called an Azure Monitor Private Link Scope (AMPLS).",
+										"link": {
+											"label": "Use Azure Private Link to connect networks to Azure Monitor - Azure Monitor | Microsoft Learn",
+											"uri": "https://learn.microsoft.com/en-us/azure/azure-monitor/logs/private-link-security"
+										}
+									}
+								},
+								{
+									"name": "privateLink",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Attach AVD monitoring resources to an existing Azure Monitor Private Link Scope"
+								},
+								{
+									"name": "azureMonitorPrivateLinkScope",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Azure Monitor Private Link Scope",
+									"resourceType": "Microsoft.Insights/privateLinkScopes",
+									"constraints": {
+										"required": true
+									},
+									"visible": "[steps('zeroTrust').azureMonitor.privateLink]"
+								}
+							]
+						},
+						{
+							"name": "policy",
+							"type": "Microsoft.Common.Section",
+							"label": "Policies",
+							"elements": [
+								{
+									"name": "diskAccessTextBlock1",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), 'Check the following box to define and and assign a policy that disables public network access and automatically assigns a disk access resource to the virtual machine OS disks for private access.', 'Select the following check box to define and assign a policy that disables all network access to your managed disks.')]",
+										"link": {
+											"label": "Microsoft Learn | Restrict Managed Disks from Being Imported or Exported",
+											"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-restrict-import-export-overview"
+										}
+									}
+								},
+								{
+									"name": "deployDiskAccessPolicy",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Deploy Disk Access Policy"
+								}
+							]
 						}
 					]
 				},
@@ -4571,15 +4521,15 @@
 				"existingLogAnalyticsWorkspaceResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.logAnalyticsWorkspace, '')]",
 				"existingAVDInsightsDataCollectionRuleResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.avdInsightsDataCollectionRule, '')]",
 				"existingDataCollectionEndpointResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.dataCollectionEndpoint, '')]",
-				"deployPrivateEndpoints": "[steps('zeroTrust').deployPrivateEndpoints]",
-				"encryptionKeyVaultForcePublicAccess": "[steps('zeroTrust').keyManagement.encryptionKeyVaultForcePublicAccess]",
-				"operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
-				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.personalRsvSubnet.id, if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, ''))]",
-				"azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
-				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
-				"azureFilesPrivateDnsZoneResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilesPrivateDnsZone, '')]",
-				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
-				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
+				"deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
+				"encryptionKeyVaultForcePublicAccess": "[steps('zeroTrust').privateEndpoints.encryptionKeyVaultForcePublicAccess]",
+				"operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
+				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)), and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",
+				"azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
+				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
+				"azureFilesPrivateDnsZoneResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilesPrivateDnsZone, '')]",
+				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
+				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
 				"azureMonitorPrivateLinkScopeResourceId": "[if(steps('zeroTrust').azureMonitor.privateLink, steps('zeroTrust').azureMonitor.azureMonitorPrivateLinkScope.id, '')]",
 				"deployDiskAccessPolicy": "[steps('zeroTrust').policy.deployDiskAccessPolicy]",
 				"avdPrivateLinkPrivateRoutes": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'None')]",
