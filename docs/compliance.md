@@ -289,6 +289,175 @@ For DoD components, the [DoD ZT Strategy](https://dodcio.defense.gov/Portals/0/D
 
 ---
 
+## CMMC 2.0 Level 2 (Defense Industrial Base / CUI)
+
+**Reference:** [CMMC 2.0 Model](https://dodcio.defense.gov/CMMC/Model/) | [NIST SP 800-171 Rev 2](https://csrc.nist.gov/pubs/sp/800/171/r2/upd1/final)
+
+CMMC 2.0 Level 2 is required for any DoD contractor or subcontractor that handles **Controlled Unclassified Information (CUI)**. Level 2 aligns 1:1 with NIST SP 800-171 Rev 2 (110 practices across 14 domains). Because NIST 800-171 is derived from NIST 800-53, the controls already documented in the NIST 800-53 / FedRAMP High section above apply directly. The table below maps CMMC practice IDs to the solution's implementation.
+
+> **Assessment scope:** CMMC Level 2 requires a third-party C3PAO assessment (or self-assessment for non-prioritized acquisitions). This mapping supports the evidence narrative — it documents what the AVD infrastructure provides. The organization's System Security Plan (SSP) and Security Assessment Report (SAR) must cover all 110 practices, including organizational, personnel, and physical domains not addressed here.
+
+| CMMC Domain | Practice | Requirement Summary | Implementation | Type |
+|------------|---------|-------------------|---------------|------|
+| **AC** Access Control | 3.1.1 | Limit system access to authorized users and processes | Entra ID authentication; RBAC scoped to minimum roles; no public session host ports | Automatic |
+| **AC** | 3.1.2 | Limit system access to authorized transaction types | Azure RBAC enforces operation-level permissions on all resources | Automatic |
+| **AC** | 3.1.12 | Monitor and control remote access sessions | All AVD session traffic brokered through control plane; private endpoints optional | Configurable (`deployPrivateEndpoints: true`) |
+| **AC** | 3.1.13 | Employ cryptographic mechanisms to protect remote access | TLS 1.2+ for all AVD sessions; HTTPS-only for all PaaS endpoints | Automatic |
+| **AC** | 3.1.14 | Route remote access via managed access control points | AVD control plane is the sole access path; no direct RDP internet exposure | Automatic |
+| **AC** | 3.1.19 | Encrypt CUI on mobile devices and portable storage | OS disk and data disk encrypted via Disk Encryption Set + CMK | Configurable (`keyManagementDisks: CustomerManaged`) |
+| **AC** | 3.1.20 | Verify and control all connections to external systems | Private endpoints prevent data flow to/from external networks for PaaS resources | Configurable (`deployPrivateEndpoints: true`) |
+| **AU** Audit & Accountability | 3.3.1 | Create and retain system audit logs to enable monitoring | AMA deployed to each session host; TerminalServices, System, and FSLogix events → Log Analytics. Key Vault audit logs enabled. Note: Windows Security event log not collected — see AU gap note. | Automatic (partial) |
+| **AU** | 3.3.2 | Ensure audit log actions are traceable to users | TerminalServices events include user session context; Key Vault records include caller identity | Automatic (partial) |
+| **IA** Identification & Authentication | 3.5.1 | Identify all system users, processes, and devices | Entra ID provides authoritative identity for all users and managed identities for all services | Automatic |
+| **IA** | 3.5.2 | Authenticate all users, processes, and devices | Entra ID MFA (via CA Policy); managed identity tokens for service-to-service | External (CA) / Automatic |
+| **IA** | 3.5.3 | Use MFA for local and network access | MFA enforced via Entra ID Conditional Access (outside template scope; applies to same identity plane) | External (CA Policy) |
+| **IA** | 3.5.10 | Store and transmit only cryptographically-protected passwords | Passwords stored in Azure Key Vault (encrypted at rest). Never in parameter files or environment variables. | Automatic |
+| **IA** | 3.5.11 | Obscure feedback of authentication information | Entra ID and Key Vault handle credential display — no raw password exposure in template outputs | Automatic |
+| **SC** System & Communications Protection | 3.13.1 | Monitor and control communications at external boundaries | Private endpoints + `publicNetworkAccess: Disabled` enforce deny-by-default at PaaS boundary | Configurable (`deployPrivateEndpoints: true`) |
+| **SC** | 3.13.2 | Employ architectural designs, software development techniques, and engineering principles | Subscription-scoped Bicep templates enforce consistent deployment; no ad-hoc resource creation | Automatic |
+| **SC** | 3.13.5 | Implement subnetworks for publicly accessible system components | Session hosts deploy to private VNet subnets with no public IPs | Automatic |
+| **SC** | 3.13.6 | Deny network communications traffic by default | `publicNetworkAccess: Disabled` on PaaS + private DNS = deny-by-default for all PaaS traffic | Configurable |
+| **SC** | 3.13.8 | Implement cryptographic mechanisms to prevent unauthorized disclosure during transmission | TLS 1.2+ for AVD sessions; HTTPS-only for storage and Key Vault | Automatic |
+| **SC** | 3.13.10 | Establish and manage cryptographic keys | CMK keys in Azure Key Vault with rotation policy. HSM option (FIPS 140-2 Level 3) available. | Configurable (`keyManagementDisks/Storage/RSV: CustomerManaged`) |
+| **SC** | 3.13.16 | Protect the confidentiality of CUI at rest | CMK encryption on VM disks, FSLogix storage, RSV. Infrastructure double encryption always on. | Configurable (`keyManagementDisks/Storage/RSV: CustomerManaged`) |
+| **SI** System & Information Integrity | 3.14.1 | Identify, report, and correct information and information system flaws | Trusted Launch + vTPM measured boot detects firmware/OS integrity violations | Automatic |
+| **SI** | 3.14.6 | Monitor organizational systems to detect attacks and indicators of potential attacks | AVD Insights DCR → Log Analytics. Azure Monitor alerts configurable. SIEM integration outside scope. | Automatic |
+| **SI** | 3.14.7 | Identify unauthorized use of organizational systems | TerminalServices session events logged; Key Vault access audited. Security event log gap applies. | Automatic (partial) |
+
+### Minimum CMMC Level 2 Parameter Set
+
+The NIST 800-53 / FedRAMP High parameter set (see table above) satisfies CMMC Level 2 infrastructure requirements. No additional parameters are required beyond those listed in the FedRAMP High section. However, the organization must also address the non-technical CMMC domains (AT, CM, IR, MA, MP, PS, PE, RA, CA) in its SSP.
+
+---
+
+## HIPAA Security Rule (Healthcare)
+
+**Reference:** [45 CFR Part 164, Subpart C — Security Standards](https://www.hhs.gov/hipaa/for-professionals/security/index.html) | [NIST SP 800-66 Rev 2 (HIPAA Implementation Guide)](https://csrc.nist.gov/pubs/sp/800/66/r2/final)
+
+HIPAA Technical Safeguards (§164.312) govern the technology and policy that protects ePHI (electronic Protected Health Information). This solution supports a HIPAA-compliant AVD deployment for healthcare organizations, health plans, and their business associates.
+
+> **HIPAA flexibility note:** HIPAA uses "Required" and "Addressable" specifications. Addressable specifications must be implemented if reasonable and appropriate; if not, the organization must document why and implement an equivalent measure. This table notes which specification type applies.
+
+| §164.312 Specification | Type | Requirement | Implementation | Parameter |
+|----------------------|------|------------|---------------|-----------|
+| **(a)(1)** Access Control — Unique User Identification | Required | Each user must have a unique identifier | Entra ID assigns unique user identities; no shared accounts in AVD | Automatic |
+| **(a)(2)(i)** Unique User ID | Required | Assign unique name/number for tracking identity | Entra ID UPN/Object ID for all users and service principals | Automatic |
+| **(a)(2)(iii)** Automatic Logoff | Addressable | Terminate session after inactivity | Configured via AVD host pool idle timeout and Windows session timeout policy (outside template scope) | External (GP/Intune) |
+| **(a)(2)(iv)** Encryption and Decryption | Addressable | Mechanism to encrypt and decrypt ePHI | VM disks and FSLogix profile storage encrypted with CMK. Infrastructure double encryption always on. | Configurable (`keyManagementDisks/Storage: CustomerManaged`) |
+| **(b)** Audit Controls | Required | Hardware/software/procedural mechanisms that record and examine activity | AMA + DCR deployed to each session host. Key Vault audit logs to Log Analytics. Note: Windows Security event log not collected — supplemental DCR required for full ePHI access audit trail. | Automatic (partial) |
+| **(c)(1)** Integrity — Electronic Mechanism | Addressable | Protect ePHI from improper alteration or destruction | Trusted Launch vTPM provides measured boot. Azure Backup (RSV) for profile and file share protection. | Automatic + Configurable (`recoveryServices: true`) |
+| **(d)** Person or Entity Authentication | Required | Verify that a person seeking access is the one claimed | Entra ID authentication for all AVD sessions. MFA via Conditional Access Policy (outside template scope). | External (CA Policy) |
+| **(e)(1)** Transmission Security — Integrity Controls | Addressable | Guard against unauthorized modification of ePHI in transit | TLS 1.2+ for all AVD session traffic | Automatic |
+| **(e)(2)(ii)** Transmission Security — Encryption | Addressable | Encrypt ePHI in transit when deemed appropriate | TLS 1.2+ for all PaaS endpoints. Private endpoints eliminate public transit path. | Configurable (`deployPrivateEndpoints: true`) |
+
+### HIPAA Minimum Parameter Set
+
+```json
+{
+  "keyManagementDisks": { "value": "CustomerManaged" },
+  "keyManagementStorage": { "value": "CustomerManaged" },
+  "deployPrivateEndpoints": { "value": true },
+  "recoveryServices": { "value": true },
+  "enableMonitoring": { "value": true }
+}
+```
+
+> **Business Associate Agreements:** Azure's [HIPAA Business Associate Agreement](https://www.microsoft.com/en-us/trust-center/compliance/hipaa) covers the Azure platform services used by this solution. The deploying organization is responsible for executing a BAA with Microsoft before using Azure to store or process ePHI.
+
+---
+
+## CJIS Security Policy (Law Enforcement / Criminal Justice)
+
+**Reference:** [CJIS Security Policy v5.9.2](https://le.fbi.gov/file-repository/cjis-security-policy-v5-9-2-20221214.pdf)
+
+The CJIS Security Policy governs access to Criminal Justice Information (CJI) and applies to all agencies and contractors with access to FBI CJIS systems. AVD is commonly used as a secure remote access mechanism for law enforcement personnel accessing CJI.
+
+| CJIS Section | Requirement | Implementation | Type |
+|-------------|------------|---------------|------|
+| **5.5** Access Control | Ensure only authorized individuals access CJI | Entra ID authentication + RBAC; no public exposure of session hosts | Automatic |
+| **5.6.2.1** Advanced Authentication (MFA) | MFA required for all remote access to CJI | MFA enforced via Entra ID Conditional Access Policy (outside template scope; mandatory for any CJIS-compliant deployment) | External (CA Policy) |
+| **5.6.2.2** Advanced Authentication — Phishing-Resistant | FIDO2 or certificate-based auth for privileged access | Entra ID supports FIDO2 and CBA with CAC/PIV | External (CA Policy) |
+| **5.8.1** Boundary Protection | Isolate CJI systems from non-CJI systems | Private endpoints, VNet isolation, dedicated subnets. No session host public IPs. | Configurable (`deployPrivateEndpoints: true`) |
+| **5.8.2** Encryption — Data at Rest | Encrypt CJI at rest using FIPS-validated cryptography (AES-256) | CMK disk and storage encryption using AES-256 in Key Vault. Infrastructure double encryption always on. | Configurable (`keyManagementDisks/Storage: CustomerManaged`) |
+| **5.8.3** Encryption — Data in Transit | Encrypt CJI in transit (minimum AES-128, FIPS-validated) | TLS 1.2+ (AES-256 cipher suites) for all AVD session and PaaS traffic | Automatic |
+| **5.8.4** Encryption — Key Management | Keys protected from unauthorized access; stored separately from encrypted data | CMK keys in Azure Key Vault (separate from the data they encrypt). Key access audited. | Automatic |
+| **5.9** Formal Audits | Log access to CJI; retain audit logs | AMA + DCR deployed to session hosts. Key Vault access logs. Note: Windows Security event log gap — supplemental DCR required for full CJI access audit. | Automatic (partial) |
+| **5.10** Personnel Security | Background checks, training (organizational, outside template scope) | — | Organizational |
+| **5.11** Physical Protection | Physical security of terminals accessing CJI | Azure datacenter physical security inherited from platform. End-user device policies outside scope. | Inherited / External |
+| **5.12** Systems and Communications Protection | Protect CJI during storage and transmission | Private DNS zones + private endpoints = no CJI traverses public internet. TLS for all sessions. | Configurable |
+| **5.13** Formal Audits — System Audit | System must generate audit records for CJI access | Key Vault audit logs + TerminalServices session events collected. Windows Security event log required separately. | Automatic (partial) |
+
+> **CJIS audit gap:** CJIS §5.9 requires logging of CJI access events. The AVD Insights DCR captures session connect/disconnect events but **not** the Windows Security event log (logon events 4624/4634, privilege use 4672). For CJIS compliance, a supplemental DCR or SIEM agent targeting the Security event log is required.
+
+> **CJIS channel partner / CJIS Systems Agency (CSA):** Deploying organizations must obtain a signed CJIS Security Addendum with their state CSA. The Azure Government CJIS compliance package and [FBI CJIS audit documentation](https://learn.microsoft.com/en-us/azure/compliance/offerings/offering-cjis) cover the platform layer.
+
+---
+
+## StateRAMP (State and Local Government)
+
+**Reference:** [StateRAMP Security Requirements](https://stateramp.org/security-requirements/)
+
+StateRAMP is the state and local government equivalent of FedRAMP, using the same NIST SP 800-53 control baseline. StateRAMP authorization levels map directly to FedRAMP:
+
+| StateRAMP Level | FedRAMP Equivalent | Applicability |
+|----------------|-------------------|---------------|
+| StateRAMP Ready | FedRAMP Ready | Pre-authorization status |
+| StateRAMP Authorized — Low | FedRAMP Low | Low-impact state systems |
+| StateRAMP Authorized — Moderate | FedRAMP Moderate | Most state agency systems |
+| StateRAMP Authorized — High | FedRAMP High | High-impact state systems (CJI, tax, health) |
+
+Because StateRAMP uses the identical NIST 800-53 control baseline, the FedRAMP High parameter set documented in this page satisfies StateRAMP High requirements. StateRAMP Moderate deployments may use a subset — CMK and HSM are recommended but `CustomerManaged` (standard Key Vault) rather than `CustomerManagedHSM` is typically acceptable at Moderate.
+
+> **StateRAMP and CJIS:** Many state/local deployments require both StateRAMP and CJIS compliance simultaneously (e.g., a state portal used for law enforcement and general government). The CJIS Advanced Authentication requirement (MFA) is an additional requirement on top of StateRAMP controls — both are addressed by Entra ID Conditional Access Policy.
+
+---
+
+## IRS Publication 1075 (Federal Tax Information)
+
+**Reference:** [IRS Publication 1075 (Rev. 10-2021)](https://www.irs.gov/pub/irs-pdf/p1075.pdf)
+
+IRS Publication 1075 (P1075) governs the handling of Federal Tax Information (FTI) by federal, state, and local agencies receiving tax data from the IRS. It is based on NIST SP 800-53 Moderate and adds IRS-specific safeguards.
+
+| P1075 Area | Requirement | Implementation | Notes |
+|-----------|------------|---------------|-------|
+| **Exhibit 7** — Encryption at Rest | FTI must be encrypted at rest using FIPS 140-2 validated cryptography | CMK disk and storage encryption. Infrastructure double encryption. Key Vault (Standard = FIPS 140-2 Level 1; Premium = Level 3 HSM). | `keyManagementDisks/Storage: CustomerManaged` |
+| **Exhibit 7** — Encryption in Transit | FTI must be encrypted in transit (TLS 1.2 minimum) | TLS 1.2+ on all AVD sessions and PaaS endpoints | Automatic |
+| **Exhibit 7** — Access Control | Role-based access; limit FTI access to authorized individuals | Entra ID + RBAC. MFA required via CA Policy. | External (CA) + Automatic |
+| **Exhibit 7** — Audit Logging | Log all access to FTI systems; retain 3+ years | Log Analytics workspace. Retention configurable (`logAnalyticsWorkspaceRetention`). Note: Windows Security event log required for full FTI access audit. | Configurable |
+| **Exhibit 7** — Network Protection | Separate FTI systems from non-FTI systems | Private endpoints + VNet isolation + dedicated subnets | Configurable (`deployPrivateEndpoints: true`) |
+| **Exhibit 7** — Media Protection | Protect/sanitize media containing FTI | Azure managed disk encryption + secure delete. Azure Backup with RSV for retention management. | Automatic + Configurable |
+| **Section 4** — Incident Response | Report FTI incidents to IRS within 24 hours | Organizational process; SIEM integration with Log Analytics enables detection | External (IR process) |
+| **Section 4** — Annual Reviews | Annual P1075 compliance review | Organizational process; this mapping supports evidence collection | Organizational |
+
+> **P1075 log retention:** IRS P1075 requires retaining audit logs for a minimum of 3 years. The default `logAnalyticsWorkspaceRetention` of 30 days is insufficient. Set a longer retention in Log Analytics (up to 2 years in hot tier) and configure Azure Monitor Log Analytics workspace archival or export to long-term storage for the remainder.
+
+---
+
+## ISO/IEC 27001:2022 (International / Commercial)
+
+**Reference:** [ISO/IEC 27001:2022](https://www.iso.org/standard/27001) | [Azure ISO 27001 compliance documentation](https://learn.microsoft.com/en-us/azure/compliance/offerings/offering-iso-27001)
+
+ISO 27001 is an internationally recognized information security management system (ISMS) standard used by commercial organizations and international government entities. Annex A controls map closely to NIST 800-53.
+
+> **Platform inheritance:** Microsoft Azure holds ISO/IEC 27001:2022 certification. The Azure Government regions used for federal AVD deployments are covered under Microsoft's certification scope. The deploying organization inherits platform-level controls and is responsible for workload-layer controls documented here.
+
+| ISO 27001 Annex A Control | Title | Implementation | Type |
+|--------------------------|-------|---------------|------|
+| **A.5.15** Access Control | Manage access rights | Entra ID + RBAC + managed identities | Automatic |
+| **A.5.33** Protection of Records | Protect records from loss, destruction, falsification | Azure Backup (RSV) for VM and file share protection | Configurable (`recoveryServices: true`) |
+| **A.8.5** Secure Authentication | Secure authentication mechanisms | Entra ID MFA (CA Policy); managed identities; Key Vault for secrets | External + Automatic |
+| **A.8.7** Protection Against Malware | Protection against malware | Trusted Launch Secure Boot + vTPM; Defender for Endpoint integration | Automatic |
+| **A.8.9** Configuration Management | Manage configurations of hardware, software, services | Infrastructure-as-code (Bicep) enforces consistent configuration; no manual drift | Automatic |
+| **A.8.10** Information Deletion | Delete information when no longer required | Soft delete on Key Vault and Storage; RSV retention policies | Configurable |
+| **A.8.15** Logging | Produce, store, protect, and analyze event logs | AMA + DCR + Log Analytics + Key Vault audit logs | Automatic |
+| **A.8.20** Network Security | Secure and manage networks | Private endpoints, VNet isolation, private DNS | Configurable |
+| **A.8.24** Use of Cryptography | CMK + HSM; key lifecycle management | Key Vault Standard or Premium; CMK on all data-bearing resources; key expiration enforced | Configurable |
+| **A.8.25** Secure Development Life Cycle | Policies for secure software development | Infrastructure-as-code in Git; image build pipeline with integrity verification | Automatic |
+
+> **Certification path:** Achieving ISO 27001 certification requires an accredited certification body (CB) audit of the organization's ISMS, not just the technical controls. This mapping supports the technical evidence package for Annex A controls but does not substitute for the full ISMS and Statement of Applicability (SoA).
+
+---
+
 ## What This Solution Does Not Cover
 
 The following are required for a complete authorization but are outside the scope of this deployment template. They must be documented separately in the SSP.
@@ -297,10 +466,118 @@ The following are required for a complete authorization but are outside the scop
 |------|-------------|-----------------|
 | **Windows Security event log** | AU-2/AU-3 — full security audit trail (logon/logoff, privilege use, account management) | Supplemental security DCR or SIEM agent targeting `Security!*` event log |
 | **MFA / Conditional Access** | IA-2(1), IA-2(2) — MFA for all privileged and non-privileged accounts | Entra ID Conditional Access Policy |
-| **STIG / CIS hardening** | OS-level hardening of session host images | Image build pipeline (Custom Script Extension, DSC, or golden image) |
+| **STIG / CIS hardening** | OS-level hardening of session host images — CM-6, CM-7, SI-3, SI-7 | See note below |
 | **Incident Response** | IR-4, IR-5, IR-6 — detection, response, and reporting procedures | SIEM integration with Log Analytics workspace |
 | **Vulnerability Management** | RA-5 — regular scanning of session hosts | Microsoft Defender for Cloud / Defender for Endpoint |
 | **Network segmentation** | SC-7 deeper — NSG rules between subnets | Networking template + NSG configuration |
 | **Zero Trust policy enforcement** | CISA ZTMM Optimal — continuous access evaluation, automated response | Conditional Access + Microsoft Sentinel or equivalent |
 | **Personnel security** | PS controls | Organizational policy |
 | **Physical security** | PE controls | Inherited from Azure platform authorization |
+
+### OS Hardening — STIG / CIS / NIST Options
+
+Session host OS hardening (CM-6, CM-7, SI-3, SI-7) is not applied by the infrastructure templates — it must be addressed in the image or at VM runtime. Three approaches are supported, and they can be combined:
+
+#### Option 1 — Apply-STIGsAVD.ps1 (Recommended for DoD)
+
+A ready-to-use script is included in this repository at [`customer/examples/artifacts/DoD-STIGs/Apply-STIGsAVD.ps1`](../customer/examples/artifacts/DoD-STIGs/Apply-STIGsAVD.ps1).
+
+The script uses Microsoft's [LGPO.exe](https://www.microsoft.com/en-us/download/details.aspx?id=55319) to apply DISA STIG GPO packages from [public.cyber.mil](https://public.cyber.mil/stigs/gpo) to the local machine. It handles:
+
+- Windows 10 and Windows 11 STIG GPOs
+- Microsoft Edge, Firewall, Defender Antivirus, Internet Explorer STIGs
+- Microsoft 365 / Office / Teams STIGs (detected automatically)
+- Third-party application STIGs: Adobe Acrobat Pro/Reader, Google Chrome, Mozilla Firefox
+- AVD-specific exceptions (remote interactive logon rights, ECC curve SSL fix that breaks AVD, firewall settings for non-domain joined VMs)
+- Version stamping to `HKLM:\Software\DoD\STIG` for upgrade detection
+
+**Deploy in image build (recommended):** Baking STIGs into the golden image means every session host starts hardened without per-VM execution time at deployment. Follow the standard artifacts workflow:
+
+**Step 1 — Copy the example artifact to your customer artifacts folder:**
+
+```powershell
+Copy-Item -Path "customer\examples\artifacts\DoD-STIGs" `
+          -Destination "customer\artifacts\" -Recurse -Force
+```
+
+**Step 2 — Upload to blob storage using `Update-ImageArtifacts.ps1`:**
+
+`Update-ImageArtifacts.ps1` packages `customer/artifacts/DoD-STIGs/` as `DoD-STIGs.zip` and uploads it to the artifacts storage account. It also downloads the STIG GPO package from the URL in `downloads.json` into the artifact folder before packaging. See [Artifacts Guide](artifacts-guide.md) and [Update-ImageArtifacts.ps1 guide](update-image-artifacts.md) for full instructions.
+
+```powershell
+cd C:\repos\FederalAVD\deployments
+.\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
+```
+
+> **Keep the STIG GPO package URL current.** The `DoDSTIGGPOPackage` entry in `customer/parameters/imageManagement/downloads.json` contains a direct link to the quarterly STIG GPO release from DISA — for example:
+> ```
+> "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip"
+> ```
+> DISA publishes a new package quarterly (typically January, April, July, October). The filename embeds the month and year. **Update the `DownloadUrl` in your `customer/parameters/imageManagement/downloads.json` whenever a new quarterly package is released**, then re-run `Update-ImageArtifacts.ps1` and rebuild your image (or re-apply via `sessionHostCustomizations`). The latest packages are listed at [public.cyber.mil/stigs/gpo](https://public.cyber.mil/stigs/gpo). Also update the `-Version` argument in your customizations entry to match (e.g., `'2026.04'` for the April 2026 release) so the version-tracking registry key stays current and upgrade detection works correctly.
+
+**Step 3 — Add to the `customizations` parameter in your image build parameter file:**
+
+```json
+"customizations": {
+  "value": [
+    {
+      "blobNameOrUri": "DoD-STIGs.zip",
+      "arguments": ""
+    }
+  ]
+}
+```
+
+Pass arguments to override defaults — for example, to target only specific applications or to run in upgrade mode:
+
+```json
+{
+  "blobNameOrUri": "DoD-STIGs.zip",
+  "arguments": "-CloudOnly 'True' -ApplicationsToSTIG '[\"Google Chrome\",\"Mozilla Firefox\"]'"
+}
+```
+
+Use `-CloudOnly 'False'` for hybrid (domain-joined) session hosts. See [`customer/examples/artifacts/DoD-STIGs/README.md`](../customer/examples/artifacts/DoD-STIGs/README.md) for all parameters.
+
+**Deploy at VM runtime:** To apply STIGs to an existing fleet without rebuilding the image — for example, after a quarterly STIG package update — add the same artifact reference to the `sessionHostCustomizations` parameter in the host pool deployment instead of `customizations` in the image build. The mechanism is identical; only the parameter name differs.
+
+```json
+"sessionHostCustomizations": {
+  "value": [
+    {
+      "blobNameOrUri": "DoD-STIGs.zip",
+      "arguments": "-Upgrade 'True' -Version '2025.10'"
+    }
+  ]
+}
+```
+
+**Offline / air-gapped environments:** Pre-download the LGPO tool and STIG GPO package and place them in the `customer/artifacts/DoD-STIGs/` folder before running `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`. See [`customer/examples/artifacts/DoD-STIGs/README.md`](../customer/examples/artifacts/DoD-STIGs/README.md) for the exact file names expected.
+
+#### Option 2 — DISA STIG GPOs and Intune Policies (Group Policy / MDM)
+
+DISA publishes the full STIG GPO package and Intune-compatible policy packages directly:
+
+| Resource | URL | Format |
+|----------|-----|--------|
+| STIG GPO packages (latest quarterly release) | [public.cyber.mil/stigs/gpo](https://public.cyber.mil/stigs/gpo) | ZIP (GPO backup format) |
+| STIG Viewer (for reviewing individual findings) | [public.cyber.mil/stigs/srg-stig-tools](https://public.cyber.mil/stigs/srg-stig-tools) | Java app / XCCDF |
+| Intune DISA STIG policy packages | [dl.dod.cyber.mil/wp-content/uploads/stigs/zip/](https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/) | ZIP (`.intunewin` or JSON) |
+| Cyber.mil STIG library (all STIGs) | [public.cyber.mil/stigs](https://public.cyber.mil/stigs) | XCCDF / SCC / ZIP |
+
+For Entra-joined (cloud-only) AVD fleets, import the Intune policy packages into Microsoft Intune and assign them to the session host device group. For hybrid-joined fleets, use Group Policy Objects applied via Active Directory.
+
+#### Option 3 — NIST / CIS Baselines
+
+For non-DoD organizations using NIST or CIS benchmarks instead of DISA STIGs:
+
+| Baseline | Publisher | URL | Notes |
+|----------|----------|-----|-------|
+| NIST National Checklist Program (NCP) — Windows 11 | NIST | [nvd.nist.gov/ncp/repository](https://nvd.nist.gov/ncp/repository) | SCAP/XCCDF format; DISA STIGs are listed here too |
+| CIS Benchmark — Microsoft Windows 11 | CIS | [cisecurity.org/benchmark/microsoft_windows_desktop](https://www.cisecurity.org/benchmark/microsoft_windows_desktop) | PDF + GPO files (CIS member download) |
+| CIS Benchmark — Microsoft Windows Server | CIS | [cisecurity.org/cis-benchmarks](https://www.cisecurity.org/cis-benchmarks) | PDF + GPO files |
+| CIS Hardened Images (Azure Marketplace) | CIS | Available in Azure Marketplace | Pre-hardened VM images; use as custom image source in `customImageResourceId` |
+| Microsoft Security Baselines | Microsoft | [microsoft.com/en-us/download/details.aspx?id=55319](https://www.microsoft.com/en-us/download/details.aspx?id=55319) | LGPO-based; included in Security Compliance Toolkit |
+| Azure Policy guest configuration — Windows baselines | Microsoft | [learn.microsoft.com/en-us/azure/governance/policy/samples/guest-configuration-baseline-windows](https://learn.microsoft.com/en-us/azure/governance/policy/samples/guest-configuration-baseline-windows) | Azure Policy initiative; audit or enforce via policy |
+
+> **Recommended combination for FedRAMP High / DoD:** Apply the DISA STIG GPO package via `Apply-STIGsAVD.ps1` in the image build to satisfy CM-6 / SI-7 baseline requirements. Layer CIS Level 2 or Microsoft Security Baseline on top for defense-in-depth. Use Azure Policy guest configuration to continuously audit for drift after deployment.

@@ -59,7 +59,7 @@ When deploying with Zero Trust principles:
 
 For detailed guidance on implementing Zero Trust for AVD, refer to Microsoft's comprehensive documentation linked above.
 
-> **Compliance frameworks:** The controls implemented in this solution align with [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) security control families (SC-7, SC-28, CP-6, CP-9, IA-3, SI-3) and Microsoft's [Secure Future Initiative (SFI)](https://www.microsoft.com/en-us/security/blog/2024/05/03/security-above-all-else-expanding-microsofts-secure-future-initiative/). **However, the solution deploys with functional minimum defaults — compliance-specific parameter values must be explicitly selected.** See the [Compliance Configuration Reference](parameters.md#compliance-configuration-reference) for the exact parameters to set for NIST 800-53 / FedRAMP High and DoD IL5 deployments.
+> **Federal Zero Trust mandates:** For federal deployments, Zero Trust is not optional — it is required by [OMB M-22-09](https://www.whitehouse.gov/wp-content/uploads/2022/01/M-22-09.pdf) (Federal Zero Trust Strategy) and the [CISA Zero Trust Maturity Model v2.0](https://www.cisa.gov/resources-tools/resources/zero-trust-maturity-model) for civilian agencies, and by the [DoD Zero Trust Strategy](https://dodcio.defense.gov/Portals/0/Documents/Library/ZTStrategy.pdf) for DoD components. This solution provides capabilities across all five CISA ZTMM pillars (Identity, Devices, Networks, Applications & Workloads, Data). See the **[Compliance Control Mapping](compliance.md)** page for the full federal ZT standard mapping, control-by-control NIST SP 800-53 / FedRAMP High and DoD SRG IL4/IL5 coverage, and the exact parameters required for each framework.
 
 ## Multi-Subscription Support
 
