@@ -301,7 +301,10 @@ Subscription
 #### `encryptionKeyVaultForcePublicAccess`
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** When `true`, the inline encryption Key Vault is deployed with public network access enabled and all IP-based firewall rules cleared. Required when `keyManagementRecoveryServicesVault` is `CustomerManaged` and `deployPrivateEndpoints` is `true`. When `false` (default), RSV CMK is silently disabled in that combination rather than deploying an unrestricted public Key Vault.
+- **Description:** Controls the trade-off between two mutually exclusive controls when `deployPrivateEndpoints = true` and `keyManagementRecoveryServicesVault = CustomerManaged`. Azure Backup has no `AzureServices` trusted service bypass for Key Vault, making simultaneous satisfaction of both SC-28 (CMK on RSV) and SC-7 (private-only KV) impossible.
+  - **`true`** — RSV uses customer-managed keys (SC-28 satisfied). The encryption Key Vault’s `publicNetworkAccess` is set to Enabled and all IP-based firewall rules are cleared — the Key Vault becomes reachable by any authenticated principal on Azure’s public network (SC-7 weakened).
+  - **`false`** (default) — The Key Vault remains private-only (SC-7 maintained). RSV silently falls back to platform-managed keys rather than failing the deployment (SC-28 not satisfied for RSV).
+- **This is a compliance risk decision for your ISSO and AO**, not a solution default or recommendation. Document the selected option and accepted control gap in your SSP.
 
 #### `fslogixShareSizeInGB`
 - **Type:** Integer
@@ -379,6 +382,31 @@ Subscription
 
 ### Security & Encryption
 
+#### `deploySecretsKeyVault`
+- **Type:** Boolean
+- **Default:** `false`
+- **Description:** Deploy an inline Secrets Key Vault (Standard SKU) to store VM admin and domain-join credentials. Configured in the **Identity → Credentials** portal step when credentials source is set to Manual Entry. Leave `false` to provide `existingCredentialsKeyVaultResourceId` from a pre-deployed Key Vaults foundation deployment.
+
+#### `secretsKeyVaultEnableSoftDelete`
+- **Type:** Boolean
+- **Default:** `true`
+- **Description:** Enable soft delete on the inline Secrets Key Vault. Allows recovery of deleted objects within the retention period.
+
+#### `secretsKeyVaultEnablePurgeProtection`
+- **Type:** Boolean
+- **Default:** `true`
+- **Description:** Enable purge protection on the inline Secrets Key Vault. Prevents permanent deletion during the retention period.
+
+#### `secretsKeyVaultRetentionInDays`
+- **Type:** Integer (7–90)
+- **Default:** `90`
+- **Description:** Soft-delete retention period in days for the inline Secrets Key Vault.
+
+#### `encryptionKeyVaultRetentionInDays`
+- **Type:** Integer (7–90)
+- **Default:** `90`
+- **Description:** Soft-delete retention period in days for the inline Encryption Key Vault. Configured in **Zero Trust → Encryption Key Management** when CMK is enabled and no existing KV is provided.
+
 #### `encryptionAtHost`
 - **Type:** Boolean
 - **Default:** `true`
@@ -403,7 +431,7 @@ Subscription
 #### `existingEncryptionKeyVaultResourceId`
 - **Type:** String
 - **Optional**
-- **Description:** Resource ID of an existing Encryption Key Vault containing customer-managed keys. Typically provided from the Key Vaults (Foundation) deployment. Leave empty to have a Key Vault created automatically when CMK is enabled.
+- **Description:** Resource ID of an existing Encryption Key Vault containing customer-managed keys. Typically provided from the Key Vaults (Foundation) deployment. Leave empty to have a Key Vault created automatically when CMK is enabled. In the portal form, toggle **Use Existing Encryption Key Vault** in the **Zero Trust → Encryption Key Management** step.
 - **Example:** `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.KeyVault/vaults/{vault}`
 
 ### 📖 Complete Parameter Reference

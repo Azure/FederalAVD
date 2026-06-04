@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "932110771794003074"
+      "templateHash": "4423462097728660652"
     }
   },
   "parameters": {
@@ -861,13 +861,22 @@
         "description": "Optional. Enables purge protection on the inline-created Secrets Key Vault."
       }
     },
-    "keyVaultRetentionInDays": {
+    "secretsKeyVaultRetentionInDays": {
       "type": "int",
       "defaultValue": 90,
       "minValue": 7,
       "maxValue": 90,
       "metadata": {
-        "description": "Optional. The retention period in days for soft-deleted objects in the inline-created Key Vaults."
+        "description": "Optional. The soft delete retention period in days for the inline-created Secrets Key Vault."
+      }
+    },
+    "encryptionKeyVaultRetentionInDays": {
+      "type": "int",
+      "defaultValue": 90,
+      "minValue": 7,
+      "maxValue": 90,
+      "metadata": {
+        "description": "Optional. The soft delete retention period in days for the inline-created Encryption Key Vault."
       }
     },
     "enableMonitoring": {
@@ -3073,17 +3082,20 @@
           "deploySecretsKeyVault": {
             "value": "[parameters('deploySecretsKeyVault')]"
           },
-          "keyVaultEnablePurgeProtection": {
+          "secretsKeyVaultEnablePurgeProtection": {
             "value": "[parameters('secretsKeyVaultEnablePurgeProtection')]"
           },
-          "keyVaultEnableSoftDelete": {
+          "secretsKeyVaultEnableSoftDelete": {
             "value": "[parameters('secretsKeyVaultEnableSoftDelete')]"
           },
           "secretsKeyVaultName": {
             "value": "[take(replace(replace(replace(variables('nameConv_Shared_Resources'), 'TOKEN', format('sec-{0}', take(uniqueString(subscription().subscriptionId, replace(replace(replace(variables('nameConv_Shared_ResGroup'), 'TOKEN', 'operations'), 'LOCATION', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, max(sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5), 0)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation), 'RESOURCETYPE', variables('abbr').resourceGroups)), 6))), 'LOCATION', variables('locs')[if(startsWith(variables('cloud'), 'us'), substring(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location, 5, max(sub(length(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location), 5), 0)), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location)].abbreviation), 'RESOURCETYPE', variables('abbr').keyVaults), 24)]"
           },
-          "keyVaultRetentionInDays": {
-            "value": "[parameters('keyVaultRetentionInDays')]"
+          "secretsKeyVaultRetentionInDays": {
+            "value": "[parameters('secretsKeyVaultRetentionInDays')]"
+          },
+          "encryptionKeyVaultRetentionInDays": {
+            "value": "[parameters('encryptionKeyVaultRetentionInDays')]"
           },
           "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(empty(parameters('existingLogAnalyticsWorkspaceResourceId')), createObject('value', reference(subscriptionResourceId(variables('effectiveMonitoringSubscription'), 'Microsoft.Resources/deployments', format('Monitoring-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpointSubnetResourceId": {
@@ -3124,7 +3136,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "14234395911829091824"
+              "templateHash": "14244985818155362678"
             }
           },
           "parameters": {
@@ -3150,15 +3162,15 @@
               "type": "securestring",
               "defaultValue": ""
             },
-            "keyVaultEnableSoftDelete": {
+            "secretsKeyVaultEnableSoftDelete": {
               "type": "bool",
               "defaultValue": true
             },
-            "keyVaultEnablePurgeProtection": {
+            "secretsKeyVaultEnablePurgeProtection": {
               "type": "bool",
               "defaultValue": true
             },
-            "keyVaultRetentionInDays": {
+            "secretsKeyVaultRetentionInDays": {
               "type": "int",
               "defaultValue": 90
             },
@@ -3203,6 +3215,15 @@
             },
             "encryptionKeyVaultName": {
               "type": "string"
+            },
+            "encryptionKeyVaultRetentionInDays": {
+              "type": "int",
+              "defaultValue": "[parameters('secretsKeyVaultRetentionInDays')]",
+              "minValue": 7,
+              "maxValue": 90,
+              "metadata": {
+                "description": "Optional. Soft delete retention days specifically for the Encryption Key Vault. Defaults to keyVaultRetentionInDays."
+              }
             },
             "permittedIPs": {
               "type": "array",
@@ -3253,13 +3274,13 @@
                     "value": "standard"
                   },
                   "enableSoftDelete": {
-                    "value": "[parameters('keyVaultEnableSoftDelete')]"
+                    "value": "[parameters('secretsKeyVaultEnableSoftDelete')]"
                   },
                   "softDeleteRetentionInDays": {
-                    "value": "[parameters('keyVaultRetentionInDays')]"
+                    "value": "[parameters('secretsKeyVaultRetentionInDays')]"
                   },
                   "enablePurgeProtection": {
-                    "value": "[parameters('keyVaultEnablePurgeProtection')]"
+                    "value": "[parameters('secretsKeyVaultEnablePurgeProtection')]"
                   },
                   "enabledForTemplateDeployment": {
                     "value": true
@@ -3805,7 +3826,7 @@
                     "value": true
                   },
                   "softDeleteRetentionInDays": {
-                    "value": "[parameters('keyVaultRetentionInDays')]"
+                    "value": "[parameters('encryptionKeyVaultRetentionInDays')]"
                   },
                   "enablePurgeProtection": {
                     "value": true

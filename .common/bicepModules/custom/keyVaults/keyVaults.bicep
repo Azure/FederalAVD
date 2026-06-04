@@ -11,9 +11,10 @@ param secretsKeyVaultName string
 param domainJoinUserPassword string = ''
 @secure()
 param domainJoinUserPrincipalName string = ''
-param keyVaultEnableSoftDelete bool = true
-param keyVaultEnablePurgeProtection bool = true
-param keyVaultRetentionInDays int = 90
+param secretsKeyVaultEnableSoftDelete bool = true
+param secretsKeyVaultEnablePurgeProtection bool = true
+param secretsKeyVaultRetentionInDays int = 90
+
 param logAnalyticsWorkspaceResourceId string = ''
 param privateEndpoint bool = false
 param privateEndpointSubnetResourceId string = ''
@@ -28,6 +29,10 @@ param virtualMachineAdminUserName string = ''
 
 param deployEncryptionKeyVault bool = true
 param encryptionKeyVaultName string
+@description('Optional. Soft delete retention days specifically for the Encryption Key Vault. Defaults to keyVaultRetentionInDays.')
+@minValue(7)
+@maxValue(90)
+param encryptionKeyVaultRetentionInDays int = secretsKeyVaultRetentionInDays
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module.')
 param permittedIPs array = []
@@ -76,9 +81,9 @@ module secretsKeyVault '../../keyVault/vaults/deploy.bicep' = if (deploySecretsK
     name: secretsKeyVaultName
     tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
     sku: 'standard'
-    enableSoftDelete: keyVaultEnableSoftDelete
-    softDeleteRetentionInDays: keyVaultRetentionInDays
-    enablePurgeProtection: keyVaultEnablePurgeProtection
+    enableSoftDelete: secretsKeyVaultEnableSoftDelete
+    softDeleteRetentionInDays: secretsKeyVaultRetentionInDays
+    enablePurgeProtection: secretsKeyVaultEnablePurgeProtection
     enabledForTemplateDeployment: true
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
       ? { workspaceId: logAnalyticsWorkspaceResourceId }
@@ -133,7 +138,7 @@ module encryptionKeyVault '../../keyVault/vaults/deploy.bicep' = if (deployEncry
     tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
     sku: 'premium'
     enableSoftDelete: true
-    softDeleteRetentionInDays: keyVaultRetentionInDays
+    softDeleteRetentionInDays: encryptionKeyVaultRetentionInDays
     enablePurgeProtection: true
     enabledForDiskEncryption: true
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)

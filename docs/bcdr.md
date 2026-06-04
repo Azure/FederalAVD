@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Business Continuity & Disaster Recovery
 
@@ -293,7 +293,17 @@ For personal host pools:
 
 Customer-managed key (CMK) encryption is supported for the vault via `keyManagementRecoveryServicesVault`. The vault always uses its system-assigned identity for CMK access — this avoids an extra user-assigned identity resource and is also required by Azure when the vault has a private endpoint.
 
-> **CMK with private Key Vaults:** Azure Backup has no `AzureServices` trusted service bypass for Key Vault, so it cannot reach a Key Vault that has public access disabled. When `deployPrivateEndpoints = true` and the encryption Key Vault is private-only, RSV CMK is automatically disabled — the vault falls back to platform-managed keys rather than failing the deployment. To keep RSV CMK active in a private environment, set `encryptionKeyVaultForcePublicAccess = true`. This re-enables public network access on the encryption Key Vault and clears any IP-based firewall restrictions so Azure Backup's regional IP addresses can reach it. Note: this also clears IP-based restrictions on the Key Vault, as Azure Backup's regional IPs are not fixed. The Key Vault's private endpoint remains intact as the primary access path for all other consumers — public access is a narrow exception required solely by the Azure Backup service.
+> **CMK with private Key Vaults — mutually exclusive controls:** Azure Backup has no `AzureServices` trusted service bypass for Key Vault, so it cannot reach a Key Vault with `publicNetworkAccess: Disabled`. This creates an irreconcilable conflict between two independent controls when both `deployPrivateEndpoints = true` and `keyManagementRecoveryServicesVault = CustomerManaged` are set:
+>
+> | | **Option A** | **Option B** |
+> |---|---|---|
+> | RSV encryption | Customer-Managed Keys | Platform-Managed Keys |
+> | KV public access | Enabled (`publicNetworkAccess: Disabled` removed; KV reachable from Azure public network by any authenticated principal) | Disabled (private-only enforced) |
+> | SC-28 satisfied for RSV | ✅ Yes | ❌ No |
+> | SC-7 network isolation maintained | ❌ No | ✅ Yes |
+> | Parameter | `encryptionKeyVaultForcePublicAccess: true` | `encryptionKeyVaultForcePublicAccess: false` (default) |
+>
+> When `encryptionKeyVaultForcePublicAccess = false` (the default), the solution automatically falls back to PMK on the RSV rather than failing the deployment (Option B). Neither option satisfies both controls simultaneously — this is a **Microsoft Azure platform limitation**. The choice is a compliance risk decision for your ISSO and Authorizing Official, not a solution default. Document the selected option and formally accept the resulting gap in your SSP.
 
 > **Pooled host pools:** When `recoveryServices = true` for a pooled host pool, the **FSLogix Azure Files file shares** are backed up using Azure Backup snapshot policy. The vault for Azure Files backup is deployed to the **shared operations resource group** (`rg-avd-operations-{loc}`) and is reused across pooled host pools in the same region — pass `existingFilesBackupVaultResourceId` on subsequent pooled deployments to reuse an existing vault rather than creating a second one. FSLogix share snapshots are stored in the storage account itself and are not transmitted to the vault — the vault holds only scheduling metadata. Vault storage redundancy is therefore hardcoded to `LocallyRedundant` for the Azure Files vault, and CMK is not required. The `backupRetentionDays` parameter controls the snapshot retention period (VM backup and Azure Files backup are mutually exclusive per host pool type, so the parameter is shared). Soft-delete retention for FSLogix file shares is controlled separately by `fslogixSoftDeleteRetentionDays` (default: 14 days). For cross-region profile resilience on pooled host pools, see [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments).
 

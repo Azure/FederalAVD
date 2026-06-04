@@ -541,10 +541,15 @@ param secretsKeyVaultEnableSoftDelete bool = true
 @description('Optional. Enables purge protection on the inline-created Secrets Key Vault.')
 param secretsKeyVaultEnablePurgeProtection bool = true
 
-@description('Optional. The retention period in days for soft-deleted objects in the inline-created Key Vaults.')
+@description('Optional. The soft delete retention period in days for the inline-created Secrets Key Vault.')
 @minValue(7)
 @maxValue(90)
-param keyVaultRetentionInDays int = 90
+param secretsKeyVaultRetentionInDays int = 90
+
+@description('Optional. The soft delete retention period in days for the inline-created Encryption Key Vault.')
+@minValue(7)
+@maxValue(90)
+param encryptionKeyVaultRetentionInDays int = 90
 
 // Monitoring
 
@@ -1417,10 +1422,11 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     deployEncryptionKeyVault: deployInlineEncryptionKv
     deploySecretsKeyVault: deploySecretsKeyVault
-    keyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
-    keyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
+    secretsKeyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
+    secretsKeyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
     secretsKeyVaultName: keyVaultNameSecrets
-    keyVaultRetentionInDays: keyVaultRetentionInDays
+    secretsKeyVaultRetentionInDays: secretsKeyVaultRetentionInDays
+    encryptionKeyVaultRetentionInDays: encryptionKeyVaultRetentionInDays
     logAnalyticsWorkspaceResourceId: enableMonitoring
       ? (empty(existingLogAnalyticsWorkspaceResourceId)
           ? monitoring!.outputs.logAnalyticsWorkspaceResourceId

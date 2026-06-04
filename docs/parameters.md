@@ -67,7 +67,7 @@ The tables below are a quick developer reference for which parameters to set. Al
 | **SC-28** Protection of Information at Rest — artifacts/build-log storage | `imageManagement.bicep` | `keyManagementStorageAccounts` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
 | **SC-28** Protection of Information at Rest — gallery image versions | `imageManagement.bicep` | `keyManagementGalleryImageVersions` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
 | **SC-28(1)** Encryption At Host *(supplemental)* | `hostpool.bicep` | `encryptionAtHost` | `true` | `true` ✅ *(already default — encrypts temp disk and host cache; not the primary IL5 disk encryption mechanism — see note below)* |
-| **SC-7 / SC-5** Boundary Protection / DoS Protection | `hostpool.bicep` | `enablePrivateEndpoint` | `false` | `true` |
+| **SC-7 / SC-5** Boundary Protection / DoS Protection | `hostpool.bicep` | `deployPrivateEndpoints` | `false` | `true` |
 | **CP-9** Information System Backup — FSLogix zone resilience | `hostpool.bicep` | `fslogixStorageRedundancy` | `LocallyRedundant` | `ZoneRedundant` *(zone-enabled regions)* |
 | **CP-6** Alternate Storage Site — personal VM backup | `hostpool.bicep` | `recoveryServicesVaultStorageRedundancy` | `LocallyRedundant` | `GeoRedundant` |
 | **SI-3 / IA-3** Trusted Launch / integrity | `hostpool.bicep` | `securityType` | `TrustedLaunch` | `TrustedLaunch` ✅ *(already default)* |
@@ -76,7 +76,7 @@ The tables below are a quick developer reference for which parameters to set. Al
 
 > **Storage double encryption:** `requireInfrastructureEncryption` is always `true` for all storage accounts in this solution. Enabling CMK (`CustomerManaged` or `CustomerManagedHSM`) on any storage parameter automatically produces double encryption — no additional configuration is required.
 
-> **Private endpoints:** Setting `enablePrivateEndpoint = true` requires pre-provisioned private DNS zones. Use the networking template to create them, or provide existing zone resource IDs to the relevant `azure*PrivateDnsZoneResourceId` parameters. See [Host Pool Deployment Guide — DNS Requirements](hostpool-deployment.md#c-dns-requirements).
+> **Private endpoints:** Setting `deployPrivateEndpoints = true` requires pre-provisioned private DNS zones. Use the networking template to create them, or provide existing zone resource IDs to the relevant `azure*PrivateDnsZoneResourceId` parameters. See [Host Pool Deployment Guide — DNS Requirements](hostpool-deployment.md#c-dns-requirements).
 
 ---
 

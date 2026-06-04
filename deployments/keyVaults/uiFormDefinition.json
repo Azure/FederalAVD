@@ -192,6 +192,25 @@
 							"label": "Deploy Encryption Key Vault",
 							"defaultValue": true,
 							"toolTip": "Deploy a Premium SKU Key Vault (HSM-backed) for Customer-Managed Key encryption across all AVD solutions."
+						},
+						{
+							"name": "encKvRetentionInDays",
+							"type": "Microsoft.Common.Slider",
+							"label": "Encryption Key Vault Soft Delete Retention (Days)",
+							"defaultValue": 90,
+							"showStepMarkers": false,
+							"toolTip": "Number of days the Encryption Key Vault and its objects are retained after deletion before permanent removal.",
+							"min": 7,
+							"max": 90,
+							"visible": "[steps('encryptionKeyVault').deployEncryptionKeyVault]"
+						},
+						{
+							"name": "forcePublicAccess",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "Allow public network access on Encryption Key Vault",
+							"defaultValue": false,
+							"toolTip": "When checked, the Encryption Key Vault is deployed with public network access enabled. Required when this vault will be used for Customer-Managed Key encryption on a Recovery Services Vault with private endpoints, because Azure Backup does not support the AzureServices trusted service bypass.",
+							"visible": "[steps('encryptionKeyVault').deployEncryptionKeyVault]"
 						}
 					]
 				},
@@ -442,12 +461,14 @@
 				"deploySecretsKeyVault": "[steps('secretsKeyVault').deploySecretsKeyVault]",
 				"secretsKeyVaultEnableSoftDelete": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enableSoftDelete, true)]",
 				"secretsKeyVaultEnablePurgeProtection": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enablePurgeProtection, true)]",
-				"keyVaultRetentionInDays": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.retentionDays, 90)]",
+				"secretsKeyVaultRetentionInDays": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.retentionDays, 90)]",
 				"virtualMachineAdminUserName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.virtualMachineAdminUserName, '')]",
 				"virtualMachineAdminPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.virtualMachineAdminPassword, '')]",
 				"domainJoinUserPrincipalName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPrincipalName, '')]",
 				"domainJoinUserPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPassword, '')]",
 				"deployEncryptionKeyVault": "[steps('encryptionKeyVault').deployEncryptionKeyVault]",
+				"encryptionKeyVaultRetentionInDays": "[if(steps('encryptionKeyVault').deployEncryptionKeyVault, steps('encryptionKeyVault').encKvRetentionInDays, 90)]",
+				"encryptionKeyVaultForcePublicAccess": "[if(steps('encryptionKeyVault').deployEncryptionKeyVault, steps('encryptionKeyVault').forcePublicAccess, false)]",
 				"privateEndpoint": "[steps('networking').privateEndpoint]",
 				"privateEndpointSubnetResourceId": "[if(steps('networking').privateEndpoint, steps('networking').networkSection.privateEndpointSubnet, '')]",
 				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.keyVaultPrivateDnsZone, '')]",

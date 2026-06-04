@@ -206,8 +206,8 @@ The host pool deployment always creates all resources — resource groups, AVD c
 |---|---|---|
 | AVD Workspace | **Workspace Creation Option → Update an existing Workspace** | `existingFeedWorkspaceResourceId` |
 | Monitoring (Log Analytics, DCR, DCE) | **Use Existing Monitoring Resources** checkbox | `existingLogAnalyticsWorkspaceResourceId` + DCR + DCE IDs |
-| Credentials Key Vault | **Credentials source → Key Vault** | `existingCredentialsKeyVaultResourceId` |
-| Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox | `existingEncryptionKeyVaultResourceId` |
+| Credentials Key Vault | **Credentials source → Key Vault** (Identity step) | `existingCredentialsKeyVaultResourceId` |
+| Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox (Zero Trust → Encryption Key Management) | `existingEncryptionKeyVaultResourceId` |
 | Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingVmBackupVaultResourceId` |
 
 To deploy all host pool infrastructure without creating session host VMs, set `sessionHostCount: 0`. This lets you validate storage, networking, and control plane configuration before committing to VM costs. Add hosts later using the **Session Hosts** add-on (`SessionHostsOnly` mode).
@@ -229,6 +229,10 @@ To deploy all host pool infrastructure without creating session host VMs, set `s
 | **identitySolution** | Identity and authentication method | `ActiveDirectoryDomainServices`<br>`EntraDomainServices`<br>`EntraKerberos-Hybrid`<br>`EntraKerberos-CloudOnly`<br>`EntraId` |
 | **domainName** | AD domain name (if applicable) | `contoso.com` |
 | **domainJoinUserName** | Domain join account UPN | `djoin@contoso.com` |
+| **deploySecretsKeyVault** | Deploy an inline Secrets Key Vault to store VM admin and domain-join credentials (configured in the **Identity → Credentials** portal step) | `true` / `false` |
+| **secretsKeyVaultEnableSoftDelete** | Enable soft delete on the inline Secrets Key Vault | `true` (default) |
+| **secretsKeyVaultEnablePurgeProtection** | Enable purge protection on the inline Secrets Key Vault | `true` (default) |
+| **secretsKeyVaultRetentionInDays** | Soft-delete retention period for the Secrets Key Vault (7–90 days) | `90` (default) |
 
 **[Identity Solutions Details](features.md#identity-solutions)**
 
@@ -314,14 +318,18 @@ Run post-deployment scripts on session hosts using the `sessionHostCustomization
 
 #### Zero Trust / Security Configuration
 
+> **Portal form:** Zero Trust settings are split across two steps — **Zero Trust → Encryption Key Management** (CMK selectors, existing KV toggle, key rotation, enc KV retention) and **Zero Trust → PaaS Private Endpoints** (private endpoint deploy checkbox, subnet selectors, DNS zones). Secrets Key Vault deploy controls are in the **Identity → Credentials** step.
+
 ```json
 {
-  "enablePrivateEndpoint": true,
-  "privateEndpointSubnetResourceId": "/subscriptions/xxx/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-privateendpoints",
+  "deployPrivateEndpoints": true,
+  "operationsPrivateEndpointSubnetResourceId": "/subscriptions/xxx/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-privateendpoints",
   "keyManagementDisks": "CustomerManaged",
   "encryptionAtHost": true,
   "secureBootEnabled": true,
-  "vTpmEnabled": true
+  "vTpmEnabled": true,
+  "secretsKeyVaultRetentionInDays": 90,
+  "encryptionKeyVaultRetentionInDays": 90
 }
 ```
 

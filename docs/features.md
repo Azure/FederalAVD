@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Features
 
@@ -50,7 +50,7 @@ This solution is designed to align with Microsoft's Zero Trust security principl
 
 When deploying with Zero Trust principles:
 
-1. **Disable Public Access**: Set `enablePrivateEndpoint = true` for storage accounts and ensure session hosts have no public IP addresses
+1. **Disable Public Access**: Set `deployPrivateEndpoints = true` for storage accounts and Key Vaults, and ensure session hosts have no public IP addresses
 2. **Use Managed Identities**: Configure `artifactsUserAssignedIdentityResourceId` for artifact downloads instead of storage account keys
 3. **Implement Network Segmentation**: Deploy session hosts to dedicated subnets with restrictive NSG rules
 4. **Enable Monitoring**: Configure Log Analytics workspace for all diagnostic logs and performance data
@@ -879,7 +879,7 @@ For IL5 environments, CMK with HSM protection is required. See [IL5 Isolation](#
 - System-Assigned Managed Identity (for Recovery Services Vault CMK — SAI is always used; Azure also requires it when the vault has a private endpoint)
 - Disk Encryption Set (for disk and gallery image version CMK)
 
-> **Recovery Services Vault CMK with private endpoints:** Azure Backup has no `AzureServices` trusted service bypass for Key Vault. When `deployPrivateEndpoints = true` and the encryption Key Vault has public access disabled, RSV CMK is automatically skipped to prevent a deployment failure — the vault uses platform-managed keys instead. To preserve RSV CMK in a fully private environment, set `encryptionKeyVaultForcePublicAccess = true`. This re-enables public network access on the encryption Key Vault and clears any IP-based firewall rules so Azure Backup can reach it. Accept this trade-off intentionally. See [Personal Host Pool VM Backup](bcdr.md#personal-host-pool-vm-backup) in the BCDR guide for more detail.
+> **Recovery Services Vault CMK with private endpoints — mutually exclusive controls:** Azure Backup has no `AzureServices` trusted service bypass for Key Vault. When `deployPrivateEndpoints = true` and the encryption Key Vault has public access disabled, two mandatory controls conflict: preserving SC-28 (CMK on RSV) requires enabling KV public access (`encryptionKeyVaultForcePublicAccess = true`), which removes the `publicNetworkAccess: Disabled` enforcement and weakens SC-7 network isolation. Preserving SC-7 (private-only KV) requires accepting PMK on the RSV, which does not satisfy SC-28 for that resource. By default (`encryptionKeyVaultForcePublicAccess = false`) the solution falls back to PMK on the RSV rather than failing the deployment. Neither option satisfies both controls simultaneously — this is a **Microsoft Azure platform limitation**. The choice is a compliance risk decision for your ISSO and AO. See [Personal Host Pool VM Backup](bcdr.md#personal-host-pool-vm-backup) in the BCDR guide for the full option comparison.
 
 ## SMB Multichannel
 

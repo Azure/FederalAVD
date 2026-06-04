@@ -329,8 +329,41 @@
 										"required": true
 									},
 									"visible": "[equals(steps('identity').credentials.source, 'keyVault')]"
-								}
-							]
+								},                                                                
+                                {
+                                    "name": "deploySecretsKeyVault",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Deploy VM Secrets Key Vault",
+                                    "toolTip": "Deploy a Key Vault and store VM admin credentials as secrets.",
+                                    "visible": "[equals(steps('identity').credentials.source, 'manual')]"
+                                },
+                                {
+                                    "name": "enableSoftDelete",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Enable Soft Delete on Secrets Key Vault",
+                                    "defaultValue": true,
+                                    "toolTip": "Allow recovery of deleted Key Vault objects within the retention period.",
+                                    "visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault)]"
+                                },
+                                {
+                                    "name": "enablePurgeProtection",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Enable Purge Protection on Secrets Key Vault",
+                                    "defaultValue": true,
+                                    "toolTip": "Prevent permanent deletion during the retention period. Requires soft delete.",
+                                    "visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault, steps('identity').credentials.enableSoftDelete)]"
+                                },
+                                {
+                                    "name": "secretsKvRetentionInDays",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Secrets Key Vault Soft Delete Retention (Days)",
+                                    "defaultValue": 90,
+                                    "showStepMarkers": false,
+                                    "toolTip": "Days to retain the Secrets Key Vault after deletion before permanent removal.",
+                                    "min": 7,
+                                    "max": 90,
+                                    "visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault)]"
+                                }							]
 						}
 					]
 				},
@@ -3210,7 +3243,7 @@
 							"name": "deploymentVm",
 							"type": "Microsoft.Common.Section",
 							"label": "Deployment Virtual Machine",
-							"visible": "[or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))]",
+							"visible": "[or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, not(empty(steps('controlPlane').naming.desktopFriendlyName)))]",
 							"elements": [
 								{
 									"name": "deploymentVmInfoBox",
@@ -3302,83 +3335,7 @@
 									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)]"
 								}
 							]
-						},
-						{
-							"name": "keyVaults",
-							"type": "Microsoft.Common.Section",
-							"label": "Key Vaults",
-							"visible": "[or(equals(steps('identity').credentials.source, 'manual'), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]",
-							"elements": [
-								{
-									"name": "deploySecretsKeyVault",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Deploy VM Secrets Key Vault",
-									"toolTip": "Select to deploy a key vault and create secrets for VM Admin user and password and if applicable, the domain join username and password.",
-									"visible": "[equals(steps('identity').credentials.source, 'manual')]"
-								},
-								{
-									"name": "enableSoftDelete",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Soft Delete on Secrets Key Vault",
-									"defaultValue": true,
-									"toolTip": "Select to enable soft delete on the secrets key vault",
-									"visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault)]"
-								},
-								{
-									"name": "enablePurgeProtection",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Purge Protection on Secrets Key Vault",
-									"defaultValue": true,
-									"toolTip": "Select to enable purge protection on the secrets key vault",
-									"visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, steps('operationsAndMonitoring').keyVaults.enableSoftDelete)]"
-								},
-								{
-									"name": "keyVaultRetentionInDays",
-									"type": "Microsoft.Common.Slider",
-									"label": "Key Vault Retention (in Days)",
-									"defaultValue": 90,
-									"showStepMarkers": false,
-									"toolTip": "The number of days Key Vaults are kept in the recycle bin. Soft delete is designed to prevent accidental deletion of your key vault and keys, secrets, and certificates stored inside key vault. When you delete a key vault or a key vault object, it remains recoverable for a user configurable retention period or a default of 90 days.",
-									"min": 7,
-									"max": 90,
-									"visible": "[or(and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault)]"
-								},
-								{
-									"name": "useExistingEncryptionKv",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Use Existing Encryption Key Vault",
-									"defaultValue": false,
-									"toolTip": "Check to select an existing Encryption Key Vault (e.g., from the Security deployment) instead of creating one inline in the management resource group.",
-									"visible": "[or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]"
-								},
-								{
-									"name": "existingEncryptionKeyVault",
-									"type": "Microsoft.Solutions.ResourceSelector",
-									"label": "Existing Encryption Key Vault",
-									"resourceType": "Microsoft.KeyVault/vaults",
-									"toolTip": "Select an existing Key Vault to use for Customer Managed Keys. Only key vaults in the session host location are shown.",
-									"constraints": {
-										"required": "[steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv]"
-									},
-									"scope": {
-										"subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]",
-										"location": "[steps('hosts').scope.location.name]"
-									},
-									"visible": "[and(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv, or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')))]"
-								},
-								{
-									"name": "keyExpirationInDays",
-									"type": "Microsoft.Common.Slider",
-									"label": "Encryption Key Rotation (in Days)",
-									"defaultValue": 180,
-									"showStepMarkers": false,
-									"toolTip": "The number of days before a new key version is automatically generated in the Azure Key Vault.",
-									"min": 30,
-									"max": 180,
-									"visible": "[or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]"
-								}
-							]
-						},
+						},						
 						{
 							"name": "monitoring",
 							"type": "Microsoft.Common.Section",
@@ -3645,14 +3602,59 @@
 											}
 										]
 									}
-								}
+								},
+                                {
+                                    "name": "useExistingEncryptionKv",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Use Existing Encryption Key Vault",
+                                    "defaultValue": false,
+                                    "toolTip": "Select an existing Encryption Key Vault (e.g., from the Security deployment) instead of creating one inline.",
+                                    "visible": "[or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]"
+                                },
+                                {
+                                    "name": "existingEncryptionKeyVault",
+                                    "type": "Microsoft.Solutions.ResourceSelector",
+                                    "label": "Existing Encryption Key Vault",
+                                    "resourceType": "Microsoft.KeyVault/vaults",
+                                    "toolTip": "Select an existing Key Vault for Customer Managed Keys. Only key vaults in the session host location are shown.",
+                                    "constraints": {
+                                        "required": "[steps('zeroTrust').keyManagement.useExistingEncryptionKv]"
+                                    },
+                                    "scope": {
+                                        "subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]",
+                                        "location": "[steps('hosts').scope.location.name]"
+                                    },
+                                    "visible": "[and(steps('zeroTrust').keyManagement.useExistingEncryptionKv, or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')))]"
+                                },
+                                {
+                                    "name": "keyExpirationInDays",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Encryption Key Rotation (in Days)",
+                                    "defaultValue": 180,
+                                    "showStepMarkers": false,
+                                    "toolTip": "Days before a new key version is automatically generated in the Azure Key Vault.",
+                                    "min": 30,
+                                    "max": 180,
+                                    "visible": "[or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]"
+                                },
+                                {
+                                    "name": "encKvRetentionInDays",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Encryption Key Vault Soft Delete Retention (Days)",
+                                    "defaultValue": 90,
+                                    "showStepMarkers": false,
+                                    "toolTip": "Days to retain the Encryption Key Vault after deletion before permanent removal.",
+                                    "min": 7,
+                                    "max": 90,
+                                    "visible": "[and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv))]"
+                                }
 							]
 						},
 						{
 							"name": "privateEndpoints",
 							"type": "Microsoft.Common.Section",
 							"label": "PaaS Private Endpoints",
-							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)))]",
+							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('identity').credentials.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)))]",
 							"elements": [
 								{
 									"name": "privateEndpointTextBlock1",
@@ -3694,7 +3696,7 @@
 								{
 									"name": "operationsHeader",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
+									"visible": "[and(or(steps('identity').credentials.deploySecretsKeyVault, and(not(steps('zeroTrust').keyManagement.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
 									"options": {
 										"text": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal'))), 'Shared Operations Resources (Key Vaults and Recovery Services Vault)', 'Shared Operations Resources (Key Vaults)')]"
 									}
@@ -3710,7 +3712,7 @@
 										"allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('hosts').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(steps('identity').credentials.deploySecretsKeyVault, and(not(steps('zeroTrust').keyManagement.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "operationsSubnetsApi",
@@ -3730,7 +3732,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.operationsSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
 										"required": true
 									},
-									"visible": "[and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
+									"visible": "[and(or(steps('identity').credentials.deploySecretsKeyVault, and(not(steps('zeroTrust').keyManagement.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
 								},
 								{
 									"name": "hostpoolHeader",
@@ -3890,7 +3892,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": true
 									},
-									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')))]"
+									"visible": "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('zeroTrust').keyManagement.useExistingEncryptionKv), or(steps('identity').credentials.deploySecretsKeyVault, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')))]"
 								},
 								{
 									"name": "azureQueuePrivateDnsZone",
@@ -3911,7 +3913,7 @@
 							"name": "permittedIPsSection",
 							"type": "Microsoft.Common.Section",
 							"label": "Permitted IP Addresses",
-							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)))]",
+							"visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('identity').credentials.deploySecretsKeyVault, and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)))]",
 							"elements": [
 								{
 									"name": "permittedIPsInfo",
@@ -4510,12 +4512,13 @@
 				"existingVmBackupVaultResourceId": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('operationsAndMonitoring').backup.recoveryServicesVault, '')]",
 				"existingFilesBackupVaultResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('operationsAndMonitoring').backup.recoveryServicesVault, '')]",
 				"backupRetentionDays": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)), steps('operationsAndMonitoring').backup.backupRetentionDays, 30)]",
-				"deploySecretsKeyVault": "[if(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, false)]",
-				"secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault), steps('operationsAndMonitoring').keyVaults.enableSoftDelete, false)]",
-				"secretsKeyVaultEnablePurgeProtection": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, steps('operationsAndMonitoring').keyVaults.enableSoftDelete), steps('operationsAndMonitoring').keyVaults.enablePurgeProtection, false)]",
-				"keyVaultRetentionInDays": "[if(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv))), steps('operationsAndMonitoring').keyVaults.keyVaultRetentionInDays, 7)]",
-				"existingEncryptionKeyVaultResourceId": "[if(and(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv, or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), steps('operationsAndMonitoring').keyVaults.existingEncryptionKeyVault.id, '')]",
-				"keyExpirationInDays": "[if(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), steps('operationsAndMonitoring').keyVaults.keyExpirationInDays, 180)]",
+				"deploySecretsKeyVault": "[if(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault, false)]",
+				"secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault), steps('identity').credentials.enableSoftDelete, false)]",
+				"secretsKeyVaultEnablePurgeProtection": "[if(and(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault, steps('identity').credentials.enableSoftDelete), steps('identity').credentials.enablePurgeProtection, false)]",
+				"secretsKeyVaultRetentionInDays": "[if(steps('identity').credentials.deploySecretsKeyVault, steps('identity').credentials.secretsKvRetentionInDays, 90)]",
+				"encryptionKeyVaultRetentionInDays": "[if(and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)), steps('zeroTrust').keyManagement.encKvRetentionInDays, 90)]",
+				"existingEncryptionKeyVaultResourceId": "[if(and(steps('zeroTrust').keyManagement.useExistingEncryptionKv, or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), steps('zeroTrust').keyManagement.existingEncryptionKeyVault.id, '')]",
+				"keyExpirationInDays": "[if(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), steps('zeroTrust').keyManagement.keyExpirationInDays, 180)]",
 				"enableMonitoring": "[steps('operationsAndMonitoring').monitoring.enableMonitoring]",
 				"monitoringSubscriptionId": "[if(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.subscription.subscriptionId, '')]",
 				"existingLogAnalyticsWorkspaceResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.logAnalyticsWorkspace, '')]",
@@ -4523,12 +4526,12 @@
 				"existingDataCollectionEndpointResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.dataCollectionEndpoint, '')]",
 				"deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
 				"encryptionKeyVaultForcePublicAccess": "[steps('zeroTrust').privateEndpoints.encryptionKeyVaultForcePublicAccess]",
-				"operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
+				"operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('identity').credentials.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
 				"hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)), and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",
 				"azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
 				"azureBlobPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
 				"azureFilesPrivateDnsZoneResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilesPrivateDnsZone, '')]",
-				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv), or(steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
+				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('zeroTrust').keyManagement.useExistingEncryptionKv), or(steps('identity').credentials.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
 				"azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
 				"azureMonitorPrivateLinkScopeResourceId": "[if(steps('zeroTrust').azureMonitor.privateLink, steps('zeroTrust').azureMonitor.azureMonitorPrivateLinkScope.id, '')]",
 				"deployDiskAccessPolicy": "[steps('zeroTrust').policy.deployDiskAccessPolicy]",
@@ -4541,7 +4544,7 @@
 				"existingGlobalFeedResourceId": "[first(map(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed')), (ws) => ws.id))]",
 				"globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
 				"globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
-				"permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('operationsAndMonitoring').keyVaults.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('operationsAndMonitoring').keyVaults.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
+				"permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('identity').credentials.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
 				"tags": "[steps('tags').tags]"
 			},
 			"kind": "Subscription",

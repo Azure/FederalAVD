@@ -23,10 +23,10 @@ param secretsKeyVaultEnableSoftDelete bool = true
 @description('Optional. Enable purge protection on the Secrets Key Vault. Recommended for production environments.')
 param secretsKeyVaultEnablePurgeProtection bool = true
 
-@description('Optional. The retention period in days for soft-deleted objects in the Key Vaults.')
+@description('Optional. The retention period in days for soft-deleted objects in the Secrets Key Vault.')
 @minValue(7)
 @maxValue(90)
-param keyVaultRetentionInDays int = 7
+param secretsKeyVaultRetentionInDays int = 90
 
 // ── Credential Secrets (Optional — Security Team Owned) ───────────────────────
 // Providing these values stores them in the Secrets Key Vault at foundation deployment time.
@@ -65,6 +65,14 @@ param domainJoinUserPrincipalName string = ''
 
 @description('Optional. Deploy the Encryption Key Vault (Premium SKU) for Customer-Managed Keys. Required when using CMK in any AVD solution.')
 param deployEncryptionKeyVault bool = true
+
+@description('Optional. Soft delete retention days for the Encryption Key Vault.')
+@minValue(7)
+@maxValue(90)
+param encryptionKeyVaultRetentionInDays int = 90
+
+@description('Optional. When true, the Encryption Key Vault is deployed with public network access enabled. Required when using CMK on a Recovery Services Vault with private endpoints, because Azure Backup does not use the AzureServices trusted service bypass.')
+param encryptionKeyVaultForcePublicAccess bool = false
 
 // ── Private Endpoints ──────────────────────────────────────────────────────────
 
@@ -189,15 +197,17 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
     resourceGroupName: operationsResourceGroupName
     deploySecretsKeyVault: deploySecretsKeyVault
     secretsKeyVaultName: secretsKeyVaultName
-    keyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
-    keyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
-    keyVaultRetentionInDays: keyVaultRetentionInDays
+    secretsKeyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
+    secretsKeyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
+    secretsKeyVaultRetentionInDays: secretsKeyVaultRetentionInDays
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
     deployEncryptionKeyVault: deployEncryptionKeyVault
     encryptionKeyVaultName: encryptionKeyVaultName
+    encryptionKeyVaultRetentionInDays: encryptionKeyVaultRetentionInDays
+    encryptionKeyVaultForcePublicAccess: encryptionKeyVaultForcePublicAccess
     privateEndpoint: privateEndpoint
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
