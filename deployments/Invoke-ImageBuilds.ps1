@@ -3,12 +3,22 @@ param (
     [Parameter(Mandatory = $true)]
     [string]$Location,
     [Parameter(Mandatory = $false)]
-    [array]$ParameterFilePrefixes = @()
+    [array]$ParameterFilePrefixes = @(),
+    [Parameter(Mandatory = $false)]
+    [string]$CustomerRootPath = ''
 )
+
+$ResolvedCustomerRootPath = if ([string]::IsNullOrWhiteSpace($CustomerRootPath)) {
+    Join-Path -Path $PSScriptRoot -ChildPath '..\customer'
+} else {
+    $CustomerRootPath
+}
 
 $DeploymentJobs = @()
 ForEach ($Prefix in $ParameterFilePrefixes) {
-    $ParameterFile = Join-Path -Path $PSScriptRoot -ChildPath "imageBuild\parameters\$Prefix.imagebuild.parameters.json"
+    $CustomerParameterFile = Join-Path -Path $ResolvedCustomerRootPath -ChildPath "parameters\imageBuild\$Prefix.imagebuild.parameters.json"
+    $RepoParameterFile = Join-Path -Path $PSScriptRoot -ChildPath "imageBuild\parameters\$Prefix.imagebuild.parameters.json"
+    $ParameterFile = if (Test-Path -Path $CustomerParameterFile) { $CustomerParameterFile } else { $RepoParameterFile }
     If (Test-Path -Path $ParameterFile) {
         Write-Output "Using parameter file: $ParameterFile"
         $Date = Get-Date -Format 'yyyyMMddhhmmss'
@@ -16,7 +26,7 @@ ForEach ($Prefix in $ParameterFilePrefixes) {
         Start-Sleep -Seconds 1
     }
     else {
-        Write-Error "Parameter file $ParameterFile does not exist. Please create the parameter file and try again."
+        Write-Error "Parameter file not found. Checked: $CustomerParameterFile and $RepoParameterFile. Please create the parameter file and try again."
         exit
     }
     $DeploymentJobs += $DeploymentJob

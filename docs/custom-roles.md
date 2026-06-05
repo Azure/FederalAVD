@@ -6,15 +6,6 @@ The [quickStart](quick-start.md#required-deployer-roles-by-deployment) guide lis
 
 ---
 
-## Table of Contents
-
-1. [imageManagement Operator](#1-imagemanagement-operator)
-2. [imageBuild Operator — New RG Path](#2-imagebuild-operator--new-rg-path)
-3. [imageBuild Operator — Existing RG Path](#3-imagebuild-operator--existing-rg-path)
-4. [Hostpool Operator — Full Deployment](#4-hostpool-operator--full-deployment)
-5. [Hostpool Operator — SessionHostsOnly](#5-hostpool-operator--sessionhostsonly)
-6. [Deploying Custom Roles](#deploying-custom-roles)
-
 ---
 
 ## 1. imageManagement Operator

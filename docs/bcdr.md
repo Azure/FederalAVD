@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Business Continuity & Disaster Recovery
 
@@ -7,42 +7,6 @@
 FederalAVD includes purpose-built support for multi-region disaster recovery and high availability at every layer of the AVD stack — compute, profiles, images, and control plane. These capabilities are built into the existing templates and do not require additional tooling. This guide explains each available pattern, the RTO/RPO characteristics of each, and the specific parameters and deployment sequence required to implement them.
 
 > **Well-Architected Reference:** This guidance aligns with the [Azure Well-Architected Framework for AVD — Reliability](https://learn.microsoft.com/en-us/azure/well-architected/azure-virtual-desktop/reliability) and [Azure Virtual Desktop business continuity and disaster recovery](https://learn.microsoft.com/en-us/azure/virtual-desktop/disaster-recovery).
-
----
-
-## Table of Contents
-
-- [Business Continuity \& Disaster Recovery](#business-continuity--disaster-recovery)
-  - [Overview](#overview)
-  - [Table of Contents](#table-of-contents)
-  - [Intra-Region High Availability — Availability Zones](#intra-region-high-availability--availability-zones)
-  - [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments)
-    - [Recommended: Per-Region Profiles (No Cross-Region Replication)](#recommended-per-region-profiles-no-cross-region-replication)
-    - [When Cloud Cache Is the Right Answer](#when-cloud-cache-is-the-right-answer)
-  - [Profile High Availability — FSLogix Cloud Cache](#profile-high-availability--fslogix-cloud-cache)
-    - [How It Works in This Solution](#how-it-works-in-this-solution)
-    - [Prerequisites for Cross-Region Cloud Cache](#prerequisites-for-cross-region-cloud-cache)
-    - [Example Parameter Configuration](#example-parameter-configuration)
-  - [Image Gallery Cross-Region Replication](#image-gallery-cross-region-replication)
-    - [Architecture](#architecture)
-    - [Deployment Sequence](#deployment-sequence)
-    - [Customer-Managed Key Considerations](#customer-managed-key-considerations)
-  - [Cross-Region Host Pool Deployment](#cross-region-host-pool-deployment)
-    - [Naming Consistency — The Key to Cross-Region Deployments](#naming-consistency--the-key-to-cross-region-deployments)
-    - [Workspace Strategy](#workspace-strategy)
-    - [Standby Mode Options](#standby-mode-options)
-    - [Deployment Checklist for Secondary Region](#deployment-checklist-for-secondary-region)
-  - [Personal Host Pool VM Backup](#personal-host-pool-vm-backup)
-  - [Session Host Replacer — Image Rollback](#session-host-replacer--image-rollback)
-  - [End-to-End Multi-Region Architecture](#end-to-end-multi-region-architecture)
-  - [RTO/RPO Reference](#rtorpo-reference)
-  - [Known Gaps and Limitations](#known-gaps-and-limitations)
-    - [Secondary Gallery Deployment Is Not Automated](#secondary-gallery-deployment-is-not-automated)
-    - [Azure NetApp Files Cross-Region Replication](#azure-netapp-files-cross-region-replication)
-    - [EntraId Identity Solution Does Not Support Cloud Cache Multi-Account](#entraid-identity-solution-does-not-support-cloud-cache-multi-account)
-    - [Backup Policy Schedules Are Not Parameterized](#backup-policy-schedules-are-not-parameterized)
-    - [FSLogix Office Container Cross-Region](#fslogix-office-container-cross-region)
-    - [No Automated Failover Routing](#no-automated-failover-routing)
 
 ---
 
@@ -71,6 +35,22 @@ param availabilityZones array = []  // empty = spread across all zones
 
 > **FSLogix is always recommended for pooled host pools.** Without FSLogix, users on pooled hosts accumulate roaming profile baggage in the local temp profile, leading to bloat, inconsistent state, and policy enforcement gaps. The question for DR is not whether to use FSLogix, but whether to replicate profiles across regions. Personal host pool VMs carry their profile state on the OS disk and typically do not require FSLogix.
 
+### Start With OneDrive Known Folder Move
+
+Before designing a cross-region FSLogix strategy, evaluate whether **OneDrive Known Folder Move (KFM)** is deployed or can be deployed as part of the AVD configuration. KFM silently redirects Desktop, Documents, and Pictures to OneDrive, making those folders cloud-native and continuously synchronized independent of the FSLogix profile container.
+
+With KFM in place:
+
+- **The files users care most about survive any regional failover automatically** — documents, desktop items, and saved work are already in OneDrive and available from any host pool in any region.
+- **The FSLogix profile container's cross-region importance shrinks significantly** — it holds application state, browser cache, Outlook OST files, and registry hive. Users starting with a fresh profile on failover face a much smaller practical gap.
+- **For most organizations, KFM + per-region FSLogix profiles meets recovery objectives** without the cost and performance trade-offs of Cloud Cache or additional geo-redundant profile storage.
+
+> **Recommendation:** Deploy OneDrive KFM via Intune or Group Policy before evaluating Cloud Cache or any cross-region profile replication approach. It is the lowest-complexity, highest-impact profile resilience investment available for cloud-joined or hybrid AVD deployments.
+
+**Reference:** [Redirect and move Windows known folders to OneDrive](https://learn.microsoft.com/en-us/onedrive/redirect-known-folders)
+
+---
+
 ### Recommended: Per-Region Profiles (No Cross-Region Replication)
 
 The default recommendation for cross-region DR is **independent per-region FSLogix storage with no cross-region synchronization**. Each region's host pool writes profiles to its own local storage. On a regional failover, users connecting to the secondary region get a fresh profile or the last state that was written to the secondary region's own storage.
@@ -82,6 +62,8 @@ This is preferred for most deployments because:
 - **Lower cost** — No secondary storage account is needed for profile data; only the compute and networking infrastructure in the secondary region.
 
 Deploy the secondary host pool with its own FSLogix storage. Accept that users who fail over will start from an empty or per-region profile. Use OneDrive Known Folder Move (KFM) to roam Desktop/Documents/Pictures natively, reducing the practical impact of per-region profiles.
+
+> **FSLogix storage redundancy:** Independent of cross-region DR strategy, match FSLogix storage account redundancy to compute resilience. When session hosts are deployed across availability zones, set `fslogixStorageRedundancy = 'ZoneRedundant'` (the default is `LocallyRedundant`). **Azure Files Premium does not support Geo-Redundant Storage (GRS) — ZRS is the highest redundancy tier available for production-grade FSLogix storage.** LRS is appropriate only for single-zone or availability set deployments. Environments aligning to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-9 (Information System Backup) should use ZRS in zone-enabled regions as the expected baseline for primary profile storage.
 
 ### When Cloud Cache Is the Right Answer
 
@@ -283,6 +265,69 @@ Do not pre-deploy session hosts. In a failover event, trigger a Session Host Rep
 - [ ] Host pool deployed with same `identifier` + `index`, secondary subnet, `existingFeedWorkspaceResourceId` set
 - [ ] `customImageResourceId` pointing to secondary gallery
 
+### Executing Pooled Host Pool Failover
+
+When a regional outage occurs, the steps depend on which standby mode was chosen. In all cases, the prerequisite checklist above must have been completed beforehand — you cannot improvise the image replication or networking during an active outage.
+
+#### Step 1 — Confirm image availability in the secondary gallery
+
+Before deploying session hosts, verify that the intended image version is present and fully replicated in the secondary region's Azure Compute Gallery. You need the resource ID of the image version in the **secondary** gallery, not the primary.
+
+If the last replication run completed successfully before the outage, the image is available. If the most recent version was not yet replicated, use the most recent available version in the secondary gallery. Do not attempt to trigger a new imageBuild run while the primary region is unavailable.
+
+To list available image versions in the secondary gallery:
+
+```powershell
+# List replicated image versions in the secondary gallery
+Get-AzGalleryImageVersion `
+  -ResourceGroupName <secondary imageManagement resource group> `
+  -GalleryName <secondary gallery name> `
+  -GalleryImageDefinitionName <image definition name>
+```
+
+Note the `id` of the version you will use. If `keyManagementGalleryImageVersions` is `CustomerManaged`, use the secondary region's Disk Encryption Set resource ID, not the primary's.
+
+#### Step 2 — Warm standby: scale up existing session hosts
+
+If session hosts were pre-deployed in the secondary region (warm standby with `startVMOnConnect = true`), they start automatically on user connection. No deployment action is required. Verify that:
+
+- The secondary host pool is registered in the workspace users are being directed to (see [Workspace Strategy](#workspace-strategy))
+- Scaling plan limits are appropriate for the expected failover load — adjust `minSessionHostCount` in Session Host Replacer or increase the scaling plan's capacity thresholds if needed
+
+#### Step 3 — Cold standby: deploy session hosts from pre-replicated image
+
+If no session hosts are pre-deployed, use **`deployments/add-ons/sessionHosts/`** to add session hosts to the secondary host pool. This avoids re-running the full hostpool template (which would touch control plane resources and workspace registration). The session hosts add-on takes the existing host pool resource ID and deploys only the VMs:
+
+```powershell
+# From the repo root — deploy session hosts into the secondary host pool
+cd deployments/add-ons/sessionHosts
+
+# Edit or create a parameter file targeting the secondary region:
+#   - hostPoolResourceId: resource ID of the secondary host pool
+#   - customImageResourceId: image version ID from the secondary gallery (Step 1)
+#   - virtualMachineNamePrefix / index: consistent with your naming convention
+#   - subnet: secondary region subnet resource ID
+
+New-AzResourceGroupDeployment `
+  -ResourceGroupName <secondary hosts resource group> `
+  -TemplateFile sessionHosts.bicep `
+  -TemplateParameterFile parameters/sessionHosts.<env>.json
+```
+
+Alternatively, trigger a **Session Host Replacer** run in the secondary region if it was pre-configured there. Session Host Replacer will deploy the configured number of hosts from the `latest` version in the secondary gallery automatically.
+
+#### Step 4 — Verify user routing
+
+Ensure users are being directed to the secondary workspace or host pool. This solution does not automate DNS failover or workspace switching — user routing must be handled through:
+
+- **Conditional access policies** that assign users to the secondary workspace's application group
+- **Manual workspace assignment** (update users' feed URL or re-subscribe to the secondary workspace)
+- **AVD Global Reach / workspace aggregation** if the secondary app group was registered to the shared primary workspace (Option A above)
+
+#### Post-failover: image replication catchup
+
+When the primary region recovers, resume normal imageBuild runs with `remoteComputeGalleryResourceId` pointing to the secondary gallery. The next successful build will replicate the latest image to the secondary region, keeping the secondary gallery current for the next DR event or for failing back.
+
 ---
 
 ## Personal Host Pool VM Backup
@@ -290,22 +335,54 @@ Do not pre-deploy session hosts. In a failover event, trigger a Session Host Rep
 **What it protects against:** Accidental deletion, data corruption, or OS-level failure on personal (dedicated) session host VMs. With geo-redundant vaults, also enables cross-region restore for personal VMs.
 
 **RTO:** Hours — manual restore process.  
-**RPO:** Determined by backup schedule (Azure Backup policy defaults).
+**RPO:** Determined by backup schedule and `backupRetentionDays` (daily backup, default 30-day retention). For cross-region restore (GRS), recovery points in the secondary region lag the primary by approximately 12–24 hours — this is the effective RPO for a regional outage scenario.
 
-Personal host pool VMs are backed up to an Azure Recovery Services Vault when `recoveryServices = true`. The vault is deployed to `rg-avd-operations-{loc}` and is shared across all host pools in the region.
+Personal host pool VMs are backed up to an Azure Recovery Services Vault when `recoveryServices = true`. The vault is deployed to the **host pool’s own hosts resource group** (`rg-avd-hosts-{identifier}-{index}-{loc}`) — one vault per host pool, not shared. This keeps backup scope and lifecycle tightly bound to each host pool.
 
 ```bicep
 param recoveryServices bool = false
 @allowed(['LocallyRedundant', 'ZoneRedundant', 'GeoRedundant'])
 param recoveryServicesVaultStorageRedundancy string = 'LocallyRedundant'
+@minValue(1)
+@maxValue(365)
+param backupRetentionDays int = 30                        // daily retention window
+param existingVmBackupVaultResourceId string = '' // omit to create a new vault
 ```
 
 For personal host pools:
-- `GeoRedundant` enables [Azure Backup Cross-Region Restore (CRR)](https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#cross-region-restore), allowing VM recovery in the paired Azure region if the primary region is unavailable.
-- `ZoneRedundant` protects against zone failure but not regional outage.
-- `LocallyRedundant` is the default and is appropriate when the personal host pool itself is zone-redundant.
+- `GeoRedundant` replicates backup recovery points to a paired Azure region and automatically enables Cross-Region Restore (CRR), allowing VM recovery in that secondary region even if the primary region is completely unavailable. CRR is enabled automatically when GRS is selected — no separate parameter is needed. GRS storage costs roughly 2× LRS regardless of whether CRR is on or off; without CRR the geo-redundant copy is passive data durability with no recovery capability, so enabling CRR with GRS is always the right choice. The only additional cost for CRR is the restore operation itself, which occurs only during an actual DR event. In environments aligned to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-6 (Alternate Storage Site) and CP-7 (Alternate Processing Site), GRS is the recommended configuration — backup data physically resides at an alternate facility and can be restored there within an acceptable RTO.
+- `ZoneRedundant` protects backup data against a zone-level failure within the region. Satisfies NIST CP-9 zone-resilience expectations when cross-region restore is not required.
+- `LocallyRedundant` is the default and is appropriate when cross-region recovery of backup data is not a requirement and the host pool is already zone-redundant.
 
-> **Pooled host pools:** When `recoveryServices = true` for a pooled host pool, the **FSLogix Azure Files file share** is backed up (not the VMs). FSLogix share snapshots are stored in the storage account itself, so vault storage redundancy has limited impact on profile data recovery. For cross-region profile resilience on pooled host pools, see [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments) — the default recommendation is per-region FSLogix storage with no cross-region sync rather than backup or Cloud Cache.
+### Performing a Cross-Region Restore
+
+When a regional outage requires recovering personal VMs into the paired region, the process is entirely manual through the Azure Portal or Azure CLI. There is no automated failover. At a high level:
+
+1. **Navigate to the vault** in the Azure Portal — the vault is in the hosts resource group (`rg-avd-hosts-{identifier}-{index}-{loc}`) in the *primary* region. Even if the primary region is unavailable, the vault's geo-redundant data is accessible from the portal.
+2. **Switch to Secondary Region view** — in the vault's **Backup Items** blade, use the **Secondary Region** toggle. This shows backup items replicated to the paired region. The toggle is not visible by default; you must explicitly select it.
+3. **Select the VM and trigger restore** — choose the VM, select **Restore VM**, then choose **Cross Region Restore**. Select a recovery point (the most recent available in the secondary region is typically 12–24 hours behind the primary).
+4. **Specify target resources in the secondary region** — provide a target resource group, target virtual network, and subnet. These must already exist in the secondary region (pre-provisioned as part of your DR runbook; this solution's networking template can be pre-deployed there).
+5. **Wait for restore to complete** — the restored VM is created in the secondary region as a standalone VM, not automatically enrolled in a host pool. After the restore completes, re-add it to the secondary region's AVD host pool.
+
+> **Note:** CRR recovery points in the secondary region lag the primary by approximately 12–24 hours. This is the practical RPO for CRR — not the backup schedule interval alone.
+
+For the full procedure including CLI and PowerShell options, see [Restore Azure VM data in Azure portal — Cross Region Restore](https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#cross-region-restore).
+
+Customer-managed key (CMK) encryption is supported for the vault via `keyManagementRecoveryServicesVault`. The vault always uses its system-assigned identity for CMK access — this avoids an extra user-assigned identity resource and is also required by Azure when the vault has a private endpoint.
+
+> **CMK with private Key Vaults — mutually exclusive controls:** Azure Backup has no `AzureServices` trusted service bypass for Key Vault, so it cannot reach a Key Vault with `publicNetworkAccess: Disabled`. This creates an irreconcilable conflict between two independent controls when both `deployPrivateEndpoints = true` and `keyManagementRecoveryServicesVault = CustomerManaged` are set:
+>
+> | | **Option A** | **Option B** |
+> |---|---|---|
+> | RSV encryption | Customer-Managed Keys | Platform-Managed Keys |
+> | KV public access | Enabled (`publicNetworkAccess: Disabled` removed; KV reachable from Azure public network by any authenticated principal) | Disabled (private-only enforced) |
+> | SC-28 satisfied for RSV | ✅ Yes | ❌ No |
+> | SC-7 network isolation maintained | ❌ No | ✅ Yes |
+> | Parameter | `encryptionKeyVaultForcePublicAccess: true` | `encryptionKeyVaultForcePublicAccess: false` (default) |
+>
+> When `encryptionKeyVaultForcePublicAccess = false` (the default), the solution automatically falls back to PMK on the RSV rather than failing the deployment (Option B). Neither option satisfies both controls simultaneously — this is a **Microsoft Azure platform limitation**. The choice is a compliance risk decision for your ISSO and Authorizing Official, not a solution default. Document the selected option and formally accept the resulting gap in your SSP.
+
+> **Pooled host pools:** When `recoveryServices = true` for a pooled host pool, the **FSLogix Azure Files file shares** are backed up using Azure Backup snapshot policy. The vault for Azure Files backup is deployed to the **shared operations resource group** (`rg-avd-operations-{loc}`) and is reused across pooled host pools in the same region — pass `existingFilesBackupVaultResourceId` on subsequent pooled deployments to reuse an existing vault rather than creating a second one. FSLogix share snapshots are stored in the storage account itself and are not transmitted to the vault — the vault holds only scheduling metadata. Vault storage redundancy is therefore hardcoded to `LocallyRedundant` for the Azure Files vault, and CMK is not required. The `backupRetentionDays` parameter controls the snapshot retention period (VM backup and Azure Files backup are mutually exclusive per host pool type, so the parameter is shared). Soft-delete retention for FSLogix file shares is controlled separately by `fslogixSoftDeleteRetentionDays` (default: 14 days). For cross-region profile resilience on pooled host pools, see [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments).
 
 ---
 
@@ -388,7 +465,8 @@ graph TB
 | **Image Gallery replication** | 0 | 0 | None (pre-replicated) | Secondary imageManagement deployed; `remoteComputeGalleryResourceId` set in imageBuild |
 | **Warm standby host pool** | Minutes | Depends on profile strategy | Power on VMs or wait for Start VM on Connect | Secondary host pool pre-deployed with deallocated VMs |
 | **Cold standby host pool** | Hours | Depends on profile strategy | Deploy session hosts from pre-replicated image | Secondary host pool infra deployed; no VMs |
-| **Azure Backup — personal VMs** | Hours | Last backup point | Manual restore in Azure portal | `recoveryServices = true`, `GeoRedundant` vault |
+| **Azure Backup — personal VMs (LRS/ZRS)** | Hours | Last backup point | Manual restore in Azure portal | `recoveryServices = true` |
+| **Azure Backup — personal VMs (GRS + CRR)** | Hours | Last backup point | Manual cross-region restore in Azure portal | `recoveryServices = true`, `GeoRedundant` vault, `recoveryServicesVaultCrossRegionRestore = true` |
 | **FSLogix share backup (pooled)** | Hours | Last backup point | Manual restore | `recoveryServices = true` |
 | **Session Host Replacer rollback** | Minutes | N/A | Power on retained hosts | `ShutdownRetention` mode; within retention window |
 
@@ -408,9 +486,9 @@ The imageManagement template does not deploy a remote gallery — it must be dep
 
 When `identitySolution = 'EntraId'` (storage key authentication), FSLogix is configured to write to only the first storage account. Cloud Cache multi-account cross-region writes are not supported with this identity solution. Use `EntraKerberos-CloudOnly`, `EntraKerberos-Hybrid`, `EntraDS`, or `ADDS` for full Cloud Cache support.
 
-### Backup Policy Schedules Are Not Parameterized
+### Backup Schedule Is Not Parameterized
 
-`recoveryServices = true` creates Azure Backup policies using default schedules. The backup frequency and retention period are not exposed as template parameters. If specific RPO targets are required, configure custom backup policies on the Recovery Services Vault after deployment.
+`recoveryServices = true` creates Azure Backup policies with a daily backup schedule running at 23:00 UTC. The backup frequency is not configurable via template parameters. **Retention is parameterized** — use `backupRetentionDays` (default: 30, range: 1–365) to control how many daily recovery points are kept for VM backup, or how many daily snapshots are retained for Azure Files backup. If you require custom backup windows or intraday snapshots, configure an additional custom backup policy on the Recovery Services Vault after deployment.
 
 ### FSLogix Office Container Cross-Region
 
@@ -419,3 +497,22 @@ When `identitySolution = 'EntraId'` (storage key authentication), FSLogix is con
 ### No Automated Failover Routing
 
 FederalAVD does not include automated DNS failover, Azure Traffic Manager configuration, or user re-routing logic. When a failover event occurs, users must be directed to the secondary workspace (if using separate workspaces) or they must select the secondary region's application group manually (if using a shared workspace with both regions' app groups registered). Automate user routing decisions through your identity provider's conditional access policies or workspace assignment tooling.
+
+### Azure Site Recovery (ASR) Is Not Implemented
+
+This solution does not deploy Azure Site Recovery replication for personal host pool VMs. ASR provides continuous VM replication to a secondary region with RPO in minutes and RTO in minutes-to-hours, and is the mechanism that satisfies the built-in Azure Policy **"Audit virtual machines without disaster recovery configured"** (policy ID `0015ea4d-51ff-4ce3-8d8c-f3f8f0179a56`). That policy checks for `Microsoft.Resources/links: ASR-Protect-*`, which is only created by ASR — Azure Backup with GRS+CRR does not create this link and will not satisfy the policy check.
+
+For most AVD personal desktop deployments, Azure Backup with GRS + CRR provides adequate DR capability when the Contingency Plan (CP-2) documents an RPO of hours rather than minutes. The two approaches differ:
+
+| | **Azure Backup + GRS + CRR** | **Azure Site Recovery** |
+|---|---|---|
+| RPO | Hours (last backup point) | Minutes (continuous replication) |
+| RTO | Hours (restore + reconfigure) | Minutes to hours (failover) |
+| VM state on recovery | Point-in-time snapshot | Near-current replica |
+| CP-7 satisfaction | ✅ if CP documents hours-RPO acceptable | ✅ for tight RPO/RTO requirements |
+| Azure policy compliant | ❌ (exemption required) | ✅ |
+| Incremental ongoing cost | None beyond GRS storage (restore charges on DR event only) | Higher (replication compute + storage) |
+
+If your organization's Contingency Plan requires sub-hour RPO/RTO for personal desktop VMs, or if your ISSO/AO will not accept a policy exemption, ASR support would need to be added to this solution. For the majority of government AVD deployments where user data is cloud-synced (OneDrive KFM, SharePoint), Azure Backup + GRS + CRR with a documented policy exemption is the appropriate and cost-effective choice.
+
+Document the selected approach and formally accept the resulting policy finding in your SSP. See [docs/compliance.md](compliance.md) for the CP-7 control mapping and exemption guidance.

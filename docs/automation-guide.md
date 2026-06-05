@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # End-to-End Automation Guide
 
@@ -115,6 +115,8 @@ Script invocation:
   # Add -UpdateArtifacts to also run Step 3 automatically
 ```
 
+If your customer parameter files live outside the extracted repo zip, pass `-CustomerRootPath <path>` so the script reads from your external customer folder.
+
 ### Key outputs
 
 | Output | Used by |
@@ -133,6 +135,7 @@ Script invocation:
 - Add `-UpdateArtifacts` to the script call to roll Steps 2 and 3 into a single invocation for first-time setup.
 - If `deployArtifactsStorageAccount = false` in the parameter file, the artifacts-related outputs will be empty strings — skip Step 3 and omit `artifactsContainerUri` / `userAssignedIdentityResourceId` in Step 4.
 - The `managedIdentityResourceId` output (→ `userAssignedIdentityResourceId`) is only **required** when using the existing resource group path (`imageBuildResourceGroupId` is set), zero-trust artifacts storage, or log collection. Leave it empty to use the **temporary RG path** (see Step 4 notes).
+- If your customer parameter files live outside the extracted repo zip, pass `-CustomerRootPath <path>` to `Deploy-ImageManagement.ps1` and `Invoke-ImageBuilds.ps1` so they resolve the external customer folder.
 
 ---
 
@@ -151,9 +154,10 @@ This step has **no Azure deployment outputs** — it only writes blobs to storag
 
 ### Notes
 
-- For air-gapped environments, use `-SkipDownloadingNewSources` and pre-stage files in `.common/artifacts/` manually before running.
+- For air-gapped environments, use `-SkipDownloadingNewSources` and pre-stage customer-managed files in `customer/artifacts/` before running.
 - Use `-DeleteExistingBlobs` for a clean upload when removing old packages.
-- Use `-AdditionalDownloadsFilePath` to merge a custom downloads JSON file on top of the auto-selected base file.
+- To merge customer-owned optional downloads, place `downloads.json` in `customer/parameters/imageManagement/`; the script discovers it automatically.
+- To keep customer content outside a freshly extracted repo zip, pass `-CustomerRootPath <path>` to `Update-ImageArtifacts.ps1`.
 
 ---
 
@@ -214,7 +218,7 @@ Example PowerShell invocation:
   New-AzDeployment `
       -Location <region> `
       -TemplateFile ".\deployments\hostpools\hostpool.json" `
-      -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
+  -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
       -Name $deploymentName
 ```
 
@@ -230,7 +234,7 @@ Example PowerShell invocation:
 ### Notes
 
 - If `customImageResourceId` is empty, the host pool uses the marketplace image defined by `imagePublisher` / `imageOffer` / `imageSku`.
-- The host pool deployment always creates all resources. Use `existingLogAnalyticsWorkspaceResourceId`, `existingAVDInsightsDataCollectionRuleResourceId`, and `existingDataCollectionEndpointResourceId` in the parameter file to reuse shared monitoring infrastructure instead of creating new resources. Use `existingRecoveryServicesVaultResourceId` to reuse an existing backup vault, and `existingEncryptionKeyVaultResourceId` to reference a pre-deployed encryption Key Vault.
+- The host pool deployment always creates all resources. Use `existingLogAnalyticsWorkspaceResourceId`, `existingAVDInsightsDataCollectionRuleResourceId`, and `existingDataCollectionEndpointResourceId` in the parameter file to reuse shared monitoring infrastructure instead of creating new resources. Use `existingVmBackupVaultResourceId` (personal host pools) or `existingFilesBackupVaultResourceId` (pooled host pools) to reuse existing backup vaults, and `existingEncryptionKeyVaultResourceId` to reference a pre-deployed encryption Key Vault.
 - For repeatable redeployments (e.g., after a new image build), keep your parameter file stable and just update `customImageResourceId` to the new image version.
 
 ---
@@ -281,20 +285,21 @@ $galleryId = $imgMgmt.Outputs.computeGalleryResourceId.Value
 Keep one parameter file per component per environment. Update only the fields that change between runs (typically `customImageResourceId` after a new build):
 
 ```
-deployments/
-  keyVaults/parameters/
-    prod.keyVaults.parameters.json
+customer/
+  parameters/
+    keyVaults/
+      prod.keyVaults.parameters.json
 
-  imageManagement/parameters/
-    prod.imageManagement.parameters.json
+    imageManagement/
+      prod.imageManagement.parameters.json
 
-  imageBuild/parameters/
-    prod.imageBuild.parameters.json       ← update computeGalleryResourceId, artifactsContainerUri, etc. once
-    win11-m365.imageBuild.parameters.json ← per image definition variant
+    imageBuild/
+      prod.imageBuild.parameters.json       ← update computeGalleryResourceId, artifactsContainerUri, etc. once
+      win11-m365.imageBuild.parameters.json ← per image definition variant
 
-  hostpools/parameters/
-    prod-finance.hostpool.parameters.json ← update customImageResourceId after each build
-    prod-general.hostpool.parameters.json
+    hostpools/
+      prod-finance.hostpool.parameters.json ← update customImageResourceId after each build
+      prod-general.hostpool.parameters.json
 ```
 
 ---

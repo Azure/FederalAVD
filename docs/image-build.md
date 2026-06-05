@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical Reference:** [Image Build Template Documentation](../deployments/imageBuild/README.md) - Complete parameter reference and CI/CD examples
 
@@ -27,21 +27,6 @@ The Federal AVD solution includes an automated custom image building capability.
 - Supporting air-gapped or restricted network environments
 
 ---
-
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Understanding the Build Process](#understanding-the-build-process)
-- [Deployment Methods](#deployment-methods)
-  - [Method 1: Deploy Button (Recommended)](#method-1-deploy-button-recommended)
-  - [Method 2: PowerShell Helper Script](#method-2-using-the-powershell-helper-script)
-  - [Method 3: Azure CLI](#method-3-azure-cli)
-- [Parameter Configuration](#parameter-configuration)
-- [Build Process Monitoring](#build-process-monitoring)
-- [Using the Custom Image](#using-the-custom-image)
-- [Troubleshooting](#troubleshooting)
-- [Best Practices](#best-practices)
-- [Next Steps](#next-steps)
 
 ---
 
@@ -106,7 +91,7 @@ Custom images are built by executing **artifacts** during the image build proces
 
 ### Required - Parameter Files
 
-Image build configurations are defined in parameter files located in `deployments/imageBuild/parameters/`:
+Use the sample files in `deployments/imageBuild/parameters/` as starting points, then store your environment-specific copies in `customer/parameters/imageBuild/`:
 
 **One parameter file is required per image build:**
 
@@ -115,7 +100,7 @@ Image build configurations are defined in parameter files located in `deployment
 **Example structure:**
 
 ```
-deployments/imageBuild/parameters/
+customer/parameters/imageBuild/
 ├── demo.imageBuild.parameters.json
 ├── dev.imageBuild.parameters.json
 └── prod.imageBuild.parameters.json
@@ -309,7 +294,7 @@ Deploy using Azure CLI or PowerShell directly:
 New-AzSubscriptionDeployment `
     -Location "usgovvirginia" `
     -TemplateFile "imageBuild\imageBuild.json" `
-    -TemplateParameterFile "imageBuild\parameters\demo.imageBuild.parameters.json" `
+  -TemplateParameterFile "..\customer\parameters\imageBuild\demo.imageBuild.parameters.json" `
     -Name "avd-image-build-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
 
@@ -321,7 +306,7 @@ Executed from Deployments folder.
 az deployment sub create \
     --location usgovvirginia \
     --template-file imageBuild/imageBuild.json \
-    --parameters @imageBuild/parameters/demo.imageBuild.parameters.json \
+  --parameters @../customer/parameters/imageBuild/demo.imageBuild.parameters.json \
     --name "avd-image-build-$(date +%Y%m%d%H%M)"
 ```
 

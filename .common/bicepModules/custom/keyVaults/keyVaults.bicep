@@ -1,5 +1,4 @@
 targetScope = 'subscription'
-import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
 // Shared module: deploys AVD Secrets Key Vault and/or Encryption Key Vault into an existing resource group.
 // Called by both the standalone Security deployment and the hostpool inline fallback.
 // The caller is responsible for creating the resource group before calling this module.
@@ -12,9 +11,10 @@ param secretsKeyVaultName string
 param domainJoinUserPassword string = ''
 @secure()
 param domainJoinUserPrincipalName string = ''
-param keyVaultEnableSoftDelete bool = true
-param keyVaultEnablePurgeProtection bool = true
-param keyVaultRetentionInDays int = 90
+param secretsKeyVaultEnableSoftDelete bool = true
+param secretsKeyVaultEnablePurgeProtection bool = true
+param secretsKeyVaultRetentionInDays int = 90
+
 param logAnalyticsWorkspaceResourceId string = ''
 param privateEndpoint bool = false
 param privateEndpointSubnetResourceId string = ''
@@ -29,12 +29,16 @@ param virtualMachineAdminUserName string = ''
 
 param deployEncryptionKeyVault bool = true
 param encryptionKeyVaultName string
+@description('Optional. Soft delete retention days specifically for the Encryption Key Vault. Defaults to keyVaultRetentionInDays.')
+@minValue(7)
+@maxValue(90)
+param encryptionKeyVaultRetentionInDays int = secretsKeyVaultRetentionInDays
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module.')
 param permittedIPs array = []
 
-@description('Optional. Role assignments to apply to the inline-created secrets key vault.')
-param secretsKeyVaultRoleAssignments roleAssignmentType[] = []
+@description('Optional. When true, the encryption key vault is deployed with public network access enabled and all IP-based firewall restrictions cleared, regardless of the privateEndpoint setting. Required when CMK is configured on Recovery Services Vault (RSV does not use the AzureServices trusted service bypass, and its backup IPs are regional/dynamic so IP restrictions are not feasible). Only set this when you explicitly accept the tradeoff of an internet-reachable encryption key vault without IP restrictions.')
+param encryptionKeyVaultForcePublicAccess bool = false
 
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
@@ -60,6 +64,14 @@ var deploySecretsKv = deploySecretsKeyVault
 var deploySecretsKvPe = deploySecretsKv && privateEndpoint && !empty(privateEndpointSubnetResourceId)
 var deployEncryptionKvPe = deployEncryptionKeyVault && privateEndpoint && !empty(privateEndpointSubnetResourceId)
 
+// Resolve publicNetworkAccess for each vault. When PE is used and no IPs are permitted, public access
+// is disabled — the PE becomes the sole access path. IP allowances or an explicit override keep it open.
+var kvPublicAccessDisabled = privateEndpoint && empty(permittedIPs)
+var secretsKvPublicNetworkAccess = kvPublicAccessDisabled ? 'Disabled' : 'Enabled'
+// Encryption KV can be forced open (Enabled) to support RSV CMK, which requires unrestricted public access.
+// In all other PE+no-IP scenarios it is private-only, matching the secrets KV.
+var encryptionKvPublicNetworkAccess = encryptionKeyVaultForcePublicAccess ? 'Enabled' : (kvPublicAccessDisabled ? 'Disabled' : 'Enabled')
+
 // ─── Secrets Key Vault ─────────────────────────────────────────────────────────
 
 module secretsKeyVault '../../keyVault/vaults/deploy.bicep' = if (deploySecretsKv) {
@@ -69,15 +81,15 @@ module secretsKeyVault '../../keyVault/vaults/deploy.bicep' = if (deploySecretsK
     name: secretsKeyVaultName
     tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
     sku: 'standard'
-    enableSoftDelete: keyVaultEnableSoftDelete
-    softDeleteRetentionInDays: keyVaultRetentionInDays
-    enablePurgeProtection: keyVaultEnablePurgeProtection
+    enableSoftDelete: secretsKeyVaultEnableSoftDelete
+    softDeleteRetentionInDays: secretsKeyVaultRetentionInDays
+    enablePurgeProtection: secretsKeyVaultEnablePurgeProtection
     enabledForTemplateDeployment: true
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
       ? { workspaceId: logAnalyticsWorkspaceResourceId }
       : null
     permittedIPs: permittedIPs
-    privateEndpoint: privateEndpoint
+    publicNetworkAccess: secretsKvPublicNetworkAccess
   }
 }
 
@@ -116,18 +128,6 @@ module secrets '../../keyVault/vaults/secrets/deploy.bicep' = [
   }
 ]
 
-module secretsKeyVaultRoleAssignmentsModule '../../keyVault/vaults/roleAssignment.bicep' = if (deploySecretsKv && !empty(secretsKeyVaultRoleAssignments)) {
-  name: 'Secrets-KeyVault-RBAC-${deploymentSuffix}'
-  scope: resourceGroup(resourceGroupName)
-  params: {
-    keyVaultName: secretsKeyVaultName
-    assignments: secretsKeyVaultRoleAssignments
-  }
-  dependsOn: [
-    secretsKeyVault
-  ]
-}
-
 // ─── Encryption Key Vault ──────────────────────────────────────────────────────
 
 module encryptionKeyVault '../../keyVault/vaults/deploy.bicep' = if (deployEncryptionKeyVault) {
@@ -138,14 +138,14 @@ module encryptionKeyVault '../../keyVault/vaults/deploy.bicep' = if (deployEncry
     tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
     sku: 'premium'
     enableSoftDelete: true
-    softDeleteRetentionInDays: keyVaultRetentionInDays
+    softDeleteRetentionInDays: encryptionKeyVaultRetentionInDays
     enablePurgeProtection: true
     enabledForDiskEncryption: true
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
       ? { workspaceId: logAnalyticsWorkspaceResourceId }
       : null
-    permittedIPs: permittedIPs
-    privateEndpoint: privateEndpoint
+    permittedIPs: encryptionKeyVaultForcePublicAccess ? [] : permittedIPs
+    publicNetworkAccess: encryptionKvPublicNetworkAccess
   }
 }
 

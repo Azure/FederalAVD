@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "17387567010493828557"
+      "templateHash": "16536545935961896332"
     }
   },
   "parameters": {
@@ -44,13 +44,13 @@
         "description": "Optional. Enable purge protection on the Secrets Key Vault. Recommended for production environments."
       }
     },
-    "keyVaultRetentionInDays": {
+    "secretsKeyVaultRetentionInDays": {
       "type": "int",
-      "defaultValue": 7,
+      "defaultValue": 90,
       "minValue": 7,
       "maxValue": 90,
       "metadata": {
-        "description": "Optional. The retention period in days for soft-deleted objects in the Key Vaults."
+        "description": "Optional. The retention period in days for soft-deleted objects in the Secrets Key Vault."
       }
     },
     "virtualMachineAdminPassword": {
@@ -86,6 +86,22 @@
       "defaultValue": true,
       "metadata": {
         "description": "Optional. Deploy the Encryption Key Vault (Premium SKU) for Customer-Managed Keys. Required when using CMK in any AVD solution."
+      }
+    },
+    "encryptionKeyVaultRetentionInDays": {
+      "type": "int",
+      "defaultValue": 90,
+      "minValue": 7,
+      "maxValue": 90,
+      "metadata": {
+        "description": "Optional. Soft delete retention days for the Encryption Key Vault."
+      }
+    },
+    "encryptionKeyVaultForcePublicAccess": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. When true, the Encryption Key Vault is deployed with public network access enabled. Required when using CMK on a Recovery Services Vault with private endpoints, because Azure Backup does not use the AzureServices trusted service bypass."
       }
     },
     "privateEndpoint": {
@@ -779,14 +795,14 @@
           "secretsKeyVaultName": {
             "value": "[variables('secretsKeyVaultName')]"
           },
-          "keyVaultEnableSoftDelete": {
+          "secretsKeyVaultEnableSoftDelete": {
             "value": "[parameters('secretsKeyVaultEnableSoftDelete')]"
           },
-          "keyVaultEnablePurgeProtection": {
+          "secretsKeyVaultEnablePurgeProtection": {
             "value": "[parameters('secretsKeyVaultEnablePurgeProtection')]"
           },
-          "keyVaultRetentionInDays": {
-            "value": "[parameters('keyVaultRetentionInDays')]"
+          "secretsKeyVaultRetentionInDays": {
+            "value": "[parameters('secretsKeyVaultRetentionInDays')]"
           },
           "domainJoinUserPassword": {
             "value": "[parameters('domainJoinUserPassword')]"
@@ -805,6 +821,12 @@
           },
           "encryptionKeyVaultName": {
             "value": "[variables('encryptionKeyVaultName')]"
+          },
+          "encryptionKeyVaultRetentionInDays": {
+            "value": "[parameters('encryptionKeyVaultRetentionInDays')]"
+          },
+          "encryptionKeyVaultForcePublicAccess": {
+            "value": "[parameters('encryptionKeyVaultForcePublicAccess')]"
           },
           "privateEndpoint": {
             "value": "[parameters('privateEndpoint')]"
@@ -841,7 +863,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "9267374848829079702"
+              "templateHash": "14244985818155362678"
             }
           },
           "parameters": {
@@ -867,15 +889,15 @@
               "type": "securestring",
               "defaultValue": ""
             },
-            "keyVaultEnableSoftDelete": {
+            "secretsKeyVaultEnableSoftDelete": {
               "type": "bool",
               "defaultValue": true
             },
-            "keyVaultEnablePurgeProtection": {
+            "secretsKeyVaultEnablePurgeProtection": {
               "type": "bool",
               "defaultValue": true
             },
-            "keyVaultRetentionInDays": {
+            "secretsKeyVaultRetentionInDays": {
               "type": "int",
               "defaultValue": 90
             },
@@ -921,11 +943,27 @@
             "encryptionKeyVaultName": {
               "type": "string"
             },
+            "encryptionKeyVaultRetentionInDays": {
+              "type": "int",
+              "defaultValue": "[parameters('secretsKeyVaultRetentionInDays')]",
+              "minValue": 7,
+              "maxValue": 90,
+              "metadata": {
+                "description": "Optional. Soft delete retention days specifically for the Encryption Key Vault. Defaults to keyVaultRetentionInDays."
+              }
+            },
             "permittedIPs": {
               "type": "array",
               "defaultValue": [],
               "metadata": {
                 "description": "Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module."
+              }
+            },
+            "encryptionKeyVaultForcePublicAccess": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. When true, the encryption key vault is deployed with public network access enabled and all IP-based firewall restrictions cleared, regardless of the privateEndpoint setting. Required when CMK is configured on Recovery Services Vault (RSV does not use the AzureServices trusted service bypass, and its backup IPs are regional/dynamic so IP restrictions are not feasible). Only set this when you explicitly accept the tradeoff of an internet-reachable encryption key vault without IP restrictions."
               }
             }
           },
@@ -935,7 +973,10 @@
             "secretList": "[union(if(not(empty(parameters('domainJoinUserPassword'))), createArray(createObject('name', 'DomainJoinUserPassword', 'value', parameters('domainJoinUserPassword'))), createArray()), if(not(empty(parameters('domainJoinUserPrincipalName'))), createArray(createObject('name', 'DomainJoinUserPrincipalName', 'value', parameters('domainJoinUserPrincipalName'))), createArray()), if(not(empty(parameters('virtualMachineAdminPassword'))), createArray(createObject('name', 'VirtualMachineAdminPassword', 'value', parameters('virtualMachineAdminPassword'))), createArray()), if(not(empty(parameters('virtualMachineAdminUserName'))), createArray(createObject('name', 'VirtualMachineAdminUserName', 'value', parameters('virtualMachineAdminUserName'))), createArray()))]",
             "deploySecretsKv": "[parameters('deploySecretsKeyVault')]",
             "deploySecretsKvPe": "[and(and(variables('deploySecretsKv'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
-            "deployEncryptionKvPe": "[and(and(parameters('deployEncryptionKeyVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]"
+            "deployEncryptionKvPe": "[and(and(parameters('deployEncryptionKeyVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
+            "kvPublicAccessDisabled": "[and(parameters('privateEndpoint'), empty(parameters('permittedIPs')))]",
+            "secretsKvPublicNetworkAccess": "[if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled')]",
+            "encryptionKvPublicNetworkAccess": "[if(parameters('encryptionKeyVaultForcePublicAccess'), 'Enabled', if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled'))]"
           },
           "resources": [
             {
@@ -960,13 +1001,13 @@
                     "value": "standard"
                   },
                   "enableSoftDelete": {
-                    "value": "[parameters('keyVaultEnableSoftDelete')]"
+                    "value": "[parameters('secretsKeyVaultEnableSoftDelete')]"
                   },
                   "softDeleteRetentionInDays": {
-                    "value": "[parameters('keyVaultRetentionInDays')]"
+                    "value": "[parameters('secretsKeyVaultRetentionInDays')]"
                   },
                   "enablePurgeProtection": {
-                    "value": "[parameters('keyVaultEnablePurgeProtection')]"
+                    "value": "[parameters('secretsKeyVaultEnablePurgeProtection')]"
                   },
                   "enabledForTemplateDeployment": {
                     "value": true
@@ -975,8 +1016,8 @@
                   "permittedIPs": {
                     "value": "[parameters('permittedIPs')]"
                   },
-                  "privateEndpoint": {
-                    "value": "[parameters('privateEndpoint')]"
+                  "publicNetworkAccess": {
+                    "value": "[variables('secretsKvPublicNetworkAccess')]"
                   }
                 },
                 "template": {
@@ -987,7 +1028,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "2698261586423631691"
+                      "templateHash": "8485039422876759494"
                     }
                   },
                   "definitions": {
@@ -1143,9 +1184,13 @@
                         "description": "Allow disk encryption operations (Azure Disk Encryption / Disk Encryption Sets) to access the vault."
                       }
                     },
-                    "privateEndpoint": {
-                      "type": "bool",
-                      "defaultValue": false,
+                    "publicNetworkAccess": {
+                      "type": "string",
+                      "defaultValue": "Enabled",
+                      "allowedValues": [
+                        "Enabled",
+                        "Disabled"
+                      ],
                       "metadata": {
                         "description": "Optional. Whether this vault is accessed via a private endpoint. When true and no permittedIPs are provided, public network access is disabled."
                       }
@@ -1154,7 +1199,7 @@
                       "type": "array",
                       "defaultValue": [],
                       "metadata": {
-                        "description": "Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall."
+                        "description": "Optional. Array of permitted IP addresses or CIDR blocks. When provided, a deny-by-default firewall is applied."
                       }
                     },
                     "diagnosticSettings": {
@@ -1174,9 +1219,7 @@
                       }
                     ],
                     "requiresAzureServicesBypass": "[or(or(parameters('enabledForDeployment'), parameters('enabledForTemplateDeployment')), parameters('enabledForDiskEncryption'))]",
-                    "hasFirewallRestrictions": "[or(parameters('privateEndpoint'), not(empty(variables('kvIpRules'))))]",
-                    "resolvedPublicNetworkAccess": "[if(and(parameters('privateEndpoint'), empty(variables('kvIpRules'))), 'Disabled', 'Enabled')]",
-                    "resolvedNetworkAcls": "[if(variables('hasFirewallRestrictions'), createObject('bypass', if(variables('requiresAzureServicesBypass'), 'AzureServices', 'None'), 'defaultAction', 'Deny', 'ipRules', variables('kvIpRules')), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow'), null()))]",
+                    "resolvedNetworkAcls": "[if(not(empty(variables('kvIpRules'))), createObject('bypass', if(variables('requiresAzureServicesBypass'), 'AzureServices', 'None'), 'defaultAction', 'Deny', 'ipRules', variables('kvIpRules')), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow'), null()))]",
                     "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
                     "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
                   },
@@ -1200,7 +1243,7 @@
                         "enabledForDeployment": "[parameters('enabledForDeployment')]",
                         "enabledForTemplateDeployment": "[parameters('enabledForTemplateDeployment')]",
                         "enabledForDiskEncryption": "[parameters('enabledForDiskEncryption')]",
-                        "publicNetworkAccess": "[variables('resolvedPublicNetworkAccess')]",
+                        "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
                         "networkAcls": "[variables('resolvedNetworkAcls')]"
                       }
                     },
@@ -1510,7 +1553,7 @@
                     "value": true
                   },
                   "softDeleteRetentionInDays": {
-                    "value": "[parameters('keyVaultRetentionInDays')]"
+                    "value": "[parameters('encryptionKeyVaultRetentionInDays')]"
                   },
                   "enablePurgeProtection": {
                     "value": true
@@ -1519,11 +1562,9 @@
                     "value": true
                   },
                   "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
-                  "permittedIPs": {
-                    "value": "[parameters('permittedIPs')]"
-                  },
-                  "privateEndpoint": {
-                    "value": "[parameters('privateEndpoint')]"
+                  "permittedIPs": "[if(parameters('encryptionKeyVaultForcePublicAccess'), createObject('value', createArray()), createObject('value', parameters('permittedIPs')))]",
+                  "publicNetworkAccess": {
+                    "value": "[variables('encryptionKvPublicNetworkAccess')]"
                   }
                 },
                 "template": {
@@ -1534,7 +1575,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "2698261586423631691"
+                      "templateHash": "8485039422876759494"
                     }
                   },
                   "definitions": {
@@ -1690,9 +1731,13 @@
                         "description": "Allow disk encryption operations (Azure Disk Encryption / Disk Encryption Sets) to access the vault."
                       }
                     },
-                    "privateEndpoint": {
-                      "type": "bool",
-                      "defaultValue": false,
+                    "publicNetworkAccess": {
+                      "type": "string",
+                      "defaultValue": "Enabled",
+                      "allowedValues": [
+                        "Enabled",
+                        "Disabled"
+                      ],
                       "metadata": {
                         "description": "Optional. Whether this vault is accessed via a private endpoint. When true and no permittedIPs are provided, public network access is disabled."
                       }
@@ -1701,7 +1746,7 @@
                       "type": "array",
                       "defaultValue": [],
                       "metadata": {
-                        "description": "Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall."
+                        "description": "Optional. Array of permitted IP addresses or CIDR blocks. When provided, a deny-by-default firewall is applied."
                       }
                     },
                     "diagnosticSettings": {
@@ -1721,9 +1766,7 @@
                       }
                     ],
                     "requiresAzureServicesBypass": "[or(or(parameters('enabledForDeployment'), parameters('enabledForTemplateDeployment')), parameters('enabledForDiskEncryption'))]",
-                    "hasFirewallRestrictions": "[or(parameters('privateEndpoint'), not(empty(variables('kvIpRules'))))]",
-                    "resolvedPublicNetworkAccess": "[if(and(parameters('privateEndpoint'), empty(variables('kvIpRules'))), 'Disabled', 'Enabled')]",
-                    "resolvedNetworkAcls": "[if(variables('hasFirewallRestrictions'), createObject('bypass', if(variables('requiresAzureServicesBypass'), 'AzureServices', 'None'), 'defaultAction', 'Deny', 'ipRules', variables('kvIpRules')), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow'), null()))]",
+                    "resolvedNetworkAcls": "[if(not(empty(variables('kvIpRules'))), createObject('bypass', if(variables('requiresAzureServicesBypass'), 'AzureServices', 'None'), 'defaultAction', 'Deny', 'ipRules', variables('kvIpRules')), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow'), null()))]",
                     "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
                     "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
                   },
@@ -1747,7 +1790,7 @@
                         "enabledForDeployment": "[parameters('enabledForDeployment')]",
                         "enabledForTemplateDeployment": "[parameters('enabledForTemplateDeployment')]",
                         "enabledForDiskEncryption": "[parameters('enabledForDiskEncryption')]",
-                        "publicNetworkAccess": "[variables('resolvedPublicNetworkAccess')]",
+                        "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
                         "networkAcls": "[variables('resolvedNetworkAcls')]"
                       }
                     },
@@ -1986,7 +2029,7 @@
     "secretsKeyVaultResourceId": {
       "type": "string",
       "metadata": {
-        "description": "The resource ID of the Secrets Key Vault. Pass as \"existingCredentialsKeyVaultResourceId\" to the host pool deployment, or as \"credentialsKeyVaultResourceId\" to the Session Host Replacer and Session Hosts add-on deployments."
+        "description": "The resource ID of the Secrets Key Vault. Pass as \"credentialsKeyVaultResourceId\" to the host pool and Session Host Replacer deployments."
       },
       "value": "[if(parameters('deploySecretsKeyVault'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Operations-KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.secretsKeyVaultResourceId.value, '')]"
     },

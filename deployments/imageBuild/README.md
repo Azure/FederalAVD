@@ -1268,7 +1268,7 @@ stages:
                 az deployment sub create `
                   --location $(location) `
                   --template-file deployments/imageBuild/imageBuild.json `
-                  --parameters deployments/imageBuild/parameters/prod.imageBuild.parameters.json `
+                  --parameters customer/parameters/imageBuild/prod.imageBuild.parameters.json `
                   --name "imageBuild-$timestamp" `
                   --verbose
 ```
@@ -1326,7 +1326,7 @@ jobs:
           az deployment sub create \
             --location ${{ env.LOCATION }} \
             --template-file deployments/imageBuild/imageBuild.json \
-            --parameters deployments/imageBuild/parameters/prod.imageBuild.parameters.json \
+            --parameters customer/parameters/imageBuild/prod.imageBuild.parameters.json \
             --name "imageBuild-$TIMESTAMP"
 ```
 

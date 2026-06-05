@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Features
 
@@ -50,7 +50,7 @@ This solution is designed to align with Microsoft's Zero Trust security principl
 
 When deploying with Zero Trust principles:
 
-1. **Disable Public Access**: Set `enablePrivateEndpoint = true` for storage accounts and ensure session hosts have no public IP addresses
+1. **Disable Public Access**: Set `deployPrivateEndpoints = true` for storage accounts and Key Vaults, and ensure session hosts have no public IP addresses
 2. **Use Managed Identities**: Configure `artifactsUserAssignedIdentityResourceId` for artifact downloads instead of storage account keys
 3. **Implement Network Segmentation**: Deploy session hosts to dedicated subnets with restrictive NSG rules
 4. **Enable Monitoring**: Configure Log Analytics workspace for all diagnostic logs and performance data
@@ -58,6 +58,8 @@ When deploying with Zero Trust principles:
 6. **Secure Bastion Access**: Use Azure Bastion for administrative access instead of RDP over public internet
 
 For detailed guidance on implementing Zero Trust for AVD, refer to Microsoft's comprehensive documentation linked above.
+
+> **Federal Zero Trust mandates:** For federal deployments, Zero Trust is not optional — it is required by [OMB M-22-09](https://www.whitehouse.gov/wp-content/uploads/2022/01/M-22-09.pdf) (Federal Zero Trust Strategy) and the [CISA Zero Trust Maturity Model v2.0](https://www.cisa.gov/resources-tools/resources/zero-trust-maturity-model) for civilian agencies, and by the [DoD Zero Trust Strategy](https://dodcio.defense.gov/Portals/0/Documents/Library/ZTStrategy.pdf) for DoD components. This solution provides capabilities across all five CISA ZTMM pillars (Identity, Devices, Networks, Applications & Workloads, Data). See the **[Compliance Control Mapping](compliance.md)** page for the full federal ZT standard mapping, control-by-control NIST SP 800-53 / FedRAMP High and DoD SRG IL4/IL5 coverage, and the exact parameters required for each framework.
 
 ## Multi-Subscription Support
 
@@ -642,27 +644,28 @@ availability = 'None'                      // No infrastructure redundancy
 
 ### Zone Redundant Storage
 
-Zone-Redundant Storage for FSLogix is automatically configured based on the availability setting. When you deploy session hosts across availability zones, the FSLogix storage accounts are automatically configured with Zone-Redundant Storage (ZRS) to match the compute redundancy, protecting user profile data against datacenter-level failures.
+Azure Files storage accounts for FSLogix can be configured with Zone-Redundant Storage (ZRS) using the `fslogixStorageRedundancy` parameter. ZRS replicates data synchronously across three availability zones within a region, protecting user profile data against a datacenter-level failure without any operator action or failover.
 
-**Storage Redundancy Behavior:**
+**`fslogixStorageRedundancy` is an independent parameter** — it is not automatically derived from the session host `availability` setting. The default is `LocallyRedundant`. For production deployments where session hosts are deployed across availability zones, explicitly set `fslogixStorageRedundancy = 'ZoneRedundant'` to align storage resilience with compute resilience.
 
-- **availability = 'availabilityZones'**: Storage accounts use Zone-Redundant Storage (ZRS)
-- **availability = 'availabilitySets' or 'None'**: Storage accounts use Locally-Redundant Storage (LRS)
+> **Azure Files Premium and GRS:** Azure Files Premium does not support Geo-Redundant Storage (GRS). ZRS is the highest redundancy tier available for production-grade (Premium) FSLogix storage. This is a platform constraint — cross-region profile redundancy requires FSLogix Cloud Cache or an accepted per-region profile strategy. See [BCDR — Profile Strategy](bcdr.md#profile-strategy-for-cross-region-deployments).
+
+> **Compliance guidance:** Environments aligning to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-9 (Information System Backup) should use ZRS for FSLogix storage in zone-enabled regions. ZRS satisfies the expectation that primary profile storage can survive a datacenter-level failure without data loss. It does not substitute for CP-6 (Alternate Storage Site), which requires geographic separation — addressable through Cloud Cache or per-region profiles with OneDrive Known Folder Move. Microsoft's [Secure Future Initiative (SFI)](https://www.microsoft.com/en-us/security/blog/2024/05/03/security-above-all-else-expanding-microsofts-secure-future-initiative/) similarly emphasizes resilience of data at every layer as a core security principle.
 
 **Storage Service Options:**
 
-- **'AzureFiles Premium'**: Premium file shares with ZRS or LRS based on availability setting
-- **'AzureFiles Standard'**: Standard file shares with large file share option
-- **'AzureNetAppFiles Premium'**: Azure NetApp Files with premium tier (450,000 IOPS)
-- **'AzureNetAppFiles Standard'**: Azure NetApp Files with standard tier (320,000 IOPS)
+- **'AzureFiles Premium'**: Recommended for production. ZRS or LRS. Does not support GRS.
+- **'AzureFiles Standard'**: Supports LRS and ZRS. GRS available but IOPS typically insufficient for production AVD scale.
+- **'AzureNetAppFiles Premium'**: Highest IOPS tier (450,000 IOPS). Redundancy managed through ANF capacity pool SKU and Cross-Region Replication.
+- **'AzureNetAppFiles Standard'**: Standard IOPS tier (320,000 IOPS).
 
 **Reference:** [Azure Storage redundancy](https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy)
 
 **Parameter Configuration:**
 
 ```bicep
-availability = 'availabilityZones'              // Automatically enables ZRS for storage
-fslogixStorageService = 'AzureFiles Premium'    // Storage service and tier
+fslogixStorageRedundancy = 'ZoneRedundant'      // Recommended for zone-deployed hosts
+fslogixStorageService = 'AzureFiles Premium'    // Production-grade storage
 ```
 
 **Benefits:**
@@ -839,15 +842,44 @@ Autoscale lets you scale your session host virtual machines (VMs) in a host pool
 
 ## Customer Managed Keys for Encryption
 
-This optional feature deploys the required resources & configuration to enable virtual machine managed disk encryption on the session hosts using a customer managed key. The configuration also enables double encryption which uses a platform managed key in combination with the customer managed key. The FSLogix storage account can also be encrypted using Customer Managed Keys.
+Customer-managed keys (CMK) allow your organization to hold and control the encryption keys protecting data at rest, rather than delegating that responsibility to Microsoft-managed keys. **The default for all key management parameters in this solution is `PlatformManaged` — CMK is opt-in.** Compliance environments should explicitly select a CMK option appropriate to their requirements.
+
+### Services and Parameters
+
+CMK is applied across the solution through four parameters, each independently controlled:
+
+| Parameter | Template | Protects |
+|---|---|---|
+| `keyManagementDisks` | `hostpool.bicep` | Session host VM managed disks (OS + data) via Disk Encryption Set |
+| `keyManagementStorage` | `hostpool.bicep` | FSLogix Azure Files storage accounts |
+| `keyManagementRecoveryServicesVault` | `hostpool.bicep` | Recovery Services Vault (personal host pool VM backup) |
+| `keyManagementStorageAccounts` | `imageManagement.bicep` | Artifacts and build logs storage accounts |
+| `keyManagementGalleryImageVersions` | `imageManagement.bicep` | Compute Gallery image versions via Disk Encryption Set |
+
+Each parameter accepts: `PlatformManaged` (default), `CustomerManaged`, or `CustomerManagedHSM`. The disk parameters additionally accept `PlatformManagedAndCustomerManaged` and `PlatformManagedAndCustomerManagedHSM` for double encryption (two independent key layers on managed disks).
+
+> **Storage accounts always use infrastructure encryption** (`requireInfrastructureEncryption: true`) regardless of the CMK setting — the platform encryption layer is always present. Enabling CMK on a storage account therefore always produces double encryption without requiring a separate parameter value.
+
+### Compliance Guidance
+
+[NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) **SC-28 (Protection of Information at Rest)** requires cryptographic mechanisms to protect the confidentiality and integrity of information at rest. **SC-28(1)** extends this to cryptographic protection for specific categories of data. CMK satisfies these controls by ensuring your organization retains key custody — Microsoft cannot decrypt your data without access to your Key Vault.
+
+Microsoft's [Secure Future Initiative (SFI)](https://www.microsoft.com/en-us/security/blog/2024/05/03/security-above-all-else-expanding-microsofts-secure-future-initiative/) identifies key management and identity-bound encryption as foundational to a Zero Trust security posture. Storing keys in Azure Key Vault Premium with HSM protection (FIPS 140 Level 3 validated) and configuring automatic key rotation aligns with SFI's principle of protecting identities and secrets at every layer.
+
+For IL5 environments, CMK with HSM protection is required. See [IL5 Isolation](#il5-isolation).
 
 **Reference:** [Azure Server-Side Encryption - Microsoft Docs](https://learn.microsoft.com/azure/virtual-machines/disk-encryption)
 
 **Deployed Resources:**
 
-- Key Vault
-  - Key Encryption Key (1 per host pool for VM disks, 1 for each fslogix storage account)
-- Disk Encryption Set
+- Azure Key Vault Premium (when CMK is selected inline)
+  - Key Encryption Keys (one per protected scope — VM disks, FSLogix storage accounts, Recovery Services Vault, or gallery image versions)
+  - Automatic key rotation policy (configurable via `keyExpirationInDays`, default 180 days)
+- User-Assigned Managed Identity (for PaaS CMK — FSLogix storage accounts)
+- System-Assigned Managed Identity (for Recovery Services Vault CMK — SAI is always used; Azure also requires it when the vault has a private endpoint)
+- Disk Encryption Set (for disk and gallery image version CMK)
+
+> **Recovery Services Vault CMK with private endpoints — mutually exclusive controls:** Azure Backup has no `AzureServices` trusted service bypass for Key Vault. When `deployPrivateEndpoints = true` and the encryption Key Vault has public access disabled, two mandatory controls conflict: preserving SC-28 (CMK on RSV) requires enabling KV public access (`encryptionKeyVaultForcePublicAccess = true`), which removes the `publicNetworkAccess: Disabled` enforcement and weakens SC-7 network isolation. Preserving SC-7 (private-only KV) requires accepting PMK on the RSV, which does not satisfy SC-28 for that resource. By default (`encryptionKeyVaultForcePublicAccess = false`) the solution falls back to PMK on the RSV rather than failing the deployment. Neither option satisfies both controls simultaneously — this is a **Microsoft Azure platform limitation**. The choice is a compliance risk decision for your ISSO and AO. See [Personal Host Pool VM Backup](bcdr.md#personal-host-pool-vm-backup) in the BCDR guide for the full option comparison.
 
 ## SMB Multichannel
 
@@ -943,6 +975,8 @@ When deploying to Azure Government IL4 regions (Arizona, Texas, Virginia), you c
 1. **Dedicated Hosts**: Deploy virtual machines to dedicated physical servers
 2. **HSM-Protected Keys**: Use customer-managed keys stored in Azure Key Vault Premium with FIPS 140 Level 3 validated Hardware Security Modules
 
+> **Exemptions:** If Dedicated Hosts are operationally or financially infeasible, you may request a technical exception through your Authorizing Official (AO). Any exception must be documented in your SSP with compensating controls and a formal written risk acceptance.
+
 **Prerequisites:**
 
 - At least one dedicated host deployed in a dedicated host group in an Azure Government region
@@ -959,7 +993,7 @@ When deploying to Azure Government IL4 regions (Arizona, Texas, Virginia), you c
   - Customer-managed keys protected by HSM with auto-rotation
 - Virtual machines deployed to dedicated hosts
 
-**Parameter Reference:** For example parameter values, see [IL5 Isolation Requirements on IL4](parameters.md#il5-isolation-requirements-on-il4)
+**Parameter Reference:** For example parameter values, see [IL5 Isolation Requirements on IL4](parameters.md#il5-isolation-requirements-on-il4-dedicated-hosts--hsm)
 
 ## Backups
 

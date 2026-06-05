@@ -1,6 +1,6 @@
 ↩ **Back to:** [Quick Start](quick-start.md)
 
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Air-Gapped Cloud Considerations
 
@@ -33,7 +33,7 @@ During session host deployment (host pool creation and Session Host Replacer ope
 
 | Component | Storage Account</br>Provided | Instructions |
 | :-- | :--: | :-- |
-| **AVD Agent &</br>Boot Loader** | Yes | Running `Update-ImageArtifacts.ps1` automatically downloads the AVD Agent and Bootloader from the air-gapped cloud URLs and uploads them to the artifacts storage account — no manual steps required. After running the script, set `agentBootLoaderDownloadUrl` and `agentDownloadUrl` to the corresponding blob storage URLs (e.g., `https://<storageAccount>.blob.<env-suffix>/artifacts/Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi`) to override the default permalinks.<br/><br/>If the air-gapped URLs are not reachable from the management system, download both MSI files manually, place them in `.common/artifacts/`, and run `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`.<br/><br/>**Note:** The Agent download always tries the host pool API endpoint first for the latest version, then falls back to the URL you configure. See [Parameters](parameters.md) for details. |
+| **AVD Agent &</br>Boot Loader** | Yes | Running `Update-ImageArtifacts.ps1` automatically downloads the AVD Agent and Bootloader from the air-gapped cloud URLs and uploads them to the artifacts storage account — no manual steps required. After running the script, set `agentBootLoaderDownloadUrl` and `agentDownloadUrl` to the corresponding blob storage URLs (e.g., `https://<storageAccount>.blob.<env-suffix>/artifacts/Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi`) to override the default permalinks.<br/><br/>If the air-gapped URLs are not reachable from the management system, download both MSI files manually, place them in `customer/artifacts/`, and run `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`.<br/><br/>**Note:** The Agent download always tries the host pool API endpoint first for the latest version, then falls back to the URL you configure. See [Parameters](parameters.md) for details. |
 | **AVD Agent &</br>Boot Loader** | No | The deployment uses the default cloud-specific permalinks (see network requirements above) for both components. For the Agent, the deployment always attempts the host pool API endpoint first for the latest version before falling back to the permalink. |
 
 📖 **Parameter Reference:** See the `agentDownloadUrl` and `agentBootLoaderDownloadUrl` parameters in [Parameters](parameters.md).
@@ -54,7 +54,13 @@ The `Update-ImageArtifacts.ps1` script automatically selects the correct downloa
 
 The secret and top secret files are already in the repository. Each entry either has a working air-gapped cloud URL (the script downloads it automatically) or an **empty `DownloadUrl`** (you must place the file manually before running the script).
 
-To add software not in the base file, pass an additional JSON file via `-AdditionalDownloadsFilePath`. See [Update-ImageArtifacts Script Guide](update-image-artifacts.md) for the file format.
+To add software not in the base file, place `downloads.json` in `customer/parameters/imageManagement/`. The script discovers and merges it automatically. See [Update-ImageArtifacts Script Guide](update-image-artifacts.md) for the file format.
+
+> **⚠️ WingetId entries are not supported in air-gapped environments.** Winget downloads require outbound internet access to the winget CDN or Microsoft Store, which is unavailable in air-gapped clouds. The base `secret` and `topsecret` downloads files do not use winget, so a standard run is unaffected. However, if you add a `customer/parameters/imageManagement/downloads.json` that contains `WingetId` entries, those specific entries will fail.
+>
+> **Alternatives for optional software in air-gapped environments:**
+> - Replace `WingetId` with `DownloadUrl` pointing to an internally hosted copy (e.g., an internal web server, SharePoint site, or Azure Blob storage accessible from your management system).
+> - Pre-stage the installer directly in `customer/artifacts/<FolderName>/` and omit the entry from `downloads.json` — the script will package and upload it without attempting a download.
 
 ---
 
@@ -64,13 +70,13 @@ The following artifacts have empty `DownloadUrl` entries in the secret and top s
 
 | Software | Destination Filename | Place In | Notes |
 |---|---|---|---|
-| **FSLogix** | `FSLogix.zip` | `.common/artifacts/` | Available from Azure Toolbox in air-gapped clouds. Also available at [aka.ms/fslogix_download](https://aka.ms/fslogix_download) on internet-connected systems. |
-| **WebView2 Runtime** | `WebView2.exe` | `.common/artifacts/` | Required by Teams. Download from [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) on an internet-connected system. |
-| **Visual Studio Redistributables** | `vc_redist.x64.exe` | `.common/artifacts/` | Required by Teams. Download from [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) on an internet-connected system. |
-| **Remote Desktop WebRTC Service** | `MsRdcWebRTCSvc.msi` | `.common/artifacts/` | Required for Teams media optimizations. Download from [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) on an internet-connected system. |
-| **WDOT** | `WDOT.zip` | `.common/artifacts/` | Required if `applyWindowsDesktopOptimizations = true`. Download from [GitHub](https://codeload.github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool/zip/refs/heads/main) on an internet-connected system. |
+| **FSLogix** | `FSLogix.zip` | `customer/artifacts/` | Available from Azure Toolbox in air-gapped clouds. Also available at [aka.ms/fslogix_download](https://aka.ms/fslogix_download) on internet-connected systems. |
+| **WebView2 Runtime** | `WebView2.exe` | `customer/artifacts/` | Required by Teams. Download from [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) on an internet-connected system. |
+| **Visual Studio Redistributables** | `vc_redist.x64.exe` | `customer/artifacts/` | Required by Teams. Download from [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) on an internet-connected system. |
+| **Remote Desktop WebRTC Service** | `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | Required for Teams media optimizations. Download from [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) on an internet-connected system. |
+| **WDOT** | `WDOT.zip` | `customer/artifacts/` | Required if `applyWindowsDesktopOptimizations = true`. Download from [GitHub](https://codeload.github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool/zip/refs/heads/main) on an internet-connected system. |
 
-> **Transfer tip:** Download all of the above on an internet-connected system, copy them to the air-gapped network, then drop them into the `.common/artifacts/` directory before running the upload script.
+> **Transfer tip:** Download all of the above on an internet-connected system, copy them to the air-gapped network, then drop them into the `customer/artifacts/` directory before running the upload script.
 
 ---
 
@@ -89,7 +95,7 @@ The following artifacts have working URLs in the secret and top secret downloads
 
 > **Note:** The AVD Agent and Bootloader are not used during custom image builds — they are included in this upload so that `agentDownloadUrl` and `agentBootLoaderDownloadUrl` host pool parameters can reference them from the artifacts storage account instead of relying on the permalink.
 
-If these URLs are not reachable from your management system, download the files manually from the appropriate air-gapped cloud software distribution site and place them in `.common/artifacts/` before running with `-SkipDownloadingNewSources`.
+If these URLs are not reachable from your management system, download the files manually from the appropriate air-gapped cloud software distribution site and place them in `customer/artifacts/` before running with `-SkipDownloadingNewSources`.
 
 ---
 

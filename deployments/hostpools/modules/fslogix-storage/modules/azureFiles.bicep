@@ -1,6 +1,5 @@
-param appUpdateUserAssignedIdentityResourceId string
-param availability string
-param recoveryServicesVaultResourceId string = ''
+﻿param appUpdateUserAssignedIdentityResourceId string
+
 param azureFilePrivateDnsZoneResourceId string
 param deploymentUserAssignedIdentityClientId string
 param deploymentVirtualMachineName string
@@ -34,11 +33,17 @@ param storageAccountNamePrefix string
 param storageCount int
 param storageIndex int
 param storageSku string
+param storageRedundancy string
 param tags object
 param deploymentSuffix string
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks for the FSLogix storage account firewall.')
 param permittedIPs array = []
+
+@description('Optional. Number of days to retain deleted file shares (1–365).')
+@minValue(1)
+@maxValue(365)
+param softDeleteRetentionDays int = 14
 
 var adminRoleDefinitionId = '69566ab7-960f-475b-8e7c-b3118f30c6bd' // Storage File Data Privileged Contributor
 
@@ -59,7 +64,7 @@ var smbSettingsValues = {
   channelEncryption: 'AES-128-CCM;AES-128-GCM;AES-256-GCM;'
   multichannel: storageSku != 'Standard' ? { enabled: true } : null
 }
-var storageRedundancy = availability == 'availabilityZones' ? '_ZRS' : '_LRS'
+var storageRedundancySuffix = storageRedundancy == 'ZoneRedundant' ? '_ZRS' : '_LRS'
 
 var graphEndpoint = environment().name == 'AzureUSGovernment'
   ? 'https://graph.microsoft.us'
@@ -83,14 +88,14 @@ module storageAccounts '../../../../../.common/bicepModules/storage/storageAccou
       name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
       location: location
       kind: storageSku == 'Standard' ? 'StorageV2' : 'FileStorage'
-      skuName: '${storageSku}${storageRedundancy}'
+      skuName: '${storageSku}${storageRedundancySuffix}'
       tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
       allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
       allowSharedKeyAccess: identitySolution == 'EntraId' ? true : false
       largeFileSharesState: storageSku == 'Standard' ? 'Enabled' : ''
       sasExpirationPeriod: '180.00:00:00'
       permittedIPs: permittedIPs
-      privateEndpoint: privateEndpoint
+      publicNetworkAccess: (privateEndpoint && empty(permittedIPs)) ? 'Disabled' : 'Enabled'
       azureFilesIdentityBasedAuthentication: identitySolution != 'EntraId'
         ? {
             defaultSharePermission: defaultSharePermission
@@ -99,11 +104,10 @@ module storageAccounts '../../../../../.common/bicepModules/storage/storageAccou
               : identitySolution == 'EntraDomainServices' ? 'AADDS' : 'None'
           }
         : {}
-      encryptionKeyVaultUri: keyManagementStorageAccounts != 'MicrosoftManaged' ? encryptionKeyVaultUri : ''
-      encryptionKeyName: keyManagementStorageAccounts != 'MicrosoftManaged'
-        ? replace(fslogixEncryptionKeyNameConv, '##', padLeft(i + storageIndex, 2, '0'))
+      cmkKeyUri: keyManagementStorageAccounts != 'PlatformManaged'
+        ? '${encryptionKeyVaultUri}keys/${replace(fslogixEncryptionKeyNameConv, '##', padLeft(i + storageIndex, 2, '0'))}'
         : ''
-      encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'MicrosoftManaged'
+      cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
         ? encryptionUserAssignedIdentityResourceId
         : ''
       diagnosticSettings: !empty(logAnalyticsWorkspaceId) ? { workspaceId: logAnalyticsWorkspaceId } : null
@@ -118,7 +122,8 @@ module fileServices '../../../../../.common/bicepModules/storage/storageAccounts
     params: {
       storageAccountName: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
       smbSettings: smbSettingsValues
-      shareDeleteRetentionPolicyEnabled: empty(recoveryServicesVaultResourceId)
+      shareDeleteRetentionPolicyEnabled: true
+      shareDeleteRetentionPolicyDays: softDeleteRetentionDays
       diagnosticSettings: !empty(logAnalyticsWorkspaceId)
         ? {
             workspaceId: logAnalyticsWorkspaceId

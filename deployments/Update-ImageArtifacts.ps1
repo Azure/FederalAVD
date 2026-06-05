@@ -1,11 +1,15 @@
 <#
 .SYNOPSIS
-Downloads the latest software sources, packages them as zip files, and uploads them to the
-image management artifacts storage account blob container.
+Downloads the latest software sources, stages repository and customer artifacts, packages them as
+zip files, and uploads them to the image management artifacts storage account blob container.
 
 .DESCRIPTION
 Run this script whenever you want to refresh the artifacts in the image management storage account —
 for example, after adding new software packages or after new versions are released.
+
+The script stages artifacts from both the repository-owned '.common\artifacts' folder and the
+customer-owned 'customer\artifacts' folder. Customer artifacts are overlaid on top of repository
+artifacts, allowing customers to extend or replace packages without modifying repo-provided content.
 
 This script does NOT deploy any Azure infrastructure. Deploy the imageManagement Bicep template
 first (see deployments/imageManagement/README.md), then use this script to populate the storage
@@ -38,13 +42,22 @@ When specified, skips downloading new software versions from the internet.
 Use this in air-gapped environments or when the artifacts directory already contains
 the correct content and you just want to re-upload.
 
-.PARAMETER AdditionalDownloadsFilePath
-Full path to an additional downloads JSON file to merge with the base environment downloads file.
-Entries in this file are merged on top of the base file — existing keys are overwritten, new keys are added.
-The base file (public / secret / topsecret) is always selected automatically based on the current Azure environment.
+.PARAMETER CustomerRootPath
+Optional. Root folder that contains customer-owned content. Defaults to the repo-local
+`customer` folder next to the `deployments` folder. Use this to keep customer content outside
+the extracted repo when updating from a fresh zip.
 
-Example:
-  .\Update-ImageArtifacts.ps1 -StorageAccountName 'sa123' -ResourceGroupName 'rg-avd' -AdditionalDownloadsFilePath 'C:\configs\extra.downloads.json'
+.PARAMETER CustomerArtifactsMode
+Controls whether customer artifacts are included when packaging artifacts.
+Use `Overlay` to merge customer artifacts over repo artifacts, or `None` to skip customer artifacts.
+
+.PARAMETER CustomerDownloadsMode
+Controls whether customer downloads.json content is merged into the base downloads file.
+Use `Merge` to apply customer overrides, or `None` to use only the repo-selected base file.
+
+.NOTES
+If `customer\parameters\imageManagement\downloads.json` exists, it is merged on top of the
+auto-selected base environment downloads file. Existing keys are overwritten and new keys are added.
 
 .PARAMETER TempDir
 Temporary directory used during artifact packaging. Defaults to $Env:Temp.
@@ -72,11 +85,10 @@ Use a path on a high-performance drive when processing large artifact sets.
     -DeleteExistingBlobs
 
 .EXAMPLE
-# Merge additional downloads on top of the auto-detected base file
+# Merge additional downloads automatically when customer\parameters\imageManagement\downloads.json exists
 .\Update-ImageArtifacts.ps1 `
     -StorageAccountName "saimgassetsuse2abc123" `
-    -ResourceGroupName "rg-avd-image-management-use2" `
-    -AdditionalDownloadsFilePath "C:\configs\extra.downloads.json"
+    -ResourceGroupName "rg-avd-image-management-use2"
 #>
 
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'ByResourceId')]
@@ -97,7 +109,15 @@ param(
     [switch]$SkipDownloadingNewSources,
 
     [Parameter(Mandatory = $false)]
-    [string]$AdditionalDownloadsFilePath,
+    [string]$CustomerRootPath = '',
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('Overlay', 'None')]
+    [string]$CustomerArtifactsMode = 'Overlay',
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('Merge', 'None')]
+    [string]$CustomerDownloadsMode = 'Merge',
 
     [Parameter(Mandatory = $false)]
     [string]$TempDir = "$Env:Temp"
@@ -128,12 +148,22 @@ Else {
 
 $ArtifactsContainerName = 'artifacts'
 $TempArtifactsDir = Join-Path -Path $TempDir -ChildPath 'Artifacts'
-$ArtifactsDir = (Get-Item -Path (Join-Path -Path $PSScriptRoot -ChildPath '..\.common\artifacts')).FullName
+$RepoArtifactsDir = (Get-Item -Path (Join-Path -Path $PSScriptRoot -ChildPath '..\.common\artifacts')).FullName
+$ResolvedCustomerRootPath = if ([string]::IsNullOrWhiteSpace($CustomerRootPath)) {
+    Join-Path -Path $PSScriptRoot -ChildPath '..\customer'
+} else {
+    $CustomerRootPath
+}
+$CustomerArtifactsDir = Join-Path -Path $ResolvedCustomerRootPath -ChildPath 'artifacts'
+$CustomerImageManagementParametersDir = Join-Path -Path $ResolvedCustomerRootPath -ChildPath 'parameters\imageManagement'
+$ArtifactsDir = Join-Path -Path $TempArtifactsDir -ChildPath 'stagedArtifacts'
+$ResolvedAdditionalDownloadsFilePath = Join-Path -Path $CustomerImageManagementParametersDir -ChildPath 'downloads.json'
 
 If (Test-Path -Path $TempArtifactsDir) {
     Remove-Item -Path $TempArtifactsDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 New-Item -Path $TempArtifactsDir -ItemType Directory -Force | Out-Null
+New-Item -Path $ArtifactsDir -ItemType Directory -Force | Out-Null
 
 # Resolve storage account name and resource group from whichever parameter set was used
 If ($PSCmdlet.ParameterSetName -eq 'ByResourceId') {
@@ -154,6 +184,11 @@ $ArtifactsContainerUrl = $BlobEndpoint + $ArtifactsContainerName + '/'
 Write-Output "Storage account : $StorageAccountName"
 Write-Output "Resource group  : $StorageAccountResourceGroup"
 Write-Output "Container URL   : $ArtifactsContainerUrl"
+Write-Output "Repo artifacts  : $RepoArtifactsDir"
+Write-Output "Customer assets : $CustomerArtifactsDir"
+Write-Output "Customer root   : $ResolvedCustomerRootPath"
+Write-Output "Cust art mode   : $CustomerArtifactsMode"
+Write-Output "Cust dl mode    : $CustomerDownloadsMode"
 #endregion Variables
 
 Write-Output ("[{0} entered]" -f $MyInvocation.MyCommand)
@@ -428,6 +463,37 @@ function Compress-SubFolderContents {
     }
 }
 
+function Copy-ArtifactsContent {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, HelpMessage = 'Source folder whose contents should be merged into the destination.')]
+        [string] $SourceFolderPath,
+        [Parameter(Mandatory, HelpMessage = 'Destination folder that receives the source contents.')]
+        [string] $DestinationFolderPath
+    )
+
+    if (-not (Test-Path -Path $SourceFolderPath)) {
+        return
+    }
+
+    if (-not (Test-Path -Path $DestinationFolderPath)) {
+        New-Item -Path $DestinationFolderPath -ItemType Directory -Force | Out-Null
+    }
+
+    foreach ($item in Get-ChildItem -Path $SourceFolderPath -Force) {
+        $destinationPath = Join-Path -Path $DestinationFolderPath -ChildPath $item.Name
+        if ($item.PSIsContainer) {
+            if (-not (Test-Path -Path $destinationPath)) {
+                New-Item -Path $destinationPath -ItemType Directory -Force | Out-Null
+            }
+            Copy-ArtifactsContent -SourceFolderPath $item.FullName -DestinationFolderPath $destinationPath
+        }
+        elseif ($item.Name -ine '.gitkeep') {
+            Copy-Item -Path $item.FullName -Destination $destinationPath -Force
+        }
+    }
+}
+
 function Add-ContentToBlobContainer {
     [CmdletBinding(SupportsShouldProcess = $True)]
     param(
@@ -462,75 +528,27 @@ function Add-ContentToBlobContainer {
     }
 }
 
-Function Install-Evergreen {
-    $adminCheck = [Security.Principal.WindowsPrincipal]([Security.Principal.WindowsIdentity]::GetCurrent())
-    $Admin = $adminCheck.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (Get-PSRepository | Where-Object { $_.Name -eq "PSGallery" -and $_.InstallationPolicy -ne "Trusted" }) {
-        if ($Admin) {
-            Set-PSRepository -Name "PSGallery" -InstallationPolicy "Trusted"
-            Install-PackageProvider -Name "NuGet" -MinimumVersion 2.8.5.208 -Force
-        } else {
-            Install-PackageProvider -Name "NuGet" -MinimumVersion 2.8.5.208 -Force -Scope CurrentUser
-        }
-    }
-    # Check for module in the appropriate scope
-    if ($Admin) {
-        $Installed = Get-Module -Name "Evergreen" -ListAvailable | `
-            Sort-Object -Property @{ Expression = { [System.Version]$_.Version }; Descending = $true } | `
-            Select-Object -First 1
-        $Published = Find-Module -Name "Evergreen"
-        if ($Null -eq $Installed -or [System.Version]$Published.Version -gt [System.Version]$Installed.Version) {
-            Install-Module -Name "Evergreen" -Force -AllowClobber
-        }
-    } else {
-        # For non-admin, check CurrentUser scope and suppress warnings
-        $CurrentUserPath = [Environment]::GetFolderPath('MyDocuments') + '\PowerShell\Modules\Evergreen'
-        if (-not (Test-Path $CurrentUserPath)) {
-            $CurrentUserPath = [Environment]::GetFolderPath('MyDocuments') + '\WindowsPowerShell\Modules\Evergreen'
-        }
-        $Installed = Get-Module -Name "Evergreen" -ListAvailable | Where-Object { $_.Path -like "*$($env:USERNAME)*" } | `
-            Sort-Object -Property @{ Expression = { [System.Version]$_.Version }; Descending = $true } | `
-            Select-Object -First 1
-        
-        # Only check for updates if no user-scope version exists or suppress update notifications
-        if ($Null -eq $Installed) {
-            Install-Module -Name "Evergreen" -Scope CurrentUser -Force -AllowClobber -WarningAction SilentlyContinue
-        }
-    }
-    Import-Module -Name "Evergreen" -Force
-}
-
-function Get-EvergreenAppUri {
-    param (
-        [psobject]$Evergreen
-    )
-    $filters = @()
-    if ($Evergreen.Architecture) {
-        $Architecture = $Evergreen.Architecture
-        $filters += '$_.Architecture -eq ''' + $Architecture + ''''
-    }
-    if ($Evergreen.InstallerType) {
-        $InstallerType = $Evergreen.InstallerType
-        $filters += '$_.InstallerType -eq ''' + $InstallerType + ''''
-    }
-    if ($Evergreen.Language) {
-        $Language = $Evergreen.Language
-        $filters += '$_.Language -eq ''' + $Language + ''''
-    }
-    if ($Evergreen.Type) {
-        $Type = $Evergreen.Type
-        $filters += '$_.Type -eq ''' + $Type + ''''
-    } 
-    if ($filters.Count -gt 0) {
-        $WhereObject = ($filters -join ' -and ').replace('  ', ' ')
-        $ScriptBlock = [scriptblock]::Create("Get-EvergreenApp -name $($Evergreen.name) | Where-Object {$($WhereObject)}")
-        Return (Invoke-Command -ScriptBlock $ScriptBlock).Uri
-    } Else {
-        Return (Get-EvergreenApp -Name $($Evergreen.name)).Uri
-    }
-}
-
 #endregion Functions
+
+#region Prepare Artifacts
+
+Write-Output ""
+Write-Output "=== Prepare Artifacts ==="
+Write-Output "Staging repository artifacts..."
+Copy-ArtifactsContent -SourceFolderPath $RepoArtifactsDir -DestinationFolderPath $ArtifactsDir
+
+if ($CustomerArtifactsMode -ne 'None' -and (Test-Path -Path $CustomerArtifactsDir)) {
+    Write-Output "Overlaying customer artifacts..."
+    Copy-ArtifactsContent -SourceFolderPath $CustomerArtifactsDir -DestinationFolderPath $ArtifactsDir
+}
+elseif ($CustomerArtifactsMode -eq 'None') {
+    Write-Output "Customer artifacts disabled by mode. Continuing with repository artifacts only."
+}
+else {
+    Write-Output "Customer artifacts directory not found. Continuing with repository artifacts only."
+}
+
+#endregion Prepare Artifacts
 
 #region Download New Sources
 
@@ -552,13 +570,10 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         Write-Error "Configuration JSON content could not be converted to a PowerShell object" -ErrorAction 'Stop'
     }
 
-    # Merge additional downloads file if provided
-    if (-not [string]::IsNullOrEmpty($AdditionalDownloadsFilePath)) {
-        if (-not (Test-Path -Path $AdditionalDownloadsFilePath)) {
-            Write-Error "AdditionalDownloadsFilePath '$AdditionalDownloadsFilePath' was not found." -ErrorAction 'Stop'
-        }
-        Write-Output "Merging additional downloads from '$AdditionalDownloadsFilePath'."
-        $additionalJson = Get-Content -Path $AdditionalDownloadsFilePath -Raw -ErrorAction 'Stop'
+    # Merge customer-owned downloads file if present
+    if ($CustomerDownloadsMode -ne 'None' -and (Test-Path -Path $ResolvedAdditionalDownloadsFilePath)) {
+        Write-Output "Merging additional downloads from '$ResolvedAdditionalDownloadsFilePath'."
+        $additionalJson = Get-Content -Path $ResolvedAdditionalDownloadsFilePath -Raw -ErrorAction 'Stop'
         $additionalJson = $additionalJson -replace 'ENVSUFFIX', $EnvSuffix
         try {
             $AdditionalDownloads = $additionalJson | ConvertFrom-Json -ErrorAction 'Stop'
@@ -570,18 +585,8 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             $Downloads | Add-Member -NotePropertyName $key -NotePropertyValue $AdditionalDownloads.$key -Force
         }
     }
-
-    # Check if any download requires Evergreen and install if needed
-    $RequiresEvergreen = $false
-    foreach ($key in $Downloads.PSObject.Properties.Name) {
-        if ($null -ne $Downloads.$key.Evergreen) {
-            $RequiresEvergreen = $true
-            break
-        }
-    }
-    If ($RequiresEvergreen -and ($Environment -eq 'AzureCloud' -or $Environment -eq 'AzureUSGovernment')) {
-        Write-Output "Evergreen functionality detected in downloads configuration. Installing Evergreen module..."
-        Install-Evergreen
+    elseif ($CustomerDownloadsMode -eq 'None') {
+        Write-Output "Customer downloads disabled by mode. Using the repository-selected base downloads file only."
     }
 
     # Check if any download requires winget
@@ -649,13 +654,6 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             $DownloadUrl = ((Invoke-RestMethod -Method GET -Uri $ReleasesUri).assets | Where-Object name -like $FileNamePattern).browser_download_url
             Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
         }
-        ElseIf ($null -ne $Download.Evergreen) {
-            Write-Output "[$SoftwareName] Retrieving URL via Evergreen..."
-            Write-Output "[$SoftwareName] Evergreen config: $($Download.Evergreen)"
-            $DownloadUrl = Get-EvergreenAppUri -Evergreen $Download.Evergreen
-            Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
-        }
-
         If ($UseWinget) {
             If (-not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
                 Write-Warning "[$SoftwareName] Skipping: winget is not available on this system."
@@ -700,15 +698,15 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                 Catch {
                     Write-Error "Error downloading '$SoftwareName' via winget: $_."
                 }
-                $DestFolders = $Download.DestinationFolders
+                $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
                 foreach ($DestFolder in $DestFolders) {
                     $DestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolder
                     If (-not (Test-Path -Path $DestinationDir)) {
                         New-Item -Path $DestinationDir -ItemType Directory -Force | Out-Null
                     }
-                    $copySize = [math]::Round((Get-Item $DestFileFullName).Length / 1MB, 1)
+                    $copySize = [math]::Round(((Get-ChildItem -Path $TempSoftwareDownloadDir -Recurse -File | Measure-Object -Property Length -Sum).Sum) / 1MB, 1)
                     Write-Output "[$SoftwareName] Copying to artifacts directory ($copySize MB)..."
-                    Copy-Item -Path $DestFileFullName -Destination $DestinationDir -Force
+                    Copy-Item -Path "$TempSoftwareDownloadDir\*" -Destination $DestinationDir -Recurse -Force
                 }
             }
         }
@@ -749,7 +747,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             Catch {
                 Write-Error "Error downloading software from '$DownloadUrl': $_."
             }
-            $DestFolders = $Download.DestinationFolders
+            $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
             foreach ($DestFolder in $DestFolders) {
                 $DestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolder
                 If (-not (Test-Path -Path $DestinationDir)) {
@@ -761,7 +759,17 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             }
         }
         Else {
-            Write-Error "No Internet URL found for '$SoftwareName'."
+            # No download source configured — check whether the file was pre-staged in customer/artifacts/
+            $DestFileName = $Download.DestinationFileName
+            $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
+            $PreStagedPaths = $DestFolders | ForEach-Object { Join-Path -Path $ArtifactsDir -ChildPath (Join-Path -Path $_ -ChildPath $DestFileName) }
+            $PreStagedFile = $PreStagedPaths | Where-Object { Test-Path -Path $_ } | Select-Object -First 1
+            If ($null -ne $PreStagedFile) {
+                Write-Output "[$SoftwareName] No download URL configured — using pre-staged file found in artifacts directory."
+            }
+            Else {
+                Write-Warning "[$SoftwareName] No download URL configured and '$DestFileName' was not found in the artifacts directory. If you have enabled the corresponding feature in your image build, pre-stage this file in customer/artifacts/ before running. If you are not using this software, no action is needed."
+            }
         }
     }
     Write-Output ""

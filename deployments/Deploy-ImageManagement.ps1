@@ -3,9 +3,10 @@
     Deploys AVD Image Management infrastructure using a named parameter file.
 
 .DESCRIPTION
-    Deploys the imageManagement.json ARM template using a parameter file from the
-    imageManagement\parameters\ directory. Parameter files must follow the naming
-    convention: <Prefix>.imageManagement.parameters.json
+    Deploys the imageManagement.json ARM template using a parameter file. The script prefers
+    customer-owned files in ..\customer\parameters\imageManagement\ and falls back to the repo
+    examples in imageManagement\parameters\. Parameter files must follow the naming convention:
+    <Prefix>.imageManagement.parameters.json
 
     After deployment, use Update-ImageArtifacts.ps1 to populate the artifacts
     storage account with software packages.
@@ -16,6 +17,8 @@
 
 .PARAMETER ParameterFilePrefix
     Prefix of the parameter file to use. The script will look for:
+    ..\customer\parameters\imageManagement\<Prefix>.imageManagement.parameters.json
+    and then fall back to:
     imageManagement\parameters\<Prefix>.imageManagement.parameters.json
 
     Included example prefixes:
@@ -28,6 +31,11 @@
     When specified, automatically runs Update-ImageArtifacts.ps1 after a successful deployment
     using the artifactsStorageAccountResourceId from the deployment outputs. Skipped if no
     artifacts storage account was deployed.
+
+.PARAMETER CustomerRootPath
+    Optional root folder that contains customer-owned parameter files. Defaults to the repo-local
+    customer folder next to the deployments folder. Useful when customers keep their overrides
+    outside a freshly extracted repo zip.
 
 .EXAMPLE
     .\.Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix basic
@@ -51,13 +59,23 @@ param (
     [string]$ParameterFilePrefix,
 
     [Parameter(Mandatory = $false)]
-    [switch]$UpdateArtifacts
+    [switch]$UpdateArtifacts,
+
+    [Parameter(Mandatory = $false)]
+    [string]$CustomerRootPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
-$TemplateFile   = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageManagement.json'
-$ParameterFile  = Join-Path -Path $PSScriptRoot -ChildPath "imageManagement\parameters\$ParameterFilePrefix.imageManagement.parameters.json"
+$TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath 'imageManagement\imageManagement.json'
+$ResolvedCustomerRootPath = if ([string]::IsNullOrWhiteSpace($CustomerRootPath)) {
+    Join-Path -Path $PSScriptRoot -ChildPath '..\customer'
+} else {
+    $CustomerRootPath
+}
+$CustomerParameterFile = Join-Path -Path $ResolvedCustomerRootPath -ChildPath "parameters\imageManagement\$ParameterFilePrefix.imageManagement.parameters.json"
+$RepoParameterFile = Join-Path -Path $PSScriptRoot -ChildPath "imageManagement\parameters\$ParameterFilePrefix.imageManagement.parameters.json"
+$ParameterFile = if (Test-Path -Path $CustomerParameterFile) { $CustomerParameterFile } else { $RepoParameterFile }
 $DeploymentName = "ImageManagement-$ParameterFilePrefix-$(Get-Date -Format 'yyyyMMddHHmmss')"
 
 if (-not (Test-Path -Path $TemplateFile)) {
@@ -66,7 +84,7 @@ if (-not (Test-Path -Path $TemplateFile)) {
 }
 
 if (-not (Test-Path -Path $ParameterFile)) {
-    Write-Error "Parameter file not found: $ParameterFile`nExpected naming convention: <Prefix>.imageManagement.parameters.json"
+    Write-Error "Parameter file not found. Checked: $CustomerParameterFile and $RepoParameterFile`nExpected naming convention: <Prefix>.imageManagement.parameters.json"
     exit 1
 }
 

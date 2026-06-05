@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "10412347679082395590"
+      "templateHash": "12175029762373167653"
     }
   },
   "parameters": {
@@ -1106,10 +1106,10 @@
           "deploymentSuffix": {
             "value": "[parameters('timeStamp')]"
           },
-          "storageKeyNames": {
+          "keyNames": {
             "value": "[variables('cmkKeyNames')]"
           },
-          "storageIdentityName": {
+          "identityName": {
             "value": "[variables('storageEncryptionIdentityName')]"
           }
         },
@@ -1121,7 +1121,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "18067987585444669153"
+              "templateHash": "7123932894855210232"
             }
           },
           "definitions": {
@@ -1129,18 +1129,30 @@
               "type": "object",
               "properties": {
                 "keyName": {
-                  "type": "string"
+                  "type": "string",
+                  "metadata": {
+                    "description": "Name of the Key Vault key to create or reference for this disk encryption configuration."
+                  }
                 },
                 "diskEncryptionSetName": {
-                  "type": "string"
+                  "type": "string",
+                  "metadata": {
+                    "description": "Name of the Disk Encryption Set resource to create."
+                  }
                 },
                 "confidentialVMOSDiskEncryption": {
                   "type": "bool",
-                  "nullable": true
+                  "nullable": true,
+                  "metadata": {
+                    "description": "When true, configures Confidential VM disk encryption behavior and release-user assignment."
+                  }
                 },
                 "confidentialVMOrchestratorObjectId": {
                   "type": "string",
-                  "nullable": true
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Object ID of the Confidential VM Orchestrator service principal. Required when confidentialVMOSDiskEncryption is true."
+                  }
                 },
                 "skipKeyCreation": {
                   "type": "bool",
@@ -1155,7 +1167,10 @@
               "type": "object",
               "properties": {
                 "diskEncryptionSetResourceId": {
-                  "type": "string"
+                  "type": "string",
+                  "metadata": {
+                    "description": "Resource ID of the Disk Encryption Set created for the corresponding diskEncryptionConfigs entry."
+                  }
                 }
               }
             }
@@ -1215,21 +1230,21 @@
                 "description": "Optional. Suffix appended to deployment names for uniqueness."
               }
             },
-            "storageKeyNames": {
+            "keyNames": {
               "type": "array",
               "items": {
                 "type": "string"
               },
               "defaultValue": [],
               "metadata": {
-                "description": "Optional. Names of Key Vault keys to create for storage account CMK encryption.\nOne key is created per entry. All keys are assigned to the single storageIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
+                "description": "Optional. Names of Key Vault keys to create for CMK encryption.\nOne key is created per entry. All keys are assigned to the single identityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
               }
             },
-            "storageIdentityName": {
+            "identityName": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Name of the user-assigned identity to create for storage CMK. Required when storageKeyNames is not empty."
+                "description": "Optional. Name of the user-assigned identity to create for CMK. Required when keyNames is not empty."
               }
             },
             "diskEncryptionConfigs": {
@@ -1277,14 +1292,14 @@
             "cvmKeyReleasePolicy": "[base64('{\"version\":\"1.0.0\",\"anyOf\":[{\"authority\":\"https://sharedeus.eus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus.wus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedneu.neu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedweu.weu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsasia.sasia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeasia.easia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedjpe.jpe.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedswn.swn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareditn.itn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2.eus2.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2e.eus2e.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedscus.scus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcuse.cuse.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcus.cus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeau.eau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsau.sau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcin.cin.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareduaen.uaen.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareddewc.dewc.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus3.wus3.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]}]}')]"
           },
           "resources": {
-            "storageKeys": {
+            "paasKeys": {
               "copy": {
-                "name": "storageKeys",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeys",
+                "count": "[length(parameters('keyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -1297,7 +1312,7 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "name": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('keyNames')[copyIndex()]]"
                   },
                   "kty": {
                     "value": "[variables('kty')]"
@@ -1436,11 +1451,11 @@
                 }
               }
             },
-            "storageIdentity": {
-              "condition": "[not(empty(parameters('storageKeyNames')))]",
+            "paasIdentity": {
+              "condition": "[not(empty(parameters('keyNames')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageUAI-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -1448,7 +1463,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[parameters('storageIdentityName')]"
+                    "value": "[parameters('identityName')]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -1510,14 +1525,14 @@
                 }
               }
             },
-            "storageKeyRoleAssignments": {
+            "paasKeyRoleAssignments": {
               "copy": {
-                "name": "storageKeyRoleAssignments",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeyRoleAssignments",
+                "count": "[length(parameters('keyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -1530,12 +1545,12 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "keyName": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('keyNames')[copyIndex()]]"
                   },
                   "assignments": {
                     "value": [
                       {
-                        "principalId": "[reference('storageIdentity').outputs.principalId.value]",
+                        "principalId": "[reference('paasIdentity').outputs.principalId.value]",
                         "principalType": "ServicePrincipal",
                         "roleDefinitionId": "[variables('roleKeyVaultCryptoEncryptionUser')]"
                       }
@@ -1668,8 +1683,8 @@
                 }
               },
               "dependsOn": [
-                "storageIdentity",
-                "[format('storageKeys[{0}]', copyIndex())]"
+                "paasIdentity",
+                "[format('paasKeys[{0}]', copyIndex())]"
               ]
             },
             "diskKeys": {
@@ -2302,19 +2317,19 @@
             }
           },
           "outputs": {
-            "storageIdentityResourceId": {
+            "identityResourceId": {
               "type": "string",
               "metadata": {
-                "description": "Resource ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Resource ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.resourceId.value, '')]"
+              "value": "[if(not(empty(parameters('keyNames'))), reference('paasIdentity').outputs.resourceId.value, '')]"
             },
-            "storageIdentityPrincipalId": {
+            "identityPrincipalId": {
               "type": "string",
               "metadata": {
-                "description": "Principal ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Principal ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.principalId.value, '')]"
+              "value": "[if(not(empty(parameters('keyNames'))), reference('paasIdentity').outputs.principalId.value, '')]"
             },
             "diskResults": {
               "type": "array",
@@ -2384,7 +2399,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "18067987585444669153"
+              "templateHash": "7123932894855210232"
             }
           },
           "definitions": {
@@ -2392,18 +2407,30 @@
               "type": "object",
               "properties": {
                 "keyName": {
-                  "type": "string"
+                  "type": "string",
+                  "metadata": {
+                    "description": "Name of the Key Vault key to create or reference for this disk encryption configuration."
+                  }
                 },
                 "diskEncryptionSetName": {
-                  "type": "string"
+                  "type": "string",
+                  "metadata": {
+                    "description": "Name of the Disk Encryption Set resource to create."
+                  }
                 },
                 "confidentialVMOSDiskEncryption": {
                   "type": "bool",
-                  "nullable": true
+                  "nullable": true,
+                  "metadata": {
+                    "description": "When true, configures Confidential VM disk encryption behavior and release-user assignment."
+                  }
                 },
                 "confidentialVMOrchestratorObjectId": {
                   "type": "string",
-                  "nullable": true
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Object ID of the Confidential VM Orchestrator service principal. Required when confidentialVMOSDiskEncryption is true."
+                  }
                 },
                 "skipKeyCreation": {
                   "type": "bool",
@@ -2418,7 +2445,10 @@
               "type": "object",
               "properties": {
                 "diskEncryptionSetResourceId": {
-                  "type": "string"
+                  "type": "string",
+                  "metadata": {
+                    "description": "Resource ID of the Disk Encryption Set created for the corresponding diskEncryptionConfigs entry."
+                  }
                 }
               }
             }
@@ -2478,21 +2508,21 @@
                 "description": "Optional. Suffix appended to deployment names for uniqueness."
               }
             },
-            "storageKeyNames": {
+            "keyNames": {
               "type": "array",
               "items": {
                 "type": "string"
               },
               "defaultValue": [],
               "metadata": {
-                "description": "Optional. Names of Key Vault keys to create for storage account CMK encryption.\nOne key is created per entry. All keys are assigned to the single storageIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
+                "description": "Optional. Names of Key Vault keys to create for CMK encryption.\nOne key is created per entry. All keys are assigned to the single identityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
               }
             },
-            "storageIdentityName": {
+            "identityName": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Name of the user-assigned identity to create for storage CMK. Required when storageKeyNames is not empty."
+                "description": "Optional. Name of the user-assigned identity to create for CMK. Required when keyNames is not empty."
               }
             },
             "diskEncryptionConfigs": {
@@ -2540,14 +2570,14 @@
             "cvmKeyReleasePolicy": "[base64('{\"version\":\"1.0.0\",\"anyOf\":[{\"authority\":\"https://sharedeus.eus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus.wus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedneu.neu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedweu.weu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsasia.sasia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeasia.easia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedjpe.jpe.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedswn.swn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareditn.itn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2.eus2.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2e.eus2e.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedscus.scus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcuse.cuse.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcus.cus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeau.eau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsau.sau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcin.cin.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareduaen.uaen.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareddewc.dewc.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus3.wus3.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]}]}')]"
           },
           "resources": {
-            "storageKeys": {
+            "paasKeys": {
               "copy": {
-                "name": "storageKeys",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeys",
+                "count": "[length(parameters('keyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -2560,7 +2590,7 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "name": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('keyNames')[copyIndex()]]"
                   },
                   "kty": {
                     "value": "[variables('kty')]"
@@ -2699,11 +2729,11 @@
                 }
               }
             },
-            "storageIdentity": {
-              "condition": "[not(empty(parameters('storageKeyNames')))]",
+            "paasIdentity": {
+              "condition": "[not(empty(parameters('keyNames')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageUAI-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -2711,7 +2741,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[parameters('storageIdentityName')]"
+                    "value": "[parameters('identityName')]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -2773,14 +2803,14 @@
                 }
               }
             },
-            "storageKeyRoleAssignments": {
+            "paasKeyRoleAssignments": {
               "copy": {
-                "name": "storageKeyRoleAssignments",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeyRoleAssignments",
+                "count": "[length(parameters('keyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -2793,12 +2823,12 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "keyName": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('keyNames')[copyIndex()]]"
                   },
                   "assignments": {
                     "value": [
                       {
-                        "principalId": "[reference('storageIdentity').outputs.principalId.value]",
+                        "principalId": "[reference('paasIdentity').outputs.principalId.value]",
                         "principalType": "ServicePrincipal",
                         "roleDefinitionId": "[variables('roleKeyVaultCryptoEncryptionUser')]"
                       }
@@ -2931,8 +2961,8 @@
                 }
               },
               "dependsOn": [
-                "storageIdentity",
-                "[format('storageKeys[{0}]', copyIndex())]"
+                "paasIdentity",
+                "[format('paasKeys[{0}]', copyIndex())]"
               ]
             },
             "diskKeys": {
@@ -3565,19 +3595,19 @@
             }
           },
           "outputs": {
-            "storageIdentityResourceId": {
+            "identityResourceId": {
               "type": "string",
               "metadata": {
-                "description": "Resource ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Resource ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.resourceId.value, '')]"
+              "value": "[if(not(empty(parameters('keyNames'))), reference('paasIdentity').outputs.resourceId.value, '')]"
             },
-            "storageIdentityPrincipalId": {
+            "identityPrincipalId": {
               "type": "string",
               "metadata": {
-                "description": "Principal ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Principal ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.principalId.value, '')]"
+              "value": "[if(not(empty(parameters('keyNames'))), reference('paasIdentity').outputs.principalId.value, '')]"
             },
             "diskResults": {
               "type": "array",
@@ -3647,7 +3677,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "18067987585444669153"
+              "templateHash": "7123932894855210232"
             }
           },
           "definitions": {
@@ -3655,18 +3685,30 @@
               "type": "object",
               "properties": {
                 "keyName": {
-                  "type": "string"
+                  "type": "string",
+                  "metadata": {
+                    "description": "Name of the Key Vault key to create or reference for this disk encryption configuration."
+                  }
                 },
                 "diskEncryptionSetName": {
-                  "type": "string"
+                  "type": "string",
+                  "metadata": {
+                    "description": "Name of the Disk Encryption Set resource to create."
+                  }
                 },
                 "confidentialVMOSDiskEncryption": {
                   "type": "bool",
-                  "nullable": true
+                  "nullable": true,
+                  "metadata": {
+                    "description": "When true, configures Confidential VM disk encryption behavior and release-user assignment."
+                  }
                 },
                 "confidentialVMOrchestratorObjectId": {
                   "type": "string",
-                  "nullable": true
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Object ID of the Confidential VM Orchestrator service principal. Required when confidentialVMOSDiskEncryption is true."
+                  }
                 },
                 "skipKeyCreation": {
                   "type": "bool",
@@ -3681,7 +3723,10 @@
               "type": "object",
               "properties": {
                 "diskEncryptionSetResourceId": {
-                  "type": "string"
+                  "type": "string",
+                  "metadata": {
+                    "description": "Resource ID of the Disk Encryption Set created for the corresponding diskEncryptionConfigs entry."
+                  }
                 }
               }
             }
@@ -3741,21 +3786,21 @@
                 "description": "Optional. Suffix appended to deployment names for uniqueness."
               }
             },
-            "storageKeyNames": {
+            "keyNames": {
               "type": "array",
               "items": {
                 "type": "string"
               },
               "defaultValue": [],
               "metadata": {
-                "description": "Optional. Names of Key Vault keys to create for storage account CMK encryption.\nOne key is created per entry. All keys are assigned to the single storageIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
+                "description": "Optional. Names of Key Vault keys to create for CMK encryption.\nOne key is created per entry. All keys are assigned to the single identityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
               }
             },
-            "storageIdentityName": {
+            "identityName": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Name of the user-assigned identity to create for storage CMK. Required when storageKeyNames is not empty."
+                "description": "Optional. Name of the user-assigned identity to create for CMK. Required when keyNames is not empty."
               }
             },
             "diskEncryptionConfigs": {
@@ -3803,14 +3848,14 @@
             "cvmKeyReleasePolicy": "[base64('{\"version\":\"1.0.0\",\"anyOf\":[{\"authority\":\"https://sharedeus.eus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus.wus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedneu.neu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedweu.weu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsasia.sasia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeasia.easia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedjpe.jpe.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedswn.swn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareditn.itn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2.eus2.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2e.eus2e.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedscus.scus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcuse.cuse.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcus.cus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeau.eau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsau.sau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcin.cin.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareduaen.uaen.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareddewc.dewc.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus3.wus3.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]}]}')]"
           },
           "resources": {
-            "storageKeys": {
+            "paasKeys": {
               "copy": {
-                "name": "storageKeys",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeys",
+                "count": "[length(parameters('keyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -3823,7 +3868,7 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "name": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('keyNames')[copyIndex()]]"
                   },
                   "kty": {
                     "value": "[variables('kty')]"
@@ -3962,11 +4007,11 @@
                 }
               }
             },
-            "storageIdentity": {
-              "condition": "[not(empty(parameters('storageKeyNames')))]",
+            "paasIdentity": {
+              "condition": "[not(empty(parameters('keyNames')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageUAI-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -3974,7 +4019,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[parameters('storageIdentityName')]"
+                    "value": "[parameters('identityName')]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -4036,14 +4081,14 @@
                 }
               }
             },
-            "storageKeyRoleAssignments": {
+            "paasKeyRoleAssignments": {
               "copy": {
-                "name": "storageKeyRoleAssignments",
-                "count": "[length(parameters('storageKeyNames'))]"
+                "name": "paasKeyRoleAssignments",
+                "count": "[length(parameters('keyNames'))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-StorageKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('CMK-PaaSKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -4056,12 +4101,12 @@
                     "value": "[variables('keyVaultName')]"
                   },
                   "keyName": {
-                    "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                    "value": "[parameters('keyNames')[copyIndex()]]"
                   },
                   "assignments": {
                     "value": [
                       {
-                        "principalId": "[reference('storageIdentity').outputs.principalId.value]",
+                        "principalId": "[reference('paasIdentity').outputs.principalId.value]",
                         "principalType": "ServicePrincipal",
                         "roleDefinitionId": "[variables('roleKeyVaultCryptoEncryptionUser')]"
                       }
@@ -4194,8 +4239,8 @@
                 }
               },
               "dependsOn": [
-                "storageIdentity",
-                "[format('storageKeys[{0}]', copyIndex())]"
+                "paasIdentity",
+                "[format('paasKeys[{0}]', copyIndex())]"
               ]
             },
             "diskKeys": {
@@ -4828,19 +4873,19 @@
             }
           },
           "outputs": {
-            "storageIdentityResourceId": {
+            "identityResourceId": {
               "type": "string",
               "metadata": {
-                "description": "Resource ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Resource ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.resourceId.value, '')]"
+              "value": "[if(not(empty(parameters('keyNames'))), reference('paasIdentity').outputs.resourceId.value, '')]"
             },
-            "storageIdentityPrincipalId": {
+            "identityPrincipalId": {
               "type": "string",
               "metadata": {
-                "description": "Principal ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                "description": "Principal ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested."
               },
-              "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.principalId.value, '')]"
+              "value": "[if(not(empty(parameters('keyNames'))), reference('paasIdentity').outputs.principalId.value, '')]"
             },
             "diskResults": {
               "type": "array",
@@ -4903,18 +4948,15 @@
           "serviceEndpointSubnetIds": {
             "value": "[parameters('storageServiceEndpointSubnetResourceIds')]"
           },
-          "privateEndpoint": {
-            "value": "[equals(parameters('storageNetworkAccess'), 'PrivateEndpoint')]"
-          },
+          "publicNetworkAccess": "[if(and(and(equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'), empty(parameters('storagePermittedIPs'))), empty(parameters('storageServiceEndpointSubnetResourceIds'))), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
           "networkAclsBypass": {
             "value": "None"
           },
           "sasExpirationPeriod": {
             "value": "[variables('sasExpirationPeriod')]"
           },
-          "encryptionKeyVaultUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('encryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri), createObject('value', ''))]",
-          "encryptionKeyName": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', variables('storageEncryptionKeyName')), createObject('value', ''))]",
-          "encryptionUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.storageIdentityResourceId.value), createObject('value', ''))]",
+          "cmkKeyUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', format('{0}keys/{1}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('encryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri, variables('storageEncryptionKeyName'))), createObject('value', ''))]",
+          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.identityResourceId.value), createObject('value', ''))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
           }
@@ -4927,7 +4969,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "11266636639603511759"
+              "templateHash": "10800169598555599766"
             }
           },
           "definitions": {
@@ -5110,11 +5152,15 @@
               "type": "string",
               "defaultValue": ""
             },
-            "privateEndpoint": {
-              "type": "bool",
-              "defaultValue": false,
+            "publicNetworkAccess": {
+              "type": "string",
+              "defaultValue": "Enabled",
+              "allowedValues": [
+                "Enabled",
+                "Disabled"
+              ],
               "metadata": {
-                "description": "Optional. Whether this storage account is accessed via a private endpoint. When true and no permittedIPs or serviceEndpointSubnetIds are provided, public network access is disabled entirely."
+                "description": "Optional. Public network access setting for this storage account. Caller is responsible for resolving the correct value based on private endpoint topology, permitted IPs, and service endpoints."
               }
             },
             "permittedIPs": {
@@ -5165,25 +5211,18 @@
                 "description": "Optional. Azure Files identity-based authentication settings object."
               }
             },
-            "encryptionKeyVaultUri": {
+            "cmkKeyUri": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Key Vault URI for customer-managed key encryption."
+                "description": "Optional. Customer-managed key URI for storage encryption."
               }
             },
-            "encryptionKeyName": {
+            "cmkUserAssignedIdentityResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Key Vault key name for customer-managed encryption."
-              }
-            },
-            "encryptionUserAssignedIdentityResourceId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of user-assigned identity with key vault access for CMK."
+                "description": "Optional. User-assigned identity resource ID used for CMK access."
               }
             },
             "diagnosticSettings": {
@@ -5210,11 +5249,14 @@
                 }
               }
             ],
-            "hasFirewallRestrictions": "[or(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), not(empty(parameters('serviceEndpointSubnetIds'))))]",
-            "resolvedPublicNetworkAccess": "[if(and(and(parameters('privateEndpoint'), empty(parameters('permittedIPs'))), empty(parameters('serviceEndpointSubnetIds'))), 'Disabled', 'Enabled')]",
+            "hasFirewallRestrictions": "[or(not(empty(parameters('permittedIPs'))), not(empty(parameters('serviceEndpointSubnetIds'))))]",
             "supportsBlobService": "[or(or(or(equals(parameters('kind'), 'BlockBlobStorage'), equals(parameters('kind'), 'BlobStorage')), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
             "supportsFileService": "[or(or(equals(parameters('kind'), 'FileStorage'), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
-            "useCmk": "[and(not(empty(parameters('encryptionKeyVaultUri'))), not(empty(parameters('encryptionKeyName'))))]",
+            "cmkConfigurationValidated": "[if(and(or(empty(parameters('cmkKeyUri')), contains(parameters('cmkKeyUri'), '/keys/')), equals(empty(parameters('cmkKeyUri')), empty(parameters('cmkUserAssignedIdentityResourceId')))), true(), bool('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.'))]",
+            "cmkKeyVaultUri": "[if(not(empty(parameters('cmkKeyUri'))), format('{0}/', split(parameters('cmkKeyUri'), '/keys/')[0]), '')]",
+            "cmkKeyPathSegments": "[split(if(not(empty(parameters('cmkKeyUri'))), split(parameters('cmkKeyUri'), '/keys/')[1], ''), '/')]",
+            "cmkKeyName": "[if(not(empty(parameters('cmkKeyUri'))), variables('cmkKeyPathSegments')[0], '')]",
+            "cmkKeyVersion": "[if(and(not(empty(parameters('cmkKeyUri'))), greater(length(variables('cmkKeyPathSegments')), 1)), variables('cmkKeyPathSegments')[1], '')]",
             "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
             "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
           },
@@ -5229,14 +5271,14 @@
               "sku": {
                 "name": "[parameters('skuName')]"
               },
-              "identity": "[if(and(variables('useCmk'), not(empty(parameters('encryptionUserAssignedIdentityResourceId')))), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('encryptionUserAssignedIdentityResourceId')), createObject())), null())]",
+              "identity": "[if(not(empty(parameters('cmkKeyUri'))), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('cmkUserAssignedIdentityResourceId')), createObject())), null())]",
               "properties": {
                 "accessTier": "[if(or(equals(parameters('kind'), 'StorageV2'), equals(parameters('kind'), 'BlobStorage')), parameters('accessTier'), null())]",
                 "allowBlobPublicAccess": "[parameters('allowBlobPublicAccess')]",
                 "allowCrossTenantReplication": "[parameters('allowCrossTenantReplication')]",
                 "allowSharedKeyAccess": "[parameters('allowSharedKeyAccess')]",
                 "defaultToOAuthAuthentication": "[parameters('defaultToOAuthAuthentication')]",
-                "supportsHttpsTrafficOnly": "[parameters('supportsHttpsTrafficOnly')]",
+                "supportsHttpsTrafficOnly": "[if(variables('cmkConfigurationValidated'), parameters('supportsHttpsTrafficOnly'), parameters('supportsHttpsTrafficOnly'))]",
                 "minimumTlsVersion": "[parameters('minimumTlsVersion')]",
                 "dnsEndpointType": "[if(not(empty(parameters('dnsEndpointType'))), parameters('dnsEndpointType'), null())]",
                 "largeFileSharesState": "[if(not(empty(parameters('largeFileSharesState'))), parameters('largeFileSharesState'), null())]",
@@ -5246,12 +5288,12 @@
                   "virtualNetworkRules": "[variables('virtualNetworkRules')]",
                   "ipRules": "[variables('ipRules')]"
                 },
-                "publicNetworkAccess": "[variables('resolvedPublicNetworkAccess')]",
+                "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
                 "allowedCopyScope": "[if(not(empty(parameters('allowedCopyScope'))), parameters('allowedCopyScope'), null())]",
                 "sasPolicy": "[if(not(empty(parameters('sasExpirationPeriod'))), createObject('expirationAction', 'Log', 'sasExpirationPeriod', parameters('sasExpirationPeriod')), null())]",
                 "azureFilesIdentityBasedAuthentication": "[if(not(empty(parameters('azureFilesIdentityBasedAuthentication'))), parameters('azureFilesIdentityBasedAuthentication'), null())]",
                 "encryption": {
-                  "keySource": "[if(variables('useCmk'), 'Microsoft.Keyvault', 'Microsoft.Storage')]",
+                  "keySource": "[if(not(empty(parameters('cmkKeyUri'))), 'Microsoft.Keyvault', 'Microsoft.Storage')]",
                   "services": {
                     "blob": "[if(variables('supportsBlobService'), createObject('enabled', true()), null())]",
                     "file": "[if(variables('supportsFileService'), createObject('enabled', true()), null())]",
@@ -5263,8 +5305,8 @@
                     }
                   },
                   "requireInfrastructureEncryption": "[if(not(equals(parameters('kind'), 'Storage')), parameters('requireInfrastructureEncryption'), null())]",
-                  "keyvaultproperties": "[if(variables('useCmk'), createObject('keyname', parameters('encryptionKeyName'), 'keyvaulturi', parameters('encryptionKeyVaultUri')), null())]",
-                  "identity": "[if(variables('useCmk'), createObject('userAssignedIdentity', parameters('encryptionUserAssignedIdentityResourceId')), null())]"
+                  "keyvaultproperties": "[if(not(empty(parameters('cmkKeyUri'))), createObject('keyname', variables('cmkKeyName'), 'keyvaulturi', variables('cmkKeyVaultUri'), 'keyversion', if(not(empty(variables('cmkKeyVersion'))), variables('cmkKeyVersion'), null())), null())]",
+                  "identity": "[if(not(empty(parameters('cmkKeyUri'))), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId')), null())]"
                 }
               }
             },
@@ -5969,18 +6011,15 @@
           "serviceEndpointSubnetIds": {
             "value": "[parameters('storageServiceEndpointSubnetResourceIds')]"
           },
-          "privateEndpoint": {
-            "value": "[equals(parameters('storageNetworkAccess'), 'PrivateEndpoint')]"
-          },
+          "publicNetworkAccess": "[if(and(and(equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'), empty(parameters('storagePermittedIPs'))), empty(parameters('storageServiceEndpointSubnetResourceIds'))), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
           "networkAclsBypass": {
             "value": "None"
           },
           "sasExpirationPeriod": {
             "value": "[variables('sasExpirationPeriod')]"
           },
-          "encryptionKeyVaultUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('encryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri), createObject('value', ''))]",
-          "encryptionKeyName": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', variables('storageEncryptionKeyName')), createObject('value', ''))]",
-          "encryptionUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.storageIdentityResourceId.value), createObject('value', ''))]",
+          "cmkKeyUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', format('{0}keys/{1}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('encryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri, variables('storageEncryptionKeyName'))), createObject('value', ''))]",
+          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.identityResourceId.value), createObject('value', ''))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
           }
@@ -5993,7 +6032,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "11266636639603511759"
+              "templateHash": "10800169598555599766"
             }
           },
           "definitions": {
@@ -6176,11 +6215,15 @@
               "type": "string",
               "defaultValue": ""
             },
-            "privateEndpoint": {
-              "type": "bool",
-              "defaultValue": false,
+            "publicNetworkAccess": {
+              "type": "string",
+              "defaultValue": "Enabled",
+              "allowedValues": [
+                "Enabled",
+                "Disabled"
+              ],
               "metadata": {
-                "description": "Optional. Whether this storage account is accessed via a private endpoint. When true and no permittedIPs or serviceEndpointSubnetIds are provided, public network access is disabled entirely."
+                "description": "Optional. Public network access setting for this storage account. Caller is responsible for resolving the correct value based on private endpoint topology, permitted IPs, and service endpoints."
               }
             },
             "permittedIPs": {
@@ -6231,25 +6274,18 @@
                 "description": "Optional. Azure Files identity-based authentication settings object."
               }
             },
-            "encryptionKeyVaultUri": {
+            "cmkKeyUri": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Key Vault URI for customer-managed key encryption."
+                "description": "Optional. Customer-managed key URI for storage encryption."
               }
             },
-            "encryptionKeyName": {
+            "cmkUserAssignedIdentityResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Key Vault key name for customer-managed encryption."
-              }
-            },
-            "encryptionUserAssignedIdentityResourceId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of user-assigned identity with key vault access for CMK."
+                "description": "Optional. User-assigned identity resource ID used for CMK access."
               }
             },
             "diagnosticSettings": {
@@ -6276,11 +6312,14 @@
                 }
               }
             ],
-            "hasFirewallRestrictions": "[or(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), not(empty(parameters('serviceEndpointSubnetIds'))))]",
-            "resolvedPublicNetworkAccess": "[if(and(and(parameters('privateEndpoint'), empty(parameters('permittedIPs'))), empty(parameters('serviceEndpointSubnetIds'))), 'Disabled', 'Enabled')]",
+            "hasFirewallRestrictions": "[or(not(empty(parameters('permittedIPs'))), not(empty(parameters('serviceEndpointSubnetIds'))))]",
             "supportsBlobService": "[or(or(or(equals(parameters('kind'), 'BlockBlobStorage'), equals(parameters('kind'), 'BlobStorage')), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
             "supportsFileService": "[or(or(equals(parameters('kind'), 'FileStorage'), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
-            "useCmk": "[and(not(empty(parameters('encryptionKeyVaultUri'))), not(empty(parameters('encryptionKeyName'))))]",
+            "cmkConfigurationValidated": "[if(and(or(empty(parameters('cmkKeyUri')), contains(parameters('cmkKeyUri'), '/keys/')), equals(empty(parameters('cmkKeyUri')), empty(parameters('cmkUserAssignedIdentityResourceId')))), true(), bool('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.'))]",
+            "cmkKeyVaultUri": "[if(not(empty(parameters('cmkKeyUri'))), format('{0}/', split(parameters('cmkKeyUri'), '/keys/')[0]), '')]",
+            "cmkKeyPathSegments": "[split(if(not(empty(parameters('cmkKeyUri'))), split(parameters('cmkKeyUri'), '/keys/')[1], ''), '/')]",
+            "cmkKeyName": "[if(not(empty(parameters('cmkKeyUri'))), variables('cmkKeyPathSegments')[0], '')]",
+            "cmkKeyVersion": "[if(and(not(empty(parameters('cmkKeyUri'))), greater(length(variables('cmkKeyPathSegments')), 1)), variables('cmkKeyPathSegments')[1], '')]",
             "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
             "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
           },
@@ -6295,14 +6334,14 @@
               "sku": {
                 "name": "[parameters('skuName')]"
               },
-              "identity": "[if(and(variables('useCmk'), not(empty(parameters('encryptionUserAssignedIdentityResourceId')))), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('encryptionUserAssignedIdentityResourceId')), createObject())), null())]",
+              "identity": "[if(not(empty(parameters('cmkKeyUri'))), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('cmkUserAssignedIdentityResourceId')), createObject())), null())]",
               "properties": {
                 "accessTier": "[if(or(equals(parameters('kind'), 'StorageV2'), equals(parameters('kind'), 'BlobStorage')), parameters('accessTier'), null())]",
                 "allowBlobPublicAccess": "[parameters('allowBlobPublicAccess')]",
                 "allowCrossTenantReplication": "[parameters('allowCrossTenantReplication')]",
                 "allowSharedKeyAccess": "[parameters('allowSharedKeyAccess')]",
                 "defaultToOAuthAuthentication": "[parameters('defaultToOAuthAuthentication')]",
-                "supportsHttpsTrafficOnly": "[parameters('supportsHttpsTrafficOnly')]",
+                "supportsHttpsTrafficOnly": "[if(variables('cmkConfigurationValidated'), parameters('supportsHttpsTrafficOnly'), parameters('supportsHttpsTrafficOnly'))]",
                 "minimumTlsVersion": "[parameters('minimumTlsVersion')]",
                 "dnsEndpointType": "[if(not(empty(parameters('dnsEndpointType'))), parameters('dnsEndpointType'), null())]",
                 "largeFileSharesState": "[if(not(empty(parameters('largeFileSharesState'))), parameters('largeFileSharesState'), null())]",
@@ -6312,12 +6351,12 @@
                   "virtualNetworkRules": "[variables('virtualNetworkRules')]",
                   "ipRules": "[variables('ipRules')]"
                 },
-                "publicNetworkAccess": "[variables('resolvedPublicNetworkAccess')]",
+                "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
                 "allowedCopyScope": "[if(not(empty(parameters('allowedCopyScope'))), parameters('allowedCopyScope'), null())]",
                 "sasPolicy": "[if(not(empty(parameters('sasExpirationPeriod'))), createObject('expirationAction', 'Log', 'sasExpirationPeriod', parameters('sasExpirationPeriod')), null())]",
                 "azureFilesIdentityBasedAuthentication": "[if(not(empty(parameters('azureFilesIdentityBasedAuthentication'))), parameters('azureFilesIdentityBasedAuthentication'), null())]",
                 "encryption": {
-                  "keySource": "[if(variables('useCmk'), 'Microsoft.Keyvault', 'Microsoft.Storage')]",
+                  "keySource": "[if(not(empty(parameters('cmkKeyUri'))), 'Microsoft.Keyvault', 'Microsoft.Storage')]",
                   "services": {
                     "blob": "[if(variables('supportsBlobService'), createObject('enabled', true()), null())]",
                     "file": "[if(variables('supportsFileService'), createObject('enabled', true()), null())]",
@@ -6329,8 +6368,8 @@
                     }
                   },
                   "requireInfrastructureEncryption": "[if(not(equals(parameters('kind'), 'Storage')), parameters('requireInfrastructureEncryption'), null())]",
-                  "keyvaultproperties": "[if(variables('useCmk'), createObject('keyname', parameters('encryptionKeyName'), 'keyvaulturi', parameters('encryptionKeyVaultUri')), null())]",
-                  "identity": "[if(variables('useCmk'), createObject('userAssignedIdentity', parameters('encryptionUserAssignedIdentityResourceId')), null())]"
+                  "keyvaultproperties": "[if(not(empty(parameters('cmkKeyUri'))), createObject('keyname', variables('cmkKeyName'), 'keyvaulturi', variables('cmkKeyVaultUri'), 'keyversion', if(not(empty(variables('cmkKeyVersion'))), variables('cmkKeyVersion'), null())), null())]",
+                  "identity": "[if(not(empty(parameters('cmkKeyUri'))), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId')), null())]"
                 }
               }
             },

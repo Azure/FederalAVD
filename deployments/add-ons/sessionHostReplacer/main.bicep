@@ -1,4 +1,4 @@
-// AVD Session Host Replacer Add-On
+﻿// AVD Session Host Replacer Add-On
 // Deploys automated session host lifecycle management for Azure Virtual Desktop
 
 targetScope = 'subscription'
@@ -105,11 +105,11 @@ param encryptionKeyVaultResourceId string = ''
 
 @description('Optional. Key management solution for storage accounts. Options: Platform, Customer.')
 @allowed([
-  'MicrosoftManaged'
+  'PlatformManaged'
   'CustomerManaged'
   'CustomerManagedHSM'
 ])
-param keyManagementStorageAccounts string = 'MicrosoftManaged'
+param keyManagementStorageAccounts string = 'PlatformManaged'
 
 @description('Optional. Log Analytics Workspace resource ID for Application Insights.')
 param logAnalyticsWorkspaceResourceId string = ''

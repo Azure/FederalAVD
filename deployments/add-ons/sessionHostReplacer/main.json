@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "10616616602296585356"
+      "templateHash": "6158453884294838116"
     }
   },
   "parameters": {
@@ -181,9 +181,9 @@
     },
     "keyManagementStorageAccounts": {
       "type": "string",
-      "defaultValue": "MicrosoftManaged",
+      "defaultValue": "PlatformManaged",
       "allowedValues": [
-        "MicrosoftManaged",
+        "PlatformManaged",
         "CustomerManaged",
         "CustomerManagedHSM"
       ],
@@ -3518,7 +3518,7 @@
                                     "count": "[[length(parameters('customizations'))]",
                                     "input": {
                                       "name": "[[replace(parameters('customizations')[copyIndex('customizers')].name, ' ', '-')]",
-                                      "uri": "[[if(or(startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'https://'), startsWith(parameters('customizations')[copyIndex('customizers')].blobNameorUri, 'http://')), parameters('customizations')[copyIndex('customizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri))]",
+                                      "uri": "[[if(or(startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'https://'), startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'http://')), parameters('customizations')[copyIndex('customizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri))]",
                                       "arguments": "[[coalesce(tryGet(parameters('customizations')[copyIndex('customizers')], 'arguments'), '')]"
                                     }
                                   }
@@ -3898,7 +3898,16 @@
                   "name": "infoBox1",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
-                    "text": "Deploy new session hosts into an existing Azure Virtual Desktop host pool. Select the target host pool and configure the number, size, and settings for the new virtual machines. The host pool must have a valid registration token before deployment."
+                    "text": "Deploy new session hosts into an existing Azure Virtual Desktop host pool. Select the target host pool and configure the number, size, and settings for the new virtual machines."
+                  }
+                },
+                {
+                  "name": "registrationTokenInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "The selected host pool must have a valid registration token before deploying session hosts. Without one, the AVD agent cannot register the VMs and they will not appear in the host pool. To generate a new token, open the host pool in the Azure portal → Overview → Registration key → Generate new key.",
+                    "uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/add-session-hosts-host-pool?tabs=portal%2Cgui&pivots=host-pool-standard"
                   }
                 },
                 {
@@ -3945,16 +3954,6 @@
                   "request": {
                     "method": "GET",
                     "path": "[[concat(steps('basics').hostPool.id, '?api-version=2024-04-03')]"
-                  }
-                },
-                {
-                  "name": "registrationTokenWarning",
-                  "type": "Microsoft.Common.InfoBox",
-                  "visible": "[[not(empty(steps('basics').hostPool))]",
-                  "options": {
-                    "style": "Warning",
-                    "text": "The selected host pool must have a valid registration token before deploying session hosts. Without one, the AVD agent cannot register the VMs and they will not appear in the host pool. To generate a new token, open the host pool in the Azure portal → Overview → Registration key → Generate new key.",
-                    "uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/add-session-hosts-host-pool?tabs=portal%2Cgui&pivots=host-pool-standard"
                   }
                 },
                 {
@@ -4400,23 +4399,10 @@
                       "name": "offer",
                       "type": "Microsoft.Common.DropDown",
                       "label": "Offer",
-                      "defaultValue": "[[if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), 'Office-365', steps('basics').hostsRGProps.tags.vmImageOffer)]",
+                      "defaultValue": "[[if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'Windows-11', 'Office-365'), steps('basics').hostsRGProps.tags.vmImageOffer)]",
                       "toolTip": "Select the desired marketplace image offer.",
                       "constraints": {
-                        "allowedValues": [
-                          {
-                            "label": "Office-365",
-                            "value": "Office-365"
-                          },
-                          {
-                            "label": "Windows-10",
-                            "value": "Windows-10"
-                          },
-                          {
-                            "label": "Windows-11",
-                            "value": "Windows-11"
-                          }
-                        ],
+                        "allowedValues": "[[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), parse('[{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"},{\"label\":\"Windows Enterprise CPC\",\"value\":\"windows-ent-cpc\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"Office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"}]'))]",
                         "required": true
                       },
                       "visible": "[[equals(steps('hosts').image.source, 'marketplace')]"
@@ -4427,17 +4413,21 @@
                       "condition": "[[and(not(empty(steps('hosts').scope.subscription.id)), not(empty(steps('hosts').scope.location)), not(empty(steps('hosts').image.offer)), equals(steps('hosts').image.source, 'marketplace'))]",
                       "request": {
                         "method": "GET",
-                        "path": "[[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]"
+                        "path": "[[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]",
+                        "transforms": {
+                          "personal": "[?starts_with(name, `win`) && contains(name, `ent`) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}",
+                          "pooled": "[?starts_with(name, `win`) && (contains(name, `ent`) || contains(name, `avd`)) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}"
+                        }
                       }
                     },
                     {
                       "name": "sku",
                       "type": "Microsoft.Common.DropDown",
                       "label": "SKU",
-                      "defaultValue": "[[if(empty(steps('basics').hostsRGProps.tags.vmImageSku), 'win11-25h2-avd-m365', steps('basics').hostsRGProps.tags.vmImageSku)]",
+                      "defaultValue": "[[if(empty(steps('basics').hostsRGProps.tags.vmImageSku), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'win11-25h2-ent', 'win11-25h2-avd-m365'), steps('basics').hostsRGProps.tags.vmImageSku)]",
                       "toolTip": "Select the desired marketplace image SKU.",
                       "constraints": {
-                        "allowedValues": "[[map(filter(steps('hosts').image.skuApi, (sku) => and(startsWith(sku.name, 'win'), or(contains(sku.name, 'ent'), contains(sku.name, 'avd')))), (sku) => parse(concat('{\"label\":\"', sku.name, '\",\"value\":\"', sku.name, '\"}')))]",
+                        "allowedValues": "[[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('hosts').image.skuApi.transformed.personal, steps('hosts').image.skuApi.transformed.pooled)]",
                         "required": true
                       },
                       "visible": "[[equals(steps('hosts').image.source, 'marketplace')]"
@@ -4919,10 +4909,11 @@
                     },
                     {
                       "name": "storageIntro",
-                      "type": "Microsoft.Common.TextBlock",
+                      "type": "Microsoft.Common.InfoBox",
                       "visible": "[[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
                       "options": {
-                        "text": "Optionally select a storage account and blob container hosting your artifacts (agent installers, scripts, or software), and a User Assigned Managed Identity with 'Storage Blob Data Reader' role assignment. If you provide full URLs in the fields below, these selections are not required."
+                        "style": "Info",
+                        "text": "Optionally select a storage account, blob container, and User Assigned Managed Identity with 'Storage Blob Data Reader' role assignment to host your artifacts (agent installers, scripts, or software). If you specify these items, you can provide blob names in the fields below instead of full URLs. Otherwise, full URLs are required."
                       }
                     },
                     {
@@ -4987,15 +4978,18 @@
                       "toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role assigned to the storage account selected above.",
                       "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
                       "constraints": {
-                        "required": false,
-                        "validations": [
-                          {
-                            "isValid": "[[or(not(empty(steps('hosts').customizations.managedIdentity)), and(empty(steps('hosts').customizations.storageAccount), not(contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.')), not(contains(steps('hosts').customizations.agentUrl, '.blob.core.'))))]",
-                            "message": "A managed identity is required when accessing blob storage. Either select a storage account above or provide a managed identity."
-                          }
-                        ]
+                        "required": false
                       },
                       "visible": "[[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
+                    },
+                    {
+                      "name": "managedIdentityRequiredError",
+                      "type": "Microsoft.Common.InfoBox",
+                      "visible": "[[and(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), not(contains(string(steps('hosts').customizations.managedIdentity), '/subscriptions/')), or(not(empty(steps('hosts').customizations.storageAccount)), contains(steps('hosts').customizations.agentBootLoaderUrl, '.blob.core.'), contains(steps('hosts').customizations.agentUrl, '.blob.core.')))]",
+                      "options": {
+                        "text": "A managed identity with 'Storage Blob Data Reader' on the storage account is required when a storage account is selected or a blob storage URL is provided.",
+                        "style": "Error"
+                      }
                     },
                     {
                       "name": "agentDownloadHeader",
@@ -5009,7 +5003,7 @@
                       "name": "agentBootLoaderUrl",
                       "type": "Microsoft.Common.TextBox",
                       "label": "[[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent Boot Loader URL', 'AVD Agent Boot Loader URL or Blob Name')]",
-                      "defaultValue": "[[if(empty(steps('hosts').customizations.storageAccount), '', 'Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi')]",
+                      "defaultValue": "Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi",
                       "toolTip": "[[if(empty(steps('hosts').customizations.storageAccount), 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide a custom full URL to override the default.', 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide either a blob name (if using the storage account selected above) or a custom full URL to override the default.')]",
                       "constraints": {
                         "required": false,
@@ -5022,7 +5016,7 @@
                       "name": "agentUrl",
                       "type": "Microsoft.Common.TextBox",
                       "label": "[[if(empty(steps('hosts').customizations.storageAccount), 'AVD Agent URL', 'AVD Agent URL or Blob Name')]",
-                      "defaultValue": "[[if(empty(steps('hosts').customizations.storageAccount), '', 'Microsoft.RDInfra.RDAgent.Installer-x64.msi')]",
+                      "defaultValue": "Microsoft.RDInfra.RDAgent.Installer-x64.msi",
                       "toolTip": "[[if(empty(steps('hosts').customizations.storageAccount), 'Optional. Provide a custom full URL to override defaults (go.microsoft.com for public clouds, aka.ms perma-links for air-gapped clouds). This URL will be used as fallback if the endpoint download fails.', 'Optional. Provide a blob name (using storage account above) or full URL to override defaults. This will be used as fallback if the endpoint download fails.')]",
                       "constraints": {
                         "required": false,
@@ -5030,6 +5024,15 @@
                         "validationMessage": "Must be either a full URL (https://...) or a blob name ending in .msi"
                       },
                       "visible": "[[steps('hosts').customizations.customizeAgentDownload]"
+                    },
+                    {
+                      "name": "agentBlobWithoutStorageError",
+                      "type": "Microsoft.Common.InfoBox",
+                      "visible": "[[and(steps('hosts').customizations.customizeAgentDownload, empty(steps('hosts').customizations.storageAccount), or(and(not(empty(steps('hosts').customizations.agentBootLoaderUrl)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), and(not(empty(steps('hosts').customizations.agentUrl)), not(startsWith(steps('hosts').customizations.agentUrl, 'http')))))]",
+                      "options": {
+                        "text": "A blob name was entered but no storage account is selected. Select a storage account and container above, or provide a full URL instead.",
+                        "style": "Error"
+                      }
                     },
                     {
                       "name": "customScriptsHeader",
@@ -5125,10 +5128,20 @@
               "label": "User Profiles",
               "elements": [
                 {
+                  "name": "personalHostPoolInfoBox",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[[equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')]",
+                  "options": {
+                    "style": "Info",
+                    "text": "FSLogix profile management is not applicable to Personal host pools. Session hosts in Personal host pools retain their local user profiles."
+                  }
+                },
+                {
                   "name": "profileSolution",
                   "type": "Microsoft.Common.DropDown",
                   "defaultValue": "FSLogix",
                   "label": "Profile Solution",
+                  "visible": "[[not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'))]",
                   "toolTip": "Select the user profile solution for your end users.",
                   "constraints": {
                     "allowedValues": [
@@ -5148,12 +5161,12 @@
                   "type": "Microsoft.Common.CheckBox",
                   "label": "Configure FSLogix registry settings on session hosts",
                   "defaultValue": true,
-                  "visible": "[[equals(steps('userProfiles').profileSolution, 'FSLogix')]"
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'))]"
                 },
                 {
                   "name": "fslogixContainerType",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[[steps('userProfiles').configureSessionHosts]",
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]",
                   "label": "FSLogix Container Type(s)",
                   "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.fslContainerType, 'Profile Container')]",
                   "toolTip": "Select the container type(s) for the FSLogix profiles.",
@@ -5183,7 +5196,7 @@
                   "name": "sizeInMBs",
                   "type": "Microsoft.Common.Slider",
                   "label": "FSLogix VHD Size (MB)",
-                  "defaultValue": "[[coalesce(int(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs), 30720)]",
+                  "defaultValue": "[[if(empty(coalesce(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs, '')), 30720, int(steps('basics').hostsRGProps.tags.fslContainerSizeInMBs))]",
                   "toolTip": "Input the max size of the users fslogix containers.",
                   "min": 10240,
                   "max": 1048576,
@@ -5191,12 +5204,12 @@
                   "constraints": {
                     "required": true
                   },
-                  "visible": "[[and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]"
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]"
                 },
                 {
                   "name": "storageService",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[[steps('userProfiles').configureSessionHosts]",
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts)]",
                   "label": "Storage Service",
                   "defaultValue": "[[if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureNetAppFiles'), 'Azure NetApp Files', if(equals(steps('basics').hostsRGProps.tags.fslStorageService, 'AzureFiles'), 'Azure Files', 'Azure Files'))]",
                   "toolTip": "Select the storage service that provides the SMB file share to support the use of FSLogix.",
@@ -5208,7 +5221,7 @@
                   "name": "azureNetAppFiles",
                   "type": "Microsoft.Common.Section",
                   "label": "Azure NetApp Files",
-                  "visible": "[[equals(steps('userProfiles').storageService, 'AzureNetAppFiles')]",
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles'))]",
                   "elements": [
                     {
                       "name": "subscription",
@@ -5389,7 +5402,7 @@
                   "name": "azureFiles",
                   "type": "Microsoft.Common.Section",
                   "label": "Azure Files",
-                  "visible": "[[equals(steps('userProfiles').storageService, 'AzureFiles')]",
+                  "visible": "[[and(not(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'))]",
                   "elements": [
                     {
                       "name": "shardHeader",
@@ -5638,7 +5651,7 @@
             },
             {
               "name": "monitoring",
-              "label": "Monitoring and Management",
+              "label": "Monitoring and Operations",
               "elements": [
                 {
                   "name": "enableSessionHostMonitoring",
@@ -5906,7 +5919,7 @@
             "agentBootLoaderDownloadUrl": "[[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentBootLoaderUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentBootLoaderUrl), steps('hosts').customizations.agentBootLoaderUrl), '')]",
             "agentDownloadUrl": "[[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentUrl), steps('hosts').customizations.agentUrl), '')]",
             "sessionHostCustomizations": "[[if(steps('hosts').customizations.addCustomScripts, steps('hosts').customizations.customScripts, parse('[]'))]",
-            "fslogixConfigureSessionHosts": "[[steps('userProfiles').configureSessionHosts]",
+            "fslogixConfigureSessionHosts": "[[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), false, steps('userProfiles').configureSessionHosts)]",
             "fslogixContainerType": "[[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').fslogixContainerType, 'ProfileContainer')]",
             "fslogixSizeInMBs": "[[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').sizeInMBs, 30720)]",
             "fslogixStorageService": "[[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').storageService, 'AzureFiles')]",
@@ -7224,112 +7237,193 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "1609150334520108793"
+              "templateHash": "12502195827596088426"
             }
           },
           "parameters": {
             "applicationInsightsName": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Name of the Application Insights resource to create when enableApplicationInsights is true."
+              }
             },
             "azureBlobPrivateDnsZoneResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the private DNS zone for blob endpoints (typically privatelink.blob.core.windows.net)."
+              }
             },
             "azureFunctionAppPrivateDnsZoneResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the private DNS zone for Function App private endpoints (typically privatelink.azurewebsites.net)."
+              }
             },
             "azureQueuePrivateDnsZoneResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the private DNS zone for queue endpoints (typically privatelink.queue.core.windows.net)."
+              }
             },
             "azureTablePrivateDnsZoneResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the private DNS zone for table endpoints (typically privatelink.table.core.windows.net)."
+              }
             },
             "deploymentSuffix": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Unique suffix used for deterministic deployment naming and idempotency."
+              }
             },
             "enableApplicationInsights": {
               "type": "bool",
-              "defaultValue": false
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Enables creation and wiring of Application Insights for the Function App."
+              }
             },
             "enableQueueStorage": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enables queue endpoint configuration for AzureWebJobsStorage and queue private endpoint DNS integration."
+              }
             },
             "enableTableStorage": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enables table endpoint configuration for AzureWebJobsStorage and table private endpoint DNS integration."
+              }
             },
             "encryptionKeyName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required when CMK is used. Name of the Key Vault key referenced by storage account encryption settings."
+              }
             },
             "encryptionKeyVaultResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Resource ID of the Key Vault containing the CMK used for storage account encryption."
+              }
             },
             "functionAppDelegatedSubnetResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Resource ID of a delegated subnet for Function App regional VNet integration."
+              }
             },
             "functionAppName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the Function App."
+              }
             },
             "functionAppAppSettings": {
-              "type": "array"
+              "type": "array",
+              "metadata": {
+                "description": "Optional. Additional app settings merged into the default Function App configuration."
+              }
             },
             "functionAppUserAssignedIdentityResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Existing user-assigned identity resource ID for the Function App. When omitted, system-assigned identity is used."
+              }
             },
             "hostPoolResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Parent host pool resource ID used for traceability tags."
+              }
             },
             "keyManagementStorageAccounts": {
               "type": "string",
               "allowedValues": [
-                "MicrosoftManaged",
+                "PlatformManaged",
                 "CustomerManaged",
                 "CustomerManagedHSM"
-              ]
+              ],
+              "metadata": {
+                "description": "Required. Storage encryption key management mode for the Function App storage account."
+              }
             },
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for resources in this module."
+              }
             },
             "logAnalyticsWorkspaceResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Log Analytics workspace resource ID used for Application Insights workspace-based mode."
+              }
             },
             "privateEndpoint": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Enables or disables deployment of private endpoints for storage and Function App."
+              }
             },
             "privateEndpointNameConv": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Naming convention template for private endpoint resources (supports RESOURCE/SUBRESOURCE/VNETID placeholders)."
+              }
             },
             "privateEndpointNICNameConv": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Naming convention template for private endpoint NIC resources (supports RESOURCE/SUBRESOURCE/VNETID placeholders)."
+              }
             },
             "privateEndpointSubnetResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required when privateEndpoint is true. Subnet resource ID used by private endpoints."
+              }
             },
             "privateLinkScopeResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Azure Monitor Private Link Scope resource ID used to associate Application Insights over Private Link."
+              }
             },
             "storageAccountRoleDefinitionIds": {
               "type": "array",
-              "defaultValue": []
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Additional role definition IDs assigned to the Function App identity on the storage account."
+              }
             },
             "serverFarmId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. App Service plan (server farm) resource ID for the Function App."
+              }
             },
             "storageEncryptionIdentityName": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. Name for the storage encryption user-assigned identity to create when CMK is selected and functionAppUserAssignedIdentityResourceId is not provided. Computed by caller using naming convention. Required when keyManagementStorageAccounts != MicrosoftManaged and functionAppUserAssignedIdentityResourceId is empty."
+                "description": "Optional. Name for the storage encryption user-assigned identity to create when CMK is selected and functionAppUserAssignedIdentityResourceId is not provided. Computed by caller using naming convention. Required when keyManagementStorageAccounts != PlatformManaged and functionAppUserAssignedIdentityResourceId is empty."
               }
             },
             "storageAccountName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the storage account used by the Function App runtime."
+              }
             },
             "permittedIPs": {
               "type": "array",
@@ -7339,7 +7433,10 @@
               }
             },
             "tags": {
-              "type": "object"
+              "type": "object",
+              "metadata": {
+                "description": "Required. Tag object with resource-type keys used to stamp deployed resources."
+              }
             }
           },
           "variables": {
@@ -7385,7 +7482,7 @@
             "resolvedIpSecurityRestrictions": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), union(variables('permittedIPRestrictions'), variables('azureCloudRestriction')), null())]",
             "storageSubResources": "[union(createArray('blob'), if(parameters('enableQueueStorage'), createArray('queue'), createArray()), if(parameters('enableTableStorage'), createArray('table'), createArray()))]",
             "azureStoragePrivateDnsZoneResourceIds": "[union(createArray(parameters('azureBlobPrivateDnsZoneResourceId')), if(and(parameters('enableQueueStorage'), not(empty(parameters('azureQueuePrivateDnsZoneResourceId')))), createArray(parameters('azureQueuePrivateDnsZoneResourceId')), createArray()), if(and(parameters('enableTableStorage'), not(empty(parameters('azureTablePrivateDnsZoneResourceId')))), createArray(parameters('azureTablePrivateDnsZoneResourceId')), createArray()))]",
-            "useCmk": "[not(equals(parameters('keyManagementStorageAccounts'), 'MicrosoftManaged'))]",
+            "useCmk": "[not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'))]",
             "createStorageEncryptionUai": "[and(variables('useCmk'), empty(parameters('functionAppUserAssignedIdentityResourceId')))]",
             "storageEncryptionUaiResourceId": "[if(variables('createStorageEncryptionUai'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('storageEncryptionIdentityName')), '')]",
             "cmkUaiResourceId": "[if(variables('useCmk'), if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), parameters('functionAppUserAssignedIdentityResourceId'), variables('storageEncryptionUaiResourceId')), '')]",
@@ -7634,12 +7731,12 @@
                   "deploymentSuffix": {
                     "value": "[parameters('deploymentSuffix')]"
                   },
-                  "storageKeyNames": {
+                  "keyNames": {
                     "value": [
                       "[parameters('encryptionKeyName')]"
                     ]
                   },
-                  "storageIdentityName": {
+                  "identityName": {
                     "value": "[parameters('storageEncryptionIdentityName')]"
                   }
                 },
@@ -7651,7 +7748,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "18067987585444669153"
+                      "templateHash": "7123932894855210232"
                     }
                   },
                   "definitions": {
@@ -7659,18 +7756,30 @@
                       "type": "object",
                       "properties": {
                         "keyName": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Name of the Key Vault key to create or reference for this disk encryption configuration."
+                          }
                         },
                         "diskEncryptionSetName": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Name of the Disk Encryption Set resource to create."
+                          }
                         },
                         "confidentialVMOSDiskEncryption": {
                           "type": "bool",
-                          "nullable": true
+                          "nullable": true,
+                          "metadata": {
+                            "description": "When true, configures Confidential VM disk encryption behavior and release-user assignment."
+                          }
                         },
                         "confidentialVMOrchestratorObjectId": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Object ID of the Confidential VM Orchestrator service principal. Required when confidentialVMOSDiskEncryption is true."
+                          }
                         },
                         "skipKeyCreation": {
                           "type": "bool",
@@ -7685,7 +7794,10 @@
                       "type": "object",
                       "properties": {
                         "diskEncryptionSetResourceId": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Resource ID of the Disk Encryption Set created for the corresponding diskEncryptionConfigs entry."
+                          }
                         }
                       }
                     }
@@ -7745,21 +7857,21 @@
                         "description": "Optional. Suffix appended to deployment names for uniqueness."
                       }
                     },
-                    "storageKeyNames": {
+                    "keyNames": {
                       "type": "array",
                       "items": {
                         "type": "string"
                       },
                       "defaultValue": [],
                       "metadata": {
-                        "description": "Optional. Names of Key Vault keys to create for storage account CMK encryption.\nOne key is created per entry. All keys are assigned to the single storageIdentityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
+                        "description": "Optional. Names of Key Vault keys to create for CMK encryption.\nOne key is created per entry. All keys are assigned to the single identityName UAI.\nFor a single storage account, pass a one-element array.\nFor FSLogix with multiple accounts, pass all key names (one per account).\n"
                       }
                     },
-                    "storageIdentityName": {
+                    "identityName": {
                       "type": "string",
                       "defaultValue": "",
                       "metadata": {
-                        "description": "Optional. Name of the user-assigned identity to create for storage CMK. Required when storageKeyNames is not empty."
+                        "description": "Optional. Name of the user-assigned identity to create for CMK. Required when keyNames is not empty."
                       }
                     },
                     "diskEncryptionConfigs": {
@@ -7807,14 +7919,14 @@
                     "cvmKeyReleasePolicy": "[base64('{\"version\":\"1.0.0\",\"anyOf\":[{\"authority\":\"https://sharedeus.eus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus.wus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedneu.neu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedweu.weu.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsasia.sasia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeasia.easia.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedjpe.jpe.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedswn.swn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareditn.itn.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2.eus2.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeus2e.eus2e.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedscus.scus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcuse.cuse.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcus.cus.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedeau.eau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedsau.sau.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedcin.cin.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareduaen.uaen.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://shareddewc.dewc.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]},{\"authority\":\"https://sharedwus3.wus3.attest.azure.net/\",\"allOf\":[{\"claim\":\"x-ms-compliance-status\",\"equals\":\"azure-compliant-cvm\"},{\"anyOf\":[{\"claim\":\"x-ms-attestation-type\",\"equals\":\"tdxvm\"},{\"claim\":\"x-ms-attestation-type\",\"equals\":\"sevsnpvm\"}]}]}]}')]"
                   },
                   "resources": {
-                    "storageKeys": {
+                    "paasKeys": {
                       "copy": {
-                        "name": "storageKeys",
-                        "count": "[length(parameters('storageKeyNames'))]"
+                        "name": "paasKeys",
+                        "count": "[length(parameters('keyNames'))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('CMK-StorageKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+                      "name": "[format('CMK-PaaSKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
                       "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
@@ -7827,7 +7939,7 @@
                             "value": "[variables('keyVaultName')]"
                           },
                           "name": {
-                            "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                            "value": "[parameters('keyNames')[copyIndex()]]"
                           },
                           "kty": {
                             "value": "[variables('kty')]"
@@ -7966,11 +8078,11 @@
                         }
                       }
                     },
-                    "storageIdentity": {
-                      "condition": "[not(empty(parameters('storageKeyNames')))]",
+                    "paasIdentity": {
+                      "condition": "[not(empty(parameters('keyNames')))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('CMK-StorageUAI-{0}', parameters('deploymentSuffix'))]",
+                      "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -7978,7 +8090,7 @@
                         "mode": "Incremental",
                         "parameters": {
                           "name": {
-                            "value": "[parameters('storageIdentityName')]"
+                            "value": "[parameters('identityName')]"
                           },
                           "location": {
                             "value": "[parameters('location')]"
@@ -8040,14 +8152,14 @@
                         }
                       }
                     },
-                    "storageKeyRoleAssignments": {
+                    "paasKeyRoleAssignments": {
                       "copy": {
-                        "name": "storageKeyRoleAssignments",
-                        "count": "[length(parameters('storageKeyNames'))]"
+                        "name": "paasKeyRoleAssignments",
+                        "count": "[length(parameters('keyNames'))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('CMK-StorageKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+                      "name": "[format('CMK-PaaSKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
                       "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
@@ -8060,12 +8172,12 @@
                             "value": "[variables('keyVaultName')]"
                           },
                           "keyName": {
-                            "value": "[parameters('storageKeyNames')[copyIndex()]]"
+                            "value": "[parameters('keyNames')[copyIndex()]]"
                           },
                           "assignments": {
                             "value": [
                               {
-                                "principalId": "[reference('storageIdentity').outputs.principalId.value]",
+                                "principalId": "[reference('paasIdentity').outputs.principalId.value]",
                                 "principalType": "ServicePrincipal",
                                 "roleDefinitionId": "[variables('roleKeyVaultCryptoEncryptionUser')]"
                               }
@@ -8198,8 +8310,8 @@
                         }
                       },
                       "dependsOn": [
-                        "storageIdentity",
-                        "[format('storageKeys[{0}]', copyIndex())]"
+                        "paasIdentity",
+                        "[format('paasKeys[{0}]', copyIndex())]"
                       ]
                     },
                     "diskKeys": {
@@ -8832,19 +8944,19 @@
                     }
                   },
                   "outputs": {
-                    "storageIdentityResourceId": {
+                    "identityResourceId": {
                       "type": "string",
                       "metadata": {
-                        "description": "Resource ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                        "description": "Resource ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested."
                       },
-                      "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.resourceId.value, '')]"
+                      "value": "[if(not(empty(parameters('keyNames'))), reference('paasIdentity').outputs.resourceId.value, '')]"
                     },
-                    "storageIdentityPrincipalId": {
+                    "identityPrincipalId": {
                       "type": "string",
                       "metadata": {
-                        "description": "Principal ID of the shared storage encryption user-assigned identity. Empty when storageKeyNames is empty."
+                        "description": "Principal ID of the CMK encryption user-assigned identity. Empty when no CMK keys are requested."
                       },
-                      "value": "[if(not(empty(parameters('storageKeyNames'))), reference('storageIdentity').outputs.principalId.value, '')]"
+                      "value": "[if(not(empty(parameters('keyNames'))), reference('paasIdentity').outputs.principalId.value, '')]"
                     },
                     "diskResults": {
                       "type": "array",
@@ -8897,18 +9009,27 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "15107852728170180576"
+                      "templateHash": "2251730712385734116"
                     }
                   },
                   "parameters": {
                     "privateLinkScopeResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the Azure Monitor Private Link Scope (AMPLS) to update."
+                      }
                     },
                     "scopedResourceIds": {
-                      "type": "array"
+                      "type": "array",
+                      "metadata": {
+                        "description": "Required. Array of resource IDs to associate as scoped resources on the AMPLS."
+                      }
                     },
                     "deploymentSuffix": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Unique suffix used for deterministic deployment naming and idempotency."
+                      }
                     }
                   },
                   "resources": [
@@ -9121,14 +9242,23 @@
           "outputs": {
             "functionAppName": {
               "type": "string",
+              "metadata": {
+                "description": "Name of the deployed Function App."
+              },
               "value": "[parameters('functionAppName')]"
             },
             "functionAppPrincipalId": {
               "type": "string",
+              "metadata": {
+                "description": "Principal ID of the identity used by the Function App (UAI when provided, otherwise SAI)."
+              },
               "value": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[2], split(parameters('functionAppUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('functionAppUserAssignedIdentityResourceId'), '/'))), '2024-11-30').principalId, reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2024-11-01', 'full').identity.principalId)]"
             },
             "applicationInsightsResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of Application Insights when enabled; otherwise empty string."
+              },
               "value": "[if(parameters('enableApplicationInsights'), resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '')]"
             }
           }

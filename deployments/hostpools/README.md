@@ -1,4 +1,4 @@
-# AVD Host Pool Deployment Template
+﻿# AVD Host Pool Deployment Template
 
 > **📖 User Guide:** For deployment instructions and step-by-step guidance, see the [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
 
@@ -39,12 +39,19 @@ Subscription
 │   ├── Network Interface Cards
 │   ├── OS Disks
 │   ├── Availability Set (optional)
-│   └── Disk Encryption Set (optional)
+│   ├── Disk Encryption Set (optional, Customer Managed Keys)
+│   ├── Disk Access (optional, Personal host pool with private endpoints)
+│   ├── Private Endpoint (Disk Access, optional)
+│   ├── Recovery Services Vault (optional, Personal host pool VM backup)
+│   ├── VM Backup Policy (optional, Personal host pool VM backup)
+│   └── Private Endpoint (Recovery Services Vault, optional)
 ├── Operations Resource Group
-│   ├── Key Vaults
-│   ├── Recovery Services Vault (optional, when backup enabled)
-│   ├── Backup Policies (file share policy for pooled, VM policy for personal)
-│   └── Private Endpoints (Key Vaults, Recovery Services Vault)
+│   ├── Key Vaults (secrets, encryption)
+│   ├── Private Endpoints (Key Vaults, optional)
+│   ├── Recovery Services Vault (optional, Pooled host pool Azure Files backup)
+│   ├── File Share Backup Policy (optional, Pooled host pool Azure Files backup)
+│   ├── Backup Protection Items (Storage Accounts / File Shares, optional)
+│   └── Private Endpoint (Recovery Services Vault, optional)
 ├── Storage Resource Group
 │   ├── Azure NetApp Files Account (optional)
 │   ├── Capacity Pool (optional)
@@ -99,6 +106,7 @@ Subscription
 
 - **Private Endpoints** - Storage, Key Vault, Workspace, Automation Account
 - **Customer-Managed Keys** - Disk encryption, storage encryption
+- **Recovery Services CMK** - When CMK is enabled for Recovery Services vault creation the vault uses its own **System-Assigned Identity (SAI)**. The encryption key is host-pool-scoped (name: `{hpBaseName}-encryption-key-rsv`) — each personal host pool's vault has its own dedicated key, consistent with VM disk and storage key treatment. No user-assigned identity is created for RSV.
 - **Managed Identities** - No stored credentials for Azure service access
 - **Key Vault Integration** - Secrets management for credentials
 - **Disk Encryption Sets** - Centralized key management for VM disks
@@ -259,42 +267,64 @@ Subscription
 - **Description:** Availability zones for VMs
 - **Example:** `["1", "2", "3"]`
 
-#### `subnetResourceId`
+#### `virtualMachineSubnetResourceId`
 - **Type:** String
 - **Required:** Yes
 - **Description:** Subnet resource ID for session hosts
 
 ### Storage
 
-#### `storageService`
+#### `fslogixStorageService`
 - **Type:** String
-- **Allowed:** `AzureFiles`, `AzureNetAppFiles`, `None`
-- **Default:** `AzureFiles`
-- **Description:** Storage solution for FSLogix profiles
+- **Allowed:** `AzureFiles Standard`, `AzureFiles Premium`, `AzureNetAppFiles Standard`, `AzureNetAppFiles Premium`
+- **Default:** `AzureFiles Standard`
+- **Description:** Storage solution and performance tier for FSLogix profiles.
 
-#### `storageAccountSku`
+#### `fslogixStorageRedundancy`
 - **Type:** String (Azure Files only)
-- **Allowed:** `Standard_LRS`, `Standard_ZRS`, `Premium_LRS`, `Premium_ZRS`
-- **Default:** `Standard_LRS`
-- **Description:** Storage account SKU
+- **Allowed:** `LocallyRedundant`, `ZoneRedundant`
+- **Default:** `LocallyRedundant`
+- **Description:** Redundancy for newly created Azure Files storage accounts used by FSLogix. This is configured independently from session host availability zone settings.
 
-#### `fileShareQuotaInGB`
+#### `keyManagementStorage`
+- **Type:** String
+- **Allowed:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
+- **Default:** `PlatformManaged`
+- **Description:** Key management mode for Azure Files (FSLogix) storage account encryption.
+
+#### `keyManagementRecoveryServicesVault`
+- **Type:** String
+- **Allowed:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
+- **Default:** `PlatformManaged`
+- **Description:** Key management mode for Recovery Services Vault encryption. When `CustomerManaged` is combined with `deployPrivateEndpoints=true`, see `encryptionKeyVaultForcePublicAccess` below — Azure Backup has no AzureServices trusted service bypass for Key Vault.
+
+#### `encryptionKeyVaultForcePublicAccess`
+- **Type:** Boolean
+- **Default:** `false`
+- **Description:** Controls the trade-off between two mutually exclusive controls when `deployPrivateEndpoints = true` and `keyManagementRecoveryServicesVault = CustomerManaged`. Azure Backup has no `AzureServices` trusted service bypass for Key Vault, making simultaneous satisfaction of both SC-28 (CMK on RSV) and SC-7 (private-only KV) impossible.
+  - **`true`** — RSV uses customer-managed keys (SC-28 satisfied). The encryption Key Vault’s `publicNetworkAccess` is set to Enabled and all IP-based firewall rules are cleared — the Key Vault becomes reachable by any authenticated principal on Azure’s public network (SC-7 weakened).
+  - **`false`** (default) — The Key Vault remains private-only (SC-7 maintained). RSV silently falls back to platform-managed keys rather than failing the deployment (SC-28 not satisfied for RSV).
+- **This is a compliance risk decision for your ISSO and AO**, not a solution default or recommendation. Document the selected option and accepted control gap in your SSP.
+
+#### `fslogixShareSizeInGB`
 - **Type:** Integer
 - **Default:** `100`
 - **Description:** Azure Files share quota in GB
 
-#### `netAppFilesAccountName`
-- **Type:** String (Azure NetApp Files only)
-- **Description:** Existing ANF account name
-
-#### `netAppFilesCapacityPoolName`
-- **Type:** String (Azure NetApp Files only)
-- **Description:** Existing ANF capacity pool name
-
-#### `netAppFilesVolumeQuotaGB`
+#### `fslogixStorageIndex`
 - **Type:** Integer
-- **Default:** `1024`
-- **Description:** ANF volume quota in GB
+- **Default:** `1`
+- **Description:** Starting index for created FSLogix storage accounts.
+
+#### `fslogixOUPath`
+- **Type:** String
+- **Optional**
+- **Description:** OU path used when joining FSLogix storage resources to AD DS.
+
+#### `netAppVolumesSubnetResourceId`
+- **Type:** String (Azure NetApp Files only)
+- **Optional**
+- **Description:** Subnet resource ID delegated to `Microsoft.NetApp/volumes`.
 
 ### Monitoring
 
@@ -332,7 +362,7 @@ Subscription
 - **Type:** String
 - **Allowed:** `LocallyRedundant`, `ZoneRedundant`, `GeoRedundant`
 - **Default:** `LocallyRedundant`
-- **Description:** Storage redundancy for backup recovery points in the Recovery Services vault. Independent of storage account SKU.
+- **Description:** Storage redundancy for backup recovery points in the Recovery Services vault. Independent of storage account SKU. When set to `GeoRedundant`, Cross-Region Restore (CRR) is automatically enabled — no separate parameter is needed. GRS storage costs the same whether CRR is on or off; without CRR the geo-redundant copy provides passive data durability only with no recovery capability in the secondary region. See [bcdr.md](../../docs/bcdr.md#personal-host-pool-vm-backup) for CP-6/CP-7 mapping and the Azure Policy gap note.
 
 #### `existingRecoveryServicesVaultResourceId`
 - **Type:** String
@@ -344,17 +374,50 @@ Subscription
 #### `permittedIPs`
 - **Type:** Array
 - **Optional**
-- **Description:** IP addresses or CIDR blocks permitted through the firewall of all PaaS resources (storage accounts, Key Vaults). Use when managing deployments from a trusted workstation outside the Azure network boundary.
+- **Description:** IP addresses or CIDR blocks permitted on the firewall of all PaaS resources (storage accounts, Key Vaults). Behavior depends on `deployPrivateEndpoints`:
+  - **Private endpoints ON, no IPs:** public access **disabled** — all traffic must use the private endpoint.
+  - **Private endpoints ON, IPs specified:** public access **enabled but restricted** to those ranges — the private endpoint handles internal traffic and the IP allowlist covers management access from known external addresses.
+  - **Private endpoints OFF:** public access enabled; if IPs are specified only those ranges are permitted, otherwise the resource is open to all traffic.
 - **Example:** `["203.0.113.10", "198.51.100.0/24"]`
 
 ### Security & Encryption
 
-#### `diskEncryption`
+#### `deploySecretsKeyVault`
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Enable disk encryption with platform-managed keys
+- **Description:** Deploy an inline Secrets Key Vault (Standard SKU) to store VM admin and domain-join credentials. Configured in the **Identity → Credentials** portal step when credentials source is set to Manual Entry. Leave `false` to provide `existingCredentialsKeyVaultResourceId` from a pre-deployed Key Vaults foundation deployment.
 
-#### `diskEncryptionSetResourceId`
+#### `secretsKeyVaultEnableSoftDelete`
+- **Type:** Boolean
+- **Default:** `true`
+- **Description:** Enable soft delete on the inline Secrets Key Vault. Allows recovery of deleted objects within the retention period.
+
+#### `secretsKeyVaultEnablePurgeProtection`
+- **Type:** Boolean
+- **Default:** `true`
+- **Description:** Enable purge protection on the inline Secrets Key Vault. Prevents permanent deletion during the retention period.
+
+#### `secretsKeyVaultRetentionInDays`
+- **Type:** Integer (7–90)
+- **Default:** `90`
+- **Description:** Soft-delete retention period in days for the inline Secrets Key Vault.
+
+#### `encryptionKeyVaultRetentionInDays`
+- **Type:** Integer (7–90)
+- **Default:** `90`
+- **Description:** Soft-delete retention period in days for the inline Encryption Key Vault. Configured in **Zero Trust → Encryption Key Management** when CMK is enabled and no existing KV is provided.
+
+#### `encryptionAtHost`
+- **Type:** Boolean
+- **Default:** `true`
+- **Description:** Enable encryption at host for session host VMs.
+
+#### `keyManagementDisks`
+- **Type:** String
+- **Default:** `PlatformManaged`
+- **Description:** Session host disk key-management mode.
+
+#### `existingDiskEncryptionSetResourceId`
 - **Type:** String
 - **Optional**
 - **Description:** Disk Encryption Set for customer-managed keys
@@ -362,13 +425,13 @@ Subscription
 #### `securityType`
 - **Type:** String
 - **Allowed:** `Standard`, `TrustedLaunch`, `ConfidentialVM`
-- **Default:** `Standard`
+- **Default:** `TrustedLaunch`
 - **Description:** VM security configuration
 
-#### `encryptionKeyVaultResourceId`
+#### `existingEncryptionKeyVaultResourceId`
 - **Type:** String
 - **Optional**
-- **Description:** Resource ID of an existing Encryption Key Vault containing customer-managed keys. Typically provided from the Key Vaults (Foundation) deployment. Leave empty to have a Key Vault created automatically when CMK is enabled.
+- **Description:** Resource ID of an existing Encryption Key Vault containing customer-managed keys. Typically provided from the Key Vaults (Foundation) deployment. Leave empty to have a Key Vault created automatically when CMK is enabled. In the portal form, toggle **Use Existing Encryption Key Vault** in the **Zero Trust → Encryption Key Management** step.
 - **Example:** `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.KeyVault/vaults/{vault}`
 
 ### 📖 Complete Parameter Reference
@@ -385,7 +448,7 @@ For a complete list of all 150+ parameters with detailed descriptions, see:
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\hostpool.json" `
-  -TemplateParameterFile ".\parameters\finance.parameters.json" `
+  -TemplateParameterFile "..\..\customer\parameters\hostpools\finance.parameters.json" `
   -identifier "finance" `
   -identitySolution "EntraDomainServices" `
   -domainName "contoso.com" `
@@ -415,7 +478,7 @@ New-AzSubscriptionDeployment `
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\hostpool.json" `
-  -TemplateParameterFile ".\parameters\secure.parameters.json" `
+  -TemplateParameterFile "..\..\customer\parameters\hostpools\secure.parameters.json" `
   -deployPrivateEndpoints $true `
   -hostPoolResourcesPrivateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints" `
   -operationsPrivateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints" `
@@ -424,7 +487,7 @@ New-AzSubscriptionDeployment `
 
 ## Examples — Parameter Files
 
-Ready-to-use parameter files are in `parameters\`. Copy and rename one for your environment. The following annotated examples show the key patterns.
+Ready-to-use sample parameter files are in `parameters\`. Copy and rename one into `customer\parameters\hostpools\` for your environment. The following annotated examples show the key patterns.
 
 ### Minimal Pooled Desktop (Entra ID, Marketplace Image)
 
@@ -510,7 +573,7 @@ Ready-to-use parameter files are in `parameters\`. Copy and rename one for your 
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Compute/galleries/gal_avd_use2/images/win11-24h2-avd-m365/versions/latest"
         },
         "keyManagementDisks": { "value": "CustomerManaged" },
-        "keyManagementStorageAccounts": { "value": "CustomerManaged" },
+        "keyManagementStorage": { "value": "CustomerManaged" },
         "encryptionKeyVaultResourceId": {
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-operations-use2/providers/Microsoft.KeyVault/vaults/kv-avd-enc-use2-abc"
         },
@@ -527,7 +590,7 @@ Ready-to-use parameter files are in `parameters\`. Copy and rename one for your 
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\hostpool.json" `
-  -TemplateParameterFile ".\parameters\graphics.parameters.json" `
+  -TemplateParameterFile "..\..\customer\parameters\hostpools\graphics.parameters.json" `
   -customImageResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/win11-graphics/versions/latest" `
   -virtualMachineSize "Standard_NV12ads_A10_v5" `
   -installNvidiaGpuDriver $true `
@@ -540,7 +603,7 @@ New-AzSubscriptionDeployment `
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\hostpool.json" `
-  -TemplateParameterFile ".\parameters\enterprise.parameters.json" `
+  -TemplateParameterFile "..\..\customer\parameters\hostpools\enterprise.parameters.json" `
   -storageService "AzureNetAppFiles" `
   -netAppFilesAccountName "anf-avd-storage" `
   -netAppFilesCapacityPoolName "pool-premium" `

@@ -1,4 +1,4 @@
-// FSLogix Storage Quota Manager Add-On
+﻿// FSLogix Storage Quota Manager Add-On
 // Automated quota management for FSLogix Azure Files Premium file shares
 
 targetScope = 'subscription'
@@ -74,11 +74,11 @@ param encryptionKeyVaultResourceId string = ''
 
 @description('Optional. Key management solution for storage accounts. Options: Platform, Customer.')
 @allowed([
-  'MicrosoftManaged'
+  'PlatformManaged'
   'CustomerManaged'
   'CustomerManagedHSM'
 ])
-param keyManagementStorageAccounts string = 'MicrosoftManaged'
+param keyManagementStorageAccounts string = 'PlatformManaged'
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. Use when managing from a trusted workstation outside the Azure network boundary.')
 param permittedIPs array = []

@@ -1,21 +1,10 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical References:**
 > - [Image Management Template Documentation](../deployments/imageManagement/README.md) - Artifacts storage infrastructure
 > - [Image Build Template Documentation](../deployments/imageBuild/README.md) - Using artifacts in image builds
 
 # Artifacts and Image Management Guide
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Artifacts Directory Structure](#artifacts-directory-structure)
-- [Creating Custom Artifact Packages](#creating-custom-artifact-packages)
-- [Master Scripts](#master-scripts)
-- [Integration with Deployments](#integration-with-deployments)
-- [Best Practices](#best-practices)
-- [Troubleshooting](#troubleshooting)
 
 ## Overview
 
@@ -164,67 +153,64 @@ graph TD
 
 ### Repository Location
 
-All artifacts are stored in the repository at:
+Repo-provided artifacts live at:
 
 ```text
 .common/artifacts/
 ```
 
+Customer-provided artifacts and overrides belong at:
+
+```text
+customer/artifacts/
+```
+
+> **Ready-to-use examples:** `customer/examples/artifacts/` contains example packages for common software (Chrome, FSLogix, LGPO, STIG tooling, VS Code, and more). Copy the folders you want directly into `customer/artifacts/` and pair them with the matching entries in `customer/examples/parameters/imageManagement/downloads.json`. See [`customer/README.md`](../customer/README.md) for copy commands.
+
 ### Directory Layout
 
 ```text
 .common/artifacts/
+│                                            # Reserved for future repo-provided artifact packages.
+│                                            # Currently empty — all artifact content comes from
+│                                            # customer/artifacts/ (or customer/examples/artifacts/
+│                                            # copied in as a starting point).
 │
-├── uploadedFileVersionInfo.txt              # Auto-generated version info
+customer/artifacts/
+├── [Your-Custom-Artifact]/                  # Your custom package
+│   ├── Install-[AppName].ps1                # Main script (required)
+│   ├── [installer-file]                     # Application installer (optional)
+│   └── [config-files]                       # Supporting files (optional)
 │
-├── FSLogix.zip                              # Pre-packaged artifact (optional)
-├── WDOT.zip                                 # Pre-packaged artifact (optional)
-│
-├── Install-FSLogix/                         # Artifact Package Example
-│   ├── Install-FSLogix.ps1                  # Main script (required)
-│   └── [supporting files]                   # Installers, configs (optional)
-│
-├── VSCode/                                  # Artifact Package Example
-│   ├── Install_VSCode.ps1                   # Main script (required)
-│   ├── VSCodeSetup.exe                      # Installer (optional)
-│   └── readme.md                            # Documentation (optional)
-│
-├── Configure-Office365Policy/               # Configuration-only example
-│   ├── Configure-Office365.ps1              # Main script (required)
-│   └── office365.admx                       # Policy templates (optional)
-│
-├── LGPO/                                    # Tool-based artifact
-│   ├── install-lgpo.ps1                     # Main script (required)
-│   └── LGPO.exe                             # Tool executable (optional)
-│
-└── [Your-Custom-Artifact]/                  # Your custom package
-    ├── Install-[AppName].ps1                # Main script (required)
-    ├── [installer-file]                     # Application installer (optional)
-    └── [config-files]                       # Supporting files (optional)
+└── uploadedFileVersionInfo.txt              # Auto-generated version log (added by the script)
 ```
 
 **Note:** The orchestration script `Invoke-Customization.ps1` is located at `.common/scripts/Invoke-Customization.ps1` (not in the artifacts directory). It is embedded into ARM/Bicep deployments using the `loadTextContent()` function.
 
 ### Packaging Rules (Update-ImageArtifacts.ps1)
 
-When `Update-ImageArtifacts.ps1` processes the `.common/artifacts/` directory for upload to blob storage:
+When `Update-ImageArtifacts.ps1` prepares content for upload to blob storage, it stages `.common/artifacts/` first and then overlays `customer/artifacts/` on top:
 
 | Source | Processing | Result |
 |--------|------------|--------|
+| **Customer overlays** | Copied over repo content when names match | Customer files/folders win over `.common/artifacts/` |
 | **Subfolders** | Compressed to ZIP | Each subfolder becomes a separate .zip file (e.g., `Chrome/` → `Chrome.zip`) |
 | **Root files** | Copied as-is | Files in the root are uploaded individually without modification |
 
 **Example:**
 
 ```
-.common/artifacts/
-├── Chrome/              → Uploaded as Chrome.zip
+customer/artifacts/
+├── Google-Chrome-Enterprise/    → Uploaded as Google-Chrome-Enterprise.zip
 │   ├── Install-Chrome.ps1
-│   └── installer.msi
-├── FSLogix/             → Uploaded as FSLogix.zip
-│   └── Install-FSLogix.ps1
-└── teamsbootstrapper.exe → Uploaded as teamsbootstrapper.exe
+│   └── GoogleChromeEnterprise.msi
+├── LGPO/                        → Uploaded as LGPO.zip
+│   ├── Install-LGPO.ps1
+│   └── LGPO.exe
+└── teamsbootstrapper.exe        → Uploaded as-is (root file)
 ```
+
+If the repo ever ships base artifact scripts via `.common/artifacts/`, they are staged first and `customer/artifacts/` overlays on top — customer files always win when names match.
 
 ### Execution Rules (Invoke-Customization.ps1)
 
@@ -267,11 +253,11 @@ Downloaded on = 12/15/2024 10:31:12 AM
 
 #### Step 1: Create the Artifact Folder
 
-Create a new folder in `.common/artifacts/` with a descriptive name:
+Create a new folder in `customer/artifacts/` with a descriptive name:
 
 ```powershell
 # Example: Creating an artifact for Google Chrome
-New-Item -Path ".\.common\artifacts\Chrome" -ItemType Directory
+New-Item -Path ".\customer\artifacts\Chrome" -ItemType Directory
 ```
 
 **Naming Conventions:**
@@ -432,10 +418,10 @@ Before uploading, test your script locally:
 
 ```powershell
 # Test with no parameters
-.\.common\artifacts\Chrome\Install-Chrome.ps1
+.\customer\artifacts\Chrome\Install-Chrome.ps1
 
 # Test with named parameters
-.\.common\artifacts\Chrome\Install-Chrome.ps1 -InstallMode Full -SkipShortcuts
+.\customer\artifacts\Chrome\Install-Chrome.ps1 -InstallMode Full -SkipShortcuts
 ```
 
 #### Step 5: Upload with Update-ImageArtifacts.ps1
@@ -899,7 +885,7 @@ Edit your image build parameters file:
 New-AzDeployment `
     -Location "East US 2" `
     -TemplateFile ".\deployments\imageBuild\imageBuild.json" `
-    -TemplateParameterFile ".\deployments\imageBuild\parameters\production.imageBuild.parameters.json"
+   -TemplateParameterFile ".\customer\parameters\imageBuild\production.imageBuild.parameters.json"
 ```
 
 ### Session Host Integration
@@ -955,7 +941,7 @@ Edit your host pool parameters file:
 New-AzDeployment `
     -Location "East US 2" `
     -TemplateFile ".\deployments\hostpools\hostpool.json" `
-    -TemplateParameterFile ".\deployments\hostpools\parameters\production.hostpool.parameters.json"
+   -TemplateParameterFile ".\customer\parameters\hostpools\production.hostpool.parameters.json"
 ```
 
 ## Best Practices
@@ -1100,7 +1086,7 @@ New-AzDeployment `
 
    ```powershell
    # Check artifact folder contents before zipping
-   Get-ChildItem .\.common\artifacts\MyApp\ -Recurse
+   Get-ChildItem .\customer\artifacts\MyApp\ -Recurse
    ```
 
 #### Issue: Parameters Not Being Received
@@ -1270,9 +1256,9 @@ If you encounter issues not covered here:
    - [Quick Start Guide](quick-start.md)
 
 2. **Review example artifacts:**
-   - `.common/artifacts/VSCode/` - Simple installer example
-   - `.common/artifacts/Configure-Office365Policy/` - Configuration example
-   - `.common/artifacts/Install-FSLogix/` - Download and install example
+   - `customer/examples/artifacts/Microsoft-VSCode/` - Simple installer example
+   - `customer/examples/artifacts/Configure-Office365Policy/` - Configuration example
+   - `customer/examples/artifacts/Microsoft-FSLogix/` - Download and install example
 
 3. **Search GitHub issues:**
    - [FederalAVD Issues](https://github.com/Azure/FederalAVD/issues)

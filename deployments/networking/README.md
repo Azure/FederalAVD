@@ -388,7 +388,7 @@ New-AzSubscriptionDeployment `
 New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\networking.json" `
-  -TemplateParameterFile ".\parameters\prod.networking.parameters.json" `
+  -TemplateParameterFile "..\..\customer\parameters\networking\prod.networking.parameters.json" `
   -Name "avd-networking-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
 

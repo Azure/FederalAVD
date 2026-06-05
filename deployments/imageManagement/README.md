@@ -229,10 +229,10 @@ Example parameter files are provided in the `parameters\` directory. Copy and re
 
 | File | Description |
 | :--- | :---------- |
-| `basic.imageManagement.parameters.json` | Artifacts storage only, public endpoint |
-| `privateEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, private endpoints, fully private |
-| `serviceEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, service endpoint subnet access |
-| `production.imageManagement.parameters.json` | Full production: CMK, remote gallery, IP restrictions, tags |
+| `sample-basic.imageManagement.parameters.json` | Artifacts storage only, public endpoint |
+| `sample-privateEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, private endpoints, fully private |
+| `sample-serviceEndpoint.imageManagement.parameters.json` | Artifacts + logs storage, service endpoint subnet access |
+| `sample-production.imageManagement.parameters.json` | Full production: CMK, remote gallery, IP restrictions, tags |
 
 Naming convention for custom files: `<prefix>.imageManagement.parameters.json`
 
@@ -249,13 +249,18 @@ Commercial and Government clouds only:
 
 ### Deploy-ImageManagement.ps1 (Recommended)
 
-Use the provided `Deploy-ImageManagement.ps1` script in the `deployments\` folder. It expects a parameter file prefix that maps to `imageManagement\parameters\<Prefix>.imageManagement.parameters.json`.
+Use the provided `Deploy-ImageManagement.ps1` script in the `deployments\` folder. It prefers customer-owned parameter files in `customer\parameters\imageManagement\<Prefix>.imageManagement.parameters.json` and falls back to the repo examples in `imageManagement\parameters\<Prefix>.imageManagement.parameters.json`.
+
+If you keep customer overrides outside the extracted repo zip, pass `-CustomerRootPath <path>` so the script reads parameters from your external customer folder.
 
 ```powershell
 cd deployments
 
 # Basic deployment
 .\Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix basic
+
+# Use an external customer folder
+.\Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix basic -CustomerRootPath D:\FederalAVD\customer
 
 # Private endpoint deployment
 .\Deploy-ImageManagement.ps1 -Location usgovvirginia -ParameterFilePrefix privateEndpoint
@@ -275,7 +280,7 @@ The script prints all deployment outputs. Use `-UpdateArtifacts` to automaticall
 New-AzDeployment `
   -Location 'usgovvirginia' `
   -TemplateFile '.\imageManagement\imageManagement.json' `
-  -TemplateParameterFile '.\imageManagement\parameters\basic.imageManagement.parameters.json' `
+    -TemplateParameterFile '..\customer\parameters\imageManagement\basic.imageManagement.parameters.json' `
   -Name "ImageManagement-$(Get-Date -Format 'yyyyMMddHHmmss')"
 ```
 
@@ -285,7 +290,7 @@ New-AzDeployment `
 az deployment sub create \
   --location usgovvirginia \
   --template-file ./imageManagement/imageManagement.json \
-  --parameters @./imageManagement/parameters/basic.imageManagement.parameters.json \
+    --parameters @../customer/parameters/imageManagement/basic.imageManagement.parameters.json \
   --name "ImageManagement-$(date +%Y%m%d%H%M%S)"
 ```
 

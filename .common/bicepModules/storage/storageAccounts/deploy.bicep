@@ -28,8 +28,9 @@ param dnsEndpointType string = 'Standard'
 
 param largeFileSharesState string = ''
 
-@description('Optional. Whether this storage account is accessed via a private endpoint. When true and no permittedIPs or serviceEndpointSubnetIds are provided, public network access is disabled entirely.')
-param privateEndpoint bool = false
+@description('Optional. Public network access setting for this storage account. Caller is responsible for resolving the correct value based on private endpoint topology, permitted IPs, and service endpoints.')
+@allowed(['Enabled', 'Disabled'])
+param publicNetworkAccess string = 'Enabled'
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall allowing only these addresses.')
 param permittedIPs array = []
@@ -50,27 +51,30 @@ param sasExpirationPeriod string = ''
 @description('Optional. Azure Files identity-based authentication settings object.')
 param azureFilesIdentityBasedAuthentication object = {}
 
-@description('Optional. Key Vault URI for customer-managed key encryption.')
-param encryptionKeyVaultUri string = ''
+@description('Optional. Customer-managed key URI for storage encryption.')
+param cmkKeyUri string = ''
 
-@description('Optional. Key Vault key name for customer-managed encryption.')
-param encryptionKeyName string = ''
-
-@description('Optional. Resource ID of user-assigned identity with key vault access for CMK.')
-param encryptionUserAssignedIdentityResourceId string = ''
+@description('Optional. User-assigned identity resource ID used for CMK access.')
+param cmkUserAssignedIdentityResourceId string = ''
 
 param diagnosticSettings diagnosticSettingsType?
 
 var ipRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
 var virtualNetworkRules = [for subnetId in serviceEndpointSubnetIds: { id: subnetId, action: 'Allow' }]
-var hasFirewallRestrictions = privateEndpoint || !empty(permittedIPs) || !empty(serviceEndpointSubnetIds)
-// Disable public access only when private endpoint is the sole access path (no trusted IPs or service endpoints need public access).
-var resolvedPublicNetworkAccess = (privateEndpoint && empty(permittedIPs) && empty(serviceEndpointSubnetIds)) ? 'Disabled' : 'Enabled'
+// Firewall is applied when explicit IP allowances or service endpoints are present. PE topology is the caller's concern.
+var hasFirewallRestrictions = !empty(permittedIPs) || !empty(serviceEndpointSubnetIds)
 
 var supportsBlobService = kind == 'BlockBlobStorage' || kind == 'BlobStorage' || kind == 'StorageV2' || kind == 'Storage'
 var supportsFileService = kind == 'FileStorage' || kind == 'StorageV2' || kind == 'Storage'
 
-var useCmk = !empty(encryptionKeyVaultUri) && !empty(encryptionKeyName)
+var cmkConfigurationValidated = (empty(cmkKeyUri) || contains(cmkKeyUri, '/keys/')) && (empty(cmkKeyUri) == empty(cmkUserAssignedIdentityResourceId))
+  ? true
+  : bool('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.')
+
+var cmkKeyVaultUri = !empty(cmkKeyUri) ? '${split(cmkKeyUri, '/keys/')[0]}/' : ''
+var cmkKeyPathSegments = split(!empty(cmkKeyUri) ? split(cmkKeyUri, '/keys/')[1] : '', '/')
+var cmkKeyName = !empty(cmkKeyUri) ? cmkKeyPathSegments[0] : ''
+var cmkKeyVersion = !empty(cmkKeyUri) && length(cmkKeyPathSegments) > 1 ? cmkKeyPathSegments[1] : ''
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: name
@@ -80,11 +84,11 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   sku: {
     name: skuName
   }
-  identity: useCmk && !empty(encryptionUserAssignedIdentityResourceId)
+  identity: !empty(cmkKeyUri)
     ? {
         type: 'UserAssigned'
         userAssignedIdentities: {
-          '${encryptionUserAssignedIdentityResourceId}': {}
+          '${cmkUserAssignedIdentityResourceId}': {}
         }
       }
     : null
@@ -94,7 +98,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     allowCrossTenantReplication: allowCrossTenantReplication
     allowSharedKeyAccess: allowSharedKeyAccess
     defaultToOAuthAuthentication: defaultToOAuthAuthentication
-    supportsHttpsTrafficOnly: supportsHttpsTrafficOnly
+    supportsHttpsTrafficOnly: cmkConfigurationValidated ? supportsHttpsTrafficOnly : supportsHttpsTrafficOnly
     minimumTlsVersion: minimumTlsVersion
     dnsEndpointType: !empty(dnsEndpointType) ? dnsEndpointType : null
     largeFileSharesState: !empty(largeFileSharesState) ? largeFileSharesState : null
@@ -104,7 +108,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
       virtualNetworkRules: virtualNetworkRules
       ipRules: ipRules
     }
-    publicNetworkAccess: resolvedPublicNetworkAccess
+    publicNetworkAccess: publicNetworkAccess
     allowedCopyScope: !empty(allowedCopyScope) ? allowedCopyScope : null
     sasPolicy: !empty(sasExpirationPeriod)
       ? {
@@ -116,7 +120,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
       ? azureFilesIdentityBasedAuthentication
       : null
     encryption: {
-      keySource: useCmk ? 'Microsoft.Keyvault' : 'Microsoft.Storage'
+      keySource: !empty(cmkKeyUri) ? 'Microsoft.Keyvault' : 'Microsoft.Storage'
       services: {
         blob: supportsBlobService
           ? {
@@ -136,15 +140,16 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
         }
       }
       requireInfrastructureEncryption: kind != 'Storage' ? requireInfrastructureEncryption : null
-      keyvaultproperties: useCmk
+      keyvaultproperties: !empty(cmkKeyUri)
         ? {
-            keyname: encryptionKeyName
-            keyvaulturi: encryptionKeyVaultUri
+            keyname: cmkKeyName
+            keyvaulturi: cmkKeyVaultUri
+            keyversion: !empty(cmkKeyVersion) ? cmkKeyVersion : null
           }
         : null
-      identity: useCmk
+      identity: !empty(cmkKeyUri)
         ? {
-            userAssignedIdentity: encryptionUserAssignedIdentityResourceId
+            userAssignedIdentity: cmkUserAssignedIdentityResourceId
           }
         : null
     }

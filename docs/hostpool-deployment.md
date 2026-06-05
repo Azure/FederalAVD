@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical Reference:** [Host Pool Template Documentation](../deployments/hostpools/README.md) - Complete parameter catalog and advanced scenarios
 
@@ -22,26 +22,6 @@ A complete host pool deployment includes:
 | **💿 Backup** | Recovery Services Vault (optional) — VM backup for **personal** host pools; FSLogix Azure Files file share backup for **pooled** host pools |
 
 ---
-
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Deployment Methods](#deployment-methods)
-  - [Method 1: Template Specs (Recommended)](#method-1-template-specs-recommended)
-  - [Method 2: Deploy Button](#method-2-deploy-button)
-  - [Method 3: PowerShell/CLI](#method-3-powershellcli)
-- [Parameter Configuration](#parameter-configuration)
-  - [Basic Parameters](#basic-parameters)
-  - [Identity & Networking](#identity--networking)
-  - [Storage Configuration](#storage-configuration)
-  - [Advanced Options](#advanced-options)
-- [Post-Deployment Tasks](#post-deployment-tasks)
-- [Scaling Configuration](#scaling-configuration)
-- [Monitoring & Alerts](#monitoring--alerts)
-- [Add-Ons](#add-ons)
-- [Troubleshooting](#troubleshooting)
-- [Best Practices](#best-practices)
-- [Next Steps](#next-steps)
 
 ---
 
@@ -169,7 +149,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 New-AzSubscriptionDeployment `
     -Location "usgovvirginia" `
     -TemplateFile ".\hostpools\hostpool.json" `
-    -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
+  -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
     -Name $deploymentName
 ```
 
@@ -188,7 +168,7 @@ DEPLOYMENT_NAME="${PARAM_FILE%.json}"
 az deployment sub create \
     --location usgovvirginia \
     --template-file ./hostpools/hostpool.json \
-    --parameters @./hostpools/parameters/$PARAM_FILE \
+  --parameters @./customer/parameters/hostpools/$PARAM_FILE \
     --name $DEPLOYMENT_NAME
 ```
 
@@ -207,10 +187,10 @@ az deployment sub create \
 
 ### Parameter Files
 
-Host pool configurations are defined in parameter files located in `deployments/hostpools/parameters/`:
+Use the sample files in `deployments/hostpools/parameters/` as starting points, then store your environment-specific copies in `customer/parameters/hostpools/`:
 
 ```
-deployments/hostpools/parameters/
+customer/parameters/hostpools/
 ├── demo.hostpool.parameters.json
 ├── prod.hostpool.parameters.json
 └── test.hostpool.parameters.json
@@ -226,9 +206,9 @@ The host pool deployment always creates all resources — resource groups, AVD c
 |---|---|---|
 | AVD Workspace | **Workspace Creation Option → Update an existing Workspace** | `existingFeedWorkspaceResourceId` |
 | Monitoring (Log Analytics, DCR, DCE) | **Use Existing Monitoring Resources** checkbox | `existingLogAnalyticsWorkspaceResourceId` + DCR + DCE IDs |
-| Credentials Key Vault | **Credentials source → Key Vault** | `existingCredentialsKeyVaultResourceId` |
-| Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox | `existingEncryptionKeyVaultResourceId` |
-| Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingRecoveryServicesVaultResourceId` |
+| Credentials Key Vault | **Credentials source → Key Vault** (Identity step) | `existingCredentialsKeyVaultResourceId` |
+| Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox (Zero Trust → Encryption Key Management) | `existingEncryptionKeyVaultResourceId` |
+| Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingVmBackupVaultResourceId` |
 
 To deploy all host pool infrastructure without creating session host VMs, set `sessionHostCount: 0`. This lets you validate storage, networking, and control plane configuration before committing to VM costs. Add hosts later using the **Session Hosts** add-on (`SessionHostsOnly` mode).
 
@@ -249,6 +229,10 @@ To deploy all host pool infrastructure without creating session host VMs, set `s
 | **identitySolution** | Identity and authentication method | `ActiveDirectoryDomainServices`<br>`EntraDomainServices`<br>`EntraKerberos-Hybrid`<br>`EntraKerberos-CloudOnly`<br>`EntraId` |
 | **domainName** | AD domain name (if applicable) | `contoso.com` |
 | **domainJoinUserName** | Domain join account UPN | `djoin@contoso.com` |
+| **deploySecretsKeyVault** | Deploy an inline Secrets Key Vault to store VM admin and domain-join credentials (configured in the **Identity → Credentials** portal step) | `true` / `false` |
+| **secretsKeyVaultEnableSoftDelete** | Enable soft delete on the inline Secrets Key Vault | `true` (default) |
+| **secretsKeyVaultEnablePurgeProtection** | Enable purge protection on the inline Secrets Key Vault | `true` (default) |
+| **secretsKeyVaultRetentionInDays** | Soft-delete retention period for the Secrets Key Vault (7–90 days) | `90` (default) |
 
 **[Identity Solutions Details](features.md#identity-solutions)**
 
@@ -334,14 +318,18 @@ Run post-deployment scripts on session hosts using the `sessionHostCustomization
 
 #### Zero Trust / Security Configuration
 
+> **Portal form:** Zero Trust settings are split across two steps — **Zero Trust → Encryption Key Management** (CMK selectors, existing KV toggle, key rotation, enc KV retention) and **Zero Trust → PaaS Private Endpoints** (private endpoint deploy checkbox, subnet selectors, DNS zones). Secrets Key Vault deploy controls are in the **Identity → Credentials** step.
+
 ```json
 {
-  "enablePrivateEndpoint": true,
-  "privateEndpointSubnetResourceId": "/subscriptions/xxx/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-privateendpoints",
+  "deployPrivateEndpoints": true,
+  "operationsPrivateEndpointSubnetResourceId": "/subscriptions/xxx/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-privateendpoints",
   "keyManagementDisks": "CustomerManaged",
   "encryptionAtHost": true,
   "secureBootEnabled": true,
-  "vTpmEnabled": true
+  "vTpmEnabled": true,
+  "secretsKeyVaultRetentionInDays": 90,
+  "encryptionKeyVaultRetentionInDays": 90
 }
 ```
 
@@ -381,11 +369,11 @@ Copy and customize a parameter file:
 ```powershell
 # Copy example parameter file
 Copy-Item `
-    -Path ".\hostpools\parameters\demo.hostpool.parameters.json" `
-    -Destination ".\hostpools\parameters\mycompany.hostpool.parameters.json"
+  -Path ".\deployments\hostpools\parameters\demo.hostpool.parameters.json" `
+  -Destination ".\customer\parameters\hostpools\mycompany.hostpool.parameters.json"
 
 # Edit with your values
-code ".\hostpools\parameters\mycompany.hostpool.parameters.json"
+code ".\customer\parameters\hostpools\mycompany.hostpool.parameters.json"
 ```
 
 #### 2. Update Secrets in Key Vault
@@ -426,7 +414,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 New-AzSubscriptionDeployment `
     -Location "East US 2" `
     -TemplateFile ".\hostpools\hostpool.json" `
-    -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
+  -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
     -Name $deploymentName
 ```
 
@@ -507,10 +495,10 @@ Backup behavior depends on host pool type and the `recoveryServices` parameter:
 | Host Pool Type | `recoveryServices` | `useExistingRSV` | Additional requirements | Vault | Backed Up |
 |---|---|---|---|---|---|
 | **Personal** | `true` | `false` | — | Created inline | VM OS disks |
-| **Personal** | `true` | `true` | `existingRecoveryServicesVaultResourceId` required | Existing | VM OS disks |
+| **Personal** | `true` | `true` | `existingVmBackupVaultResourceId` required | Existing | VM OS disks |
 | **Personal** | `false` | — | — | Not created | Nothing |
 | **Pooled** | `true` | `false` | `deployFSLogixStorage=true` + Azure Files | Created inline | FSLogix file shares |
-| **Pooled** | `true` | `true` | `deployFSLogixStorage=true` + Azure Files + `existingRecoveryServicesVaultResourceId` | Existing | FSLogix file shares |
+| **Pooled** | `true` | `true` | `deployFSLogixStorage=true` + Azure Files + `existingFilesBackupVaultResourceId` | Existing | FSLogix file shares |
 | **Pooled** | `false` | — | — | Not created | Nothing |
 
 > **Pooled VMs are never backed up.** Users are stateless in pooled pools; profile data lives in FSLogix storage which is what gets backed up instead.
@@ -553,7 +541,7 @@ To add more session hosts to an existing pool:
    New-AzSubscriptionDeployment `
        -Location "East US 2" `
        -TemplateFile ".\hostpools\hostpool.json" `
-       -TemplateParameterFile ".\hostpools\parameters\$paramFile" `
+       -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
        -Name $deploymentName
    ```
 
@@ -871,7 +859,7 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
    New-AzDeployment `
        -Location "eastus2" `
        -TemplateFile ".\deployments\hostpools\hostpool.json" `
-       -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
+       -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
        -Name $deploymentName
    
    # Option 3: Combine identifier with date (if uniqueness needed)

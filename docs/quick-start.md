@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Quick Start Guide
 
@@ -16,6 +16,8 @@ Get your Azure Virtual Desktop environment deployed quickly with this step-by-st
 | **4 — Fully Automated** | DevOps / platform team | Tier 3 + CI/CD tooling | ~1 week setup | [Automation Guide](automation-guide.md) |
 
 > **Just need a working AVD environment to test?** Jump directly to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool). A VNet with one subnet is the only hard prerequisite. CMK, FSLogix, monitoring, and private endpoints are all optional and can be added later.
+
+> **🔒 Deploying for NIST SP 800-53 / FedRAMP High or DoD IL5 compliance?** The deployment tiers above describe *operational* complexity — compliance hardening is a separate set of parameter choices that can be applied at any tier. See the [Compliance Configuration Reference](parameters.md#compliance-configuration-reference) for the exact parameters to change from their defaults. The Zero Trust tab in the host pool deployment UI also warns when defaults are not compliance-configured.
 
 ---
 
@@ -218,7 +220,7 @@ $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 New-AzDeployment `
     -Location "usgovvirginia" `
     -TemplateFile ".\deployments\hostpools\hostpool.json" `
-    -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
+    -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
     -Name $deploymentName
 ```
 
@@ -283,7 +285,7 @@ New-AzDeployment `
     -Location "usgovvirginia" `
     -Name "avd-networking-deployment" `
     -TemplateFile ".\deployments\networking\networking.json" `
-    -TemplateParameterFile ".\deployments\networking\parameters\<your-params>.json" `
+    -TemplateParameterFile ".\customer\parameters\networking\<your-params>.json" `
     -Verbose
 ```
 
@@ -441,7 +443,7 @@ cd deployments
 .\Deploy-ImageManagement.ps1 -Location "usgovvirginia" -ParameterFilePrefix basic -UpdateArtifacts
 ```
 
-Example parameter files are in `deployments\imageManagement\parameters\` (`basic`, `privateEndpoint`, `serviceEndpoint`, `production`). Copy and rename one for your environment.
+Example parameter files are in `deployments\imageManagement\parameters\` (`basic`, `privateEndpoint`, `serviceEndpoint`, `production`). Copy and rename one into `customer\parameters\imageManagement\` for your environment.
 
 If you did **not** use `-UpdateArtifacts`, note the `artifactsStorageAccountResourceId` output — you'll need it in Part B.
 
@@ -465,7 +467,7 @@ cd deployments
     -StorageAccountResourceId "<artifactsStorageAccountResourceId from Part A output>"
 ```
 
-**✈️ Air-gapped environments:** Use `-SkipDownloadingNewSources` and manually place installers in `.common/artifacts/` subdirectories before running.
+**✈️ Air-gapped environments:** Use `-SkipDownloadingNewSources` and manually place installers in `customer/artifacts/` before running.
 
 **📚 Detailed Guides:**
 
@@ -551,7 +553,7 @@ New-AzDeployment `
     -Location 'eastus2' `
     -Name $deploymentName `
     -TemplateFile '.\deployments\hostpools\hostpool.json' `
-    -TemplateParameterFile ".\deployments\hostpools\parameters\$paramFile" `
+    -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
     -Verbose
 ```
 

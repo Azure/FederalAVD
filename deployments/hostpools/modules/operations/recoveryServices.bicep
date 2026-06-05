@@ -1,20 +1,20 @@
-targetScope = 'subscription'
+﻿targetScope = 'subscription'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Recovery Services — shared vault in the Operations resource group.
+// Recovery Services — shared Azure Files snapshot-backup vault.
+// Deployed in the Operations resource group.
 //
-// Called from hostpool.bicep BEFORE fslogix and sessionHosts so the vault
-// is ready for both phases to register backup items against it.
+// Used for pooled host pool FSLogix Azure Files snapshot backup only.
+// No data is transferred to the vault — snapshots remain in the storage account.
+// No CMK is required: the vault holds only metadata, not file data; the storage
+// account's own encryption protects the actual snapshot data.
+// Vault storage replication type is irrelevant for Azure Files snapshot backup
+// (data stays in the storage account), so LocallyRedundant is hardcoded.
 //
-//  • Complete    → createVault = true  (vault + policies + PE created here)
-//  • HostPoolOnly → createVault = false (uses existingRecoveryServicesVaultResourceId)
-//
-// FSLogix Azure Files backup items are registered in fslogix.bicep after
-// storage accounts exist. VM backup items are registered in sessionHosts.bicep
-// (currently commented out pending ARM/Bicep issue resolution).
+// createVault = false when reusing an existing vault (existingRecoveryServicesVaultResourceId).
 // ─────────────────────────────────────────────────────────────────────────────
 
-@description('Required. Whether to create a new Recovery Services Vault. True on Complete deployments; false when using an existing vault.')
+@description('Required. Whether to create a new Recovery Services Vault.')
 param createVault bool
 
 @description('Conditional. Resource ID of an existing Recovery Services Vault. Required when createVault is false.')
@@ -28,9 +28,6 @@ param resourceGroupOperations string
 
 @description('Required. Azure region for all resources.')
 param location string
-
-@description('Required. Storage replication type for a new vault: LocallyRedundant, GeoRedundant, or ZoneRedundant.')
-param storageRedundancy string
 
 @description('Required. Short unique deployment suffix.')
 param deploymentSuffix string
@@ -65,10 +62,13 @@ param tags object
 @description('Required. Backup policy time zone (e.g. "Eastern Standard Time").')
 param timeZone string
 
-@description('Required. True when the host pool is pooled (file share backup). False when personal (VM backup).')
-param pooledHostPool bool
-param vmPolicyName string = 'AvdPolicyVm'
+@description('Optional. Name for the Azure Files snapshot backup policy.')
 param fileSharePolicyName string = 'filesharepolicy'
+
+@description('Optional. Number of daily snapshots to retain (1–365).')
+@minValue(1)
+@maxValue(365)
+param backupRetentionDays int = 30
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -86,57 +86,27 @@ var effectiveVaultRG = createVault ? resourceGroupOperations : split(existingRec
 var effectiveVaultName = createVault ? vaultName : last(split(existingRecoveryServicesVaultResourceId, '/'))!
 
 // ─── Recovery Services Vault ──────────────────────────────────────────────────
+// Note: storageType is irrelevant for Azure Files snapshot backup — snapshots stay
+// in the storage account. LocallyRedundant is used to minimise cost and complexity.
 module recoveryServicesVault '../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (createVault) {
-  name: 'RecoveryServicesVault-${deploymentSuffix}'
+  name: 'RecoveryServicesVault-AzureFiles-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupOperations)
   params: {
     name: vaultName
     location: location
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
     publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
-    storageType: storageRedundancy
+    storageType: 'LocallyRedundant'
     tags: tags[?'Microsoft.RecoveryServices/vaults'] ?? {}
+    cmkKeyUri: ''
+    cmkUserAssignedIdentityResourceId: ''
+    cmkUseSystemAssignedIdentity: false
   }
 }
 
-// ─── VM Backup Policy (personal host pools only) ───────────────────────────
-module vmBackupPolicy '../../../../.common/bicepModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = if (!pooledHostPool) {
-  name: 'RSV-BackupPolicy-VirtualMachines-${deploymentSuffix}'
-  scope: resourceGroup(effectiveVaultSub, effectiveVaultRG)
-  params: {
-    recoveryServicesVaultName: effectiveVaultName
-    name: vmPolicyName
-    properties: {
-      backupManagementType: 'AzureIaasVM'
-      instantRpRetentionRangeInDays: 2
-      policyType: 'V2'
-      retentionPolicy: {
-        retentionPolicyType: 'LongTermRetentionPolicy'
-        dailySchedule: {
-          retentionDuration: {
-            count: 30
-            durationType: 'Days'
-          }
-          retentionTimes: ['23:00']
-        }
-      }
-      schedulePolicy: {
-        schedulePolicyType: 'SimpleSchedulePolicyV2'
-        scheduleRunFrequency: 'Daily'
-        dailySchedule: {
-          scheduleRunTimes: ['23:00']
-        }
-      }
-      timeZone: timeZone
-    }
-  }
-  #disable-next-line no-unnecessary-dependson
-  dependsOn: [recoveryServicesVault]
-}
-
-// ─── File Share Backup Policy (pooled host pools only) ────────────────────────
-module fileShareBackupPolicy '../../../../.common/bicepModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = if (pooledHostPool) {
-  name: 'RSV-BackupPolicy-FileShares-${deploymentSuffix}'
+// ─── Azure Files Snapshot Backup Policy ──────────────────────────────────────
+module fileShareBackupPolicy '../../../../.common/bicepModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = {
+  name: 'RSV-BackupPolicy-AzureFiles-${deploymentSuffix}'
   scope: resourceGroup(effectiveVaultSub, effectiveVaultRG)
   params: {
     recoveryServicesVaultName: effectiveVaultName
@@ -154,7 +124,7 @@ module fileShareBackupPolicy '../../../../.common/bicepModules/recoveryServices/
         dailySchedule: {
           retentionTimes: ['23:00']
           retentionDuration: {
-            count: 30
+            count: backupRetentionDays
             durationType: 'Days'
           }
         }
@@ -169,7 +139,7 @@ module fileShareBackupPolicy '../../../../.common/bicepModules/recoveryServices/
 // ─── Vault Private Endpoint ───────────────────────────────────────────────────
 // Only created alongside a new vault (Complete). Existing vaults already have their PE.
 module vaultPrivateEndpoint '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId)) {
-  name: 'PE-RecoveryServicesVault-${deploymentSuffix}'
+  name: 'PE-RecoveryServicesVault-AzureFiles-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupOperations)
   params: {
     name: replace(
