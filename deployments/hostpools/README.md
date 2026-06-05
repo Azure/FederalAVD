@@ -362,7 +362,7 @@ Subscription
 - **Type:** String
 - **Allowed:** `LocallyRedundant`, `ZoneRedundant`, `GeoRedundant`
 - **Default:** `LocallyRedundant`
-- **Description:** Storage redundancy for backup recovery points in the Recovery Services vault. Independent of storage account SKU.
+- **Description:** Storage redundancy for backup recovery points in the Recovery Services vault. Independent of storage account SKU. When set to `GeoRedundant`, Cross-Region Restore (CRR) is automatically enabled — no separate parameter is needed. GRS storage costs the same whether CRR is on or off; without CRR the geo-redundant copy provides passive data durability only with no recovery capability in the secondary region. See [bcdr.md](../../docs/bcdr.md#personal-host-pool-vm-backup) for CP-6/CP-7 mapping and the Azure Policy gap note.
 
 #### `existingRecoveryServicesVaultResourceId`
 - **Type:** String

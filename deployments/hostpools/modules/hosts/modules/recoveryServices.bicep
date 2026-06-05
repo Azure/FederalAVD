@@ -27,6 +27,11 @@ param location string
 @description('Required. Storage replication type for a new vault: LocallyRedundant, GeoRedundant, or ZoneRedundant.')
 param storageRedundancy string
 
+// CRR is enabled automatically when GRS is selected. GRS storage costs the same
+// regardless of whether CRR is on, and without CRR the geo-redundant copy provides
+// passive durability only with no recovery capability in the secondary region.
+var crossRegionRestoreEnabled = storageRedundancy == 'GeoRedundant'
+
 @description('Required. Short unique deployment suffix.')
 param deploymentSuffix string
 
@@ -175,6 +180,7 @@ module recoveryServicesVaultInit '../../../../../.common/bicepModules/recoverySe
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
     publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     storageType: storageRedundancy
+    crossRegionRestoreFlag: crossRegionRestoreEnabled
     tags: tags[?'Microsoft.RecoveryServices/vaults'] ?? {}
     cmkKeyUri: ''
     cmkUseSystemAssignedIdentity: true
@@ -211,6 +217,7 @@ module recoveryServicesVaultCmk '../../../../../.common/bicepModules/recoverySer
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
     publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     storageType: storageRedundancy
+    crossRegionRestoreFlag: crossRegionRestoreEnabled
     tags: tags[?'Microsoft.RecoveryServices/vaults'] ?? {}
     cmkKeyUri: '${encryptionKeyVaultUri}keys/${encryptionKeyName}'
     cmkUseSystemAssignedIdentity: true
@@ -229,6 +236,7 @@ module recoveryServicesVault '../../../../../.common/bicepModules/recoveryServic
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
     publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     storageType: storageRedundancy
+    crossRegionRestoreFlag: crossRegionRestoreEnabled
     tags: tags[?'Microsoft.RecoveryServices/vaults'] ?? {}
     cmkKeyUri: ''
     cmkUserAssignedIdentityResourceId: ''

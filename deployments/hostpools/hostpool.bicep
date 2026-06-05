@@ -1757,7 +1757,7 @@ module diskAccessPolicy 'modules/hosts/modules/diskNetworkAccessPolicy.bicep' = 
 }
 
 module sessionHosts 'modules/hosts/hosts.bicep' = {
-  name: 'Session-Hosts-${deploymentSuffix}'
+  name: 'Hosts-${deploymentSuffix}'
   params: {
     resourceGroupHosts: resourceGroupHosts
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl

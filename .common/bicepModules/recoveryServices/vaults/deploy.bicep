@@ -139,4 +139,11 @@ resource diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-pre
 
 output resourceId string = recoveryServicesVault.id
 output name string = recoveryServicesVault.name
-output principalId string = !empty(recoveryServicesVault.identity.?principalId ?? '') ? recoveryServicesVault.identity!.principalId! : ''
+// Guard against accessing .identity when the vault was deployed without one.
+// When identity is null (platform-managed keys, no SAI/UAI), ARM cannot evaluate
+// reference(...).identity.principalId at all — not even with the safe-navigation
+// operator — because the property is absent from the API response.
+// Use a param-based conditional so ARM short-circuits before touching .identity.
+output principalId string = (cmkUseSystemAssignedIdentity || (cmkEnabled && !empty(cmkUserAssignedIdentityResourceId)))
+  ? recoveryServicesVault.identity!.principalId!
+  : ''

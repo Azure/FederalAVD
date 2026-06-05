@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "4423462097728660652"
+      "templateHash": "13570172277444230547"
     }
   },
   "parameters": {
@@ -11733,7 +11733,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "8086260789384274793"
+              "templateHash": "4304399699952372771"
             }
           },
           "parameters": {
@@ -11907,7 +11907,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "1825977361808190703"
+                      "templateHash": "17340702393104837269"
                     }
                   },
                   "definitions": {
@@ -12152,7 +12152,7 @@
                     },
                     "principalId": {
                       "type": "string",
-                      "value": "[if(not(empty(coalesce(tryGet(reference('recoveryServicesVault', '2023-04-01', 'full').identity, 'principalId'), ''))), reference('recoveryServicesVault', '2023-04-01', 'full').identity.principalId, '')]"
+                      "value": "[if(or(parameters('cmkUseSystemAssignedIdentity'), and(variables('cmkEnabled'), not(empty(parameters('cmkUserAssignedIdentityResourceId'))))), reference('recoveryServicesVault', '2023-04-01', 'full').identity.principalId, '')]"
                     }
                   }
                 }
@@ -16488,7 +16488,7 @@
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Session-Hosts-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('Hosts-{0}', variables('deploymentSuffix'))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -16732,7 +16732,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "12414196354128623040"
+              "templateHash": "16593541081133698147"
             }
           },
           "parameters": {
@@ -17196,7 +17196,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "11852518772003995681"
+                      "templateHash": "238705500839488102"
                     }
                   },
                   "parameters": {
@@ -17371,6 +17371,7 @@
                     }
                   },
                   "variables": {
+                    "crossRegionRestoreEnabled": "[equals(parameters('storageRedundancy'), 'GeoRedundant')]",
                     "backupPrivateDnsZoneResourceIds": "[filter(createArray(parameters('azureBackupPrivateDnsZoneResourceId'), parameters('azureBlobPrivateDnsZoneResourceId'), parameters('azureQueuePrivateDnsZoneResourceId')), lambda('z', not(empty(lambdaVariables('z')))))]",
                     "effectiveVaultSub": "[if(parameters('createVault'), subscription().subscriptionId, split(parameters('existingRecoveryServicesVaultResourceId'), '/')[2])]",
                     "effectiveVaultRG": "[if(parameters('createVault'), parameters('resourceGroupHosts'), split(parameters('existingRecoveryServicesVaultResourceId'), '/')[4])]",
@@ -17584,6 +17585,9 @@
                           "storageType": {
                             "value": "[parameters('storageRedundancy')]"
                           },
+                          "crossRegionRestoreFlag": {
+                            "value": "[variables('crossRegionRestoreEnabled')]"
+                          },
                           "tags": {
                             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults'), createObject())]"
                           },
@@ -17605,7 +17609,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.43.8.12551",
-                              "templateHash": "1825977361808190703"
+                              "templateHash": "17340702393104837269"
                             }
                           },
                           "definitions": {
@@ -17850,7 +17854,7 @@
                             },
                             "principalId": {
                               "type": "string",
-                              "value": "[if(not(empty(coalesce(tryGet(reference('recoveryServicesVault', '2023-04-01', 'full').identity, 'principalId'), ''))), reference('recoveryServicesVault', '2023-04-01', 'full').identity.principalId, '')]"
+                              "value": "[if(or(parameters('cmkUseSystemAssignedIdentity'), and(variables('cmkEnabled'), not(empty(parameters('cmkUserAssignedIdentityResourceId'))))), reference('recoveryServicesVault', '2023-04-01', 'full').identity.principalId, '')]"
                             }
                           }
                         }
@@ -18039,6 +18043,9 @@
                           "storageType": {
                             "value": "[parameters('storageRedundancy')]"
                           },
+                          "crossRegionRestoreFlag": {
+                            "value": "[variables('crossRegionRestoreEnabled')]"
+                          },
                           "tags": {
                             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults'), createObject())]"
                           },
@@ -18060,7 +18067,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.43.8.12551",
-                              "templateHash": "1825977361808190703"
+                              "templateHash": "17340702393104837269"
                             }
                           },
                           "definitions": {
@@ -18305,7 +18312,7 @@
                             },
                             "principalId": {
                               "type": "string",
-                              "value": "[if(not(empty(coalesce(tryGet(reference('recoveryServicesVault', '2023-04-01', 'full').identity, 'principalId'), ''))), reference('recoveryServicesVault', '2023-04-01', 'full').identity.principalId, '')]"
+                              "value": "[if(or(parameters('cmkUseSystemAssignedIdentity'), and(variables('cmkEnabled'), not(empty(parameters('cmkUserAssignedIdentityResourceId'))))), reference('recoveryServicesVault', '2023-04-01', 'full').identity.principalId, '')]"
                             }
                           }
                         }
@@ -18337,6 +18344,9 @@
                           "storageType": {
                             "value": "[parameters('storageRedundancy')]"
                           },
+                          "crossRegionRestoreFlag": {
+                            "value": "[variables('crossRegionRestoreEnabled')]"
+                          },
                           "tags": {
                             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults'), createObject())]"
                           },
@@ -18358,7 +18368,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.43.8.12551",
-                              "templateHash": "1825977361808190703"
+                              "templateHash": "17340702393104837269"
                             }
                           },
                           "definitions": {
@@ -18603,7 +18613,7 @@
                             },
                             "principalId": {
                               "type": "string",
-                              "value": "[if(not(empty(coalesce(tryGet(reference('recoveryServicesVault', '2023-04-01', 'full').identity, 'principalId'), ''))), reference('recoveryServicesVault', '2023-04-01', 'full').identity.principalId, '')]"
+                              "value": "[if(or(parameters('cmkUseSystemAssignedIdentity'), and(variables('cmkEnabled'), not(empty(parameters('cmkUserAssignedIdentityResourceId'))))), reference('recoveryServicesVault', '2023-04-01', 'full').identity.principalId, '')]"
                             }
                           }
                         }
@@ -20866,7 +20876,7 @@
           },
           "userAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
           "virtualMachineNames": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
           }
         },
         "template": {
@@ -21490,7 +21500,7 @@
       "dependsOn": [
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Deployment-Prereqs-{0}', variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('Resource-Group-Deployment-{0}', variables('deploymentSuffix')))]",
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix')))]"
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Hosts-{0}', variables('deploymentSuffix')))]"
       ]
     }
   ],
@@ -21513,7 +21523,7 @@
     },
     "virtualMachineNames": {
       "type": "array",
-      "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Session-Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
+      "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Hosts-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNames.value]"
     }
   }
 }
