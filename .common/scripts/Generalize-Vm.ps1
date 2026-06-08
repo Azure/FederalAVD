@@ -38,34 +38,37 @@ Try {
     }
 
     # Wait for sysprep to complete and shut down the VM (sysprep runs with /shutdown from a scheduled task)
-    
-    Write-Log "Waiting for sysprep to complete and the VM to stop."
+    Write-Log "Waiting for sysprep to complete and the VM to stop (timeout: 10 minutes)."
     $SysprepTimeout = (Get-Date).AddMinutes(10)
-    Do {
-        Start-Sleep -Seconds 15
-        if ((Get-Date) -ge $SysprepTimeout) {
-            throw "Timed out after 10 minutes waiting for the image VM to stop. Sysprep may have failed. Last power state: $VMPowerState"
-        }
+    $VMPowerState = $null
+    do {
         $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')
-        $VMPowerState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).displayStatus
-
-    } Until ($VMPowerState -eq 'VM stopped')
-    
+        $VMPowerState = ($VmStatus.statuses | Where-Object { $_.code -like 'PowerState*' }).displayStatus
+        Write-Log "VM power state: $VMPowerState"
+        if ($VMPowerState -eq 'VM stopped') { break }
+        if ((Get-Date) -ge $SysprepTimeout) {
+            throw "Timed out after 10 minutes waiting for the VM to stop after sysprep. Current power state: '$VMPowerState'. Sysprep may have failed or hung — aborting to prevent generalizing a VM in an unknown state."
+        }
+        Start-Sleep -Seconds 15
+    } while ($VMPowerState -ne 'VM stopped')
+  
     # Deallocate the VM (required for capture)
     Write-Log "VM has stopped. Proceeding to deallocate the VM."
-
     $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/deallocate?api-version=2024-03-01')
 
     # Wait for deallocated state
     $DeallocateTimeout = (Get-Date).AddMinutes(5)
-    Do {
-        Start-Sleep -Seconds 5
-        if ((Get-Date) -ge $DeallocateTimeout) {
-            throw "Timed out after 15 minutes waiting for the image VM to deallocate. Last power state: $VMPowerState"
-        }
+    $VMPowerState = $null
+    do {
         $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')
-        $VMPowerState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).displayStatus
-    } Until ($VMPowerState -eq 'VM deallocated')
+        $VMPowerState = ($VmStatus.statuses | Where-Object { $_.code -like 'PowerState*' }).displayStatus
+        Write-Log "VM power state: $VMPowerState"
+        if ($VMPowerState -eq 'VM deallocated') { break }
+        if ((Get-Date) -ge $DeallocateTimeout) {
+            throw "Timed out after 5 minutes waiting for the VM to deallocate. Current power state: '$VMPowerState'."
+        }
+        Start-Sleep -Seconds 5
+    } while ($VMPowerState -ne 'VM deallocated')
 
     # Generalize the VM
     Write-Log "VM has been deallocated. Proceeding to generalize the VM."

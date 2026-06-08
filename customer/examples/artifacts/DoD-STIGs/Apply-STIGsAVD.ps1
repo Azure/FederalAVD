@@ -227,42 +227,77 @@ Function Get-InternetFile {
     }
 }
 
-Function Invoke-LGPO {
-    [CmdletBinding()]
+Function Update-LocalGPOTextFile {
+    <#
+    .SYNOPSIS
+        Appends a single registry policy entry to an LGPO text file (lgpo.exe /t format).
+    .DESCRIPTION
+        Builds up Computer.txt or User.txt in the specified output directory.
+        Each call appends one 4-line block (scope, key path, value name, data/DELETE)
+        followed by a blank line.  Pass the resulting file to 'lgpo.exe /t <file>'.
+    #>
+    [CmdletBinding(DefaultParameterSetName = 'Set')]
     Param (
-        [string]$InputDir = $Script:LGPOTempDir
+        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
+        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
+        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
+        [ValidateSet('Computer', 'User')]
+        [string]$Scope,
+        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
+        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
+        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
+        [string]$RegistryKeyPath,
+        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
+        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
+        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
+        [string]$RegistryValue,
+        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
+        [AllowEmptyString()]
+        [string]$RegistryData,
+        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
+        [ValidateSet('DWORD', 'String')]
+        [string]$RegistryType,
+        [Parameter(Mandatory = $false, ParameterSetName = 'Delete')]
+        [switch]$Delete,
+        [Parameter(Mandatory = $false, ParameterSetName = 'DeleteAllValues')]
+        [switch]$DeleteAllValues,
+        [string]$OutputFile = ''
     )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        Write-Log -Message "${CmdletName}: Gathering Registry text files for LGPO from '$InputDir'"
-        $RegFiles = Get-ChildItem -Path $InputDir -Filter '*.txt'
-        ForEach ($RegistryFile in $RegFiles) {
-            $TxtFilePath = $RegistryFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying settings from '$txtFilePath' to Local Group Policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/t `"$TxtFilePath`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-        Write-Log -Message "${CmdletName}: Gathering Security Templates files for LGPO from '$InputDir'"
-        $ConfigFile = Get-ChildItem -Path $InputDir -Filter '*.inf'
-        If ($ConfigFile) {
-            $ConfigFile = $ConfigFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying security settings from '$ConfigFile' to Local Security Policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/s `"$ConfigFile`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-        Write-Log -Message "${CmdletName}: Finding Audit CSV file for LGPO from '$InputDir'"
-        $AuditFile = Get-ChildItem -Path $InputDir -Filter '*.csv'
-        If ($AuditFile) {
-            $AuditFile = $AuditFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying advanced audit settings from '$AuditFile' to Local policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/ac `"$AuditFile`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
+    [string]$CmdletName = $PSCmdlet.MyInvocation.MyCommand.Name
+    # Convert type to uppercase; LGPO text format uses SZ not STRING
+    $ValueType = $RegistryType.ToUpper()
+    If ($ValueType -eq 'STRING') { $ValueType = 'SZ' }
+
+    # Strip any PowerShell-style drive prefixes (HKLM:\, HKCU:\, etc.)
+    $SearchStrings = 'HKLM:\', 'HKCU:\', 'HKEY_CURRENT_USER:\', 'HKEY_LOCAL_MACHINE:\'
+    $modified = $false
+    ForEach ($String in $SearchStrings) {
+        If ($RegistryKeyPath.StartsWith($String) -and -not $modified) {
+            $RegistryKeyPath = $RegistryKeyPath.Substring($String.Length)
+            $modified = $true
         }
     }
-    End {
+
+    # Default output path: $Script:LGPOTempDir\<Scope>.txt
+    # Callers can override with -OutputFile to keep the path explicit.
+    If ([string]::IsNullOrEmpty($OutputFile)) {
+        $OutputFile = Join-Path -Path $Script:LGPOTempDir -ChildPath "$Scope.txt"
     }
+    $OutDir = Split-Path -Path $OutputFile -Parent
+    If (-not (Test-Path -LiteralPath $OutDir -PathType Container)) {
+        $null = New-Item -Path $OutDir -ItemType Directory -Force -ErrorAction Stop
+    }
+    If (-not (Test-Path -LiteralPath $OutputFile)) {
+        $null = New-Item -Path $OutputFile -ItemType File -ErrorAction Stop
+    }
+    Write-Log -Message "${CmdletName}: Adding '$RegistryValue' to '$OutputFile'"
+    Add-Content -Path $OutputFile -Value $Scope
+    Add-Content -Path $OutputFile -Value $RegistryKeyPath
+    Add-Content -Path $OutputFile -Value $RegistryValue
+    If ($Delete)              { Add-Content -Path $OutputFile -Value 'DELETE' }
+    ElseIf ($DeleteAllValues) { Add-Content -Path $OutputFile -Value 'DELETEALLVALUES' }
+    Else                      { Add-Content -Path $OutputFile -Value "$($ValueType):$RegistryData" }
+    Add-Content -Path $OutputFile -Value ''
 }
 
 Function New-Log {
@@ -391,78 +426,22 @@ Function Set-RegistryValue {
     }
 }
 
-Function Update-LocalGPOTextFile {
-    [CmdletBinding(DefaultParameterSetName = 'Set')]
-    Param (
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [ValidateSet('Computer', 'User')]
-        [string]$Scope,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [string]$RegistryKeyPath,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [string]$RegistryValue,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [AllowEmptyString()]
-        [string]$RegistryData,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [ValidateSet('DWORD', 'String')]
-        [string]$RegistryType,
-        [Parameter(Mandatory = $false, ParameterSetName = 'Delete')]
-        [switch]$Delete,
-        [Parameter(Mandatory = $false, ParameterSetName = 'DeleteAllValues')]
-        [switch]$DeleteAllValues,
-        [string]$outputDir = $Script:LGPOTempDir
+Function Disable-OptionalFeatureIfEnabled {
+    <#
+    .SYNOPSIS
+        Disables a Windows Optional Feature only if it is currently enabled.
+        Silently no-ops when the feature is absent or already disabled.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$FeatureName,
+        [Parameter(Mandatory)][string]$StigId
     )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        # Convert $RegistryType to UpperCase to prevent LGPO errors.
-        $ValueType = $RegistryType.ToUpper()
-        # Change String type to SZ for text file
-        If ($ValueType -eq 'STRING') { $ValueType = 'SZ' }
-        # Replace any incorrect registry entries for the format needed by text file.
-        $modified = $false
-        $SearchStrings = 'HKLM:\', 'HKCU:\', 'HKEY_CURRENT_USER:\', 'HKEY_LOCAL_MACHINE:\'
-        ForEach ($String in $SearchStrings) {
-            If ($RegistryKeyPath.StartsWith("$String") -and $modified -ne $true) {
-                $index = $String.Length
-                $RegistryKeyPath = $RegistryKeyPath.Substring($index, $RegistryKeyPath.Length - $index)
-                $modified = $true
-            }
-        }        
-        #Create the output file if needed.
-        $OutFile = Join-Path -Path $OutputDir -ChildPath "$Scope.txt"
-        If (-not (Test-Path -LiteralPath $Outfile)) {
-            If (-not (Test-Path -LiteralPath $OutputDir -PathType 'Container')) {
-                $null = New-Item -Path $OutputDir -Type 'Directory' -Force -ErrorAction 'Stop'
-            }
-            $null = New-Item -Path $OutFile -ItemType File -ErrorAction Stop
-        }
-
-        Write-Log -Message "${CmdletName}: Adding registry information to '$outfile' for LGPO.exe"
-        # Update file with information
-        Add-Content -Path $Outfile -Value $Scope
-        Add-Content -Path $Outfile -Value $RegistryKeyPath
-        Add-Content -Path $Outfile -Value $RegistryValue
-        If ($Delete) {
-            Add-Content -Path $Outfile -Value 'DELETE'
-        }
-        ElseIf ($DeleteAllValues) {
-            Add-Content -Path $Outfile -Value 'DELETEALLVALUES'
-        }
-        Else {
-            Add-Content -Path $Outfile -Value "$($ValueType):$RegistryData"
-        }
-        Add-Content -Path $Outfile -Value ""
-    }
-    End {        
+    $feature = Get-WindowsOptionalFeature -Online -FeatureName $FeatureName -ErrorAction SilentlyContinue
+    if ($feature -and $feature.State -eq 'Enabled') {
+        Write-Log -Message "${StigId}: Disabling Windows Optional Feature '$FeatureName'."
+        Disable-WindowsOptionalFeature -Online -FeatureName $FeatureName -NoRestart -ErrorAction SilentlyContinue | Out-Null
+    } else {
+        Write-Log -Message "${StigId}: '$FeatureName' is already disabled or not present. No action required."
     }
 }
 
@@ -641,6 +620,30 @@ ForEach ($gpoFolder in $GPOFolders) {
 }
 
 Write-Log -Message "Applying AVD Exceptions"
+
+# Build the privilege rights lines as an array so each entry is guaranteed
+# to land on its own line when written to the INF.  Using bare += on a string
+# concatenates without a newline separator, which causes secedit to silently
+# ignore all but the first entry in the [Privilege Rights] section.
+$privilegeRights = [System.Collections.Generic.List[string]]::new()
+$privilegeRights.Add('SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544')
+
+if ($IsDomainJoined) {
+    $privilegeRights.Add('SeDenyBatchLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins')
+    $privilegeRights.Add('SeDenyNetworkLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins')
+    $privilegeRights.Add('SeDenyInteractiveLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins')
+    $privilegeRights.Add('SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins')
+}
+Else {
+    $privilegeRights.Add('SeDenyBatchLogonRight = *S-1-5-32-546')
+    $privilegeRights.Add('SeDenyNetworkLogonRight = *S-1-5-32-546')
+    $privilegeRights.Add('SeDenyInteractiveLogonRight = *S-1-5-32-546')
+    $privilegeRights.Add('SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546')
+}
+
+# Build the INF content.  secedit expects UTF-16 LE (written by Out-File -Encoding unicode).
+# The $CHICAGO$ signature is a literal string required by secedit; use single-quoted
+# here-string to avoid PowerShell interpreting the $ characters.
 $SecFileContent = @'
 [Unicode]
 Unicode=yes
@@ -648,51 +651,76 @@ Unicode=yes
 signature="$CHICAGO$"
 Revision=1
 [Privilege Rights]
-SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544
-'@
 
-if ($IsDomainJoined) {
-    $SecFileContent += 'SeDenyBatchLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
-    $SecFileContent += 'SeDenyNetworkLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
-    $SecFileContent += 'SeDenyInteractiveLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
-    $SecFileContent += 'SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins'
-}
-Else {
-    $SecFileContent += 'SeDenyBatchLogonRight = *S-1-5-32-546'
-    $SecFileContent += 'SeDenyNetworkLogonRight = *S-1-5-32-546'
-    $SecFileContent += 'SeDenyInteractiveLogonRight = *S-1-5-32-546'
-    $SecFileContent += 'SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546'
-}
+'@
+$SecFileContent += $privilegeRights -join "`r`n"
 
 If ($CloudOnly) {
-    $SecFileContent += "`n[Registry Values]"
-    $SecFileContent += "`nMACHINE\System\CurrentControlSet\Control\Lsa\DisableDomainCreds=4,0"
+    $SecFileContent += "`r`n[Registry Values]"
+    $SecFileContent += "`r`nMACHINE\System\CurrentControlSet\Control\Lsa\DisableDomainCreds=4,0"
 }
 
 # Applying AVD Exceptions
 
-$SecTemplate = Join-Path -Path $Script:LGPOTempDir -ChildPath "AVD-Exceptions.inf"
+$SecTemplate = Join-Path -Path $Script:LGPOTempDir -ChildPath 'AVD-Exceptions.inf'
 $SecFileContent | Out-File -FilePath $SecTemplate -Encoding unicode
-# Remove Setting that breaks AVD
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002' -RegistryValue 'EccCurves' -Delete -Verbose
+# Apply security template first (privilege rights), then registry overrides
+Write-Log -Message "Applying AVD Exceptions security template via lgpo.exe /s"
+$r = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/s `"$SecTemplate`"" -Wait -PassThru
+Write-Log -Message "lgpo.exe /s exited with code [$($r.ExitCode)]"
+
+# ── EccCurves exception (WN11-CC-000195 → V-253363) ──────────────────────────
+# The DoD Windows 11 STIG GPO (WN11-CC-000195) sets the EccCurves policy value
+# under HKLM\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002
+# to restrict TLS elliptic curves to NistP384 only (NSA Suite B).
+#
+# This BREAKS Azure Virtual Desktop because:
+#   - The AVD gateway, broker, and control plane endpoints negotiate TLS using
+#     ECDHE with P-256 (NistP256).
+#   - When EccCurves is locked to NistP384, the TLS handshake fails because
+#     there is no common curve to negotiate with the Azure service endpoints.
+#   - Symptoms: AVD agent fails to register the session host with the host pool;
+#     active sessions disconnect; the RD Gateway connection itself fails.
+#
+# The fix is to DELETE this policy value so Windows falls back to its default
+# curve list, which includes both NistP256 and NistP384.
+#
+# Note: The ideal long-term fix would be to explicitly set EccCurves to
+# "NistP256 NistP384" (both curves) rather than deleting the key entirely.
+# Deleting restores the full Windows default list which includes some older
+# curves. However, DELETE is the approach used by all current DoD AVD STIG
+# guidance and is the most operationally safe option until Microsoft aligns
+# AVD endpoint TLS requirements with strict Suite B curve restrictions.
+#
+# Reference: STIG rule WN11-CC-000195 / V-253363, TLS cipher suite configuration.
+# AVD TLS requirements: https://learn.microsoft.com/azure/virtual-desktop/required-fqdn-endpoint
+
+# $LgpoTxtFile is defined here and passed to every Update-LocalGPOTextFile call
+# (-OutputFile) AND to lgpo.exe /t below — one variable, no convention mismatch.
+$LgpoTxtFile = Join-Path -Path $Script:LGPOTempDir -ChildPath 'AVD-Exceptions.txt'
+
+Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002' -RegistryValue 'EccCurves' -Delete -OutputFile $LgpoTxtFile
+
+# Edge proxy (breaks AVD connectivity when set by the STIG GPO)
+Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Edge' -RegistryValue 'ProxySettings' -Delete -OutputFile $LgpoTxtFile
 
 If (-not $IsDomainJoined) {
-    # Remove Firewall Configuration that breaks non-domain joined Remote Desktop.
-    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Windows' -RegistryValue 'DisableCAD' -RegistryData '0' -RegistryType 'DWORD' -Verbose
-    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\DomainProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -Verbose
-    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PrivateProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -Verbose
-    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PublicProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -Verbose
+    # Remove firewall and CAD settings that break non-domain-joined Remote Desktop.
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Windows' -RegistryValue 'DisableCAD' -RegistryData '0' -RegistryType 'DWORD' -OutputFile $LgpoTxtFile
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\DomainProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -OutputFile $LgpoTxtFile
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PrivateProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -OutputFile $LgpoTxtFile
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PublicProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -OutputFile $LgpoTxtFile
 }
 
-# Remove Edge Proxy Configuration
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Edge' -RegistryValue 'ProxySettings' -Delete -Verbose
-Invoke-LGPO
+# Apply registry policy overrides built above
+Write-Log -Message "Applying AVD Exceptions registry overrides via lgpo.exe /t"
+$r = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/t `"$LgpoTxtFile`"" -Wait -PassThru
+Write-Log -Message "lgpo.exe /t exited with code [$($r.ExitCode)]"
 $GPUpdate = Start-Process -FilePath 'gpupdate.exe' -ArgumentList '/force' -Wait -PassThru
 Write-Log -Message "'gpupdate.exe' exited with code [$($GPUpdate.ExitCode)])."
 
-#Disable Secondary Logon Service
-#WN10-00-000175
-Write-Log -Message "SRG-OS-000095-GPOS-00049: Disabling the Secondary Logon Service."
+# V-253289 MEDIUM: The Secondary Logon service must be disabled on Windows 11.
+Write-Log -Message "V-253289: Disabling the Secondary Logon Service."
 $Service = 'SecLogon'
 $Serviceobject = Get-Service | Where-Object { $_.Name -eq $Service }
 If ($Serviceobject) {
@@ -709,27 +737,93 @@ If ($Serviceobject) {
     }
 }
 
-# SRG-OS-000480-GPOS-00227 Disable PortProxy
+# V-257592 MEDIUM: Windows 11 must not have portproxy enabled or in use.
 $output = cmd /c netsh interface portproxy show all '2>&1'
 If ($output) {
-    Write-Log -Message "SRG-OS-000480-GPOS-00227: Disabling PortProxy rules."
+    Write-Log -Message "V-257592: Disabling PortProxy rules."
     Start-Process -FilePatch 'netsh.exe' -ArgumentList 'interface portproxy delete' -Wait -NoNewWindow
 }
 
-# WIN11-00-000145 Data Execution Prevention must be set to OptOut
-Write-Log-Message "WIN11-00-000145: Setting Data Execution Prevention (DEP) policy to OptOut."
-$null = cmd /c bcdedit.exe /set nx OptOut 2>&1
-    
-# WN11-00-000125 Remove Copilot if Found
-Write-Log -Message "SRG-OS-000096-GPOS-00050: Removing Microsoft Copilot if installed."
-Get-AppxPackage -AllUsers *CoPilot* | Remove-AppxPackage -AllUsers
+# V-253396 MEDIUM: Explorer Data Execution Prevention must be enabled.
+# This is enforced via the DoD STIG GPO (NoDataExecutionPrevention registry value must
+# not be set to 1).  The GPO package applied above via lgpo.exe handles this control.
+# NOTE: The old STIG rule WIN11-00-000145 previously required 'bcdedit /set nx OptOut'
+# (OS-level DEP boot configuration).  That rule was REMOVED in V2R7 and there is no
+# equivalent bcdedit requirement in the current STIG.  No bcdedit action is needed here.
 
-Write-Log -Message "SRG-OS-000095-GPOS-00049: Removing Run As User from context menus."
-# SRG-OS-000095-GPOS-00049
+# ── Windows Optional Features (V-253275, V-253276, V-253277, V-253278, V-253279, V-253286) ────────────
+# V-253275 HIGH: IIS must not be installed
+Disable-OptionalFeatureIfEnabled -FeatureName 'IIS-WebServer'         -StigId 'V-253275'
+Disable-OptionalFeatureIfEnabled -FeatureName 'IIS-HostableWebCore'   -StigId 'V-253275'
+
+# V-253276 MEDIUM: SNMP must not be installed
+# SNMP ships as a Windows Capability on Windows 11; also check legacy optional feature name
+$snmpCap = Get-WindowsCapability -Online -Name 'SNMP.Client~~~~0.0.1.0' -ErrorAction SilentlyContinue
+if ($snmpCap -and $snmpCap.State -eq 'Installed') {
+    Write-Log -Message 'V-253276: Removing SNMP Client Windows Capability.'
+    Remove-WindowsCapability -Online -Name 'SNMP.Client~~~~0.0.1.0' -ErrorAction SilentlyContinue | Out-Null
+} else {
+    Write-Log -Message 'V-253276: SNMP Client capability not installed. No action required.'
+}
+Disable-OptionalFeatureIfEnabled -FeatureName 'SNMP'        -StigId 'V-253276'
+
+# V-253277 MEDIUM: Simple TCP/IP Services must not be installed
+Disable-OptionalFeatureIfEnabled -FeatureName 'SimpleTCP'   -StigId 'V-253277'
+
+# V-253278 MEDIUM: Telnet Client must not be installed
+Disable-OptionalFeatureIfEnabled -FeatureName 'TelnetClient' -StigId 'V-253278'
+
+# V-253279 MEDIUM: TFTP Client must not be installed
+Disable-OptionalFeatureIfEnabled -FeatureName 'TFTP'         -StigId 'V-253279'
+
+# V-253286 MEDIUM: SMB v1 protocol must be disabled
+Disable-OptionalFeatureIfEnabled -FeatureName 'SMB1Protocol' -StigId 'V-253286'
+
+# WN11-00-000125 / V-268317 - Remove Microsoft Copilot
+# IMAGE BUILD: Remove-AppxProvisionedPackage removes the package from the image so it is not
+# provisioned for any user created from this image.  Remove-AppxPackage covers any profiles
+# that already exist on the build VM (e.g., the build administrator account).
+Write-Log -Message 'V-268317: Removing Microsoft Copilot provisioned package (image build).'
+Get-AppxProvisionedPackage -Online |
+    Where-Object { $_.DisplayName -like '*Copilot*' } |
+    ForEach-Object {
+        Write-Log -Message "  Removing provisioned package: $($_.DisplayName)"
+        Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction SilentlyContinue | Out-Null
+    }
+Get-AppxPackage -AllUsers |
+    Where-Object { $_.Name -like '*Copilot*' } |
+    ForEach-Object {
+        Write-Log -Message "  Removing user package: $($_.Name)"
+        Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+    }
+
+# V-253359 MEDIUM: Run as different user must be removed from context menus.
+Write-Log -Message "V-253359: Removing Run As User from context menus."
 Set-RegistryValue -Name SuppressionPolicy -Path 'HKLM:\SOFTWARE\Classes\batfile\shell\runasuser' -PropertyType DWORD -Value 4096
 Set-RegistryValue -Name SuppressionPolicy -Path 'HKLM:\SOFTWARE\Classes\cmdfile\shell\runasuser' -PropertyType DWORD -Value 4096
 Set-RegistryValue -Name SuppressionPolicy -Path 'HKLM:\SOFTWARE\Classes\exefile\shell\runasuser' -PropertyType DWORD -Value 4096
 Set-RegistryValue -Name SuppressionPolicy -Path 'HKLM:\SOFTWARE\Classes\mscfile\shell\runasuser' -PropertyType DWORD -Value 4096
+
+# V-253340 / V-253341 / V-253342 - Event log permissions
+# Restrict Application, Security, and System event log access so non-privileged accounts
+# cannot read the logs.  The CustomSD registry value is read by the EventLog service on
+# startup and overrides the on-disk ACL.  SDDL grants: SYSTEM Full, Administrators Full,
+# Server Operators Read/Write, Interactive Users Read, Service Users Read, Batch Read,
+# Write-Restricted Read, Event Log Readers (S-1-5-32-573) Read — no BUILTIN\Users entry.
+$eventLogSddl = 'O:BAG:SYD:(A;;0xf0007;;;SY)(A;;0x7;;;BA)(A;;0x7;;;SO)(A;;0x3;;;IU)(A;;0x3;;;SU)(A;;0x3;;;S-1-5-3)(A;;0x3;;;S-1-5-33)(A;;0x1;;;S-1-5-32-573)'
+$eventLogMap = @{
+    'Application' = 'V-253340'
+    'Security'    = 'V-253341'
+    'System'      = 'V-253342'
+}
+foreach ($log in $eventLogMap.Keys) {
+    $stig = $eventLogMap[$log]
+    Write-Log -Message "${stig}: Setting $log event log CustomSD to restrict non-privileged access."
+    Set-RegistryValue -Name 'CustomSD' `
+        -Path "HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\$log" `
+        -PropertyType String `
+        -Value $eventLogSddl
+}
 
 # CVE-2013-3900
 Write-Log -Message "CVE-2013-3900: Mitigating PE Installation risks."
