@@ -1,5 +1,27 @@
 targetScope = 'subscription'
 
+import {
+  SessionHostConfigurationProperties
+} from '../../../../.common/bicepModules/desktopVirtualization/hostPools/sessionHostConfigurations/deploy.bicep'
+
+import {
+  SessionHostManagementProperties
+} from '../../../../.common/bicepModules/desktopVirtualization/hostPools/sessionHostManagements/deploy.bicep'
+
+@export()
+@description('Settings object that activates AVD Automated host pool management for a pooled host pool.')
+type AutomatedHostPoolSettings = {
+  @description('Set true to enable automated management mode.')
+  enabled: bool
+  @description('When true, Azure provisions and replaces VMs using the sessionHostConfiguration. The sessionHosts module is skipped.')
+  enableSessionHostProvisioning: bool?
+  @description('Required when enabled is true. Defines the VM shape: image, disk (managedDisk OR diffDiskSettings), network, credentials, security.')
+  sessionHostConfigurationProperties: SessionHostConfigurationProperties?
+  @description('Override for session host management properties when enableSessionHostProvisioning is false (update orchestration only).')
+  sessionHostManagementNoProvisioningProperties: SessionHostManagementProperties?
+  @description('Override for session host management properties when enableSessionHostProvisioning is true (full lifecycle).')
+  sessionHostManagementProvisioningProperties: SessionHostManagementProperties?
+}
 param appGroupSecurityGroups array
 param avdPrivateDnsZoneResourceId string
 param avdPrivateLinkPrivateRoutes string
@@ -27,7 +49,7 @@ param hostPoolVmTemplate object
 @allowed(['None', 'SystemAssigned', 'UserAssigned'])
 param hostPoolManagedIdentityType string = 'None'
 param hostPoolUserAssignedIdentityResourceId string = ''
-param automatedHostPoolSettings object = {}
+param automatedHostPoolSettings AutomatedHostPoolSettings = { enabled: false }
 param controlPlaneRegion string
 param globalFeedRegion string
 param virtualMachinesRegion string
@@ -47,7 +69,6 @@ param workspaceFeedPrivateEndpointSubnetResourceId string
 param workspaceFriendlyName string
 param workspaceName string
 param workspacePublicNetworkAccess string
-param automatedSessionHostManagementTimestamp string = utcNow('yyyy-MM-ddTHH:mm')
 param automatedSessionHostManagementTimeZone string = 'UTC'
 
 // ─── Private endpoint name construction ───────────────────────────────────────
@@ -134,9 +155,7 @@ var pooledAutomatedHostPoolEnabled = automatedHostPoolEnabled && effectiveHostPo
 var automatedSessionHostProvisioningEnabled = bool(automatedHostPoolSettings.?enableSessionHostProvisioning ?? false)
 var sessionHostConfigurationProperties = automatedHostPoolSettings.?sessionHostConfigurationProperties ?? {}
 var sessionHostManagementNoProvisioningProperties = automatedHostPoolSettings.?sessionHostManagementNoProvisioningProperties ?? {
-  scheduledDateTime: automatedSessionHostManagementTimestamp
   scheduledDateTimeZone: automatedSessionHostManagementTimeZone
-  provisioning: null
   update: {
     deleteOriginalVm: false
     maxVmsRemoved: 1
@@ -151,7 +170,6 @@ var sessionHostManagementProvisioningProperties = automatedHostPoolSettings.?ses
     canaryPolicy: 'Auto'
     setDrainMode: false
   }
-  scheduledDateTime: automatedSessionHostManagementTimestamp
   scheduledDateTimeZone: automatedSessionHostManagementTimeZone
   update: {
     deleteOriginalVm: true

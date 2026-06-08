@@ -1,23 +1,27 @@
 @description('Name of the parent AVD host pool.')
 param hostPoolName string
 
+@export()
 type HostPoolUpdateConfigurationProperties = {
   deleteOriginalVm: bool?
   logOffDelayMinutes: int
   logOffMessage: string?
+  @minValue(1)
   maxVmsRemoved: int
 }
 
+@export()
 type SessionHostManagementProvisioningProperties = {
-  canaryPolicy: string?
+  canaryPolicy: ('Auto' | 'Never' | 'Always')?
+  @minValue(1)
   instanceCount: int?
   setDrainMode: bool?
 }
 
+@export()
 type SessionHostManagementProperties = {
-  failedSessionHostCleanupPolicy: string?
+  failedSessionHostCleanupPolicy: ('KeepAll' | 'KeepOne' | 'KeepNone')?
   provisioning: SessionHostManagementProvisioningProperties?
-  scheduledDateTime: string?
   scheduledDateTimeZone: string
   update: HostPoolUpdateConfigurationProperties
 }
@@ -32,7 +36,7 @@ resource hostpool 'Microsoft.DesktopVirtualization/hostPools@2025-11-01-preview'
 resource sessionHostManagement 'Microsoft.DesktopVirtualization/hostPools/sessionHostManagements@2025-11-01-preview' = {
   name: 'default'
   parent: hostpool
-  properties: any(properties)
+  properties: properties
 }
 
 output resourceId string = sessionHostManagement.id

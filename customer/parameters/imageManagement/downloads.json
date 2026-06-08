@@ -1,0 +1,10 @@
+    {
+        "AzCli": {
+            "Description": "Optional: Azure CLI Installer",
+            "DownloadUrl": "https://aka.ms/installazurecliwindowsx64",
+            "DestinationFileName": "azclix64.msi",
+            "DestinationFolders": [
+                "Microsoft-AzCLI"
+            ]
+        }
+    }

@@ -1,0 +1,287 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "userAssignedIdentityAutoAssignRoles": {
+            "value": false
+        },
+        "nestedTemplatesLocation": {
+            "value": "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/armtemplates/AutomatedHostpool_1.0.03419.1309/nestedTemplates/"
+        },
+        "artifactsLocation": {
+            "value": "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_1.0.03419.1309.zip"
+        },
+        "hostpoolName": {
+            "value": "auto-ephemeral"
+        },
+        "hostpoolToken": {
+            "value": null
+        },
+        "hostpoolFriendlyName": {
+            "value": ""
+        },
+        "hostpoolDescription": {
+            "value": "Created through the Azure Virtual Desktop extension"
+        },
+        "hostpoolDiagnosticSettingsStorageAccount": {
+            "value": ""
+        },
+        "hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId": {
+            "value": ""
+        },
+        "hostpoolDiagnosticSettingsEventHubName": {
+            "value": ""
+        },
+        "hostpoolDiagnosticSettingsEventHubAuthorizationId": {
+            "value": ""
+        },
+        "hostpoolDiagnosticSettingsLogCategories": {
+            "value": [
+                "Checkpoint",
+                "Error",
+                "Management",
+                "Connection",
+                "HostRegistration",
+                "AgentHealthStatus",
+                "NetworkData",
+                "SessionHostManagement"
+            ]
+        },
+        "appGroupDiagnosticSettingsLogCategories": {
+            "value": [
+                "Checkpoint",
+                "Error",
+                "Management"
+            ]
+        },
+        "workspaceDiagnosticSettingsLogCategories": {
+            "value": [
+                "Checkpoint",
+                "Error",
+                "Management",
+                "Feed"
+            ]
+        },
+        "location": {
+            "value": "eastus2"
+        },
+        "workSpaceName": {
+            "value": ""
+        },
+        "workspaceLocation": {
+            "value": ""
+        },
+        "workspaceResourceGroup": {
+            "value": ""
+        },
+        "isNewWorkspace": {
+            "value": false
+        },
+        "allApplicationGroupReferences": {
+            "value": ""
+        },
+        "addToWorkspace": {
+            "value": false
+        },
+        "administratorAccountUsernameVaultResourceId": {
+            "value": null
+        },
+        "administratorAccountUsernameSecretUri": {
+            "value": null
+        },
+        "administratorAccountPasswordVaultResourceId": {
+            "value": null
+        },
+        "administratorAccountPasswordSecretUri": {
+            "value": null
+        },
+        "vmAdministratorAccountUsernameVaultResourceId": {
+            "value": null
+        },
+        "vmAdministratorAccountUsernameSecretUri": {
+            "value": null
+        },
+        "vmAdministratorAccountPasswordVaultResourceId": {
+            "value": null
+        },
+        "vmAdministratorAccountPasswordSecretUri": {
+            "value": null
+        },
+        "availabilityZones": {
+            "value": []
+        },
+        "vmResourceGroup": {
+            "value": "auto-ephemeral"
+        },
+        "vmLocation": {
+            "value": "eastus2"
+        },
+        "vmExtendedLocation": {
+            "value": {}
+        },
+        "vmSize": {
+            "value": "Standard_D4ds_v7"
+        },
+        "vmKind": {
+            "value": ""
+        },
+        "vmDiskSizeGB": {
+            "value": 128
+        },
+        "vmHibernate": {
+            "value": false
+        },
+        "vmNumberOfInstances": {
+            "value": 3
+        },
+        "vmNamePrefix": {
+            "value": "avdephm"
+        },
+        "vmImageType": {
+            "value": "Gallery"
+        },
+        "vmGalleryImageOffer": {
+            "value": "office-365"
+        },
+        "vmGalleryImagePublisher": {
+            "value": "microsoftwindowsdesktop"
+        },
+        "vmGalleryImageHasPlan": {
+            "value": false
+        },
+        "vmGalleryImageSKU": {
+            "value": "win11-25h2-avd-m365"
+        },
+        "vmGalleryImageVersion": {
+            "value": "26200.8457.260512"
+        },
+        "vmCustomImageSourceId": {
+            "value": ""
+        },
+        "vmDiskType": {
+            "value": "Standard_LRS"
+        },
+        "enableEOSDPublicAPIVersion": {
+            "value": true
+        },
+        "eosdEnabled": {
+            "value": false
+        },
+        "eosdType": {
+            "value": ""
+        },
+        "existingVnetName": {
+            "value": "vnet-avd-use2"
+        },
+        "existingSubnetName": {
+            "value": "snet-hosts"
+        },
+        "virtualNetworkResourceGroupName": {
+            "value": "rg-avd-networking-use2"
+        },
+        "createNetworkSecurityGroup": {
+            "value": false
+        },
+        "networkSecurityGroupId": {
+            "value": ""
+        },
+        "networkSecurityGroupRules": {
+            "value": []
+        },
+        "hostpoolType": {
+            "value": "Pooled"
+        },
+        "loadBalancerBackendPoolId": {
+            "value": ""
+        },
+        "personalDesktopAssignmentType": {
+            "value": ""
+        },
+        "maxSessionLimit": {
+            "value": 1
+        },
+        "loadBalancerType": {
+            "value": "BreadthFirst"
+        },
+        "customRdpProperty": {
+            "value": ""
+        },
+        "vmTemplate": {
+            "value": ""
+        },
+        "virtualMachineTags": {
+            "value": {
+                "cm-resource-parent": "/subscriptions/67edfd17-f0d1-466a-aacb-ca9daeabb9b8/resourceGroups/auto-ephemeral/providers/Microsoft.DesktopVirtualization/auto-ephemeral"
+            }
+        },
+        "apiVersion": {
+            "value": "2024-09-01-privatepreview"
+        },
+        "deploymentId": {
+            "value": "acfda50f-3f6d-44b0-84b7-46300f6eb058"
+        },
+        "validationEnvironment": {
+            "value": false
+        },
+        "preferredAppGroupType": {
+            "value": "Desktop"
+        },
+        "ouPath": {
+            "value": ""
+        },
+        "domain": {
+            "value": ""
+        },
+        "aadJoin": {
+            "value": true
+        },
+        "intune": {
+            "value": false
+        },
+        "bootDiagnostics": {
+            "value": {
+                "enabled": true
+            }
+        },
+        "userAssignedIdentity": {
+            "value": ""
+        },
+        "customConfigurationScriptUrl": {
+            "value": ""
+        },
+        "systemData": {
+            "value": {
+                "aadJoinPreview": false,
+                "sessionHostConfigurationVersion": "",
+                "firstPartyExtension": false
+            }
+        },
+        "securityType": {
+            "value": "TrustedLaunch"
+        },
+        "secureBoot": {
+            "value": true
+        },
+        "vTPM": {
+            "value": true
+        },
+        "publicNetworkAccess": {
+            "value": "Enabled"
+        },
+        "defaultTimestamp": {
+            "value": "2026-06-05T23:28"
+        },
+        "defaultTimeZone": {
+            "value": "UTC"
+        },
+        "identityType": {
+            "value": "SystemAssigned"
+        },
+        "userAssignedIdentityResourceId": {
+            "value": ""
+        },
+        "enableSessionHostProvisioning": {
+            "value": true
+        }
+    }
+}

@@ -1,5 +1,9 @@
 ﻿targetScope = 'subscription'
 
+import {
+  AutomatedHostPoolSettings
+} from './modules/controlPlane/controlPlane.bicep'
+
 // Deploys an Azure Virtual Desktop host pool including the AVD control plane (host pool, workspace, application groups),
 // session host VMs, FSLogix storage, monitoring, private networking, and optional Customer Managed Key encryption.
 // Subscription-scoped; creates and manages multiple resource groups for compute, storage, and operations resources.
@@ -103,6 +107,26 @@ param hostPoolRDPProperties string = ''
 
 @description('Optional. The value determines whether the hostPool should receive early AVD updates for testing.')
 param hostPoolValidationEnvironment bool = false
+
+@description('''Optional. Settings to enable AVD Automated host pool management (pooled host pools only).
+Set `enabled: true` and provide `sessionHostConfigurationProperties` to activate.
+When `enableSessionHostProvisioning: true` Azure manages VM lifecycle; the sessionHosts module is skipped.
+Example:
+{
+  enabled: true
+  enableSessionHostProvisioning: true
+  sessionHostConfigurationProperties: { ... }
+}
+''')
+param automatedHostPoolSettings AutomatedHostPoolSettings = { enabled: false }
+
+@allowed(['None', 'SystemAssigned', 'UserAssigned'])
+@description('''Optional. Managed identity type for the host pool resource.
+Automated pooled host pools require SystemAssigned so the AVD service can act on behalf of the pool.''')
+param hostPoolManagedIdentityType string = 'None'
+
+@description('Optional. Resource ID of a user-assigned managed identity to assign to the host pool. Only used when hostPoolManagedIdentityType is UserAssigned.')
+param hostPoolUserAssignedIdentityResourceId string = ''
 
 @description('Optional. Determines if the Start VM on Connect Feature is enabled for the Host Pool.')
 param startVMOnConnect bool = true
@@ -684,6 +708,10 @@ var virtualMachinesRegion = vmVirtualNetwork.location
 var effectiveControlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
 
 var createDeploymentVm = deployFSLogixStorage || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)
+
+// Automated host pool: Azure manages VM lifecycle when both enabled + enableSessionHostProvisioning are true.
+// In that case the sessionHosts module is skipped — VMs are created by the AVD service via sessionHostConfiguration.
+var automatedProvisioningEnabled = bool(automatedHostPoolSettings.?enabled ?? false) && bool(automatedHostPoolSettings.?enableSessionHostProvisioning ?? false)
 
 // deployKeyVaults controls inline KV creation within this deployment.
 //   (a) deploySecretsKeyVault = true: user explicitly requested a secrets KV deployed inline
@@ -1587,6 +1615,9 @@ module controlPlane 'modules/controlPlane/controlPlane.bicep' = {
     hostPoolType: hostPoolType
     hostPoolValidationEnvironment: hostPoolValidationEnvironment
     hostPoolVmTemplate: hostPoolVmTemplate
+    automatedHostPoolSettings: automatedHostPoolSettings
+    hostPoolManagedIdentityType: hostPoolManagedIdentityType
+    hostPoolUserAssignedIdentityResourceId: hostPoolUserAssignedIdentityResourceId
     virtualMachinesRegion: virtualMachinesRegion
     logAnalyticsWorkspaceResourceId: enableMonitoring
       ? (empty(existingLogAnalyticsWorkspaceResourceId)
@@ -1756,7 +1787,7 @@ module diskAccessPolicy 'modules/hosts/modules/diskNetworkAccessPolicy.bicep' = 
   }
 }
 
-module sessionHosts 'modules/hosts/hosts.bicep' = {
+module sessionHosts 'modules/hosts/hosts.bicep' = if (!automatedProvisioningEnabled) {
   name: 'Hosts-${deploymentSuffix}'
   params: {
     resourceGroupHosts: resourceGroupHosts
@@ -1899,7 +1930,7 @@ module cleanUp 'modules/cleanUp/cleanUp.bicep' = if (createDeploymentVm) {
     userAssignedIdentityClientId: createDeploymentVm
       ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
       : ''
-    virtualMachineNames: sessionHosts.outputs.virtualMachineNames
+    virtualMachineNames: sessionHosts.?outputs.virtualMachineNames ?? []
   }
   dependsOn: [
     deploymentResourceGroup
@@ -1915,4 +1946,4 @@ output fslogixLocalStorageAccountResourceIds array = deployFSLogixStorage
   ? fslogix!.outputs.storageAccountResourceIds
   : fslogixExistingLocalStorageAccountResourceIds
 output hostResouceGroupId string = hostsResourceGroup!.outputs.resourceId
-output virtualMachineNames array = sessionHosts.outputs.virtualMachineNames
+output virtualMachineNames array = sessionHosts.?outputs.virtualMachineNames ?? []
