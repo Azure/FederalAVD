@@ -180,7 +180,7 @@ try {
     )) {
         if (Test-Path $logFile) {
             Write-Output ""
-            Write-Output "=== BEGIN $(Split-Path $logFile -Leaf) ==="
+            Write-Log "=== BEGIN $(Split-Path $logFile -Leaf) ==="
             Get-Content $logFile | ForEach-Object { Write-Output $_ }
             Write-Log "=== END $(Split-Path $logFile -Leaf) ==="
         } else {
