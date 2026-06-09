@@ -37,7 +37,7 @@ param (
 
     [string]$CloudOnly = 'True',
 
-    [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip',
+    [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_April_2026.zip',
 
     [string]$Upgrade = 'False',
 
