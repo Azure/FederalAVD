@@ -118,3 +118,15 @@ New-AzSubscriptionDeployment `
 - Maximum size: **256KB** of inline script content
 - Supports multi-line scripts with special characters
 - Line endings are automatically normalized
+
+## Troubleshooting
+
+### Run Commands Stuck or Causing Deployment Conflicts
+
+Run Command resources are persistent ARM objects that remain on the VM after execution. If a deployment fails or is interrupted, orphaned run commands can block redeployment (name conflict) or accumulate toward the per-VM limit (~25).
+
+See [Run Commands Stuck or Blocking Redeployment](../../../docs/troubleshooting.md#run-commands-stuck-or-blocking-redeployment) in the troubleshooting guide for PowerShell, CLI, and portal removal steps.
+
+### Deployment Overwrites Across Multiple VMs
+
+If you see a deployment overwrite error and all failing deployments share the same name (e.g., `DoD-STIGs-202604` across all VMs), you are deploying from a stale compiled template (`.json`) that predates the fix which includes the VM name in inner deployment names. Publish the current `main.json` to your Template Spec and redeploy.

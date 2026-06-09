@@ -98,3 +98,66 @@ Complete these steps to determine if this is the issue.
 6. Compare the values and note if the value is incorrect. Update the 'avdAgentsDSCPackage' parameter value in your parameters file or use this new value in the **AVD Agent DSC Package** text box on the **Session Hosts** pane of the template spec (or blue-button deployment).
 
    ![AVD Agent DSC Package](images/AVDAgentDSCPackageUI.png)
+
+## Run Commands Stuck or Blocking Redeployment
+
+### Symptom
+
+A deployment fails with a conflict or overwrite error on a Run Command resource, or redeployment of the `runCommandsOnVms` add-on or session hosts add-on fails because a Run Command with the same name already exists on one or more VMs.
+
+### Problem
+
+Azure VM Run Commands are persistent ARM resources (`Microsoft.Compute/virtualMachines/runCommands`). If a deployment failed or was interrupted, the Run Command resource remains on the VM in a `Running`, `Failed`, or `Succeeded` state. ARM uses the Run Command name as a unique key per VM, so re-deploying the same command while the resource still exists causes a conflict. Each VM also has a per-VM limit on the total number of Run Commands (~25); repeated deployments without cleanup can exhaust this limit.
+
+### Solution
+
+Remove the Run Command resources before redeploying. The VM does not need to be running to delete a Run Command ARM resource.
+
+**PowerShell (Az module):**
+
+```powershell
+# List all run commands on a VM
+Get-AzVMRunCommand -ResourceGroupName 'rg-avd-sessionhosts' -VMName 'avd-vm-01'
+
+# Remove a specific run command by name
+Remove-AzVMRunCommand -ResourceGroupName 'rg-avd-sessionhosts' -VMName 'avd-vm-01' -RunCommandName 'DoD-STIGs-202604'
+
+# Remove ALL run commands from a single VM
+Get-AzVMRunCommand -ResourceGroupName 'rg-avd-sessionhosts' -VMName 'avd-vm-01' |
+    ForEach-Object {
+        Remove-AzVMRunCommand -ResourceGroupName 'rg-avd-sessionhosts' -VMName 'avd-vm-01' -RunCommandName $_.Name
+    }
+
+# Remove all run commands from multiple VMs
+$resourceGroupName = 'rg-avd-sessionhosts'
+$vmNames = @('avd-vm-01', 'avd-vm-02', 'avd-vm-03')
+foreach ($vmName in $vmNames) {
+    Get-AzVMRunCommand -ResourceGroupName $resourceGroupName -VMName $vmName |
+        ForEach-Object {
+            Remove-AzVMRunCommand -ResourceGroupName $resourceGroupName -VMName $vmName -RunCommandName $_.Name
+        }
+}
+```
+
+**Azure CLI:**
+
+```bash
+# List all run commands on a VM
+az vm run-command list --resource-group rg-avd-sessionhosts --vm-name avd-vm-01
+
+# Remove a specific run command
+az vm run-command delete --resource-group rg-avd-sessionhosts --vm-name avd-vm-01 --name DoD-STIGs-202604 --yes
+
+# Remove all run commands from a VM
+az vm run-command list --resource-group rg-avd-sessionhosts --vm-name avd-vm-01 \
+  --query '[].name' -o tsv | \
+  xargs -I{} az vm run-command delete \
+    --resource-group rg-avd-sessionhosts --vm-name avd-vm-01 --name {} --yes
+```
+
+**Azure portal:**
+
+1. Navigate to the VM in the Azure portal.
+2. Under **Operations**, select **Run command**.
+3. Select the **Managed** tab to view persistent Run Command resources.
+4. Click the run command to open it, then select **Delete**.
