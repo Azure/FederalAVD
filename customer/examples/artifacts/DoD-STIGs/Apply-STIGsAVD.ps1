@@ -9,7 +9,7 @@
 .PARAMETER SearchForApplications
     This parameter defines whether or not the script verifies the applications defined in 'ApplicationsToSTIG' are installed before applying the settings.
 
-.PARAMETER CloudOnly
+.PARAMETER AllowCredentialManager
     This parameter defines whether or not cloud only identity is used on the system with fslogix. If selected then the system will be able to use cmdkey to save the storage account key.
 
 .PARAMETER STIGsUrl
@@ -35,7 +35,7 @@ param (
     
     [string]$SearchForApplications = 'False',
 
-    [string]$CloudOnly = 'False',
+    [string]$AllowCredentialManager = 'False',
 
     [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_April_2026.zip',
 
@@ -55,7 +55,7 @@ If (-not(Test-Path -Path $Script:LGPOTempDir)) { New-Item -Path $Script:LGPOTemp
 If ($ApplicationsToSTIG -ne $null) { 
     [array]$ApplicationsToSTIG = $ApplicationsToSTIG.replace('\', '') | ConvertFrom-Json
 }
-[bool]$CloudOnly = $CloudOnly.ToLower() -eq 'true'
+[bool]$AllowCredentialManager = $AllowCredentialManager.ToLower() -eq 'true'
 [bool]$SearchForApplications = $SearchForApplications.ToLower() -eq 'true'
 [bool]$Upgrade = $Upgrade.ToLower() -eq 'true'
 [bool]$IsDomainJoined = (Get-WmiObject -Class Win32_ComputerSystem).PartOfDomain
@@ -456,7 +456,7 @@ Function Write-Log {
 
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 Write-Log -Message "Starting '$PSCommandPath'."
-Write-Log -Category Info -Message "Parameters: ApplicationsToSTIG: $($ApplicatonsToSTIG -join ','), CloudOnly: $CloudOnly, Upgrade: $Upgrade, Version: $Version"
+Write-Log -Category Info -Message "Parameters: ApplicationsToSTIG: $($ApplicatonsToSTIG -join ','), AllowCredentialManager: $AllowCredentialManager, Upgrade: $Upgrade, Version: $Version"
 
 # Use provided version parameter
 [version]$stigVersion = $Version
@@ -640,10 +640,10 @@ ForEach ($gpoFolder in $GPOFolders) {
             if ($_ -like 'SeRemoteInteractiveLogonRight*') { 'SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544' } else { $_ }
         }
 
-        # When CloudOnly, allow Windows Credential Manager to store credentials for mapped
+        # When AllowCredentialManager, allow Windows Credential Manager to store credentials for mapped
         # storage accounts (e.g. FSLogix Azure Files UNC paths).  The STIG sets
         # DisableDomainCreds=4,1 (block credential storage); cloud-only AVD needs 4,0 (allow).
-        if ($CloudOnly) {
+        if ($AllowCredentialManager) {
             $Content | Where-Object { $_ -like '*DisableDomainCreds*' } | ForEach-Object {
                 Write-Output "  [GptTmpl] BEFORE  : $_"
                 Write-Output "  [GptTmpl] AFTER   : $($_ -replace '4,1', '4,0')"

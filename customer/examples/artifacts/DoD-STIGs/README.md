@@ -26,11 +26,11 @@ This PowerShell script automates the application of Defense Information Systems 
 - **Default:** `'False'`
 - **Description:** When `'True'`, verifies applications in `ApplicationsToSTIG` are installed before applying settings
 
-### `CloudOnly`
+### `AllowCredentialManager`
 
 - **Type:** String (Boolean)
-- **Default:** `'True'`
-- **Description:** Indicates cloud-only identity configuration. Enables cmdkey storage of storage account keys for FSLogix
+- **Default:** `'False'`
+- **Description:** Enables cmdkey storage of storage account keys for FSLogix
 
 ### `STIGsUrl`
 
@@ -80,7 +80,7 @@ This PowerShell script automates the application of Defense Information Systems 
 ### Domain-Joined Environment
 
 ```powershell
-.\Apply-STIGsAVD.ps1 -CloudOnly 'False'
+.\Apply-STIGsAVD.ps1
 ```
 
 ## What the Script Does
