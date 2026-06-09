@@ -10,7 +10,7 @@
     "AmazonWorkSpacesClient": {
         "Description": "Amazon WorkSpaces Client Installer",
         "WingetId": "Amazon.WorkSpacesClient",
-        "DestinationFileName": "Amazon-WorkSpacesClient.exe",
+        "DestinationFileName": "Amazon-WorkSpacesClient.msi",
         "DestinationFolders": [
             "Amazon-Workspaces-Client"
         ]
