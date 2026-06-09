@@ -1,14 +1,8 @@
 ﻿[CmdletBinding()]
 param (
     [Parameter()]
-    [String]$DisableUpdates = 'True'
+    [bool]$DisableUpdates = $true
 )
-try {
-    [bool]$DisableUpdates = [System.Convert]::ToBoolean($DisableUpdates)
-}
-catch [FormatException] {
-    $DisableUpdates = $false
-}
 #region Initialization
 $SoftwareName = 'Amazon-Workspaces-Client'
 $Script:Name = 'Install-AmazonWorkspacesClient'

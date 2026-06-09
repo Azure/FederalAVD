@@ -1,7 +1,6 @@
 ﻿[CmdletBinding(SupportsShouldProcess = $true)]
 param (
-    [ValidateSet("True", "False")]
-    [string]$DisableUpdates = "False",
+    [switch]$DisableUpdates,
 
     [ValidateSet("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30")]
     [string]$DeferQualityUpdatesPeriodInDays = "0",
@@ -327,12 +326,6 @@ function New-Log {
 #endregion Functions
 
 #region Initialization
-if ($DisableUpdates.ToLower() -eq 'true') {
-    [bool]$DisableUpdates = $true
-}
-Else {
-    [bool]$DisableUpdates = $false
-}
 [int]$DeferQualityUpdatesPeriodInDays = $DeferQualityUpdatesPeriodInDays
 Switch ($ScheduledInstallDay) {
     "Sunday" { [int]$ScheduledInstallDay = 1 }

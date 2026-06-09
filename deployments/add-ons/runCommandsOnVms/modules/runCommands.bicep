@@ -11,7 +11,7 @@ var apiVersion = startsWith(environment().name, 'USN') ? '2017-08-01' : '2018-02
 
 @batchSize(1)
 module runCommands '../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = [for script in scripts: {
-  name: script.name
+  name: '${script.name}-${virtualMachineName}-${timeStamp}'
   params: {
     virtualMachineName: virtualMachineName
     location: location

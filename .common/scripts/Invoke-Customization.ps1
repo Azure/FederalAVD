@@ -26,16 +26,23 @@ function Split-ArgumentString {
   $arguments = @()
   $currentArg = ''
   $inQuotes = $false
+  $quoteChar = $null
 
   for ($i = 0; $i -lt $ArgumentString.Length; $i++) {
     $char = $ArgumentString[$i]
-    if ($char -eq '"' -and ($i -eq 0 -or $ArgumentString[$i - 1] -ne '\')) {
-      $inQuotes = !$inQuotes
+    if (!$inQuotes -and (($char -eq '"' -and ($i -eq 0 -or $ArgumentString[$i - 1] -ne '\')) -or $char -eq "'")) {
+      $inQuotes = $true
+      $quoteChar = $char
+      $currentArg += $char
+    }
+    elseif ($inQuotes -and $char -eq $quoteChar) {
+      $inQuotes = $false
+      $quoteChar = $null
       $currentArg += $char
     }
     elseif ($char -eq ' ' -and !$inQuotes) {
       if ($currentArg.Length -gt 0) {
-        $value = $currentArg.Trim('"')
+        $value = $currentArg.Trim('"').Trim("'")
         if ($value -eq 'true') { $arguments += '$true' }
         elseif ($value -eq 'false') { $arguments += '$false' }
         else { $arguments += $value }
@@ -47,7 +54,7 @@ function Split-ArgumentString {
     }
   }
   if ($currentArg.Length -gt 0) {
-    $value = $currentArg.Trim('"')
+    $value = $currentArg.Trim('"').Trim("'")
     if ($value -eq 'true') { $arguments += '$true' }
     elseif ($value -eq 'false') { $arguments += '$false' }
     else { $arguments += $value }

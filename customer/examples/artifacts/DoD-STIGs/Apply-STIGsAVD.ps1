@@ -33,13 +33,13 @@
 param (
     [string]$ApplicationsToSTIG = '["Adobe Acrobat Pro", "Adobe Acrobat Reader", "Google Chrome", "Mozilla Firefox"]',
     
-    [string]$SearchForApplications = 'False',
+    [switch]$SearchForApplications,
 
-    [string]$AllowCredentialManager = 'False',
+    [switch]$AllowCredentialManager,
 
     [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_April_2026.zip',
 
-    [string]$Upgrade = 'False',
+    [switch]$Upgrade,
 
     [string]$Version = '2026.04'
 )
@@ -55,9 +55,6 @@ If (-not(Test-Path -Path $Script:LGPOTempDir)) { New-Item -Path $Script:LGPOTemp
 If ($ApplicationsToSTIG -ne $null) { 
     [array]$ApplicationsToSTIG = $ApplicationsToSTIG.replace('\', '') | ConvertFrom-Json
 }
-[bool]$AllowCredentialManager = $AllowCredentialManager.ToLower() -eq 'true'
-[bool]$SearchForApplications = $SearchForApplications.ToLower() -eq 'true'
-[bool]$Upgrade = $Upgrade.ToLower() -eq 'true'
 [bool]$IsDomainJoined = (Get-WmiObject -Class Win32_ComputerSystem).PartOfDomain
 #endregion
 

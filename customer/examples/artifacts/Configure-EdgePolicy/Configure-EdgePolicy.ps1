@@ -1,7 +1,7 @@
 ﻿[CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [Parameter(Mandatory = $false)]
-    [string]$AllowDeveloperTools = 'True',
+    [bool]$AllowDeveloperTools = $true,
 
     #JSON String of the SmartScreenAllowListDomains
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#smartscreenallowlistdomains
@@ -361,7 +361,6 @@ If (-not(Test-Path -Path $Script:LGPOTempDir)) { New-Item -Path $Script:LGPOTemp
 
 [array]$SmartScreenAllowListDomains = $SmartScreenAllowListDomains.Replace('\"', '"').Replace('\[', '[').Replace('\]', ']') | ConvertFrom-Json
 [array]$PopupsAllowedForUrls = $PopupsAllowedForUrls.Replace('\"', '"').Replace('\[', '[').Replace('\]', ']') | ConvertFrom-Json
-[bool]$AllowDeveloperTools = $AllowDeveloperTools.ToLower() -eq 'true'
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 $ErrorActionPreference = 'Stop'
 Write-Log -Category Info -Message "Starting '$PSCommandPath'."

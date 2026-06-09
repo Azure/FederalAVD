@@ -25,8 +25,9 @@ param osDiskSku string = 'Premium_LRS'
 @description('OS disk size in GB. 0 uses the image default.')
 param osDiskSizeGB int = 0
 
-@allowed(['SCSI', 'NVMe'])
-param diskControllerType string = 'SCSI'
+@description('Optional. The disk controller type. When empty, Azure selects automatically based on the VM SKU.')
+@allowed(['SCSI', 'NVMe', ''])
+param diskControllerType string = ''
 
 @description('Disk access resource ID for restricting disk network access.')
 param diskAccessId string = ''
@@ -149,7 +150,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2023-09-01' = {
         }
         diskSizeGB: osDiskSizeGB > 0 ? osDiskSizeGB : null
       }
-      diskControllerType: diskControllerType
+      diskControllerType: empty(diskControllerType) ? null : diskControllerType
     }
     additionalCapabilities: hibernationEnabled
       ? { hibernationEnabled: true }
