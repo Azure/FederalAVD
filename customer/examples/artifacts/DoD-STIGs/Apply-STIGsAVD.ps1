@@ -611,22 +611,30 @@ ForEach ($gpoFolder in $GPOFolders) {
         #>
         $SecEditFile = (Get-ChildItem -Path $gpoFolder -Recurse -Filter "GptTmpl.inf" | Where-Object { $_.DirectoryName -match "SecEdit" }).FullName
         $Content = Get-Content $SecEditFile
+        Write-Output "Applying AVD exceptions to DoD Windows $osVersion security template: $SecEditFile"
+
+        # Remove administrator account disable/rename lines
+        $Content | Where-Object { ($_ -like 'NewAdministratorName*') -or ($_ -like 'EnableAdminAccount*') } |
+            ForEach-Object { Write-Output "  [GptTmpl] REMOVED : $_" }
         $Content = $Content | Where-Object { (-not ($_ -like 'NewAdministratorName*')) -and (-not ($_ -like 'EnableAdminAccount*')) }
 
         # Replace or remove the 'ADD YOUR ENTERPRISE ADMINS' / 'ADD YOUR DOMAIN ADMINS'
         # placeholder tokens that the DoD STIG GPO leaves in the [Privilege Rights] section.
-        # Replacements run on the array directly; piping through ForEach-Object is not needed
-        # because PowerShell -replace operates on each element when the LHS is an array.
         if ($IsDomainJoined) {
+            $Content | Where-Object { $_ -match 'ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS' } | ForEach-Object {
+                $replaced = $_ -replace 'ADD YOUR ENTERPRISE ADMINS', 'Enterprise Admins' -replace 'ADD YOUR DOMAIN ADMINS', 'Domain Admins'
+                Write-Output "  [GptTmpl] BEFORE  : $_"
+                Write-Output "  [GptTmpl] AFTER   : $replaced"
+            }
             $Content = $Content -replace 'ADD YOUR ENTERPRISE ADMINS', 'Enterprise Admins'
             $Content = $Content -replace 'ADD YOUR DOMAIN ADMINS', 'Domain Admins'
         } else {
-            # Remove each placeholder. Three patterns cover all positions:
-            #   1. preceded by a comma  (e.g. ...,ADD YOUR ENTERPRISE ADMINS,...)
-            #   2. followed by a comma  (e.g. ADD YOUR ENTERPRISE ADMINS,...)
-            #   3. standalone           (only entry on that right)
-            # After both placeholders are removed, any resulting double-commas or
-            # trailing commas (from removing the only/last entry) are cleaned up.
+            $Content | Where-Object { $_ -match 'ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS' } | ForEach-Object {
+                $cleaned = $_ -replace ",\s*ADD YOUR ENTERPRISE ADMINS", '' -replace "ADD YOUR ENTERPRISE ADMINS\s*,", '' -replace 'ADD YOUR ENTERPRISE ADMINS', ''
+                $cleaned = $cleaned -replace ",\s*ADD YOUR DOMAIN ADMINS", '' -replace "ADD YOUR DOMAIN ADMINS\s*,", '' -replace 'ADD YOUR DOMAIN ADMINS', ''
+                Write-Output "  [GptTmpl] BEFORE  : $_"
+                Write-Output "  [GptTmpl] AFTER   : $cleaned"
+            }
             foreach ($placeholder in @('ADD YOUR ENTERPRISE ADMINS', 'ADD YOUR DOMAIN ADMINS')) {
                 $escaped = [regex]::Escape($placeholder)
                 $Content = $Content -replace ",\s*$escaped", ''
@@ -638,6 +646,10 @@ ForEach ($gpoFolder in $GPOFolders) {
         # Set SeRemoteInteractiveLogonRight to allow RDS Users (S-1-5-32-555) and Administrators
         # (S-1-5-32-544). The STIG restricts this to Administrators only; AVD requires RDS Users
         # so that session host connections can be established.
+        $Content | Where-Object { $_ -like 'SeRemoteInteractiveLogonRight*' } | ForEach-Object {
+            Write-Output "  [GptTmpl] BEFORE  : $_"
+            Write-Output "  [GptTmpl] AFTER   : SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544"
+        }
         $Content = $Content | ForEach-Object {
             if ($_ -like 'SeRemoteInteractiveLogonRight*') { 'SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544' } else { $_ }
         }
@@ -646,6 +658,10 @@ ForEach ($gpoFolder in $GPOFolders) {
         # storage accounts (e.g. FSLogix Azure Files UNC paths).  The STIG sets
         # DisableDomainCreds=4,1 (block credential storage); cloud-only AVD needs 4,0 (allow).
         if ($CloudOnly) {
+            $Content | Where-Object { $_ -like '*DisableDomainCreds*' } | ForEach-Object {
+                Write-Output "  [GptTmpl] BEFORE  : $_"
+                Write-Output "  [GptTmpl] AFTER   : $($_ -replace '4,1', '4,0')"
+            }
             $Content = $Content | ForEach-Object {
                 if ($_ -like '*DisableDomainCreds*') { $_ -replace '4,1', '4,0' } else { $_ }
             }
@@ -658,7 +674,7 @@ ForEach ($gpoFolder in $GPOFolders) {
     Write-Log -Message "'lgpo.exe' exited with code [$($lgpo.ExitCode)]."
 }
 
-Write-Log -Message "Applying AVD Exceptions"
+Write-Log -Message "Applying AVD Administrative Template-based Exceptions"
 
 # ── EccCurves exception (WN11-CC-000195 → V-253363) ──────────────────────────
 # The DoD Windows 11 STIG GPO (WN11-CC-000195) sets the EccCurves policy value
