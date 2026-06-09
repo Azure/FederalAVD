@@ -65,6 +65,145 @@ Corrupt Bizep Install
 
 Reinstall Bicep by following the steps at [Bicep Installation](quick-start.md#bicep-installation)
 
+## Encryption at Host Not Enabled
+
+### Symptom
+
+Deployment fails with an error similar to:
+
+```
+Encryption at host is not enabled for this subscription.
+To enable it, register the 'EncryptionAtHost' feature for provider 'Microsoft.Compute'.
+```
+
+### Problem
+
+`encryptionAtHost: true` is the default in this solution for hostpool, imageBuild, and sessionHosts deployments. This feature must be explicitly registered on the subscription before any VMs using it can be deployed. The registration is a one-time operation per subscription.
+
+### Solution
+
+Register the feature and wait for it to complete before redeploying:
+
+```powershell
+Register-AzProviderFeature -FeatureName EncryptionAtHost -ProviderNamespace Microsoft.Compute
+
+# Check registration state — wait until RegistrationState is 'Registered' (can take a few minutes)
+Get-AzProviderFeature -FeatureName EncryptionAtHost -ProviderNamespace Microsoft.Compute
+```
+
+Once `RegistrationState` shows `Registered`, redeploy. If you cannot enable this feature in your environment, set `encryptionAtHost: false` in your parameters file.
+
+## Key Vault Name Conflict After Cleanup
+
+### Symptom
+
+Deployment fails with an error similar to:
+
+```
+A vault with the same name already exists in deleted state.
+You need to either recover or purge existing key vault before creating the new one.
+```
+
+### Problem
+
+Azure Key Vault names are globally unique and retained in soft-deleted state for 7–90 days after deletion (default is 90 days with purge protection enabled). If a previous deployment created a Key Vault with the same name and it was subsequently deleted, the name is unavailable until the soft-deleted vault is purged.
+
+### Solution
+
+Recover or purge the soft-deleted vault before redeploying:
+
+```powershell
+# List soft-deleted Key Vaults
+Get-AzKeyVault -InRemovedState
+
+# Option 1: Recover the vault (restores it to the original resource group)
+Undo-AzKeyVaultRemoval -VaultName 'kv-avd-enc-abc123-va' -ResourceGroupName 'rg-avd-operations-va' -Location 'usgovvirginia'
+
+# Option 2: Purge the vault permanently (irreversible — use only if recovery is not needed)
+Remove-AzKeyVault -VaultName 'kv-avd-enc-abc123-va' -InRemovedState -Location 'usgovvirginia' -Force
+```
+
+> **Note:** Purging a Key Vault is irreversible. All keys, secrets, and certificates in the vault are permanently deleted. Only purge if you are certain the vault contents are no longer needed.
+
+### Prevention
+
+In test or development environments, set the retention period to the minimum (7 days) so that a deleted vault's name becomes purgeable sooner. Set `secretsKeyVaultRetentionInDays: 7` and `encryptionKeyVaultRetentionInDays: 7` in your parameters file. Keep the default of `90` in production.
+
+## RBAC Propagation Delay
+
+### Symptom
+
+A deployment that succeeds on subsequent runs fails on the first run with a 403 or `AuthorizationFailed` error, typically during a Run Command or storage access step shortly after role assignments are created.
+
+### Problem
+
+Azure role assignments can take several minutes to propagate through the authorization system after being created. This solution creates managed identity role assignments early in the deployment (e.g., Storage Blob Data Contributor, Key Vault Crypto Officer) and then immediately uses those identities in later stages. In some environments — particularly fresh subscriptions or subscriptions with slow RBAC replication — the propagation window exceeds the deployment stage gap.
+
+### Solution
+
+Simply redeploy. The role assignments are already in place from the first run and will be fully propagated by the time the second deployment reaches the failing stage. No changes to parameters are needed.
+
+If the failure recurs consistently, check that the managed identity being used is the correct one — a mismatch between the identity expected by the deployment and the one that holds the role is a common cause of persistent 403 errors.
+
+## vCPU Quota Exhaustion
+
+### Symptom
+
+Deployment fails with an error similar to:
+
+```
+Operation could not be completed as it results in exceeding approved Total Regional Cores quota.
+Location: usgovvirginia, Current Limit: 10, Current Usage: 8, Additional Required: 4.
+```
+
+### Problem
+
+Azure subscriptions, particularly in government cloud environments, have per-region vCPU quotas that may be lower than commercial defaults. Deploying multiple session hosts, a deployment VM, or a high-vCPU image build VM can exhaust the available quota.
+
+### Solution
+
+Check current usage and submit a quota increase request:
+
+```powershell
+# Check current vCPU usage and limits for a region
+Get-AzVMUsage -Location 'usgovvirginia' |
+    Where-Object { $_.Name.Value -like '*cores*' -or $_.Name.Value -like '*vCPUs*' } |
+    Select-Object @{n='Name';e={$_.Name.LocalizedValue}}, CurrentValue, Limit |
+    Format-Table -AutoSize
+```
+
+To request a quota increase, go to **Azure Portal → Subscriptions → [your subscription] → Usage + quotas**, filter by the region and VM family, and select **Request Increase**. In government cloud, quota increase requests may require coordination with your cloud broker or sponsor.
+
+As a short-term workaround, reduce `sessionHostCount` or switch to a smaller `virtualMachineSize` that uses fewer vCPUs per VM.
+
+## Host Pool Registration Token Expired
+
+### Symptom
+
+Session hosts deploy successfully but never appear as **Available** in the host pool — they remain in an **Unavailable** or **Needs Assistance** state. The AVD agent on the VM may log errors indicating the registration token is invalid or expired.
+
+### Problem
+
+The host pool registration token embedded in the deployment has a maximum validity of 27 days. If the token was generated well before deployment started, or if the deployment ran slowly and the token expired mid-deployment, session hosts will fail to register with the host pool broker.
+
+### Solution
+
+Generate a fresh registration token and redeploy the session hosts:
+
+```powershell
+# Generate a new token valid for 2 hours
+$expiry = (Get-Date).ToUniversalTime().AddHours(2).ToString('yyyy-MM-ddTHH:mm:ssZ')
+New-AzWvdRegistrationInfo -ResourceGroupName 'rg-avd-control-plane-va' `
+    -HostPoolName 'vdpool-avd-01-va' `
+    -ExpirationTime $expiry
+
+# Retrieve the new token value
+(Get-AzWvdHostPoolRegistrationToken -ResourceGroupName 'rg-avd-control-plane-va' `
+    -HostPoolName 'vdpool-avd-01-va').Token
+```
+
+Pass the new token in your parameters file as `hostPoolRegistrationToken` and redeploy only the session hosts (use the session hosts add-on rather than a full host pool redeployment to avoid recreating control plane resources).
+
 ## Run Commands Stuck or Blocking Redeployment
 
 ### Symptom

@@ -541,12 +541,12 @@ param secretsKeyVaultEnableSoftDelete bool = true
 @description('Optional. Enables purge protection on the inline-created Secrets Key Vault.')
 param secretsKeyVaultEnablePurgeProtection bool = true
 
-@description('Optional. The soft delete retention period in days for the inline-created Secrets Key Vault.')
+@description('Optional. The soft delete retention period in days for the inline-created Secrets Key Vault. Use 7 in test environments to minimise the wait before a deleted vault name can be reused; keep 90 in production.')
 @minValue(7)
 @maxValue(90)
 param secretsKeyVaultRetentionInDays int = 90
 
-@description('Optional. The soft delete retention period in days for the inline-created Encryption Key Vault.')
+@description('Optional. The soft delete retention period in days for the inline-created Encryption Key Vault. Use 7 in test environments to minimise the wait before a deleted vault name can be reused; keep 90 in production.')
 @minValue(7)
 @maxValue(90)
 param encryptionKeyVaultRetentionInDays int = 90

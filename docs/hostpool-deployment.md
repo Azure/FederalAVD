@@ -232,7 +232,7 @@ To deploy all host pool infrastructure without creating session host VMs, set `s
 | **deploySecretsKeyVault** | Deploy an inline Secrets Key Vault to store VM admin and domain-join credentials (configured in the **Identity → Credentials** portal step) | `true` / `false` |
 | **secretsKeyVaultEnableSoftDelete** | Enable soft delete on the inline Secrets Key Vault | `true` (default) |
 | **secretsKeyVaultEnablePurgeProtection** | Enable purge protection on the inline Secrets Key Vault | `true` (default) |
-| **secretsKeyVaultRetentionInDays** | Soft-delete retention period for the Secrets Key Vault (7–90 days) | `90` (default) |
+| **secretsKeyVaultRetentionInDays** | Soft-delete retention period for the Secrets Key Vault (7–90 days). Use `7` in test environments to minimise the wait before a deleted vault name can be reused. | `90` (default) |
 
 **[Identity Solutions Details](features.md#identity-solutions)**
 

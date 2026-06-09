@@ -23,7 +23,7 @@ param secretsKeyVaultEnableSoftDelete bool = true
 @description('Optional. Enable purge protection on the Secrets Key Vault. Recommended for production environments.')
 param secretsKeyVaultEnablePurgeProtection bool = true
 
-@description('Optional. The retention period in days for soft-deleted objects in the Secrets Key Vault.')
+@description('Optional. The retention period in days for soft-deleted objects in the Secrets Key Vault. Use 7 in test environments to minimise the wait before a deleted vault name can be reused; keep 90 in production.')
 @minValue(7)
 @maxValue(90)
 param secretsKeyVaultRetentionInDays int = 90
@@ -66,7 +66,7 @@ param domainJoinUserPrincipalName string = ''
 @description('Optional. Deploy the Encryption Key Vault (Premium SKU) for Customer-Managed Keys. Required when using CMK in any AVD solution.')
 param deployEncryptionKeyVault bool = true
 
-@description('Optional. Soft delete retention days for the Encryption Key Vault.')
+@description('Optional. Soft delete retention days for the Encryption Key Vault. Use 7 in test environments to minimise the wait before a deleted vault name can be reused; keep 90 in production.')
 @minValue(7)
 @maxValue(90)
 param encryptionKeyVaultRetentionInDays int = 90
