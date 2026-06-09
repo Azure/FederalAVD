@@ -124,7 +124,7 @@
     },
     "PuTTY": {
         "Description": "PuTTY Installer",
-        "WingetId": "XPFNZKSKLBP7RJ",
+        "WingetId": "PuTTY.PuTTY",
         "DestinationFileName": "PuTTY.msi",
         "DestinationFolders": [
             "PuTTY"
