@@ -549,8 +549,12 @@ If (-not(Test-Path -Path "$env:SystemRoot\System32\lgpo.exe")) {
     Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
     Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
 }
-$stigZip = Get-ChildItem -Path $PSScriptRoot -Filter '*.zip' | Where-Object { $_.Name -notmatch 'LGPO.zip' } | Select-Object -First 1
+$stigZips = @(Get-ChildItem -Path $PSScriptRoot -Filter '*.zip' | Where-Object { $_.Name -notmatch 'LGPO.zip' } | Sort-Object LastWriteTime -Descending)
+$stigZip  = $stigZips | Select-Object -First 1
 If ($stigZip) {
+    If ($stigZips.Count -gt 1) {
+        Write-Log -Category Warning -Message "Multiple STIG ZIP files found in '$PSScriptRoot'. Using the newest: '$($stigZip.Name)'. Remove older packages to avoid ambiguity."
+    }
     $stigZip = $stigZip.FullName
     Write-Log -Message "Using existing STIG GPOs ZIP file found at '$stigZip'."
 }
