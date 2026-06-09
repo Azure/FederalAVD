@@ -389,7 +389,7 @@ Write-Log -category Info -message "Starting '$PSCommandPath'."
 
 Write-Log -category Info -message "Running Script to Configure Microsoft Office 365 Policies and registry settings."
 
-$O365TemplatesExe = (Get-ChildItem -Path $PSScriptRoot -Filter '*.exe').FullName
+$O365TemplatesExe = (Get-ChildItem -Path $PSScriptRoot -Filter '*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 If (-not $O365TemplatesExe) {
     $WebsiteUrl = "https://www.microsoft.com/en-us/download/details.aspx?id=49030"
     $SearchString = "admintemplates_x64*.exe"
@@ -420,7 +420,7 @@ If (-not(Test-Path -Path "$env:SystemRoot\System32\lgpo.exe")) {
     If ($LGPOZip) {
         Write-Log -Category Info -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
         Expand-Archive -Path $LGPOZip -DestinationPath $Script:TempDir -Force
-        $fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse)[0].FullName
+        $fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse | Select-Object -First 1).FullName
         Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
         Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
     }

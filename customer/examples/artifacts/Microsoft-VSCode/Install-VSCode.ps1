@@ -161,7 +161,7 @@ $DownloadedInstaller = $null
 
 try {
     #region Locate or download installer
-    $installerFiles = Get-ChildItem -Path $PSScriptRoot -File -Filter '*.exe' -ErrorAction Stop
+    $installerFiles = @(Get-ChildItem -Path $PSScriptRoot -File -Filter '*.exe' -ErrorAction Stop | Sort-Object LastWriteTime -Descending)
     if ($installerFiles.Count -gt 0) {
         $VSCodeExe = $installerFiles[0].FullName
         Write-Log -Category Info -Message "Found local installer: '$VSCodeExe'."

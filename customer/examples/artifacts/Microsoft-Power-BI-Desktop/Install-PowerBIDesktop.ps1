@@ -53,7 +53,7 @@ function New-Log {
 New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
 $ErrorActionPreference = 'Stop'
 Write-Log -message "Starting '$PSCommandPath'."
-$Installer = (Get-ChildItem -Path $PSScriptRoot -File -Filter '*.exe').FullName
+$Installer = (Get-ChildItem -Path $PSScriptRoot -File -Filter '*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 $Install = Start-Process -FilePath $Installer -ArgumentList "-quiet -norestart ACCEPT_EULA=1 DISABLE_UPDATE_NOTIFICATION=1 ENABLECXP=0" -Wait -PassThru
 If ($Install.ExitCode -eq 0) {
     Write-Log -message "Power BI Desktop installed successfully."

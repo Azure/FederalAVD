@@ -545,7 +545,7 @@ If (-not(Test-Path -Path "$env:SystemRoot\System32\lgpo.exe")) {
     }
     Write-Log -Category Info -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
     Expand-Archive -Path $LGPOZip -DestinationPath $Script:TempDir -Force
-    $fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse)[0].FullName
+    $fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse | Select-Object -First 1).FullName
     Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
     Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
 }

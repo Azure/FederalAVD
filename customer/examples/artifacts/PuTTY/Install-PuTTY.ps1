@@ -135,7 +135,7 @@ New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
 
-$PathMSI = (Get-ChildItem -Path $PSScriptRoot -Filter '*.msi').FullName
+$PathMSI = (Get-ChildItem -Path $PSScriptRoot -Filter '*.msi' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 Write-Log -Category Info -message "Installing '$SoftwareName' via cmdline: 'msiexec /i `"$PathMSI`" /quiet /noreboot'."
 $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /quiet /noreboot" -Wait -PassThru
 If ($($Installer.ExitCode) -eq 0) {

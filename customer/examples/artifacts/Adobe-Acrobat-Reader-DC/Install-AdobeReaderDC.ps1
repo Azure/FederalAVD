@@ -104,7 +104,7 @@ If ($DisableUpdates) {
 Else {
     $InstallArgs = '-sfx /sALL /msi EULA_ACCEPT=YES ENABLE_CHROMEEXT=0 DISABLE_BROWSER_INTEGRATION=1 ENABLE_OPTIMIZATION=YES ADD_THUMBNAILPREVIEW=0 DISABLEDESKTOPSHORTCUT=1'
 }
-$PathExe = (Get-ChildItem -Path $PSScriptRoot -Filter '*.exe').FullName
+$PathExe = (Get-ChildItem -Path $PSScriptRoot -Filter '*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 Write-Log -Category Info -message "Installing '$SoftwareName' via cmdline: '$PathExe $InstallArgs'."
 $Installer = Start-Process -FilePath $PathExe -ArgumentList $InstallArgs -Wait -PassThru
 If ($($Installer.ExitCode) -eq 0) {

@@ -375,7 +375,11 @@ Write-Log -Category Info -Message "Parameters: AllowDeveloperTools='$AllowDevelo
 #endregion
 
 Write-Log -Category Info -Message "Running Script to Configure Microsoft Edge Policies."
-$EdgeTemplatesCab = (Get-ChildItem -Path $PSScriptRoot -Filter '*.cab').FullName
+$edgeCabs = @(Get-ChildItem -Path $PSScriptRoot -Filter '*.cab' | Sort-Object LastWriteTime -Descending)
+If ($edgeCabs.Count -gt 1) {
+    Write-Log -Category Warning -Message "Multiple CAB files found in '$PSScriptRoot'. Using newest: '$($edgeCabs[0].Name)'. Remove older files to avoid ambiguity."
+}
+$EdgeTemplatesCab = ($edgeCabs | Select-Object -First 1).FullName
 If ($null -eq $EdgeTemplatesCab) {
     $APIUrl = "https://edgeupdates.microsoft.com/api/products?view=enterprise"
     $EdgeUpdatesJSON = Invoke-WebRequest -Uri $APIUrl -UseBasicParsing
@@ -402,12 +406,16 @@ If ($null -ne $EdgeTemplatesCab) {
     New-Item -Path $TemplatesDir -ItemType Directory -Force | out-null
     Write-Log -Category Info -Message "Expanding `"$EdgeTemplatesCab`" into `"$TemplatesDir`"."
     & cmd /c extrac32 /Y /E $EdgeTemplatesCab /L "$TemplatesDir"
-    $EdgeTemplatesZip = Get-ChildItem -Path "$TemplatesDir" -Filter '*.zip' -Recurse
-    $EdgeTemplatesZip = $EdgeTemplatesZip[0].FullName
-    Expand-Archive -Path $EdgeTemplatesZip -DestinationPath "$TemplatesDir" -force
-    Write-Log -Category Info -Message "Copy ADMX and ADML files to PolicyDefinition Folders."
-    $null = Get-ChildItem -Path "$TemplatesDir" -File -Recurse -Filter '*.admx' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\" -Force }
-    $null = Get-ChildItem -Path "$TemplatesDir" -Directory -Recurse | Where-Object { $_.Name -eq 'en-us' } | Get-ChildItem -File -recurse -filter '*.adml' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\en-us\" -Force }
+    $EdgeTemplatesZip = Get-ChildItem -Path "$TemplatesDir" -Filter '*.zip' -Recurse | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    If ($null -eq $EdgeTemplatesZip) {
+        Write-Log -Category Warning -Message "No ZIP file found in '$TemplatesDir' after extracting '$EdgeTemplatesCab'. Edge policy templates will not be installed."
+    } Else {
+        $EdgeTemplatesZip = $EdgeTemplatesZip.FullName
+        Expand-Archive -Path $EdgeTemplatesZip -DestinationPath "$TemplatesDir" -force
+        Write-Log -Category Info -Message "Copy ADMX and ADML files to PolicyDefinition Folders."
+        $null = Get-ChildItem -Path "$TemplatesDir" -File -Recurse -Filter '*.admx' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\" -Force }
+        $null = Get-ChildItem -Path "$TemplatesDir" -Directory -Recurse | Where-Object { $_.Name -eq 'en-us' } | Get-ChildItem -File -recurse -filter '*.adml' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\en-us\" -Force }
+    }
 }
 
 Write-Log -Message "Checking for lgpo.exe in '$env:SystemRoot\system32'."
@@ -422,7 +430,7 @@ If (-not(Test-Path -Path "$env:SystemRoot\System32\lgpo.exe")) {
     If ($LGPOZip) {
         Write-Log -Category Info -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
         Expand-Archive -Path $LGPOZip -DestinationPath $Script:TempDir -Force
-        $fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse)[0].FullName
+        $fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse | Select-Object -First 1).FullName
         Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
         Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
     }

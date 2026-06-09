@@ -116,7 +116,7 @@ try {
 
     # Locate or download installer
     Write-Log -Message "Checking for installer in '$PSScriptRoot'."
-    $installerFiles = Get-ChildItem -Path $PSScriptRoot -Filter '*.exe' -ErrorAction Stop
+    $installerFiles = @(Get-ChildItem -Path $PSScriptRoot -Filter '*.exe' -ErrorAction Stop | Sort-Object LastWriteTime -Descending)
     if ($installerFiles.Count -gt 0) {
         $GitInstaller = $installerFiles[0].FullName
         Write-Log -Message "Found local installer: '$GitInstaller'."

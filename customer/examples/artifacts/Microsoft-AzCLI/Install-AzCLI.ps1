@@ -362,7 +362,7 @@ $DownloadUrl = 'https://aka.ms/installazurecliwindowsx64'
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Software')
 If ($DeploymentType -ne 'UnInstall') {
     Remove-MSIApplication -Name $SoftwareName
-    $pathMsi = (Get-ChildItem -Path $PSScriptRoot -filter '*.msi').FullName
+    $pathMsi = (Get-ChildItem -Path $PSScriptRoot -Filter '*.msi' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
     If (!$pathMsi) {
         Write-Log -Message "Downloading '$SoftwareName' from '$DownloadUrl'."
         $TempDir = Join-Path $env:Temp -ChildPath $Script:Name

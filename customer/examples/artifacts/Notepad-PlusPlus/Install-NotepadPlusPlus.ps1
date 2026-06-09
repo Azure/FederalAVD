@@ -88,7 +88,7 @@ New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
 
-$PathExe = (Get-ChildItem -Path $PSScriptRoot -Filter '*.exe').FullName
+$PathExe = (Get-ChildItem -Path $PSScriptRoot -Filter '*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 Write-Log -Category Info -message "Installing '$SoftwareName' via cmdline: '$PathExe /S /noUpdater' ."
 $Installer = Start-Process -FilePath $PathExe  -ArgumentList "/S /noUpdater" -Wait -PassThru
 If ($($Installer.ExitCode) -eq 0) {

@@ -218,7 +218,7 @@ Function Get-InternetFile {
 New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
 $ErrorActionPreference = 'Stop'
 Write-Log -message "Starting '$PSCommandPath'."
-$PathMSI = (Get-ChildItem -Path $PSScriptRoot -Filter '*.msi').FullName
+$PathMSI = (Get-ChildItem -Path $PSScriptRoot -Filter '*.msi' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 $TempDir = Join-Path -Path $env:Temp -ChildPath 'InstallRoot'
 If (!$PathMSI) {
     $null = New-Item -Path $TempDir -ItemType Directory -Force

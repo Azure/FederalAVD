@@ -132,7 +132,7 @@ Function Get-InternetFile {
 New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
 $ErrorActionPreference = 'Stop'
 Write-Log -message "Starting '$PSCommandPath'."
-$PathZip = (Get-ChildItem -Path $PSScriptRoot -Filter '*.zip').FullName
+$PathZip = (Get-ChildItem -Path $PSScriptRoot -Filter '*.zip' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 $TempDir = Join-Path -Path $env:Temp -ChildPath 'FSLogix'
 $null = New-Item -Path $TempDir -ItemType Directory -Force
 If (!$PathZip) {
@@ -144,7 +144,7 @@ Else {
 }
 Write-Log -Message "Extracting Contents of Zip File"
 Expand-Archive -Path $pathZip -DestinationPath $TempDir -Force
-$Installer = (Get-ChildItem -Path $TempDir -File -Recurse -Filter 'FSLogixAppsSetup.exe' | Where-Object { $_.FullName -like '*x64*' }).FullName
+$Installer = (Get-ChildItem -Path $TempDir -File -Recurse -Filter 'FSLogixAppsSetup.exe' | Where-Object { $_.FullName -like '*x64*' } | Select-Object -First 1).FullName
 Write-Log -Message "Installation file found: [$Installer], executing installation."
 $Install = Start-Process -FilePath $Installer -ArgumentList "/install /quiet /norestart" -Wait -PassThru
 If ($($Install.ExitCode) -eq 0) {
