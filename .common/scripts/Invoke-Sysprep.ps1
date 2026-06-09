@@ -98,24 +98,106 @@ try {
     } while ($CbsBusy)
     Write-Log "CBS check complete. Proceeding with sysprep."
 
-    Write-Log "Creating a Scheduled Task to start Sysprep using the local admin account credentials."
-    $TaskName = "RunSysprep"
-    $TaskDescription = "Runs Sysprep with OOBE, Generalize, and VM Mode as Administrator and shuts down the VM when complete."
-    # Define the action to execute Sysprep
-    $Action = New-ScheduledTaskAction -Execute "C:\Windows\System32\Sysprep\sysprep.exe" -Argument "/oobe /generalize /shutdown /mode:vm"
-    # Create the task trigger (run once, immediately)
-    $Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(20)
-    # Register the scheduled task
-    Register-ScheduledTask -TaskName $TaskName -Description $TaskDescription -Action $Action -User $AdminAccount.Name -Password $AdminUserPw -Trigger $Trigger -RunLevel Highest -Force | Out-Null
-    $RegisteredTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-    If ($RegisteredTask) {
-        Write-Log "Scheduled task '$TaskName' registered successfully. Sysprep will run in ~20 seconds and shut down this VM when complete."
+    # Clear any existing Sysprep Panther logs so the captured output only reflects
+    # this run. Sysprep appends to setupact.log rather than replacing it, so without
+    # this the captured log would contain output from prior sysprep invocations
+    # (e.g. from FSLogix, Office, or WDOT customizations) mixed with the current run.
+    $PantherDir = "$env:SystemRoot\System32\Sysprep\Panther"
+    if (Test-Path $PantherDir) {
+        Write-Log "Clearing previous Sysprep Panther logs from '$PantherDir'."
+        Remove-Item -Path "$PantherDir\*.log" -Force -ErrorAction SilentlyContinue
     }
-    Else {
-        Write-Log "Scheduled task '$TaskName' was not found after registration. Exiting."
-        Exit 1
+
+    Write-Log "Registering and starting the Sysprep scheduled task as the local administrator account."
+    $TaskName = 'RunSysprep'
+
+    # Register using the direct -User/-Password/-Action parameters on Register-ScheduledTask.
+    # Using New-ScheduledTaskPrincipal with -LogonType Password + Register-ScheduledTask -InputObject
+    # causes CimException 'The supplied variant structure contains invalid data' on some Windows builds.
+    # The direct parameter form avoids this and is equivalent to the original working approach.
+    $Action  = New-ScheduledTaskAction -Execute 'C:\Windows\System32\Sysprep\sysprep.exe' `
+                   -Argument '/oobe /generalize /quit /mode:vm'
+    $Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddHours(24)  # Far-future fallback only; we start it explicitly below.
+    Register-ScheduledTask -TaskName $TaskName `
+        -Description 'Runs Sysprep (OOBE / Generalize / Quit / VM mode) as the built-in administrator.' `
+        -Action $Action -Trigger $Trigger `
+        -User $AdminAccount.Name -Password $AdminUserPw `
+        -RunLevel Highest -Force | Out-Null
+    If (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) {
+        throw "Scheduled task '$TaskName' was not found immediately after registration."
     }
-    Write-Log "Sysprep script complete. The orchestration VM will monitor this VM's power state and generalize it once it has stopped."
+    Write-Log "Scheduled task '$TaskName' registered. Starting now."
+
+    # Start the task immediately (do not wait for the far-future trigger)
+    Start-ScheduledTask -TaskName $TaskName
+
+    # -- Confirm the task actually started (transitions to Running) -------------
+    # This is the critical check  - if sysprep.exe never launches (e.g. bad
+    # credentials, locked account, binary missing) we catch it here rather than
+    # timing out 30 minutes later.
+    Write-Log "Waiting for sysprep task to enter Running state (timeout: 2 minutes)."
+    $StartTimeout = (Get-Date).AddMinutes(2)
+    do {
+        Start-Sleep -Seconds 5
+        $taskState = (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue).State
+        if ($taskState -eq 'Running') {
+            Write-Log "Sysprep task is Running. Sysprep has started."
+            break
+        }
+        if ((Get-Date) -ge $StartTimeout) {
+            $info = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
+            throw "Sysprep task failed to enter Running state within 2 minutes. " +
+                  "Task state: '$taskState'. Last result: 0x$('{0:X8}' -f $info.LastTaskResult)."
+        }
+        Write-Log "Task state: '$taskState'  - waiting for Running..."
+    } while ($true)
+
+    # -- Wait for sysprep to complete (task returns to Ready) -------------------
+    Write-Log "Sysprep is running. Waiting for completion (timeout: 30 minutes)."
+    $SysprepTimeout = (Get-Date).AddMinutes(30)
+    do {
+        Start-Sleep -Seconds 15
+        $taskState = (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue).State
+        if ($taskState -eq 'Ready') {
+            Write-Log "Sysprep task has completed."
+            break
+        }
+        if ((Get-Date) -ge $SysprepTimeout) {
+            throw "Timed out after 30 minutes waiting for sysprep to complete. Task state: '$taskState'."
+        }
+        Write-Log "Task state: '$taskState'  - sysprep still running..."
+    } while ($true)
+
+    $taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName
+    Write-Log "Sysprep exit code: 0x$('{0:X8}' -f $taskInfo.LastTaskResult) ($($taskInfo.LastTaskResult))"
+
+    # -- Capture Panther logs into Run Command output (goes to outputBlobUri) ---
+    # Writing to stdout here means the content lands in the same blob that ARM
+    # already captures for this Run Command  - no separate upload needed.
+    foreach ($logFile in @(
+        "$env:SystemRoot\System32\Sysprep\Panther\setupact.log",
+        "$env:SystemRoot\System32\Sysprep\Panther\setuperr.log"
+    )) {
+        if (Test-Path $logFile) {
+            Write-Output ""
+            Write-Output "=== BEGIN $(Split-Path $logFile -Leaf) ==="
+            Get-Content $logFile | ForEach-Object { Write-Output $_ }
+            Write-Log "=== END $(Split-Path $logFile -Leaf) ==="
+        } else {
+            Write-Log "Log file not found: $logFile"
+        }
+    }
+
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+    Write-Log "Scheduled task '$TaskName' deregistered."
+
+    # Fail the deployment with full log context if sysprep returned non-zero
+    if ($taskInfo.LastTaskResult -ne 0) {
+        throw "Sysprep failed with exit code 0x$('{0:X8}' -f $taskInfo.LastTaskResult). " +
+              "Review the Panther log output above for details."
+    }
+
+    Write-Log "Sysprep completed successfully. Script exiting  - Generalize-Vm.ps1 will deallocate and generalize the VM."
 }
 catch {
     Write-Log "FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)"

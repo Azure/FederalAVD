@@ -30,7 +30,7 @@ function Write-Log {
     )
 
     $date = get-date
-    $content = "[$date]`t$category`t`t$message`n"
+    $Content = "[$Date]`t$Category`t`t$Message"
     Write-Verbose "$Script:Name $content" -verbose
 
     if (! $script:Log) {

@@ -33,7 +33,7 @@
     },
     "DoDSTIGGPOPackage": {
         "Description": "DoD STIG GPO Package - Keep it updated! Used for applying STIGs via LGPO.",
-        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip",
+        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/zip/U_STIG_GPO_Package_April_2026.zip",
         "DestinationFileName": "STIGs.zip",
         "DestinationFolders": [
             "DoD-STIGs"
@@ -42,7 +42,7 @@
     "EdgeEnterpriseAdministrativeTemplates": {
         "Description": "Microsoft Edge Enterprise Administrative Templates. Used for Edge policy configuration via LGPO.",
         "APIUrl": "https://edgeupdates.microsoft.com/api/products?view=enterprise",
-        "DestinationFileName": "EdgeEnterprisePolicyTemplates.cab",
+        "DestinationFileName": "MicrosoftEdgePolicyTemplates.cab",
         "DestinationFolders": [
             "Configure-EdgePolicy"
         ]

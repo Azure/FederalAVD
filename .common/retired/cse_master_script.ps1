@@ -53,7 +53,7 @@ function Write-Log {
     )
 
     $date = get-date
-    $content = "[$date]`t$category`t`t$message`n" 
+    $Content = "[$Date]`t$Category`t`t$Message" 
     Add-Content $Script:Log $content -ErrorAction Stop
 }
 

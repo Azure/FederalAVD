@@ -245,15 +245,23 @@ Runs Windows Desktop Optimization Tool (WDOT) for AVD image optimization.
 
 #### [Invoke-Sysprep.ps1](Invoke-Sysprep.ps1)
 
-Executes sysprep to generalize Windows images.
+Executes sysprep to generalize Windows images, then captures the Panther logs into the Run Command output blob.
 
 - **Used by:** Image Management
-- **Parameters:** APIVersion, UserAssignedIdentityClientId, LogBlobContainerUri, AdminUserPw
+- **Parameters:** AdminUserPw
 - **Features:**
-  - Waits for required services (RdAgent, WindowsAzureGuestAgent)
-  - Uploads sysprep logs to blob storage
-  - Handles sysprep execution and error scenarios
-- **Output:** Generalized VM ready for image capture
+  - Waits for required services (RdAgent, WindowsAzureGuestAgent) to be running
+  - Removes cached unattend files that would interfere with OOBE
+  - Enables the built-in local administrator account (required by the scheduled task)
+  - Waits for CBS (Component Based Servicing) to settle; exits with an error if a reboot is still pending
+  - Registers a scheduled task to run sysprep `/oobe /generalize /quit /mode:vm` under the local admin account
+  - Starts the task immediately with `Start-ScheduledTask` and confirms it enters **Running** state within 2 minutes — fails fast if sysprep never launches
+  - Waits up to 30 minutes for sysprep to complete, then checks the scheduled task exit code
+  - Emits `setupact.log` and `setuperr.log` from `C:\Windows\System32\Sysprep\Panther\` to stdout so they are captured by the Run Command `outputBlobUri`
+  - Fails the Run Command (and the deployment) if sysprep returns a non-zero exit code, with the Panther log already in the output blob
+  - Deregisters the scheduled task on success
+  - Exits cleanly — `Generalize-Vm.ps1` handles deallocate and generalize
+- **Output:** Panther logs in the Run Command output blob; VM left running and generalized (ready for deallocate)
 
 ### 🧹 Cleanup & Removal
 
@@ -313,15 +321,16 @@ Removes Azure RBAC role assignments.
 
 #### [Generalize-Vm.ps1](Generalize-Vm.ps1)
 
-Generalizes (stops and marks as generalized) a VM via Azure REST API.
+Deallocates a running generalized VM and marks it as generalized via the Azure REST API.
 
 - **Used by:** Image Management
 - **Parameters:** ResourceManagerUri, UserAssignedIdentityClientId, VmResourceId
 - **Features:**
-  - Uses managed identity authentication
-  - Stops and generalizes VM for image capture
-  - Validates VM state transitions
-- **Purpose:** Prepare VM for Azure Compute Gallery image creation
+  - Uses managed identity authentication (UAI or system-assigned)
+  - Calls `/deallocate` directly on the running VM — no prior stop required; Azure handles the stop+deallocate in one operation
+  - Polls VM power state until `VM deallocated` (5-minute timeout)
+  - Calls `/generalize` to mark the VM for image capture
+- **Purpose:** Prepare VM for Azure Compute Gallery image creation after `Invoke-Sysprep.ps1` has completed
 
 #### [Restart-Vm.ps1](Restart-Vm.ps1)
 

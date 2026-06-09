@@ -455,7 +455,7 @@ Function Write-Log {
     )
 
     $Date = get-date
-    $Content = "[$Date]`t$Category`t`t$Message`n" 
+    $Content = "[$Date]`t$Category`t`t$Message" 
     Add-Content $Script:Log $content -ErrorAction Stop
     If ($Verbose) {
         Write-Verbose $Content
@@ -612,6 +612,45 @@ ForEach ($gpoFolder in $GPOFolders) {
         $SecEditFile = (Get-ChildItem -Path $gpoFolder -Recurse -Filter "GptTmpl.inf" | Where-Object { $_.DirectoryName -match "SecEdit" }).FullName
         $Content = Get-Content $SecEditFile
         $Content = $Content | Where-Object { (-not ($_ -like 'NewAdministratorName*')) -and (-not ($_ -like 'EnableAdminAccount*')) }
+
+        # Replace or remove the 'ADD YOUR ENTERPRISE ADMINS' / 'ADD YOUR DOMAIN ADMINS'
+        # placeholder tokens that the DoD STIG GPO leaves in the [Privilege Rights] section.
+        # Replacements run on the array directly; piping through ForEach-Object is not needed
+        # because PowerShell -replace operates on each element when the LHS is an array.
+        if ($IsDomainJoined) {
+            $Content = $Content -replace 'ADD YOUR ENTERPRISE ADMINS', 'Enterprise Admins'
+            $Content = $Content -replace 'ADD YOUR DOMAIN ADMINS', 'Domain Admins'
+        } else {
+            # Remove each placeholder. Three patterns cover all positions:
+            #   1. preceded by a comma  (e.g. ...,ADD YOUR ENTERPRISE ADMINS,...)
+            #   2. followed by a comma  (e.g. ADD YOUR ENTERPRISE ADMINS,...)
+            #   3. standalone           (only entry on that right)
+            # After both placeholders are removed, any resulting double-commas or
+            # trailing commas (from removing the only/last entry) are cleaned up.
+            foreach ($placeholder in @('ADD YOUR ENTERPRISE ADMINS', 'ADD YOUR DOMAIN ADMINS')) {
+                $escaped = [regex]::Escape($placeholder)
+                $Content = $Content -replace ",\s*$escaped", ''
+                $Content = $Content -replace "$escaped\s*,", ''
+                $Content = $Content -replace $escaped, ''
+            }
+        }
+
+        # Set SeRemoteInteractiveLogonRight to allow RDS Users (S-1-5-32-555) and Administrators
+        # (S-1-5-32-544). The STIG restricts this to Administrators only; AVD requires RDS Users
+        # so that session host connections can be established.
+        $Content = $Content | ForEach-Object {
+            if ($_ -like 'SeRemoteInteractiveLogonRight*') { 'SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544' } else { $_ }
+        }
+
+        # When CloudOnly, allow Windows Credential Manager to store credentials for mapped
+        # storage accounts (e.g. FSLogix Azure Files UNC paths).  The STIG sets
+        # DisableDomainCreds=4,1 (block credential storage); cloud-only AVD needs 4,0 (allow).
+        if ($CloudOnly) {
+            $Content = $Content | ForEach-Object {
+                if ($_ -like '*DisableDomainCreds*') { $_ -replace '4,1', '4,0' } else { $_ }
+            }
+        }
+
         Set-Content -Path $SecEditFile -Value $Content -Encoding Unicode
     }
     Write-Log -Message "Running 'LGPO.exe /g `"$gpoFolder`"'"
@@ -620,54 +659,6 @@ ForEach ($gpoFolder in $GPOFolders) {
 }
 
 Write-Log -Message "Applying AVD Exceptions"
-
-# Build the privilege rights lines as an array so each entry is guaranteed
-# to land on its own line when written to the INF.  Using bare += on a string
-# concatenates without a newline separator, which causes secedit to silently
-# ignore all but the first entry in the [Privilege Rights] section.
-$privilegeRights = [System.Collections.Generic.List[string]]::new()
-$privilegeRights.Add('SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544')
-
-if ($IsDomainJoined) {
-    $privilegeRights.Add('SeDenyBatchLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins')
-    $privilegeRights.Add('SeDenyNetworkLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins')
-    $privilegeRights.Add('SeDenyInteractiveLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins')
-    $privilegeRights.Add('SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546,Domain Admins,Enterprise Admins')
-}
-Else {
-    $privilegeRights.Add('SeDenyBatchLogonRight = *S-1-5-32-546')
-    $privilegeRights.Add('SeDenyNetworkLogonRight = *S-1-5-32-546')
-    $privilegeRights.Add('SeDenyInteractiveLogonRight = *S-1-5-32-546')
-    $privilegeRights.Add('SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546')
-}
-
-# Build the INF content.  secedit expects UTF-16 LE (written by Out-File -Encoding unicode).
-# The $CHICAGO$ signature is a literal string required by secedit; use single-quoted
-# here-string to avoid PowerShell interpreting the $ characters.
-$SecFileContent = @'
-[Unicode]
-Unicode=yes
-[Version]
-signature="$CHICAGO$"
-Revision=1
-[Privilege Rights]
-
-'@
-$SecFileContent += $privilegeRights -join "`r`n"
-
-If ($CloudOnly) {
-    $SecFileContent += "`r`n[Registry Values]"
-    $SecFileContent += "`r`nMACHINE\System\CurrentControlSet\Control\Lsa\DisableDomainCreds=4,0"
-}
-
-# Applying AVD Exceptions
-
-$SecTemplate = Join-Path -Path $Script:LGPOTempDir -ChildPath 'AVD-Exceptions.inf'
-$SecFileContent | Out-File -FilePath $SecTemplate -Encoding unicode
-# Apply security template first (privilege rights), then registry overrides
-Write-Log -Message "Applying AVD Exceptions security template via lgpo.exe /s"
-$r = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/s `"$SecTemplate`"" -Wait -PassThru
-Write-Log -Message "lgpo.exe /s exited with code [$($r.ExitCode)]"
 
 # ── EccCurves exception (WN11-CC-000195 → V-253363) ──────────────────────────
 # The DoD Windows 11 STIG GPO (WN11-CC-000195) sets the EccCurves policy value

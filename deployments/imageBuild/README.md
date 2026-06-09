@@ -77,7 +77,7 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
    - Clean up desktop shortcuts
 
 3. **Image Capture**
-   - Stop and generalize VM (sysprep)
+   - Run sysprep (`/oobe /generalize /quit /mode:vm`) via scheduled task; capture Panther logs to output blob; deallocate and generalize VM
    - Capture image to Compute Gallery
    - Create image version with replication
 
@@ -1141,12 +1141,13 @@ image-customization-logs/
 
 #### Issue: Sysprep Fails
 
-**Symptoms:** Image capture fails, sysprep errors in logs
+**Symptoms:** Image capture fails, sysprep errors in logs  
 **Solution:**
 - Review VDI customizations (must support sysprep)
 - Check for running services (stop before sysprep)
 - Avoid `/norestart` in final customizations
-- Review sysprep logs: `C:\Windows\System32\Sysprep\Panther\`
+- Sysprep Panther logs (`setupact.log` / `setuperr.log`) are automatically captured in the **Sysprep Run Command output blob** — check the log storage account for `<imageVmName>-Sysprep-<suffix>.log`
+- If the Run Command itself failed before sysprep ran (e.g. CBS reboot pending, task never entered Running state), the error is in the same output blob
 
 ### Monitoring Deployment
 
