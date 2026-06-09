@@ -288,9 +288,12 @@ To prevent the operator identity from granting itself or others arbitrary roles,
 | Desktop Virtualization User | `1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63` |
 | Desktop Virtualization Application Group Contributor | `86240b0e-9422-4c43-887b-b61143f32ba8` |
 | Role Based Access Control Administrator | `f58310d9-a9f6-439a-9e8d-f62e7b41a168` |
+| Contributor | `b24988ac-6180-42a0-ab88-20f7382dd24c` |
 | Virtual Machine Contributor | `9980e02c-c2be-4d73-94e8-173b1dc7cf3c` |
+| Key Vault Crypto Officer *(CVM path only)* | `14b46e9e-c2b7-41b4-b07b-48a6ebf60603` |
 | Storage Account Contributor | `17d1049b-9a84-46fb-8f53-869881c3d3ab` |
 | Storage File Data Privileged Contributor | `69566ab7-960f-475b-8e7c-b3118f30c6bd` |
+| Virtual Machine User Login *(Entra-joined hosts only)* | `fb879df8-f326-4884-b1cf-06f3ad86be52` |
 
 ---
 
@@ -356,50 +359,6 @@ This role covers deployments using `deployments/add-ons/sessionHosts/main.bicep`
 > **Key Vault access:** The `getSecret()` Bicep function resolves secrets using the deployment principal at ARM evaluation time. Grant the deploying identity the built-in `Key Vault Secrets User` role (`4633458b-17de-408a-b874-0445c86b69e6`) on the credentials Key Vault — this is a data plane role and cannot be expressed in the custom role above.
 
 > **Subnet join:** `Microsoft.Network/virtualNetworks/subnets/join/action` is required to attach NICs to the subnet. If the virtual network is in a separate hub/networking resource group, this action must be granted there rather than on the hosts RG.
-
----
-
-## 6. Hostpool Operator — SessionHostsOnly
-
-**Minimum scope:** Subscription scope required for deployment submission; no subscription-level resource creation or role assignments
-
-This is the most constrained operator model. The host pool, control plane, and all RBAC are pre-provisioned. The operator only adds new session hosts to an existing environment.
-
-> **Important:** `hostpool.bicep` has `targetScope = 'subscription'`. Even though all resources land in resource groups, the ARM deployment object itself is created at subscription scope. The deploying identity must have `Microsoft.Resources/deployments/write` at subscription scope — it cannot be avoided without restructuring the template.
-
-### Required role assignments
-
-| Role | Scope |
-|---|---|
-| `FederalAVD - Hostpool SessionHostsOnly Operator` (below) | **Subscription** (for deployment write only) |
-| Built-in: `Contributor` | Existing **hosts RG** |
-| Built-in: `Desktop Virtualization Host Pool Contributor` | Existing **control plane RG** |
-
-The subscription-scope custom role below grants only `deployments/*` and `resourceGroups/read` — no resource creation, no role assignment write.
-
-### Custom role definition
-
-```json
-{
-  "Name": "FederalAVD - Hostpool SessionHostsOnly Operator (Subscription)",
-  "Description": "Grants only the subscription-level deployment submission right needed for hostpool.bicep (targetScope = subscription). Assign at subscription scope alongside Contributor on the hosts RG and Desktop Virtualization Host Pool Contributor on the control plane RG.",
-  "AssignableScopes": ["/"],
-  "Actions": [
-    "Microsoft.Resources/subscriptions/resourceGroups/read",
-    "Microsoft.Resources/deployments/*",
-    "Microsoft.Authorization/*/read",
-    "Microsoft.Insights/alertRules/*",
-    "Microsoft.Support/*"
-  ],
-  "NotActions": [],
-  "DataActions": [],
-  "NotDataActions": []
-}
-```
-
-There is no custom role needed for the RG-scoped assignments — the split of built-in roles already achieves least privilege:
-- `Contributor` on the hosts RG is needed for VM + NIC + disk creation. No narrower built-in role covers all three resource types together.
-- `Desktop Virtualization Host Pool Contributor` on the control plane RG is narrower than `Contributor` — it restricts the operator to `Microsoft.DesktopVirtualization/hostpools/*` and cannot create, delete, or modify other resource types in that RG.
 
 ---
 

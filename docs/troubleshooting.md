@@ -20,29 +20,50 @@ You receive an error similar to the following:
 
 ### Problem
 
-You may have orphaned role assignments.
+This error means ARM attempted to PUT a role assignment resource at a specific GUID, but that GUID already exists with different immutable properties (principal ID, tenant ID, or scope). There are two common causes:
+
+**Cause 1 — Orphaned role assignment.** A role assignment exists whose principal (user, group, service principal, or managed identity) has since been deleted. ARM uses a deterministic GUID formula (`guid(scope, principalId, roleDefinitionId)`) to name role assignments. If the managed identity was deleted and recreated, the new principal has a different object ID, which changes the deterministic GUID ARM wants to use — but the old GUID (pointing at the now-deleted principal) may still exist, and ARM cannot update its `principalId`.
+
+**Cause 2 — Portal-created assignment at a conflicting GUID.** If someone manually created a role assignment through the portal, Azure generates a random GUID for it. If that random GUID happens to match the deterministic GUID this solution's ARM template computes for a *different* role assignment (different role, principal, or scope), ARM will try to overwrite an immutable field on the portal-created assignment and fail. More commonly, the portal assignment creates a *duplicate* for the same principal+role+scope combination, which ARM then cannot reconcile with its own resource.
 
 ### Solution
 
-Fix this issue by running the following PowerShell commands from the Cloud Shell.
-
+**Step 1 — Find and remove orphaned assignments** (principal no longer exists):
 
 ```powershell
-$orphanedRoleAssignments = Get-AzRoleAssignment | Where-object -Property Displayname -eq $null
+$orphanedRoleAssignments = Get-AzRoleAssignment | Where-Object -Property DisplayName -eq $null
 if ($orphanedRoleAssignments.Count -eq 0) {
-    Write-Output "No orphaned role assignments found. Exiting."
-    exit 0
-}
-Write-Output "Total number of orphaned role assignments: $($orphanedRoleAssignments.Count)"
- 
-$orphanCounter = 0
-foreach ($assignment in $orphanedRoleAssignments) {
-    $orphanCounter++
-    Write-Output "Attempting to remove item number $orphanCounter for RoleAssignmentName: $($assignment.RoleAssignmentName) | RoleAssignmentId: $($assignment.RoleAssignmentId) | ObjectId: $($assignment.ObjectId) | RoleDefinitionName: $($assignment.RoleDefinitionName) | Scope: $($assignment.Scope)"    
-    Remove-AzRoleAssignment -ObjectId $assignment.ObjectId -RoleDefinitionName $assignment.RoleDefinitionName -Scope $assignment.Scope    
-    Write-Output "Successfully removed item number $orphanCounter"
+    Write-Output "No orphaned role assignments found."
+} else {
+    Write-Output "Found $($orphanedRoleAssignments.Count) orphaned role assignment(s)."
+    $orphanedRoleAssignments | ForEach-Object {
+        Write-Output "Removing: RoleAssignmentId=$($_.RoleAssignmentName) | ObjectId=$($_.ObjectId) | Role=$($_.RoleDefinitionName) | Scope=$($_.Scope)"
+        Remove-AzRoleAssignment -ObjectId $_.ObjectId -RoleDefinitionName $_.RoleDefinitionName -Scope $_.Scope
+    }
 }
 ```
+
+**Step 2 — Find and remove portal-created duplicates** for a specific principal+role+scope:
+
+```powershell
+# Substitute the values from your failed deployment
+$scope           = '/subscriptions/<subscriptionId>/resourceGroups/<resourceGroupName>'
+$roleDefinition  = 'Contributor'   # e.g. Contributor, Key Vault Crypto Officer
+$principalId     = '<objectId>'    # object ID of the managed identity or service principal
+
+# List ALL assignments for this combination — there should be exactly one
+Get-AzRoleAssignment -Scope $scope -RoleDefinitionName $roleDefinition -ObjectId $principalId |
+    Format-List RoleAssignmentName, RoleDefinitionName, ObjectId, Scope, DisplayName
+
+# Remove any duplicates (keep at most one, or remove all and let ARM recreate)
+Get-AzRoleAssignment -Scope $scope -RoleDefinitionName $roleDefinition -ObjectId $principalId |
+    ForEach-Object {
+        Write-Output "Removing assignment: $($_.RoleAssignmentName)"
+        Remove-AzRoleAssignment -RoleAssignmentId $_.RoleAssignmentId
+    }
+```
+
+After removing the conflicting assignment(s), redeploy — ARM will recreate the assignment at its deterministic GUID.
 
 ## Redeployment
 

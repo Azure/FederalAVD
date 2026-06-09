@@ -167,7 +167,7 @@ azureTablePrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatel
 
 ### Deployment Notes
 - **Function App**: Leave `existingHostingPlanResourceId` empty to deploy a new app service plan inline, or provide an existing one to share a plan across multiple deployments.
-- **SessionHostsOnly**: Not supported (requires control plane resources)
+- **Session Hosts add-on**: Not supported (requires control plane resources)
 
 ## Configuration
 

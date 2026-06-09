@@ -210,7 +210,7 @@ The host pool deployment always creates all resources — resource groups, AVD c
 | Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox (Zero Trust → Encryption Key Management) | `existingEncryptionKeyVaultResourceId` |
 | Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingVmBackupVaultResourceId` |
 
-To deploy all host pool infrastructure without creating session host VMs, set `sessionHostCount: 0`. This lets you validate storage, networking, and control plane configuration before committing to VM costs. Add hosts later using the **Session Hosts** add-on (`SessionHostsOnly` mode).
+To deploy all host pool infrastructure without creating session host VMs, set `sessionHostCount: 0`. This lets you validate storage, networking, and control plane configuration before committing to VM costs. Add hosts later using the **Session Hosts** add-on.
 
 #### Basic Configuration
 
@@ -531,7 +531,7 @@ Get-AzRecoveryServicesBackupItem -WorkloadType AzureStorage -VaultId $vaultId
 To add more session hosts to an existing pool:
 
 1. **Update parameter file** - Increase `sessionHostCount`
-2. **Redeploy using the Session Hosts add-on** (`SessionHostsOnly` mode):
+2. **Redeploy using the Session Hosts add-on:**
 
    ```powershell
    # Update sessionHostCount in parameter file, then redeploy
