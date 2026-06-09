@@ -294,7 +294,72 @@ To prevent the operator identity from granting itself or others arbitrary roles,
 
 ---
 
-## 5. Hostpool Operator — SessionHostsOnly
+## 5. Session Hosts Add-On Operator
+
+**Minimum scope:** Resource group (hosts RG) — no subscription-level permission required
+
+This role covers deployments using `deployments/add-ons/sessionHosts/main.bicep` as a standalone portal deployment or as the Template Spec target for the Session Host Replacer. Unlike `hostpool.bicep`, this template is resource group scoped so no subscription-level `deployments/write` is needed.
+
+### What the deployment does
+
+| Action | Resource | Scope |
+|---|---|---|
+| Create virtual machines | Hosts RG | RG |
+| Create network interfaces | Hosts RG | RG |
+| Create OS disks | Hosts RG | RG |
+| Create availability sets *(optional)* | Hosts RG | RG |
+| Create VM extensions (domain join, Entra login, monitoring, Run Commands) | Hosts RG | RG |
+| Create data collection rule associations *(optional)* | Hosts RG | RG |
+| Read host pool + list registration tokens | Host pool RG | RG |
+| Read Key Vault secrets at deployment time (`getSecret()`) | Credentials Key Vault | Resource |
+| Enroll VMs in backup policy *(optional)* | Recovery Services Vault RG | RG |
+
+### Required role assignments
+
+| Role | Scope |
+|---|---|
+| `FederalAVD - Session Hosts Add-On Operator` (below) | Hosts **resource group** |
+| Built-in: `Desktop Virtualization Host Pool Contributor` | Host pool **resource group** |
+| Built-in: `Key Vault Secrets User` | Credentials **Key Vault** |
+| Built-in: `Storage Blob Data Reader` *(optional)* | Artifacts **storage account** |
+| Built-in: `Backup Contributor` *(optional)* | Recovery Services **Vault** |
+
+### Custom role definition
+
+```json
+{
+  "Name": "FederalAVD - Session Hosts Add-On Operator",
+  "Description": "Deploys the FederalAVD session hosts add-on template at resource group scope. Creates VMs, NICs, disks, availability sets, extensions, and Run Commands in the hosts resource group. No subscription-level permissions required.",
+  "AssignableScopes": ["/"],
+  "Actions": [
+    "Microsoft.Resources/deployments/*",
+    "Microsoft.Resources/subscriptions/resourceGroups/read",
+    "Microsoft.Compute/virtualMachines/*",
+    "Microsoft.Compute/virtualMachines/extensions/*",
+    "Microsoft.Compute/virtualMachines/runCommands/*",
+    "Microsoft.Compute/disks/*",
+    "Microsoft.Compute/availabilitySets/*",
+    "Microsoft.Network/networkInterfaces/*",
+    "Microsoft.Network/virtualNetworks/subnets/read",
+    "Microsoft.Network/virtualNetworks/subnets/join/action",
+    "Microsoft.Insights/dataCollectionRuleAssociations/*",
+    "Microsoft.Authorization/*/read",
+    "Microsoft.Insights/alertRules/*",
+    "Microsoft.Support/*"
+  ],
+  "NotActions": [],
+  "DataActions": [],
+  "NotDataActions": []
+}
+```
+
+> **Key Vault access:** The `getSecret()` Bicep function resolves secrets using the deployment principal at ARM evaluation time. Grant the deploying identity the built-in `Key Vault Secrets User` role (`4633458b-17de-408a-b874-0445c86b69e6`) on the credentials Key Vault — this is a data plane role and cannot be expressed in the custom role above.
+
+> **Subnet join:** `Microsoft.Network/virtualNetworks/subnets/join/action` is required to attach NICs to the subnet. If the virtual network is in a separate hub/networking resource group, this action must be granted there rather than on the hosts RG.
+
+---
+
+## 6. Hostpool Operator — SessionHostsOnly
 
 **Minimum scope:** Subscription scope required for deployment submission; no subscription-level resource creation or role assignments
 

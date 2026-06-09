@@ -66,6 +66,29 @@ Before deploying session hosts, ensure the following are in place:
 
 ---
 
+## Required Permissions
+
+This template deploys at **resource group scope** — no subscription-level role is required for deployment submission (unlike `hostpool.bicep`).
+
+### Role assignments summary
+
+| Role | Scope | Required for |
+|---|---|---|
+| `Contributor` | **Hosts resource group** | Create VMs, NICs, OS disks, availability sets, extensions, Run Commands, DCR associations |
+| `Desktop Virtualization Host Pool Contributor` | **Host pool resource group** | Read host pool properties and call `listRegistrationTokens` to obtain the registration token |
+| `Key Vault Secrets User` | **Credentials Key Vault** | Read `VirtualMachineAdminPassword`, `VirtualMachineAdminUserName`, `DomainJoinUserPassword`, `DomainJoinUserPrincipalName` secrets via `getSecret()` at deployment time |
+| `Storage Blob Data Reader` | **Artifacts storage account** | *(Optional)* Download customization scripts and installers from the artifacts container |
+| `Key Vault Secrets User` | **Disk encryption Key Vault** | *(Optional)* Read the CMK key URI when `diskEncryptionSetResourceId` is provided |
+| `Backup Contributor` | **Recovery Services Vault** | *(Optional)* Enroll VMs in a backup policy when `deployRecoveryServices = true` (personal host pools) |
+
+> **Note on `Contributor` scope:** Contributor on the hosts RG is the minimum practical scope. The VM, NIC, disk, extension, and Run Command resource types span three different resource providers (`Microsoft.Compute`, `Microsoft.Network`, `Microsoft.Insights`) and no single narrower built-in role covers all of them. For a tighter custom role definition see [Custom RBAC Roles — Session Hosts Add-On Operator](../../../docs/custom-roles.md#session-hosts-add-on-operator).
+
+### Comparison with `hostpool.bicep`
+
+The full `hostpool.bicep` template (`targetScope = 'subscription'`) additionally requires `Microsoft.Resources/deployments/write` at **subscription scope** even when no subscription-level resources are being created. This add-on template avoids that requirement because `main.bicep` defaults to `targetScope = 'resourceGroup'`, making it suitable for operators who are constrained to resource group scope.
+
+---
+
 ## Deployment
 
 ### Azure Portal (UI Form)
