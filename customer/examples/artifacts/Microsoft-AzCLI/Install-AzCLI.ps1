@@ -1,4 +1,4 @@
-param (
+﻿param (
     [string]$DeploymentType = 'Install'
 )
 
@@ -83,29 +83,6 @@ Function Get-InternetFile {
 }
 
 Function Get-InstalledApplication {
-    <#
-    .SYNOPSIS
-        Retrieves information about installed applications.
-    .DESCRIPTION
-        Retrieves information about installed applications by querying the registry. You can specify an application name, a product code, or both.
-        Returns information about application publisher, name & version, product code, uninstall string, install source, location, date, and application architecture.
-    .PARAMETER Name
-        The name of the application to retrieve information for. Performs a contains match on the application display name by default.
-    .PARAMETER Exact
-        Specifies that the named application must be matched using the exact name.
-    .PARAMETER WildCard
-        Specifies that the named application must be matched using a wildcard search.
-    .PARAMETER RegEx
-        Specifies that the named application must be matched using a regular expression search.
-    .PARAMETER ProductCode
-        The product code of the application to retrieve information for.
-    .PARAMETER IncludeUpdatesAndHotfixes
-        Include matches against updates and hotfixes in results.
-    .EXAMPLE
-        Get-InstalledApplication -Name 'Adobe Flash'
-    .EXAMPLE
-        Get-InstalledApplication -ProductCode '{1AD147D0-BE0E-3D6C-AC11-64F6DC4163F1}'
-    #>
     [CmdletBinding()]
     Param (
         [Parameter(Mandatory = $false)]
@@ -278,26 +255,12 @@ Function Get-InstalledApplication {
 }
 
 function New-Log {
-    <#
-    .SYNOPSIS
-    Sets default log file and stores in a script accessible variable $script:Log
-    Log File name "packageExecution_$date.log"
-
-    .PARAMETER Path
-    Path to the log file
-
-    .EXAMPLE
-    New-Log c:\Windows\Logs
-    Create a new log file in c:\Windows\Logs
-    #>
-
     Param (
         [Parameter(Position = 0)]
         [string] $Path = (Join-Path -Path $env:SystemRoot -ChildPath 'Logs')
     )
 
-    # Create central log file with given date
-
+    if ($env:SUPPRESS_FILELOG -eq '1') { return }
     $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
     Set-Variable logFile -Scope Script
     $script:logFile = "$Script:Name-$date.log"
@@ -311,7 +274,7 @@ function New-Log {
     Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
 }
 
-function Write-Log {
+Function Write-Log {
     Param (
         [Parameter(Mandatory = $false, Position = 0)]
         [ValidateSet("Info", "Warning", "Error")]
@@ -320,18 +283,14 @@ function Write-Log {
         $Message
     )
 
-    $Date = get-date
-    $Content = "[$Date]`t$Category`t`t$Message" 
-    Add-Content $Script:Log $content -ErrorAction Stop
-    If ($Verbose) {
-        Write-Log -Message $Content
+    $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if (-not $env:SUPPRESS_FILELOG) {
+        Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
     }
-    Else {
-        Switch ($Category) {
-            'Info' { Write-Host $content }
-            'Error' { Write-Error $Content }
-            'Warning' { Write-Warning $Content }
-        }
+    Switch ($Category) {
+        'Info'    { Write-Host $Content }
+        'Error'   { Write-Error $Content -ErrorAction Continue }
+        'Warning' { Write-Warning $Content }
     }
 }
 

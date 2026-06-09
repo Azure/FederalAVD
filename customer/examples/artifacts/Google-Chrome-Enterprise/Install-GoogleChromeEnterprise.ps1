@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param (
     [Parameter()]
     [String]$DisableUpdates = 'True'
@@ -15,67 +15,33 @@ $Script:Name = 'Install-GoogleChromeEnterprise'
 #endregion
 
 #region Supporting Functions
-function Write-Log {
-
-    <#
-    .SYNOPSIS
-    Creates a log file and stores logs based on categories with tab seperation
-
-    .PARAMETER category
-    Category to put into the trace
-
-    .PARAMETER message
-    Message to be loged
-
-    .EXAMPLE
-    Log 'Info' 'Message'
-
-    #>
-
+Function Write-Log {
     Param (
         [Parameter(Mandatory = $false, Position = 0)]
         [ValidateSet("Info", "Warning", "Error")]
-        $category = 'Info',
+        $Category = 'Info',
         [Parameter(Mandatory = $true, Position = 1)]
-        $message
+        $Message
     )
 
-    $date = get-date
-    $Content = "[$Date]`t$Category`t`t$Message"
-    Write-Verbose "$Script:Name $content" -verbose
-
-    if (! $script:Log) {
-        $File = Join-Path -Path $env:TEMP -ChildPath "$Script:Name.log"
-        Write-Warning "Log file not found, create new $File"
-        $script:Log = $File
+    $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if (-not $env:SUPPRESS_FILELOG) {
+        Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
     }
-    else {
-        $File = $script:Log
+    Switch ($Category) {
+        'Info'    { Write-Host $Content }
+        'Error'   { Write-Error $Content -ErrorAction Continue }
+        'Warning' { Write-Warning $Content }
     }
-    Add-Content $File $content -ErrorAction Stop
 }
 
 function New-Log {
-    <#
-    .SYNOPSIS
-    Sets default log file and stores in a script accessible variable $script:Log
-    Log File name "packageExecution_$date.log"
-
-    .PARAMETER Path
-    Path to the log file
-
-    .EXAMPLE
-    New-Log c:\Windows\Logs
-    Create a new log file in c:\Windows\Logs
-    #>
-
     Param (
         [Parameter(Mandatory = $true, Position = 0)]
         [string] $Path
     )
 
-    # Create central log file with given date
-
+    if ($env:SUPPRESS_FILELOG -eq '1') { return }
     $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
     Set-Variable logFile -Scope Script
     $script:logFile = "$Script:Name-$date.log"

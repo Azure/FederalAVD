@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Installs Visual Studio Code silently and optionally disables automatic updates.
 
@@ -43,43 +43,25 @@ Function Write-Log {
         [Parameter(Mandatory = $true, Position = 1)]
         $Message
     )
-
-    $Date = get-date
-    $Content = "[$Date]`t$Category`t`t$Message" 
-    Add-Content $Script:Log $content -ErrorAction Stop
-    If ($Verbose) {
-        Write-Verbose $Content
+    
+    $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if (-not $env:SUPPRESS_FILELOG) {
+        Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
     }
-    Else {
-        Switch ($Category) {
-            'Info' { Write-Host $content }
-            'Error' { Write-Error $Content }
-            'Warning' { Write-Warning $Content }
-        }
+    Switch ($Category) {
+        'Info'    { Write-Host $Content }
+        'Error'   { Write-Error $Content -ErrorAction Continue }
+        'Warning' { Write-Warning $Content }
     }
 }
 
 function New-Log {
-    <#
-    .SYNOPSIS
-    Sets default log file and stores in a script accessible variable $script:Log
-    Log File name "packageExecution_$date.log"
-
-    .PARAMETER Path
-    Path to the log file
-
-    .EXAMPLE
-    New-Log c:\Windows\Logs
-    Create a new log file in c:\Windows\Logs
-    #>
-
     Param (
         [Parameter(Mandatory = $true, Position=0)]
         [string] $Path
     )
 
-    # Create central log file with given date
-
+    if ($env:SUPPRESS_FILELOG -eq '1') { return }
     $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
     Set-Variable logFile -Scope Script
     $script:logFile = "$Script:Name-$date.log"

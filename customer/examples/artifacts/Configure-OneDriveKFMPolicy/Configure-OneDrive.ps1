@@ -1,4 +1,4 @@
-[CmdletBinding(SupportsShouldProcess = $true)]
+﻿[CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [Parameter(Mandatory = $true)]
     [string]$TenantId
@@ -248,7 +248,7 @@ Function Set-RegistryValue {
     }
 }
 
-function Write-Log {
+Function Write-Log {
     Param (
         [Parameter(Mandatory = $false, Position = 0)]
         [ValidateSet("Info", "Warning", "Error")]
@@ -256,19 +256,15 @@ function Write-Log {
         [Parameter(Mandatory = $true, Position = 1)]
         $Message
     )
-
-    $Date = get-date
-    $Content = "[$Date]`t$Category`t`t$Message" 
-    Add-Content $Script:Log $content -ErrorAction Stop
-    If ($Verbose) {
-        Write-Verbose $Content
+    
+    $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if (-not $env:SUPPRESS_FILELOG) {
+        Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
     }
-    Else {
-        Switch ($Category) {
-            'Info' { Write-Host $content }
-            'Error' { Write-Error $Content }
-            'Warning' { Write-Warning $Content }
-        }
+    Switch ($Category) {
+        'Info'    { Write-Host $Content }
+        'Error'   { Write-Error $Content -ErrorAction Continue }
+        'Warning' { Write-Warning $Content }
     }
 }
 
@@ -278,8 +274,7 @@ function New-Log {
         [string] $Path
     )
 
-    # Create central log file with given date
-
+    if ($env:SUPPRESS_FILELOG -eq '1') { return }
     $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
     Set-Variable logFile -Scope Script
     $script:logFile = "$Script:Name-$date.log"

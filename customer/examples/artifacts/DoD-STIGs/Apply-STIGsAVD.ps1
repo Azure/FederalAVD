@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     This script uses the local group policy object tool (lgpo.exe) to apply the applicable DISA STIGs GPOs either downloaded directly from CyberCom or
     the files are contained with this script in the root of a folder.
@@ -228,14 +228,6 @@ Function Get-InternetFile {
 }
 
 Function Update-LocalGPOTextFile {
-    <#
-    .SYNOPSIS
-        Appends a single registry policy entry to an LGPO text file (lgpo.exe /t format).
-    .DESCRIPTION
-        Builds up Computer.txt or User.txt in the specified output directory.
-        Each call appends one 4-line block (scope, key path, value name, data/DELETE)
-        followed by a blank line.  Pass the resulting file to 'lgpo.exe /t <file>'.
-    #>
     [CmdletBinding(DefaultParameterSetName = 'Set')]
     Param (
         [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
@@ -307,8 +299,7 @@ Function New-Log {
         [string] $Path = (Join-Path -Path $env:SystemRoot -ChildPath 'Logs')
     )
 
-    # Create central log file with given date
-
+    if ($env:SUPPRESS_FILELOG -eq '1') { return }
     $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
     Set-Variable logFile -Scope Script
     $script:logFile = "$Script:Name-$date.log"
@@ -427,11 +418,6 @@ Function Set-RegistryValue {
 }
 
 Function Disable-OptionalFeatureIfEnabled {
-    <#
-    .SYNOPSIS
-        Disables a Windows Optional Feature only if it is currently enabled.
-        Silently no-ops when the feature is absent or already disabled.
-    #>
     param(
         [Parameter(Mandatory)][string]$FeatureName,
         [Parameter(Mandatory)][string]$StigId
@@ -454,18 +440,14 @@ Function Write-Log {
         $Message
     )
 
-    $Date = get-date
-    $Content = "[$Date]`t$Category`t`t$Message" 
-    Add-Content $Script:Log $content -ErrorAction Stop
-    If ($Verbose) {
-        Write-Verbose $Content
+    $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if (-not $env:SUPPRESS_FILELOG) {
+        Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
     }
-    Else {
-        Switch ($Category) {
-            'Info' { Write-Host $content }
-            'Error' { Write-Error $Content }
-            'Warning' { Write-Warning $Content }
-        }
+    Switch ($Category) {
+        'Info'    { Write-Host $Content }
+        'Error'   { Write-Error $Content -ErrorAction Continue }
+        'Warning' { Write-Warning $Content }
     }
 }
 #endregion

@@ -121,75 +121,81 @@ try {
 
   Set-Location -Path $TempDir
   $Ext = [System.IO.Path]::GetExtension($DestFile).ToLower().Replace('.', '')
-  switch ($Ext) {
-    'exe' {
-      If ($Arguments) {
-        Write-Log "Executing '`"$DestFile`" $Arguments'"
-        $Install = Start-Process -FilePath "$DestFile" -ArgumentList (Split-ArgumentString -ArgumentString $Arguments) -NoNewWindow -Wait -PassThru
-        Write-Log "Installation ended with exit code $($Install.ExitCode)."
-      }
-      Else {
-        Write-Log "Executing '$DestFile'"
-        $Install = Start-Process -FilePath "$DestFile" -NoNewWindow -Wait -PassThru
-        Write-Log "Installation ended with exit code $($Install.ExitCode)."
-      }
-    }
-    'msi' {
-      If ($Arguments) {
-        $Arguments = Split-ArgumentString -ArgumentString $Arguments
-        If ($Arguments -notcontains $DestFile) {
-          $Arguments = @("/i $DestFile") + $Arguments
+  $env:SUPPRESS_FILELOG = '1'
+  try {
+    switch ($Ext) {
+      'exe' {
+        If ($Arguments) {
+          Write-Log "Executing '`"$DestFile`" $Arguments'"
+          $Install = Start-Process -FilePath "$DestFile" -ArgumentList (Split-ArgumentString -ArgumentString $Arguments) -NoNewWindow -Wait -PassThru
+          Write-Log "Installation ended with exit code $($Install.ExitCode)."
         }
-        Write-Log "Executing 'msiexec.exe $Arguments'"
-        $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $Arguments -Wait -PassThru
-        Write-Log "Installation ended with exit code $($MsiExec.ExitCode)."
+        Else {
+          Write-Log "Executing '$DestFile'"
+          $Install = Start-Process -FilePath "$DestFile" -NoNewWindow -Wait -PassThru
+          Write-Log "Installation ended with exit code $($Install.ExitCode)."
+        }
       }
-      Else {
-        Write-Log "Executing 'msiexec.exe /i $DestFile /qn'"
-        $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList "/i $DestFile /qn" -Wait -PassThru
-        Write-Log "Installation ended with exit code $($MsiExec.ExitCode)."
+      'msi' {
+        If ($Arguments) {
+          $Arguments = Split-ArgumentString -ArgumentString $Arguments
+          If ($Arguments -notcontains $DestFile) {
+            $Arguments = @("/i $DestFile") + $Arguments
+          }
+          Write-Log "Executing 'msiexec.exe $Arguments'"
+          $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $Arguments -Wait -PassThru
+          Write-Log "Installation ended with exit code $($MsiExec.ExitCode)."
+        }
+        Else {
+          Write-Log "Executing 'msiexec.exe /i $DestFile /qn'"
+          $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList "/i $DestFile /qn" -Wait -PassThru
+          Write-Log "Installation ended with exit code $($MsiExec.ExitCode)."
+        }
+      }
+      'bat' {
+        If ($Arguments) {
+          Write-Log "Executing 'cmd.exe `"$DestFile`" $Arguments'"
+          $BatArgs = Split-ArgumentString -ArgumentString $Arguments
+          If ($BatArgs -notcontains $DestFile) { $BatArgs = @("$DestFile") + $BatArgs }
+          Start-Process -FilePath cmd.exe -ArgumentList $BatArgs -Wait
+        }
+        Else {
+          Write-Log "Executing 'cmd.exe `"$DestFile`"'"
+          Start-Process -FilePath cmd.exe -ArgumentList "`"$DestFile`"" -Wait
+        }
+      }
+      'ps1' {
+        If ($Arguments) {
+          Write-Log "Calling '$DestFile' with arguments '$Arguments'"
+          $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments
+          & $DestFile @parameterSplat
+        }
+        Else {
+          Write-Log "Calling '$DestFile'"
+          & $DestFile
+        }
+      }
+      'zip' {
+        $DestinationPath = Join-Path -Path $TempDir -ChildPath ([System.IO.Path]::GetFileNameWithoutExtension($SourceFileName))
+        Write-Log "Extracting '$DestFile' to '$DestinationPath'."
+        Expand-Archive -Path $DestFile -DestinationPath $DestinationPath -Force
+        Write-Log "Finding PowerShell script in '$DestinationPath'."
+        $PSScript = (Get-ChildItem -Path $DestinationPath -Filter '*.ps1').FullName
+        If ($PSScript.Count -gt 1) { $PSScript = $PSScript[0] }
+        If ($Arguments) {
+          Write-Log "Calling '$PSScript' with arguments '$Arguments'"
+          $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments
+          & $PSScript @parameterSplat
+        }
+        Else {
+          Write-Log "Calling '$PSScript'"
+          & $PSScript
+        }
       }
     }
-    'bat' {
-      If ($Arguments) {
-        Write-Log "Executing 'cmd.exe `"$DestFile`" $Arguments'"
-        $BatArgs = Split-ArgumentString -ArgumentString $Arguments
-        If ($BatArgs -notcontains $DestFile) { $BatArgs = @("$DestFile") + $BatArgs }
-        Start-Process -FilePath cmd.exe -ArgumentList $BatArgs -Wait
-      }
-      Else {
-        Write-Log "Executing 'cmd.exe `"$DestFile`"'"
-        Start-Process -FilePath cmd.exe -ArgumentList "`"$DestFile`"" -Wait
-      }
-    }
-    'ps1' {
-      If ($Arguments) {
-        Write-Log "Calling '$DestFile' with arguments '$Arguments'"
-        $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments
-        & $DestFile @parameterSplat
-      }
-      Else {
-        Write-Log "Calling '$DestFile'"
-        & $DestFile
-      }
-    }
-    'zip' {
-      $DestinationPath = Join-Path -Path $TempDir -ChildPath ([System.IO.Path]::GetFileNameWithoutExtension($SourceFileName))
-      Write-Log "Extracting '$DestFile' to '$DestinationPath'."
-      Expand-Archive -Path $DestFile -DestinationPath $DestinationPath -Force
-      Write-Log "Finding PowerShell script in '$DestinationPath'."
-      $PSScript = (Get-ChildItem -Path $DestinationPath -Filter '*.ps1').FullName
-      If ($PSScript.Count -gt 1) { $PSScript = $PSScript[0] }
-      If ($Arguments) {
-        Write-Log "Calling '$PSScript' with arguments '$Arguments'"
-        $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments
-        & $PSScript @parameterSplat
-      }
-      Else {
-        Write-Log "Calling '$PSScript'"
-        & $PSScript
-      }
-    }
+  }
+  finally {
+    $env:SUPPRESS_FILELOG = $null
   }
 
   If ((Split-Path $TempDir -Parent) -eq $Env:TEMP) {

@@ -28,22 +28,6 @@ param(
 #region Functions
 
 function Write-Log {
-
-    <#
-    .SYNOPSIS
-    Creates a log file and stores logs based on categories with tab seperation
-
-    .PARAMETER category
-    Category to put into the trace
-
-    .PARAMETER message
-    Message to be loged
-
-    .EXAMPLE
-    Log 'Info' 'Message'
-
-    #>
-
     Param (
         [Parameter(Mandatory=$false, Position=0)]
         [ValidateSet("Info","Warning","Error")]
@@ -58,25 +42,10 @@ function Write-Log {
 }
 
 function New-Log {
-    <#
-    .SYNOPSIS
-    Sets default log file and stores in a script accessible variable $script:Log
-    Log File name "packageExecution_$date.log"
-
-    .PARAMETER Path
-    Path to the log file
-
-    .EXAMPLE
-    New-Log c:\Windows\Logs
-    Create a new log file in c:\Windows\Logs
-    #>
-
     Param (
         [Parameter(Mandatory = $true, Position=0)]
         [string] $Path
     )
-
-    # Create central log file with given date
 
     $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
     Set-Variable logFile -Scope Script
