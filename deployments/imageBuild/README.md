@@ -497,25 +497,26 @@ Gallery image version CMK is managed by the **imageManagement** template, which 
 
 - **Type:** Boolean
 - **Default:** `true`
-- **Description:** Enable Accelerated Networking on VMs from this image
+- **Description:** Enable Accelerated Networking on VMs deployed from this image. When enabled, the build VM must also support Accelerated Networking — the VM size list is automatically filtered to compatible sizes. Not compatible with Confidential VM security types.
 
 #### `imageDefinitionIsHibernateSupported`
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Enable hibernation support (preview)
+- **Description:** Enable hibernation support on VMs deployed from this image. Not compatible with NVMe, Confidential VM security types, or Accelerated Networking in some regions. In regions where no VM sizes support both hibernation and accelerated networking simultaneously, the VM size picker will be hidden and the build cannot proceed with both enabled.
 
 #### `imageDefinitionIsHigherStoragePerformanceSupported`
 
 - **Type:** Boolean
-- **Default:** `true`
-- **Description:** Enable NVMe disk controller support
+- **Default:** `false`
+- **Description:** Enable NVMe disk controller support. Set to `true` when using NVMe-only VM sizes (v6 and newer, e.g. environments where only v6 SKUs are available). The build VM disk controller type and image definition `DiskControllerTypes` feature are set in lockstep — they must match, so do not enable NVMe support unless the build VM size supports it.
 
 #### `imageDefinitionSecurityType`
 
 - **Type:** String
 - **Default:** `TrustedLaunch`
 - **Allowed Values:** `Standard`, `TrustedLaunch`, `TrustedLaunchSupported`, `ConfidentialVM`, `ConfidentialVMSupported`, `TrustedLaunchAndConfidentialVMSupported`
+- **Description:** Security type for the image definition. Confidential VM variants are incompatible with NVMe, Accelerated Networking, and Hibernation — selecting a Confidential type forces those features off and restricts the build VM size list to Confidential-capable SKUs (DC/EC/NCC series).
 
 ### Image Version
 
@@ -1116,9 +1117,9 @@ image-customization-logs/
 
 **Symptoms:** VM fails to deploy with NVMe support
 **Solution:**
-- Use v6 VM series (Dadsv6, Dadsv6, Easv6, Eadsv6)
+- Use v6 VM series (Dadsv6, Easv6, Eadsv6) and set `imageDefinitionIsHigherStoragePerformanceSupported: true`
 - Check [NVMe VM list](https://learn.microsoft.com/azure/virtual-machines/nvme-overview)
-- Set `imageDefinitionIsHigherStoragePerformanceSupported: false` if not needed
+- For SCSI-only environments (v5 and older VM sizes), leave `imageDefinitionIsHigherStoragePerformanceSupported` at its default (`false`)
 
 #### Issue: Artifact Download Fails
 

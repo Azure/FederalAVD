@@ -652,7 +652,7 @@ The `Arguments` string is parsed into named parameters using the `ConvertTo-Para
 1. Parameters start with `-` followed by parameter name
 2. Switch parameters have no value (set to `$true`)
 3. Boolean values: `true` → `$true`, `false` → `$false`
-4. Quoted strings are preserved
+4. Both single (`'`) and double (`"`) quotes are treated as string delimiters and stripped from the value
 5. Result is hashtable splatted to the PowerShell script
 
 **Example:**

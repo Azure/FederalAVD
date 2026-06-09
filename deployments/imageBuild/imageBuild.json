@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "8501732626479981252"
+      "templateHash": "1473432656510386248"
     }
   },
   "parameters": {
@@ -360,7 +360,7 @@
     },
     "imageDefinitionIsHigherStoragePerformanceSupported": {
       "type": "bool",
-      "defaultValue": true,
+      "defaultValue": false,
       "metadata": {
         "description": "Optional. Specifies whether the image definition supports capturing images of NVMe disks or Virtual Machines."
       }
