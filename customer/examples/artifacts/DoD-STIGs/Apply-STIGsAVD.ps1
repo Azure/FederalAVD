@@ -41,7 +41,7 @@ param (
 
     [string]$Upgrade = 'False',
 
-    [string]$Version = '2025.10'
+    [string]$Version = '2026.04'
 )
 #region Initialization
 $Script:Name = 'Apply-STIGs'
