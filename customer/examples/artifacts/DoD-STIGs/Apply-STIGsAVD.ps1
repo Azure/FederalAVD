@@ -35,7 +35,7 @@ param (
     
     [string]$SearchForApplications = 'False',
 
-    [string]$CloudOnly = 'True',
+    [string]$CloudOnly = 'False',
 
     [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_April_2026.zip',
 
