@@ -1,11 +1,3 @@
-targetScope = 'subscription'
-
-@description('The location of the virtual machines where the run commands will be executed.')
-param location string = deployment().location
-
-@description('Required. The name of the resource group in which to deploy the resources.')
-param resourceGroupName string
-
 @description('Required. The names of the virtual machines on which to run the scripts.')
 param vmNames array
 
@@ -91,16 +83,14 @@ resource scriptsUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIden
 resource existingVms 'Microsoft.Compute/virtualMachines@2023-03-01' existing = [
   for (vmName, i) in vmNames: {
     name: vmName
-    scope: resourceGroup(resourceGroupName)
   }
 ]
 
 module updateVms 'modules/virtualMachineUpdate.bicep' = [
    for (vmName, i) in vmNames: if(!empty(logsUserAssignedIdentityResourceId) || !empty(scriptsUserAssignedIdentityResourceId)) {
     name: 'VirtualMachineUpdate-${vmName}-${timeStamp}'
-    scope: resourceGroup(resourceGroupName)
     params: {
-      location: location
+      location: existingVms[i].location
       name: vmNames[i]
       identity: existingVms[i].?identity
       logsUserAssignedIdentityResourceId: logsUserAssignedIdentityResourceId
@@ -116,10 +106,9 @@ module updateVms 'modules/virtualMachineUpdate.bicep' = [
 module runCommands 'modules/runCommands.bicep' = [
   for (vmName, i) in vmNames: if (!empty(scripts)) {
     name: 'RunCommands-${vmName}-${timeStamp}'
-    scope: resourceGroup(resourceGroupName)
     params: {
       scripts: multipleScripts
-      location: location
+      location: existingVms[i].location
       logsContainerUri: logsContainerUri
       logsUserAssignedIdentityClientId: empty(logsUserAssignedIdentityResourceId)
         ? ''
@@ -139,9 +128,8 @@ module runCommands 'modules/runCommands.bicep' = [
 module runCommand '../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for (vmName, i) in vmNames: if (empty(scripts)) {
     name: 'RunCommand-${vmName}-${timeStamp}'
-    scope: resourceGroup(resourceGroupName)
     params: {
-      location: location
+      location: existingVms[i].location
       virtualMachineName: vmName
       name: runCommandName
       script: normalizedScriptContent

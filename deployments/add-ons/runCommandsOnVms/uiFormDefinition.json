@@ -22,24 +22,43 @@
 							}
 						},
 						{
-							"name": "scope",
-							"type": "Microsoft.Common.ResourceScope",
-							"instanceDetailsLabel": "Deployment Details",
-							"location": {
-								"label": "Deployment Location",
-								"resourceTypes": [
-									"Microsoft.compute/virtualMachines"
-								]
+							"name": "subscriptionsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "GET",
+								"path": "/subscriptions?api-version=2022-12-01",
+								"transforms": {
+									"list": "value|[*].{label:displayName, value:id}"
+								}
 							}
 						},
 						{
-							"type": "Microsoft.Common.ResourceGroupSelector",
+							"name": "subscription",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Subscription",
+							"constraints": {
+								"allowedValues": "[steps('basics').subscriptionsApi.transformed.list]",
+								"required": true
+							}
+						},
+						{
+							"name": "resourceGroupsApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"condition": "[not(empty(steps('basics').subscription))]",
+							"request": {
+								"method": "GET",
+								"path": "[concat(steps('basics').subscription, '/resourcegroups?api-version=2021-04-01')]"
+							}
+						},
+						{
 							"name": "resourceGroup",
-							"label": "Virtual Machine(s) Resource Group",
-							"allowedMode": "UseExisting",
-							"required": true,
-							"scope": {
-								"subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
+							"type": "Microsoft.Common.DropDown",
+							"label": "Resource Group",
+							"toolTip": "Select the resource group containing the Virtual Machines",
+							"multiLine": true,							
+							"constraints": {
+								"allowedValues": "[map(steps('basics').resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"Location: ', rg.location, '\",\"value\":{\"id\":\"', rg.id, '\",\"location\":\"', rg.location, '\"}}')))]",
+								"required": true
 							}
 						},
 						{
@@ -48,10 +67,10 @@
 							"condition": "[not(empty(steps('basics').resourceGroup))]",
 							"request": {
 								"method": "GET",
-								"path": "[concat(steps('basics').scope.subscription.id, '/resourceGroups/', steps('basics').resourceGroup.value.name, '/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01')]",
+								"path": "[concat(steps('basics').resourceGroup.id, '/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01')]",
 								"transforms": {
-											"list": "value|[*].{label:name, value:name}"
-										}
+									"list": "value|[*].{label:name, value:name}"
+								}
 							}
 						},
 						{
@@ -63,7 +82,6 @@
 							"constraints": {
 								"allowedValues": "[steps('basics').virtualMachinesApi.transformed.list]",
 								"required": true
-								
 							}
 						}
 					]
@@ -504,7 +522,6 @@
 		},
 		"outputs": {
 			"parameters": {
-				"resourceGroupName": "[steps('basics').resourceGroup.value.name]",
 				"vmNames": "[steps('basics').vmNames]",
 				"runCommandName": "[if(equals(steps('scripts').multipleScripts, false), steps('scripts').single.runCommandName, '')]",
 				"scriptContent": "[if(and(equals(steps('scripts').multipleScripts, false), equals(steps('scripts').single.source, 'paste')), steps('scripts').single.scriptContent, '')]",
@@ -520,9 +537,9 @@
 				"logsUserAssignedIdentityResourceId": "[if(steps('scripts').logging.enable, steps('scripts').logging.userAssignedIdentity.id,'')]",
 				"timeoutInSeconds": "[if(equals(steps('scripts').multipleScripts, false), steps('scripts').single.timeout, 5400)]"
 			},
-			"kind": "Subscription",
-			"location": "[steps('basics').scope.location.name]",
-			"subscriptionId": "[steps('basics').scope.subscription.id]"
+			"kind": "ResourceGroup",
+			"location": "[steps('basics').resourceGroup.location]",
+			"resourceGroupId": "[steps('basics').resourceGroup.id]"
 		}
 	}
 }
